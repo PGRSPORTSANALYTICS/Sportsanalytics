@@ -17,6 +17,8 @@ from dataclasses import dataclass, field
 import re
 import json
 from player_stats import get_player_stats, get_match_prediction, get_real_matchups
+from totalcorner_players import get_totalcorner_stats, get_real_match_prediction, get_totalcorner_matchups
+from totalcorner_scraper import totalcorner_scraper
 
 # Database setup
 DATA_DIR = Path("data")
@@ -149,8 +151,8 @@ class EsoccerProvider:
     def _get_enhanced_realistic_matches(self) -> List[Dict]:
         """Generate matches using REAL Esoccer Battle player data"""
         
-        # Get real player matchups
-        real_matchups = get_real_matchups()
+        # Get real player matchups from TotalCorner
+        real_matchups = get_totalcorner_matchups()
         
         matches = []
         now = time.time()
@@ -164,8 +166,8 @@ class EsoccerProvider:
             home_player = home_team.split('(')[-1].replace(')', '') 
             away_player = away_team.split('(')[-1].replace(')', '')
             
-            # Get match prediction based on real player stats
-            prediction = get_match_prediction(home_player, away_player)
+            # Get match prediction based on REAL TotalCorner stats
+            prediction = get_real_match_prediction(home_player, away_player)
             
             # Realistic timing (matches are 8 mins, start every ~10-15 mins)
             elapsed = random.randint(30, 420)  # 0.5 to 7 minutes elapsed
@@ -220,20 +222,33 @@ class EsoccerProvider:
         base_goal_rate = 4.8  # E-soccer averages ~5-6 goals per 8 minutes
         expected_remaining = base_goal_rate * remaining_time_factor
         
-        # Generate odds for each market
+        # Generate odds using REAL TotalCorner Over/Under data
         for t in MARKETS:
             goals_needed = max(0, math.ceil(t + 0.5) - goals_so_far)
+            
+            # Extract players for TotalCorner lookup
+            home_player = match.home.split('(')[-1].replace(')', '') if '(' in match.home else 'unknown'
+            away_player = match.away.split('(')[-1].replace(')', '') if '(' in match.away else 'unknown'
             
             if goals_needed <= 0:
                 prob_over = 0.95  # Already achieved
             else:
-                # Poisson probability of scoring enough goals
-                mu = expected_remaining
-                prob_over = self._poisson_survival(goals_needed - 1, mu)
+                # Use REAL TotalCorner probability data
+                from totalcorner_players import get_over_under_probability
+                base_prob = get_over_under_probability(home_player, away_player, t)
+                
+                # Adjust for remaining time and goals needed
+                time_adjustment = remaining_time_factor
+                if goals_needed == 1:
+                    prob_over = base_prob * time_adjustment * 0.85
+                elif goals_needed == 2:
+                    prob_over = base_prob * time_adjustment * 0.65
+                else:
+                    prob_over = base_prob * time_adjustment * 0.45
             
-            # Add realistic bookmaker margin and noise
+            # Add realistic bookmaker margin
             margin = 0.05 + random.uniform(0.01, 0.03)  
-            prob_over = max(0.05, min(0.95, prob_over + random.uniform(-0.08, 0.08)))
+            prob_over = max(0.05, min(0.95, prob_over))
             
             over_odds = (1 + margin) / prob_over
             under_odds = (1 + margin) / (1 - prob_over)
