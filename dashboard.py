@@ -129,7 +129,7 @@ with tab1:
     latest_suggestions = data_loader.get_recent_suggestions(limit=20)
     
     # Filter to only very recent (live) suggestions
-    if not latest_suggestions.empty:
+    if not latest_suggestions.empty and 'ts' in latest_suggestions.columns:
         live_suggestions = latest_suggestions[latest_suggestions['ts'] > five_minutes_ago]
     else:
         live_suggestions = latest_suggestions
@@ -140,7 +140,10 @@ with tab1:
         
         if not goal_markets.empty:
             # Show live status indicator
-            minutes_since = int((current_time - goal_markets['ts'].max()) / 60)
+            if 'ts' in goal_markets.columns and len(goal_markets) > 0:
+                minutes_since = int((current_time - goal_markets['ts'].max()) / 60)
+            else:
+                minutes_since = 0
             if minutes_since < 1:
                 live_status = "🔴 **LIVE NOW** - Fresh opportunities!"
             elif minutes_since < 3:
@@ -158,13 +161,16 @@ with tab1:
                     
                     with col1:
                         # Add LIVE indicator
-                        age_minutes = int((current_time - row['ts']) / 60)
-                        if age_minutes < 1:
-                            live_badge = "🔴 LIVE"
-                        elif age_minutes < 3:
-                            live_badge = f"🟡 {age_minutes}m"
+                        if 'ts' in goal_markets.columns:
+                            age_minutes = int((current_time - row['ts']) / 60)
+                            if age_minutes < 1:
+                                live_badge = "🔴 LIVE"
+                            elif age_minutes < 3:
+                                live_badge = f"🟡 {age_minutes}m"
+                            else:
+                                live_badge = f"🟠 {age_minutes}m"
                         else:
-                            live_badge = f"🟠 {age_minutes}m"
+                            live_badge = "🔴 LIVE"
                         
                         st.markdown(f"{live_badge} **⚽ {row['match_title']}**")
                         st.markdown(f"*{row['league']}*")
@@ -258,7 +264,7 @@ with tab2:
                     display_df[col] = display_df[col].round(2)
             display_df.columns = ['Open Time', 'Match', 'League', 'Market', 'Odds', 'Stake', 'Potential Win']
             
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
+            st.dataframe(display_df, width="stretch", hide_index=True)
         
         with col2:
             # Summary stats
@@ -384,7 +390,7 @@ with tab4:
             cols_to_show = ['ts_formatted', 'match_title', 'market_name', 'odds', 'stake', 'Edge %']
             display_df = display_suggestions[cols_to_show]
             display_df.columns = ['Time (Stockholm)', 'Match', 'Market', 'Odds', 'Stake $', 'Edge %']
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
+            st.dataframe(display_df, width="stretch", hide_index=True)
         
         # Market breakdown
         st.markdown("#### 📊 Goal Market Breakdown")
