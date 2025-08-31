@@ -26,6 +26,7 @@ TOTALCORNER_PLAYERS = {
         "over_55_rate": 0.70,       # 70%
         "over_65_rate": 0.49,       # 49%
         "over_75_rate": 0.39,       # 39%
+        "btts_rate": 0.95,          # 95% Both Teams Score
         "preferred_teams": ["Netherlands"],
         "style": "ultra_attacking"
     },
@@ -49,6 +50,7 @@ TOTALCORNER_PLAYERS = {
         "over_55_rate": 0.49,       # 49%
         "over_65_rate": 0.29,       # 29%
         "over_75_rate": 0.20,       # 20%
+        "btts_rate": 0.88,          # 88% Both Teams Score
         "preferred_teams": ["Sweden", "Marseille"],
         "style": "balanced"
     },
@@ -72,6 +74,7 @@ TOTALCORNER_PLAYERS = {
         "over_55_rate": 0.45,       # 45%
         "over_65_rate": 0.23,       # 23%
         "over_75_rate": 0.18,       # 18%
+        "btts_rate": 0.83,          # 83% Both Teams Score
         "preferred_teams": ["England"],
         "style": "balanced"
     },
@@ -95,6 +98,7 @@ TOTALCORNER_PLAYERS = {
         "over_55_rate": 0.44,       # 44%
         "over_65_rate": 0.24,       # 24%
         "over_75_rate": 0.18,       # 18%
+        "btts_rate": 0.89,          # 89% Both Teams Score
         "preferred_teams": ["Italy"],
         "style": "balanced"
     },
@@ -118,6 +122,7 @@ TOTALCORNER_PLAYERS = {
         "over_55_rate": 0.72,       # 72%
         "over_65_rate": 0.45,       # 45%
         "over_75_rate": 0.24,       # 24%
+        "btts_rate": 0.93,          # 93% Both Teams Score
         "preferred_teams": ["Spain"],
         "style": "attacking"
     },
@@ -141,6 +146,7 @@ TOTALCORNER_PLAYERS = {
         "over_55_rate": 0.25,       # 25%
         "over_65_rate": 0.19,       # 19%
         "over_75_rate": 0.19,       # 19%
+        "btts_rate": 0.75,          # 75% Both Teams Score (lower due to defense)
         "preferred_teams": ["Barcelona"],
         "style": "defensive"        # Low concession
     },
@@ -164,6 +170,7 @@ TOTALCORNER_PLAYERS = {
         "over_55_rate": 0.48,       # 48%
         "over_65_rate": 0.26,       # 26%
         "over_75_rate": 0.13,       # 13%
+        "btts_rate": 0.91,          # 91% Both Teams Score (concedes a lot)
         "preferred_teams": ["France"],
         "style": "weak_defensive"
     },
@@ -187,6 +194,7 @@ TOTALCORNER_PLAYERS = {
         "over_55_rate": 0.00,       # 0%
         "over_65_rate": 0.00,       # 0%
         "over_75_rate": 0.00,       # 0%
+        "btts_rate": 0.60,          # 60% Both Teams Score (limited data)
         "preferred_teams": ["Argentina"],
         "style": "low_scoring"
     },
@@ -210,6 +218,7 @@ TOTALCORNER_PLAYERS = {
         "over_55_rate": 0.66,       # 66%
         "over_65_rate": 0.45,       # 45%
         "over_75_rate": 0.34,       # 34%
+        "btts_rate": 0.90,          # 90% Both Teams Score
         "preferred_teams": ["Germany"],
         "style": "attacking"
     }
@@ -218,6 +227,32 @@ TOTALCORNER_PLAYERS = {
 def get_totalcorner_stats(player_name: str) -> Dict:
     """Get real TotalCorner statistics for a player"""
     return TOTALCORNER_PLAYERS.get(player_name, {})
+
+def get_btts_probability(home_player: str, away_player: str) -> float:
+    """Calculate Both Teams to Score probability using REAL TotalCorner data"""
+    home_stats = get_totalcorner_stats(home_player)
+    away_stats = get_totalcorner_stats(away_player)
+    
+    if not home_stats or not away_stats:
+        return 0.85  # Default e-soccer BTTS rate
+    
+    # Average the two players' BTTS rates
+    home_btts = home_stats.get("btts_rate", 0.85)
+    away_btts = away_stats.get("btts_rate", 0.85)
+    
+    # Combined BTTS probability
+    combined_btts = (home_btts + away_btts) / 2
+    
+    # Slight adjustment based on scoring ability
+    home_goals = home_stats.get("goals_per_match", 2.5)
+    away_goals = away_stats.get("goals_per_match", 2.5)
+    
+    if home_goals > 3.0 and away_goals > 3.0:
+        combined_btts *= 1.05  # Boost for high scorers
+    elif home_goals < 2.0 or away_goals < 2.0:
+        combined_btts *= 0.90  # Reduce for low scorers
+    
+    return min(0.98, max(0.30, combined_btts))
 
 def get_over_under_probability(home_player: str, away_player: str, line: float) -> float:
     """Calculate Over probability using REAL TotalCorner data"""

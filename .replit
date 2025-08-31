@@ -18,27 +18,15 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Streamlit Dashboard"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
 args = "install_dependencies"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
 args = "E-Soccer Bot"
 
-[[workflows.workflow]]
-name = "Streamlit Dashboard"
-author = "agent"
-
 [[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "streamlit run dashboard.py --server.port 5000"
-waitForPort = 5000
-
-[workflows.workflow.metadata]
-outputType = "webview"
+task = "workflow.run"
+args = "Streamlit Dashboard"
 
 [[workflows.workflow]]
 name = "install_dependencies"
@@ -58,6 +46,18 @@ args = "python esoccer_bot.py"
 
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow]]
+name = "Streamlit Dashboard"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "streamlit run dashboard.py --server.port 5000"
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"
 
 [[ports]]
 localPort = 5000

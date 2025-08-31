@@ -33,7 +33,8 @@ MAX_TOTAL_RISK = float(os.getenv("MAX_TOTAL_RISK", "0.25"))
 MIN_ABS_EV = float(os.getenv("MIN_ABS_EV", "0.008"))  # Lower threshold = more bets
 MIN_REL_EDGE = float(os.getenv("MIN_REL_EDGE", "0.02"))  # Lower threshold = more bets
 
-MARKETS = [3.5, 4.5, 5.5, 6.5]  # E-soccer typical goals markets
+MARKETS = [4.5, 5.5, 6.5, 7.5]  # E-soccer focus on higher markets
+BTTS_MARKETS = ["btts_yes", "btts_no"]  # Both Teams to Score for H2H GG League
 
 @dataclass
 class Match:
@@ -255,6 +256,27 @@ class EsoccerProvider:
             
             match.odds[f"over_{str(t).replace('.','_')}"] = round(max(1.15, over_odds), 2)
             match.odds[f"under_{str(t).replace('.','_')}"] = round(max(1.15, under_odds), 2)
+        
+        # Add BTTS markets for H2H GG League
+        if "H2H GG" in match.league:
+            from totalcorner_players import get_btts_probability
+            btts_prob = get_btts_probability(home_player, away_player)
+            
+            # Adjust for current game state
+            current_goals = match.home_goals + match.away_goals
+            if current_goals >= 2 and match.home_goals > 0 and match.away_goals > 0:
+                btts_prob = 0.98  # BTTS already achieved
+            elif match.home_goals > 0 and match.away_goals > 0:
+                btts_prob = min(0.95, btts_prob * 1.2)  # Both scored, very likely
+            elif current_goals == 0 and elapsed_minutes > 6:
+                btts_prob *= 0.3  # Late in game, no goals yet
+            
+            margin = 0.05 + random.uniform(0.01, 0.03)
+            btts_yes_odds = (1 + margin) / btts_prob
+            btts_no_odds = (1 + margin) / (1 - btts_prob)
+            
+            match.odds["btts_yes"] = round(max(1.15, btts_yes_odds), 2)
+            match.odds["btts_no"] = round(max(1.15, btts_no_odds), 2)
     
     def _poisson_survival(self, k: int, mu: float) -> float:
         """P(X > k) for Poisson distribution"""
@@ -383,7 +405,7 @@ class EsoccerProvider:
             ("France (tohi4)", "Liverpool"),
             ("Chelsea", "Bayern Munich")
         ]
-        leagues = ["Esoccer Battle - 8 mins play"]
+        leagues = ["Esoccer Battle - 8 mins play", "Esoccer H2H GG League - 8 mins play"]
         
         home, away = random.choice(teams)
         now = time.time()
@@ -430,12 +452,19 @@ class BettingEngine:
         # Try multiple markets for more betting opportunities
         potential_markets = self._get_potential_markets(match, current_goals, elapsed_minutes)
         
+        # OVER/UNDER MARKETS
         for market_t in potential_markets:
             suggestion = self._evaluate_market(match, market_t)
             if suggestion and self._risk_check(suggestion):
                 suggestions.append(suggestion)
-                if len(suggestions) >= 2:  # Max 2 bets per match per cycle
+                if len(suggestions) >= 3:  # Allow more bets for dual leagues
                     break
+        
+        # BTTS MARKETS (H2H GG League)
+        if "H2H GG" in match.league and len(suggestions) < 3:
+            btts_suggestion = self._evaluate_btts_market(match)
+            if btts_suggestion and self._risk_check(btts_suggestion):
+                suggestions.append(btts_suggestion)
         
         if suggestions:
             self.last_suggestions[match.match_id] = time.time()  # Mark this match as analyzed
