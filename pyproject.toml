@@ -9,4 +9,5 @@ dependencies = [
     "plotly>=6.3.0",
     "pytz>=2025.2",
     "streamlit>=1.49.1",
+    "trafilatura>=2.0.0",
 ]
