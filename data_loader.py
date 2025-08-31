@@ -2,6 +2,7 @@ import sqlite3
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta, timezone
+import pytz
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
@@ -120,7 +121,8 @@ class DataLoader:
         """)
         
         if not df.empty:
-            df['open_ts_formatted'] = pd.to_datetime(df['open_ts'], unit='s').dt.strftime('%Y-%m-%d %H:%M:%S')
+            stockholm_tz = pytz.timezone('Europe/Stockholm')
+            df['open_ts_formatted'] = pd.to_datetime(df['open_ts'], unit='s', utc=True).dt.tz_convert(stockholm_tz).dt.strftime('%Y-%m-%d %H:%M:%S')
         
         return df
     
@@ -129,8 +131,9 @@ class DataLoader:
         df = self._execute_query("SELECT * FROM tickets ORDER BY open_ts DESC")
         
         if not df.empty:
-            df['open_ts_formatted'] = pd.to_datetime(df['open_ts'], unit='s').dt.strftime('%Y-%m-%d %H:%M:%S')
-            df['close_ts_formatted'] = pd.to_datetime(df['close_ts'], unit='s').dt.strftime('%Y-%m-%d %H:%M:%S')
+            stockholm_tz = pytz.timezone('Europe/Stockholm')
+            df['open_ts_formatted'] = pd.to_datetime(df['open_ts'], unit='s', utc=True).dt.tz_convert(stockholm_tz).dt.strftime('%Y-%m-%d %H:%M:%S')
+            df['close_ts_formatted'] = pd.to_datetime(df['close_ts'], unit='s', utc=True).dt.tz_convert(stockholm_tz).dt.strftime('%Y-%m-%d %H:%M:%S')
         
         return df
     
@@ -154,7 +157,8 @@ class DataLoader:
         df = self._execute_query(query, params)
         
         if not df.empty:
-            df['ts_formatted'] = pd.to_datetime(df['ts'], unit='s').dt.strftime('%Y-%m-%d %H:%M:%S')
+            stockholm_tz = pytz.timezone('Europe/Stockholm')
+            df['ts_formatted'] = pd.to_datetime(df['ts'], unit='s', utc=True).dt.tz_convert(stockholm_tz).dt.strftime('%Y-%m-%d %H:%M:%S')
             df['match_title'] = df['home'] + ' vs ' + df['away']
         
         return df
@@ -164,7 +168,8 @@ class DataLoader:
         df = self._execute_query(f"SELECT * FROM suggestions ORDER BY ts DESC LIMIT {limit}")
         
         if not df.empty:
-            df['ts_formatted'] = pd.to_datetime(df['ts'], unit='s').dt.strftime('%H:%M:%S')
+            stockholm_tz = pytz.timezone('Europe/Stockholm')
+            df['ts_formatted'] = pd.to_datetime(df['ts'], unit='s', utc=True).dt.tz_convert(stockholm_tz).dt.strftime('%H:%M:%S')
             df['match_title'] = df['home'] + ' vs ' + df['away']
         
         return df
@@ -174,7 +179,8 @@ class DataLoader:
         df = self._execute_query("SELECT * FROM pnl ORDER BY ts")
         
         if not df.empty:
-            df['timestamp'] = pd.to_datetime(df['ts'], unit='s')
+            stockholm_tz = pytz.timezone('Europe/Stockholm')
+            df['timestamp'] = pd.to_datetime(df['ts'], unit='s', utc=True).dt.tz_convert(stockholm_tz)
             df['date'] = df['timestamp'].dt.date
         
         return df

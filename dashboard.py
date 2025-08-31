@@ -7,6 +7,7 @@ import sqlite3
 import time
 import os
 from datetime import datetime, timezone
+import pytz
 from pathlib import Path
 
 from data_loader import DataLoader
@@ -183,10 +184,11 @@ with tab2:
             # Active bets table
             display_tickets = active_tickets.copy()
             display_tickets['Match'] = display_tickets['home'] + ' vs ' + display_tickets['away']
-            display_tickets['Open Time'] = pd.to_datetime(display_tickets['open_ts'], unit='s').dt.strftime('%H:%M:%S')
+            stockholm_tz = pytz.timezone('Europe/Stockholm')
+            display_tickets['Open Time'] = pd.to_datetime(display_tickets['open_ts'], unit='s', utc=True).dt.tz_convert(stockholm_tz).dt.strftime('%H:%M:%S')
             display_tickets['Potential Win'] = (display_tickets['odds'] - 1) * display_tickets['stake']
             
-            cols_to_show = ['Open Time', 'Match', 'League', 'market_name', 'odds', 'stake', 'Potential Win']
+            cols_to_show = ['Open Time', 'Match', 'league', 'market_name', 'odds', 'stake', 'Potential Win']
             display_df = display_tickets[cols_to_show].round(2)
             display_df.columns = ['Open Time', 'Match', 'League', 'Market', 'Odds', 'Stake', 'Potential Win']
             
@@ -424,9 +426,11 @@ with tab5:
 
 # Footer
 st.markdown("---")
+stockholm_tz = pytz.timezone('Europe/Stockholm')
+stockholm_time = datetime.now(stockholm_tz)
 st.markdown(
     "🤖 **E-Soccer Betting Bot Dashboard** | "
-    f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | "
+    f"Last updated: {stockholm_time.strftime('%Y-%m-%d %H:%M:%S')} (Stockholm) | "
     "Auto-refresh: " + ("✅ Enabled" if auto_refresh else "❌ Disabled")
 )
 
