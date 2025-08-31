@@ -18,13 +18,13 @@ DATA_DIR = Path("data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / "esoccer.db"
 
-# Configuration
+# Configuration - More aggressive for more bets
 START_BANKROLL = float(os.getenv("START_BANKROLL", "1000"))
 SAFE_KELLY_FACTOR = float(os.getenv("SAFE_KELLY_FACTOR", "0.25"))
-MAX_RISK_PER_MATCH = float(os.getenv("MAX_RISK_PER_MATCH", "0.06"))
-MAX_TOTAL_RISK = float(os.getenv("MAX_TOTAL_RISK", "0.18"))
-MIN_ABS_EV = float(os.getenv("MIN_ABS_EV", "0.015"))
-MIN_REL_EDGE = float(os.getenv("MIN_REL_EDGE", "0.04"))
+MAX_RISK_PER_MATCH = float(os.getenv("MAX_RISK_PER_MATCH", "0.08"))
+MAX_TOTAL_RISK = float(os.getenv("MAX_TOTAL_RISK", "0.25"))
+MIN_ABS_EV = float(os.getenv("MIN_ABS_EV", "0.008"))  # Lower threshold = more bets
+MIN_REL_EDGE = float(os.getenv("MIN_REL_EDGE", "0.02"))  # Lower threshold = more bets
 
 MARKETS = [0.5, 1.5, 2.5, 3.5]
 
@@ -234,27 +234,31 @@ class BettingEngine:
         """Analyze match for total goals betting opportunities"""
         suggestions = []
         
-        # Skip if too early or too late in match
-        if match.elapsed < 60 or match.elapsed > 420:  # Only bet between 1-7 minutes
+        # Skip if too early or too late in match - wider window
+        if match.elapsed < 30 or match.elapsed > 450:  # Bet between 0.5-7.5 minutes
             return suggestions
         
-        # Prevent duplicate bets for same match - use match_id as key
+        # Reduce cooldown for more frequent bets per match
         if match.match_id in self.last_suggestions:
-            if time.time() - self.last_suggestions[match.match_id] < 120:  # 2 minute cooldown per match
+            if time.time() - self.last_suggestions[match.match_id] < 60:  # 1 minute cooldown per match
                 return suggestions
         
-        # Focus on total goals - find the best market based on current game state
+        # Generate multiple betting opportunities per match
         current_goals = match.home_goals + match.away_goals
         elapsed_minutes = match.elapsed / 60.0
         
-        # Determine which total goals market makes most sense
-        best_market = self._find_best_total_goals_market(match, current_goals, elapsed_minutes)
+        # Try multiple markets for more betting opportunities
+        potential_markets = self._get_potential_markets(match, current_goals, elapsed_minutes)
         
-        if best_market:
-            suggestion = self._evaluate_market(match, best_market)
+        for market_t in potential_markets:
+            suggestion = self._evaluate_market(match, market_t)
             if suggestion and self._risk_check(suggestion):
                 suggestions.append(suggestion)
-                self.last_suggestions[match.match_id] = time.time()  # Mark this match as analyzed
+                if len(suggestions) >= 2:  # Max 2 bets per match per cycle
+                    break
+        
+        if suggestions:
+            self.last_suggestions[match.match_id] = time.time()  # Mark this match as analyzed
         
         return suggestions
     
@@ -301,11 +305,12 @@ class BettingEngine:
         if ev < MIN_ABS_EV or edge_rel < MIN_REL_EDGE:
             return None
         
-        # Kelly criterion stake
+        # Kelly criterion stake - more flexible sizing
         kelly_f = max(0.0, (model_prob * odds - 1) / (odds - 1))
-        stake = min(50, self.bankroll * kelly_f * SAFE_KELLY_FACTOR)  # Cap at $50
+        stake = min(75, self.bankroll * kelly_f * SAFE_KELLY_FACTOR)  # Cap at $75
         
-        if stake < 1.0:
+        # Lower minimum stake for more bets
+        if stake < 0.5:
             return None
         
         return Suggestion(
@@ -347,35 +352,40 @@ class BettingEngine:
             
         return min(1.0, prob)
     
-    def _find_best_total_goals_market(self, match: Match, current_goals: int, elapsed_minutes: float) -> Optional[float]:
-        """Find the best total goals market to bet on based on game state"""
+    def _get_potential_markets(self, match: Match, current_goals: int, elapsed_minutes: float) -> List[float]:
+        """Get multiple potential total goals markets to bet on"""
+        markets = []
         
         # Estimate final total goals based on current pace
         remaining_minutes = 8 - elapsed_minutes
         goals_per_minute = current_goals / max(elapsed_minutes, 1)  # Avoid division by zero
         projected_total = current_goals + (goals_per_minute * remaining_minutes)
         
-        # If game is goalless after 3+ minutes, focus on Over 0.5
-        if current_goals == 0 and elapsed_minutes >= 3:
-            return 0.5
+        # Always consider the next logical total goals markets
+        if current_goals == 0:
+            # Goalless game - consider Over 0.5 and Over 1.5
+            markets.extend([0.5, 1.5])
+            if elapsed_minutes <= 3:  # Early in game
+                markets.append(2.5)
         
-        # If 1 goal scored early, consider Over 1.5 or Over 2.5
-        if current_goals == 1 and elapsed_minutes <= 4:
-            return 1.5 if projected_total < 2.2 else 2.5
+        elif current_goals == 1:
+            # 1 goal scored - consider Over 1.5 and Over 2.5
+            markets.extend([1.5, 2.5])
+            if elapsed_minutes <= 4:  # Still early
+                markets.append(3.5)
         
-        # If 2+ goals already, focus on higher totals
-        if current_goals >= 2:
-            return 2.5 if current_goals == 2 else 3.5
+        elif current_goals == 2:
+            # 2 goals scored - consider Over 2.5 and Over 3.5
+            markets.extend([2.5, 3.5])
         
-        # Default logic based on projected total
-        if projected_total <= 1.0:
-            return 0.5
-        elif projected_total <= 2.2:
-            return 1.5
-        elif projected_total <= 3.0:
-            return 2.5
         else:
-            return 3.5
+            # 3+ goals - focus on higher totals
+            markets.extend([3.5])
+            if current_goals >= 3:
+                markets.append(2.5)  # Might still hit over 2.5 easily
+        
+        # Remove duplicates and return up to 3 markets
+        return list(dict.fromkeys(markets))[:3]
     
     def _risk_check(self, suggestion: Suggestion) -> bool:
         """Check if suggestion passes risk limits"""
