@@ -166,10 +166,13 @@ with tab1:
     # Recent activity
     st.markdown("#### 📈 Recent Activity")
     if not recent_suggestions.empty:
-        # Show last 5 suggestions
-        display_cols = ['ts_formatted', 'match_title', 'market_name', 'odds', 'stake', 'edge_abs', 'edge_rel']
-        recent_display = recent_suggestions[display_cols].head(5)
-        recent_display.columns = ['Time', 'Match', 'Market', 'Odds', 'Stake', 'EV %', 'Edge %']
+        # Show last 5 suggestions - check if columns exist first
+        if all(col in recent_suggestions.columns for col in ['ts_formatted', 'match_title', 'market_name', 'odds', 'stake', 'edge_abs', 'edge_rel']):
+            display_cols = ['ts_formatted', 'match_title', 'market_name', 'odds', 'stake', 'edge_abs', 'edge_rel']
+            recent_display = recent_suggestions[display_cols].head(5)
+            recent_display.columns = ['Time', 'Match', 'Market', 'Odds', 'Stake', 'EV %', 'Edge %']
+        else:
+            recent_display = pd.DataFrame()
         st.dataframe(recent_display, use_container_width=True, hide_index=True)
     else:
         st.info("No recent suggestions")
@@ -189,7 +192,12 @@ with tab2:
             display_tickets['Potential Win'] = (display_tickets['odds'] - 1) * display_tickets['stake']
             
             cols_to_show = ['Open Time', 'Match', 'league', 'market_name', 'odds', 'stake', 'Potential Win']
-            display_df = display_tickets[cols_to_show].round(2)
+            display_df = display_tickets[cols_to_show]
+            # Only round numeric columns
+            numeric_cols = ['odds', 'stake', 'Potential Win']
+            for col in numeric_cols:
+                if col in display_df.columns:
+                    display_df[col] = display_df[col].round(2)
             display_df.columns = ['Open Time', 'Match', 'League', 'Market', 'Odds', 'Stake', 'Potential Win']
             
             st.dataframe(display_df, use_container_width=True, hide_index=True)
@@ -306,15 +314,20 @@ with tab4:
         display_suggestions['Edge %'] = (display_suggestions['edge_rel'] * 100).round(1)
         display_suggestions['EV %'] = (display_suggestions['edge_abs'] * 100).round(1)
         
-        cols_to_show = [
-            'ts_formatted', 'match_title', 'market_name', 'odds', 
-            'stake', 'EV %', 'Edge %', 'model_prob', 'implied_prob'
-        ]
-        display_df = display_suggestions[cols_to_show]
-        display_df.columns = [
-            'Time', 'Match', 'Market', 'Odds', 
-            'Stake', 'EV %', 'Edge %', 'Model Prob', 'Implied Prob'
-        ]
+        # Check if required columns exist
+        required_cols = ['ts_formatted', 'match_title', 'market_name', 'odds', 'stake', 'model_prob', 'implied_prob']
+        if all(col in display_suggestions.columns for col in required_cols):
+            cols_to_show = [
+                'ts_formatted', 'match_title', 'market_name', 'odds', 
+                'stake', 'EV %', 'Edge %', 'model_prob', 'implied_prob'
+            ]
+            display_df = display_suggestions[cols_to_show]
+            display_df.columns = [
+                'Time', 'Match', 'Market', 'Odds', 
+                'Stake', 'EV %', 'Edge %', 'Model Prob', 'Implied Prob'
+            ]
+        else:
+            display_df = pd.DataFrame()
         
         st.dataframe(display_df, use_container_width=True, hide_index=True)
         
