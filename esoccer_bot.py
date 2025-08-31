@@ -30,7 +30,7 @@ MAX_TOTAL_RISK = float(os.getenv("MAX_TOTAL_RISK", "0.25"))
 MIN_ABS_EV = float(os.getenv("MIN_ABS_EV", "0.008"))  # Lower threshold = more bets
 MIN_REL_EDGE = float(os.getenv("MIN_REL_EDGE", "0.02"))  # Lower threshold = more bets
 
-MARKETS = [0.5, 1.5, 2.5, 3.5]
+MARKETS = [3.5, 4.5, 5.5, 6.5]  # E-soccer typical goals markets
 
 @dataclass
 class Match:
@@ -204,9 +204,9 @@ class EsoccerProvider:
         elapsed_minutes = match.elapsed / 60.0
         goals_so_far = match.home_goals + match.away_goals
         
-        # Realistic goal expectation decreases over time
+        # E-soccer has higher scoring - realistic goal expectation
         remaining_time_factor = max(0.1, (8 - elapsed_minutes) / 8)
-        base_goal_rate = 2.2  # goals per 8 minutes
+        base_goal_rate = 4.8  # E-soccer averages ~5-6 goals per 8 minutes
         expected_remaining = base_goal_rate * remaining_time_factor
         
         # Generate odds for each market
@@ -454,8 +454,8 @@ class BettingEngine:
             current_pace = goals_now / elapsed_minutes
             expected_goals = current_pace * remaining_minutes
         else:
-            # Use historical average for goalless games
-            expected_goals = 2.0 * remaining_minutes / 8.0
+            # Use historical average for low-scoring e-soccer games
+            expected_goals = 4.8 * remaining_minutes / 8.0  # E-soccer baseline
         
         # Add slight randomness to model different game scenarios
         expected_goals *= random.uniform(0.85, 1.15)
@@ -528,28 +528,32 @@ class BettingEngine:
         goals_per_minute = current_goals / max(elapsed_minutes, 1)  # Avoid division by zero
         projected_total = current_goals + (goals_per_minute * remaining_minutes)
         
-        # Always consider the next logical total goals markets
-        if current_goals == 0:
-            # Goalless game - consider Over 0.5 and Over 1.5
-            markets.extend([0.5, 1.5])
-            if elapsed_minutes <= 3:  # Early in game
-                markets.append(2.5)
+        # E-soccer typical markets - focus on 4.5 goals as main market
+        if current_goals <= 2:
+            # Low scoring early - consider Over 4.5 as main market
+            markets.extend([4.5, 5.5])
+            if elapsed_minutes <= 3:  # Early in game, could be high scoring
+                markets.append(6.5)
         
-        elif current_goals == 1:
-            # 1 goal scored - consider Over 1.5 and Over 2.5
-            markets.extend([1.5, 2.5])
-            if elapsed_minutes <= 4:  # Still early
-                markets.append(3.5)
+        elif current_goals == 3:
+            # 3 goals scored - Over 4.5 likely, consider higher
+            markets.extend([4.5, 5.5])
+            if elapsed_minutes <= 5:  # Still time for more
+                markets.append(6.5)
         
-        elif current_goals == 2:
-            # 2 goals scored - consider Over 2.5 and Over 3.5
-            markets.extend([2.5, 3.5])
+        elif current_goals == 4:
+            # 4 goals scored - Over 4.5 already hit, focus on higher
+            markets.extend([5.5, 6.5])
+        
+        elif current_goals >= 5:
+            # High scoring game - focus on higher totals
+            markets.extend([5.5, 6.5])
+            if current_goals >= 6:
+                markets.append(4.5)  # Over 4.5 already guaranteed
         
         else:
-            # 3+ goals - focus on higher totals
-            markets.extend([3.5])
-            if current_goals >= 3:
-                markets.append(2.5)  # Might still hit over 2.5 easily
+            # Default to main e-soccer market
+            markets.extend([4.5])
         
         # Remove duplicates and return up to 3 markets
         return list(dict.fromkeys(markets))[:3]
