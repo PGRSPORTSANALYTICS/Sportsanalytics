@@ -244,6 +244,7 @@ class BettingEngine:
         self.bankroll = START_BANKROLL
         self.open_risk = 0.0
         self.last_suggestions = {}  # Cooldown tracking
+        self.pending_bets = {}  # Track active bets
     
     def analyze_match(self, match: Match) -> List[Suggestion]:
         """Analyze match for total goals betting opportunities"""
@@ -274,6 +275,19 @@ class BettingEngine:
         
         if suggestions:
             self.last_suggestions[match.match_id] = time.time()  # Mark this match as analyzed
+            # Place the bets (update bankroll and risk)
+            for suggestion in suggestions:
+                self.bankroll -= suggestion.stake  # Deduct stake from bankroll
+                self.open_risk += suggestion.stake  # Add to open risk
+                # Track the bet
+                bet_id = f"{suggestion.match_id}:{suggestion.market_t}:{int(suggestion.ts)}"
+                self.pending_bets[bet_id] = {
+                    'stake': suggestion.stake,
+                    'odds': suggestion.odds,
+                    'match_id': suggestion.match_id,
+                    'market_t': suggestion.market_t,
+                    'placed_at': suggestion.ts
+                }
         
         return suggestions
     
@@ -409,6 +423,50 @@ class BettingEngine:
         max_total = self.bankroll * MAX_TOTAL_RISK
         
         return total_risk_after <= max_total
+    
+    def settle_finished_bets(self, finished_matches: List[Match]) -> int:
+        """Settle bets for finished matches"""
+        settled_count = 0
+        
+        for bet_id, bet_info in list(self.pending_bets.items()):
+            # Find the match for this bet
+            match = None
+            for m in finished_matches:
+                if m.match_id == bet_info['match_id']:
+                    match = m
+                    break
+            
+            if not match:
+                continue  # Match not finished yet
+            
+            # Determine if bet won
+            total_goals = match.home_goals + match.away_goals
+            market_t = bet_info['market_t']
+            over_bet = True  # We only do Over bets
+            
+            won = False
+            if over_bet and total_goals > market_t:
+                won = True
+            
+            # Settle the bet
+            stake = bet_info['stake']
+            if won:
+                payout = stake * bet_info['odds']
+                self.bankroll += payout
+                profit = payout - stake
+                print(f"✅ WON: Over {market_t} - {match.title} ({match.score}) +${profit:.2f}")
+            else:
+                profit = -stake
+                print(f"❌ LOST: Over {market_t} - {match.title} ({match.score}) -${stake:.2f}")
+            
+            # Remove from open risk
+            self.open_risk -= stake
+            
+            # Remove from pending bets
+            del self.pending_bets[bet_id]
+            settled_count += 1
+        
+        return settled_count
 
 class DataStore:
     """Handles database operations"""
@@ -502,14 +560,23 @@ async def main():
     store = DataStore()
     
     last_pnl_update = 0
+    last_settlement = 0
     
     while True:
         try:
             # Get live matches
             matches = await provider.get_live_matches()
             live_matches = [m for m in matches if m.inplay]
+            finished_matches = [m for m in matches if m.finished]
             
             print(f"📊 Monitoring {len(live_matches)} live matches...")
+            
+            # Settle finished bets
+            if time.time() - last_settlement > 120:  # Every 2 minutes
+                settled_count = engine.settle_finished_bets(finished_matches)
+                if settled_count > 0:
+                    print(f"⚖️ Settled {settled_count} finished bets")
+                last_settlement = time.time()
             
             # Analyze each match
             all_suggestions = []
