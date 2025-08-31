@@ -135,8 +135,11 @@ with tab1:
         live_suggestions = latest_suggestions
     
     if not live_suggestions.empty:
-        # Filter only over/under goal markets from LIVE suggestions
-        goal_markets = live_suggestions[live_suggestions['market_name'].str.contains('Over', na=False)]
+        # Include both Over/Under and BTTS markets from LIVE suggestions
+        goal_markets = live_suggestions[
+            (live_suggestions['market_name'].str.contains('Over', na=False)) |
+            (live_suggestions['market_name'].str.contains('BTTS', na=False))
+        ]
         
         if not goal_markets.empty:
             # Show live status indicator
@@ -154,92 +157,71 @@ with tab1:
             st.markdown(f"### 🔥 {live_status}")
             st.markdown("**⚡ Lightning-fast betting opportunities happening RIGHT NOW!**")
             
-            # Show each LIVE suggestion as a prominent card
-            for idx, row in goal_markets.head(8).iterrows():  # Show more live opportunities
+            # Show each LIVE suggestion as a mobile-friendly card
+            for idx, row in goal_markets.head(6).iterrows():  # Fewer cards for mobile
                 with st.container():
-                    col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
+                    # MOBILE-OPTIMIZED: Single column layout
                     
-                    with col1:
-                        # Add LIVE indicator
-                        if 'ts' in goal_markets.columns:
-                            age_minutes = int((current_time - row['ts']) / 60)
-                            if age_minutes < 1:
-                                live_badge = "🔴 LIVE"
-                            elif age_minutes < 3:
-                                live_badge = f"🟡 {age_minutes}m"
-                            else:
-                                live_badge = f"🟠 {age_minutes}m"
+                    # Live status badge
+                    if 'ts' in goal_markets.columns:
+                        age_minutes = int((current_time - row['ts']) / 60)
+                        if age_minutes < 1:
+                            live_badge = "🔴 LIVE NOW"
+                        elif age_minutes < 3:
+                            live_badge = f"🟡 {age_minutes}m ago"
                         else:
-                            live_badge = "🔴 LIVE"
-                        
-                        # Add game time info and match start time
-                        if 'elapsed' in row and row['elapsed'] is not None:
-                            game_minutes = int(row['elapsed'] / 60)
-                            game_seconds = int(row['elapsed'] % 60)
-                            game_time = f"⏱️ {game_minutes}:{game_seconds:02d}"
-                            
-                            # Calculate match start time
-                            match_start_ts = row['ts'] - row['elapsed']
-                            stockholm_tz = pytz.timezone('Europe/Stockholm')
-                            match_start_time = pd.to_datetime(match_start_ts, unit='s', utc=True).tz_convert(stockholm_tz).strftime('%H:%M')
-                            start_display = f"🕐 Started {match_start_time}"
-                        else:
-                            game_time = "⏱️ --:--"
-                            start_display = "🕐 --:--"
-                        
-                        # Add score if available
-                        if 'score' in row and row['score'] is not None:
-                            score_display = f"📊 {row['score']}"
-                        else:
-                            score_display = "📊 0-0"
-                        
-                        st.markdown(f"{live_badge} **⚽ {row['match_title']}**")
-                        st.markdown(f"*{row['league']}*")
-                        st.markdown(f"{start_display} | {game_time} | {score_display}")
+                            live_badge = f"🟠 {age_minutes}m ago"
+                    else:
+                        live_badge = "🔴 LIVE NOW"
                     
-                    with col2:
-                        st.markdown("**Market**")
-                        st.markdown(f"🎯 **{row['market_name']}**")
+                    # Game info
+                    if 'elapsed' in row and row['elapsed'] is not None:
+                        game_minutes = int(row['elapsed'] / 60)
+                        game_seconds = int(row['elapsed'] % 60)
+                        game_time = f"{game_minutes}:{game_seconds:02d}"
+                    else:
+                        game_time = "--:--"
                     
-                    with col3:
-                        st.markdown("**Odds & Stake**")
-                        st.markdown(f"📊 **{row['odds']:.2f}**")
-                        st.markdown(f"💰 **${row['stake']:.0f}**")
+                    if 'score' in row and row['score'] is not None:
+                        score = row['score']
+                    else:
+                        score = "0-0"
                     
-                    with col4:
-                        edge_pct = row['edge_rel'] * 100
-                        ev_pct = row['edge_abs'] * 100
-                        st.markdown("**Edge**")
-                        if edge_pct > 15:
-                            st.markdown(f"🔥 **{edge_pct:.1f}%**")
-                        elif edge_pct > 8:
-                            st.markdown(f"⚡ **{edge_pct:.1f}%**")
-                        else:
-                            st.markdown(f"✅ **{edge_pct:.1f}%**")
-                        st.markdown(f"EV: {ev_pct:.1f}%")
+                    # MAIN BET INFO - Large and clear for mobile
+                    edge_pct = row['edge_rel'] * 100
+                    if edge_pct > 15:
+                        edge_icon = "🔥"
+                    elif edge_pct > 8:
+                        edge_icon = "⚡"
+                    else:
+                        edge_icon = "✅"
                     
-                    st.markdown(f"*⏱️ {row['ts_formatted']} Stockholm time*")
+                    # Single big card with essential info only
+                    st.markdown(f"""
+                    ## {live_badge}
+                    # 🎯 **{row['market_name']}** @ **{row['odds']:.2f}**
+                    ## 💰 **Bet ${row['stake']:.0f}** {edge_icon} **{edge_pct:.0f}% Edge**
+                    
+                    **⚽ {row['match_title']}**  
+                    📊 {score} • ⏱️ {game_time} • *{row['league']}*
+                    """)
                     st.markdown("---")
             
-            # LIVE Summary section
-            st.markdown("### 📊 **LIVE Opportunities Summary**")
-            col1, col2, col3, col4 = st.columns(4)
+            # MOBILE-FRIENDLY Summary
+            st.markdown("### 📊 **Quick Summary**")
+            col1, col2 = st.columns(2)
             
             with col1:
                 live_opportunities = len(goal_markets)
-                st.metric("🔴 LIVE Opportunities", live_opportunities)
+                total_stake = goal_markets['stake'].sum()
+                st.metric("🔴 Live Bets", f"{live_opportunities}")
+                st.metric("💰 Total Stake", f"${total_stake:.0f}")
             
             with col2:
                 avg_edge = goal_markets['edge_rel'].mean() * 100
-                st.metric("📈 Avg Edge", f"{avg_edge:.1f}%")
-            
-            with col3:
-                total_recommended_stake = goal_markets['stake'].sum()
-                st.metric("💰 Total Live Stake", f"${total_recommended_stake:.0f}")
-            
-            with col4:
-                high_value_bets = len(goal_markets[goal_markets['edge_rel'] > 0.15])  # Higher threshold for live
-                st.metric("🔥 High Value LIVE", high_value_bets)
+                high_value = len(goal_markets[goal_markets['edge_rel'] > 0.15])
+                st.metric("📈 Avg Edge", f"{avg_edge:.0f}%")
+                st.metric("🔥 High Value", f"{high_value}")
             
         else:
             st.warning("⏳ No LIVE over/under opportunities right now")
