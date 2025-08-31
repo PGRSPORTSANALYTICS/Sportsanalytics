@@ -231,25 +231,30 @@ class BettingEngine:
         self.last_suggestions = {}  # Cooldown tracking
     
     def analyze_match(self, match: Match) -> List[Suggestion]:
-        """Analyze match for betting opportunities"""
+        """Analyze match for total goals betting opportunities"""
         suggestions = []
         
-        # Skip if too early or too late
-        if match.elapsed < 60 or match.elapsed > 420:  # 1-7 minutes
+        # Skip if too early or too late in match
+        if match.elapsed < 60 or match.elapsed > 420:  # Only bet between 1-7 minutes
             return suggestions
         
-        # Cooldown check
-        cooldown_key = f"{match.match_id}_{match.elapsed // 60}"  # Per minute
-        if cooldown_key in self.last_suggestions:
-            if time.time() - self.last_suggestions[cooldown_key] < 30:  # 30s cooldown
+        # Prevent duplicate bets for same match - use match_id as key
+        if match.match_id in self.last_suggestions:
+            if time.time() - self.last_suggestions[match.match_id] < 120:  # 2 minute cooldown per match
                 return suggestions
         
-        for t in MARKETS:
-            suggestion = self._evaluate_market(match, t)
+        # Focus on total goals - find the best market based on current game state
+        current_goals = match.home_goals + match.away_goals
+        elapsed_minutes = match.elapsed / 60.0
+        
+        # Determine which total goals market makes most sense
+        best_market = self._find_best_total_goals_market(match, current_goals, elapsed_minutes)
+        
+        if best_market:
+            suggestion = self._evaluate_market(match, best_market)
             if suggestion and self._risk_check(suggestion):
                 suggestions.append(suggestion)
-                self.last_suggestions[cooldown_key] = time.time()
-                break  # One suggestion per match per minute
+                self.last_suggestions[match.match_id] = time.time()  # Mark this match as analyzed
         
         return suggestions
     
@@ -261,16 +266,28 @@ class BettingEngine:
         if not odds or odds < 1.2:
             return None
         
-        # Calculate model probability
+        # Calculate model probability for total goals
         goals_now = match.home_goals + match.away_goals
         goals_needed = max(0, math.ceil(market_t + 0.5) - goals_now)
         
         if goals_needed <= 0:
-            return None  # Already achieved
+            return None  # Market already won
         
-        # Time-based expected goals
-        remaining_minutes = max(0.5, 8 - match.elapsed / 60.0)
-        expected_goals = (2.2 * remaining_minutes / 8.0) * random.uniform(0.8, 1.2)  # Add noise
+        # Improved expected goals calculation based on game dynamics
+        elapsed_minutes = match.elapsed / 60.0
+        remaining_minutes = max(0.5, 8 - elapsed_minutes)
+        
+        # Base rate adjusted for actual game pace
+        if goals_now > 0:
+            # Use current pace if goals have been scored
+            current_pace = goals_now / elapsed_minutes
+            expected_goals = current_pace * remaining_minutes
+        else:
+            # Use historical average for goalless games
+            expected_goals = 2.0 * remaining_minutes / 8.0
+        
+        # Add slight randomness to model different game scenarios
+        expected_goals *= random.uniform(0.85, 1.15)
         
         # Model probability using Poisson approximation
         model_prob = self._poisson_survival(goals_needed - 1, expected_goals)
@@ -329,6 +346,36 @@ class BettingEngine:
             prob += exp_neg_mu * mu_power / factorial
             
         return min(1.0, prob)
+    
+    def _find_best_total_goals_market(self, match: Match, current_goals: int, elapsed_minutes: float) -> Optional[float]:
+        """Find the best total goals market to bet on based on game state"""
+        
+        # Estimate final total goals based on current pace
+        remaining_minutes = 8 - elapsed_minutes
+        goals_per_minute = current_goals / max(elapsed_minutes, 1)  # Avoid division by zero
+        projected_total = current_goals + (goals_per_minute * remaining_minutes)
+        
+        # If game is goalless after 3+ minutes, focus on Over 0.5
+        if current_goals == 0 and elapsed_minutes >= 3:
+            return 0.5
+        
+        # If 1 goal scored early, consider Over 1.5 or Over 2.5
+        if current_goals == 1 and elapsed_minutes <= 4:
+            return 1.5 if projected_total < 2.2 else 2.5
+        
+        # If 2+ goals already, focus on higher totals
+        if current_goals >= 2:
+            return 2.5 if current_goals == 2 else 3.5
+        
+        # Default logic based on projected total
+        if projected_total <= 1.0:
+            return 0.5
+        elif projected_total <= 2.2:
+            return 1.5
+        elif projected_total <= 3.0:
+            return 2.5
+        else:
+            return 3.5
     
     def _risk_check(self, suggestion: Suggestion) -> bool:
         """Check if suggestion passes risk limits"""
