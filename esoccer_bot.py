@@ -248,8 +248,8 @@ class EsoccerProvider:
         """Get current live matches from real sources"""
         now = time.time()
         
-        # Fetch fresh data every 2 minutes
-        if now - self.last_fetch > 120:
+        # Fetch fresh data every 60 seconds for faster updates
+        if now - self.last_fetch > 60:
             print("🔄 Fetching fresh live match data...")
             live_data = self._fetch_live_esoccer_data()
             self._update_matches_from_data(live_data)
@@ -392,9 +392,9 @@ class BettingEngine:
         if match.elapsed < 30 or match.elapsed > 450:  # Bet between 0.5-7.5 minutes
             return suggestions
         
-        # Reduce cooldown for more frequent bets per match
+        # Faster bet updates - shorter cooldown
         if match.match_id in self.last_suggestions:
-            if time.time() - self.last_suggestions[match.match_id] < 60:  # 1 minute cooldown per match
+            if time.time() - self.last_suggestions[match.match_id] < 30:  # 30 second cooldown per match
                 return suggestions
         
         # Generate multiple betting opportunities per match
@@ -689,10 +689,10 @@ class DataStore:
         conn.close()
 
 async def main():
-    """Main bot loop - LIVE DATA MODE"""
+    """Main bot loop - LIVE DATA MODE with FAST UPDATES"""
     print("🔴 E-Soccer Live Goals Bot - LIVE DATA MODE")
     print("🌐 Connecting to real Esoccer Battle sources...")
-    print("⚽ Analyzing live matches every 8 minutes...")
+    print("⚡ FAST MODE: New bets every 2 minutes, results every 8 minutes...")
     
     provider = EsoccerProvider()
     engine = BettingEngine()
@@ -700,24 +700,27 @@ async def main():
     
     last_pnl_update = 0
     last_settlement = 0
+    cycle_count = 0
     
     while True:
         try:
+            cycle_count += 1
+            
             # Get LIVE matches from real sources
             matches = await provider.get_live_matches()
             live_matches = [m for m in matches if m.inplay]
             finished_matches = [m for m in matches if m.finished]
             
-            print(f"🔴 LIVE: Monitoring {len(live_matches)} real Esoccer Battle matches...")
+            print(f"⚡ FAST UPDATE #{cycle_count}: Monitoring {len(live_matches)} live matches...")
             
-            # Settle finished bets with REAL results
-            if time.time() - last_settlement > 120:  # Every 2 minutes
+            # Settle finished bets every 8 minutes (every 4th cycle)
+            if cycle_count % 4 == 0 or time.time() - last_settlement > 480:  # Every 8 minutes
                 settled_count = engine.settle_finished_bets(finished_matches)
                 if settled_count > 0:
-                    print(f"⚖️ Settled {settled_count} bets with REAL match results")
+                    print(f"⚖️ RESULTS: Settled {settled_count} bets with REAL match results")
                 last_settlement = time.time()
             
-            # Analyze each LIVE match for real opportunities
+            # Analyze each LIVE match for fast betting opportunities
             all_suggestions = []
             for match in live_matches:
                 suggestions = engine.analyze_match(match)
@@ -725,30 +728,30 @@ async def main():
                     all_suggestions.append(suggestion)
                     store.save_suggestion(suggestion)
                     
-                    print(f"🔴 LIVE BET OPPORTUNITY: {suggestion.market_name} @ {suggestion.odds:.2f}")
+                    print(f"⚡ FAST BET: {suggestion.market_name} @ {suggestion.odds:.2f}")
                     print(f"   {suggestion.home} vs {suggestion.away}")
                     print(f"   Stake: ${suggestion.stake:.0f}, Edge: {suggestion.edge_rel:.1%}")
                     print(f"   LIVE Score: {suggestion.score} at {suggestion.elapsed//60:.0f}' elapsed")
             
-            # Update P&L with real performance
+            # Update P&L more frequently
             now = time.time()
-            if now - last_pnl_update > 300:  # Every 5 minutes
+            if now - last_pnl_update > 240:  # Every 4 minutes
                 store.save_pnl(engine.bankroll, engine.open_risk)
                 last_pnl_update = now
             
             if all_suggestions:
-                print(f"✅ Found {len(all_suggestions)} LIVE betting opportunities")
+                print(f"⚡ Found {len(all_suggestions)} FAST betting opportunities")
             else:
-                print("⏳ Scanning for live opportunities...")
+                print("⚡ Scanning for fast opportunities...")
             
             print(f"💰 LIVE Bankroll: ${engine.bankroll:.2f} | Active Risk: ${engine.open_risk:.2f}")
-            print("=" * 60)
+            print("-" * 50)
             
         except Exception as e:
-            print(f"❌ Error in LIVE data cycle: {e}")
+            print(f"❌ Error in FAST cycle: {e}")
         
-        # Wait 8 minutes between LIVE data updates
-        await asyncio.sleep(480)
+        # Wait 2 minutes between betting updates (4x faster)
+        await asyncio.sleep(120)
 
 if __name__ == "__main__":
     try:
