@@ -325,7 +325,7 @@ with tab4:
             title="Distribution of Relative Edge",
             labels={'edge_rel': 'Relative Edge', 'count': 'Frequency'}
         )
-        fig_edge.update_xaxis(tickformat='.1%')
+        fig_edge.update_xaxes(tickformat='.1%')
         st.plotly_chart(fig_edge, use_container_width=True)
     else:
         st.info("📋 No suggestions match the current filters")

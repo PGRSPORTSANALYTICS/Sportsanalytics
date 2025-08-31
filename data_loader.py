@@ -41,11 +41,11 @@ class DataLoader:
                 """)
                 conn.commit()
     
-    def _execute_query(self, query: str, params: tuple = ()) -> pd.DataFrame:
+    def _execute_query(self, query: str, params = None) -> pd.DataFrame:
         """Execute a SQL query and return results as DataFrame."""
         try:
             with sqlite3.connect(self.db_path) as conn:
-                return pd.read_sql_query(query, conn, params=params)
+                return pd.read_sql_query(query, conn, params=params if params else [])
         except Exception as e:
             print(f"Database query error: {e}")
             return pd.DataFrame()
@@ -151,7 +151,7 @@ class DataLoader:
         
         query += " ORDER BY ts DESC"
         
-        df = self._execute_query(query, tuple(params))
+        df = self._execute_query(query, params)
         
         if not df.empty:
             df['ts_formatted'] = pd.to_datetime(df['ts'], unit='s').dt.strftime('%Y-%m-%d %H:%M:%S')

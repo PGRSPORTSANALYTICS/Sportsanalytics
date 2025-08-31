@@ -91,7 +91,7 @@ class ChartGenerator:
         wins = settled_tickets[settled_tickets['pnl'] > 0]['pnl']
         losses = settled_tickets[settled_tickets['pnl'] <= 0]['pnl']
         
-        if not wins.empty:
+        if len(wins) > 0:
             fig.add_trace(go.Histogram(
                 x=wins,
                 name='Wins',
@@ -100,7 +100,7 @@ class ChartGenerator:
                 nbinsx=20
             ))
         
-        if not losses.empty:
+        if len(losses) > 0:
             fig.add_trace(go.Histogram(
                 x=losses,
                 name='Losses',
