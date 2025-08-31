@@ -121,25 +121,52 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 ])
 
 with tab1:
-    st.subheader("🎯 Current Betting Recommendations - Over/Under Goals")
+    st.subheader("🔴 LIVE Betting Opportunities - Right Now!")
     
-    # Get latest suggestions (last 10)
-    latest_suggestions = data_loader.get_recent_suggestions(limit=10)
+    # Get only LIVE/ACTIVE suggestions (last 5 minutes)
+    current_time = time.time()
+    five_minutes_ago = current_time - 300  # 5 minutes
+    latest_suggestions = data_loader.get_recent_suggestions(limit=20)
     
+    # Filter to only very recent (live) suggestions
     if not latest_suggestions.empty:
-        # Filter only over/under goal markets
-        goal_markets = latest_suggestions[latest_suggestions['market_name'].str.contains('Over', na=False)]
+        live_suggestions = latest_suggestions[latest_suggestions['ts'] > five_minutes_ago]
+    else:
+        live_suggestions = latest_suggestions
+    
+    if not live_suggestions.empty:
+        # Filter only over/under goal markets from LIVE suggestions
+        goal_markets = live_suggestions[live_suggestions['market_name'].str.contains('Over', na=False)]
         
         if not goal_markets.empty:
-            st.markdown("### 🔥 **LIVE BETTING OPPORTUNITIES**")
+            # Show live status indicator
+            minutes_since = int((current_time - goal_markets['ts'].max()) / 60)
+            if minutes_since < 1:
+                live_status = "🔴 **LIVE NOW** - Fresh opportunities!"
+            elif minutes_since < 3:
+                live_status = f"🟡 **{minutes_since}m ago** - Still fresh"
+            else:
+                live_status = f"🟠 **{minutes_since}m ago** - Check if still available"
             
-            # Show each suggestion as a prominent card
-            for idx, row in goal_markets.head(5).iterrows():
+            st.markdown(f"### 🔥 {live_status}")
+            st.markdown("**⚡ Lightning-fast betting opportunities happening RIGHT NOW!**")
+            
+            # Show each LIVE suggestion as a prominent card
+            for idx, row in goal_markets.head(8).iterrows():  # Show more live opportunities
                 with st.container():
                     col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
                     
                     with col1:
-                        st.markdown(f"**⚽ {row['match_title']}**")
+                        # Add LIVE indicator
+                        age_minutes = int((current_time - row['ts']) / 60)
+                        if age_minutes < 1:
+                            live_badge = "🔴 LIVE"
+                        elif age_minutes < 3:
+                            live_badge = f"🟡 {age_minutes}m"
+                        else:
+                            live_badge = f"🟠 {age_minutes}m"
+                        
+                        st.markdown(f"{live_badge} **⚽ {row['match_title']}**")
                         st.markdown(f"*{row['league']}*")
                     
                     with col2:
@@ -166,13 +193,13 @@ with tab1:
                     st.markdown(f"*⏱️ {row['ts_formatted']} Stockholm time*")
                     st.markdown("---")
             
-            # Summary section
-            st.markdown("### 📊 **Today's Betting Summary**")
+            # LIVE Summary section
+            st.markdown("### 📊 **LIVE Opportunities Summary**")
             col1, col2, col3, col4 = st.columns(4)
             
             with col1:
-                total_opportunities = len(goal_markets)
-                st.metric("🎯 Opportunities Found", total_opportunities)
+                live_opportunities = len(goal_markets)
+                st.metric("🔴 LIVE Opportunities", live_opportunities)
             
             with col2:
                 avg_edge = goal_markets['edge_rel'].mean() * 100
@@ -180,28 +207,33 @@ with tab1:
             
             with col3:
                 total_recommended_stake = goal_markets['stake'].sum()
-                st.metric("💰 Total Stake", f"${total_recommended_stake:.0f}")
+                st.metric("💰 Total Live Stake", f"${total_recommended_stake:.0f}")
             
             with col4:
-                high_value_bets = len(goal_markets[goal_markets['edge_rel'] > 0.1])
-                st.metric("🔥 High Value Bets", high_value_bets)
+                high_value_bets = len(goal_markets[goal_markets['edge_rel'] > 0.15])  # Higher threshold for live
+                st.metric("🔥 High Value LIVE", high_value_bets)
             
         else:
-            st.warning("⏳ No over/under goal opportunities found in recent suggestions")
+            st.warning("⏳ No LIVE over/under opportunities right now")
+            st.info("🔍 Bot scans every 2 minutes - check back soon!")
     else:
-        st.info("🔍 Bot is scanning markets... No suggestions yet")
+        st.info("🔍 Bot is scanning for LIVE opportunities... New bets coming soon!")
+        
+    # Add refresh notice for live data
+    st.markdown("---")
+    st.markdown("🔄 **Live updates every 10 seconds** | Bot finds new opportunities every 2 minutes")
     
-    # Market focus info
-    st.markdown("### 🎲 **Supported Goal Markets**")
+    # LIVE Market focus info  
+    st.markdown("### 🎯 **LIVE E-Soccer Markets (TotalCorner Data)**")
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.markdown("**Over 0.5**\n*At least 1 goal*")
+        st.markdown("**Over 4.5** 🔥\n*E-soccer standard*")
     with col2:
-        st.markdown("**Over 1.5**\n*At least 2 goals*")  
+        st.markdown("**Over 5.5** ⚡\n*High value bets*")  
     with col3:
-        st.markdown("**Over 2.5**\n*At least 3 goals*")
+        st.markdown("**Over 6.5** 💎\n*Massive edges*")
     with col4:
-        st.markdown("**Over 3.5**\n*At least 4 goals*")
+        st.markdown("**Over 7.5** 🚀\n*Extreme value*")
 
 with tab2:
     st.subheader("🎲 Active Betting Positions")
