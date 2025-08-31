@@ -636,14 +636,38 @@ class BettingEngine:
             if not match:
                 continue  # Match not finished yet
             
-            # Determine if bet won
+            # Determine if bet won based on market type
             total_goals = match.home_goals + match.away_goals
             market_t = bet_info['market_t']
-            over_bet = True  # We only do Over bets
+            
+            # Get the original market name to determine bet type
+            original_market = None
+            for pending_bet_id, pending_info in self.pending_bets.items():
+                if pending_bet_id == bet_id:
+                    # Find this bet in the tickets table to get market_name
+                    try:
+                        conn = sqlite3.connect("data/esoccer.db")
+                        cur = conn.cursor()
+                        result = cur.execute("SELECT market_name FROM tickets WHERE id = ?", (bet_id,)).fetchone()
+                        if result:
+                            original_market = result[0]
+                        conn.close()
+                    except:
+                        pass
+                    break
             
             won = False
-            if over_bet and total_goals > market_t:
-                won = True
+            if original_market and "BTTS" in original_market:
+                # BTTS settlement logic
+                both_scored = match.home_goals > 0 and match.away_goals > 0
+                if "YES" in original_market:
+                    won = both_scored
+                else:  # BTTS NO
+                    won = not both_scored
+            else:
+                # Over/Under settlement logic
+                if total_goals > market_t:
+                    won = True
             
             # Settle the bet
             stake = bet_info['stake']
@@ -655,6 +679,20 @@ class BettingEngine:
             else:
                 profit = -stake
                 print(f"❌ LOST: Over {market_t} - {match.title} ({match.score}) -${stake:.2f}")
+            
+            # UPDATE DATABASE - Mark ticket as settled
+            try:
+                conn = sqlite3.connect("data/esoccer.db")
+                cur = conn.cursor()
+                cur.execute("""
+                    UPDATE tickets 
+                    SET is_settled = 1, win = ?, close_ts = ?, pnl = ?
+                    WHERE id = ?
+                """, (1 if won else 0, int(time.time()), profit, bet_id))
+                conn.commit()
+                conn.close()
+            except Exception as e:
+                print(f"⚠️ Database settlement error: {e}")
             
             # Remove from open risk
             self.open_risk -= stake
