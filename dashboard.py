@@ -113,69 +113,95 @@ st.markdown("---")
 
 # Main content tabs
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "📊 Live Overview", 
+    "🎯 What to Bet", 
     "🎲 Active Bets", 
     "💹 Performance", 
-    "📋 Suggestions", 
+    "📋 History", 
     "⚙️ Risk Management"
 ])
 
 with tab1:
-    st.subheader("📊 Live Market Overview")
+    st.subheader("🎯 Current Betting Recommendations - Over/Under Goals")
     
-    # Current matches section
-    col1, col2 = st.columns([2, 1])
+    # Get latest suggestions (last 10)
+    latest_suggestions = data_loader.get_recent_suggestions(limit=10)
     
-    with col1:
-        st.markdown("#### 🏆 Current Matches")
-        if not active_tickets.empty:
-            # Group active tickets by match
-            match_summary = active_tickets.groupby(['match_id', 'home', 'away', 'league']).agg({
-                'stake': 'sum',
-                'market_name': 'count',
-                'odds': 'mean'
-            }).round(2)
-            match_summary.columns = ['Total Stake', 'Active Bets', 'Avg Odds']
-            match_summary = match_summary.reset_index()
-            match_summary['Match'] = match_summary['home'] + ' vs ' + match_summary['away']
+    if not latest_suggestions.empty:
+        # Filter only over/under goal markets
+        goal_markets = latest_suggestions[latest_suggestions['market_name'].str.contains('Over', na=False)]
+        
+        if not goal_markets.empty:
+            st.markdown("### 🔥 **LIVE BETTING OPPORTUNITIES**")
             
-            st.dataframe(
-                match_summary[['Match', 'league', 'Active Bets', 'Total Stake', 'Avg Odds']],
-                use_container_width=True,
-                hide_index=True
-            )
+            # Show each suggestion as a prominent card
+            for idx, row in goal_markets.head(5).iterrows():
+                with st.container():
+                    col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
+                    
+                    with col1:
+                        st.markdown(f"**⚽ {row['match_title']}**")
+                        st.markdown(f"*{row['league']}*")
+                    
+                    with col2:
+                        st.markdown("**Market**")
+                        st.markdown(f"🎯 **{row['market_name']}**")
+                    
+                    with col3:
+                        st.markdown("**Odds & Stake**")
+                        st.markdown(f"📊 **{row['odds']:.2f}**")
+                        st.markdown(f"💰 **${row['stake']:.0f}**")
+                    
+                    with col4:
+                        edge_pct = row['edge_rel'] * 100
+                        ev_pct = row['edge_abs'] * 100
+                        st.markdown("**Edge**")
+                        if edge_pct > 15:
+                            st.markdown(f"🔥 **{edge_pct:.1f}%**")
+                        elif edge_pct > 8:
+                            st.markdown(f"⚡ **{edge_pct:.1f}%**")
+                        else:
+                            st.markdown(f"✅ **{edge_pct:.1f}%**")
+                        st.markdown(f"EV: {ev_pct:.1f}%")
+                    
+                    st.markdown(f"*⏱️ {row['ts_formatted']} Stockholm time*")
+                    st.markdown("---")
+            
+            # Summary section
+            st.markdown("### 📊 **Today's Betting Summary**")
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                total_opportunities = len(goal_markets)
+                st.metric("🎯 Opportunities Found", total_opportunities)
+            
+            with col2:
+                avg_edge = goal_markets['edge_rel'].mean() * 100
+                st.metric("📈 Avg Edge", f"{avg_edge:.1f}%")
+            
+            with col3:
+                total_recommended_stake = goal_markets['stake'].sum()
+                st.metric("💰 Total Stake", f"${total_recommended_stake:.0f}")
+            
+            with col4:
+                high_value_bets = len(goal_markets[goal_markets['edge_rel'] > 0.1])
+                st.metric("🔥 High Value Bets", high_value_bets)
+            
         else:
-            st.info("No active matches with open positions")
-    
-    with col2:
-        st.markdown("#### 📊 Risk Distribution")
-        if not active_tickets.empty:
-            # Risk by market type
-            market_risk = active_tickets.groupby('market_name')['stake'].sum().reset_index()
-            fig_risk = px.pie(
-                market_risk, 
-                values='stake', 
-                names='market_name',
-                title="Risk by Market Type"
-            )
-            fig_risk.update_layout(height=300)
-            st.plotly_chart(fig_risk, use_container_width=True)
-        else:
-            st.info("No active risk to display")
-    
-    # Recent activity
-    st.markdown("#### 📈 Recent Activity")
-    if not recent_suggestions.empty:
-        # Show last 5 suggestions - check if columns exist first
-        if all(col in recent_suggestions.columns for col in ['ts_formatted', 'match_title', 'market_name', 'odds', 'stake', 'edge_abs', 'edge_rel']):
-            display_cols = ['ts_formatted', 'match_title', 'market_name', 'odds', 'stake', 'edge_abs', 'edge_rel']
-            recent_display = recent_suggestions[display_cols].head(5)
-            recent_display.columns = ['Time', 'Match', 'Market', 'Odds', 'Stake', 'EV %', 'Edge %']
-        else:
-            recent_display = pd.DataFrame()
-        st.dataframe(recent_display, use_container_width=True, hide_index=True)
+            st.warning("⏳ No over/under goal opportunities found in recent suggestions")
     else:
-        st.info("No recent suggestions")
+        st.info("🔍 Bot is scanning markets... No suggestions yet")
+    
+    # Market focus info
+    st.markdown("### 🎲 **Supported Goal Markets**")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.markdown("**Over 0.5**\n*At least 1 goal*")
+    with col2:
+        st.markdown("**Over 1.5**\n*At least 2 goals*")  
+    with col3:
+        st.markdown("**Over 2.5**\n*At least 3 goals*")
+    with col4:
+        st.markdown("**Over 3.5**\n*At least 4 goals*")
 
 with tab2:
     st.subheader("🎲 Active Betting Positions")
@@ -278,72 +304,66 @@ with tab3:
         st.info("📊 No performance data available yet")
 
 with tab4:
-    st.subheader("📋 Betting Suggestions History")
+    st.subheader("📋 Over/Under Goals Betting History")
     
-    # Filters
+    # Filters focused on goal markets
     col1, col2, col3 = st.columns(3)
     with col1:
         days_filter = st.selectbox("Time Period", [1, 3, 7, 30], index=2)
     with col2:
-        market_filter = st.selectbox("Market", ["All"] + data_loader.get_available_markets())
+        goal_markets = ["All", "Over 0.5", "Over 1.5", "Over 2.5", "Over 3.5"]
+        market_filter = st.selectbox("Goal Market", goal_markets)
     with col3:
-        min_edge_filter = st.slider("Min Edge %", 0.0, 20.0, 0.0, 0.5)
+        min_edge_filter = st.slider("Min Edge %", 0.0, 25.0, 5.0, 1.0)
     
-    # Get filtered suggestions
+    # Get filtered suggestions for over/under markets only
     suggestions_df = data_loader.get_suggestions(
         days=days_filter,
         market_filter=market_filter if market_filter != "All" else None,
         min_edge=min_edge_filter/100
     )
     
+    # Filter only over/under goal markets
     if not suggestions_df.empty:
+        goal_suggestions = suggestions_df[suggestions_df['market_name'].str.contains('Over', na=False)]
+    else:
+        goal_suggestions = pd.DataFrame()
+    
+    if not goal_suggestions.empty:
         # Summary stats
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.metric("Total Suggestions", len(suggestions_df))
+            st.metric("Goal Market Bets", len(goal_suggestions))
         with col2:
-            st.metric("Avg Edge", f"{suggestions_df['edge_rel'].mean()*100:.1f}%")
+            st.metric("Avg Edge", f"{goal_suggestions['edge_rel'].mean()*100:.1f}%")
         with col3:
-            st.metric("Avg EV", f"{suggestions_df['edge_abs'].mean()*100:.1f}%")
+            st.metric("Total Stake", f"${goal_suggestions['stake'].sum():.0f}")
         with col4:
-            st.metric("Total Stake", f"${suggestions_df['stake'].sum():.2f}")
+            high_edge = len(goal_suggestions[goal_suggestions['edge_rel'] > 0.15])
+            st.metric("High Edge Bets (>15%)", high_edge)
         
-        # Suggestions table
-        st.markdown("#### 📋 Detailed Suggestions")
-        display_suggestions = suggestions_df.copy()
+        # Simplified table focused on key info
+        st.markdown("#### 📋 Over/Under Goals History")
+        display_suggestions = goal_suggestions.copy()
         display_suggestions['Edge %'] = (display_suggestions['edge_rel'] * 100).round(1)
         display_suggestions['EV %'] = (display_suggestions['edge_abs'] * 100).round(1)
         
-        # Check if required columns exist
-        required_cols = ['ts_formatted', 'match_title', 'market_name', 'odds', 'stake', 'model_prob', 'implied_prob']
-        if all(col in display_suggestions.columns for col in required_cols):
-            cols_to_show = [
-                'ts_formatted', 'match_title', 'market_name', 'odds', 
-                'stake', 'EV %', 'Edge %', 'model_prob', 'implied_prob'
-            ]
+        if 'ts_formatted' in display_suggestions.columns:
+            cols_to_show = ['ts_formatted', 'match_title', 'market_name', 'odds', 'stake', 'Edge %']
             display_df = display_suggestions[cols_to_show]
-            display_df.columns = [
-                'Time', 'Match', 'Market', 'Odds', 
-                'Stake', 'EV %', 'Edge %', 'Model Prob', 'Implied Prob'
-            ]
-        else:
-            display_df = pd.DataFrame()
+            display_df.columns = ['Time (Stockholm)', 'Match', 'Market', 'Odds', 'Stake $', 'Edge %']
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
         
-        st.dataframe(display_df, use_container_width=True, hide_index=True)
-        
-        # Edge distribution chart
-        st.markdown("#### 📊 Edge Distribution")
-        fig_edge = px.histogram(
-            suggestions_df, 
-            x='edge_rel', 
-            nbins=20,
-            title="Distribution of Relative Edge",
-            labels={'edge_rel': 'Relative Edge', 'count': 'Frequency'}
-        )
-        fig_edge.update_xaxes(tickformat='.1%')
-        st.plotly_chart(fig_edge, use_container_width=True)
+        # Market breakdown
+        st.markdown("#### 📊 Goal Market Breakdown")
+        market_stats = goal_suggestions.groupby('market_name').agg({
+            'stake': ['count', 'sum'],
+            'edge_rel': 'mean'
+        }).round(2)
+        market_stats.columns = ['Count', 'Total Stake', 'Avg Edge']
+        st.dataframe(market_stats, use_container_width=True)
     else:
-        st.info("📋 No suggestions match the current filters")
+        st.info("📋 No over/under goal suggestions match the current filters")
 
 with tab5:
     st.subheader("⚙️ Risk Management")
