@@ -196,14 +196,16 @@ with tab1:
                     else:
                         edge_icon = "✅"
                     
-                    # Single big card with essential info only
+                    # Compact card with smaller text
                     st.markdown(f"""
-                    ## {live_badge}
-                    # 🎯 **{row['market_name']}** @ **{row['odds']:.2f}**
-                    ## 💰 **Bet ${row['stake']:.0f}** {edge_icon} **{edge_pct:.0f}% Edge**
+                    **{live_badge}**
                     
-                    **⚽ {row['match_title']}**  
-                    📊 {score} • ⏱️ {game_time} • *{row['league']}*
+                    **🎯 {row['market_name']} @ {row['odds']:.2f}**
+                    
+                    **💰 Bet ${row['stake']:.0f}** {edge_icon} **{edge_pct:.0f}% Edge**
+                    
+                    ⚽ {row['match_title']}  
+                    📊 {score} • ⏱️ {game_time}
                     """)
                     st.markdown("---")
             
