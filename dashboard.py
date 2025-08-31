@@ -172,8 +172,30 @@ with tab1:
                         else:
                             live_badge = "🔴 LIVE"
                         
+                        # Add game time info and match start time
+                        if 'elapsed' in row and row['elapsed'] is not None:
+                            game_minutes = int(row['elapsed'] / 60)
+                            game_seconds = int(row['elapsed'] % 60)
+                            game_time = f"⏱️ {game_minutes}:{game_seconds:02d}"
+                            
+                            # Calculate match start time
+                            match_start_ts = row['ts'] - row['elapsed']
+                            stockholm_tz = pytz.timezone('Europe/Stockholm')
+                            match_start_time = pd.to_datetime(match_start_ts, unit='s', utc=True).tz_convert(stockholm_tz).strftime('%H:%M')
+                            start_display = f"🕐 Started {match_start_time}"
+                        else:
+                            game_time = "⏱️ --:--"
+                            start_display = "🕐 --:--"
+                        
+                        # Add score if available
+                        if 'score' in row and row['score'] is not None:
+                            score_display = f"📊 {row['score']}"
+                        else:
+                            score_display = "📊 0-0"
+                        
                         st.markdown(f"{live_badge} **⚽ {row['match_title']}**")
                         st.markdown(f"*{row['league']}*")
+                        st.markdown(f"{start_display} | {game_time} | {score_display}")
                     
                     with col2:
                         st.markdown("**Market**")
