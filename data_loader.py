@@ -209,8 +209,8 @@ class DataLoader:
             max_risk_per_match = 0.0
         
         return {
-            'bankroll': bankroll,
-            'total_risk': total_risk,
-            'risk_percentage': (total_risk / bankroll * 100) if bankroll > 0 else 0,
-            'max_risk_per_match': max_risk_per_match
+            'bankroll': float(bankroll),
+            'total_risk': float(total_risk),
+            'risk_percentage': float((total_risk / bankroll * 100) if bankroll > 0 else 0),
+            'max_risk_per_match': float(max_risk_per_match)
         }

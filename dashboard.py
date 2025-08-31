@@ -29,10 +29,7 @@ data_loader = get_data_loader()
 chart_generator = ChartGenerator()
 
 # Auto-refresh functionality
-auto_refresh = st.sidebar.checkbox("Auto Refresh (10s)", value=True)
-if auto_refresh:
-    time.sleep(0.1)  # Small delay to prevent too frequent updates
-    st.rerun()
+auto_refresh = st.sidebar.checkbox("Auto Refresh (10s)", value=False)
 
 # Manual refresh button
 if st.sidebar.button("🔄 Refresh Now"):
@@ -142,7 +139,7 @@ with tab1:
             match_summary['Match'] = match_summary['home'] + ' vs ' + match_summary['away']
             
             st.dataframe(
-                match_summary[['Match', 'League', 'Active Bets', 'Total Stake', 'Avg Odds']],
+                match_summary[['Match', 'league', 'Active Bets', 'Total Stake', 'Avg Odds']],
                 use_container_width=True,
                 hide_index=True
             )
@@ -234,7 +231,10 @@ with tab3:
         with col2:
             # PnL distribution
             all_tickets = data_loader.get_tickets()
-            settled_tickets = all_tickets[all_tickets['is_settled'] == 1].copy()
+            if not all_tickets.empty:
+                settled_tickets = all_tickets[all_tickets['is_settled'] == 1].copy()
+            else:
+                settled_tickets = pd.DataFrame()
             
             if not settled_tickets.empty:
                 fig_pnl = chart_generator.create_pnl_distribution(settled_tickets)
