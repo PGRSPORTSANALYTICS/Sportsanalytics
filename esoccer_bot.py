@@ -88,17 +88,28 @@ class EsoccerProvider:
             "Esoccer Battle - 8 mins play"
         ]
         
-        # Exact teams from your screenshot
-        teams = [
+        # Both country teams and club teams that appear in Esoccer Battle
+        country_teams = [
             ("Argentina (Donatello)", "Germany (Serenity)"),
             ("Italy (Samurai)", "Spain (Cavempt)"),
             ("France (tohi4)", "Spain (Cavempt)"),
             ("Italy (Samurai)", "Germany (Serenity)"),
             ("Argentina (Donatello)", "Italy (Samurai)"),
             ("Germany (Serenity)", "Spain (Cavempt)"),
-            ("France (tohi4)", "Argentina (Donatello)"),
-            ("Italy (Samurai)", "France (tohi4)")
+            ("France (tohi4)", "Argentina (Donatello)")
         ]
+        
+        club_teams = [
+            ("PSG", "Real Madrid"),
+            ("Barcelona", "Manchester City"),
+            ("Liverpool", "Bayern Munich"),
+            ("Chelsea", "Juventus"),
+            ("Arsenal", "AC Milan"),
+            ("Manchester United", "Inter Milan"),
+            ("Atletico Madrid", "Napoli")
+        ]
+        
+        teams = country_teams + club_teams
         
         now = time.time()
         for i in range(4):  # 4 concurrent matches
@@ -199,12 +210,14 @@ class EsoccerProvider:
     
     def _add_new_match(self):
         """Add a new live match"""
-        # Same teams that appear in real Esoccer Battle
+        # Mix of country and club teams for variety
         teams = [
             ("Argentina (Donatello)", "Germany (Serenity)"),
+            ("PSG", "Real Madrid"),
             ("Italy (Samurai)", "Spain (Cavempt)"),
-            ("France (tohi4)", "Spain (Cavempt)"),
-            ("Germany (Serenity)", "France (tohi4)")
+            ("Barcelona", "Manchester City"),
+            ("France (tohi4)", "Liverpool"),
+            ("Chelsea", "Bayern Munich")
         ]
         leagues = ["Esoccer Battle - 8 mins play"]
         
