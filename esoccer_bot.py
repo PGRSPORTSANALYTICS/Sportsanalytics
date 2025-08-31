@@ -88,15 +88,16 @@ class EsoccerProvider:
             "Esoccer Battle - 8 mins play"
         ]
         
+        # Exact teams from your screenshot
         teams = [
             ("Argentina (Donatello)", "Germany (Serenity)"),
             ("Italy (Samurai)", "Spain (Cavempt)"),
-            ("France (tohi4)", "Brazil (Lionmessi)"),
-            ("England (Beckham)", "Netherlands (Cruyff)"),
-            ("Portugal (Ronaldo)", "Argentina (Messi)"),
-            ("Germany (Muller)", "Italy (Totti)"),
-            ("Spain (Xavi)", "France (Zidane)"),
-            ("Brazil (Pele)", "England (Kane)")
+            ("France (tohi4)", "Spain (Cavempt)"),
+            ("Italy (Samurai)", "Germany (Serenity)"),
+            ("Argentina (Donatello)", "Italy (Samurai)"),
+            ("Germany (Serenity)", "Spain (Cavempt)"),
+            ("France (tohi4)", "Argentina (Donatello)"),
+            ("Italy (Samurai)", "France (tohi4)")
         ]
         
         now = time.time()
@@ -198,11 +199,12 @@ class EsoccerProvider:
     
     def _add_new_match(self):
         """Add a new live match"""
+        # Same teams that appear in real Esoccer Battle
         teams = [
-            ("Croatia (Modric)", "Belgium (KDB)"),
-            ("Uruguay (Suarez)", "Colombia (James)"),
-            ("Mexico (Chicharito)", "Chile (Vidal)"),
-            ("Poland (Lewandowski)", "Sweden (Zlatan)")
+            ("Argentina (Donatello)", "Germany (Serenity)"),
+            ("Italy (Samurai)", "Spain (Cavempt)"),
+            ("France (tohi4)", "Spain (Cavempt)"),
+            ("Germany (Serenity)", "France (tohi4)")
         ]
         leagues = ["Esoccer Battle - 8 mins play"]
         
