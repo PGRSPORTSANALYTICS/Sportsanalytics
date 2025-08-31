@@ -89,14 +89,14 @@ class EsoccerProvider:
         ]
         
         teams = [
-            ("Real Madrid", "Barcelona"),
-            ("Man United", "Liverpool"), 
-            ("Chelsea", "Arsenal"),
-            ("Bayern Munich", "Dortmund"),
-            ("PSG", "Lyon"),
-            ("Juventus", "AC Milan"),
-            ("Ajax", "PSV"),
-            ("Porto", "Benfica")
+            ("Argentina (Donatello)", "Germany (Serenity)"),
+            ("Italy (Samurai)", "Spain (Cavempt)"),
+            ("France (tohi4)", "Brazil (Lionmessi)"),
+            ("England (Beckham)", "Netherlands (Cruyff)"),
+            ("Portugal (Ronaldo)", "Argentina (Messi)"),
+            ("Germany (Muller)", "Italy (Totti)"),
+            ("Spain (Xavi)", "France (Zidane)"),
+            ("Brazil (Pele)", "England (Kane)")
         ]
         
         now = time.time()
@@ -199,8 +199,10 @@ class EsoccerProvider:
     def _add_new_match(self):
         """Add a new live match"""
         teams = [
-            ("Napoli", "Roma"), ("Atletico", "Valencia"), 
-            ("Inter", "Lazio"), ("Sevilla", "Betis")
+            ("Croatia (Modric)", "Belgium (KDB)"),
+            ("Uruguay (Suarez)", "Colombia (James)"),
+            ("Mexico (Chicharito)", "Chile (Vidal)"),
+            ("Poland (Lewandowski)", "Sweden (Zlatan)")
         ]
         leagues = ["Esoccer Battle - 8 mins play"]
         
