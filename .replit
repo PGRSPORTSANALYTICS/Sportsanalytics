@@ -24,6 +24,10 @@ args = "Streamlit Dashboard"
 task = "workflow.run"
 args = "install_dependencies"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "E-Soccer Bot"
+
 [[workflows.workflow]]
 name = "Streamlit Dashboard"
 author = "agent"
@@ -43,6 +47,17 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "uv add plotly"
+
+[[workflows.workflow]]
+name = "E-Soccer Bot"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python esoccer_bot.py"
+
+[workflows.workflow.metadata]
+outputType = "console"
 
 [[ports]]
 localPort = 5000

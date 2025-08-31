@@ -29,8 +29,8 @@ def get_data_loader():
 data_loader = get_data_loader()
 chart_generator = ChartGenerator()
 
-# Auto-refresh functionality
-auto_refresh = st.sidebar.checkbox("Auto Refresh (10s)", value=False)
+# Auto-refresh functionality  
+auto_refresh = st.sidebar.checkbox("Auto Refresh (8 min)", value=True)
 
 # Manual refresh button
 if st.sidebar.button("🔄 Refresh Now"):
@@ -467,7 +467,7 @@ st.markdown(
     "Auto-refresh: " + ("✅ Enabled" if auto_refresh else "❌ Disabled")
 )
 
-# Auto-refresh timer (runs every 10 seconds when enabled)
+# Auto-refresh timer (runs every 8 minutes when enabled)
 if auto_refresh:
-    time.sleep(10)
+    time.sleep(480)  # 8 minutes = 480 seconds
     st.rerun()
