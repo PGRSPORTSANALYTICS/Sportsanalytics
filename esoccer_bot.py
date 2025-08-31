@@ -85,9 +85,7 @@ class EsoccerProvider:
     def _init_matches(self):
         """Initialize live matches"""
         leagues = [
-            "Esoccer Battle - 8 mins play",
-            "Esoccer Liga Pro - 8 mins", 
-            "Esoccer GT League - 8 mins"
+            "Esoccer Battle - 8 mins play"
         ]
         
         teams = [
@@ -204,7 +202,7 @@ class EsoccerProvider:
             ("Napoli", "Roma"), ("Atletico", "Valencia"), 
             ("Inter", "Lazio"), ("Sevilla", "Betis")
         ]
-        leagues = ["Esoccer Battle - 8 mins play", "Esoccer Liga Pro - 8 mins"]
+        leagues = ["Esoccer Battle - 8 mins play"]
         
         home, away = random.choice(teams)
         now = time.time()
