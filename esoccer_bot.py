@@ -93,41 +93,46 @@ class EsoccerProvider:
         print("🔴 LIVE MODE: Fetching real Esoccer Battle data...")
         
     def _fetch_live_esoccer_data(self) -> List[Dict]:
-        """Fetch real live Esoccer Battle matches"""
+        """🎮 Fetch REAL e-soccer matches with authentic players and odds"""
         try:
-            # Multiple sources for Esoccer Battle data
-            sources = [
-                "https://www.flashscore.com/esports/esoccer/",
-                "https://www.bet365.com/",  # Would need different approach for bet365
-                "https://www.sofascore.com/esports/esoccer"
-            ]
+            print("🎮 CONNECTING TO REAL E-SOCCER SOURCES...")
             
-            matches_data = []
+            # Use the real e-soccer scraper for authentic data
+            from esoccer_scraper import RealEsoccerScraper
             
-            # Try flashscore first
-            try:
-                url = "https://www.flashscore.com/esports/esoccer/"
-                downloaded = trafilatura.fetch_url(url)
-                if downloaded:
-                    text = trafilatura.extract(downloaded)
-                    if text and "esoccer" in text.lower():
-                        # Parse the content for match data
-                        matches_data.extend(self._parse_flashscore_data(text))
-                        print(f"✅ Fetched data from FlashScore")
-            except Exception as e:
-                print(f"❌ FlashScore error: {e}")
+            scraper = RealEsoccerScraper()
+            esoccer_matches = scraper.get_esoccer_matches()
             
-            # If no data, TRY HARDER - don't fall back to simulation
-            if not matches_data:
-                print("🔴 ATTEMPTING DIRECT BETTING API CONNECTION...")
-                return self._fetch_from_betting_apis()
+            if esoccer_matches:
+                print(f"🎮 REAL E-SOCCER: Found {len(esoccer_matches)} authentic matches!")
                 
-            return matches_data
+                # Convert to the format expected by the rest of the system
+                matches_data = []
+                for match in esoccer_matches:
+                    match_dict = {
+                        'match_id': match['match_id'],
+                        'league': match['league'],
+                        'home': match['home_team'],
+                        'away': match['away_team'],
+                        'home_player': match['home_player'],
+                        'away_player': match['away_player'],
+                        'score': match.get('score', '0-0'),
+                        'elapsed': match.get('elapsed', 0),
+                        'odds': match['odds'],
+                        'commence_time': match.get('commence_time', time.time())
+                    }
+                    matches_data.append(match_dict)
+                    
+                return matches_data
             
+            else:
+                print("⚠️ No real e-soccer matches available")
+                return []
+                
         except Exception as e:
-            print(f"❌ Error fetching live data: {e}")
+            print(f"❌ Error fetching real e-soccer data: {e}")
             print("🚫 NO SIMULATION FALLBACK - USER WANTS REAL DATA ONLY!")
-            return []  # Return empty instead of fake data
+            return []
     
     def _parse_flashscore_data(self, content: str) -> List[Dict]:
         """Parse FlashScore content for match data"""
@@ -722,7 +727,7 @@ class EsoccerProvider:
         return min(1.0, prob)
     
     async def get_live_matches(self) -> List[Match]:
-        """Get current live matches from real sources"""
+        """🎮 Get current REAL e-soccer matches with authentic odds"""
         now = time.time()
         
         # Fetch fresh data every 60 seconds for faster updates
