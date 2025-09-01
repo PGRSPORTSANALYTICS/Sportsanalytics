@@ -481,7 +481,13 @@ class EsoccerProvider:
         return home_goals, away_goals
     
     def _update_realistic_odds(self, match: Match):
-        """Update realistic odds based on match state"""
+        """Update odds - REAL LIVE ODDS when available, fallback to simulated"""
+        # 🚀 TRY REAL LIVE ODDS FIRST!
+        if self._try_update_live_odds(match):
+            print(f"✅ REAL ODDS: {match.home} vs {match.away}")
+            return
+        
+        # Fallback to simulated odds when real odds not available
         elapsed_minutes = match.elapsed / 60.0
         goals_so_far = match.home_goals + match.away_goals
         
@@ -490,7 +496,7 @@ class EsoccerProvider:
         base_goal_rate = 4.8  # E-soccer averages ~5-6 goals per 8 minutes
         expected_remaining = base_goal_rate * remaining_time_factor
         
-        # Generate odds using REAL TotalCorner Over/Under data
+        # Generate odds using REAL TotalCorner Over/Under data (fallback)
         for t in MARKETS:
             goals_needed = max(0, math.ceil(t + 0.5) - goals_so_far)
             
@@ -544,6 +550,94 @@ class EsoccerProvider:
             
             match.odds["btts_yes"] = round(max(1.15, btts_yes_odds), 2)
             match.odds["btts_no"] = round(max(1.15, btts_no_odds), 2)
+    
+    def _try_update_live_odds(self, match: Match) -> bool:
+        """🚀 Try to get REAL live odds from The Odds API"""
+        try:
+            # Import here to avoid circular imports
+            from live_odds_api import TheOddsAPI
+            
+            if not hasattr(self, '_live_odds_api'):
+                self._live_odds_api = TheOddsAPI()
+                self._last_live_odds_fetch = 0
+                self._live_odds_cache = {}
+            
+            # Rate limit: Only fetch every 5 minutes to conserve API quota
+            current_time = time.time()
+            if current_time - self._last_live_odds_fetch < 300:  # 5 minutes
+                # Use cached odds if available
+                cache_key = f"{match.home}_{match.away}"
+                if cache_key in self._live_odds_cache:
+                    live_odds = self._live_odds_cache[cache_key]
+                    self._apply_live_odds_to_match(match, live_odds)
+                    return True
+                return False
+            
+            # Fetch fresh live odds
+            print("🔄 Fetching REAL live odds from bookmakers...")
+            live_odds = self._live_odds_api.get_soccer_odds(markets='totals')
+            
+            if not live_odds:
+                return False
+            
+            # Update cache and timestamp
+            self._last_live_odds_fetch = current_time
+            self._live_odds_cache = {}
+            
+            # Try to match this specific game
+            for odds in live_odds:
+                # Match by team names (fuzzy matching)
+                if self._teams_match(match.home, match.away, odds.home_team, odds.away_team):
+                    cache_key = f"{match.home}_{match.away}"
+                    self._live_odds_cache[cache_key] = odds
+                    self._apply_live_odds_to_match(match, odds)
+                    
+                    # Show usage stats
+                    stats = self._live_odds_api.get_usage_stats()
+                    print(f"📊 Live Odds API: {stats['requests_used']}/{stats['quota_percentage']:.1f}%")
+                    return True
+            
+            return False
+            
+        except Exception as e:
+            print(f"⚠️ Live odds fetch failed: {e}")
+            return False
+    
+    def _teams_match(self, home1: str, away1: str, home2: str, away2: str) -> bool:
+        """Check if team names match (fuzzy matching for different formats)"""
+        # Extract team names without player names
+        h1 = home1.split('(')[0].strip()
+        a1 = away1.split('(')[0].strip()
+        
+        # Simple fuzzy matching
+        return (h1 in home2 or home2 in h1) and (a1 in away2 or away2 in a1)
+    
+    def _apply_live_odds_to_match(self, match: Match, live_odds) -> None:
+        """Apply real live odds to the match"""
+        if live_odds.market == 'totals' and live_odds.total_line and live_odds.total_over:
+            # Map the live odds total line to our markets
+            line = live_odds.total_line
+            over_odds = live_odds.total_over
+            under_odds = live_odds.total_under or (1.0 / (1.0 - (1.0 / over_odds)))
+            
+            # Store real odds for the specific line
+            market_key = f"over_{str(line).replace('.','_')}"
+            match.odds[market_key] = round(over_odds, 2)
+            match.odds[f"under_{str(line).replace('.','_')}"] = round(under_odds, 2)
+            
+            # Generate odds for other lines based on this real data point
+            for t in MARKETS:
+                if t != line:
+                    # Estimate odds for other lines based on the real line
+                    if t < line:  # Lower line = higher probability
+                        estimated_over = max(1.15, over_odds * 0.7)
+                    else:  # Higher line = lower probability  
+                        estimated_over = min(10.0, over_odds * 1.4)
+                    
+                    estimated_under = 1.0 / (1.0 - (1.0 / estimated_over))
+                    
+                    match.odds[f"over_{str(t).replace('.','_')}"] = round(estimated_over, 2)
+                    match.odds[f"under_{str(t).replace('.','_')}"] = round(estimated_under, 2)
     
     def _poisson_survival(self, k: int, mu: float) -> float:
         """P(X > k) for Poisson distribution"""
