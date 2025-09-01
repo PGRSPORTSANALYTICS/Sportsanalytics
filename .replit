@@ -48,6 +48,10 @@ args = "Real E-Soccer Champion"
 task = "workflow.run"
 args = "Money Machine Dashboard"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Live Results Tracker"
+
 [[workflows.workflow]]
 name = "install_dependencies"
 author = "agent"
@@ -130,6 +134,17 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python money_machine_dashboard.py"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow]]
+name = "Live Results Tracker"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python live_results_tracker.py"
 
 [workflows.workflow.metadata]
 outputType = "console"
