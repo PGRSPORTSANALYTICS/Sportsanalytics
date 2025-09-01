@@ -31,8 +31,8 @@ START_BANKROLL = float(os.getenv("START_BANKROLL", "1000"))
 SAFE_KELLY_FACTOR = float(os.getenv("SAFE_KELLY_FACTOR", "0.25"))
 MAX_RISK_PER_MATCH = float(os.getenv("MAX_RISK_PER_MATCH", "0.08"))
 MAX_TOTAL_RISK = float(os.getenv("MAX_TOTAL_RISK", "0.25"))
-MIN_ABS_EV = float(os.getenv("MIN_ABS_EV", "0.001"))  # Extremely low threshold = maximum bets
-MIN_REL_EDGE = float(os.getenv("MIN_REL_EDGE", "0.005"))  # Extremely low threshold = maximum bets
+MIN_ABS_EV = float(os.getenv("MIN_ABS_EV", "0.02"))  # More conservative (was 0.001)
+MIN_REL_EDGE = float(os.getenv("MIN_REL_EDGE", "0.03"))  # More conservative (was 0.005)
 
 MARKETS = [4.5, 5.5, 6.5, 7.5]  # E-soccer focus on higher markets
 BTTS_MARKETS = ["btts_yes", "btts_no"]  # Both Teams to Score for H2H GG League
@@ -528,11 +528,21 @@ class BettingEngine:
         ev = model_prob * (odds - 1) - (1 - model_prob)
         edge_rel = (model_prob / implied_prob) - 1.0
         
-        # Edge thresholds - with debug logging
+        # Edge thresholds with SANITY CHECKS
         if ev < MIN_ABS_EV or edge_rel < MIN_REL_EDGE:
             print(f"🚫 REJECTED BET: {match.title} Over {market_t} @ {odds:.2f}")
             print(f"   Edge: {ev:.4f} (need >{MIN_ABS_EV:.4f}), Rel: {edge_rel:.2%} (need >{MIN_REL_EDGE:.2%})")
             print(f"   Model: {model_prob:.3f}, Implied: {implied_prob:.3f}")
+            return None
+            
+        # SANITY CHECK: Reject edges that are too good to be true
+        if edge_rel > 0.25:  # 25%+ relative edge is suspicious
+            print(f"🚨 REJECTED: Edge too high ({edge_rel:.1%}) - likely model error")
+            return None
+            
+        # SANITY CHECK: Don't bet if model probability is extremely high
+        if model_prob > 0.85:  # >85% probability is unrealistic for sports betting
+            print(f"🚨 REJECTED: Model probability too high ({model_prob:.1%})")
             return None
         
         # 🧠 DYNAMIC KELLY: Adaptive sizing based on AI calibration quality
