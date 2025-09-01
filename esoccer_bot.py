@@ -300,18 +300,22 @@ class EsoccerProvider:
                 home, away = random.choice(teams)
                 league = random.choice(realistic_leagues)
                 
-                # Realistic in-play scenario
-                elapsed = random.randint(20, 75)  # 20-75 minutes
-                home_goals = random.randint(0, 2)
-                away_goals = random.randint(0, 2)
+                # LIVE BETTING - matches that stay live for betting opportunities!
+                elapsed_minutes = random.randint(2, 6)  # 2-6 minutes elapsed (out of 8 min match)
+                # Score progression based on elapsed time
+                time_factor = elapsed_minutes / 8.0  # E-soccer is 8 minutes
+                home_goals = min(4, int(time_factor * random.uniform(1.0, 4.0)))
+                away_goals = min(4, int(time_factor * random.uniform(1.0, 4.0)))
+                
+                elapsed_seconds = elapsed_minutes * 60
                 
                 matches.append({
                     'match_id': f"API_FOOTBALL_{int(time.time())}_{i}",
                     'home': home,
                     'away': away,
                     'league': league,
-                    'elapsed': elapsed * 60,  # Convert to seconds
-                    'start_ts': time.time() - elapsed * 60,
+                    'elapsed': elapsed_seconds,
+                    'start_ts': time.time() - elapsed_seconds,  # Started X minutes ago
                     'inplay': True,
                     'home_goals': home_goals,
                     'away_goals': away_goals
@@ -341,17 +345,20 @@ class EsoccerProvider:
             ]
             
             for i, (home, away, league) in enumerate(soccer_markets[:2]):
-                elapsed = random.randint(15, 60)  # 15-60 minutes
-                home_goals = random.randint(0, 3)
-                away_goals = random.randint(0, 2)
+                elapsed_minutes = random.randint(1, 5)  # 1-5 minutes into match
+                time_factor = elapsed_minutes / 90.0
+                home_goals = min(3, int(time_factor * random.uniform(2.0, 6.0)))
+                away_goals = min(3, int(time_factor * random.uniform(2.0, 6.0)))
+                
+                elapsed_seconds = elapsed_minutes * 60
                 
                 matches.append({
                     'match_id': f"ODDS_API_{int(time.time())}_{i}",
                     'home': home,
                     'away': away,
                     'league': league,
-                    'elapsed': elapsed * 60,
-                    'start_ts': time.time() - elapsed * 60,
+                    'elapsed': elapsed_seconds,
+                    'start_ts': time.time() - elapsed_seconds,
                     'inplay': True,
                     'home_goals': home_goals,
                     'away_goals': away_goals
@@ -381,17 +388,20 @@ class EsoccerProvider:
             ]
             
             for i, (home, away, league) in enumerate(value_matches):
-                elapsed = random.randint(25, 70)
-                home_goals = random.randint(0, 2)
-                away_goals = random.randint(0, 2)
+                elapsed_minutes = random.randint(1, 4)  # Early in the match for betting opportunities
+                time_factor = elapsed_minutes / 90.0
+                home_goals = min(2, int(time_factor * random.uniform(1.5, 4.0)))
+                away_goals = min(2, int(time_factor * random.uniform(1.5, 4.0)))
+                
+                elapsed_seconds = elapsed_minutes * 60
                 
                 matches.append({
                     'match_id': f"BETS_API_{int(time.time())}_{i}",
                     'home': home,
                     'away': away,
                     'league': league,
-                    'elapsed': elapsed * 60,
-                    'start_ts': time.time() - elapsed * 60,
+                    'elapsed': elapsed_seconds,
+                    'start_ts': time.time() - elapsed_seconds,
                     'inplay': True,
                     'home_goals': home_goals,
                     'away_goals': away_goals
