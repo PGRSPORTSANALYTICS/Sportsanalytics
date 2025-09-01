@@ -411,9 +411,9 @@ class GoalModel:
     
     def __init__(self, total_secs: int = 480, player_factor_fn=None, h2h_factor_fn=None):
         self.total_secs = total_secs
-        # Gamma prior: λ ~ Gamma(α, β) with mean = α/β ≈ 2.2 goals per 8 min
+        # E-SOCCER HIGH SCORING: λ ~ Gamma(α, β) with mean = α/β ≈ 6.5 goals per 8 min
         self.alpha = 3.0
-        self.beta = self.alpha / 2.2
+        self.beta = self.alpha / 6.5  # MASSIVELY higher expectation (was 2.2!)
         # EWMA smoothers per (match_id, odds_key)
         self.ewma: Dict[Tuple[str, str], EWMA] = {}
         # Optional player factor callback

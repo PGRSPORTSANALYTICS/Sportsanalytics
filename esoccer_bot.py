@@ -31,8 +31,8 @@ START_BANKROLL = float(os.getenv("START_BANKROLL", "1000"))
 SAFE_KELLY_FACTOR = float(os.getenv("SAFE_KELLY_FACTOR", "0.25"))
 MAX_RISK_PER_MATCH = float(os.getenv("MAX_RISK_PER_MATCH", "0.08"))
 MAX_TOTAL_RISK = float(os.getenv("MAX_TOTAL_RISK", "0.25"))
-MIN_ABS_EV = float(os.getenv("MIN_ABS_EV", "0.003"))  # Very low threshold = more bets
-MIN_REL_EDGE = float(os.getenv("MIN_REL_EDGE", "0.01"))  # Very low threshold = more bets
+MIN_ABS_EV = float(os.getenv("MIN_ABS_EV", "0.001"))  # Extremely low threshold = maximum bets
+MIN_REL_EDGE = float(os.getenv("MIN_REL_EDGE", "0.005"))  # Extremely low threshold = maximum bets
 
 MARKETS = [4.5, 5.5, 6.5, 7.5]  # E-soccer focus on higher markets
 BTTS_MARKETS = ["btts_yes", "btts_no"]  # Both Teams to Score for H2H GG League
@@ -465,13 +465,22 @@ class BettingEngine:
         # Try multiple markets for more betting opportunities
         potential_markets = self._get_potential_markets(match, current_goals, elapsed_minutes)
         
-        # OVER/UNDER MARKETS
+        # OVER/UNDER MARKETS with debugging
+        print(f"🔍 EVALUATING MATCH: {match.title} (Score: {match.score}, Elapsed: {match.elapsed/60:.1f}min)")
+        print(f"🎯 Testing markets: {potential_markets}")
+        
         for market_t in potential_markets:
             suggestion = self._evaluate_market(match, market_t)
             if suggestion and self._risk_check(suggestion):
                 suggestions.append(suggestion)
+                print(f"✅ BET ACCEPTED: {suggestion.market_name} @ {suggestion.odds}")
                 if len(suggestions) >= 3:  # Allow more bets for dual leagues
                     break
+            elif suggestion:
+                print(f"⚠️ BET FAILED RISK CHECK: {market_t}")
+        
+        if not suggestions:
+            print(f"❌ NO BETS FOUND for {match.title}")
         
         # BTTS MARKETS (H2H GG League)
         if "H2H GG" in match.league and len(suggestions) < 3:
@@ -519,8 +528,11 @@ class BettingEngine:
         ev = model_prob * (odds - 1) - (1 - model_prob)
         edge_rel = (model_prob / implied_prob) - 1.0
         
-        # Edge thresholds
+        # Edge thresholds - with debug logging
         if ev < MIN_ABS_EV or edge_rel < MIN_REL_EDGE:
+            print(f"🚫 REJECTED BET: {match.title} Over {market_t} @ {odds:.2f}")
+            print(f"   Edge: {ev:.4f} (need >{MIN_ABS_EV:.4f}), Rel: {edge_rel:.2%} (need >{MIN_REL_EDGE:.2%})")
+            print(f"   Model: {model_prob:.3f}, Implied: {implied_prob:.3f}")
             return None
         
         # 🧠 DYNAMIC KELLY: Adaptive sizing based on AI calibration quality

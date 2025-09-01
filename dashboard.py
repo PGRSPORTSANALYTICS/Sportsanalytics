@@ -357,7 +357,7 @@ with tab4:
     # Get AI learning metrics from database
     try:
         db_path = Path("data/esoccer.db")
-        conn = sqlite3.connect(db_path)
+        conn = sqlite3.connect(db_path, timeout=10.0)
         cur = conn.cursor()
         
         # Get calibration data
@@ -500,7 +500,7 @@ with tab5:
     # Get settled bets from database
     try:
         db_path = Path("data/esoccer.db")
-        conn = sqlite3.connect(db_path)
+        conn = sqlite3.connect(db_path, timeout=10.0)
         
         # Get recent settled bets
         settled_query = """
