@@ -2,7 +2,7 @@ modules = ["python-3.11", "postgresql-16"]
 
 [nix]
 channel = "stable-25_05"
-packages = ["glibcLocales"]
+packages = ["geckodriver", "glibcLocales", "chromium", "chromedriver"]
 
 [deployment]
 deploymentTarget = "autoscale"
@@ -39,6 +39,10 @@ args = "Ultimate E-Soccer Champion"
 [[workflows.workflow.tasks]]
 task = "workflow.run"
 args = "Perfect Champion"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Real E-Soccer Champion"
 
 [[workflows.workflow]]
 name = "install_dependencies"
@@ -100,6 +104,17 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python perfect_champion.py"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow]]
+name = "Real E-Soccer Champion"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python real_esoccer_champion.py"
 
 [workflows.workflow.metadata]
 outputType = "console"
