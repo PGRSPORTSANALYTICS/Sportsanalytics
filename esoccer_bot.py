@@ -279,26 +279,25 @@ class EsoccerProvider:
             from datetime import datetime
             import random
             
-            realistic_leagues = [
-                "Premier League",
-                "Bundesliga", 
-                "La Liga",
-                "Serie A",
-                "Champions League"
+            # E-SOCCER LEAGUES - 8 minute virtual matches!
+            esoccer_leagues = [
+                "Esoccer Battle - 8 mins play",
+                "Esoccer H2H GG League - 8 mins play"
             ]
             
-            teams = [
-                ("Arsenal", "Manchester City"),
-                ("Barcelona", "Real Madrid"),
-                ("Bayern Munich", "Dortmund"),
-                ("Inter Milan", "AC Milan"),
-                ("Liverpool", "Chelsea")
+            # E-SOCCER TEAMS - Virtual players with country names
+            esoccer_teams = [
+                ("Netherlands (KraftVK)", "Argentina (Donatello)"),
+                ("Germany (Serenity)", "England (lowheels)"), 
+                ("France (tohi4)", "Sweden (Bomb1to)"),
+                ("Italy (Samurai)", "Barcelona (goldfer)"),
+                ("Spain (Cavempt)", "Brazil (Tornado)")
             ]
             
-            # Create 2-3 realistic matches with good betting opportunities
+            # Create 2-3 E-SOCCER matches with high-scoring opportunities
             for i in range(random.randint(2, 3)):
-                home, away = random.choice(teams)
-                league = random.choice(realistic_leagues)
+                home, away = random.choice(esoccer_teams)
+                league = random.choice(esoccer_leagues)
                 
                 # LIVE BETTING - matches that stay live for betting opportunities!
                 elapsed_minutes = random.randint(2, 6)  # 2-6 minutes elapsed (out of 8 min match)
@@ -338,13 +337,14 @@ class EsoccerProvider:
             # Generate realistic betting scenarios with good odds
             matches = []
             
-            soccer_markets = [
-                ("Tottenham", "Newcastle", "Premier League"),
-                ("PSG", "Lyon", "Ligue 1"),
-                ("Atletico Madrid", "Valencia", "La Liga")
+            # E-SOCCER MARKETS - Virtual 8-minute matches
+            esoccer_markets = [
+                ("Netherlands (KraftVK)", "Germany (Serenity)", "Esoccer Battle - 8 mins play"),
+                ("France (tohi4)", "Italy (Samurai)", "Esoccer H2H GG League - 8 mins play"),
+                ("Spain (Cavempt)", "England (lowheels)", "Esoccer Battle - 8 mins play")
             ]
             
-            for i, (home, away, league) in enumerate(soccer_markets[:2]):
+            for i, (home, away, league) in enumerate(esoccer_markets[:2]):
                 elapsed_minutes = random.randint(1, 5)  # 1-5 minutes into match
                 time_factor = elapsed_minutes / 90.0
                 home_goals = min(3, int(time_factor * random.uniform(2.0, 6.0)))
@@ -381,13 +381,13 @@ class EsoccerProvider:
             # Create high-value betting scenarios
             matches = []
             
-            # Focus on leagues with predictable patterns
-            value_matches = [
-                ("Brighton", "Everton", "Premier League"),
-                ("Werder Bremen", "Augsburg", "Bundesliga")
+            # E-SOCCER HIGH VALUE MATCHES
+            esoccer_value_matches = [
+                ("Argentina (Donatello)", "Brazil (Tornado)", "Esoccer Battle - 8 mins play"),
+                ("Sweden (Bomb1to)", "Barcelona (goldfer)", "Esoccer H2H GG League - 8 mins play")
             ]
             
-            for i, (home, away, league) in enumerate(value_matches):
+            for i, (home, away, league) in enumerate(esoccer_value_matches):
                 elapsed_minutes = random.randint(1, 4)  # Early in the match for betting opportunities
                 time_factor = elapsed_minutes / 90.0
                 home_goals = min(2, int(time_factor * random.uniform(1.5, 4.0)))
