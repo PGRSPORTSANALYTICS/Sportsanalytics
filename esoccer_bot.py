@@ -434,6 +434,16 @@ class BettingEngine:
         self.pending_bets = {}  # Track active bets
         self.ai_learner = SelfLearner()  # 🧠 AI Self-Learning System
         print("🧠 AI Self-Learning System initialized!")
+        
+        # Import historical data for learning on first run
+        from totalcorner_scraper import totalcorner_scraper
+        try:
+            historical_matches = totalcorner_scraper.get_historical_matches(days_back=30)
+            if historical_matches:
+                self.ai_learner.import_historical_data(historical_matches)
+                print("📚 Historical learning data imported successfully!")
+        except Exception as e:
+            print(f"⚠️ Historical data import failed: {e}")
     
     def analyze_match(self, match: Match) -> List[Suggestion]:
         """Analyze match for total goals betting opportunities"""

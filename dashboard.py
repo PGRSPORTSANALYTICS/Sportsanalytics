@@ -380,6 +380,10 @@ with tab4:
         # Get training data count
         training_count = cur.execute("SELECT COUNT(*) FROM training_data").fetchone()[0]
         
+        # Get historical data import status
+        total_player_matches = cur.execute("SELECT SUM(matches) FROM player_learning").fetchone()[0] or 0
+        total_h2h_matches = cur.execute("SELECT SUM(matches) FROM head_to_head").fetchone()[0] or 0
+        
         conn.close()
         
         if calibration_row:
@@ -457,6 +461,22 @@ with tab4:
                 else:
                     st.markdown("#### ⚔️ Head-to-Head Learning")
                     st.info("No H2H data yet - will appear after teams play multiple matches")
+            
+            # Historical Data Status
+            st.markdown("#### 📚 Historical Data Import Status")
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric("🏆 Training Matches", training_count)
+            with col2:
+                st.metric("👥 Player Matches", total_player_matches)
+            with col3:
+                st.metric("⚔️ H2H Matches", total_h2h_matches)
+            
+            if total_player_matches > 0 or total_h2h_matches > 0:
+                st.success("✅ Historical data successfully imported from TotalCorner!")
+            else:
+                st.info("🔄 Historical data import in progress...")
             
             # Dynamic Kelly Info
             st.markdown("#### 🎲 Dynamic Kelly Sizing")

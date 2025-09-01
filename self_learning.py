@@ -14,7 +14,7 @@ import math
 import sqlite3
 import time
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, List
 
 # Define Match class locally to avoid circular import
 from dataclasses import dataclass, field
@@ -603,6 +603,42 @@ class SelfLearner:
             self.player_model.update_from_match(match.home, match.away, total_goals)
             # Update head-to-head statistics with individual goal counts
             self.h2h_model.update_from_match(match.home, match.away, match.home_goals, match.away_goals)
+
+    def import_historical_data(self, historical_matches: List[Dict]):
+        """Import historical match data to pre-train learning models"""
+        imported_count = 0
+        
+        print("📚 Importing historical data for AI learning...")
+        
+        for match_data in historical_matches:
+            try:
+                # Update player statistics
+                home_player = match_data.get('home_player', match_data.get('home', ''))
+                away_player = match_data.get('away_player', match_data.get('away', ''))
+                total_goals = match_data['total_goals']
+                home_goals = match_data['home_goals']
+                away_goals = match_data['away_goals']
+                
+                # Clean player names (remove team prefix if present)
+                if '(' in home_player and ')' in home_player:
+                    home_player = home_player.split('(')[-1].replace(')', '')
+                if '(' in away_player and ')' in away_player:
+                    away_player = away_player.split('(')[-1].replace(')', '')
+                
+                # Update player learning model
+                self.player_model.update_from_match(home_player, away_player, total_goals)
+                
+                # Update head-to-head learning model  
+                self.h2h_model.update_from_match(home_player, away_player, home_goals, away_goals)
+                
+                imported_count += 1
+                
+            except Exception as e:
+                print(f"⚠️ Error importing match {match_data.get('match_id', 'unknown')}: {e}")
+                continue
+        
+        print(f"✅ Successfully imported {imported_count} historical matches")
+        return imported_count
     
     def get_learning_stats(self) -> Dict:
         """Get current learning statistics for dashboard"""
