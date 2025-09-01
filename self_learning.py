@@ -411,9 +411,9 @@ class GoalModel:
     
     def __init__(self, total_secs: int = 480, player_factor_fn=None, h2h_factor_fn=None):
         self.total_secs = total_secs
-        # E-SOCCER HIGH SCORING: λ ~ Gamma(α, β) with mean = α/β ≈ 6.0 goals per 8 min
-        self.alpha = 4.5
-        self.beta = self.alpha / 6.0  # E-soccer IS high-scoring! (was 4.8 too low)
+        # E-SOCCER ULTRA HIGH SCORING: λ ~ Gamma(α, β) with mean = α/β ≈ 6.5 goals per 8 min
+        self.alpha = 5.2
+        self.beta = self.alpha / 6.5  # E-soccer averages 6.5+ goals - be aggressive!
         # EWMA smoothers per (match_id, odds_key)
         self.ewma: Dict[Tuple[str, str], EWMA] = {}
         # Optional player factor callback

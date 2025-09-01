@@ -31,8 +31,8 @@ START_BANKROLL = float(os.getenv("START_BANKROLL", "1000"))
 SAFE_KELLY_FACTOR = float(os.getenv("SAFE_KELLY_FACTOR", "0.25"))
 MAX_RISK_PER_MATCH = float(os.getenv("MAX_RISK_PER_MATCH", "0.08"))
 MAX_TOTAL_RISK = float(os.getenv("MAX_TOTAL_RISK", "0.25"))
-MIN_ABS_EV = float(os.getenv("MIN_ABS_EV", "0.01"))  # Balanced - not too conservative (was 0.02)
-MIN_REL_EDGE = float(os.getenv("MIN_REL_EDGE", "0.015"))  # Balanced for better opportunities (was 0.03)
+MIN_ABS_EV = float(os.getenv("MIN_ABS_EV", "0.005"))  # AGGRESSIVE - catch more opportunities!
+MIN_REL_EDGE = float(os.getenv("MIN_REL_EDGE", "0.008"))  # LOWER threshold to catch near-misses
 
 MARKETS = [4.5, 5.5, 6.5, 7.5]  # E-soccer focus on higher markets
 BTTS_MARKETS = ["btts_yes", "btts_no"]  # Both Teams to Score for H2H GG League
