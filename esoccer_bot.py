@@ -772,6 +772,51 @@ class BettingEngine:
         
         return suggestions
     
+    def _evaluate_btts_market(self, match: Match) -> Optional[Suggestion]:
+        """Evaluate Both Teams to Score (BTTS) market for H2H GG League"""
+        btts_odds = match.odds.get("btts_yes", 1.8)  # Default BTTS odds
+        
+        if btts_odds < 1.2:
+            return None
+            
+        # E-soccer BTTS probability is higher due to attacking play
+        btts_prob = 0.65  # 65% chance both teams score in e-soccer
+        implied_prob = 1.0 / btts_odds
+        
+        # Calculate edge
+        ev = btts_prob * (btts_odds - 1) - (1 - btts_prob)
+        edge_rel = (btts_prob / implied_prob) - 1.0
+        
+        if ev < MIN_ABS_EV or edge_rel < MIN_REL_EDGE:
+            return None
+        
+        # Kelly sizing for BTTS
+        kelly_f = max(0.0, (btts_prob * btts_odds - 1) / (btts_odds - 1))
+        stake = min(50, self.bankroll * kelly_f * 0.25)
+        
+        if stake < 1:
+            return None
+            
+        return Suggestion(
+            ts=time.time(),
+            match_id=match.match_id,
+            league=match.league,
+            home=match.home,
+            away=match.away,
+            market_t=0,  # BTTS doesn't use market_t
+            market_name="BTTS Yes",
+            odds=btts_odds,
+            stake=round(stake, 2),
+            kelly_fraction=round(kelly_f * 0.25, 4),
+            model_prob=round(btts_prob, 4),
+            implied_prob=round(implied_prob, 4),
+            edge_abs=round(ev, 4),
+            edge_rel=round(edge_rel, 4),
+            reason="High-scoring e-soccer BTTS opportunity",
+            score=match.score,
+            elapsed=match.elapsed
+        )
+    
     def _evaluate_market(self, match: Match, market_t: float) -> Optional[Suggestion]:
         """🧠 AI-powered market evaluation with self-learning"""
         market_key = f"over_{str(market_t).replace('.','_')}"
