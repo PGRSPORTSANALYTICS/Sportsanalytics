@@ -112,10 +112,11 @@ with col5:
 st.markdown("---")
 
 # Main content tabs
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "🎯 What to Bet", 
     "🎲 Active Bets", 
     "💹 Performance", 
+    "🧠 AI Learning", 
     "📋 History", 
     "⚙️ Risk Management"
 ])
@@ -409,7 +410,103 @@ with tab4:
     else:
         st.info("📋 No over/under goal suggestions match the current filters")
 
-with tab5:
+with tab4:
+    st.subheader("🧠 AI Self-Learning System")
+    
+    # Get AI learning metrics from database
+    try:
+        db_path = Path("data/esoccer.db")
+        conn = sqlite3.connect(db_path)
+        cur = conn.cursor()
+        
+        # Get calibration data
+        calibration_row = cur.execute("SELECT a, b, brier, updated FROM calibration WHERE id=1").fetchone()
+        
+        # Get player learning stats
+        player_stats = cur.execute("""
+            SELECT name, matches, total_goals, updated 
+            FROM player_learning 
+            ORDER BY matches DESC LIMIT 10
+        """).fetchall()
+        
+        # Get training data count
+        training_count = cur.execute("SELECT COUNT(*) FROM training_data").fetchone()[0]
+        
+        conn.close()
+        
+        if calibration_row:
+            a, b, brier, updated = calibration_row
+            
+            # AI Learning Status
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                quality = "Excellent" if brier < 0.18 else "Good" if brier < 0.24 else "Learning"
+                quality_color = "🟢" if brier < 0.18 else "🟡" if brier < 0.24 else "🔴"
+                st.metric("🧠 AI Quality", f"{quality_color} {quality}")
+            
+            with col2:
+                st.metric("📊 Brier Score", f"{brier:.3f}", "Lower is better")
+            
+            with col3:
+                st.metric("📚 Training Examples", f"{training_count:,}")
+            
+            with col4:
+                last_updated = datetime.fromtimestamp(updated).strftime("%H:%M:%S")
+                st.metric("🕐 Last Updated", last_updated)
+            
+            st.markdown("---")
+            
+            # Calibration Parameters
+            st.markdown("#### 🎯 Calibration Parameters")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown(f"""
+                **Logistic Calibration:**
+                - **a (slope):** {a:.4f}
+                - **b (bias):** {b:.4f}
+                - **Formula:** p_adj = sigmoid(a × logit(p_model) + b)
+                """)
+            
+            with col2:
+                # Brier score trend (simplified)
+                st.markdown(f"""
+                **Learning Quality:**
+                - **Brier Score:** {brier:.3f}
+                - **Status:** {"🟢 Excellent" if brier < 0.18 else "🟡 Good" if brier < 0.24 else "🔴 Learning"}
+                - **Interpretation:** {"AI predictions very accurate" if brier < 0.18 else "AI predictions good" if brier < 0.24 else "AI still learning from data"}
+                """)
+            
+            # Player Learning Stats
+            if player_stats:
+                st.markdown("#### 👥 Player Learning Stats")
+                
+                player_df = pd.DataFrame(player_stats, columns=['Player', 'Matches', 'Total Goals', 'Updated'])
+                player_df['Goal Rate'] = (player_df['Total Goals'] / player_df['Matches']).round(2)
+                player_df['Updated'] = pd.to_datetime(player_df['Updated'], unit='s').dt.strftime('%H:%M')
+                
+                # Show top learned players
+                display_df = player_df[['Player', 'Matches', 'Goal Rate', 'Updated']].head(8)
+                st.dataframe(display_df, use_container_width=True, hide_index=True)
+            
+            # Dynamic Kelly Info
+            st.markdown("#### 🎲 Dynamic Kelly Sizing")
+            kelly_info = f"""
+            The AI automatically adjusts bet sizing based on calibration quality:
+            - **Current Brier Score:** {brier:.3f}
+            - **Kelly Adjustment:** {"Conservative (60% of base)" if brier > 0.24 else "Aggressive (125% of base)" if brier < 0.18 else "Normal (100% of base)"}
+            - **Reason:** {"Poor calibration → smaller bets" if brier > 0.24 else "Excellent calibration → larger bets" if brier < 0.18 else "Good calibration → normal sizing"}
+            """
+            st.info(kelly_info)
+            
+        else:
+            st.warning("🔄 AI system initializing... Learning data will appear after first few bets settle.")
+            
+    except Exception as e:
+        st.error(f"❌ Error loading AI learning data: {e}")
+
+with tab6:
     st.subheader("⚙️ Risk Management")
     
     # Current risk metrics

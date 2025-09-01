@@ -19,6 +19,7 @@ import json
 from player_stats import get_player_stats, get_match_prediction, get_real_matchups
 from totalcorner_players import get_totalcorner_stats, get_real_match_prediction, get_totalcorner_matchups
 from totalcorner_scraper import totalcorner_scraper
+from self_learning import SelfLearner
 
 # Database setup
 DATA_DIR = Path("data")
@@ -424,13 +425,15 @@ class EsoccerProvider:
         print(f"🆕 New match started: {match.title}")
 
 class BettingEngine:
-    """Analyzes matches and generates betting suggestions"""
+    """AI-powered betting engine with self-learning capabilities"""
     
     def __init__(self):
         self.bankroll = START_BANKROLL
         self.open_risk = 0.0
         self.last_suggestions = {}  # Cooldown tracking
         self.pending_bets = {}  # Track active bets
+        self.ai_learner = SelfLearner()  # 🧠 AI Self-Learning System
+        print("🧠 AI Self-Learning System initialized!")
     
     def analyze_match(self, match: Match) -> List[Suggestion]:
         """Analyze match for total goals betting opportunities"""
@@ -485,41 +488,24 @@ class BettingEngine:
         return suggestions
     
     def _evaluate_market(self, match: Match, market_t: float) -> Optional[Suggestion]:
-        """Evaluate specific over/under market"""
+        """🧠 AI-powered market evaluation with self-learning"""
         market_key = f"over_{str(market_t).replace('.','_')}"
         odds = match.odds.get(market_key)
         
         if not odds or odds < 1.2:
             return None
         
-        # Calculate model probability for total goals
         goals_now = match.home_goals + match.away_goals
         goals_needed = max(0, math.ceil(market_t + 0.5) - goals_now)
         
         if goals_needed <= 0:
             return None  # Market already won
         
-        # Improved expected goals calculation based on game dynamics
-        elapsed_minutes = match.elapsed / 60.0
-        remaining_minutes = max(0.5, 8 - elapsed_minutes)
-        
-        # Base rate adjusted for actual game pace
-        if goals_now > 0:
-            # Use current pace if goals have been scored
-            current_pace = goals_now / elapsed_minutes
-            expected_goals = current_pace * remaining_minutes
-        else:
-            # Use historical average for low-scoring e-soccer games
-            expected_goals = 4.8 * remaining_minutes / 8.0  # E-soccer baseline
-        
-        # Add slight randomness to model different game scenarios
-        expected_goals *= random.uniform(0.85, 1.15)
-        
-        # Model probability using Poisson approximation
-        model_prob = self._poisson_survival(goals_needed - 1, expected_goals)
+        # 🧠 AI PREDICTION: Use self-learning calibrated probability
+        model_prob = self.ai_learner.get_calibrated_probability(match, market_t)
         implied_prob = 1.0 / odds
         
-        # Calculate edge
+        # Calculate edge using AI prediction
         ev = model_prob * (odds - 1) - (1 - model_prob)
         edge_rel = (model_prob / implied_prob) - 1.0
         
@@ -527,11 +513,12 @@ class BettingEngine:
         if ev < MIN_ABS_EV or edge_rel < MIN_REL_EDGE:
             return None
         
-        # Kelly criterion stake - more flexible sizing
+        # 🧠 DYNAMIC KELLY: Adaptive sizing based on AI calibration quality
         kelly_f = max(0.0, (model_prob * odds - 1) / (odds - 1))
-        stake = min(75, self.bankroll * kelly_f * SAFE_KELLY_FACTOR)  # Cap at $75
+        dynamic_kelly = self.ai_learner.get_dynamic_kelly()
+        stake = min(75, self.bankroll * kelly_f * dynamic_kelly)  # AI-adjusted Kelly
         
-        # Lower minimum stake for more bets
+        # Lower minimum stake for more betting opportunities
         if stake < 0.5:
             return None
         
@@ -668,6 +655,14 @@ class BettingEngine:
                 # Over/Under settlement logic
                 if total_goals > market_t:
                     won = True
+            
+            # 🧠 AI LEARNING: Feed result back to self-learning system
+            try:
+                self.ai_learner.update_from_settlement(match, market_t, won)
+                learning_stats = self.ai_learner.get_learning_stats()
+                print(f"🧠 AI LEARNED: Brier: {learning_stats['brier_score']:.3f}, Quality: {learning_stats['learning_quality']}")
+            except Exception as e:
+                print(f"⚠️ AI learning error: {e}")
             
             # Settle the bet
             stake = bet_info['stake']
