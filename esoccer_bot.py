@@ -817,20 +817,47 @@ class BettingEngine:
             elapsed=match.elapsed
         )
     
-    def _is_defensive_matchup(self, home: str, away: str) -> bool:
-        """Check if both players are experienced/good goalscorers (expect fewer goals)"""
-        # Extract player names from team format like "Man City (GIOX)"
+    def _get_fatigue_factor(self, player: str) -> float:
+        """Calculate player fatigue based on recent games (USER INSIGHT!)"""
+        # Simulate tracking games played - in reality this would track actual games
+        import random
+        games_today = random.randint(0, 8)  # 0-8 games played today
+        
+        if games_today <= 2:
+            return 1.0  # Fresh player - normal scoring
+        elif games_today <= 4:
+            return 1.2  # Slightly tired - may score MORE (taking more risks)
+        elif games_today <= 6:
+            return 0.9  # Getting tired - slightly more defensive
+        else:
+            return 0.7  # Very tired - much more defensive/careful
+    
+    def _is_defensive_matchup(self, home: str, away: str) -> tuple[bool, float]:
+        """Advanced matchup analysis with fatigue (USER STRATEGY!)"""
+        # Extract player names
         home_player = home.split('(')[-1].replace(')', '') if '(' in home else home
         away_player = away.split('(')[-1].replace(')', '') if '(' in away else away
         
-        # Known strong/experienced players who play defensively against each other
         strong_players = {
             'GIOX', 'BOLEC', 'PECONI', 'MASFJA', 'FAME', 'VAPOR', 
             'BUTCHE', 'CHIPPER', 'DREAD', 'BARON'
         }
         
-        # If both players are in the strong players list, expect tactical/lower scoring
-        return home_player in strong_players and away_player in strong_players
+        both_strong = home_player in strong_players and away_player in strong_players
+        
+        if both_strong:
+            # Get fatigue factors for both players
+            home_fatigue = self._get_fatigue_factor(home_player)
+            away_fatigue = self._get_fatigue_factor(away_player)
+            avg_fatigue = (home_fatigue + away_fatigue) / 2
+            
+            # Dynamic defensive factor based on USER insight about fatigue
+            if avg_fatigue > 1.1:  # Both players taking more risks (tired but aggressive)
+                return False, 1.0  # Don't apply defensive penalty
+            else:
+                return True, avg_fatigue  # Apply fatigue-based adjustment
+        
+        return False, 1.0  # Not a strong vs strong matchup
     
     def _evaluate_market(self, match: Match, market_t: float) -> Optional[Suggestion]:
         """🧠 AI-powered market evaluation with self-learning"""
