@@ -552,56 +552,63 @@ class EsoccerProvider:
             match.odds["btts_no"] = round(max(1.15, btts_no_odds), 2)
     
     def _try_update_live_odds(self, match: Match) -> bool:
-        """🚀 Try to get REAL live odds from The Odds API"""
+        """🚀 Get REAL live odds from bookmakers"""
         try:
-            # Import here to avoid circular imports
-            from live_odds_api import TheOddsAPI
+            # Import the simple, reliable odds fetcher
+            from real_odds_fetcher import RealOddsFetcher
             
-            if not hasattr(self, '_live_odds_api'):
-                self._live_odds_api = TheOddsAPI()
-                self._last_live_odds_fetch = 0
-                self._live_odds_cache = {}
+            if not hasattr(self, '_real_odds_fetcher'):
+                self._real_odds_fetcher = RealOddsFetcher()
             
-            # Rate limit: Only fetch every 5 minutes to conserve API quota
-            current_time = time.time()
-            if current_time - self._last_live_odds_fetch < 300:  # 5 minutes
-                # Use cached odds if available
-                cache_key = f"{match.home}_{match.away}"
-                if cache_key in self._live_odds_cache:
-                    live_odds = self._live_odds_cache[cache_key]
-                    self._apply_live_odds_to_match(match, live_odds)
-                    return True
+            # Get live odds from real bookmakers
+            live_odds_data = self._real_odds_fetcher.get_live_soccer_totals()
+            
+            if not live_odds_data:
                 return False
             
-            # Fetch fresh live odds
-            print("🔄 Fetching REAL live odds from bookmakers...")
-            live_odds = self._live_odds_api.get_soccer_odds(markets='totals')
+            # Try to match this game with real live odds
+            match_found = False
             
-            if not live_odds:
-                return False
-            
-            # Update cache and timestamp
-            self._last_live_odds_fetch = current_time
-            self._live_odds_cache = {}
-            
-            # Try to match this specific game
-            for odds in live_odds:
-                # Match by team names (fuzzy matching)
-                if self._teams_match(match.home, match.away, odds.home_team, odds.away_team):
-                    cache_key = f"{match.home}_{match.away}"
-                    self._live_odds_cache[cache_key] = odds
-                    self._apply_live_odds_to_match(match, odds)
+            for match_key, match_data in live_odds_data.items():
+                if self._teams_match(match.home, match.away, match_data['home'], match_data['away']):
+                    print(f"🎯 REAL ODDS MATCH: {match.home} vs {match.away}")
+                    print(f"   Bookmaker data: {match_data['home']} vs {match_data['away']}")
                     
-                    # Show usage stats
-                    stats = self._live_odds_api.get_usage_stats()
-                    print(f"📊 Live Odds API: {stats['requests_used']}/{stats['quota_percentage']:.1f}%")
-                    return True
+                    # Apply real odds to our markets
+                    odds_applied = self._apply_real_odds_data(match, match_data['odds'])
+                    if odds_applied:
+                        match_found = True
+                        break
             
-            return False
+            return match_found
             
         except Exception as e:
-            print(f"⚠️ Live odds fetch failed: {e}")
+            print(f"⚠️ Real odds fetch failed: {e}")
             return False
+    
+    def _apply_real_odds_data(self, match: Match, odds_data: Dict) -> bool:
+        """Apply real bookmaker odds to match"""
+        applied = False
+        
+        # Apply OVER odds
+        for line, odds_list in odds_data.get('over', {}).items():
+            if odds_list:
+                best_odds = max(item['odds'] for item in odds_list)
+                market_key = f"over_{str(line).replace('.','_')}"
+                match.odds[market_key] = round(best_odds, 2)
+                print(f"   ✅ REAL Over {line}: {best_odds}")
+                applied = True
+        
+        # Apply UNDER odds  
+        for line, odds_list in odds_data.get('under', {}).items():
+            if odds_list:
+                best_odds = max(item['odds'] for item in odds_list)
+                market_key = f"under_{str(line).replace('.','_')}"
+                match.odds[market_key] = round(best_odds, 2)
+                print(f"   ✅ REAL Under {line}: {best_odds}")
+                applied = True
+        
+        return applied
     
     def _teams_match(self, home1: str, away1: str, home2: str, away2: str) -> bool:
         """Check if team names match (fuzzy matching for different formats)"""

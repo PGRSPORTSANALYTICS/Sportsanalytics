@@ -58,14 +58,16 @@ class TheOddsAPI:
             print(f"⚠️ API quota reached ({self.max_requests} requests)")
             return []
         
-        # Major soccer leagues to check
+        # Focus on leagues that might have e-soccer/virtual games
         soccer_sports = [
-            'soccer_epl',           # English Premier League
+            'soccer_epl',           # English Premier League (has virtual games)
             'soccer_efl_champ',     # English Championship  
-            'soccer_germany_bundesliga',  # German Bundesliga
+            'soccer_germany_bundesliga',  # German Bundesliga (popular for e-soccer)
             'soccer_spain_la_liga', # Spanish La Liga
             'soccer_italy_serie_a', # Italian Serie A
             'soccer_france_ligue_one', # French Ligue 1
+            'soccer_uefa_champs_league', # Champions League (e-soccer format)
+            'soccer_uefa_europa_league', # Europa League
         ]
         
         all_odds = []
