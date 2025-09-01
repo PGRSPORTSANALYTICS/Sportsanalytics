@@ -349,67 +349,7 @@ with tab3:
     else:
         st.info("📊 No performance data available yet")
 
-with tab4:
-    st.subheader("📋 Over/Under Goals Betting History")
-    
-    # Filters focused on goal markets
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        days_filter = st.selectbox("Time Period", [1, 3, 7, 30], index=2)
-    with col2:
-        goal_markets = ["All", "Over 0.5", "Over 1.5", "Over 2.5", "Over 3.5"]
-        market_filter = st.selectbox("Goal Market", goal_markets)
-    with col3:
-        min_edge_filter = st.slider("Min Edge %", 0.0, 25.0, 5.0, 1.0)
-    
-    # Get filtered suggestions for over/under markets only
-    suggestions_df = data_loader.get_suggestions(
-        days=days_filter,
-        market_filter=market_filter if market_filter != "All" else None,
-        min_edge=min_edge_filter/100
-    )
-    
-    # Filter only over/under goal markets
-    if not suggestions_df.empty:
-        goal_suggestions = suggestions_df[suggestions_df['market_name'].str.contains('Over', na=False)]
-    else:
-        goal_suggestions = pd.DataFrame()
-    
-    if not goal_suggestions.empty:
-        # Summary stats
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Goal Market Bets", len(goal_suggestions))
-        with col2:
-            st.metric("Avg Edge", f"{goal_suggestions['edge_rel'].mean()*100:.1f}%")
-        with col3:
-            st.metric("Total Stake", f"${goal_suggestions['stake'].sum():.0f}")
-        with col4:
-            high_edge = len(goal_suggestions[goal_suggestions['edge_rel'] > 0.15])
-            st.metric("High Edge Bets (>15%)", high_edge)
-        
-        # Simplified table focused on key info
-        st.markdown("#### 📋 Over/Under Goals History")
-        display_suggestions = goal_suggestions.copy()
-        display_suggestions['Edge %'] = (display_suggestions['edge_rel'] * 100).round(1)
-        display_suggestions['EV %'] = (display_suggestions['edge_abs'] * 100).round(1)
-        
-        if 'ts_formatted' in display_suggestions.columns:
-            cols_to_show = ['ts_formatted', 'match_title', 'market_name', 'odds', 'stake', 'Edge %']
-            display_df = display_suggestions[cols_to_show]
-            display_df.columns = ['Time (Stockholm)', 'Match', 'Market', 'Odds', 'Stake $', 'Edge %']
-            st.dataframe(display_df, width="stretch", hide_index=True)
-        
-        # Market breakdown
-        st.markdown("#### 📊 Goal Market Breakdown")
-        market_stats = goal_suggestions.groupby('market_name').agg({
-            'stake': ['count', 'sum'],
-            'edge_rel': 'mean'
-        }).round(2)
-        market_stats.columns = ['Count', 'Total Stake', 'Avg Edge']
-        st.dataframe(market_stats, use_container_width=True)
-    else:
-        st.info("📋 No over/under goal suggestions match the current filters")
+# This tab4 content is already defined above in the AI Learning section
 
 with tab4:
     st.subheader("🧠 AI Self-Learning System")
@@ -618,12 +558,12 @@ with tab6:
     # Filters focused on goal markets
     col1, col2, col3 = st.columns(3)
     with col1:
-        days_filter = st.selectbox("Time Period", [1, 3, 7, 30], index=2)
+        days_filter = st.selectbox("Time Period", [1, 3, 7, 30], index=2, key="history_days_filter")
     with col2:
         goal_markets = ["All", "Over 0.5", "Over 1.5", "Over 2.5", "Over 3.5"]
-        market_filter = st.selectbox("Goal Market", goal_markets)
+        market_filter = st.selectbox("Goal Market", goal_markets, key="history_market_filter")
     with col3:
-        min_edge_filter = st.slider("Min Edge %", 0.0, 25.0, 5.0, 1.0)
+        min_edge_filter = st.slider("Min Edge %", 0.0, 25.0, 5.0, 1.0, key="history_edge_filter")
     
     # Get filtered suggestions for over/under markets only
     suggestions_df = data_loader.get_suggestions(
