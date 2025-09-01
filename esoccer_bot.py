@@ -742,8 +742,9 @@ class EsoccerProvider:
             if not match.inplay:
                 continue
                 
-            # Update elapsed time realistically
-            match.elapsed = min(480, int(now - match.start_ts))  # 8 min = 480s
+            # Update elapsed time realistically  
+            start_time = getattr(match, 'start_ts', now - match.elapsed)
+            match.elapsed = min(480, int(now - start_time))  # 8 min = 480s
             
             # Check if match finished
             if match.elapsed >= 480:
