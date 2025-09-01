@@ -1361,7 +1361,7 @@ class DataStore:
         ))
         
         # Also create a ticket
-        ticket_id = f"{s.match_id}:{s.market_t}:{int(s.ts)}"
+        ticket_id = f"{s.match_id}:{s.market_name.replace(' ', '_')}:{int(s.ts * 1000)}"  # More unique with microseconds
         cur.execute("""
             INSERT INTO tickets
             (id, open_ts, match_id, league, home, away, market_t, market_name, odds, stake,
