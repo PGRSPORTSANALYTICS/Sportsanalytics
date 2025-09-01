@@ -817,6 +817,21 @@ class BettingEngine:
             elapsed=match.elapsed
         )
     
+    def _is_defensive_matchup(self, home: str, away: str) -> bool:
+        """Check if both players are experienced/good goalscorers (expect fewer goals)"""
+        # Extract player names from team format like "Man City (GIOX)"
+        home_player = home.split('(')[-1].replace(')', '') if '(' in home else home
+        away_player = away.split('(')[-1].replace(')', '') if '(' in away else away
+        
+        # Known strong/experienced players who play defensively against each other
+        strong_players = {
+            'GIOX', 'BOLEC', 'PECONI', 'MASFJA', 'FAME', 'VAPOR', 
+            'BUTCHE', 'CHIPPER', 'DREAD', 'BARON'
+        }
+        
+        # If both players are in the strong players list, expect tactical/lower scoring
+        return home_player in strong_players and away_player in strong_players
+    
     def _evaluate_market(self, match: Match, market_t: float) -> Optional[Suggestion]:
         """🧠 AI-powered market evaluation with self-learning"""
         market_key = f"over_{str(market_t).replace('.','_')}"
