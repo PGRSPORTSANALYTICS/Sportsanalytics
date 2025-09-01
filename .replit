@@ -28,6 +28,10 @@ args = "E-Soccer Bot"
 task = "workflow.run"
 args = "Streamlit Dashboard"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Aggressive E-Soccer Bot"
+
 [[workflows.workflow]]
 name = "install_dependencies"
 author = "agent"
@@ -58,6 +62,17 @@ waitForPort = 5000
 
 [workflows.workflow.metadata]
 outputType = "webview"
+
+[[workflows.workflow]]
+name = "Aggressive E-Soccer Bot"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python run_aggressive_bot.py"
+
+[workflows.workflow.metadata]
+outputType = "console"
 
 [[ports]]
 localPort = 5000

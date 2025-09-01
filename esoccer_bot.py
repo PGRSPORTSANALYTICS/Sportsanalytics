@@ -743,14 +743,17 @@ class EsoccerProvider:
                 continue
                 
             # Update elapsed time realistically  
-            start_time = getattr(match, 'start_ts', now - match.elapsed)
-            match.elapsed = min(480, int(now - start_time))  # 8 min = 480s
+            if not hasattr(match, 'start_ts') or match.start_ts is None:
+                # Initialize start_ts for matches that don't have it
+                match.start_ts = now - (match.elapsed or 0)
             
-            # Check if match finished
-            if match.elapsed >= 480:
+            match.elapsed = min(480, int(now - match.start_ts))  # 8 min = 480s
+            
+            # Check if match finished (e-soccer matches are only 8 minutes)
+            if match.elapsed >= 480:  # 8 minutes = 480 seconds
                 match.inplay = False
                 match.finished = True
-                print(f"⏱️ FINISHED: {match.title} - Final Score: {match.score}")
+                print(f"⏱️ FINISHED: {match.home} vs {match.away} - Final Score: {match.score}")
                 continue
             
             # Realistic goal events based on actual Esoccer Battle patterns
