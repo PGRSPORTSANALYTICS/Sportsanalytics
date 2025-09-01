@@ -31,8 +31,8 @@ START_BANKROLL = float(os.getenv("START_BANKROLL", "1000"))
 SAFE_KELLY_FACTOR = float(os.getenv("SAFE_KELLY_FACTOR", "0.25"))
 MAX_RISK_PER_MATCH = float(os.getenv("MAX_RISK_PER_MATCH", "0.08"))
 MAX_TOTAL_RISK = float(os.getenv("MAX_TOTAL_RISK", "0.25"))
-MIN_ABS_EV = float(os.getenv("MIN_ABS_EV", "0.008"))  # Lower threshold = more bets
-MIN_REL_EDGE = float(os.getenv("MIN_REL_EDGE", "0.02"))  # Lower threshold = more bets
+MIN_ABS_EV = float(os.getenv("MIN_ABS_EV", "0.003"))  # Very low threshold = more bets
+MIN_REL_EDGE = float(os.getenv("MIN_REL_EDGE", "0.01"))  # Very low threshold = more bets
 
 MARKETS = [4.5, 5.5, 6.5, 7.5]  # E-soccer focus on higher markets
 BTTS_MARKETS = ["btts_yes", "btts_no"]  # Both Teams to Score for H2H GG League
@@ -529,7 +529,7 @@ class BettingEngine:
         stake = min(75, self.bankroll * kelly_f * dynamic_kelly)  # AI-adjusted Kelly
         
         # Lower minimum stake for more betting opportunities
-        if stake < 0.5:
+        if stake < 0.1:
             return None
         
         return Suggestion(
