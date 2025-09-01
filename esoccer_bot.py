@@ -299,8 +299,8 @@ class EsoccerProvider:
                 home, away = random.choice(esoccer_teams)
                 league = random.choice(esoccer_leagues)
                 
-                # LIVE BETTING - matches that stay live for betting opportunities!
-                elapsed_minutes = random.randint(2, 6)  # 2-6 minutes elapsed (out of 8 min match)
+                # FRESH MATCHES - catch them early for maximum betting time!
+                elapsed_minutes = random.randint(0, 2)  # 0-2 minutes elapsed (6+ minutes left!)
                 # Score progression based on elapsed time
                 time_factor = elapsed_minutes / 8.0  # E-soccer is 8 minutes
                 home_goals = min(4, int(time_factor * random.uniform(1.0, 4.0)))
@@ -345,7 +345,7 @@ class EsoccerProvider:
             ]
             
             for i, (home, away, league) in enumerate(esoccer_markets[:2]):
-                elapsed_minutes = random.randint(1, 5)  # 1-5 minutes into match
+                elapsed_minutes = random.randint(0, 2)  # 0-2 minutes - FRESH matches only!
                 time_factor = elapsed_minutes / 90.0
                 home_goals = min(3, int(time_factor * random.uniform(2.0, 6.0)))
                 away_goals = min(3, int(time_factor * random.uniform(2.0, 6.0)))
@@ -388,7 +388,7 @@ class EsoccerProvider:
             ]
             
             for i, (home, away, league) in enumerate(esoccer_value_matches):
-                elapsed_minutes = random.randint(1, 4)  # Early in the match for betting opportunities
+                elapsed_minutes = random.randint(0, 1)  # ULTRA FRESH - just started matches!
                 time_factor = elapsed_minutes / 90.0
                 home_goals = min(2, int(time_factor * random.uniform(1.5, 4.0)))
                 away_goals = min(2, int(time_factor * random.uniform(1.5, 4.0)))
