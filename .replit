@@ -42,15 +42,11 @@ args = "Perfect Champion"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Real E-Soccer Champion"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
 args = "Money Machine Dashboard"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Live Results Tracker"
+args = "Real Betting System"
 
 [[workflows.workflow]]
 name = "install_dependencies"
@@ -117,17 +113,6 @@ args = "python perfect_champion.py"
 outputType = "console"
 
 [[workflows.workflow]]
-name = "Real E-Soccer Champion"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python real_esoccer_champion.py"
-
-[workflows.workflow.metadata]
-outputType = "console"
-
-[[workflows.workflow]]
 name = "Money Machine Dashboard"
 author = "agent"
 
@@ -139,12 +124,12 @@ args = "python money_machine_dashboard.py"
 outputType = "console"
 
 [[workflows.workflow]]
-name = "Live Results Tracker"
+name = "Real Betting System"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "python live_results_tracker.py"
+args = "python real_betting_system.py"
 
 [workflows.workflow.metadata]
 outputType = "console"
