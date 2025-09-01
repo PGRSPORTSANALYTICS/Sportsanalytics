@@ -266,6 +266,139 @@ class PlayerModel:
         combined_rate = (home_rate + away_rate) / 2.0
         return combined_rate / self.mu0
 
+class HeadToHeadModel:
+    """Tracks and learns from head-to-head matchup patterns.
+    
+    Stores historical results between specific team pairings to identify:
+    - Teams that consistently have high/low scoring games against each other
+    - Matchup-specific scoring tendencies 
+    - Head-to-head win/loss patterns
+    - Defensive vs offensive matchup styles
+    """
+    
+    def __init__(self, db_path: Path = DB_PATH, alpha: float = 0.1):
+        self.db_path = db_path
+        self.alpha = alpha  # Learning rate for exponential smoothing
+        self._init_db()
+    
+    def _init_db(self):
+        """Initialize head-to-head database table"""
+        con = sqlite3.connect(self.db_path)
+        cur = con.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS head_to_head (
+                matchup TEXT PRIMARY KEY,
+                matches INTEGER,
+                total_goals REAL,
+                home_wins INTEGER,
+                away_wins INTEGER,
+                draws INTEGER,
+                avg_goals REAL,
+                updated INTEGER
+            )
+        """)
+        con.commit()
+        con.close()
+    
+    def _get_matchup_key(self, home: str, away: str) -> str:
+        """Create consistent matchup key (always alphabetical order)"""
+        teams = sorted([home.strip(), away.strip()])
+        return f"{teams[0]} vs {teams[1]}"
+    
+    def _get_h2h_stats(self, matchup_key: str) -> dict:
+        """Get head-to-head statistics for a matchup"""
+        con = sqlite3.connect(self.db_path)
+        cur = con.cursor()
+        row = cur.execute("""
+            SELECT matches, total_goals, home_wins, away_wins, draws, avg_goals 
+            FROM head_to_head WHERE matchup=?
+        """, (matchup_key,)).fetchone()
+        con.close()
+        
+        if row:
+            return {
+                'matches': int(row[0]),
+                'total_goals': float(row[1]),
+                'home_wins': int(row[2]),
+                'away_wins': int(row[3]),
+                'draws': int(row[4]),
+                'avg_goals': float(row[5])
+            }
+        return {'matches': 0, 'total_goals': 0.0, 'home_wins': 0, 'away_wins': 0, 'draws': 0, 'avg_goals': 2.2}
+    
+    def update_from_match(self, home: str, away: str, home_goals: int, away_goals: int):
+        """Update H2H statistics from a completed match"""
+        matchup_key = self._get_matchup_key(home, away)
+        stats = self._get_h2h_stats(matchup_key)
+        
+        # Update match count and total goals
+        new_matches = stats['matches'] + 1
+        total_goals = home_goals + away_goals
+        new_total_goals = stats['total_goals'] + total_goals
+        
+        # Update win/loss/draw counts
+        if home_goals > away_goals:
+            new_home_wins = stats['home_wins'] + 1
+            new_away_wins = stats['away_wins']
+            new_draws = stats['draws']
+        elif away_goals > home_goals:
+            new_home_wins = stats['home_wins']
+            new_away_wins = stats['away_wins'] + 1
+            new_draws = stats['draws']
+        else:
+            new_home_wins = stats['home_wins']
+            new_away_wins = stats['away_wins']
+            new_draws = stats['draws'] + 1
+        
+        # Calculate new exponentially smoothed average
+        if stats['matches'] == 0:
+            new_avg_goals = float(total_goals)
+        else:
+            new_avg_goals = (1 - self.alpha) * stats['avg_goals'] + self.alpha * total_goals
+        
+        # Store updated statistics
+        con = sqlite3.connect(self.db_path)
+        cur = con.cursor()
+        cur.execute("""
+            INSERT OR REPLACE INTO head_to_head 
+            (matchup, matches, total_goals, home_wins, away_wins, draws, avg_goals, updated)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (matchup_key, new_matches, new_total_goals, new_home_wins, 
+              new_away_wins, new_draws, new_avg_goals, int(time.time())))
+        con.commit()
+        con.close()
+    
+    def get_h2h_factor(self, home: str, away: str) -> float:
+        """Get head-to-head adjustment factor for expected goals"""
+        matchup_key = self._get_matchup_key(home, away)
+        stats = self._get_h2h_stats(matchup_key)
+        
+        if stats['matches'] < 3:  # Need at least 3 matches for reliable H2H data
+            return 1.0  # No adjustment
+        
+        # Return ratio of H2H average to baseline (2.2 goals per match)
+        baseline = 2.2
+        confidence = min(1.0, stats['matches'] / 10.0)  # More confidence with more matches
+        h2h_factor = stats['avg_goals'] / baseline
+        
+        # Weighted blend: more H2H weight as confidence increases
+        return (1 - confidence) * 1.0 + confidence * h2h_factor
+    
+    def get_matchup_tendency(self, home: str, away: str) -> str:
+        """Get human-readable description of matchup tendency"""
+        factor = self.get_h2h_factor(home, away)
+        stats = self._get_h2h_stats(self._get_matchup_key(home, away))
+        
+        if stats['matches'] < 3:
+            return "No H2H history"
+        
+        if factor > 1.2:
+            return f"High-scoring ({stats['avg_goals']:.1f} avg goals)"
+        elif factor < 0.8:
+            return f"Low-scoring ({stats['avg_goals']:.1f} avg goals)"
+        else:
+            return f"Typical scoring ({stats['avg_goals']:.1f} avg goals)"
+
 class GoalModel:
     """Advanced goal model combining prior + market calibration.
     
@@ -276,7 +409,7 @@ class GoalModel:
     - Player-based scaling factors
     """
     
-    def __init__(self, total_secs: int = 480, player_factor_fn=None):
+    def __init__(self, total_secs: int = 480, player_factor_fn=None, h2h_factor_fn=None):
         self.total_secs = total_secs
         # Gamma prior: λ ~ Gamma(α, β) with mean = α/β ≈ 2.2 goals per 8 min
         self.alpha = 3.0
@@ -285,6 +418,8 @@ class GoalModel:
         self.ewma: Dict[Tuple[str, str], EWMA] = {}
         # Optional player factor callback
         self.player_factor_fn = player_factor_fn
+        # Optional head-to-head factor callback
+        self.h2h_factor_fn = h2h_factor_fn
     
     def _smooth_odds(self, key: Tuple[str, str], odds: float) -> float:
         """Apply EWMA smoothing to reduce odds noise"""
@@ -352,6 +487,14 @@ class GoalModel:
             except Exception:
                 pass
         
+        # Apply head-to-head scaling if available
+        if self.h2h_factor_fn:
+            try:
+                h2h_factor = self.h2h_factor_fn(match)
+                mu_prior *= max(0.6, min(1.4, float(h2h_factor)))  # Slightly less variance than player factor
+            except Exception:
+                pass
+        
         return mu_prior
     
     def mu_remaining(self, match: Match, calibration_target: float = 1.5) -> float:
@@ -394,7 +537,11 @@ class SelfLearner:
     def __init__(self, safe_kelly_base: float = 0.25):
         self.calibrator = Calibrator(DB_PATH)
         self.player_model = PlayerModel(DB_PATH)
-        self.goal_model = GoalModel(player_factor_fn=self._player_factor)
+        self.h2h_model = HeadToHeadModel(DB_PATH)
+        self.goal_model = GoalModel(
+            player_factor_fn=self._player_factor,
+            h2h_factor_fn=self._h2h_factor
+        )
         self.safe_kelly_base = safe_kelly_base
         self._kelly_multiplier = safe_kelly_base
     
@@ -402,6 +549,13 @@ class SelfLearner:
         """Player factor callback for GoalModel"""
         try:
             return self.player_model.factor(match.home, match.away)
+        except Exception:
+            return 1.0
+    
+    def _h2h_factor(self, match: Match) -> float:
+        """Head-to-head factor callback for GoalModel"""
+        try:
+            return self.h2h_model.get_h2h_factor(match.home, match.away)
         except Exception:
             return 1.0
     
@@ -443,10 +597,12 @@ class SelfLearner:
             outcome=1 if won else 0
         )
         
-        # Update player model when match finishes
+        # Update player model and H2H model when match finishes
         if match.finished:
             total_goals = match.home_goals + match.away_goals
             self.player_model.update_from_match(match.home, match.away, total_goals)
+            # Update head-to-head statistics with individual goal counts
+            self.h2h_model.update_from_match(match.home, match.away, match.home_goals, match.away_goals)
     
     def get_learning_stats(self) -> Dict:
         """Get current learning statistics for dashboard"""

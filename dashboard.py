@@ -370,6 +370,13 @@ with tab4:
             ORDER BY matches DESC LIMIT 10
         """).fetchall()
         
+        # Get head-to-head learning stats
+        h2h_stats = cur.execute("""
+            SELECT matchup, matches, avg_goals, home_wins, away_wins, draws, updated
+            FROM head_to_head 
+            ORDER BY matches DESC LIMIT 8
+        """).fetchall()
+        
         # Get training data count
         training_count = cur.execute("SELECT COUNT(*) FROM training_data").fetchone()[0]
         
@@ -419,17 +426,37 @@ with tab4:
                 - **Interpretation:** {"AI predictions very accurate" if brier < 0.18 else "AI predictions good" if brier < 0.24 else "AI still learning from data"}
                 """)
             
-            # Player Learning Stats
-            if player_stats:
-                st.markdown("#### 👥 Player Learning Stats")
-                
-                player_df = pd.DataFrame(player_stats, columns=['Player', 'Matches', 'Total Goals', 'Updated'])
-                player_df['Goal Rate'] = (player_df['Total Goals'] / player_df['Matches']).round(2)
-                player_df['Updated'] = pd.to_datetime(player_df['Updated'], unit='s').dt.strftime('%H:%M')
-                
-                # Show top learned players
-                display_df = player_df[['Player', 'Matches', 'Goal Rate', 'Updated']].head(8)
-                st.dataframe(display_df, use_container_width=True, hide_index=True)
+            # Learning Statistics in Two Columns
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Player Learning Stats
+                if player_stats:
+                    st.markdown("#### 👥 Player Learning Stats")
+                    
+                    player_df = pd.DataFrame(player_stats, columns=['Player', 'Matches', 'Total Goals', 'Updated'])
+                    player_df['Goal Rate'] = (player_df['Total Goals'] / player_df['Matches']).round(2)
+                    player_df['Updated'] = pd.to_datetime(player_df['Updated'], unit='s').dt.strftime('%H:%M')
+                    
+                    # Show top learned players
+                    display_df = player_df[['Player', 'Matches', 'Goal Rate', 'Updated']].head(6)
+                    st.dataframe(display_df, use_container_width=True, hide_index=True)
+            
+            with col2:
+                # Head-to-Head Learning Stats
+                if h2h_stats:
+                    st.markdown("#### ⚔️ Head-to-Head Learning")
+                    
+                    h2h_df = pd.DataFrame(h2h_stats, columns=['Matchup', 'Matches', 'Avg Goals', 'Home W', 'Away W', 'Draws', 'Updated'])
+                    h2h_df['Avg Goals'] = h2h_df['Avg Goals'].round(1)
+                    h2h_df['Updated'] = pd.to_datetime(h2h_df['Updated'], unit='s').dt.strftime('%H:%M')
+                    
+                    # Show top H2H matchups
+                    display_h2h = h2h_df[['Matchup', 'Matches', 'Avg Goals', 'Updated']].head(6)
+                    st.dataframe(display_h2h, use_container_width=True, hide_index=True)
+                else:
+                    st.markdown("#### ⚔️ Head-to-Head Learning")
+                    st.info("No H2H data yet - will appear after teams play multiple matches")
             
             # Dynamic Kelly Info
             st.markdown("#### 🎲 Dynamic Kelly Sizing")
