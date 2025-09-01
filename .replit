@@ -46,7 +46,7 @@ args = "Money Machine Dashboard"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Real Betting System"
+args = "Real E-Soccer Betting"
 
 [[workflows.workflow]]
 name = "install_dependencies"
@@ -124,7 +124,7 @@ args = "python money_machine_dashboard.py"
 outputType = "console"
 
 [[workflows.workflow]]
-name = "Real Betting System"
+name = "Real E-Soccer Betting"
 author = "agent"
 
 [[workflows.workflow.tasks]]

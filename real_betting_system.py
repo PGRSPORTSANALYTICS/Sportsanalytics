@@ -38,20 +38,36 @@ class RealBettingSystem:
             print(f"❌ API Error: {e}")
             return []
     
-    def find_soccer_variants(self, sports: List[Dict]) -> List[str]:
-        """Find all soccer/football variants including virtual"""
-        soccer_sports = []
+    def find_esoccer_variants(self, sports: List[Dict]) -> List[str]:
+        """Find e-soccer/virtual football variants"""
+        esoccer_sports = []
         
         for sport in sports:
             sport_key = sport.get('key', '')
             sport_title = sport.get('title', '').lower()
             
-            # Look for soccer, football, or virtual variants
-            if any(keyword in sport_title for keyword in ['soccer', 'football', 'virtual', 'fifa', 'esports']):
-                soccer_sports.append(sport_key)
-                print(f"⚽ Found: {sport.get('title')} ({sport_key})")
+            # Look specifically for virtual/e-soccer variants
+            virtual_keywords = ['virtual', 'esoccer', 'e-soccer', 'fifa', 'esports', 'electronic']
+            if any(keyword in sport_title for keyword in virtual_keywords):
+                esoccer_sports.append(sport_key)
+                print(f"🎮 Found E-Soccer: {sport.get('title')} ({sport_key})")
         
-        return soccer_sports
+        # If no virtual sports found, try specific e-soccer sport keys
+        if not esoccer_sports:
+            potential_keys = [
+                'esoccer_battle_8min',
+                'virtual_football', 
+                'fifa_esports',
+                'esoccer_champion',
+                'virtual_soccer',
+                'esports_fifa'
+            ]
+            
+            for key in potential_keys:
+                esoccer_sports.append(key)
+                print(f"🎮 Trying E-Soccer: {key}")
+        
+        return esoccer_sports
     
     def get_live_odds(self, sport_key: str) -> List[Dict]:
         """Get live odds for a specific sport"""
@@ -240,13 +256,15 @@ class RealBettingSystem:
             print("❌ No sports data available")
             return
         
-        # Find soccer/football variants
-        soccer_sports = self.find_soccer_variants(sports)
-        if not soccer_sports:
-            print("❌ No soccer variants found")
+        # Find e-soccer/virtual football variants
+        esoccer_sports = self.find_esoccer_variants(sports)
+        if not esoccer_sports:
+            print("❌ No e-soccer variants found - using fallback system")
+            # Fall back to our working e-soccer system
+            await self.run_esoccer_fallback()
             return
         
-        print(f"⚽ Scanning {len(soccer_sports)} soccer sports...")
+        print(f"🎮 Scanning {len(esoccer_sports)} e-soccer sports...")
         
         cycle = 0
         total_opportunities = 0
@@ -257,8 +275,8 @@ class RealBettingSystem:
             
             cycle_opportunities = []
             
-            # Scan each soccer sport
-            for sport_key in soccer_sports[:3]:  # Limit to 3 to stay within API limits
+            # Scan each e-soccer sport
+            for sport_key in esoccer_sports[:3]:  # Limit to 3 to stay within API limits
                 
                 print(f"\n🔍 Scanning {sport_key}...")
                 games = self.get_live_odds(sport_key)
@@ -295,8 +313,32 @@ class RealBettingSystem:
                 print("⏳ No real opportunities found this cycle")
             
             # Wait before next scan (respect API limits)
-            print("\n⏱️ Next real bet scan in 60 seconds...")
+            print("\n⏱️ Next e-soccer scan in 60 seconds...")
             await asyncio.sleep(60)
+    
+    async def run_esoccer_fallback(self):
+        """Fallback to our proven e-soccer system when API doesn't have virtual sports"""
+        print("🎮 ACTIVATING E-SOCCER FALLBACK SYSTEM")
+        print("💡 The Odds API doesn't have e-soccer - using proven system")
+        
+        # Import our working e-soccer system
+        import sys
+        import os
+        sys.path.append(os.getcwd())
+        
+        try:
+            from real_esoccer_champion import RealESoccerChampion
+            
+            print("🏆 LAUNCHING REAL E-SOCCER CHAMPION...")
+            champion = RealESoccerChampion()
+            
+            # Run without bet365 credentials (logging mode)
+            await champion.run_champion_system()
+            
+        except ImportError:
+            print("❌ Could not load e-soccer champion system")
+            # Simple e-soccer simulation as ultimate fallback
+            await self.simple_esoccer_betting()
 
 import asyncio
 
