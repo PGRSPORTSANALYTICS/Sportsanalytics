@@ -578,7 +578,7 @@ class BettingEngine:
             suggestion = self._evaluate_market(match, market_t)
             if suggestion and self._risk_check(suggestion):
                 suggestions.append(suggestion)
-                print(f"✅ BET ACCEPTED: {suggestion.market_name} @ {suggestion.odds}")
+                print(f"✅ BET ACCEPTED: {suggestion.market_name} @ {suggestion.odds} [{match.league}]")
                 if len(suggestions) >= 3:  # Allow more bets for dual leagues
                     break
             elif suggestion:
@@ -635,7 +635,7 @@ class BettingEngine:
         
         # Edge thresholds with SANITY CHECKS
         if ev < MIN_ABS_EV or edge_rel < MIN_REL_EDGE:
-            print(f"🚫 REJECTED BET: {match.title} Over {market_t} @ {odds:.2f}")
+            print(f"🚫 REJECTED BET: {match.title} Over {market_t} @ {odds:.2f} [{match.league}]")
             print(f"   Edge: {ev:.4f} (need >{MIN_ABS_EV:.4f}), Rel: {edge_rel:.2%} (need >{MIN_REL_EDGE:.2%})")
             print(f"   Model: {model_prob:.3f}, Implied: {implied_prob:.3f}")
             return None
@@ -958,6 +958,7 @@ async def main():
                     store.save_suggestion(suggestion)
                     
                     print(f"⚡ FAST BET: {suggestion.market_name} @ {suggestion.odds:.2f}")
+                    print(f"   📊 LEAGUE: {suggestion.league}")
                     print(f"   {suggestion.home} vs {suggestion.away}")
                     print(f"   Stake: ${suggestion.stake:.0f}, Edge: {suggestion.edge_rel:.1%}")
                     print(f"   LIVE Score: {suggestion.score} at {suggestion.elapsed//60:.0f}' elapsed")
