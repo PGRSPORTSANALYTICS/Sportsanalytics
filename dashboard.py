@@ -112,11 +112,12 @@ with col5:
 st.markdown("---")
 
 # Main content tabs
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "🎯 What to Bet", 
     "🎲 Active Bets", 
     "💹 Performance", 
     "🧠 AI Learning", 
+    "✅ Wins & Losses", 
     "📋 History", 
     "⚙️ Risk Management"
 ])
@@ -506,7 +507,174 @@ with tab4:
     except Exception as e:
         st.error(f"❌ Error loading AI learning data: {e}")
 
+with tab5:
+    st.subheader("✅ Wins & Losses - Settled Bets")
+    
+    # Get settled bets from database
+    try:
+        db_path = Path("data/esoccer.db")
+        conn = sqlite3.connect(db_path)
+        
+        # Get recent settled bets
+        settled_query = """
+            SELECT id, open_ts, match_id, home, away, market_name, odds, stake, 
+                   win, close_ts, pnl, league
+            FROM tickets 
+            WHERE is_settled = 1 
+            ORDER BY close_ts DESC 
+            LIMIT 50
+        """
+        settled_df = pd.read_sql_query(settled_query, conn)
+        conn.close()
+        
+        if not settled_df.empty:
+            # Convert timestamps to readable format
+            stockholm_tz = pytz.timezone('Europe/Stockholm')
+            settled_df['settled_time'] = pd.to_datetime(settled_df['close_ts'], unit='s', utc=True).dt.tz_convert(stockholm_tz).dt.strftime('%m-%d %H:%M')
+            settled_df['match_title'] = settled_df['home'] + ' vs ' + settled_df['away']
+            
+            # Win/Loss Summary
+            st.markdown("#### 📊 **Recent Results Summary**")
+            col1, col2, col3, col4 = st.columns(4)
+            
+            total_settled = len(settled_df)
+            wins = len(settled_df[settled_df['win'] == 1])
+            losses = total_settled - wins
+            win_rate = (wins / total_settled * 100) if total_settled > 0 else 0
+            total_profit = settled_df['pnl'].sum()
+            
+            with col1:
+                st.metric("🎯 Total Settled", total_settled)
+            with col2:
+                st.metric("✅ Wins", wins, f"{win_rate:.1f}% rate")
+            with col3:
+                st.metric("❌ Losses", losses)
+            with col4:
+                profit_color = "normal" if total_profit >= 0 else "inverse"
+                st.metric("💰 Net P&L", f"${total_profit:+.2f}", delta_color=profit_color)
+            
+            st.markdown("---")
+            
+            # Recent Wins and Losses
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("#### ✅ **Recent WINS**")
+                wins_df = settled_df[settled_df['win'] == 1].head(10)
+                if not wins_df.empty:
+                    for _, bet in wins_df.iterrows():
+                        profit = bet['pnl']
+                        st.markdown(f"""
+                        **🎉 {bet['market_name']}** @ {bet['odds']:.2f}
+                        
+                        ⚽ {bet['match_title']}  
+                        💰 **+${profit:.2f}** • 🕐 {bet['settled_time']}
+                        """)
+                        st.markdown("---")
+                else:
+                    st.info("No wins yet")
+            
+            with col2:
+                st.markdown("#### ❌ **Recent LOSSES**")
+                losses_df = settled_df[settled_df['win'] == 0].head(10)
+                if not losses_df.empty:
+                    for _, bet in losses_df.iterrows():
+                        loss = bet['pnl']
+                        st.markdown(f"""
+                        **😔 {bet['market_name']}** @ {bet['odds']:.2f}
+                        
+                        ⚽ {bet['match_title']}  
+                        💸 **${loss:.2f}** • 🕐 {bet['settled_time']}
+                        """)
+                        st.markdown("---")
+                else:
+                    st.info("No losses yet")
+            
+            # Detailed Results Table
+            st.markdown("#### 📋 **Detailed Results**")
+            
+            # Add result column
+            settled_df['Result'] = settled_df['win'].apply(lambda x: "✅ WIN" if x == 1 else "❌ LOSS")
+            settled_df['Profit'] = settled_df['pnl'].apply(lambda x: f"+${x:.2f}" if x >= 0 else f"${x:.2f}")
+            
+            display_cols = ['settled_time', 'Result', 'match_title', 'market_name', 'odds', 'stake', 'Profit']
+            display_names = ['Time', 'Result', 'Match', 'Market', 'Odds', 'Stake $', 'P&L']
+            
+            result_table = settled_df[display_cols].copy()
+            result_table.columns = display_names
+            
+            st.dataframe(result_table, use_container_width=True, hide_index=True)
+            
+        else:
+            st.warning("🔄 No settled bets yet. Results will appear after matches finish and bets are settled.")
+            st.info("💡 Bets settle automatically when matches complete (every 8 minutes)")
+            
+    except Exception as e:
+        st.error(f"❌ Error loading wins/losses: {e}")
+
 with tab6:
+    st.subheader("📋 Over/Under Goals Betting History")
+    
+    # Filters focused on goal markets
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        days_filter = st.selectbox("Time Period", [1, 3, 7, 30], index=2)
+    with col2:
+        goal_markets = ["All", "Over 0.5", "Over 1.5", "Over 2.5", "Over 3.5"]
+        market_filter = st.selectbox("Goal Market", goal_markets)
+    with col3:
+        min_edge_filter = st.slider("Min Edge %", 0.0, 25.0, 5.0, 1.0)
+    
+    # Get filtered suggestions for over/under markets only
+    suggestions_df = data_loader.get_suggestions(
+        days=days_filter,
+        market_filter=market_filter if market_filter != "All" else None,
+        min_edge=min_edge_filter/100
+    )
+    
+    # Filter only over/under goal markets
+    if not suggestions_df.empty:
+        goal_suggestions = suggestions_df[suggestions_df['market_name'].str.contains('Over', na=False)]
+    else:
+        goal_suggestions = pd.DataFrame()
+    
+    if not goal_suggestions.empty:
+        # Summary stats
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Goal Market Bets", len(goal_suggestions))
+        with col2:
+            st.metric("Avg Edge", f"{goal_suggestions['edge_rel'].mean()*100:.1f}%")
+        with col3:
+            st.metric("Total Stake", f"${goal_suggestions['stake'].sum():.0f}")
+        with col4:
+            high_edge = len(goal_suggestions[goal_suggestions['edge_rel'] > 0.15])
+            st.metric("High Edge Bets (>15%)", high_edge)
+        
+        # Simplified table focused on key info
+        st.markdown("#### 📋 Over/Under Goals History")
+        display_suggestions = goal_suggestions.copy()
+        display_suggestions['Edge %'] = (display_suggestions['edge_rel'] * 100).round(1)
+        display_suggestions['EV %'] = (display_suggestions['edge_abs'] * 100).round(1)
+        
+        if 'ts_formatted' in display_suggestions.columns:
+            cols_to_show = ['ts_formatted', 'match_title', 'market_name', 'odds', 'stake', 'Edge %']
+            display_df = display_suggestions[cols_to_show]
+            display_df.columns = ['Time (Stockholm)', 'Match', 'Market', 'Odds', 'Stake $', 'Edge %']
+            st.dataframe(display_df, width="stretch", hide_index=True)
+        
+        # Market breakdown
+        st.markdown("#### 📊 Goal Market Breakdown")
+        market_stats = goal_suggestions.groupby('market_name').agg({
+            'stake': ['count', 'sum'],
+            'edge_rel': 'mean'
+        }).round(2)
+        market_stats.columns = ['Count', 'Total Stake', 'Avg Edge']
+        st.dataframe(market_stats, use_container_width=True)
+    else:
+        st.info("📋 No over/under goal suggestions match the current filters")
+
+with tab7:
     st.subheader("⚙️ Risk Management")
     
     # Current risk metrics
