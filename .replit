@@ -44,6 +44,10 @@ args = "Perfect Champion"
 task = "workflow.run"
 args = "Real E-Soccer Champion"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Money Machine Dashboard"
+
 [[workflows.workflow]]
 name = "install_dependencies"
 author = "agent"
@@ -115,6 +119,17 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python real_esoccer_champion.py"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow]]
+name = "Money Machine Dashboard"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python money_machine_dashboard.py"
 
 [workflows.workflow.metadata]
 outputType = "console"
