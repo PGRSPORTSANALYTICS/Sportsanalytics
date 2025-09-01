@@ -829,15 +829,26 @@ class BettingEngine:
         print(f"🔍 EVALUATING MATCH: {match.title} (Score: {match.score}, Elapsed: {match.elapsed/60:.1f}min)")
         print(f"🎯 Testing markets: {potential_markets}")
         
+        # Evaluate OVER markets
         for market_t in potential_markets:
             suggestion = self._evaluate_market(match, market_t)
             if suggestion and self._risk_check(suggestion):
                 suggestions.append(suggestion)
                 print(f"✅ BET ACCEPTED: {suggestion.market_name} @ {suggestion.odds} [{match.league}]")
-                if len(suggestions) >= 3:  # Allow more bets for dual leagues
+                if len(suggestions) >= 4:  # Allow more bets for dual leagues
                     break
             elif suggestion:
                 print(f"⚠️ BET FAILED RISK CHECK: {market_t}")
+        
+        # 🎯 NEW: Evaluate UNDER markets using fatigue insights!
+        if len(suggestions) < 4:  # Still have betting capacity
+            under_suggestions = self._evaluate_under_markets(match, potential_markets)
+            for under_suggestion in under_suggestions:
+                if self._risk_check(under_suggestion):
+                    suggestions.append(under_suggestion)
+                    print(f"✅ UNDER BET: {under_suggestion.market_name} @ {under_suggestion.odds} [{match.league}]")
+                    if len(suggestions) >= 4:
+                        break
         
         if not suggestions:
             print(f"❌ NO BETS FOUND for {match.title}")
@@ -1017,6 +1028,124 @@ class BettingEngine:
             edge_abs=round(ev, 4),
             edge_rel=round(edge_rel, 4),
             reason=f"edge_abs={ev:.3f}, edge_rel={edge_rel:.2%}, model_p={model_prob:.3f}",
+            score=match.score,
+            elapsed=match.elapsed
+        )
+    
+    def _evaluate_under_markets(self, match: Match, potential_markets: List[float]) -> List[Suggestion]:
+        """🎯 Evaluate UNDER markets using fatigue and defensive insights!"""
+        under_suggestions = []
+        
+        # Check if this is a good spot for UNDER bets using USER INSIGHTS
+        is_defensive, fatigue_factor = self._is_defensive_matchup(match.home, match.away)
+        
+        # UNDER opportunities when:
+        # 1. Defensive matchup with tired players (fatigue < 1.0)
+        # 2. Late in game with low score
+        # 3. Both teams being very careful
+        
+        current_goals = match.home_goals + match.away_goals
+        elapsed_minutes = match.elapsed / 60.0
+        
+        for market_t in potential_markets:
+            # Only consider UNDER if there's a good reason
+            should_bet_under = False
+            under_reason = ""
+            
+            # Scenario 1: Defensive matchup with tired players
+            if is_defensive and fatigue_factor < 1.0:
+                should_bet_under = True
+                under_reason = f"Tired defensive players (fatigue: {fatigue_factor:.2f})"
+            
+            # Scenario 2: Late game, low scoring
+            elif elapsed_minutes > 5 and current_goals < (market_t - 1):
+                should_bet_under = True
+                under_reason = f"Late game low-scoring pattern"
+            
+            # Scenario 3: Very early, both teams being careful
+            elif elapsed_minutes < 2 and current_goals == 0 and market_t >= 5.5:
+                should_bet_under = True
+                under_reason = f"Early cautious start"
+            
+            if should_bet_under:
+                under_suggestion = self._evaluate_under_market(match, market_t, under_reason)
+                if under_suggestion:
+                    under_suggestions.append(under_suggestion)
+        
+        return under_suggestions
+    
+    def _evaluate_under_market(self, match: Match, market_t: float, reason: str) -> Optional[Suggestion]:
+        """🎯 Evaluate a specific UNDER market"""
+        market_key = f"under_{str(market_t).replace('.','_')}"
+        odds = match.odds.get(market_key)
+        
+        if not odds or odds < 1.2:
+            return None
+        
+        goals_now = match.home_goals + match.away_goals
+        goals_allowed = math.floor(market_t)  # Under 4.5 = 4 goals or less
+        
+        if goals_now > goals_allowed:
+            return None  # UNDER already lost
+        
+        # 🧠 AI PREDICTION for UNDER: inverse of over probability
+        over_prob = self.ai_learner.get_calibrated_probability(match, market_t)
+        under_prob = 1.0 - over_prob
+        
+        # Apply fatigue factor for UNDER bets
+        is_defensive, fatigue_factor = self._is_defensive_matchup(match.home, match.away)
+        if is_defensive and fatigue_factor < 1.0:
+            # Boost UNDER probability for tired defensive players
+            under_prob = min(0.85, under_prob * (2.0 - fatigue_factor))  # Inverse relationship
+        
+        implied_prob = 1.0 / odds
+        
+        # Calculate edge using AI prediction
+        ev = under_prob * (odds - 1) - (1 - under_prob)
+        edge_rel = (under_prob / implied_prob) - 1.0
+        
+        # Edge thresholds (same as OVER markets)
+        if ev < MIN_ABS_EV or edge_rel < MIN_REL_EDGE:
+            print(f"🚫 REJECTED UNDER: {match.title} Under {market_t} @ {odds:.2f}")
+            print(f"   Edge: {ev:.4f} (need >{MIN_ABS_EV:.4f}), Rel: {edge_rel:.2%} (need >{MIN_REL_EDGE:.2%})")
+            print(f"   Model: {under_prob:.3f}, Implied: {implied_prob:.3f}")
+            return None
+            
+        # SANITY CHECK: Reject edges that are too good to be true
+        if edge_rel > 0.25:  # 25%+ relative edge is suspicious
+            print(f"🚨 REJECTED UNDER: Edge too high ({edge_rel:.1%}) - likely model error")
+            return None
+            
+        # SANITY CHECK: Don't bet if model probability is extremely high
+        if under_prob > 0.85:  # >85% probability is unrealistic
+            print(f"🚨 REJECTED UNDER: Model probability too high ({under_prob:.1%})")
+            return None
+        
+        # 🧠 DYNAMIC KELLY: Adaptive sizing
+        kelly_f = max(0.0, (under_prob * odds - 1) / (odds - 1))
+        dynamic_kelly = self.ai_learner.get_dynamic_kelly()
+        stake = min(50, self.bankroll * kelly_f * dynamic_kelly * 0.8)  # Slightly smaller for UNDER
+        
+        # Lower minimum stake for more opportunities
+        if stake < 0.1:
+            return None
+        
+        return Suggestion(
+            ts=time.time(),
+            match_id=match.match_id,
+            league=match.league,
+            home=match.home,
+            away=match.away,
+            market_t=market_t,
+            market_name=f"Under {market_t}",
+            odds=odds,
+            stake=round(stake, 2),
+            kelly_fraction=round(kelly_f * SAFE_KELLY_FACTOR, 4),
+            model_prob=round(under_prob, 4),
+            implied_prob=round(implied_prob, 4),
+            edge_abs=round(ev, 4),
+            edge_rel=round(edge_rel, 4),
+            reason=f"UNDER: {reason} - edge_abs={ev:.3f}, edge_rel={edge_rel:.2%}",
             score=match.score,
             elapsed=match.elapsed
         )
