@@ -32,6 +32,10 @@ args = "Streamlit Dashboard"
 task = "workflow.run"
 args = "Aggressive E-Soccer Bot"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Ultimate E-Soccer Champion"
+
 [[workflows.workflow]]
 name = "install_dependencies"
 author = "agent"
@@ -70,6 +74,17 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python run_aggressive_bot.py"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow]]
+name = "Ultimate E-Soccer Champion"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python ultimate_esoccer_bot.py"
 
 [workflows.workflow.metadata]
 outputType = "console"
