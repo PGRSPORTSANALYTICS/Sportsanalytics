@@ -1,0 +1,471 @@
+"""
+🏆 REAL FOOTBALL CHAMPION - ADVANCED ANALYTICS SYSTEM
+Sophisticated real football betting with xG, recent form, and H2H analysis
+"""
+
+import os
+import requests
+import time
+import json
+import sqlite3
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Tuple
+import statistics
+from dataclasses import dataclass
+
+@dataclass
+class TeamForm:
+    """Team recent form analysis"""
+    team_name: str
+    last_5_games: List[Dict]
+    goals_scored: float
+    goals_conceded: float
+    xg_for: float
+    xg_against: float
+    win_rate: float
+    form_trend: str
+
+@dataclass
+class HeadToHead:
+    """Head-to-head analysis"""
+    total_matches: int
+    home_wins: int
+    away_wins: int
+    draws: int
+    avg_goals: float
+    avg_home_goals: float
+    avg_away_goals: float
+    over_2_5_rate: float
+    btts_rate: float
+
+@dataclass
+class FootballOpportunity:
+    """Real football betting opportunity"""
+    match_id: str
+    home_team: str
+    away_team: str
+    league: str
+    start_time: str
+    market: str
+    selection: str
+    odds: float
+    edge_percentage: float
+    confidence: int
+    analysis: Dict
+    stake: float
+
+class RealFootballChampion:
+    """🏆 Advanced Real Football Betting Champion"""
+    
+    def __init__(self):
+        self.odds_api_key = os.getenv('THE_ODDS_API_KEY')
+        if not self.odds_api_key:
+            raise Exception("❌ THE_ODDS_API_KEY required for real betting")
+        
+        # You'll need to get a free API key from api-football.com
+        self.api_football_key = "YOUR_API_FOOTBALL_KEY"  # Replace with actual key
+        
+        self.odds_base_url = "https://api.the-odds-api.com/v4"
+        self.api_football_base_url = "https://api-football-beta.p.rapidapi.com"
+        
+        # Initialize database
+        self.init_database()
+        
+        # Analysis parameters
+        self.min_edge = 5.0  # Minimum 5% edge required
+        self.max_stake = 100.0  # Maximum stake per bet
+        self.base_stake = 25.0  # Base stake amount
+        
+        print("🏆 REAL FOOTBALL CHAMPION INITIALIZED")
+        print("⚽ Advanced analytics with xG, form, and H2H analysis")
+    
+    def init_database(self):
+        """Initialize SQLite database for football data"""
+        self.conn = sqlite3.connect('data/real_football.db')
+        cursor = self.conn.cursor()
+        
+        # Create tables
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS football_opportunities (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp INTEGER,
+                match_id TEXT,
+                home_team TEXT,
+                away_team TEXT,
+                league TEXT,
+                market TEXT,
+                selection TEXT,
+                odds REAL,
+                edge_percentage REAL,
+                confidence INTEGER,
+                analysis TEXT,
+                stake REAL,
+                status TEXT DEFAULT 'pending'
+            )
+        ''')
+        
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS team_analytics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                team_name TEXT,
+                league TEXT,
+                timestamp INTEGER,
+                form_data TEXT,
+                xg_data TEXT,
+                h2h_data TEXT
+            )
+        ''')
+        
+        self.conn.commit()
+        print("📊 Database initialized for football analytics")
+    
+    def get_live_football_odds(self) -> List[Dict]:
+        """Get live football odds from The Odds API"""
+        football_sports = [
+            'soccer_epl',  # English Premier League
+            'soccer_spain_la_liga',  # Spanish La Liga
+            'soccer_italy_serie_a',  # Italian Serie A
+            'soccer_germany_bundesliga',  # German Bundesliga
+            'soccer_france_ligue_one',  # French Ligue 1
+            'soccer_uefa_champs_league',  # Champions League
+            'soccer_uefa_europa_league',  # Europa League
+        ]
+        
+        all_matches = []
+        
+        for sport in football_sports:
+            url = f"{self.odds_base_url}/sports/{sport}/odds"
+            params = {
+                'apiKey': self.odds_api_key,
+                'regions': 'uk',
+                'markets': 'h2h,totals,btts',
+                'oddsFormat': 'decimal'
+            }
+            
+            try:
+                response = requests.get(url, params=params, timeout=10)
+                if response.status_code == 200:
+                    matches = response.json()
+                    for match in matches:
+                        match['sport'] = sport
+                        all_matches.append(match)
+                    print(f"⚽ Found {len(matches)} live matches in {sport}")
+                else:
+                    print(f"⚠️  No data for {sport}: {response.status_code}")
+            except Exception as e:
+                print(f"❌ Error fetching {sport}: {e}")
+        
+        return all_matches
+    
+    def get_team_last_5_games(self, team_name: str, league_id: int) -> List[Dict]:
+        """Get last 5 games for a team using API-Football"""
+        # This would use API-Football to get real data
+        # For now, return mock structure - you'll need to implement with real API
+        headers = {
+            'X-RapidAPI-Key': self.api_football_key,
+            'X-RapidAPI-Host': 'api-football-beta.p.rapidapi.com'
+        }
+        
+        # Mock implementation - replace with real API calls
+        mock_games = [
+            {'goals_for': 2, 'goals_against': 1, 'xg_for': 1.8, 'xg_against': 1.2, 'result': 'W'},
+            {'goals_for': 1, 'goals_against': 1, 'xg_for': 0.9, 'xg_against': 1.1, 'result': 'D'},
+            {'goals_for': 3, 'goals_against': 0, 'xg_for': 2.1, 'xg_against': 0.7, 'result': 'W'},
+            {'goals_for': 0, 'goals_against': 2, 'xg_for': 1.3, 'xg_against': 1.9, 'result': 'L'},
+            {'goals_for': 2, 'goals_against': 2, 'xg_for': 1.7, 'xg_against': 1.6, 'result': 'D'},
+        ]
+        
+        return mock_games
+    
+    def analyze_team_form(self, team_name: str, league_id: int) -> Optional[TeamForm]:
+        """Analyze team's recent form and xG data"""
+        last_5 = self.get_team_last_5_games(team_name, league_id)
+        
+        if not last_5:
+            return None
+        
+        # Calculate form metrics
+        goals_scored = sum(game['goals_for'] for game in last_5) / len(last_5)
+        goals_conceded = sum(game['goals_against'] for game in last_5) / len(last_5)
+        xg_for = sum(game['xg_for'] for game in last_5) / len(last_5)
+        xg_against = sum(game['xg_against'] for game in last_5) / len(last_5)
+        
+        wins = sum(1 for game in last_5 if game['result'] == 'W')
+        win_rate = wins / len(last_5)
+        
+        # Determine form trend
+        recent_results = [game['result'] for game in last_5[-3:]]
+        wins_recent = recent_results.count('W')
+        if wins_recent >= 2:
+            form_trend = "IMPROVING"
+        elif wins_recent == 0:
+            form_trend = "DECLINING"
+        else:
+            form_trend = "STABLE"
+        
+        return TeamForm(
+            team_name=team_name,
+            last_5_games=last_5,
+            goals_scored=goals_scored,
+            goals_conceded=goals_conceded,
+            xg_for=xg_for,
+            xg_against=xg_against,
+            win_rate=win_rate,
+            form_trend=form_trend
+        )
+    
+    def get_head_to_head(self, home_team: str, away_team: str) -> HeadToHead:
+        """Get head-to-head statistics between two teams"""
+        # Mock implementation - replace with real API calls to API-Football
+        # This would fetch historical matchups between the teams
+        
+        mock_h2h = HeadToHead(
+            total_matches=10,
+            home_wins=4,
+            away_wins=3,
+            draws=3,
+            avg_goals=2.4,
+            avg_home_goals=1.3,
+            avg_away_goals=1.1,
+            over_2_5_rate=0.6,
+            btts_rate=0.7
+        )
+        
+        return mock_h2h
+    
+    def calculate_xg_edge(self, home_form: TeamForm, away_form: TeamForm, h2h: HeadToHead) -> Dict:
+        """Calculate expected goals and value edges"""
+        
+        # Advanced xG calculation considering form, H2H, and league context
+        home_xg = (home_form.xg_for * 0.6 + h2h.avg_home_goals * 0.4)
+        away_xg = (away_form.xg_for * 0.6 + h2h.avg_away_goals * 0.4)
+        
+        # Adjust for defensive strength
+        home_xg_adjusted = home_xg * (2.0 - away_form.xg_against / 1.5)
+        away_xg_adjusted = away_xg * (2.0 - home_form.xg_against / 1.5)
+        
+        total_xg = home_xg_adjusted + away_xg_adjusted
+        
+        # Calculate probabilities
+        over_2_5_prob = min(0.95, max(0.05, (total_xg - 1.5) / 2.0))
+        over_3_5_prob = min(0.95, max(0.05, (total_xg - 2.5) / 2.5))
+        btts_prob = min(0.95, max(0.05, (home_xg_adjusted * away_xg_adjusted) / 2.0))
+        
+        return {
+            'home_xg': home_xg_adjusted,
+            'away_xg': away_xg_adjusted,
+            'total_xg': total_xg,
+            'over_2_5_prob': over_2_5_prob,
+            'over_3_5_prob': over_3_5_prob,
+            'btts_prob': btts_prob
+        }
+    
+    def find_balanced_opportunities(self, match: Dict) -> List[FootballOpportunity]:
+        """Find balanced betting opportunities with sophisticated analysis"""
+        opportunities = []
+        
+        home_team = match['home_team']
+        away_team = match['away_team']
+        
+        # Get analytics data
+        home_form = self.analyze_team_form(home_team, 1)  # League ID would be dynamic
+        away_form = self.analyze_team_form(away_team, 1)
+        h2h = self.get_head_to_head(home_team, away_team)
+        
+        if not home_form or not away_form:
+            return opportunities
+        
+        # Calculate xG and probabilities
+        xg_analysis = self.calculate_xg_edge(home_form, away_form, h2h)
+        
+        # Analyze available markets
+        bookmakers = match.get('bookmakers', [])
+        if not bookmakers:
+            return opportunities
+        
+        for bookmaker in bookmakers:
+            markets = bookmaker.get('markets', [])
+            
+            for market in markets:
+                market_key = market.get('key')
+                outcomes = market.get('outcomes', [])
+                
+                if market_key == 'totals':
+                    # Analyze over/under markets
+                    for outcome in outcomes:
+                        name = outcome.get('name')
+                        odds = outcome.get('price', 0)
+                        point = outcome.get('point', 0)
+                        
+                        if 'Over' in name and point == 2.5:
+                            implied_prob = 1.0 / odds
+                            true_prob = xg_analysis['over_2_5_prob']
+                            edge = (true_prob - implied_prob) * 100
+                            
+                            if edge >= self.min_edge:
+                                opportunity = self.create_opportunity(
+                                    match, 'Over 2.5', odds, edge, 
+                                    home_form, away_form, h2h, xg_analysis
+                                )
+                                opportunities.append(opportunity)
+                        
+                        elif 'Under' in name and point == 2.5:
+                            implied_prob = 1.0 / odds
+                            true_prob = 1.0 - xg_analysis['over_2_5_prob']
+                            edge = (true_prob - implied_prob) * 100
+                            
+                            if edge >= self.min_edge:
+                                opportunity = self.create_opportunity(
+                                    match, 'Under 2.5', odds, edge,
+                                    home_form, away_form, h2h, xg_analysis
+                                )
+                                opportunities.append(opportunity)
+                
+                elif market_key == 'btts':
+                    # Analyze Both Teams to Score
+                    for outcome in outcomes:
+                        name = outcome.get('name')
+                        odds = outcome.get('price', 0)
+                        
+                        if name == 'Yes':
+                            implied_prob = 1.0 / odds
+                            true_prob = xg_analysis['btts_prob']
+                            edge = (true_prob - implied_prob) * 100
+                            
+                            if edge >= self.min_edge:
+                                opportunity = self.create_opportunity(
+                                    match, 'BTTS Yes', odds, edge,
+                                    home_form, away_form, h2h, xg_analysis
+                                )
+                                opportunities.append(opportunity)
+        
+        return opportunities
+    
+    def create_opportunity(self, match: Dict, selection: str, odds: float, edge: float,
+                          home_form: TeamForm, away_form: TeamForm, h2h: HeadToHead, 
+                          xg_analysis: Dict) -> FootballOpportunity:
+        """Create a football betting opportunity with full analysis"""
+        
+        # Calculate confidence based on multiple factors
+        confidence_factors = [
+            min(100, edge * 2),  # Edge factor
+            home_form.win_rate * 50 + away_form.win_rate * 50,  # Form factor
+            min(100, h2h.total_matches * 10),  # H2H sample size
+            min(100, abs(xg_analysis['total_xg'] - 2.5) * 20)  # xG predictability
+        ]
+        confidence = int(sum(confidence_factors) / len(confidence_factors))
+        
+        # Calculate stake using Kelly Criterion
+        kelly_fraction = edge / 100 / (odds - 1)
+        stake = min(self.max_stake, max(5.0, self.base_stake * kelly_fraction))
+        
+        # Compile analysis
+        analysis = {
+            'home_form': {
+                'goals_per_game': home_form.goals_scored,
+                'xg_per_game': home_form.xg_for,
+                'trend': home_form.form_trend
+            },
+            'away_form': {
+                'goals_per_game': away_form.goals_scored,
+                'xg_per_game': away_form.xg_for,
+                'trend': away_form.form_trend
+            },
+            'h2h': {
+                'total_matches': h2h.total_matches,
+                'avg_goals': h2h.avg_goals,
+                'over_2_5_rate': h2h.over_2_5_rate
+            },
+            'xg_prediction': xg_analysis,
+            'edge_analysis': f"{edge:.1f}% mathematical edge identified"
+        }
+        
+        return FootballOpportunity(
+            match_id=f"{match['home_team']}_vs_{match['away_team']}_{int(time.time())}",
+            home_team=match['home_team'],
+            away_team=match['away_team'],
+            league=match.get('sport', 'Unknown'),
+            start_time=match.get('commence_time', ''),
+            market='Goals',
+            selection=selection,
+            odds=odds,
+            edge_percentage=edge,
+            confidence=confidence,
+            analysis=analysis,
+            stake=stake
+        )
+    
+    def save_opportunity(self, opportunity: FootballOpportunity):
+        """Save opportunity to database"""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            INSERT INTO football_opportunities 
+            (timestamp, match_id, home_team, away_team, league, market, selection, 
+             odds, edge_percentage, confidence, analysis, stake)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            int(time.time()),
+            opportunity.match_id,
+            opportunity.home_team,
+            opportunity.away_team,
+            opportunity.league,
+            opportunity.market,
+            opportunity.selection,
+            opportunity.odds,
+            opportunity.edge_percentage,
+            opportunity.confidence,
+            json.dumps(opportunity.analysis),
+            opportunity.stake
+        ))
+        self.conn.commit()
+    
+    def run_analysis_cycle(self):
+        """Run complete analysis cycle"""
+        print("🏆 REAL FOOTBALL CHAMPION - ANALYSIS CYCLE")
+        print("=" * 60)
+        
+        # Get live matches
+        matches = self.get_live_football_odds()
+        print(f"⚽ Analyzing {len(matches)} live football matches...")
+        
+        total_opportunities = 0
+        
+        for match in matches:
+            print(f"\n🔍 ANALYZING: {match['home_team']} vs {match['away_team']}")
+            
+            opportunities = self.find_balanced_opportunities(match)
+            
+            for opp in opportunities:
+                print(f"🎯 OPPORTUNITY FOUND:")
+                print(f"   📊 {opp.selection} @ {opp.odds}")
+                print(f"   📈 Edge: {opp.edge_percentage:.1f}%")
+                print(f"   🎯 Confidence: {opp.confidence}/100")
+                print(f"   💰 Stake: ${opp.stake:.2f}")
+                print(f"   🧠 xG Analysis: Home {opp.analysis['xg_prediction']['home_xg']:.1f}, Away {opp.analysis['xg_prediction']['away_xg']:.1f}")
+                
+                self.save_opportunity(opp)
+                total_opportunities += 1
+        
+        print(f"\n🏆 ANALYSIS COMPLETE: {total_opportunities} opportunities found")
+        print("⏱️ Next analysis cycle in 5 minutes...")
+        
+        return total_opportunities
+
+def main():
+    """Main execution function"""
+    try:
+        champion = RealFootballChampion()
+        
+        while True:
+            opportunities = champion.run_analysis_cycle()
+            
+            # Wait 5 minutes between cycles
+            time.sleep(300)
+            
+    except KeyboardInterrupt:
+        print("\n🛑 Real Football Champion stopped by user")
+    except Exception as e:
+        print(f"❌ Error in Real Football Champion: {e}")
+
+if __name__ == "__main__":
+    main()

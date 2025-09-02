@@ -26,7 +26,7 @@ args = "Streamlit Dashboard"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Real E-Soccer Betting"
+args = "Real Football Champion"
 
 [[workflows.workflow]]
 name = "install_dependencies"
@@ -49,12 +49,12 @@ waitForPort = 5000
 outputType = "webview"
 
 [[workflows.workflow]]
-name = "Real E-Soccer Betting"
+name = "Real Football Champion"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "python real_betting_system.py"
+args = "python real_football_champion.py"
 
 [workflows.workflow.metadata]
 outputType = "console"
