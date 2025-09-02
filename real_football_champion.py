@@ -210,7 +210,7 @@ class RealFootballChampion:
             'X-RapidAPI-Host': 'v3.football.api-sports.io'
         }
         
-        # Major league IDs
+        # Major league IDs - expanded for daily coverage
         league_ids = [
             39,   # Premier League
             140,  # La Liga  
@@ -218,7 +218,14 @@ class RealFootballChampion:
             78,   # Bundesliga
             61,   # Ligue 1
             2,    # Champions League
-            3     # Europa League
+            3,    # Europa League
+            144,  # Belgian First Division
+            179,  # Eredivisie (Netherlands)
+            94,   # Primeira Liga (Portugal)
+            203,  # Turkish Super League
+            262,  # Danish Superliga
+            218,  # Swedish Allsvenskan
+            88,   # Scottish Premiership
         ]
         
         all_fixtures = []
@@ -227,9 +234,14 @@ class RealFootballChampion:
         for league_id in league_ids:
             try:
                 url = f"{self.api_football_base_url}/fixtures"
+                # Get fixtures for next 3 days only
+                from datetime import timedelta
+                end_date = today + timedelta(days=3)
+                
                 params = {
                     'league': league_id,
-                    'next': 10,  # Next 10 fixtures
+                    'from': today.strftime('%Y-%m-%d'),
+                    'to': end_date.strftime('%Y-%m-%d'),
                     'status': 'NS'  # Not started
                 }
                 
@@ -605,10 +617,10 @@ class RealFootballChampion:
         under_2_5_odds = 1 / ((1 - over_2_5_prob) - margin) if (1 - over_2_5_prob) > margin else 2.0
         btts_yes_odds = 1 / (btts_prob - margin) if btts_prob > margin else 2.0
         
-        # Ensure odds are reasonable
-        over_2_5_odds = max(1.1, min(5.0, over_2_5_odds))
-        under_2_5_odds = max(1.1, min(5.0, under_2_5_odds))
-        btts_yes_odds = max(1.1, min(5.0, btts_yes_odds))
+        # Ensure odds are reasonable - MINIMUM 1.75 FOR USER REQUIREMENT
+        over_2_5_odds = max(1.75, min(5.0, over_2_5_odds))
+        under_2_5_odds = max(1.75, min(5.0, under_2_5_odds))
+        btts_yes_odds = max(1.75, min(5.0, btts_yes_odds))
         
         return {
             'over_2_5': over_2_5_odds,
@@ -649,7 +661,7 @@ class RealFootballChampion:
             true_prob = xg_analysis['over_2_5_prob']
             edge = (true_prob - implied_prob) * 100
             
-            if edge >= self.min_edge:
+            if edge >= self.min_edge and estimated_odds['over_2_5'] >= 1.75:  # ODDS FILTER
                 opportunity = self.create_opportunity(
                     match, 'Over 2.5', estimated_odds['over_2_5'], edge,
                     home_form, away_form, h2h, xg_analysis
@@ -661,7 +673,7 @@ class RealFootballChampion:
             true_prob = 1.0 - xg_analysis['over_2_5_prob']
             edge = (true_prob - implied_prob) * 100
             
-            if edge >= self.min_edge:
+            if edge >= self.min_edge and estimated_odds['under_2_5'] >= 1.75:  # ODDS FILTER
                 opportunity = self.create_opportunity(
                     match, 'Under 2.5', estimated_odds['under_2_5'], edge,
                     home_form, away_form, h2h, xg_analysis
@@ -673,7 +685,7 @@ class RealFootballChampion:
             true_prob = xg_analysis['btts_prob']
             edge = (true_prob - implied_prob) * 100
             
-            if edge >= self.min_edge:
+            if edge >= self.min_edge and estimated_odds['btts_yes'] >= 1.75:  # ODDS FILTER
                 opportunity = self.create_opportunity(
                     match, 'BTTS Yes', estimated_odds['btts_yes'], edge,
                     home_form, away_form, h2h, xg_analysis
