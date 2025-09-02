@@ -53,6 +53,8 @@ class FootballOpportunity:
     confidence: int
     analysis: Dict
     stake: float
+    match_date: str = ""
+    kickoff_time: str = ""
 
 class RealFootballChampion:
     """🏆 Advanced Real Football Betting Champion"""
@@ -106,7 +108,9 @@ class RealFootballChampion:
                 result TEXT,
                 payout REAL DEFAULT 0,
                 settled_timestamp INTEGER,
-                roi_percentage REAL DEFAULT 0
+                roi_percentage REAL DEFAULT 0,
+                match_date TEXT,
+                kickoff_time TEXT
             )
         ''')
         
@@ -125,6 +129,14 @@ class RealFootballChampion:
             pass
         try:
             cursor.execute('ALTER TABLE football_opportunities ADD COLUMN roi_percentage REAL DEFAULT 0')
+        except:
+            pass
+        try:
+            cursor.execute('ALTER TABLE football_opportunities ADD COLUMN match_date TEXT')
+        except:
+            pass
+        try:
+            cursor.execute('ALTER TABLE football_opportunities ADD COLUMN kickoff_time TEXT')
         except:
             pass
         
@@ -767,6 +779,22 @@ class RealFootballChampion:
             'edge_analysis': f"{edge:.1f}% mathematical edge identified"
         }
         
+        # Extract match date and time
+        commence_time = match.get('commence_time', '')
+        match_date = ""
+        kickoff_time = ""
+        
+        if commence_time:
+            from datetime import datetime
+            try:
+                dt = datetime.fromisoformat(commence_time.replace('Z', '+00:00'))
+                match_date = dt.strftime("%Y-%m-%d")
+                kickoff_time = dt.strftime("%H:%M")
+            except:
+                # If parsing fails, use raw data
+                match_date = commence_time[:10] if len(commence_time) > 10 else ""
+                kickoff_time = commence_time[11:16] if len(commence_time) > 16 else ""
+        
         return FootballOpportunity(
             match_id=f"{match['home_team']}_vs_{match['away_team']}_{int(time.time())}",
             home_team=match['home_team'],
@@ -779,7 +807,9 @@ class RealFootballChampion:
             edge_percentage=edge,
             confidence=confidence,
             analysis=analysis,
-            stake=stake
+            stake=stake,
+            match_date=match_date,
+            kickoff_time=kickoff_time
         )
     
     def save_opportunity(self, opportunity: FootballOpportunity):
@@ -788,8 +818,8 @@ class RealFootballChampion:
         cursor.execute('''
             INSERT INTO football_opportunities 
             (timestamp, match_id, home_team, away_team, league, market, selection, 
-             odds, edge_percentage, confidence, analysis, stake)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             odds, edge_percentage, confidence, analysis, stake, match_date, kickoff_time)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             int(time.time()),
             opportunity.match_id,
@@ -802,7 +832,9 @@ class RealFootballChampion:
             opportunity.edge_percentage,
             opportunity.confidence,
             json.dumps(opportunity.analysis),
-            opportunity.stake
+            opportunity.stake,
+            opportunity.match_date,
+            opportunity.kickoff_time
         ))
         self.conn.commit()
     

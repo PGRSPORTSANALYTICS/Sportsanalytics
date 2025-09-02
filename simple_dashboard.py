@@ -18,7 +18,17 @@ st.set_page_config(
 def load_opportunities():
     try:
         conn = sqlite3.connect('data/real_football.db')
-        query = "SELECT * FROM football_opportunities ORDER BY timestamp DESC LIMIT 50"
+        query = """
+        SELECT *, 
+               CASE 
+                   WHEN match_date IS NOT NULL AND kickoff_time IS NOT NULL 
+                   THEN match_date || ' ' || kickoff_time
+                   ELSE datetime(timestamp, 'unixepoch', 'localtime')
+               END as display_datetime
+        FROM football_opportunities 
+        ORDER BY timestamp DESC 
+        LIMIT 50
+        """
         df = pd.read_sql_query(query, conn)
         conn.close()
         return df
@@ -186,7 +196,21 @@ else:
     
     # Display each opportunity
     for idx, row in df.head(10).iterrows():
-        with st.expander(f"⚽ {row['home_team']} vs {row['away_team']} - {row['selection']}"):
+        # Format match date/time display
+        date_display = ""
+        if pd.notna(row.get('display_datetime', '')):
+            date_display = f" | 📅 {row['display_datetime']}"
+        elif pd.notna(row.get('match_date', '')) and pd.notna(row.get('kickoff_time', '')):
+            date_display = f" | 📅 {row['match_date']} {row['kickoff_time']}"
+        else:
+            import datetime
+            try:
+                date_str = datetime.datetime.fromtimestamp(row['timestamp']).strftime("%Y-%m-%d %H:%M")
+                date_display = f" | 📅 {date_str}"
+            except:
+                pass
+        
+        with st.expander(f"⚽ {row['home_team']} vs {row['away_team']} - {row['selection']}{date_display}"):
             col1, col2, col3 = st.columns(3)
             
             with col1:
@@ -194,6 +218,8 @@ else:
                 st.write(f"🏠 {row['home_team']}")
                 st.write(f"✈️ {row['away_team']}")
                 st.write(f"🏆 {row['league']}")
+                if pd.notna(row.get('match_date', '')):
+                    st.write(f"📅 {row['match_date']} {row.get('kickoff_time', '')}")
             
             with col2:
                 st.write("**Betting Details:**")
