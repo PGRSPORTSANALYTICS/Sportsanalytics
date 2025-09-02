@@ -121,8 +121,8 @@ class RealFootballChampion:
         self.conn.commit()
         print("📊 Database initialized for football analytics")
     
-    def get_live_football_odds(self) -> List[Dict]:
-        """Get live football odds from The Odds API"""
+    def get_football_odds(self) -> List[Dict]:
+        """Get pre-match and upcoming football odds from The Odds API"""
         football_sports = [
             'soccer_epl',  # English Premier League
             'soccer_spain_la_liga',  # Spanish La Liga
@@ -141,7 +141,8 @@ class RealFootballChampion:
                 'apiKey': self.odds_api_key,
                 'regions': 'uk',
                 'markets': 'h2h,totals,btts',
-                'oddsFormat': 'decimal'
+                'oddsFormat': 'decimal',
+                'dateFormat': 'iso'
             }
             
             try:
@@ -151,13 +152,83 @@ class RealFootballChampion:
                     for match in matches:
                         match['sport'] = sport
                         all_matches.append(match)
-                    print(f"⚽ Found {len(matches)} live matches in {sport}")
+                    print(f"⚽ Found {len(matches)} matches in {sport}")
                 else:
                     print(f"⚠️  No data for {sport}: {response.status_code}")
             except Exception as e:
                 print(f"❌ Error fetching {sport}: {e}")
         
+        # If no odds available, try getting upcoming fixtures
+        if not all_matches:
+            print("🔍 No odds available, checking for upcoming fixtures...")
+            all_matches = self.get_upcoming_fixtures()
+        
         return all_matches
+    
+    def get_upcoming_fixtures(self) -> List[Dict]:
+        """Get upcoming fixtures for the next few days"""
+        if not self.api_football_key:
+            print("⚠️ No API-Football key available for fixtures")
+            return []
+        
+        headers = {
+            'X-RapidAPI-Key': self.api_football_key,
+            'X-RapidAPI-Host': 'v3.football.api-sports.io'
+        }
+        
+        # Major league IDs
+        league_ids = [
+            39,   # Premier League
+            140,  # La Liga  
+            135,  # Serie A
+            78,   # Bundesliga
+            61,   # Ligue 1
+            2,    # Champions League
+            3     # Europa League
+        ]
+        
+        all_fixtures = []
+        today = datetime.now()
+        
+        for league_id in league_ids:
+            try:
+                url = f"{self.api_football_base_url}/fixtures"
+                params = {
+                    'league': league_id,
+                    'next': 10,  # Next 10 fixtures
+                    'status': 'NS'  # Not started
+                }
+                
+                response = requests.get(url, headers=headers, params=params, timeout=10)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    fixtures = data.get('response', [])
+                    
+                    for fixture in fixtures:
+                        teams = fixture.get('teams', {})
+                        fixture_info = fixture.get('fixture', {})
+                        league_info = fixture.get('league', {})
+                        
+                        # Convert to format similar to odds API
+                        formatted_fixture = {
+                            'id': fixture_info.get('id'),
+                            'sport_key': f"league_{league_id}",
+                            'sport_title': league_info.get('name', f'League {league_id}'),
+                            'commence_time': fixture_info.get('date'),
+                            'home_team': teams.get('home', {}).get('name', 'Unknown'),
+                            'away_team': teams.get('away', {}).get('name', 'Unknown'),
+                            'bookmakers': []  # Will be filled with mock odds for analysis
+                        }
+                        
+                        all_fixtures.append(formatted_fixture)
+                    
+                    print(f"📅 Found {len(fixtures)} upcoming fixtures in league {league_id}")
+                
+            except Exception as e:
+                print(f"❌ Error fetching fixtures for league {league_id}: {e}")
+        
+        return all_fixtures
     
     def get_team_last_5_games(self, team_name: str, team_id: int) -> List[Dict]:
         """Get last 5 games for a team using API-Football"""
@@ -487,6 +558,30 @@ class RealFootballChampion:
             'btts_prob': btts_prob
         }
     
+    def generate_estimated_odds(self, xg_analysis: Dict) -> Dict:
+        """Generate estimated odds based on xG analysis for pre-match"""
+        total_xg = xg_analysis['total_xg']
+        over_2_5_prob = xg_analysis['over_2_5_prob']
+        btts_prob = xg_analysis['btts_prob']
+        
+        # Convert probabilities to odds (with bookmaker margin)
+        margin = 0.05  # 5% bookmaker margin
+        
+        over_2_5_odds = 1 / (over_2_5_prob - margin) if over_2_5_prob > margin else 2.0
+        under_2_5_odds = 1 / ((1 - over_2_5_prob) - margin) if (1 - over_2_5_prob) > margin else 2.0
+        btts_yes_odds = 1 / (btts_prob - margin) if btts_prob > margin else 2.0
+        
+        # Ensure odds are reasonable
+        over_2_5_odds = max(1.1, min(5.0, over_2_5_odds))
+        under_2_5_odds = max(1.1, min(5.0, under_2_5_odds))
+        btts_yes_odds = max(1.1, min(5.0, btts_yes_odds))
+        
+        return {
+            'over_2_5': over_2_5_odds,
+            'under_2_5': under_2_5_odds,
+            'btts_yes': btts_yes_odds
+        }
+    
     def find_balanced_opportunities(self, match: Dict) -> List[FootballOpportunity]:
         """Find balanced betting opportunities with sophisticated analysis"""
         opportunities = []
@@ -510,7 +605,47 @@ class RealFootballChampion:
         
         # Analyze available markets
         bookmakers = match.get('bookmakers', [])
+        
+        # If no bookmakers (upcoming fixtures), generate estimated odds
         if not bookmakers:
+            estimated_odds = self.generate_estimated_odds(xg_analysis)
+            
+            # Check Over 2.5 opportunity
+            implied_prob = 1.0 / estimated_odds['over_2_5']
+            true_prob = xg_analysis['over_2_5_prob']
+            edge = (true_prob - implied_prob) * 100
+            
+            if edge >= self.min_edge:
+                opportunity = self.create_opportunity(
+                    match, 'Over 2.5', estimated_odds['over_2_5'], edge,
+                    home_form, away_form, h2h, xg_analysis
+                )
+                opportunities.append(opportunity)
+            
+            # Check Under 2.5 opportunity
+            implied_prob = 1.0 / estimated_odds['under_2_5']
+            true_prob = 1.0 - xg_analysis['over_2_5_prob']
+            edge = (true_prob - implied_prob) * 100
+            
+            if edge >= self.min_edge:
+                opportunity = self.create_opportunity(
+                    match, 'Under 2.5', estimated_odds['under_2_5'], edge,
+                    home_form, away_form, h2h, xg_analysis
+                )
+                opportunities.append(opportunity)
+            
+            # Check BTTS opportunity
+            implied_prob = 1.0 / estimated_odds['btts_yes']
+            true_prob = xg_analysis['btts_prob']
+            edge = (true_prob - implied_prob) * 100
+            
+            if edge >= self.min_edge:
+                opportunity = self.create_opportunity(
+                    match, 'BTTS Yes', estimated_odds['btts_yes'], edge,
+                    home_form, away_form, h2h, xg_analysis
+                )
+                opportunities.append(opportunity)
+            
             return opportunities
         
         for bookmaker in bookmakers:
@@ -654,9 +789,9 @@ class RealFootballChampion:
         print("🏆 REAL FOOTBALL CHAMPION - ANALYSIS CYCLE")
         print("=" * 60)
         
-        # Get live matches
-        matches = self.get_live_football_odds()
-        print(f"⚽ Analyzing {len(matches)} live football matches...")
+        # Get matches (live or upcoming)
+        matches = self.get_football_odds()
+        print(f"⚽ Analyzing {len(matches)} football matches...")
         
         total_opportunities = 0
         
