@@ -234,9 +234,9 @@ class RealFootballChampion:
         for league_id in league_ids:
             try:
                 url = f"{self.api_football_base_url}/fixtures"
-                # Get fixtures for next 3 days only
+                # Get fixtures for TODAY and TOMORROW only - daily bets
                 from datetime import timedelta
-                end_date = today + timedelta(days=3)
+                end_date = today + timedelta(days=1)  # ONLY TODAY AND TOMORROW
                 
                 params = {
                     'league': league_id,
