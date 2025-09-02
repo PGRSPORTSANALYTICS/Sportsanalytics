@@ -50,15 +50,20 @@ class RealFootballDataLoader:
             
             if not df.empty:
                 df['datetime'] = pd.to_datetime(df['timestamp'], unit='s')
-                # Parse analysis JSON
-                df['analysis_parsed'] = df['analysis'].apply(
-                    lambda x: json.loads(x) if x else {}
-                )
+                # Parse analysis JSON safely
+                def safe_parse_json(x):
+                    try:
+                        return json.loads(x) if x and x != 'null' else {}
+                    except:
+                        return {}
+                
+                df['analysis_parsed'] = df['analysis'].apply(safe_parse_json)
             
             return df
         except Exception as e:
-            st.error(f"Error loading opportunities: {e}")
-            return pd.DataFrame()
+            print(f"Database error: {e}")  # For debugging
+            # Return empty DataFrame with proper columns
+            return pd.DataFrame(columns=['timestamp', 'home_team', 'away_team', 'league', 'selection', 'odds', 'edge_percentage', 'confidence', 'stake', 'status'])
     
     def get_recent_opportunities(self, limit=20):
         """Get recent opportunities"""
@@ -94,8 +99,7 @@ class RealFootballDataLoader:
         
         return stats
 
-# Initialize data loader
-@st.cache_resource
+# Initialize data loader (no caching to see live data)
 def get_data_loader():
     return RealFootballDataLoader()
 
@@ -109,7 +113,6 @@ if auto_refresh:
 
 # Manual refresh button
 if st.sidebar.button("🔄 Refresh Now"):
-    st.cache_data.clear()
     st.rerun()
 
 # Main dashboard
