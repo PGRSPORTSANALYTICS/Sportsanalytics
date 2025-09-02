@@ -63,7 +63,19 @@ class RealFootballDataLoader:
         except Exception as e:
             print(f"Database error: {e}")  # For debugging
             # Return empty DataFrame with proper columns
-            return pd.DataFrame(columns=['timestamp', 'home_team', 'away_team', 'league', 'selection', 'odds', 'edge_percentage', 'confidence', 'stake', 'status'])
+            return pd.DataFrame({
+                'timestamp': [],
+                'home_team': [],
+                'away_team': [],
+                'league': [],
+                'selection': [],
+                'odds': [],
+                'edge_percentage': [],
+                'confidence': [],
+                'stake': [],
+                'status': [],
+                'analysis_parsed': []
+            })
     
     def get_recent_opportunities(self, limit=20):
         """Get recent opportunities"""
@@ -205,14 +217,18 @@ with tab1:
                     st.write(f"📊 Odds: {row['odds']:.2f}")
                 
                 with col3:
-                    if row.get('analysis_parsed'):
-                        analysis = row['analysis_parsed']
-                        st.write("**xG Analysis:**")
-                        if 'xg_prediction' in analysis:
-                            xg = analysis['xg_prediction']
-                            st.write(f"🏠 Home xG: {xg.get('home_xg', 0):.1f}")
-                            st.write(f"✈️ Away xG: {xg.get('away_xg', 0):.1f}")
-                            st.write(f"⚽ Total xG: {xg.get('total_xg', 0):.1f}")
+                    try:
+                        if hasattr(row, 'analysis_parsed') and row['analysis_parsed']:
+                            analysis = row['analysis_parsed']
+                            st.write("**xG Analysis:**")
+                            if isinstance(analysis, dict) and 'xg_prediction' in analysis:
+                                xg = analysis['xg_prediction']
+                                if isinstance(xg, dict):
+                                    st.write(f"🏠 Home xG: {xg.get('home_xg', 0):.1f}")
+                                    st.write(f"✈️ Away xG: {xg.get('away_xg', 0):.1f}")
+                                    st.write(f"⚽ Total xG: {xg.get('total_xg', 0):.1f}")
+                    except Exception as e:
+                        st.write("**xG Analysis:** Processing...")
 
 with tab2:
     st.header("📊 Analysis Dashboard")
@@ -293,14 +309,18 @@ with tab3:
         # xG analysis if available
         xg_data = []
         for idx, row in recent_opportunities.iterrows():
-            if row.get('analysis_parsed') and 'xg_prediction' in row['analysis_parsed']:
-                xg = row['analysis_parsed']['xg_prediction']
-                xg_data.append({
-                    'match': f"{row['home_team']} vs {row['away_team']}",
-                    'home_xg': xg.get('home_xg', 0),
-                    'away_xg': xg.get('away_xg', 0),
-                    'total_xg': xg.get('total_xg', 0)
-                })
+            try:
+                if isinstance(row['analysis_parsed'], dict) and 'xg_prediction' in row['analysis_parsed']:
+                    xg = row['analysis_parsed']['xg_prediction']
+                    if isinstance(xg, dict):
+                        xg_data.append({
+                            'match': f"{row['home_team']} vs {row['away_team']}",
+                            'home_xg': xg.get('home_xg', 0),
+                            'away_xg': xg.get('away_xg', 0),
+                            'total_xg': xg.get('total_xg', 0)
+                        })
+            except Exception:
+                continue
         
         if xg_data:
             xg_df = pd.DataFrame(xg_data)
@@ -328,10 +348,14 @@ with tab4:
     
     if not recent_opportunities.empty:
         # Show all opportunities in a table
-        display_df = recent_opportunities[['datetime', 'home_team', 'away_team', 'league', 
+        display_df = recent_opportunities[['home_team', 'away_team', 'league', 
                                         'selection', 'odds', 'edge_percentage', 'confidence', 
                                         'stake', 'status']].copy()
-        display_df['datetime'] = display_df['datetime'].dt.strftime('%Y-%m-%d %H:%M')
+        if 'datetime' in recent_opportunities.columns:
+            display_df['datetime'] = recent_opportunities['datetime'].dt.strftime('%Y-%m-%d %H:%M')
+            # Reorder columns to put datetime first
+            cols = ['datetime'] + [col for col in display_df.columns if col != 'datetime']
+            display_df = display_df[cols]
         
         st.dataframe(display_df, use_container_width=True)
         
