@@ -22,23 +22,7 @@ args = "install_dependencies"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "E-Soccer Bot"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
 args = "Streamlit Dashboard"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Ultimate E-Soccer Champion"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Perfect Champion"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Money Machine Dashboard"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
@@ -53,17 +37,6 @@ task = "shell.exec"
 args = "uv add plotly"
 
 [[workflows.workflow]]
-name = "E-Soccer Bot"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python esoccer_bot.py"
-
-[workflows.workflow.metadata]
-outputType = "console"
-
-[[workflows.workflow]]
 name = "Streamlit Dashboard"
 author = "agent"
 
@@ -74,39 +47,6 @@ waitForPort = 5000
 
 [workflows.workflow.metadata]
 outputType = "webview"
-
-[[workflows.workflow]]
-name = "Ultimate E-Soccer Champion"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python ultimate_esoccer_bot.py"
-
-[workflows.workflow.metadata]
-outputType = "console"
-
-[[workflows.workflow]]
-name = "Perfect Champion"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python perfect_champion.py"
-
-[workflows.workflow.metadata]
-outputType = "console"
-
-[[workflows.workflow]]
-name = "Money Machine Dashboard"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python money_machine_dashboard.py"
-
-[workflows.workflow.metadata]
-outputType = "console"
 
 [[workflows.workflow]]
 name = "Real E-Soccer Betting"
