@@ -51,13 +51,13 @@ outputType = "console"
 name = "Real Football Dashboard"
 author = "agent"
 
-[workflows.workflow.metadata]
-outputType = "webview"
-
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "streamlit run real_football_dashboard.py --server.port 5000"
+args = "streamlit run simple_dashboard.py --server.port 5000"
 waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"
 
 [[ports]]
 localPort = 5000
