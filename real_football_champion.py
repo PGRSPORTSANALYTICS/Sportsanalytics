@@ -102,9 +102,31 @@ class RealFootballChampion:
                 confidence INTEGER,
                 analysis TEXT,
                 stake REAL,
-                status TEXT DEFAULT 'pending'
+                status TEXT DEFAULT 'pending',
+                result TEXT,
+                payout REAL DEFAULT 0,
+                settled_timestamp INTEGER,
+                roi_percentage REAL DEFAULT 0
             )
         ''')
+        
+        # Add new columns to existing table if they don't exist
+        try:
+            cursor.execute('ALTER TABLE football_opportunities ADD COLUMN result TEXT')
+        except:
+            pass
+        try:
+            cursor.execute('ALTER TABLE football_opportunities ADD COLUMN payout REAL DEFAULT 0')
+        except:
+            pass
+        try:
+            cursor.execute('ALTER TABLE football_opportunities ADD COLUMN settled_timestamp INTEGER')
+        except:
+            pass
+        try:
+            cursor.execute('ALTER TABLE football_opportunities ADD COLUMN roi_percentage REAL DEFAULT 0')
+        except:
+            pass
         
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS team_analytics (

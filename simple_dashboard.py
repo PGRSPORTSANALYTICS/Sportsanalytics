@@ -26,6 +26,69 @@ def load_opportunities():
         st.error(f"Database error: {e}")
         return pd.DataFrame()
 
+@st.cache_data(ttl=10)
+def load_performance_stats():
+    try:
+        conn = sqlite3.connect('data/real_football.db')
+        
+        # Overall performance
+        query = """
+            SELECT 
+                COUNT(*) as total_bets,
+                SUM(CASE WHEN result = 'won' THEN 1 ELSE 0 END) as wins,
+                SUM(CASE WHEN result = 'lost' THEN 1 ELSE 0 END) as losses,
+                SUM(stake) as total_staked,
+                SUM(payout) as total_payout,
+                AVG(roi_percentage) as avg_roi,
+                SUM(payout) - SUM(stake) as net_profit
+            FROM football_opportunities 
+            WHERE status = 'settled'
+        """
+        
+        cursor = conn.cursor()
+        cursor.execute(query)
+        stats = cursor.fetchone()
+        
+        # Recent results
+        recent_query = """
+            SELECT home_team, away_team, selection, odds, stake, result, payout, roi_percentage, settled_timestamp
+            FROM football_opportunities 
+            WHERE status = 'settled' 
+            ORDER BY settled_timestamp DESC 
+            LIMIT 10
+        """
+        recent_df = pd.read_sql_query(recent_query, conn)
+        
+        conn.close()
+        
+        if stats and stats[0] > 0:
+            total_bets, wins, losses, total_staked, total_payout, avg_roi, net_profit = stats
+            win_rate = (wins / total_bets) * 100 if total_bets > 0 else 0
+            total_roi = ((total_payout - total_staked) / total_staked) * 100 if total_staked > 0 else 0
+            
+            return {
+                'total_bets': total_bets,
+                'wins': wins,
+                'losses': losses,
+                'win_rate': win_rate,
+                'total_staked': total_staked,
+                'total_payout': total_payout,
+                'net_profit': net_profit,
+                'total_roi': total_roi,
+                'avg_roi_per_bet': avg_roi or 0,
+                'recent_results': recent_df
+            }
+        
+        return {'total_bets': 0, 'wins': 0, 'losses': 0, 'win_rate': 0,
+                'total_staked': 0, 'total_payout': 0, 'net_profit': 0,
+                'total_roi': 0, 'avg_roi_per_bet': 0, 'recent_results': pd.DataFrame()}
+    
+    except Exception as e:
+        st.error(f"Performance data error: {e}")
+        return {'total_bets': 0, 'wins': 0, 'losses': 0, 'win_rate': 0,
+                'total_staked': 0, 'total_payout': 0, 'net_profit': 0,
+                'total_roi': 0, 'avg_roi_per_bet': 0, 'recent_results': pd.DataFrame()}
+
 # Auto refresh
 if st.sidebar.button("🔄 Refresh Data"):
     st.cache_data.clear()
@@ -37,6 +100,51 @@ st.markdown("### Live Football Betting Opportunities")
 
 # Load data
 df = load_opportunities()
+performance = load_performance_stats()
+
+# Performance Section
+if performance['total_bets'] > 0:
+    st.header("📈 Track Record & ROI")
+    
+    perf_col1, perf_col2, perf_col3, perf_col4, perf_col5 = st.columns(5)
+    
+    with perf_col1:
+        st.metric("🎯 Win Rate", f"{performance['win_rate']:.1f}%", 
+                 f"{performance['wins']}/{performance['total_bets']} won")
+    
+    with perf_col2:
+        st.metric("💰 Total ROI", f"{performance['total_roi']:.1f}%",
+                 f"${performance['net_profit']:.2f} profit")
+    
+    with perf_col3:
+        st.metric("📊 Total Staked", f"${performance['total_staked']:.2f}")
+    
+    with perf_col4:
+        st.metric("💸 Total Payout", f"${performance['total_payout']:.2f}")
+    
+    with perf_col5:
+        st.metric("📈 Avg ROI/Bet", f"{performance['avg_roi_per_bet']:.1f}%")
+    
+    # Recent Results
+    if not performance['recent_results'].empty:
+        st.subheader("🏆 Recent Results")
+        
+        for idx, row in performance['recent_results'].head(5).iterrows():
+            result_color = "🟢" if row['result'] == 'won' else "🔴" if row['result'] == 'lost' else "🟡"
+            with st.expander(f"{result_color} {row['home_team']} vs {row['away_team']} - {row['result'].upper()}"):
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.write(f"**Selection:** {row['selection']}")
+                    st.write(f"**Odds:** {row['odds']:.2f}")
+                with col2:
+                    st.write(f"**Stake:** ${row['stake']:.2f}")
+                    st.write(f"**Payout:** ${row['payout']:.2f}")
+                with col3:
+                    st.write(f"**ROI:** {row['roi_percentage']:.1f}%")
+                    profit = row['payout'] - row['stake']
+                    st.write(f"**Profit:** ${profit:.2f}")
+    
+    st.markdown("---")
 
 if df.empty:
     st.warning("No opportunities found in database")
