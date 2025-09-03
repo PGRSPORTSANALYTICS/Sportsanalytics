@@ -73,6 +73,39 @@ class RealFootballChampion:
         self.odds_base_url = "https://api.the-odds-api.com/v4"
         self.api_football_base_url = "https://v3.football.api-sports.io"
         
+        # Sport key to league name mapping
+        self.sport_to_league = {
+            'soccer_epl': 'Premier League',
+            'soccer_spain_la_liga': 'La Liga',
+            'soccer_italy_serie_a': 'Serie A',
+            'soccer_germany_bundesliga': 'Bundesliga',
+            'soccer_france_ligue_one': 'Ligue 1',
+            'soccer_uefa_champs_league': 'Champions League',
+            'soccer_uefa_europa_league': 'Europa League',
+            'soccer_belgium_first_div': 'Belgian First Division',
+            'soccer_netherlands_eredivisie': 'Eredivisie',
+            'soccer_portugal_primeira_liga': 'Primeira Liga',
+            'soccer_turkey_super_league': 'Turkish Super League'
+        }
+        
+        # API-Football league ID to name mapping
+        self.league_id_to_name = {
+            39: 'Premier League',
+            140: 'La Liga',
+            135: 'Serie A', 
+            78: 'Bundesliga',
+            61: 'Ligue 1',
+            2: 'Champions League',
+            3: 'Europa League',
+            144: 'Belgian First Division',
+            179: 'Eredivisie',
+            94: 'Primeira Liga',
+            203: 'Turkish Super League',
+            262: 'Danish Superliga',
+            218: 'Swedish Allsvenskan',
+            88: 'Scottish Premiership'
+        }
+        
         # Initialize database
         self.init_database()
         
@@ -246,7 +279,8 @@ class RealFootballChampion:
         ]
         
         all_fixtures = []
-        today = datetime.now()
+        from datetime import datetime as dt_parser
+        today = dt_parser.now()
         
         for league_id in league_ids:
             try:
@@ -273,15 +307,32 @@ class RealFootballChampion:
                         fixture_info = fixture.get('fixture', {})
                         league_info = fixture.get('league', {})
                         
+                        # Get match date and time from API-Football
+                        match_date = fixture_info.get('date', '')
+                        formatted_date = ""
+                        formatted_time = ""
+                        if match_date:
+                            try:
+                                from datetime import datetime as dt_parser
+                                dt = dt_parser.fromisoformat(match_date.replace('Z', '+00:00'))
+                                formatted_date = dt.strftime("%Y-%m-%d")
+                                formatted_time = dt.strftime("%H:%M")
+                            except:
+                                formatted_date = match_date[:10] if len(match_date) > 10 else ""
+                                formatted_time = match_date[11:16] if len(match_date) > 16 else ""
+                        
                         # Convert to format similar to odds API
                         formatted_fixture = {
                             'id': fixture_info.get('id'),
                             'sport_key': f"league_{league_id}",
                             'sport_title': league_info.get('name', f'League {league_id}'),
+                            'league_name': league_info.get('name', f'League {league_id}'),
                             'commence_time': fixture_info.get('date'),
                             'home_team': teams.get('home', {}).get('name', 'Unknown'),
                             'away_team': teams.get('away', {}).get('name', 'Unknown'),
-                            'bookmakers': []  # Will be filled with mock odds for analysis
+                            'bookmakers': [],  # Will be filled with mock odds for analysis
+                            'formatted_date': formatted_date,
+                            'formatted_time': formatted_time
                         }
                         
                         all_fixtures.append(formatted_fixture)
@@ -810,10 +861,11 @@ class RealFootballChampion:
         
         # Extract match date and time
         commence_time = match.get('commence_time', '')
-        match_date = ""
-        kickoff_time = ""
+        match_date = match.get('formatted_date', "")  # Try formatted date first
+        kickoff_time = match.get('formatted_time', "")  # Try formatted time first
         
-        if commence_time:
+        # If not available, parse from commence_time
+        if not match_date and commence_time:
             from datetime import datetime
             try:
                 dt = datetime.fromisoformat(commence_time.replace('Z', '+00:00'))
@@ -824,11 +876,15 @@ class RealFootballChampion:
                 match_date = commence_time[:10] if len(commence_time) > 10 else ""
                 kickoff_time = commence_time[11:16] if len(commence_time) > 16 else ""
         
+        # Get proper league name
+        sport_key = match.get('sport', '')
+        league_name = self.sport_to_league.get(sport_key, match.get('league_name', sport_key or 'Unknown'))
+        
         return FootballOpportunity(
             match_id=f"{match['home_team']}_vs_{match['away_team']}_{int(time.time())}",
             home_team=match['home_team'],
             away_team=match['away_team'],
-            league=match.get('sport', 'Unknown'),
+            league=league_name,
             start_time=match.get('commence_time', ''),
             market='Goals',
             selection=selection,
