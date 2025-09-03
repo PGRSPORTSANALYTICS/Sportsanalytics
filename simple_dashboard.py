@@ -214,72 +214,90 @@ else:
 
     st.markdown("---")
     
-    # Show recent opportunities
-    st.subheader("🎯 Recent Opportunities")
+    # Show recent opportunities with better visibility
+    st.subheader("🎯 Today's Betting Opportunities")
     
-    # Display each opportunity
+    # Display each opportunity as a prominent card
     for idx, row in df.head(10).iterrows():
-        # Format match date/time display
-        date_display = ""
-        if pd.notna(row.get('display_datetime', '')):
-            date_display = f" | 📅 {row['display_datetime']}"
-        elif pd.notna(row.get('match_date', '')) and pd.notna(row.get('kickoff_time', '')):
-            date_display = f" | 📅 {row['match_date']} {row['kickoff_time']}"
+        # Get status styling
+        status = row.get('bet_status', '⏳ Pending')
+        if '✅' in status:
+            card_color = "#d4edda"  # Light green
+            border_color = "#28a745" # Green
+        elif '❌' in status:
+            card_color = "#f8d7da"  # Light red  
+            border_color = "#dc3545" # Red
         else:
-            import datetime
-            try:
-                date_str = datetime.datetime.fromtimestamp(row['timestamp']).strftime("%Y-%m-%d %H:%M")
-                date_display = f" | 📅 {date_str}"
-            except:
-                pass
+            card_color = "#fff3cd"  # Light yellow
+            border_color = "#ffc107" # Yellow
         
-        # Create kickoff time display
-        kickoff_display = ""
-        if pd.notna(row.get('kickoff_time', '')):
-            kickoff_display = f" ⏰ {row['kickoff_time']}"
-        
-        with st.expander(f"⚽ {row['home_team']} vs {row['away_team']} - {row['selection']}{date_display}{kickoff_display}"):
-            col1, col2, col3 = st.columns(3)
+        # Create prominent bet card
+        with st.container():
+            st.markdown(f"""
+            <div style="
+                border: 2px solid {border_color};
+                border-radius: 10px;
+                padding: 15px;
+                margin: 10px 0;
+                background-color: {card_color};
+            ">
+            """, unsafe_allow_html=True)
+            
+            # Main bet info in large text
+            col1, col2, col3, col4 = st.columns([3, 2, 2, 2])
             
             with col1:
-                st.write("**Match Info:**")
-                st.write(f"🏠 {row['home_team']}")
-                st.write(f"✈️ {row['away_team']}")
-                st.write(f"🏆 {row['league']}")
+                st.markdown(f"### ⚽ {row['home_team']} vs {row['away_team']}")
+                st.markdown(f"**🎯 {row['selection']}** @ **{row['odds']:.2f}**")
                 if pd.notna(row.get('match_date', '')):
                     kickoff = row.get('kickoff_time', '')
-                    st.write(f"📅 {row['match_date']}")
                     if kickoff:
-                        st.write(f"⏰ Kickoff: {kickoff}")
+                        st.markdown(f"📅 {row['match_date']} ⏰ **{kickoff}**")
+                    else:
+                        st.markdown(f"📅 {row['match_date']}")
             
             with col2:
-                st.write("**Betting Details:**")
-                st.write(f"🎯 {row['market']}: {row['selection']}")
-                st.write(f"📊 Odds: {row['odds']:.2f}")
-                st.write(f"💰 Stake: ${row['stake']:.2f}")
+                confidence_stars = confidence_to_stars(row['confidence'])
+                st.metric("Confidence", f"{confidence_stars}", f"{row['confidence']}/100")
+                st.metric("Edge", f"{row['edge_percentage']:.1f}%")
             
             with col3:
-                st.write("**Analysis:**")
-                st.write(f"📈 Edge: {row['edge_percentage']:.1f}%")
-                confidence_stars = confidence_to_stars(row['confidence'])
-                st.write(f"🎯 Confidence: {confidence_stars} ({row['confidence']}/100)")
-                st.write(f"📋 Status: {row.get('bet_status', '⏳ Pending')}")
+                st.metric("Stake", f"${row['stake']:.2f}")
                 if pd.notna(row.get('profit_loss', 0)) and row.get('profit_loss', 0) != 0:
-                    profit_color = "green" if row['profit_loss'] > 0 else "red"
-                    st.markdown(f"**💰 P&L:** <span style='color:{profit_color}'>${row['profit_loss']:.2f}</span>", unsafe_allow_html=True)
+                    pl_value = row['profit_loss']
+                    st.metric("P&L", f"${pl_value:+.2f}", f"{(pl_value/row['stake']*100):+.1f}%")
+                else:
+                    st.metric("Potential Win", f"${(row['odds']-1)*row['stake']:.2f}")
+            
+            with col4:
+                st.markdown(f"**Status:** {status}")
+                st.markdown(f"**League:** {row['league']}")
+            
+            st.markdown("</div>", unsafe_allow_html=True)
     
-    # Show all data in table
+    # Quick overview table
     st.markdown("---")
-    st.subheader("📊 All Opportunities")
+    st.subheader("📊 Quick Overview Table")
     
-    # Select key columns for display including bet status and kickoff time
-    display_cols = ['home_team', 'away_team', 'league', 'match_date', 'kickoff_time', 'selection', 'odds', 'edge_percentage', 'confidence', 'stake', 'bet_status', 'profit_loss']
-    available_cols = [col for col in display_cols if col in df.columns]
-    
-    if available_cols:
-        st.dataframe(df[available_cols], use_container_width=True)
-    else:
-        st.dataframe(df, use_container_width=True)
+    if not df.empty:
+        # Create a clean summary table
+        summary_data = []
+        for idx, row in df.iterrows():
+            confidence_stars = confidence_to_stars(row['confidence'])
+            summary_data.append({
+                'Match': f"{row['home_team']} vs {row['away_team']}",
+                'Date/Time': f"{row.get('match_date', 'TBD')} {row.get('kickoff_time', '')}".strip(),
+                'Bet': row['selection'],
+                'Odds': f"{row['odds']:.2f}",
+                'Confidence': f"{confidence_stars} ({row['confidence']})",
+                'Edge': f"{row['edge_percentage']:.1f}%",
+                'Stake': f"${row['stake']:.2f}",
+                'Status': row.get('bet_status', '⏳ Pending'),
+                'P&L': f"${row.get('profit_loss', 0):+.2f}" if pd.notna(row.get('profit_loss', 0)) and row.get('profit_loss', 0) != 0 else "Pending"
+            })
+        
+        summary_df = pd.DataFrame(summary_data)
+        st.dataframe(summary_df, use_container_width=True, hide_index=True)
 
 # Footer
 st.markdown("---")
