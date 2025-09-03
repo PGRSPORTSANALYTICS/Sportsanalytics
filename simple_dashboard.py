@@ -6,6 +6,19 @@ import sqlite3
 import json
 from datetime import datetime
 
+def confidence_to_stars(confidence):
+    """Convert confidence score (0-100) to star rating (1-5 stars)"""
+    if confidence >= 90:
+        return "⭐⭐⭐⭐⭐"  # 5 stars
+    elif confidence >= 75:
+        return "⭐⭐⭐⭐"    # 4 stars
+    elif confidence >= 60:
+        return "⭐⭐⭐"      # 3 stars
+    elif confidence >= 45:
+        return "⭐⭐"        # 2 stars
+    else:
+        return "⭐"          # 1 star
+
 # Page config
 st.set_page_config(
     page_title="🏆 Real Football Champion Dashboard",
@@ -192,7 +205,8 @@ else:
     
     with col3:
         avg_conf = df['confidence'].mean() if 'confidence' in df.columns else 0
-        st.metric("Average Confidence", f"{avg_conf:.0f}/100")
+        avg_stars = confidence_to_stars(avg_conf)
+        st.metric("Average Confidence", f"{avg_stars} ({avg_conf:.0f})")
     
     with col4:
         total_stake = df['stake'].sum() if 'stake' in df.columns else 0
@@ -247,7 +261,8 @@ else:
             with col3:
                 st.write("**Analysis:**")
                 st.write(f"📈 Edge: {row['edge_percentage']:.1f}%")
-                st.write(f"🎯 Confidence: {row['confidence']}/100")
+                confidence_stars = confidence_to_stars(row['confidence'])
+                st.write(f"🎯 Confidence: {confidence_stars} ({row['confidence']}/100)")
                 st.write(f"📋 Status: {row.get('bet_status', '⏳ Pending')}")
                 if pd.notna(row.get('profit_loss', 0)) and row.get('profit_loss', 0) != 0:
                     profit_color = "green" if row['profit_loss'] > 0 else "red"
