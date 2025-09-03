@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 import statistics
 from dataclasses import dataclass
+from results_scraper import ResultsScraper
 
 @dataclass
 class TeamForm:
@@ -75,6 +76,9 @@ class RealFootballChampion:
         # Initialize database
         self.init_database()
         
+        # Initialize results scraper
+        self.results_scraper = ResultsScraper()
+        
         # Analysis parameters
         self.min_edge = 5.0  # Minimum 5% edge required
         self.max_stake = 100.0  # Maximum stake per bet
@@ -82,6 +86,7 @@ class RealFootballChampion:
         
         print("🏆 REAL FOOTBALL CHAMPION INITIALIZED")
         print("⚽ Advanced analytics with xG, form, and H2H analysis")
+        print("🔄 Results tracking with Flashscore/Sofascore integration")
     
     def init_database(self):
         """Initialize SQLite database for football data"""
@@ -129,6 +134,18 @@ class RealFootballChampion:
             pass
         try:
             cursor.execute('ALTER TABLE football_opportunities ADD COLUMN roi_percentage REAL DEFAULT 0')
+        except:
+            pass
+        try:
+            cursor.execute('ALTER TABLE football_opportunities ADD COLUMN outcome TEXT')
+        except:
+            pass
+        try:
+            cursor.execute('ALTER TABLE football_opportunities ADD COLUMN profit_loss REAL DEFAULT 0')
+        except:
+            pass
+        try:
+            cursor.execute('ALTER TABLE football_opportunities ADD COLUMN updated_at TEXT')
         except:
             pass
         try:
@@ -886,9 +903,22 @@ def main():
     """Main execution function"""
     try:
         champion = RealFootballChampion()
+        last_results_check = 0
         
         while True:
+            # Run betting analysis cycle
             opportunities = champion.run_analysis_cycle()
+            
+            # Check if it's time for results update (every 5 minutes)
+            current_time = time.time()
+            if current_time - last_results_check >= 300:  # 5 minutes
+                print("\n🔄 CHECKING BET RESULTS...")
+                updated_bets = champion.results_scraper.update_bet_outcomes()
+                if updated_bets > 0:
+                    print(f"✅ Updated {updated_bets} bet outcomes")
+                else:
+                    print("📊 No pending bets to update")
+                last_results_check = current_time
             
             # Wait 5 minutes between cycles
             time.sleep(300)

@@ -24,7 +24,13 @@ def load_opportunities():
                    WHEN match_date IS NOT NULL AND kickoff_time IS NOT NULL 
                    THEN match_date || ' ' || kickoff_time
                    ELSE datetime(timestamp, 'unixepoch', 'localtime')
-               END as display_datetime
+               END as display_datetime,
+               CASE 
+                   WHEN outcome = 'win' THEN '✅ Win'
+                   WHEN outcome = 'loss' THEN '❌ Loss'
+                   WHEN outcome = 'void' THEN '⚪ Void'
+                   ELSE '⏳ Pending'
+               END as bet_status
         FROM football_opportunities 
         ORDER BY timestamp DESC 
         LIMIT 50
@@ -41,30 +47,30 @@ def load_performance_stats():
     try:
         conn = sqlite3.connect('data/real_football.db')
         
-        # Overall performance
+        # Overall performance using new outcome column
         query = """
             SELECT 
                 COUNT(*) as total_bets,
-                SUM(CASE WHEN result = 'won' THEN 1 ELSE 0 END) as wins,
-                SUM(CASE WHEN result = 'lost' THEN 1 ELSE 0 END) as losses,
+                SUM(CASE WHEN outcome = 'win' THEN 1 ELSE 0 END) as wins,
+                SUM(CASE WHEN outcome = 'loss' THEN 1 ELSE 0 END) as losses,
                 SUM(stake) as total_staked,
-                SUM(payout) as total_payout,
-                AVG(roi_percentage) as avg_roi,
-                SUM(payout) - SUM(stake) as net_profit
+                SUM(CASE WHEN outcome = 'win' THEN stake * odds ELSE 0 END) as total_payout,
+                SUM(profit_loss) as net_profit,
+                (SUM(profit_loss) / SUM(stake)) * 100 as roi_percentage
             FROM football_opportunities 
-            WHERE status = 'settled'
+            WHERE outcome IS NOT NULL AND outcome != ''
         """
         
         cursor = conn.cursor()
         cursor.execute(query)
         stats = cursor.fetchone()
         
-        # Recent results
+        # Recent results using new outcome column
         recent_query = """
-            SELECT home_team, away_team, selection, odds, stake, result, payout, roi_percentage, settled_timestamp
+            SELECT home_team, away_team, selection, odds, stake, outcome, profit_loss, updated_at
             FROM football_opportunities 
-            WHERE status = 'settled' 
-            ORDER BY settled_timestamp DESC 
+            WHERE outcome IS NOT NULL AND outcome != ''
+            ORDER BY updated_at DESC 
             LIMIT 10
         """
         recent_df = pd.read_sql_query(recent_query, conn)
@@ -231,14 +237,17 @@ else:
                 st.write("**Analysis:**")
                 st.write(f"📈 Edge: {row['edge_percentage']:.1f}%")
                 st.write(f"🎯 Confidence: {row['confidence']}/100")
-                st.write(f"📋 Status: {row['status']}")
+                st.write(f"📋 Status: {row.get('bet_status', '⏳ Pending')}")
+                if pd.notna(row.get('profit_loss', 0)) and row.get('profit_loss', 0) != 0:
+                    profit_color = "green" if row['profit_loss'] > 0 else "red"
+                    st.markdown(f"**💰 P&L:** <span style='color:{profit_color}'>${row['profit_loss']:.2f}</span>", unsafe_allow_html=True)
     
     # Show all data in table
     st.markdown("---")
     st.subheader("📊 All Opportunities")
     
-    # Select key columns for display
-    display_cols = ['home_team', 'away_team', 'league', 'selection', 'odds', 'edge_percentage', 'confidence', 'stake']
+    # Select key columns for display including bet status
+    display_cols = ['home_team', 'away_team', 'league', 'selection', 'odds', 'edge_percentage', 'confidence', 'stake', 'bet_status', 'profit_loss']
     available_cols = [col for col in display_cols if col in df.columns]
     
     if available_cols:
