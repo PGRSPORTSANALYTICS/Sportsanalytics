@@ -219,7 +219,12 @@ else:
             except:
                 pass
         
-        with st.expander(f"⚽ {row['home_team']} vs {row['away_team']} - {row['selection']}{date_display}"):
+        # Create kickoff time display
+        kickoff_display = ""
+        if pd.notna(row.get('kickoff_time', '')):
+            kickoff_display = f" ⏰ {row['kickoff_time']}"
+        
+        with st.expander(f"⚽ {row['home_team']} vs {row['away_team']} - {row['selection']}{date_display}{kickoff_display}"):
             col1, col2, col3 = st.columns(3)
             
             with col1:
@@ -228,7 +233,10 @@ else:
                 st.write(f"✈️ {row['away_team']}")
                 st.write(f"🏆 {row['league']}")
                 if pd.notna(row.get('match_date', '')):
-                    st.write(f"📅 {row['match_date']} {row.get('kickoff_time', '')}")
+                    kickoff = row.get('kickoff_time', '')
+                    st.write(f"📅 {row['match_date']}")
+                    if kickoff:
+                        st.write(f"⏰ Kickoff: {kickoff}")
             
             with col2:
                 st.write("**Betting Details:**")
@@ -249,8 +257,8 @@ else:
     st.markdown("---")
     st.subheader("📊 All Opportunities")
     
-    # Select key columns for display including bet status
-    display_cols = ['home_team', 'away_team', 'league', 'selection', 'odds', 'edge_percentage', 'confidence', 'stake', 'bet_status', 'profit_loss']
+    # Select key columns for display including bet status and kickoff time
+    display_cols = ['home_team', 'away_team', 'league', 'match_date', 'kickoff_time', 'selection', 'odds', 'edge_percentage', 'confidence', 'stake', 'bet_status', 'profit_loss']
     available_cols = [col for col in display_cols if col in df.columns]
     
     if available_cols:
