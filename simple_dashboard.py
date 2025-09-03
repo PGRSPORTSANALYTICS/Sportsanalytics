@@ -78,9 +78,10 @@ def load_performance_stats():
         conn.close()
         
         if stats and stats[0] > 0:
-            total_bets, wins, losses, total_staked, total_payout, avg_roi, net_profit = stats
+            total_bets, wins, losses, total_staked, total_payout, net_profit, roi_percentage = stats
             win_rate = (wins / total_bets) * 100 if total_bets > 0 else 0
-            total_roi = ((total_payout - total_staked) / total_staked) * 100 if total_staked > 0 else 0
+            total_roi = roi_percentage if roi_percentage else 0
+            avg_roi_per_bet = total_roi / total_bets if total_bets > 0 else 0
             
             return {
                 'total_bets': total_bets,
@@ -91,7 +92,7 @@ def load_performance_stats():
                 'total_payout': total_payout,
                 'net_profit': net_profit,
                 'total_roi': total_roi,
-                'avg_roi_per_bet': avg_roi or 0,
+                'avg_roi_per_bet': avg_roi_per_bet,
                 'recent_results': recent_df
             }
         
@@ -146,19 +147,21 @@ if performance['total_bets'] > 0:
         st.subheader("🏆 Recent Results")
         
         for idx, row in performance['recent_results'].head(5).iterrows():
-            result_color = "🟢" if row['result'] == 'won' else "🔴" if row['result'] == 'lost' else "🟡"
-            with st.expander(f"{result_color} {row['home_team']} vs {row['away_team']} - {row['result'].upper()}"):
+            result_color = "🟢" if row.get('outcome') == 'win' else "🔴" if row.get('outcome') == 'loss' else "🟡"
+            outcome_text = row.get('outcome', 'pending').upper()
+            with st.expander(f"{result_color} {row['home_team']} vs {row['away_team']} - {outcome_text}"):
                 col1, col2, col3 = st.columns(3)
                 with col1:
                     st.write(f"**Selection:** {row['selection']}")
                     st.write(f"**Odds:** {row['odds']:.2f}")
                 with col2:
                     st.write(f"**Stake:** ${row['stake']:.2f}")
-                    st.write(f"**Payout:** ${row['payout']:.2f}")
+                    profit_loss = row.get('profit_loss', 0)
+                    st.write(f"**P&L:** ${profit_loss:.2f}")
                 with col3:
-                    st.write(f"**ROI:** {row['roi_percentage']:.1f}%")
-                    profit = row['payout'] - row['stake']
-                    st.write(f"**Profit:** ${profit:.2f}")
+                    roi = (profit_loss / row['stake'] * 100) if row['stake'] > 0 else 0
+                    st.write(f"**ROI:** {roi:.1f}%")
+                    st.write(f"**Status:** {row.get('outcome', 'pending').title()}")
     
     st.markdown("---")
 
