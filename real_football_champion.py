@@ -224,7 +224,7 @@ class RealFootballChampion:
             params = {
                 'apiKey': self.odds_api_key,
                 'regions': 'uk',
-                'markets': 'h2h,totals,btts',
+                'markets': 'h2h',
                 'oddsFormat': 'decimal',
                 'dateFormat': 'iso'
             }
