@@ -75,6 +75,7 @@ class RealFootballChampion:
         
         # Sport key to league name mapping
         self.sport_to_league = {
+            # Club Competitions
             'soccer_epl': 'Premier League',
             'soccer_spain_la_liga': 'La Liga',
             'soccer_italy_serie_a': 'Serie A',
@@ -85,11 +86,28 @@ class RealFootballChampion:
             'soccer_belgium_first_div': 'Belgian First Division',
             'soccer_netherlands_eredivisie': 'Eredivisie',
             'soccer_portugal_primeira_liga': 'Primeira Liga',
-            'soccer_turkey_super_league': 'Turkish Super League'
+            'soccer_turkey_super_league': 'Turkish Super League',
+            
+            # International Competitions - WORLD CUP FOCUS!
+            'soccer_fifa_world_cup': 'FIFA World Cup',
+            'soccer_fifa_world_cup_qualifier_afc': 'World Cup Qualifiers (AFC)',
+            'soccer_fifa_world_cup_qualifier_caf': 'World Cup Qualifiers (CAF)',  
+            'soccer_fifa_world_cup_qualifier_concacaf': 'World Cup Qualifiers (CONCACAF)',
+            'soccer_fifa_world_cup_qualifier_conmebol': 'World Cup Qualifiers (CONMEBOL)',
+            'soccer_fifa_world_cup_qualifier_ofc': 'World Cup Qualifiers (OFC)',
+            'soccer_fifa_world_cup_qualifier_uefa': 'World Cup Qualifiers (UEFA)',
+            'soccer_uefa_nations_league': 'UEFA Nations League',
+            'soccer_uefa_euros': 'UEFA European Championship',
+            'soccer_conmebol_copa_america': 'Copa America',
+            'soccer_caf_african_cup_of_nations': 'Africa Cup of Nations',
+            'soccer_afc_asian_cup': 'AFC Asian Cup',
+            'soccer_concacaf_gold_cup': 'CONCACAF Gold Cup',
+            'soccer_international_friendlies': 'International Friendlies'
         }
         
         # API-Football league ID to name mapping
         self.league_id_to_name = {
+            # Club Competitions
             39: 'Premier League',
             140: 'La Liga',
             135: 'Serie A', 
@@ -103,7 +121,23 @@ class RealFootballChampion:
             203: 'Turkish Super League',
             262: 'Danish Superliga',
             218: 'Swedish Allsvenskan',
-            88: 'Scottish Premiership'
+            88: 'Scottish Premiership',
+            
+            # International Competitions - WORLD CUP MISMATCHES!
+            1: 'FIFA World Cup',
+            4: 'UEFA European Championship',
+            5: 'UEFA Nations League',
+            9: 'Copa America',
+            15: 'Africa Cup of Nations',
+            16: 'AFC Asian Cup',
+            17: 'CONCACAF Gold Cup',
+            32: 'World Cup Qualifiers (UEFA)',
+            34: 'World Cup Qualifiers (CONMEBOL)',
+            36: 'World Cup Qualifiers (CAF)',
+            37: 'World Cup Qualifiers (AFC)',
+            38: 'World Cup Qualifiers (CONCACAF)',
+            40: 'World Cup Qualifiers (OFC)',
+            10: 'International Friendlies'
         }
         
         # World Star Players Database - for massive mismatch detection
@@ -252,6 +286,7 @@ class RealFootballChampion:
     def get_football_odds(self) -> List[Dict]:
         """Get pre-match and upcoming football odds from The Odds API"""
         football_sports = [
+            # Club Competitions
             'soccer_epl',  # English Premier League
             'soccer_spain_la_liga',  # Spanish La Liga
             'soccer_italy_serie_a',  # Italian Serie A
@@ -259,6 +294,22 @@ class RealFootballChampion:
             'soccer_france_ligue_one',  # French Ligue 1
             'soccer_uefa_champs_league',  # Champions League
             'soccer_uefa_europa_league',  # Europa League
+            
+            # International Competitions - WORLD CUP GOLDMINE!
+            'soccer_fifa_world_cup',  # FIFA World Cup
+            'soccer_fifa_world_cup_qualifier_uefa',  # UEFA World Cup Qualifiers
+            'soccer_fifa_world_cup_qualifier_conmebol',  # CONMEBOL Qualifiers
+            'soccer_fifa_world_cup_qualifier_caf',  # CAF World Cup Qualifiers
+            'soccer_fifa_world_cup_qualifier_afc',  # AFC World Cup Qualifiers
+            'soccer_fifa_world_cup_qualifier_concacaf',  # CONCACAF Qualifiers
+            'soccer_fifa_world_cup_qualifier_ofc',  # OFC World Cup Qualifiers
+            'soccer_uefa_nations_league',  # UEFA Nations League
+            'soccer_uefa_euros',  # UEFA European Championship
+            'soccer_conmebol_copa_america',  # Copa America
+            'soccer_caf_african_cup_of_nations',  # Africa Cup of Nations
+            'soccer_afc_asian_cup',  # AFC Asian Cup
+            'soccer_concacaf_gold_cup',  # CONCACAF Gold Cup
+            'soccer_international_friendlies',  # International Friendlies
         ]
         
         all_matches = []
@@ -304,8 +355,9 @@ class RealFootballChampion:
             'X-RapidAPI-Host': 'v3.football.api-sports.io'
         }
         
-        # Major league IDs - expanded for daily coverage
+        # Major league IDs - expanded for daily coverage + WORLD CUP
         league_ids = [
+            # Club Competitions
             39,   # Premier League
             140,  # La Liga  
             135,  # Serie A
@@ -313,6 +365,22 @@ class RealFootballChampion:
             61,   # Ligue 1
             2,    # Champions League
             3,    # Europa League
+            
+            # International Competitions - MASSIVE MISMATCHES!
+            1,    # FIFA World Cup
+            5,    # UEFA Nations League
+            4,    # UEFA European Championship
+            9,    # Copa America
+            15,   # Africa Cup of Nations
+            16,   # AFC Asian Cup
+            17,   # CONCACAF Gold Cup
+            32,   # World Cup Qualifiers (UEFA) - France vs Gibraltar!
+            34,   # World Cup Qualifiers (CONMEBOL) - Brazil vs Bolivia!
+            36,   # World Cup Qualifiers (CAF) - Morocco vs Chad!
+            37,   # World Cup Qualifiers (AFC) - Japan vs Myanmar!
+            38,   # World Cup Qualifiers (CONCACAF) - USA vs Bermuda!
+            40,   # World Cup Qualifiers (OFC) - New Zealand vs Samoa!
+            10,   # International Friendlies
             144,  # Belgian First Division
             179,  # Eredivisie (Netherlands)
             94,   # Primeira Liga (Portugal)
