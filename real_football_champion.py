@@ -106,6 +106,50 @@ class RealFootballChampion:
             88: 'Scottish Premiership'
         }
         
+        # World Star Players Database - for massive mismatch detection
+        self.world_star_players = {
+            # Tier 1 - Elite World Stars (95+ rating impact)
+            'Real Madrid': {'tier': 1, 'stars': ['Mbappé', 'Vinicius Jr', 'Bellingham', 'Modrić'], 'rating': 98},
+            'Manchester City': {'tier': 1, 'stars': ['Haaland', 'De Bruyne', 'Rodri'], 'rating': 97},
+            'PSG': {'tier': 1, 'stars': ['Mbappé', 'Neymar', 'Marquinhos'], 'rating': 96},
+            'Barcelona': {'tier': 1, 'stars': ['Pedri', 'Gavi', 'Lewandowski'], 'rating': 95},
+            'Bayern Munich': {'tier': 1, 'stars': ['Kane', 'Musiala', 'Kimmich'], 'rating': 97},
+            'Liverpool': {'tier': 1, 'stars': ['Salah', 'Van Dijk', 'Alisson'], 'rating': 95},
+            'Arsenal': {'tier': 1, 'stars': ['Saka', 'Ødegaard', 'Rice'], 'rating': 93},
+            'Inter Milan': {'tier': 1, 'stars': ['Lautaro', 'Barella', 'Bastoni'], 'rating': 92},
+            
+            # Tier 2 - Top Quality (85-94 rating impact)
+            'Chelsea': {'tier': 2, 'stars': ['Enzo', 'Palmer', 'Jackson'], 'rating': 88},
+            'Manchester United': {'tier': 2, 'stars': ['Rashford', 'Bruno Fernandes'], 'rating': 87},
+            'Tottenham': {'tier': 2, 'stars': ['Son', 'Maddison'], 'rating': 86},
+            'AC Milan': {'tier': 2, 'stars': ['Leão', 'Theo Hernández'], 'rating': 89},
+            'Juventus': {'tier': 2, 'stars': ['Vlahović', 'Chiesa'], 'rating': 88},
+            'Napoli': {'tier': 2, 'stars': ['Osimhen', 'Kvara'], 'rating': 90},
+            'Atlético Madrid': {'tier': 2, 'stars': ['Griezmann', 'Oblak'], 'rating': 89},
+            'Borussia Dortmund': {'tier': 2, 'stars': ['Bellingham', 'Haaland'], 'rating': 91},
+            
+            # Tier 3 - Good Players (75-84 rating impact)  
+            'Newcastle United': {'tier': 3, 'stars': ['Isak', 'Gordon'], 'rating': 82},
+            'West Ham': {'tier': 3, 'stars': ['Rice', 'Paquetá'], 'rating': 80},
+            'Aston Villa': {'tier': 3, 'stars': ['Watkins', 'McGinn'], 'rating': 81},
+            'Brighton': {'tier': 3, 'stars': ['Mitoma', 'Mac Allister'], 'rating': 79},
+            'Villarreal': {'tier': 3, 'stars': ['Gerard Moreno'], 'rating': 82},
+            'Real Betis': {'tier': 3, 'stars': ['Fekir'], 'rating': 80},
+            
+            # No Stars - Teams with limited international quality
+            'Burnley': {'tier': 4, 'stars': [], 'rating': 65},
+            'Sheffield United': {'tier': 4, 'stars': [], 'rating': 62},
+            'Luton Town': {'tier': 4, 'stars': [], 'rating': 60},
+            'Elche CF': {'tier': 4, 'stars': [], 'rating': 58},
+            'Almería': {'tier': 4, 'stars': [], 'rating': 59},
+            'Lecce': {'tier': 4, 'stars': [], 'rating': 63},
+            'Empoli': {'tier': 4, 'stars': [], 'rating': 64},
+        }
+        
+        # Lower minimum edge for obvious star mismatches
+        self.min_edge = 3.0  # Reduced from 5.0 for star mismatches
+        self.star_mismatch_min_edge = 1.5  # Even lower for obvious mismatches
+        
         # Initialize database
         self.init_database()
         
@@ -697,7 +741,7 @@ class RealFootballChampion:
         }
     
     def find_balanced_opportunities(self, match: Dict) -> List[FootballOpportunity]:
-        """Find balanced betting opportunities with sophisticated analysis"""
+        """Find balanced betting opportunities with enhanced star player analysis"""
         opportunities = []
         
         home_team = match['home_team']
@@ -710,6 +754,9 @@ class RealFootballChampion:
         home_form = self.analyze_team_form(home_team, home_id)
         away_form = self.analyze_team_form(away_team, away_id)
         h2h = self.get_head_to_head(home_team, away_team)
+        
+        # Analyze star player mismatch early for edge adjustments
+        star_analysis = self.analyze_star_player_mismatch(home_team, away_team)
         
         if not home_form or not away_form:
             return opportunities
@@ -729,7 +776,9 @@ class RealFootballChampion:
             true_prob = xg_analysis['over_2_5_prob']
             edge = (true_prob - implied_prob) * 100
             
-            if edge >= self.min_edge and estimated_odds['over_2_5'] >= 1.75:  # ODDS FILTER
+            # Use lower edge requirements for star mismatches
+            min_edge_required = self.star_mismatch_min_edge if star_analysis['is_mismatch'] else self.min_edge
+            if edge >= min_edge_required and estimated_odds['over_2_5'] >= 1.75:  # ODDS FILTER
                 opportunity = self.create_opportunity(
                     match, 'Over 2.5', estimated_odds['over_2_5'], edge,
                     home_form, away_form, h2h, xg_analysis
@@ -741,7 +790,8 @@ class RealFootballChampion:
             true_prob = 1.0 - xg_analysis['over_2_5_prob']
             edge = (true_prob - implied_prob) * 100
             
-            if edge >= self.min_edge and estimated_odds['under_2_5'] >= 1.75:  # ODDS FILTER
+            min_edge_required = self.star_mismatch_min_edge if star_analysis['is_mismatch'] else self.min_edge
+            if edge >= min_edge_required and estimated_odds['under_2_5'] >= 1.75:  # ODDS FILTER
                 opportunity = self.create_opportunity(
                     match, 'Under 2.5', estimated_odds['under_2_5'], edge,
                     home_form, away_form, h2h, xg_analysis
@@ -753,7 +803,8 @@ class RealFootballChampion:
             true_prob = xg_analysis['btts_prob']
             edge = (true_prob - implied_prob) * 100
             
-            if edge >= self.min_edge and estimated_odds['btts_yes'] >= 1.75:  # ODDS FILTER
+            min_edge_required = self.star_mismatch_min_edge if star_analysis['is_mismatch'] else self.min_edge
+            if edge >= min_edge_required and estimated_odds['btts_yes'] >= 1.75:  # ODDS FILTER
                 opportunity = self.create_opportunity(
                     match, 'BTTS Yes', estimated_odds['btts_yes'], edge,
                     home_form, away_form, h2h, xg_analysis
@@ -820,25 +871,66 @@ class RealFootballChampion:
         
         return opportunities
     
+    def analyze_star_player_mismatch(self, home_team: str, away_team: str) -> Dict:
+        """Analyze star player mismatch for confidence boost"""
+        home_info = self.world_star_players.get(home_team, {'tier': 4, 'stars': [], 'rating': 70})
+        away_info = self.world_star_players.get(away_team, {'tier': 4, 'stars': [], 'rating': 70})
+        
+        rating_diff = abs(home_info['rating'] - away_info['rating'])
+        tier_diff = abs(home_info['tier'] - away_info['tier'])
+        
+        is_mismatch = rating_diff >= 15 or tier_diff >= 2
+        mismatch_severity = 'none'
+        confidence_boost = 0
+        
+        if rating_diff >= 30:  # Massive mismatch (e.g., Real Madrid vs Burnley)
+            mismatch_severity = 'massive'
+            confidence_boost = 40
+        elif rating_diff >= 20:  # Major mismatch
+            mismatch_severity = 'major' 
+            confidence_boost = 25
+        elif rating_diff >= 15:  # Notable mismatch
+            mismatch_severity = 'notable'
+            confidence_boost = 15
+        
+        return {
+            'is_mismatch': is_mismatch,
+            'severity': mismatch_severity,
+            'confidence_boost': confidence_boost,
+            'rating_diff': rating_diff,
+            'home_tier': home_info['tier'],
+            'away_tier': away_info['tier'],
+            'home_stars': home_info['stars'],
+            'away_stars': away_info['stars'],
+            'home_rating': home_info['rating'],
+            'away_rating': away_info['rating']
+        }
+
     def create_opportunity(self, match: Dict, selection: str, odds: float, edge: float,
                           home_form: TeamForm, away_form: TeamForm, h2h: HeadToHead, 
                           xg_analysis: Dict) -> FootballOpportunity:
-        """Create a football betting opportunity with full analysis"""
+        """Create a football betting opportunity with enhanced star player analysis"""
         
-        # Calculate confidence based on multiple factors
+        # Analyze star player mismatch
+        star_analysis = self.analyze_star_player_mismatch(
+            match['home_team'], match['away_team']
+        )
+        
+        # Calculate confidence based on multiple factors + star mismatch
         confidence_factors = [
             min(100, edge * 2),  # Edge factor
             home_form.win_rate * 50 + away_form.win_rate * 50,  # Form factor
             min(100, h2h.total_matches * 10),  # H2H sample size
-            min(100, abs(xg_analysis['total_xg'] - 2.5) * 20)  # xG predictability
+            min(100, abs(xg_analysis['total_xg'] - 2.5) * 20),  # xG predictability
+            star_analysis['confidence_boost']  # NEW: Star player mismatch boost
         ]
-        confidence = int(sum(confidence_factors) / len(confidence_factors))
+        confidence = min(100, int(sum(confidence_factors) / len(confidence_factors)))
         
         # Calculate stake using Kelly Criterion
         kelly_fraction = edge / 100 / (odds - 1)
         stake = min(self.max_stake, max(5.0, self.base_stake * kelly_fraction))
         
-        # Compile analysis
+        # Compile analysis with star player data
         analysis = {
             'home_form': {
                 'goals_per_game': home_form.goals_scored,
@@ -856,6 +948,7 @@ class RealFootballChampion:
                 'over_2_5_rate': h2h.over_2_5_rate
             },
             'xg_prediction': xg_analysis,
+            'star_analysis': star_analysis,  # NEW: Star player mismatch data
             'edge_analysis': f"{edge:.1f}% mathematical edge identified"
         }
         
