@@ -161,7 +161,7 @@ def load_current_opportunities():
         thirty_min_ago = datetime.now().timestamp() - (30 * 60)
         query = f"""
         SELECT home_team, away_team, selection, odds, edge_percentage, confidence, 
-               stake, league, xg_home, xg_away, datetime(timestamp, 'unixepoch', 'localtime') as created_time,
+               stake, league, match_date, kickoff_time, datetime(timestamp, 'unixepoch', 'localtime') as created_time,
                CASE 
                    WHEN outcome = 'win' THEN '✅ Win'
                    WHEN outcome = 'loss' THEN '❌ Loss' 
@@ -204,7 +204,7 @@ if not current_opps.empty:
             with col1:
                 st.markdown(f"### 🔥 {row['home_team']} vs {row['away_team']}")
                 st.markdown(f"**🎯 {row['selection']}** @ **{row['odds']:.2f}**")
-                st.markdown(f"⚽ xG: {row.get('xg_home', 'N/A')} - {row.get('xg_away', 'N/A')}")
+                st.markdown(f"📅 {row['match_date']} at {row['kickoff_time']}")
             
             with col2:
                 confidence_stars = confidence_to_stars(row['confidence'])
