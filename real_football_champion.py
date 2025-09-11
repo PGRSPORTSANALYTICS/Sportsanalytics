@@ -306,12 +306,50 @@ class RealFootballChampion:
             except Exception as e:
                 print(f"❌ Error fetching {sport}: {e}")
         
-        # If no odds available, try getting upcoming fixtures
-        if not all_matches:
-            print("🔍 No odds available, checking for upcoming fixtures...")
-            all_matches = self.get_upcoming_fixtures()
+        # Filter matches to only near-time betting (next 3 days)
+        near_time_matches = self.filter_near_time_matches(all_matches)
         
-        return all_matches
+        # If no odds available after filtering, try getting upcoming fixtures
+        if not near_time_matches:
+            print("🔍 No near-time odds available, checking for upcoming fixtures...")
+            all_matches = self.get_upcoming_fixtures()
+            near_time_matches = self.filter_near_time_matches(all_matches)
+        
+        print(f"📅 Filtered to {len(near_time_matches)} near-time matches (next 3 days)")
+        return near_time_matches
+    
+    def filter_near_time_matches(self, matches: List[Dict]) -> List[Dict]:
+        """Filter matches to only those happening in the next 3 days (near-time betting)"""
+        from datetime import datetime, timedelta
+        
+        if not matches:
+            return []
+        
+        now = datetime.now()
+        three_days_later = now + timedelta(days=3)
+        
+        near_time_matches = []
+        
+        for match in matches:
+            commence_time = match.get('commence_time', '')
+            if not commence_time:
+                continue
+                
+            try:
+                # Parse match time
+                match_time = datetime.fromisoformat(commence_time.replace('Z', '+00:00'))
+                # Convert to local time for comparison
+                match_time_local = match_time.replace(tzinfo=None)
+                
+                # Only include matches starting within next 3 days
+                if now <= match_time_local <= three_days_later:
+                    near_time_matches.append(match)
+                    
+            except Exception as e:
+                # If can't parse time, skip this match
+                continue
+        
+        return near_time_matches
     
     def get_upcoming_fixtures(self) -> List[Dict]:
         """Get upcoming fixtures for the next few days"""
