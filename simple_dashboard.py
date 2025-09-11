@@ -148,6 +148,101 @@ st.markdown("### Live Football Betting Opportunities")
 df = load_opportunities()
 performance = load_performance_stats()
 
+# Current Betting Opportunities Section
+st.header("🎯 Current Betting Opportunities")
+st.markdown("**Live opportunities updated every few minutes**")
+
+# Get current opportunities from last 30 minutes
+@st.cache_data(ttl=30)  # Cache for 30 seconds only
+def load_current_opportunities():
+    try:
+        conn = sqlite3.connect('data/real_football.db')
+        # Get opportunities from last 30 minutes
+        thirty_min_ago = datetime.now().timestamp() - (30 * 60)
+        query = f"""
+        SELECT home_team, away_team, selection, odds, edge_percentage, confidence, 
+               stake, league, xg_home, xg_away, datetime(timestamp, 'unixepoch', 'localtime') as created_time,
+               CASE 
+                   WHEN outcome = 'win' THEN '✅ Win'
+                   WHEN outcome = 'loss' THEN '❌ Loss' 
+                   WHEN outcome = 'void' THEN '⚪ Void'
+                   ELSE '🔥 LIVE'
+               END as status
+        FROM football_opportunities 
+        WHERE timestamp >= {thirty_min_ago}
+        ORDER BY timestamp DESC 
+        LIMIT 20
+        """
+        current_df = pd.read_sql_query(query, conn)
+        conn.close()
+        return current_df
+    except Exception as e:
+        st.error(f"Error loading current opportunities: {e}")
+        return pd.DataFrame()
+
+current_opps = load_current_opportunities()
+
+if not current_opps.empty:
+    st.success(f"🔥 **{len(current_opps)} LIVE betting opportunities** found in the last 30 minutes!")
+    
+    # Display current opportunities in cards
+    for idx, row in current_opps.head(8).iterrows():  # Show top 8 current bets
+        with st.container():
+            st.markdown(f"""
+            <div style="
+                border: 3px solid #ff6b35;
+                border-radius: 15px;
+                padding: 20px;
+                margin: 15px 0;
+                background: linear-gradient(135deg, #fff8f0 0%, #ffe8d6 100%);
+                box-shadow: 0 4px 6px rgba(255, 107, 53, 0.1);
+            ">
+            """, unsafe_allow_html=True)
+            
+            col1, col2, col3, col4 = st.columns([3, 2, 2, 2])
+            
+            with col1:
+                st.markdown(f"### 🔥 {row['home_team']} vs {row['away_team']}")
+                st.markdown(f"**🎯 {row['selection']}** @ **{row['odds']:.2f}**")
+                st.markdown(f"⚽ xG: {row.get('xg_home', 'N/A')} - {row.get('xg_away', 'N/A')}")
+            
+            with col2:
+                confidence_stars = confidence_to_stars(row['confidence'])
+                st.metric("🎯 Confidence", f"{confidence_stars}", f"{row['confidence']}/100")
+                st.metric("📈 Edge", f"{row['edge_percentage']:.1f}%")
+            
+            with col3:
+                st.metric("💰 Stake", f"${row['stake']:.2f}")
+                potential_win = (row['odds'] - 1) * row['stake']
+                st.metric("🏆 Potential Win", f"${potential_win:.2f}")
+            
+            with col4:
+                st.markdown(f"**Status:** {row['status']}")
+                st.markdown(f"**League:** {row['league']}")
+                st.markdown(f"**⏰ Found:** {row['created_time'].split(' ')[1][:5]}")
+            
+            st.markdown("</div>", unsafe_allow_html=True)
+    
+    # Quick action summary
+    total_stake = current_opps['stake'].sum()
+    avg_edge = current_opps['edge_percentage'].mean()
+    st.markdown(f"""### 📊 Current Session Summary
+    - **Total opportunities**: {len(current_opps)}
+    - **Total recommended stakes**: ${total_stake:.2f}
+    - **Average edge**: {avg_edge:.1f}%
+    - **Status**: 🔥 All opportunities are LIVE and ready to bet!
+    """)
+
+else:
+    st.info("⏳ **No current opportunities** - System is analyzing matches for new betting opportunities...")
+    st.markdown("""### 🎯 What's Next?
+    - The AI is constantly analyzing matches for new opportunities
+    - New bets with 1.7+ odds and good edges will appear here
+    - Check back in a few minutes for fresh opportunities!
+    """)
+
+st.markdown("---")
+
 # Performance Section
 if performance['total_bets'] > 0:
     st.header("📈 Track Record & ROI")
