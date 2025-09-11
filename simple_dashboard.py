@@ -124,7 +124,8 @@ if not current_bets.empty:
             with col4:
                 st.write(f"**{bet['status']}**")
                 st.write(f"{bet['league']}")
-                st.write(f"Found: {bet['found_time'][11:16]}")
+                st.write(f"⏰ Found: {bet['found_time'][11:16]}")
+                st.write(f"📅 {bet['match_date']}")
             
             st.divider()
 else:
@@ -163,7 +164,7 @@ if perf is not None and perf['total_bets'] > 0:
                          title="Profit Over Time",
                          labels={'cumulative_profit': 'Cumulative Profit ($)'})
             fig.update_traces(line_color='#00cc44')
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_column_width=True)
 
 else:
     st.info("📈 Performance tracking will appear after placing bets")
@@ -249,9 +250,9 @@ if not historical_bets.empty:
     # Display historical bets table
     st.subheader("📊 Betting History")
     
-    display_df = filtered_bets[['bet_date', 'home_team', 'away_team', 'selection', 
+    display_df = filtered_bets[['bet_time', 'home_team', 'away_team', 'selection', 
                                'odds', 'edge_percentage', 'stake', 'outcome', 'profit_loss']].copy()
-    display_df.columns = ['Date', 'Home Team', 'Away Team', 'Bet', 'Odds', 
+    display_df.columns = ['Timestamp', 'Home Team', 'Away Team', 'Bet', 'Odds', 
                          'Edge %', 'Stake $', 'Result', 'P&L $']
     
     # Format numbers
@@ -272,7 +273,7 @@ if not historical_bets.empty:
             return ['background-color: #f0f0f0'] * len(row)
     
     styled_df = display_df.style.apply(highlight_results, axis=1)
-    st.dataframe(styled_df, use_container_width=True)
+    st.dataframe(styled_df)
     
     # Monthly performance breakdown
     if not completed.empty:
@@ -290,7 +291,7 @@ if not historical_bets.empty:
         monthly_stats.columns = ['Bets', 'Profit ($)', 'Staked ($)']
         monthly_stats['ROI %'] = ((monthly_stats['Profit ($)'] / monthly_stats['Staked ($)']) * 100).round(1)
         
-        st.dataframe(monthly_stats, use_container_width=True)
+        st.dataframe(monthly_stats)
 
 else:
     st.info("📝 Historical betting data will appear here after placing bets")
