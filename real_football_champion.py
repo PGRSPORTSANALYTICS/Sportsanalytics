@@ -823,7 +823,7 @@ class RealFootballChampion:
             true_prob = 1.0 - xg_analysis['over_2_5_prob']
             edge = (true_prob - implied_prob) * 100
             
-            if edge >= self.min_edge and estimated_odds['under_2_5'] >= 1.5:  # Lower odds filter for more bets
+            if edge >= self.min_edge and estimated_odds['under_2_5'] >= 1.7:  # No odds lower than 1.7
                 opportunity = self.create_opportunity(
                     match, 'Under 2.5', estimated_odds['under_2_5'], edge,
                     home_form, away_form, h2h, xg_analysis
@@ -835,7 +835,7 @@ class RealFootballChampion:
             true_prob = xg_analysis['btts_prob']
             edge = (true_prob - implied_prob) * 100
             
-            if edge >= self.min_edge and estimated_odds['btts_yes'] >= 1.5:  # Lower odds filter for more bets
+            if edge >= self.min_edge and estimated_odds['btts_yes'] >= 1.7:  # No odds lower than 1.7
                 opportunity = self.create_opportunity(
                     match, 'BTTS Yes', estimated_odds['btts_yes'], edge,
                     home_form, away_form, h2h, xg_analysis
@@ -916,7 +916,7 @@ class RealFootballChampion:
                 true_prob = xg_analysis['over_2_5_prob']
                 edge = (true_prob - implied_prob) * 100
                 
-                if edge >= self.min_edge and estimated_odds['over_2_5'] >= 1.5:
+                if edge >= self.min_edge and estimated_odds['over_2_5'] >= 1.7:
                     opportunity = self.create_opportunity(
                         match, 'Over 2.5', estimated_odds['over_2_5'], edge,
                         home_form, away_form, h2h, xg_analysis
@@ -928,7 +928,7 @@ class RealFootballChampion:
                 true_prob = 1.0 - xg_analysis['over_2_5_prob']
                 edge = (true_prob - implied_prob) * 100
                 
-                if edge >= self.min_edge and estimated_odds['under_2_5'] >= 1.5:
+                if edge >= self.min_edge and estimated_odds['under_2_5'] >= 1.7:
                     opportunity = self.create_opportunity(
                         match, 'Under 2.5', estimated_odds['under_2_5'], edge,
                         home_form, away_form, h2h, xg_analysis
@@ -941,7 +941,7 @@ class RealFootballChampion:
                 true_prob = xg_analysis['btts_prob']
                 edge = (true_prob - implied_prob) * 100
                 
-                if edge >= self.min_edge and estimated_odds['btts_yes'] >= 1.5:
+                if edge >= self.min_edge and estimated_odds['btts_yes'] >= 1.7:
                     opportunity = self.create_opportunity(
                         match, 'BTTS Yes', estimated_odds['btts_yes'], edge,
                         home_form, away_form, h2h, xg_analysis
