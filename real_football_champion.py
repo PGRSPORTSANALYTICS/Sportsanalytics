@@ -140,8 +140,8 @@ class RealFootballChampion:
             10: 'International Friendlies'
         }
         
-        # Analysis parameters - back to simple settings  
-        self.min_edge = 2.0  # Lower 2% edge to find more opportunities
+        # Analysis parameters - aggressive settings for good quality bets
+        self.min_edge = 1.0  # Just 1% edge for more opportunities
         self.max_stake = 100.0  # Maximum stake per bet
         self.base_stake = 25.0  # Base stake amount
         
@@ -798,7 +798,7 @@ class RealFootballChampion:
             true_prob = xg_analysis['over_2_5_prob']
             edge = (true_prob - implied_prob) * 100
             
-            if edge >= self.min_edge and estimated_odds['over_2_5'] >= 1.75:  # ODDS FILTER
+            if edge >= self.min_edge and estimated_odds['over_2_5'] >= 1.5:  # Lower odds filter for more bets
                 opportunity = self.create_opportunity(
                     match, 'Over 2.5', estimated_odds['over_2_5'], edge,
                     home_form, away_form, h2h, xg_analysis
@@ -810,7 +810,7 @@ class RealFootballChampion:
             true_prob = 1.0 - xg_analysis['over_2_5_prob']
             edge = (true_prob - implied_prob) * 100
             
-            if edge >= self.min_edge and estimated_odds['under_2_5'] >= 1.75:  # ODDS FILTER
+            if edge >= self.min_edge and estimated_odds['under_2_5'] >= 1.5:  # Lower odds filter for more bets
                 opportunity = self.create_opportunity(
                     match, 'Under 2.5', estimated_odds['under_2_5'], edge,
                     home_form, away_form, h2h, xg_analysis
@@ -822,7 +822,7 @@ class RealFootballChampion:
             true_prob = xg_analysis['btts_prob']
             edge = (true_prob - implied_prob) * 100
             
-            if edge >= self.min_edge and estimated_odds['btts_yes'] >= 1.75:  # ODDS FILTER
+            if edge >= self.min_edge and estimated_odds['btts_yes'] >= 1.5:  # Lower odds filter for more bets
                 opportunity = self.create_opportunity(
                     match, 'BTTS Yes', estimated_odds['btts_yes'], edge,
                     home_form, away_form, h2h, xg_analysis
