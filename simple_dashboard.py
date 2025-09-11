@@ -168,29 +168,132 @@ if perf is not None and perf['total_bets'] > 0:
 else:
     st.info("📈 Performance tracking will appear after placing bets")
 
-# === RECENT ACTIVITY ===
-st.header("📋 Recent Activity")
+# === HISTORICAL BETS ===
+st.header("📚 Historical Bets")
 
-recent = load_recent_bets()
+@st.cache_data(ttl=60)
+def load_historical_bets():
+    """Get all historical betting data with filters"""
+    try:
+        conn = sqlite3.connect('data/real_football.db')
+        query = """
+        SELECT home_team, away_team, selection, odds, edge_percentage, confidence,
+               stake, outcome, profit_loss, league, match_date, kickoff_time,
+               datetime(timestamp, 'unixepoch', 'localtime') as bet_time,
+               DATE(datetime(timestamp, 'unixepoch', 'localtime')) as bet_date
+        FROM football_opportunities 
+        ORDER BY timestamp DESC
+        """
+        df = pd.read_sql_query(query, conn)
+        conn.close()
+        return df
+    except:
+        return pd.DataFrame()
 
-if not recent.empty:
-    # Clean up the display
-    display_df = recent[['home_team', 'away_team', 'selection', 'odds', 'outcome', 'profit_loss']].copy()
-    display_df.columns = ['Home Team', 'Away Team', 'Bet', 'Odds', 'Result', 'P&L ($)']
+historical_bets = load_historical_bets()
+
+if not historical_bets.empty:
+    # Filter controls
+    col1, col2, col3 = st.columns(3)
     
-    # Color code the results
-    def color_result(val):
-        if val == 'win':
-            return 'color: green'
-        elif val == 'loss':
-            return 'color: red'
+    with col1:
+        # Outcome filter
+        outcome_options = ['All'] + list(historical_bets['outcome'].dropna().unique())
+        selected_outcome = st.selectbox("Filter by Result", outcome_options)
+    
+    with col2:
+        # League filter
+        league_options = ['All'] + list(historical_bets['league'].dropna().unique())
+        selected_league = st.selectbox("Filter by League", league_options)
+    
+    with col3:
+        # Show count
+        show_count = st.selectbox("Show", [20, 50, 100, "All"])
+    
+    # Apply filters
+    filtered_bets = historical_bets.copy()
+    
+    if selected_outcome != 'All':
+        filtered_bets = filtered_bets[filtered_bets['outcome'] == selected_outcome]
+    
+    if selected_league != 'All':
+        filtered_bets = filtered_bets[filtered_bets['league'] == selected_league]
+    
+    if show_count != "All":
+        filtered_bets = filtered_bets.head(show_count)
+    
+    # Summary stats for filtered data
+    if not filtered_bets.empty:
+        completed = filtered_bets[filtered_bets['outcome'].notna()]
+        
+        if not completed.empty:
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric("Filtered Bets", len(filtered_bets))
+            
+            with col2:
+                wins = len(completed[completed['outcome'] == 'win'])
+                losses = len(completed[completed['outcome'] == 'loss'])
+                win_rate = (wins / (wins + losses) * 100) if (wins + losses) > 0 else 0
+                st.metric("Win Rate", f"{win_rate:.1f}%")
+            
+            with col3:
+                total_profit = completed['profit_loss'].sum()
+                st.metric("Total P&L", f"${total_profit:.2f}")
+            
+            with col4:
+                avg_edge = filtered_bets['edge_percentage'].mean()
+                st.metric("Avg Edge", f"{avg_edge:.1f}%")
+    
+    # Display historical bets table
+    st.subheader("📊 Betting History")
+    
+    display_df = filtered_bets[['bet_date', 'home_team', 'away_team', 'selection', 
+                               'odds', 'edge_percentage', 'stake', 'outcome', 'profit_loss']].copy()
+    display_df.columns = ['Date', 'Home Team', 'Away Team', 'Bet', 'Odds', 
+                         'Edge %', 'Stake $', 'Result', 'P&L $']
+    
+    # Format numbers
+    display_df['Odds'] = display_df['Odds'].round(2)
+    display_df['Edge %'] = display_df['Edge %'].round(1)
+    display_df['Stake $'] = display_df['Stake $'].round(2)
+    display_df['P&L $'] = display_df['P&L $'].round(2)
+    
+    # Color coding function
+    def highlight_results(row):
+        if pd.isna(row['Result']):
+            return [''] * len(row)
+        elif row['Result'] == 'win':
+            return ['background-color: #d4edda'] * len(row)
+        elif row['Result'] == 'loss':
+            return ['background-color: #f8d7da'] * len(row)
         else:
-            return 'color: gray'
+            return ['background-color: #f0f0f0'] * len(row)
     
-    styled_df = display_df.style.applymap(color_result, subset=['Result'])
+    styled_df = display_df.style.apply(highlight_results, axis=1)
     st.dataframe(styled_df, use_container_width=True)
+    
+    # Monthly performance breakdown
+    if not completed.empty:
+        st.subheader("📅 Monthly Performance")
+        
+        completed_copy = completed.copy()
+        completed_copy['month'] = pd.to_datetime(completed_copy['bet_time']).dt.strftime('%Y-%m')
+        
+        monthly_stats = completed_copy.groupby('month').agg({
+            'outcome': 'count',
+            'profit_loss': 'sum',
+            'stake': 'sum'
+        }).round(2)
+        
+        monthly_stats.columns = ['Bets', 'Profit ($)', 'Staked ($)']
+        monthly_stats['ROI %'] = ((monthly_stats['Profit ($)'] / monthly_stats['Staked ($)']) * 100).round(1)
+        
+        st.dataframe(monthly_stats, use_container_width=True)
+
 else:
-    st.info("📝 Recent betting activity will appear here")
+    st.info("📝 Historical betting data will appear here after placing bets")
 
 # Auto-refresh
 st.markdown("---")
