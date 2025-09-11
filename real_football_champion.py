@@ -275,7 +275,7 @@ class RealFootballChampion:
             params = {
                 'apiKey': self.odds_api_key,
                 'regions': 'uk',
-                'markets': 'h2h',
+                'markets': 'h2h,totals,btts',
                 'oddsFormat': 'decimal',
                 'dateFormat': 'iso'
             }
@@ -288,6 +288,19 @@ class RealFootballChampion:
                         match['sport'] = sport
                         all_matches.append(match)
                     print(f"⚽ Found {len(matches)} matches in {sport}")
+                elif response.status_code == 422:
+                    # Try with just h2h markets if full request fails
+                    print(f"⚠️  Markets not available for {sport}, trying h2h only...")
+                    params['markets'] = 'h2h'
+                    response = requests.get(url, params=params, timeout=10)
+                    if response.status_code == 200:
+                        matches = response.json()
+                        for match in matches:
+                            match['sport'] = sport
+                            all_matches.append(match)
+                        print(f"⚽ Found {len(matches)} matches in {sport} (h2h only)")
+                    else:
+                        print(f"⚠️  No data for {sport}: {response.status_code}")
                 else:
                     print(f"⚠️  No data for {sport}: {response.status_code}")
             except Exception as e:
@@ -831,6 +844,10 @@ class RealFootballChampion:
             
             return opportunities
         
+        # Track if we found the markets we're looking for
+        found_totals = False
+        found_btts = False
+        
         for bookmaker in bookmakers:
             markets = bookmaker.get('markets', [])
             
@@ -839,6 +856,7 @@ class RealFootballChampion:
                 outcomes = market.get('outcomes', [])
                 
                 if market_key == 'totals':
+                    found_totals = True
                     # Analyze over/under markets
                     for outcome in outcomes:
                         name = outcome.get('name')
@@ -870,6 +888,7 @@ class RealFootballChampion:
                                 opportunities.append(opportunity)
                 
                 elif market_key == 'btts':
+                    found_btts = True
                     # Analyze Both Teams to Score
                     for outcome in outcomes:
                         name = outcome.get('name')
@@ -886,6 +905,48 @@ class RealFootballChampion:
                                     home_form, away_form, h2h, xg_analysis
                                 )
                                 opportunities.append(opportunity)
+        
+        # Fallback: If we have bookmakers but didn't find totals/btts markets, use estimated odds
+        if not found_totals or not found_btts:
+            estimated_odds = self.generate_estimated_odds(xg_analysis)
+            
+            # Check Over 2.5 opportunity if totals market not found
+            if not found_totals:
+                implied_prob = 1.0 / estimated_odds['over_2_5']
+                true_prob = xg_analysis['over_2_5_prob']
+                edge = (true_prob - implied_prob) * 100
+                
+                if edge >= self.min_edge and estimated_odds['over_2_5'] >= 1.5:
+                    opportunity = self.create_opportunity(
+                        match, 'Over 2.5', estimated_odds['over_2_5'], edge,
+                        home_form, away_form, h2h, xg_analysis
+                    )
+                    opportunities.append(opportunity)
+                
+                # Check Under 2.5 opportunity
+                implied_prob = 1.0 / estimated_odds['under_2_5']
+                true_prob = 1.0 - xg_analysis['over_2_5_prob']
+                edge = (true_prob - implied_prob) * 100
+                
+                if edge >= self.min_edge and estimated_odds['under_2_5'] >= 1.5:
+                    opportunity = self.create_opportunity(
+                        match, 'Under 2.5', estimated_odds['under_2_5'], edge,
+                        home_form, away_form, h2h, xg_analysis
+                    )
+                    opportunities.append(opportunity)
+            
+            # Check BTTS opportunity if btts market not found
+            if not found_btts:
+                implied_prob = 1.0 / estimated_odds['btts_yes']
+                true_prob = xg_analysis['btts_prob']
+                edge = (true_prob - implied_prob) * 100
+                
+                if edge >= self.min_edge and estimated_odds['btts_yes'] >= 1.5:
+                    opportunity = self.create_opportunity(
+                        match, 'BTTS Yes', estimated_odds['btts_yes'], edge,
+                        home_form, away_form, h2h, xg_analysis
+                    )
+                    opportunities.append(opportunity)
         
         return opportunities
     
