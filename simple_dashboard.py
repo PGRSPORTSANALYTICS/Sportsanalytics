@@ -626,13 +626,11 @@ if not ai_opportunities.empty:
         st.metric("High Confidence", high_conf)
     
     # Filter controls for AI opportunities
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
     with col1:
-        min_edge = st.slider("Minimum Edge %", 0, 50, 5)
-    with col2:
         leagues = ['All'] + list(ai_opportunities['league'].unique())
         selected_league_ai = st.selectbox("League Filter", leagues, key="ai_league")
-    with col3:
+    with col2:
         bet_types = ['All'] + list(ai_opportunities['selection'].unique())
         selected_bet_ai = st.selectbox("Bet Type", bet_types, key="ai_bet")
     
@@ -640,7 +638,6 @@ if not ai_opportunities.empty:
     filtered_ai = ai_opportunities.copy()
     if isinstance(filtered_ai, pd.Series):
         filtered_ai = filtered_ai.to_frame().T
-    filtered_ai = filtered_ai[filtered_ai['edge_percentage'] >= min_edge]
     
     if selected_league_ai != 'All':
         filtered_ai = filtered_ai[filtered_ai['league'] == selected_league_ai]
