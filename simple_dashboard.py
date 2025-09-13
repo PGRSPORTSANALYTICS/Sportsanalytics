@@ -227,13 +227,15 @@ st.subheader("🎯 Update Bet Results")
 
 @st.cache_data(ttl=10)
 def load_pending_bets():
+    """Get REAL pending bets - only placed bets awaiting results"""
     try:
         conn = sqlite3.connect('data/real_football.db')
         query = """
         SELECT id, home_team, away_team, selection, odds, stake, 
                datetime(timestamp, 'unixepoch', 'localtime') as bet_time
         FROM football_opportunities 
-        WHERE outcome IS NULL OR outcome = ''
+        WHERE status = 'placed' 
+        AND (outcome IS NULL OR outcome = '')
         ORDER BY timestamp DESC
         """
         df = pd.read_sql_query(query, conn)
@@ -352,10 +354,11 @@ def load_historical_bets():
         conn = sqlite3.connect('data/real_football.db')
         query = """
         SELECT home_team, away_team, selection, odds, edge_percentage, confidence,
-               stake, outcome, profit_loss, league, match_date, kickoff_time,
+               stake, outcome, profit_loss, league, match_date, kickoff_time, status,
                datetime(timestamp, 'unixepoch', 'localtime') as bet_time,
                DATE(datetime(timestamp, 'unixepoch', 'localtime')) as bet_date
         FROM football_opportunities 
+        WHERE status = 'placed'
         ORDER BY timestamp DESC
         """
         df = pd.read_sql_query(query, conn)
@@ -400,7 +403,9 @@ if not historical_bets.empty:
     
     # === WIN/TOTAL RATIO PROMINENTLY DISPLAYED ===
     completed_bets = historical_bets[historical_bets['outcome'].notna()]
-    pending_count = len(historical_bets[historical_bets['outcome'].isna()])
+    # Only count PLACED bets without outcomes as truly pending
+    placed_bets = historical_bets[historical_bets['status'] == 'placed']
+    pending_count = len(placed_bets[placed_bets['outcome'].isna()])
     
     if not completed_bets.empty:
         wins = len(completed_bets[completed_bets['outcome'] == 'win'])
