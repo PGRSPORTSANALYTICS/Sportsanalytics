@@ -304,15 +304,34 @@ def load_pending_bets():
     except:
         return pd.DataFrame()
 
+@st.cache_data(ttl=10)
+def load_finished_bets():
+    try:
+        conn = sqlite3.connect('data/real_football.db')
+        query = """
+        SELECT home_team, away_team, selection, odds, stake, outcome, profit_loss,
+               datetime(timestamp, 'unixepoch', 'localtime') as bet_time
+        FROM football_opportunities 
+        WHERE outcome IS NOT NULL AND outcome != ''
+        ORDER BY timestamp DESC
+        LIMIT 50
+        """
+        df = pd.read_sql_query(query, conn)
+        conn.close()
+        return df
+    except:
+        return pd.DataFrame()
+
 pending_bets = load_pending_bets()
 
 if not pending_bets.empty:
-    st.write(f"**{len(pending_bets)} pending bets** waiting for results:")
+    # PROMINENT BULK UPDATE SECTION AT TOP
+    st.markdown("### 🚀 QUICK BULK UPDATES")
+    st.warning(f"⚡ **{len(pending_bets)} pending bets** need results. Use buttons below to update ALL at once!")
     
-    # Bulk update controls
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2 = st.columns(2)
     with col1:
-        if st.button("🎯 Mark All as WIN", help="Mark all pending bets as wins"):
+        if st.button("🎯 **MARK ALL WINS**", use_container_width=True, type="primary"):
             try:
                 conn = sqlite3.connect('data/real_football.db')
                 cursor = conn.cursor()
@@ -327,54 +346,13 @@ if not pending_bets.empty:
                 
                 conn.commit()
                 conn.close()
-                st.success(f"✅ Marked {len(pending_bets)} bets as WINS!")
+                st.success(f"🎉 ALL {len(pending_bets)} BETS MARKED AS WINS!")
                 st.rerun()
             except Exception as e:
                 st.error(f"Error: {e}")
     
     with col2:
-        if st.button("❌ Mark All as LOSS", help="Mark all pending bets as losses"):
-            try:
-                conn = sqlite3.connect('data/real_football.db')
-                cursor = conn.cursor()
-                
-                for _, bet in pending_bets.iterrows():
-                    profit_loss = -bet['stake']
-                    cursor.execute("""
-                        UPDATE football_opportunities 
-                        SET outcome = 'loss', profit_loss = ?, updated_at = ?
-                        WHERE id = ?
-                    """, (profit_loss, datetime.now().isoformat(), bet['id']))
-                
-                conn.commit()
-                conn.close()
-                st.success(f"✅ Marked {len(pending_bets)} bets as LOSSES!")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Error: {e}")
-    
-    with col3:
-        if st.button("⚪ Mark All as VOID", help="Mark all pending bets as void"):
-            try:
-                conn = sqlite3.connect('data/real_football.db')
-                cursor = conn.cursor()
-                
-                for _, bet in pending_bets.iterrows():
-                    cursor.execute("""
-                        UPDATE football_opportunities 
-                        SET outcome = 'void', profit_loss = 0, updated_at = ?
-                        WHERE id = ?
-                    """, (datetime.now().isoformat(), bet['id']))
-                
-                conn.commit()
-                conn.close()
-                st.success(f"✅ Marked {len(pending_bets)} bets as VOID!")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Error: {e}")
-    
-    with col4:
-        if st.button("🎲 Auto Results (70% Win)", help="Simulate realistic results - 70% wins"):
+        if st.button("🎲 **AUTO RESULTS (70% Win Rate)**", use_container_width=True, type="secondary"):
             try:
                 conn = sqlite3.connect('data/real_football.db')
                 cursor = conn.cursor()
@@ -383,7 +361,6 @@ if not pending_bets.empty:
                 wins = 0
                 
                 for _, bet in pending_bets.iterrows():
-                    # 70% chance of winning
                     outcome = 'win' if random.random() < 0.7 else 'loss'
                     
                     if outcome == 'win':
@@ -400,68 +377,56 @@ if not pending_bets.empty:
                 
                 conn.commit()
                 conn.close()
-                st.success(f"✅ Auto-updated {len(pending_bets)} bets: {wins} wins, {len(pending_bets)-wins} losses!")
+                st.success(f"🎉 AUTO-UPDATED ALL {len(pending_bets)} BETS: {wins} WINS, {len(pending_bets)-wins} LOSSES!")
                 st.rerun()
             except Exception as e:
                 st.error(f"Error: {e}")
     
-    st.markdown("---")
-    
-    # Individual bet updates (first 10 only to avoid clutter)
-    display_count = min(10, len(pending_bets))
-    st.write(f"**Individual Updates** (showing first {display_count} bets):")
-    
-    for _, bet in pending_bets.head(display_count).iterrows():
-        with st.container():
-            col1, col2, col3 = st.columns([4, 2, 2])
-            
-            with col1:
-                st.write(f"**{bet['home_team']} vs {bet['away_team']}**")
-                st.write(f"{bet['selection']} @ {bet['odds']:.2f} (${bet['stake']:.2f})")
+    # Additional options
+    col3, col4 = st.columns(2)
+    with col3:
+        if st.button("❌ Mark All Losses", use_container_width=True):
+            try:
+                conn = sqlite3.connect('data/real_football.db')
+                cursor = conn.cursor()
                 
-            with col2:
-                outcome = st.selectbox(
-                    "Result", 
-                    ["Select...", "Win", "Loss", "Void"], 
-                    key=f"outcome_{bet['id']}"
-                )
+                for _, bet in pending_bets.iterrows():
+                    profit_loss = -bet['stake']
+                    cursor.execute("""
+                        UPDATE football_opportunities 
+                        SET outcome = 'loss', profit_loss = ?, updated_at = ?
+                        WHERE id = ?
+                    """, (profit_loss, datetime.now().isoformat(), bet['id']))
                 
-            with col3:
-                if st.button("Update", key=f"update_{bet['id']}"):
-                    if outcome != "Select...":
-                        try:
-                            conn = sqlite3.connect('data/real_football.db')
-                            cursor = conn.cursor()
-                            
-                            # Calculate profit/loss
-                            if outcome == "Win":
-                                profit_loss = (bet['odds'] - 1) * bet['stake']
-                            elif outcome == "Loss":
-                                profit_loss = -bet['stake']
-                            else:  # Void
-                                profit_loss = 0
-                            
-                            cursor.execute("""
-                                UPDATE football_opportunities 
-                                SET outcome = ?, profit_loss = ?, updated_at = ?
-                                WHERE id = ?
-                            """, (outcome.lower(), profit_loss, datetime.now().isoformat(), bet['id']))
-                            
-                            conn.commit()
-                            conn.close()
-                            
-                            st.success(f"✅ Updated: {outcome}")
-                            st.rerun()
-                            
-                        except Exception as e:
-                            st.error(f"Error updating bet: {e}")
-                            
-            st.divider()
+                conn.commit()
+                conn.close()
+                st.success(f"✅ Marked {len(pending_bets)} bets as losses")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error: {e}")
     
-    if len(pending_bets) > 10:
-        st.info(f"💡 {len(pending_bets) - 10} more bets available. Use bulk update buttons above for faster processing.")
+    with col4:
+        if st.button("⚪ Mark All Void", use_container_width=True):
+            try:
+                conn = sqlite3.connect('data/real_football.db')
+                cursor = conn.cursor()
+                
+                for _, bet in pending_bets.iterrows():
+                    cursor.execute("""
+                        UPDATE football_opportunities 
+                        SET outcome = 'void', profit_loss = 0, updated_at = ?
+                        WHERE id = ?
+                    """, (datetime.now().isoformat(), bet['id']))
+                
+                conn.commit()
+                conn.close()
+                st.success(f"✅ Marked {len(pending_bets)} bets as void")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error: {e}")
+
 else:
-    st.info("ℹ️ No pending bets to update")
+    st.success("🎉 No pending bets! All results are up to date.")
 
 st.markdown("---")
 
@@ -664,6 +629,38 @@ if not historical_bets.empty:
 
 else:
     st.info("📝 Historical betting data will appear here after placing bets")
+
+# === FINISHED RESULTS (MOVED TO BOTTOM) ===
+st.header("✅ Finished Results")
+
+finished_bets = load_finished_bets()
+
+if not finished_bets.empty:
+    st.success(f"📊 Showing {len(finished_bets)} most recent completed bets")
+    
+    # Display finished bets in clean table
+    display_finished = finished_bets[['bet_time', 'home_team', 'away_team', 'selection', 
+                                     'odds', 'stake', 'outcome', 'profit_loss']].copy()
+    display_finished.columns = ['Date', 'Home', 'Away', 'Bet', 'Odds', 'Stake', 'Result', 'P&L']
+    
+    # Format and color code
+    display_finished['Stake'] = display_finished['Stake'].apply(lambda x: f"${x:.2f}")
+    display_finished['P&L'] = display_finished['P&L'].apply(lambda x: f"${x:.2f}" if pd.notna(x) else "")
+    display_finished['Odds'] = display_finished['Odds'].round(2)
+    
+    def highlight_results(row):
+        if row['Result'] == 'win':
+            return ['background-color: #d4edda'] * len(row)
+        elif row['Result'] == 'loss':
+            return ['background-color: #f8d7da'] * len(row)
+        else:
+            return ['background-color: #f0f0f0'] * len(row)
+    
+    styled_finished = display_finished.style.apply(highlight_results, axis=1)
+    st.dataframe(styled_finished)
+    
+else:
+    st.info("📊 Finished results will appear here after updating bet outcomes")
 
 # Auto-refresh
 st.markdown("---")
