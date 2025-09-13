@@ -53,6 +53,9 @@ class PremiumTipsBot:
     
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /start command - welcome new subscribers"""
+        if not update.effective_user or not update.message:
+            return
+            
         user_id = update.effective_user.id
         username = update.effective_user.username or "Unknown"
         
@@ -91,31 +94,53 @@ Use /help for all commands
     async def tips_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Send today's premium and standard tips"""
         try:
+            # Handle both message and callback query
+            chat = update.effective_chat
+            user = update.effective_user
+            if not chat or not user:
+                return
+                
             tips = self._get_todays_tips()
             
             if not tips['premium'] and not tips['standard']:
-                await update.message.reply_text("⏳ No tips available yet today. Check back later!")
-                return
+                message_text = "⏳ No tips available yet today. Check back later!"
+            else:
+                message_text = self._format_tips_message(tips)
+                logger.info(f"📤 Sent tips to user {user.id}")
             
-            message = self._format_tips_message(tips)
-            await update.message.reply_text(message, parse_mode='Markdown')
-            
-            logger.info(f"📤 Sent tips to user {update.effective_user.id}")
+            # Send message based on update type
+            if update.callback_query:
+                await update.callback_query.edit_message_text(message_text, parse_mode='Markdown')
+            elif update.message:
+                await update.message.reply_text(message_text, parse_mode='Markdown')
             
         except Exception as e:
             logger.error(f"❌ Error sending tips: {e}")
-            await update.message.reply_text("❌ Error getting tips. Please try again later.")
+            error_msg = "❌ Error getting tips. Please try again later."
+            if update.callback_query:
+                await update.callback_query.edit_message_text(error_msg)
+            elif update.message:
+                await update.message.reply_text(error_msg)
     
     async def performance_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Send current performance statistics"""
         try:
             stats = self._get_performance_stats()
-            message = self._format_performance_message(stats)
-            await update.message.reply_text(message, parse_mode='Markdown')
+            message_text = self._format_performance_message(stats)
+            
+            # Send message based on update type
+            if update.callback_query:
+                await update.callback_query.edit_message_text(message_text, parse_mode='Markdown')
+            elif update.message:
+                await update.message.reply_text(message_text, parse_mode='Markdown')
             
         except Exception as e:
             logger.error(f"❌ Error getting performance: {e}")
-            await update.message.reply_text("❌ Error getting performance. Please try again later.")
+            error_msg = "❌ Error getting performance. Please try again later."
+            if update.callback_query:
+                await update.callback_query.edit_message_text(error_msg)
+            elif update.message:
+                await update.message.reply_text(error_msg)
     
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Show help information"""
@@ -139,11 +164,19 @@ Use /help for all commands
 
 💡 Tips are currently FREE while building track record
         """
-        await update.message.reply_text(help_text, parse_mode='Markdown')
+        
+        # Send message based on update type
+        if update.callback_query:
+            await update.callback_query.edit_message_text(help_text, parse_mode='Markdown')
+        elif update.message:
+            await update.message.reply_text(help_text, parse_mode='Markdown')
     
     async def button_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle inline keyboard button callbacks"""
         query = update.callback_query
+        if not query:
+            return
+            
         await query.answer()
         
         if query.data == "today_tips":
@@ -301,6 +334,10 @@ Use /help for all commands
         """Start the Telegram bot"""
         try:
             logger.info("🚀 Starting Premium Football Tips Bot")
+            
+            if not self.bot_token:
+                logger.error("❌ Bot token not available")
+                return
             
             # Create application
             application = Application.builder().token(self.bot_token).build()
