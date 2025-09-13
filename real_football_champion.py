@@ -1066,8 +1066,20 @@ class RealFootballChampion:
         )
     
     def save_opportunity(self, opportunity: FootballOpportunity):
-        """Save opportunity to database"""
+        """Save opportunity to database (with duplicate prevention)"""
         cursor = self.conn.cursor()
+        
+        # Check if this exact opportunity already exists
+        cursor.execute('''
+            SELECT COUNT(*) FROM football_opportunities 
+            WHERE home_team = ? AND away_team = ? AND selection = ? 
+            AND status = 'pending'
+        ''', (opportunity.home_team, opportunity.away_team, opportunity.selection))
+        
+        if cursor.fetchone()[0] > 0:
+            # Duplicate found, skip saving
+            return
+            
         cursor.execute('''
             INSERT INTO football_opportunities 
             (timestamp, match_id, home_team, away_team, league, market, selection, 
@@ -1119,7 +1131,7 @@ class RealFootballChampion:
                 total_opportunities += 1
         
         print(f"\n🏆 ANALYSIS COMPLETE: {total_opportunities} opportunities found")
-        print("⏱️ Next analysis cycle in 5 minutes...")
+        print("⏱️ Next analysis cycle in 30 minutes...")
         
         return total_opportunities
 
@@ -1144,8 +1156,8 @@ def main():
                     print("📊 No pending bets to update")
                 last_results_check = current_time
             
-            # Wait 5 minutes between cycles
-            time.sleep(300)
+            # Wait 30 minutes between cycles (slowed down to prevent duplicates)
+            time.sleep(1800)
             
     except KeyboardInterrupt:
         print("\n🛑 Real Football Champion stopped by user")

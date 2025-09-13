@@ -209,14 +209,14 @@ def main():
     while True:
         try:
             auto_logger.run_auto_cycle()
-            logger.info("💤 Sleeping for 10 minutes...")
-            time.sleep(600)  # 10 minutes
+            logger.info("💤 Sleeping for 30 minutes...")
+            time.sleep(1800)  # 30 minutes (slowed down to prevent duplicates)
         except KeyboardInterrupt:
             logger.info("👋 Auto logger stopped")
             break
         except Exception as e:
             logger.error(f"Error in main loop: {e}")
-            time.sleep(60)  # Wait 1 minute before retrying
+            time.sleep(300)  # Wait 5 minutes before retrying
 
 if __name__ == "__main__":
     main()
