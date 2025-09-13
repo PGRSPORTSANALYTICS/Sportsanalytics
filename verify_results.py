@@ -18,6 +18,8 @@ import logging
 import requests
 import trafilatura
 import re
+import os
+import json
 from datetime import datetime, timedelta, date
 import time
 import sys
@@ -151,9 +153,9 @@ class RealResultVerifier:
         NO simulated or fake data - only authentic results.
         """
         sources = [
-            self._get_flashscore_result,
+            self._get_api_football_result,
             self._get_sofascore_result,
-            self._get_api_football_result
+            self._get_flashscore_result
         ]
         
         for source_func in sources:
@@ -210,14 +212,139 @@ class RealResultVerifier:
             raise
     
     def _get_api_football_result(self, home_team: str, away_team: str, match_date: str) -> Optional[Dict]:
-        """Get real result from API-Football (last resort)"""
+        """Get real result from API-Football (primary source)"""
         try:
-            # This would use the API_FOOTBALL_KEY secret if needed
-            logger.info("API-Football verification not implemented yet")
-            return None
+            api_key = os.getenv('API_FOOTBALL_KEY')
+            if not api_key:
+                logger.warning("❌ No API_FOOTBALL_KEY found in environment")
+                raise Exception("API_FOOTBALL_KEY not configured")
+            
+            logger.info(f"🔍 Fetching result from API-Football: {home_team} vs {away_team} on {match_date}")
+            
+            # Convert date to API-Football format
+            try:
+                date_obj = datetime.strptime(match_date, '%Y-%m-%d')
+                api_date = date_obj.strftime('%Y-%m-%d')
+            except ValueError:
+                logger.error(f"❌ Invalid date format: {match_date}")
+                raise Exception(f"Invalid date format: {match_date}")
+            
+            # Search for fixtures by date
+            fixtures_url = "https://v3.football.api-sports.io/fixtures"
+            headers = {
+                'X-RapidAPI-Key': api_key,
+                'X-RapidAPI-Host': 'v3.football.api-sports.io'
+            }
+            
+            params = {
+                'date': api_date,
+                'status': 'FT'  # Only finished matches
+            }
+            
+            logger.info(f"🌐 API-Football request: {fixtures_url} with date={api_date}")
+            response = requests.get(fixtures_url, headers=headers, params=params, timeout=30)
+            
+            if response.status_code != 200:
+                logger.error(f"❌ API-Football HTTP error: {response.status_code}")
+                raise Exception(f"API-Football HTTP {response.status_code}: {response.text[:200]}")
+            
+            data = response.json()
+            
+            if data.get('errors'):
+                logger.error(f"❌ API-Football errors: {data['errors']}")
+                raise Exception(f"API-Football errors: {data['errors']}")
+            
+            fixtures = data.get('response', [])
+            logger.info(f"📊 Found {len(fixtures)} finished matches on {api_date}")
+            
+            # Search for matching teams
+            match_result = self._find_matching_fixture(fixtures, home_team, away_team)
+            
+            if match_result:
+                logger.info(f"✅ API-Football result: {home_team} {match_result['home_goals']}-{match_result['away_goals']} {away_team}")
+                return match_result
+            else:
+                logger.warning(f"⚠️ No matching fixture found in API-Football for {home_team} vs {away_team}")
+                return None
+                
         except Exception as e:
-            logger.warning(f"API-Football failed: {e}")
+            logger.error(f"❌ API-Football failed: {e}")
             raise
+    
+    def _find_matching_fixture(self, fixtures: List[Dict], home_team: str, away_team: str) -> Optional[Dict]:
+        """Find matching fixture from API-Football response"""
+        try:
+            home_normalized = self._normalize_team_name(home_team)
+            away_normalized = self._normalize_team_name(away_team)
+            
+            for fixture in fixtures:
+                try:
+                    teams = fixture.get('teams', {})
+                    home_api = teams.get('home', {}).get('name', '')
+                    away_api = teams.get('away', {}).get('name', '')
+                    
+                    home_api_normalized = self._normalize_team_name(home_api)
+                    away_api_normalized = self._normalize_team_name(away_api)
+                    
+                    # Check for team name matches (allowing partial matches)
+                    home_match = (home_normalized in home_api_normalized or 
+                                 home_api_normalized in home_normalized or
+                                 self._team_similarity_match(home_normalized, home_api_normalized))
+                    
+                    away_match = (away_normalized in away_api_normalized or 
+                                 away_api_normalized in away_normalized or
+                                 self._team_similarity_match(away_normalized, away_api_normalized))
+                    
+                    if home_match and away_match:
+                        # Extract scores
+                        goals = fixture.get('goals', {})
+                        home_goals = goals.get('home')
+                        away_goals = goals.get('away')
+                        
+                        if home_goals is not None and away_goals is not None:
+                            logger.info(f"✅ Found match: {home_api} {home_goals}-{away_goals} {away_api}")
+                            return {
+                                'home_goals': int(home_goals),
+                                'away_goals': int(away_goals),
+                                'source': 'api-football',
+                                'fixture_id': fixture.get('fixture', {}).get('id'),
+                                'api_home_team': home_api,
+                                'api_away_team': away_api
+                            }
+                        else:
+                            logger.warning(f"⚠️ Found match but missing scores: {home_api} vs {away_api}")
+                            
+                except Exception as e:
+                    logger.warning(f"⚠️ Error processing fixture: {e}")
+                    continue
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"❌ Error finding matching fixture: {e}")
+            return None
+    
+    def _team_similarity_match(self, team1: str, team2: str) -> bool:
+        """Check if team names are similar enough to be considered a match"""
+        try:
+            # Split team names into words and check for common words
+            words1 = set(team1.split())
+            words2 = set(team2.split())
+            
+            # If at least 2 words match or one significant word matches
+            common_words = words1.intersection(words2)
+            if len(common_words) >= 2:
+                return True
+            
+            # Check for single significant word matches (longer than 4 characters)
+            significant_matches = [word for word in common_words if len(word) > 4]
+            if significant_matches:
+                return True
+                
+            return False
+            
+        except Exception:
+            return False
     
     def _parse_flashscore_text(self, text: str, home_team: str, away_team: str) -> Optional[Dict]:
         """Parse Flashscore text for real match results"""
@@ -268,10 +395,10 @@ class RealResultVerifier:
             market = tip['market'].lower()
             selection = tip['selection'].lower()
             
-            if 'over/under' in market or 'total goals' in market:
-                if 'over 2.5' in selection:
+            if 'over/under' in market or 'total goals' in market or 'goals' in market:
+                if 'over 2.5' in selection or 'over2.5' in selection.replace(' ', ''):
                     return 'won' if total_goals > 2.5 else 'lost'
-                elif 'under 2.5' in selection:
+                elif 'under 2.5' in selection or 'under2.5' in selection.replace(' ', ''):
                     return 'won' if total_goals < 2.5 else 'lost'
             
             elif 'both teams to score' in market or 'btts' in market:

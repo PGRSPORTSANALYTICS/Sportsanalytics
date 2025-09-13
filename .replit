@@ -2,7 +2,7 @@ modules = ["python-3.11", "postgresql-16"]
 
 [nix]
 channel = "stable-25_05"
-packages = ["chromedriver", "chromium", "geckodriver", "glibcLocales"]
+packages = ["chromedriver", "chromium", "geckodriver", "glibcLocales", "sqlite"]
 
 [deployment]
 deploymentTarget = "autoscale"
@@ -123,6 +123,10 @@ externalPort = 3000
 [[ports]]
 localPort = 42403
 externalPort = 5000
+
+[[ports]]
+localPort = 44273
+externalPort = 6000
 
 [[ports]]
 localPort = 45243

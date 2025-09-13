@@ -2,6 +2,8 @@ import trafilatura
 import requests
 import re
 import sqlite3
+import os
+import json
 from datetime import datetime, timedelta
 import time
 import logging
@@ -121,18 +123,92 @@ class ResultsScraper:
             
         return results
     
+    def get_api_football_results(self, date_str):
+        """Get results from API-Football for a specific date (YYYY-MM-DD)"""
+        try:
+            api_key = os.getenv('API_FOOTBALL_KEY')
+            if not api_key:
+                logger.warning("❌ No API_FOOTBALL_KEY found in environment")
+                return []
+            
+            logger.info(f"🔍 Fetching API-Football results for {date_str}")
+            
+            # API-Football endpoint for fixtures
+            url = "https://v3.football.api-sports.io/fixtures"
+            headers = {
+                'X-RapidAPI-Key': api_key,
+                'X-RapidAPI-Host': 'v3.football.api-sports.io'
+            }
+            
+            params = {
+                'date': date_str,
+                'status': 'FT'  # Only finished matches
+            }
+            
+            response = requests.get(url, headers=headers, params=params, timeout=30)
+            
+            if response.status_code != 200:
+                logger.error(f"❌ API-Football HTTP error: {response.status_code}")
+                return []
+            
+            data = response.json()
+            
+            if data.get('errors'):
+                logger.error(f"❌ API-Football errors: {data['errors']}")
+                return []
+            
+            fixtures = data.get('response', [])
+            logger.info(f"📊 Found {len(fixtures)} finished matches from API-Football")
+            
+            results = []
+            for fixture in fixtures:
+                try:
+                    teams = fixture.get('teams', {})
+                    goals = fixture.get('goals', {})
+                    
+                    home_team = teams.get('home', {}).get('name', '')
+                    away_team = teams.get('away', {}).get('name', '')
+                    home_score = goals.get('home')
+                    away_score = goals.get('away')
+                    
+                    if home_score is not None and away_score is not None:
+                        results.append({
+                            'home_team': home_team,
+                            'away_team': away_team,
+                            'home_score': int(home_score),
+                            'away_score': int(away_score),
+                            'total_goals': int(home_score) + int(away_score),
+                            'result': 'home' if home_score > away_score else ('away' if away_score > home_score else 'draw'),
+                            'source': 'api-football'
+                        })
+                        
+                except Exception as e:
+                    logger.warning(f"⚠️ Error processing fixture: {e}")
+                    continue
+            
+            logger.info(f"✅ Parsed {len(results)} results from API-Football")
+            return results
+            
+        except Exception as e:
+            logger.error(f"❌ Error fetching API-Football results: {e}")
+            return []
+    
     def get_results_for_date(self, date_str):
-        """Get results from both sources for a date"""
-        logger.info(f"Getting results for {date_str}")
+        """Get results from multiple sources for a date (API-Football priority)"""
+        logger.info(f"🔍 Getting results for {date_str}")
         
-        # Try Flashscore first, fallback to Sofascore
-        results = self.get_flashscore_results(date_str)
+        # Try API-Football first (most reliable)
+        results = self.get_api_football_results(date_str)
         
         if not results:
-            logger.info("No results from Flashscore, trying Sofascore...")
+            logger.info("📡 No results from API-Football, trying Sofascore...")
             results = self.get_sofascore_results(date_str)
         
-        logger.info(f"Found {len(results)} results for {date_str}")
+        if not results:
+            logger.info("📡 No results from Sofascore, trying Flashscore...")
+            results = self.get_flashscore_results(date_str)
+        
+        logger.info(f"📊 Found {len(results)} total results for {date_str}")
         return results
     
     def update_bet_outcomes(self):
@@ -230,6 +306,16 @@ class ResultsScraper:
             threshold = float(re.findall(r'(\d+\.?\d*)', selection)[0])
             return 'win' if match_result['total_goals'] < threshold else 'loss'
             
+        elif 'btts' in selection_lower or 'both teams to score' in selection_lower:
+            # Both Teams To Score
+            both_scored = match_result['home_score'] > 0 and match_result['away_score'] > 0
+            if 'yes' in selection_lower:
+                return 'win' if both_scored else 'loss'
+            elif 'no' in selection_lower:
+                return 'win' if not both_scored else 'loss'
+            else:
+                return 'void'  # Unknown BTTS selection
+            
         elif 'home' in selection_lower or '1' in selection:
             return 'win' if match_result['result'] == 'home' else 'loss'
             
@@ -240,6 +326,7 @@ class ResultsScraper:
             return 'win' if match_result['result'] == 'draw' else 'loss'
             
         else:
+            logger.warning(f"⚠️ Unknown selection type: {selection}")
             return 'void'  # Unknown selection type
     
     def calculate_profit_loss(self, outcome, odds, stake):
