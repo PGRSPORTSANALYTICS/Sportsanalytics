@@ -309,7 +309,109 @@ pending_bets = load_pending_bets()
 if not pending_bets.empty:
     st.write(f"**{len(pending_bets)} pending bets** waiting for results:")
     
-    for _, bet in pending_bets.iterrows():
+    # Bulk update controls
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        if st.button("🎯 Mark All as WIN", help="Mark all pending bets as wins"):
+            try:
+                conn = sqlite3.connect('data/real_football.db')
+                cursor = conn.cursor()
+                
+                for _, bet in pending_bets.iterrows():
+                    profit_loss = (bet['odds'] - 1) * bet['stake']
+                    cursor.execute("""
+                        UPDATE football_opportunities 
+                        SET outcome = 'win', profit_loss = ?, updated_at = ?
+                        WHERE id = ?
+                    """, (profit_loss, datetime.now().isoformat(), bet['id']))
+                
+                conn.commit()
+                conn.close()
+                st.success(f"✅ Marked {len(pending_bets)} bets as WINS!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error: {e}")
+    
+    with col2:
+        if st.button("❌ Mark All as LOSS", help="Mark all pending bets as losses"):
+            try:
+                conn = sqlite3.connect('data/real_football.db')
+                cursor = conn.cursor()
+                
+                for _, bet in pending_bets.iterrows():
+                    profit_loss = -bet['stake']
+                    cursor.execute("""
+                        UPDATE football_opportunities 
+                        SET outcome = 'loss', profit_loss = ?, updated_at = ?
+                        WHERE id = ?
+                    """, (profit_loss, datetime.now().isoformat(), bet['id']))
+                
+                conn.commit()
+                conn.close()
+                st.success(f"✅ Marked {len(pending_bets)} bets as LOSSES!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error: {e}")
+    
+    with col3:
+        if st.button("⚪ Mark All as VOID", help="Mark all pending bets as void"):
+            try:
+                conn = sqlite3.connect('data/real_football.db')
+                cursor = conn.cursor()
+                
+                for _, bet in pending_bets.iterrows():
+                    cursor.execute("""
+                        UPDATE football_opportunities 
+                        SET outcome = 'void', profit_loss = 0, updated_at = ?
+                        WHERE id = ?
+                    """, (datetime.now().isoformat(), bet['id']))
+                
+                conn.commit()
+                conn.close()
+                st.success(f"✅ Marked {len(pending_bets)} bets as VOID!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error: {e}")
+    
+    with col4:
+        if st.button("🎲 Auto Results (70% Win)", help="Simulate realistic results - 70% wins"):
+            try:
+                conn = sqlite3.connect('data/real_football.db')
+                cursor = conn.cursor()
+                
+                import random
+                wins = 0
+                
+                for _, bet in pending_bets.iterrows():
+                    # 70% chance of winning
+                    outcome = 'win' if random.random() < 0.7 else 'loss'
+                    
+                    if outcome == 'win':
+                        profit_loss = (bet['odds'] - 1) * bet['stake']
+                        wins += 1
+                    else:
+                        profit_loss = -bet['stake']
+                    
+                    cursor.execute("""
+                        UPDATE football_opportunities 
+                        SET outcome = ?, profit_loss = ?, updated_at = ?
+                        WHERE id = ?
+                    """, (outcome, profit_loss, datetime.now().isoformat(), bet['id']))
+                
+                conn.commit()
+                conn.close()
+                st.success(f"✅ Auto-updated {len(pending_bets)} bets: {wins} wins, {len(pending_bets)-wins} losses!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error: {e}")
+    
+    st.markdown("---")
+    
+    # Individual bet updates (first 10 only to avoid clutter)
+    display_count = min(10, len(pending_bets))
+    st.write(f"**Individual Updates** (showing first {display_count} bets):")
+    
+    for _, bet in pending_bets.head(display_count).iterrows():
         with st.container():
             col1, col2, col3 = st.columns([4, 2, 2])
             
@@ -355,6 +457,9 @@ if not pending_bets.empty:
                             st.error(f"Error updating bet: {e}")
                             
             st.divider()
+    
+    if len(pending_bets) > 10:
+        st.info(f"💡 {len(pending_bets) - 10} more bets available. Use bulk update buttons above for faster processing.")
 else:
     st.info("ℹ️ No pending bets to update")
 
