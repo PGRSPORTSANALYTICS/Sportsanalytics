@@ -342,8 +342,8 @@ if perf is not None and perf['total_bets'] > 0:
 else:
     st.info("📈 Performance tracking will appear after placing bets")
 
-# === HISTORICAL BETS ===
-st.header("📚 Historical Bets")
+# === ALL BETTING HISTORY & RESULTS ===
+st.header("📚 All Betting History & Results")
 
 @st.cache_data(ttl=60)
 def load_historical_bets():
@@ -372,7 +372,7 @@ if not historical_bets.empty:
     
     with col1:
         # Outcome filter
-        outcome_options = ['All'] + list(historical_bets['outcome'].dropna().unique())
+        outcome_options = ['All', 'Pending'] + list(historical_bets['outcome'].dropna().unique())
         selected_outcome = st.selectbox("Filter by Result", outcome_options)
     
     with col2:
@@ -387,7 +387,9 @@ if not historical_bets.empty:
     # Apply filters
     filtered_bets = historical_bets.copy()
     
-    if selected_outcome != 'All':
+    if selected_outcome == 'Pending':
+        filtered_bets = filtered_bets[filtered_bets['outcome'].isna()]
+    elif selected_outcome != 'All':
         filtered_bets = filtered_bets[filtered_bets['outcome'] == selected_outcome]
     
     if selected_league != 'All':
@@ -396,36 +398,45 @@ if not historical_bets.empty:
     if show_count != "All":
         filtered_bets = filtered_bets.head(show_count)
     
-    # Summary stats for filtered data
-    if not filtered_bets.empty:
-        completed = filtered_bets[filtered_bets['outcome'].notna()]
-        
-        if not completed.empty:
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                st.metric("Filtered Bets", len(filtered_bets))
-            
-            with col2:
-                wins = len(completed[completed['outcome'] == 'win'])
-                losses = len(completed[completed['outcome'] == 'loss'])
-                win_rate = (wins / (wins + losses) * 100) if (wins + losses) > 0 else 0
-                st.metric("Win Rate", f"{win_rate:.1f}%")
-            
-            with col3:
-                total_profit = completed['profit_loss'].sum()
-                st.metric("Total P&L", f"${total_profit:.2f}")
-            
-            with col4:
-                avg_edge = filtered_bets['edge_percentage'].mean()
-                st.metric("Avg Edge", f"{avg_edge:.1f}%")
+    # === WIN/TOTAL RATIO PROMINENTLY DISPLAYED ===
+    completed_bets = historical_bets[historical_bets['outcome'].notna()]
+    pending_count = len(historical_bets[historical_bets['outcome'].isna()])
     
-    # Display historical bets table
-    st.subheader("📊 Betting History")
+    if not completed_bets.empty:
+        wins = len(completed_bets[completed_bets['outcome'] == 'win'])
+        losses = len(completed_bets[completed_bets['outcome'] == 'loss'])
+        voids = len(completed_bets[completed_bets['outcome'] == 'void'])
+        total_decided = wins + losses
+        
+        # Prominent Win/Total display
+        col1, col2, col3, col4, col5 = st.columns(5)
+        
+        with col1:
+            st.metric("🎯 Win/Total", f"{wins}/{total_decided}", 
+                     f"{(wins/total_decided*100):.1f}% win rate" if total_decided > 0 else "No completed bets")
+        
+        with col2:
+            st.metric("✅ Wins", wins, f"${completed_bets[completed_bets['outcome'] == 'win']['profit_loss'].sum():.2f}")
+        
+        with col3:
+            st.metric("❌ Losses", losses, f"${completed_bets[completed_bets['outcome'] == 'loss']['profit_loss'].sum():.2f}")
+        
+        with col4:
+            total_profit = completed_bets['profit_loss'].sum()
+            st.metric("💰 Net P&L", f"${total_profit:.2f}")
+        
+        with col5:
+            st.metric("⏳ Pending", pending_count)
+    
+    # Filter controls
+    st.subheader("🔍 Filter & Search")
+    
+    # Display combined history table
+    st.subheader("📊 Complete Betting History")
     
     display_df = filtered_bets[['bet_time', 'home_team', 'away_team', 'selection', 
                                'odds', 'edge_percentage', 'stake', 'outcome', 'profit_loss']].copy()
-    display_df.columns = ['Timestamp', 'Home Team', 'Away Team', 'Bet', 'Odds', 
+    display_df.columns = ['Date', 'Home Team', 'Away Team', 'Bet', 'Odds', 
                          'Edge %', 'Stake $', 'Result', 'P&L $']
     
     # Format numbers
@@ -437,22 +448,22 @@ if not historical_bets.empty:
     # Color coding function
     def highlight_results(row):
         if pd.isna(row['Result']):
-            return [''] * len(row)
+            return ['background-color: #fff3cd'] * len(row)  # Yellow for pending
         elif row['Result'] == 'win':
-            return ['background-color: #d4edda'] * len(row)
+            return ['background-color: #d4edda'] * len(row)  # Green for wins
         elif row['Result'] == 'loss':
-            return ['background-color: #f8d7da'] * len(row)
+            return ['background-color: #f8d7da'] * len(row)  # Red for losses
         else:
-            return ['background-color: #f0f0f0'] * len(row)
+            return ['background-color: #f0f0f0'] * len(row)  # Gray for void
     
     styled_df = display_df.style.apply(highlight_results, axis=1)
-    st.dataframe(styled_df)
+    st.dataframe(styled_df, use_container_width=True)
     
     # Monthly performance breakdown
-    if not completed.empty:
-        st.subheader("📅 Monthly Performance")
+    if not completed_bets.empty:
+        st.subheader("📅 Monthly Performance Breakdown")
         
-        completed_copy = completed.copy()
+        completed_copy = completed_bets.copy()
         completed_copy['month'] = pd.to_datetime(completed_copy['bet_time']).dt.strftime('%Y-%m')
         
         monthly_stats = completed_copy.groupby('month').agg({
@@ -461,45 +472,21 @@ if not historical_bets.empty:
             'stake': 'sum'
         }).round(2)
         
-        monthly_stats.columns = ['Bets', 'Profit ($)', 'Staked ($)']
-        monthly_stats['ROI %'] = ((monthly_stats['Profit ($)'] / monthly_stats['Staked ($)']) * 100).round(1)
+        monthly_stats.columns = ['Total Bets', 'Net P&L ($)', 'Total Staked ($)']
+        monthly_stats['ROI %'] = ((monthly_stats['Net P&L ($)'] / monthly_stats['Total Staked ($)']) * 100).round(1)
         
-        st.dataframe(monthly_stats)
+        # Add win/loss breakdown
+        for month in monthly_stats.index:
+            month_data = completed_copy[completed_copy['month'] == month]
+            wins_month = len(month_data[month_data['outcome'] == 'win'])
+            losses_month = len(month_data[month_data['outcome'] == 'loss'])
+            monthly_stats.loc[month, 'Win/Loss'] = f"{wins_month}/{wins_month + losses_month}"
+        
+        st.dataframe(monthly_stats, use_container_width=True)
 
 else:
-    st.info("📝 Historical betting data will appear here after placing bets")
+    st.info("📝 Complete betting history will appear here after placing bets")
 
-# === FINISHED RESULTS (MOVED TO BOTTOM) ===
-st.header("✅ Finished Results")
-
-finished_bets = load_finished_bets()
-
-if not finished_bets.empty:
-    st.success(f"📊 Showing {len(finished_bets)} most recent completed bets")
-    
-    # Display finished bets in clean table
-    display_finished = finished_bets[['bet_time', 'home_team', 'away_team', 'selection', 
-                                     'odds', 'stake', 'outcome', 'profit_loss']].copy()
-    display_finished.columns = ['Date', 'Home', 'Away', 'Bet', 'Odds', 'Stake', 'Result', 'P&L']
-    
-    # Format and color code
-    display_finished['Stake'] = display_finished['Stake'].apply(lambda x: f"${x:.2f}")
-    display_finished['P&L'] = display_finished['P&L'].apply(lambda x: f"${x:.2f}" if pd.notna(x) else "")
-    display_finished['Odds'] = display_finished['Odds'].round(2)
-    
-    def highlight_results(row):
-        if row['Result'] == 'win':
-            return ['background-color: #d4edda'] * len(row)
-        elif row['Result'] == 'loss':
-            return ['background-color: #f8d7da'] * len(row)
-        else:
-            return ['background-color: #f0f0f0'] * len(row)
-    
-    styled_finished = display_finished.style.apply(highlight_results, axis=1)
-    st.dataframe(styled_finished)
-    
-else:
-    st.info("📊 Finished results will appear here after updating bet outcomes")
 
 # Auto-refresh
 st.markdown("---")
