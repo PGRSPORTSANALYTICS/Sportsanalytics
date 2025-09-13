@@ -275,15 +275,12 @@ Use /help for all commands
         
         if tips['standard']:
             message += "⚡ **STANDARD TIPS** (Score 6.0-7.9)\n"
-            for i, tip in enumerate(tips['standard'][:5], 1):  # Show first 5 standard tips
+            for i, tip in enumerate(tips['standard'], 1):  # Show ALL standard tips
                 # Scale confidence from database range (0-100) to display range (1-5) 
                 scaled_confidence = min(5, max(1, int(tip['confidence'] / 20) + 1))
                 stars = "⭐" * scaled_confidence
                 message += f"{i}. **{tip['home_team']} vs {tip['away_team']}**\n"
                 message += f"   🎯 {tip['selection']} @ {tip['odds']:.2f} | Score: {tip['quality_score']:.1f} | {stars}\n"
-        
-        if len(tips['standard']) > 5:
-            message += f"\n... and {len(tips['standard']) - 5} more standard tips available\n"
         
         message += "\n📝 **Note:** Tips are FREE during track record building phase"
         message += "\n🔒 **Guarantee:** 100% real results, no simulated data"
