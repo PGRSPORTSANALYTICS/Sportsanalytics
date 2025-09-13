@@ -85,6 +85,11 @@ class AutoBetLogger:
     
     def fetch_match_results(self):
         """Automatically fetch match results and update bet outcomes"""
+        if TIPS_SELLING_MODE:
+            logger.info("🛑 Simulated results DISABLED in tips selling mode")
+            logger.info("💡 Use proper result verification for ROI credibility")
+            return 0
+            
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
@@ -141,34 +146,12 @@ class AutoBetLogger:
             logger.error(f"Error fetching results: {e}")
     
     def get_match_result(self, home_team, away_team, match_date):
-        """Get match result from external source"""
-        try:
-            # Simulate getting match results (you can integrate with real API)
-            # For now, we'll check our results scraper database or use a simple simulation
-            
-            # Check if match date has passed
-            if match_date:
-                match_datetime = datetime.strptime(match_date, '%Y-%m-%d')
-                if match_datetime.date() <= datetime.now().date() - timedelta(days=1):
-                    # Simulate realistic results for demonstration
-                    import random
-                    
-                    home_goals = random.randint(0, 4)
-                    away_goals = random.randint(0, 4)
-                    
-                    return {
-                        'home_score': home_goals,
-                        'away_score': away_goals,
-                        'total_goals': home_goals + away_goals,
-                        'both_scored': home_goals > 0 and away_goals > 0,
-                        'status': 'completed'
-                    }
-            
-            return None
-            
-        except Exception as e:
-            logger.error(f"Error getting match result for {home_team} vs {away_team}: {e}")
-            return None
+        """Get match result from external source - DISABLED to prevent fake results"""
+        # DISABLED: Simulated results undermine ROI credibility for tips selling
+        # Only real verification should be used for authentic performance tracking
+        logger.info(f"🛑 Simulated results DISABLED for {home_team} vs {away_team}")
+        logger.info("💡 Use real result verification for tips selling credibility")
+        return None  # No fake results - wait for real verification
     
     def determine_bet_outcome(self, selection, match_result):
         """Determine if bet won/lost based on selection and match result"""
