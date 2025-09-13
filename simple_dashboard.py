@@ -221,68 +221,6 @@ with col2:
 
 st.markdown("---")
 
-# === MANUAL BET LOGGING (Optional) ===
-with st.expander("📝 Manual Bet Entry (Optional)"):
-    st.write("**For bets placed outside the AI system:**")
-
-# Manual bet logging form
-st.subheader("➕ Add New Bet")
-
-with st.form("log_bet_form"):
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        home_team = st.text_input("Home Team", placeholder="e.g., Arsenal")
-        away_team = st.text_input("Away Team", placeholder="e.g., Chelsea")
-        selection = st.selectbox("Bet Type", [
-            "Over 2.5 Goals", "Under 2.5 Goals", "BTTS Yes", "BTTS No", 
-            "Over 1.5 Goals", "Under 1.5 Goals", "Over 3.5 Goals", "Under 3.5 Goals",
-            "Home Win", "Away Win", "Draw"
-        ])
-        
-    with col2:
-        odds = st.number_input("Odds", min_value=1.01, value=2.00, step=0.01, format="%.2f")
-        stake = st.number_input("Stake ($)", min_value=0.01, value=10.00, step=0.01, format="%.2f")
-        league = st.text_input("League", placeholder="e.g., Premier League")
-        match_date = st.date_input("Match Date")
-    
-    submitted = st.form_submit_button("🎯 Log This Bet")
-    
-    if submitted and home_team and away_team:
-        try:
-            conn = sqlite3.connect('data/real_football.db')
-            cursor = conn.cursor()
-            
-            # Insert the manually logged bet
-            cursor.execute("""
-                INSERT INTO football_opportunities 
-                (timestamp, home_team, away_team, selection, odds, stake, league, match_date, 
-                 edge_percentage, confidence, analysis, status, market)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                datetime.now().timestamp(),
-                home_team,
-                away_team,
-                selection,
-                odds,
-                stake,
-                league,
-                str(match_date),
-                0,  # edge_percentage - will be calculated
-                80,  # confidence - default
-                f"Manually logged bet: {home_team} vs {away_team}",
-                "manually_logged",
-                "goals" if "Goal" in selection or "BTTS" in selection else "match_result"
-            ))
-            
-            conn.commit()
-            conn.close()
-            
-            st.success(f"✅ Bet logged: {home_team} vs {away_team} - {selection} @ {odds:.2f}")
-            st.rerun()
-            
-        except Exception as e:
-            st.error(f"Error logging bet: {e}")
 
 # Update bet outcomes section
 st.subheader("🎯 Update Bet Results")
