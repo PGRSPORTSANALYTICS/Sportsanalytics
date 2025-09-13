@@ -32,6 +32,10 @@ args = "Real Football Dashboard"
 task = "workflow.run"
 args = "Auto Bet Logger"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Result Verifier"
+
 [[workflows.workflow]]
 name = "install_dependencies"
 author = "agent"
@@ -70,6 +74,17 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python auto_bet_logger.py"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow]]
+name = "Result Verifier"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python3 schedule_verification.py"
 
 [workflows.workflow.metadata]
 outputType = "console"
