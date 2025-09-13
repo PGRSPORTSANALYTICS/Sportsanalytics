@@ -414,43 +414,6 @@ if not ai_opportunities.empty:
 else:
     st.info("🔍 **AI is scanning for opportunities...** New opportunities will appear here as the AI discovers them")
 
-st.markdown("---")
-
-# === CURRENT OPPORTUNITIES ===
-st.header("🔥 Current Opportunities")
-
-current_bets = load_current_opportunities()
-
-if not current_bets.empty:
-    st.success(f"Found {len(current_bets)} live betting opportunities!")
-    
-    for _, bet in current_bets.iterrows():
-        with st.container():
-            col1, col2, col3, col4 = st.columns([3, 2, 2, 2])
-            
-            with col1:
-                st.subheader(f"{bet['home_team']} vs {bet['away_team']}")
-                st.write(f"**{bet['selection']}** @ {bet['odds']:.2f}")
-                
-            with col2:
-                st.metric("Edge", f"{bet['edge_percentage']:.1f}%")
-                st.write(confidence_to_stars(bet['confidence']))
-                
-            with col3:
-                st.metric("Stake", f"${bet['stake']:.2f}")
-                potential = (bet['odds'] - 1) * bet['stake']
-                st.metric("Potential Win", f"${potential:.2f}")
-                
-            with col4:
-                st.write(f"**{bet['status']}**")
-                st.write(f"{bet['league']}")
-                st.write(f"⏰ Found: {bet['found_time'][11:16]}")
-                st.write(f"📅 {bet['match_date']}")
-            
-            st.divider()
-else:
-    st.info("⏳ Looking for new betting opportunities...")
-
 # === PERFORMANCE SUMMARY ===
 st.header("📊 Performance Summary")
 
