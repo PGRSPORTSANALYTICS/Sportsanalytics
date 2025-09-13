@@ -271,6 +271,104 @@ else:
 
 st.markdown("---")
 
+# === ALL AI OPPORTUNITIES ===
+st.header("🤖 All AI Opportunities")
+
+@st.cache_data(ttl=30)
+def load_all_ai_opportunities():
+    """Load all AI-generated opportunities for manual review"""
+    try:
+        conn = sqlite3.connect('data/real_football.db')
+        query = """
+        SELECT home_team, away_team, league, selection, odds, edge_percentage, 
+               confidence, analysis, match_date, kickoff_time,
+               datetime(timestamp, 'unixepoch', 'localtime') as found_time
+        FROM football_opportunities 
+        WHERE status = 'pending'
+        AND edge_percentage >= 5
+        ORDER BY edge_percentage DESC, confidence DESC
+        """
+        df = pd.read_sql_query(query, conn)
+        conn.close()
+        return df
+    except Exception as e:
+        st.error(f"Error loading AI opportunities: {e}")
+        return pd.DataFrame()
+
+ai_opportunities = load_all_ai_opportunities()
+
+if not ai_opportunities.empty:
+    st.success(f"🎯 **{len(ai_opportunities)} AI opportunities found** - All betting chances discovered by the AI system")
+    
+    # Key metrics
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Opportunities", len(ai_opportunities))
+    with col2:
+        avg_edge = ai_opportunities['edge_percentage'].mean()
+        st.metric("Avg Edge", f"{avg_edge:.1f}%")
+    with col3:
+        high_edge = len(ai_opportunities[ai_opportunities['edge_percentage'] >= 15])
+        st.metric("High Edge (15%+)", high_edge)
+    with col4:
+        high_conf = len(ai_opportunities[ai_opportunities['confidence'] >= 80])
+        st.metric("High Confidence", high_conf)
+    
+    # Filter controls for AI opportunities
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        min_edge = st.slider("Minimum Edge %", 0, 50, 5)
+    with col2:
+        leagues = ['All'] + list(ai_opportunities['league'].unique())
+        selected_league_ai = st.selectbox("League Filter", leagues, key="ai_league")
+    with col3:
+        bet_types = ['All'] + list(ai_opportunities['selection'].unique())
+        selected_bet_ai = st.selectbox("Bet Type", bet_types, key="ai_bet")
+    
+    # Apply filters
+    filtered_ai = ai_opportunities.copy()
+    filtered_ai = filtered_ai[filtered_ai['edge_percentage'] >= min_edge]
+    
+    if selected_league_ai != 'All':
+        filtered_ai = filtered_ai[filtered_ai['league'] == selected_league_ai]
+    if selected_bet_ai != 'All':
+        filtered_ai = filtered_ai[filtered_ai['selection'] == selected_bet_ai]
+    
+    # Display AI opportunities table
+    if not filtered_ai.empty:
+        st.subheader(f"📊 AI Opportunities ({len(filtered_ai)} matches filters)")
+        
+        display_ai = filtered_ai[['found_time', 'home_team', 'away_team', 'league', 'selection', 
+                                 'odds', 'edge_percentage', 'confidence']].copy()
+        display_ai.columns = ['Discovered', 'Home', 'Away', 'League', 'Bet', 'Odds', 'Edge %', 'Confidence']
+        
+        # Format the data
+        display_ai['Odds'] = display_ai['Odds'].round(2)
+        display_ai['Edge %'] = display_ai['Edge %'].round(1)
+        
+        # Color coding by edge percentage
+        def highlight_edge(row):
+            edge = row['Edge %']
+            if edge >= 20:
+                return ['background-color: #d4edda'] * len(row)  # Green for high edge
+            elif edge >= 10:
+                return ['background-color: #fff3cd'] * len(row)  # Yellow for medium edge
+            else:
+                return ['background-color: #f8f9fa'] * len(row)  # Light gray for low edge
+        
+        styled_ai = display_ai.style.apply(highlight_edge, axis=1)
+        st.dataframe(styled_ai, use_container_width=True)
+        
+        st.info("💡 **Manual Decision Making**: These are ALL opportunities found by the AI. You can review these and decide which ones to place manually, or let the Auto Bet Logger handle them automatically.")
+    
+    else:
+        st.warning("No opportunities match your filters")
+
+else:
+    st.info("🔍 **AI is scanning for opportunities...** New opportunities will appear here as the AI discovers them")
+
+st.markdown("---")
+
 # === CURRENT OPPORTUNITIES ===
 st.header("🔥 Current Opportunities")
 
