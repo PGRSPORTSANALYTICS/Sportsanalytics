@@ -128,17 +128,23 @@ class ROITracker:
             today = date.today()
             
             # Daily ROI (today) - using settlement date for accurate timeframes
-            daily_df = df[df['settled_date'] == str(today)]
+            daily_df = df[df['settled_date'] == str(today)].copy()
+            if isinstance(daily_df, pd.Series):
+                daily_df = daily_df.to_frame().T
             daily_roi = self._calculate_timeframe_roi(daily_df)
             
             # Weekly ROI (last 7 days)
             week_ago = today - timedelta(days=7)
-            weekly_df = df[df['settled_date'] >= str(week_ago)]
+            weekly_df = df[df['settled_date'] >= str(week_ago)].copy()
+            if isinstance(weekly_df, pd.Series):
+                weekly_df = weekly_df.to_frame().T
             weekly_roi = self._calculate_timeframe_roi(weekly_df)
             
             # Monthly ROI (last 30 days)
             month_ago = today - timedelta(days=30)
-            monthly_df = df[df['settled_date'] >= str(month_ago)]
+            monthly_df = df[df['settled_date'] >= str(month_ago)].copy()
+            if isinstance(monthly_df, pd.Series):
+                monthly_df = monthly_df.to_frame().T
             monthly_roi = self._calculate_timeframe_roi(monthly_df)
             
             # Progress toward target

@@ -458,9 +458,11 @@ else:
     if readiness.get('estimated_days_to_ready'):
         st.info(f"⏱️ **Estimated time to ready**: {readiness['estimated_days_to_ready']} days (if current performance maintains)")
 
+# Initialize ROI tracker for the dashboard
+tracker = ROITracker()
+
 # ROI History Chart (if available)
 try:
-    tracker = ROITracker()
     roi_history = tracker.get_roi_history(30)  # Last 30 days
     
     if not roi_history.empty:
@@ -636,6 +638,8 @@ if not ai_opportunities.empty:
     
     # Apply filters
     filtered_ai = ai_opportunities.copy()
+    if isinstance(filtered_ai, pd.Series):
+        filtered_ai = filtered_ai.to_frame().T
     filtered_ai = filtered_ai[filtered_ai['edge_percentage'] >= min_edge]
     
     if selected_league_ai != 'All':
@@ -643,13 +647,21 @@ if not ai_opportunities.empty:
     if selected_bet_ai != 'All':
         filtered_ai = filtered_ai[filtered_ai['selection'] == selected_bet_ai]
     
+    # Ensure it's a DataFrame after filtering
+    if isinstance(filtered_ai, pd.Series):
+        filtered_ai = filtered_ai.to_frame().T
+    
     # Display AI opportunities table
-    if not filtered_ai.empty:
+    if isinstance(filtered_ai, pd.DataFrame) and not filtered_ai.empty:
         st.subheader(f"📊 AI Opportunities ({len(filtered_ai)} matches filters)")
         
         display_ai = filtered_ai[['found_time', 'home_team', 'away_team', 'league', 'selection', 
                                  'odds', 'edge_percentage', 'confidence']].copy()
-        display_ai.columns = ['Discovered', 'Home', 'Away', 'League', 'Bet', 'Odds', 'Edge %', 'Confidence']
+        if isinstance(display_ai, pd.Series):
+            display_ai = display_ai.to_frame().T
+        # Ensure it's a DataFrame before setting columns
+        if isinstance(display_ai, pd.DataFrame):
+            display_ai.columns = ['Discovered', 'Home', 'Away', 'League', 'Bet', 'Odds', 'Edge %', 'Confidence']
         
         # Format the data
         display_ai['Odds'] = display_ai['Odds'].round(2)
@@ -665,7 +677,11 @@ if not ai_opportunities.empty:
             else:
                 return ['background-color: #f8f9fa'] * len(row)  # Light gray for low edge
         
-        styled_ai = display_ai.style.apply(highlight_edge, axis=1)
+        # Ensure we have a DataFrame for styling
+        if isinstance(display_ai, pd.DataFrame) and not display_ai.empty:
+            styled_ai = display_ai.style.apply(highlight_edge, axis=1)
+        else:
+            styled_ai = display_ai
         st.dataframe(styled_ai, width='stretch')
         
     
@@ -699,9 +715,11 @@ if perf is not None and perf['total_bets'] > 0:
         
     # Profit/Loss Chart
     recent = load_recent_bets()
-    if not recent.empty and 'profit_loss' in recent.columns:
+    if isinstance(recent, pd.DataFrame) and not recent.empty and 'profit_loss' in recent.columns:
         completed = recent[recent['outcome'].notna() & recent['profit_loss'].notna()].copy()
-        if not completed.empty:
+        if isinstance(completed, pd.Series):
+            completed = completed.to_frame().T
+        if isinstance(completed, pd.DataFrame) and not completed.empty:
             completed['cumulative_profit'] = completed['profit_loss'].fillna(0).cumsum()
             
             fig = px.line(completed, y='cumulative_profit', 
@@ -768,13 +786,18 @@ if not historical_bets.empty:
         filtered_bets = filtered_bets[filtered_bets['league'] == selected_league]
     
     if show_count != "All":
-        filtered_bets = filtered_bets.head(show_count)
+        if isinstance(filtered_bets, pd.DataFrame):
+            filtered_bets = filtered_bets.head(int(show_count))
+        elif isinstance(filtered_bets, pd.Series):
+            filtered_bets = filtered_bets.head(int(show_count)).to_frame().T
     
     # === WIN/TOTAL RATIO PROMINENTLY DISPLAYED ===
     completed_bets = historical_bets[historical_bets['outcome'].notna()]
     # Only count PLACED bets without outcomes as truly pending
     placed_bets = historical_bets[historical_bets['status'] == 'placed']
-    pending_count = len(placed_bets[placed_bets['outcome'].isna()])
+    if isinstance(placed_bets, pd.Series):
+        placed_bets = placed_bets.to_frame().T
+    pending_count = len(placed_bets[placed_bets['outcome'].isna()]) if isinstance(placed_bets, pd.DataFrame) else 0
     
     if not completed_bets.empty:
         wins = len(completed_bets[completed_bets['outcome'] == 'win'])
@@ -810,8 +833,12 @@ if not historical_bets.empty:
     
     display_df = filtered_bets[['bet_time', 'home_team', 'away_team', 'selection', 
                                'odds', 'edge_percentage', 'stake', 'outcome', 'profit_loss']].copy()
-    display_df.columns = ['Date', 'Home Team', 'Away Team', 'Bet', 'Odds', 
-                         'Edge %', 'Stake $', 'Result', 'P&L $']
+    if isinstance(display_df, pd.Series):
+        display_df = display_df.to_frame().T
+    # Ensure it's a DataFrame before setting columns
+    if isinstance(display_df, pd.DataFrame):
+        display_df.columns = ['Date', 'Home Team', 'Away Team', 'Bet', 'Odds', 
+                             'Edge %', 'Stake $', 'Result', 'P&L $']
     
     # Format numbers
     display_df['Odds'] = display_df['Odds'].round(2)
@@ -830,7 +857,11 @@ if not historical_bets.empty:
         else:
             return ['background-color: #f0f0f0'] * len(row)  # Gray for void
     
-    styled_df = display_df.style.apply(highlight_results, axis=1)
+    # Ensure we have a DataFrame for styling
+    if isinstance(display_df, pd.DataFrame) and not display_df.empty:
+        styled_df = display_df.style.apply(highlight_results, axis=1)
+    else:
+        styled_df = display_df
     st.dataframe(styled_df, width='stretch')
     
     # Monthly performance breakdown
@@ -838,7 +869,13 @@ if not historical_bets.empty:
         st.subheader("📅 Monthly Performance Breakdown")
         
         completed_copy = completed_bets.copy()
-        completed_copy['month'] = pd.to_datetime(completed_copy['bet_time']).dt.strftime('%Y-%m')
+        if isinstance(completed_copy, pd.Series):
+            completed_copy = completed_copy.to_frame().T
+        # Ensure proper datetime conversion and dt accessor usage
+        if isinstance(completed_copy, pd.DataFrame) and not completed_copy.empty:
+            completed_copy['month'] = pd.to_datetime(completed_copy['bet_time']).dt.strftime('%Y-%m')
+        else:
+            completed_copy['month'] = ''
         
         monthly_stats = completed_copy.groupby('month').agg({
             'outcome': 'count',
