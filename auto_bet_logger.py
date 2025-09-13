@@ -11,6 +11,13 @@ import random
 from datetime import datetime, timedelta
 import logging
 
+# Import configuration for tips-selling mode
+try:
+    from config import AUTO_BET_ENABLED, TIPS_SELLING_MODE
+except ImportError:
+    AUTO_BET_ENABLED = False  # Default: disable auto-betting for tips selling
+    TIPS_SELLING_MODE = True
+
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -21,6 +28,11 @@ class AutoBetLogger:
         
     def auto_place_bets(self):
         """Automatically mark recent AI opportunities as placed bets"""
+        if not AUTO_BET_ENABLED:
+            logger.info("🛑 Auto-betting DISABLED - Tips selling mode active")
+            logger.info("💡 Focus on quality tips for manual review instead of auto-betting")
+            return 0
+            
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()

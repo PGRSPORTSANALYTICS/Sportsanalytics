@@ -143,13 +143,14 @@ class ResultsScraper:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
-            # Get all pending bets (no outcome yet) with valid match dates
+            # Get pending bets (no outcome yet) for PAST dates only - avoid 404s on future dates
             cursor.execute('''
                 SELECT id, home_team, away_team, selection, match_date, odds, stake
                 FROM football_opportunities 
                 WHERE (outcome IS NULL OR outcome = '') 
                   AND match_date IS NOT NULL 
                   AND match_date != ''
+                  AND DATE(match_date) <= DATE('now')
                 ORDER BY match_date
             ''')
             
@@ -158,33 +159,43 @@ class ResultsScraper:
             
             updated_count = 0
             
+            # Process unique dates to avoid redundant API calls
+            unique_dates = {}
             for bet in pending_bets:
                 bet_id, home_team, away_team, selection, match_date, odds, stake = bet
-                
-                # Get results for this match date
+                if match_date not in unique_dates:
+                    unique_dates[match_date] = []
+                unique_dates[match_date].append(bet)
+            
+            for match_date, date_bets in unique_dates.items():
+                # Get results once per date
                 results = self.get_results_for_date(match_date)
                 
-                # Find matching result
-                match_result = None
-                for result in results:
-                    if (self.team_match(result['home_team'], home_team) and 
-                        self.team_match(result['away_team'], away_team)):
-                        match_result = result
-                        break
-                
-                if match_result:
-                    outcome = self.determine_bet_outcome(selection, match_result)
-                    profit_loss = self.calculate_profit_loss(outcome, odds, stake)
+                # Process all bets for this date
+                for bet in date_bets:
+                    bet_id, home_team, away_team, selection, match_date, odds, stake = bet
                     
-                    # Update bet outcome
-                    cursor.execute('''
-                        UPDATE football_opportunities 
-                        SET outcome = ?, profit_loss = ?, updated_at = ?
-                        WHERE id = ?
-                    ''', (outcome, profit_loss, datetime.now().isoformat(), bet_id))
+                    # Find matching result
+                    match_result = None
+                    for result in results:
+                        if (self.team_match(result['home_team'], home_team) and 
+                            self.team_match(result['away_team'], away_team)):
+                            match_result = result
+                            break
                     
-                    updated_count += 1
-                    logger.info(f"✅ Updated bet {bet_id}: {home_team} vs {away_team} | {selection} = {outcome}")
+                    if match_result:
+                        outcome = self.determine_bet_outcome(selection, match_result)
+                        profit_loss = self.calculate_profit_loss(outcome, odds, stake)
+                        
+                        # Update bet outcome
+                        cursor.execute('''
+                            UPDATE football_opportunities 
+                            SET outcome = ?, profit_loss = ?, updated_at = ?
+                            WHERE id = ?
+                        ''', (outcome, profit_loss, datetime.now().isoformat(), bet_id))
+                        
+                        updated_count += 1
+                        logger.info(f"✅ Updated bet {bet_id}: {home_team} vs {away_team} | {selection} = {outcome}")
             
             conn.commit()
             conn.close()
