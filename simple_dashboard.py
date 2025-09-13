@@ -231,7 +231,10 @@ def get_tips_stats():
         conn = sqlite3.connect('data/real_football.db')
         cursor = conn.cursor()
         
-        # Get stats for tips selling
+        # Get stats for tips selling (today's tips)
+        from datetime import date
+        today = date.today().isoformat()
+        
         cursor.execute("""
             SELECT 
                 COUNT(CASE WHEN status = 'pending' THEN 1 END) as total_tips,
@@ -239,8 +242,8 @@ def get_tips_stats():
                 COUNT(CASE WHEN recommended_tier = 'standard' THEN 1 END) as standard_tips,
                 ROUND(AVG(CASE WHEN recommended_tier IS NOT NULL THEN quality_score END), 1) as avg_quality
             FROM football_opportunities
-            WHERE recommended_date = '2025-09-13'
-        """)
+            WHERE recommended_date = ?
+        """, (today,))
         
         stats = cursor.fetchone()
         conn.close()
@@ -310,7 +313,7 @@ def load_finished_bets():
 pending_bets = load_pending_bets()
 
 if not pending_bets.empty:
-    st.info(f"ℹ️ {len(pending_bets)} pending bets (automatically managed by Auto Bet Logger)")
+    st.warning(f"⚠️ {len(pending_bets)} old bets pending results - tips selling mode focuses on new recommendations")
 else:
     st.success("🎉 No pending bets! All results are up to date.")
 
@@ -404,7 +407,6 @@ if not ai_opportunities.empty:
         styled_ai = display_ai.style.apply(highlight_edge, axis=1)
         st.dataframe(styled_ai, width='stretch')
         
-        st.info("💡 **Manual Decision Making**: These are ALL opportunities found by the AI. You can review these and decide which ones to place manually, or let the Auto Bet Logger handle them automatically.")
     
     else:
         st.warning("No opportunities match your filters")
