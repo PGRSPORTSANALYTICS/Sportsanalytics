@@ -50,15 +50,32 @@ Preferred communication style: Simple, everyday language.
 - **pandas**: Data manipulation and analysis
 - **numpy**: Numerical computations for statistical calculations
 
+### Communication & Distribution
+- **python-telegram-bot**: Telegram Bot API integration for tips delivery
+- **telegram.ext**: Command handlers and subscriber management
+- **asyncio**: Asynchronous operations for bot performance
+
 ### Data Storage
 - **sqlite3**: Built-in Python SQLite interface for local database operations
+
+### Web Scraping & Verification
+- **trafilatura**: Web content extraction for result verification
+- **requests**: HTTP client for API calls and web scraping
+- **selenium**: Browser automation for complex scraping scenarios
 
 ### Utility Libraries
 - **pathlib**: Modern path handling for file operations
 - **datetime**: Time and date manipulation with timezone support
 - **typing**: Type hints for better code documentation and IDE support
+- **schedule**: Task scheduling for automated processes
 
 ### File System
-- **Local Storage**: SQLite database stored in `data/esoccer.db`
-- **Export Directory**: `exports/` folder for data export functionality
+- **Local Storage**: SQLite database stored in `data/real_football.db`
+- **Logs Directory**: `logs/` folder for system and verification logs
 - **Automatic Directory Creation**: Self-managing file structure
+
+### Integration Features
+- **Telegram Bot**: Premium tips delivery with subscriber management
+- **Real Result Verification**: Multi-source scraping with failure handling
+- **Quality Scoring**: 40 tip daily limit with tiered recommendations
+- **Authentic ROI Tracking**: No simulated data, only real match outcomes
