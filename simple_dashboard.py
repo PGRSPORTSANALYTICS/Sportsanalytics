@@ -219,28 +219,28 @@ if not standard_tips.empty:
 
 st.markdown("---")
 
-# === AUTOMATIC BET LOGGING ===
-st.header("🤖 Automatic Bet Logging")
+# === TIPS SELLING DASHBOARD ===
+st.header("💡 Tips Analytics & Performance")
 
-st.info("🔄 **Auto-Logger Running:** AI opportunities are automatically treated as placed bets and results are tracked automatically!")
+st.success("🎯 **Tips Selling Mode Active** - Focus on quality recommendations with verified ROI tracking")
 
-# Show auto-logging status
+# Show tips-focused statistics
 @st.cache_data(ttl=30)
-def get_auto_logging_stats():
+def get_tips_stats():
     try:
         conn = sqlite3.connect('data/real_football.db')
         cursor = conn.cursor()
         
-        # Get stats for auto-placed bets
+        # Get stats for tips selling
         cursor.execute("""
             SELECT 
-                COUNT(*) as total_auto_bets,
-                COUNT(CASE WHEN status = 'placed' THEN 1 END) as placed_bets,
-                COUNT(CASE WHEN outcome IS NOT NULL AND outcome != '' THEN 1 END) as completed_bets,
-                SUM(CASE WHEN status = 'placed' THEN stake ELSE 0 END) as total_staked
+                COUNT(CASE WHEN status = 'pending' THEN 1 END) as total_tips,
+                COUNT(CASE WHEN recommended_tier = 'premium' THEN 1 END) as premium_tips,
+                COUNT(CASE WHEN recommended_tier = 'standard' THEN 1 END) as standard_tips,
+                ROUND(AVG(CASE WHEN recommended_tier IS NOT NULL THEN quality_score END), 1) as avg_quality
             FROM football_opportunities
-            WHERE timestamp >= ?
-        """, (datetime.now().timestamp() - (7 * 24 * 60 * 60),))  # Last 7 days
+            WHERE recommended_date = '2025-09-13'
+        """)
         
         stats = cursor.fetchone()
         conn.close()
@@ -248,99 +248,21 @@ def get_auto_logging_stats():
     except:
         return (0, 0, 0, 0)
 
-auto_stats = get_auto_logging_stats()
+tips_stats = get_tips_stats()
 
 col1, col2, col3, col4 = st.columns(4)
 with col1:
-    st.metric("Auto Opportunities", auto_stats[0])
+    st.metric("📊 Total Tips Today", tips_stats[0], f"Max 40/day")
 with col2:
-    st.metric("Auto-Placed Bets", auto_stats[1])
+    st.metric("🌟 Premium Tips", tips_stats[1], f"Top quality")
 with col3:
-    st.metric("Results Updated", auto_stats[2])
+    st.metric("⭐ Standard Tips", tips_stats[2], f"Good value")
 with col4:
-    st.metric("Total Auto-Staked", f"${auto_stats[3]:.2f}")
+    avg_quality = tips_stats[3] if tips_stats[3] else 0
+    st.metric("🎯 Avg Quality Score", f"{avg_quality}/100", f"AI confidence")
 
-# Manual controls
-st.subheader("🎛️ Manual Controls")
-
-col1, col2 = st.columns(2)
-with col1:
-    if st.button("🔄 Auto-Place Recent Opportunities", help="Convert recent AI opportunities to placed bets"):
-        try:
-            conn = sqlite3.connect('data/real_football.db')
-            cursor = conn.cursor()
-            
-            # Auto-place high-quality recent opportunities
-            cursor.execute("""
-                UPDATE football_opportunities 
-                SET status = 'placed', 
-                    stake = CASE 
-                        WHEN edge_percentage >= 20 THEN 15.0
-                        WHEN edge_percentage >= 10 THEN 12.0
-                        ELSE 10.0
-                    END,
-                    updated_at = ?
-                WHERE status != 'placed' 
-                AND edge_percentage >= 5.0 
-                AND odds >= 1.7
-                AND timestamp >= ?
-            """, (datetime.now().isoformat(), datetime.now().timestamp() - (24 * 60 * 60)))
-            
-            affected = cursor.rowcount
-            conn.commit()
-            conn.close()
-            
-            st.success(f"✅ Auto-placed {affected} high-quality bets!")
-            st.rerun()
-            
-        except Exception as e:
-            st.error(f"Error auto-placing bets: {e}")
-
-with col2:
-    if st.button("📊 Auto-Update Results", help="Fetch and update results for completed matches"):
-        try:
-            conn = sqlite3.connect('data/real_football.db')
-            cursor = conn.cursor()
-            
-            # Simulate updating results for completed matches (simplified)
-            cursor.execute("""
-                SELECT id, home_team, away_team, selection, odds, stake, match_date
-                FROM football_opportunities 
-                WHERE status = 'placed' 
-                AND (outcome IS NULL OR outcome = '')
-                AND match_date IS NOT NULL
-                AND DATE(match_date) <= DATE('now')
-                LIMIT 10
-            """)
-            
-            bets_to_update = cursor.fetchall()
-            updated_count = 0
-            
-            for bet in bets_to_update:
-                bet_id, home, away, selection, odds, stake, match_date = bet
-                
-                # Simulate realistic bet outcomes (70% win rate for demonstration)
-                import random
-                outcome = 'win' if random.random() > 0.3 else 'loss'
-                
-                profit_loss = ((odds - 1) * stake) if outcome == 'win' else -stake
-                
-                cursor.execute("""
-                    UPDATE football_opportunities 
-                    SET outcome = ?, profit_loss = ?, updated_at = ?
-                    WHERE id = ?
-                """, (outcome, profit_loss, datetime.now().isoformat(), bet_id))
-                
-                updated_count += 1
-            
-            conn.commit()
-            conn.close()
-            
-            st.success(f"✅ Updated results for {updated_count} completed matches!")
-            st.rerun()
-            
-        except Exception as e:
-            st.error(f"Error updating results: {e}")
+# Tips Selling Mode - No auto-betting controls needed
+st.info("🎯 **Tips Selling Mode Active** - Focus on quality tip recommendations instead of auto-betting.")
 
 st.markdown("---")
 
