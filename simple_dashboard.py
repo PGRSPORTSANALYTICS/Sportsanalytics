@@ -96,6 +96,144 @@ def load_recent_bets():
 st.title("🏆 Football Betting Dashboard")
 st.markdown("**Smart betting opportunities with AI analysis**")
 
+# === BET LOGGING SECTION ===
+st.header("📝 Log Your Bets")
+
+# Manual bet logging form
+st.subheader("➕ Add New Bet")
+
+with st.form("log_bet_form"):
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        home_team = st.text_input("Home Team", placeholder="e.g., Arsenal")
+        away_team = st.text_input("Away Team", placeholder="e.g., Chelsea")
+        selection = st.selectbox("Bet Type", [
+            "Over 2.5 Goals", "Under 2.5 Goals", "BTTS Yes", "BTTS No", 
+            "Over 1.5 Goals", "Under 1.5 Goals", "Over 3.5 Goals", "Under 3.5 Goals",
+            "Home Win", "Away Win", "Draw"
+        ])
+        
+    with col2:
+        odds = st.number_input("Odds", min_value=1.01, value=2.00, step=0.01, format="%.2f")
+        stake = st.number_input("Stake ($)", min_value=0.01, value=10.00, step=0.01, format="%.2f")
+        league = st.text_input("League", placeholder="e.g., Premier League")
+        match_date = st.date_input("Match Date")
+    
+    submitted = st.form_submit_button("🎯 Log This Bet")
+    
+    if submitted and home_team and away_team:
+        try:
+            conn = sqlite3.connect('data/real_football.db')
+            cursor = conn.cursor()
+            
+            # Insert the manually logged bet
+            cursor.execute("""
+                INSERT INTO football_opportunities 
+                (timestamp, home_team, away_team, selection, odds, stake, league, match_date, 
+                 edge_percentage, confidence, analysis, status, market)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                datetime.now().timestamp(),
+                home_team,
+                away_team,
+                selection,
+                odds,
+                stake,
+                league,
+                str(match_date),
+                0,  # edge_percentage - will be calculated
+                80,  # confidence - default
+                f"Manually logged bet: {home_team} vs {away_team}",
+                "manually_logged",
+                "goals" if "Goal" in selection or "BTTS" in selection else "match_result"
+            ))
+            
+            conn.commit()
+            conn.close()
+            
+            st.success(f"✅ Bet logged: {home_team} vs {away_team} - {selection} @ {odds:.2f}")
+            st.rerun()
+            
+        except Exception as e:
+            st.error(f"Error logging bet: {e}")
+
+# Update bet outcomes section
+st.subheader("🎯 Update Bet Results")
+
+@st.cache_data(ttl=10)
+def load_pending_bets():
+    try:
+        conn = sqlite3.connect('data/real_football.db')
+        query = """
+        SELECT id, home_team, away_team, selection, odds, stake, 
+               datetime(timestamp, 'unixepoch', 'localtime') as bet_time
+        FROM football_opportunities 
+        WHERE outcome IS NULL OR outcome = ''
+        ORDER BY timestamp DESC
+        """
+        df = pd.read_sql_query(query, conn)
+        conn.close()
+        return df
+    except:
+        return pd.DataFrame()
+
+pending_bets = load_pending_bets()
+
+if not pending_bets.empty:
+    st.write(f"**{len(pending_bets)} pending bets** waiting for results:")
+    
+    for _, bet in pending_bets.iterrows():
+        with st.container():
+            col1, col2, col3 = st.columns([4, 2, 2])
+            
+            with col1:
+                st.write(f"**{bet['home_team']} vs {bet['away_team']}**")
+                st.write(f"{bet['selection']} @ {bet['odds']:.2f} (${bet['stake']:.2f})")
+                
+            with col2:
+                outcome = st.selectbox(
+                    "Result", 
+                    ["Select...", "Win", "Loss", "Void"], 
+                    key=f"outcome_{bet['id']}"
+                )
+                
+            with col3:
+                if st.button("Update", key=f"update_{bet['id']}"):
+                    if outcome != "Select...":
+                        try:
+                            conn = sqlite3.connect('data/real_football.db')
+                            cursor = conn.cursor()
+                            
+                            # Calculate profit/loss
+                            if outcome == "Win":
+                                profit_loss = (bet['odds'] - 1) * bet['stake']
+                            elif outcome == "Loss":
+                                profit_loss = -bet['stake']
+                            else:  # Void
+                                profit_loss = 0
+                            
+                            cursor.execute("""
+                                UPDATE football_opportunities 
+                                SET outcome = ?, profit_loss = ?, updated_at = ?
+                                WHERE id = ?
+                            """, (outcome.lower(), profit_loss, datetime.now().isoformat(), bet['id']))
+                            
+                            conn.commit()
+                            conn.close()
+                            
+                            st.success(f"✅ Updated: {outcome}")
+                            st.rerun()
+                            
+                        except Exception as e:
+                            st.error(f"Error updating bet: {e}")
+                            
+            st.divider()
+else:
+    st.info("ℹ️ No pending bets to update")
+
+st.markdown("---")
+
 # === CURRENT OPPORTUNITIES ===
 st.header("🔥 Current Opportunities")
 
