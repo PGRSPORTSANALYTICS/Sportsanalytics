@@ -344,8 +344,8 @@ if perf is not None and perf['total_bets'] > 0:
 else:
     st.info("📈 Performance tracking will appear after placing bets")
 
-# === ALL BETTING HISTORY & RESULTS ===
-st.header("📚 All Betting History & Results")
+# === CURRENT BETTING ACTIVITY ===
+st.header("📊 Current Betting Activity")
 
 @st.cache_data(ttl=60)
 def load_historical_bets():
@@ -436,8 +436,8 @@ if not historical_bets.empty:
     # Filter controls
     st.subheader("🔍 Filter & Search")
     
-    # Display combined history table
-    st.subheader("📊 Complete Betting History")
+    # Display current betting table
+    st.subheader("📊 Current Bets & Results")
     
     display_df = filtered_bets[['bet_time', 'home_team', 'away_team', 'selection', 
                                'odds', 'edge_percentage', 'stake', 'outcome', 'profit_loss']].copy()
@@ -490,7 +490,7 @@ if not historical_bets.empty:
         st.dataframe(monthly_stats, use_container_width=True)
 
 else:
-    st.info("📝 Complete betting history will appear here after placing bets")
+    st.info("📝 Current betting activity will appear here after placing bets")
 
 
 # Auto-refresh
