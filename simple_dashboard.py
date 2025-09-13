@@ -93,8 +93,131 @@ def load_recent_bets():
         return pd.DataFrame()
 
 # Main Dashboard
-st.title("🏆 Football Betting Dashboard")
-st.markdown("**Smart betting opportunities with AI analysis**")
+st.title("🏆 Premium Football Tips Platform")
+st.markdown("**AI-Powered Quality Tips with Daily Limits & ROI Focus**")
+
+# === TOP RECOMMENDED TIPS SECTION ===
+st.header("🌟 Today's Recommended Tips")
+
+@st.cache_data(ttl=60)
+def load_recommended_tips():
+    """Load today's recommended tips with quality scoring"""
+    try:
+        from datetime import date
+        today = date.today().isoformat()
+        
+        conn = sqlite3.connect('data/real_football.db')
+        
+        # Get premium tips (top 10)
+        premium_query = """
+        SELECT home_team, away_team, league, selection, odds, edge_percentage, 
+               confidence, quality_score, daily_rank, match_date, kickoff_time,
+               datetime(timestamp, 'unixepoch', 'localtime') as discovered
+        FROM football_opportunities 
+        WHERE recommended_date = ? AND recommended_tier = 'premium'
+        ORDER BY daily_rank ASC
+        """
+        premium_df = pd.read_sql_query(premium_query, conn, params=[today])
+        
+        # Get standard tips (next 30)
+        standard_query = """
+        SELECT home_team, away_team, league, selection, odds, edge_percentage, 
+               confidence, quality_score, daily_rank, match_date, kickoff_time,
+               datetime(timestamp, 'unixepoch', 'localtime') as discovered
+        FROM football_opportunities 
+        WHERE recommended_date = ? AND recommended_tier = 'standard'
+        ORDER BY daily_rank ASC
+        """
+        standard_df = pd.read_sql_query(standard_query, conn, params=[today])
+        
+        conn.close()
+        return premium_df, standard_df
+    except Exception as e:
+        st.error(f"Error loading recommended tips: {e}")
+        return pd.DataFrame(), pd.DataFrame()
+
+premium_tips, standard_tips = load_recommended_tips()
+
+# Display daily tip usage metrics
+col1, col2, col3, col4 = st.columns(4)
+with col1:
+    st.metric("🌟 Premium Tips", f"{len(premium_tips)}/10", "High-Quality Picks")
+with col2:
+    st.metric("⭐ Standard Tips", f"{len(standard_tips)}/30", "Good Value Picks")
+with col3:
+    total_tips = len(premium_tips) + len(standard_tips)
+    st.metric("📊 Total Daily Tips", f"{total_tips}/40", "Daily Limit Applied")
+with col4:
+    if not premium_tips.empty:
+        avg_score = premium_tips['quality_score'].mean()
+        st.metric("🎯 Avg Quality Score", f"{avg_score:.1f}/100", "AI Confidence")
+
+# Premium Tips Section
+if not premium_tips.empty:
+    st.subheader("🌟 Premium Tips (Top 10)")
+    st.success("**Highest quality opportunities with the best ROI potential**")
+    
+    for idx, tip in premium_tips.iterrows():
+        with st.expander(f"#{tip['daily_rank']} {tip['home_team']} vs {tip['away_team']} - {tip['selection']} ({tip['quality_score']:.1f} pts)", expanded=False):
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.write(f"**🏟️ Match:** {tip['home_team']} vs {tip['away_team']}")
+                st.write(f"**🏆 League:** {tip['league']}")
+                st.write(f"**⚽ Bet:** {tip['selection']}")
+                
+            with col2:
+                st.write(f"**📊 Odds:** {tip['odds']:.2f}")
+                st.write(f"**📈 Edge:** {tip['edge_percentage']:.1f}%")
+                st.write(f"**🎯 Confidence:** {tip['confidence']}%")
+                
+            with col3:
+                st.write(f"**⭐ Quality Score:** {tip['quality_score']:.1f}/100")
+                st.write(f"**🗓️ Match Date:** {tip['match_date']}")
+                st.write(f"**⏰ Kickoff:** {tip['kickoff_time']}")
+                
+            # Quality indicators
+            if tip['quality_score'] >= 85:
+                st.success("🔥 **EXCEPTIONAL QUALITY** - Highest recommendation level")
+            elif tip['quality_score'] >= 80:
+                st.info("✨ **HIGH QUALITY** - Strong recommendation")
+            else:
+                st.warning("⚡ **GOOD QUALITY** - Solid opportunity")
+
+else:
+    st.info("🔍 **Generating today's premium tips...** Check back shortly for the top 10 recommendations")
+
+# Standard Tips Section (collapsed by default)
+if not standard_tips.empty:
+    st.subheader("⭐ Standard Tips (Next 30)")
+    
+    with st.expander(f"View {len(standard_tips)} Standard Quality Tips", expanded=False):
+        st.info("**Good value opportunities - solid picks with decent ROI potential**")
+        
+        # Display as table for standard tips
+        display_standard = standard_tips[['daily_rank', 'home_team', 'away_team', 'league', 'selection', 
+                                        'odds', 'edge_percentage', 'confidence', 'quality_score']].copy()
+        display_standard.columns = ['Rank', 'Home', 'Away', 'League', 'Bet', 'Odds', 'Edge %', 'Confidence', 'Score']
+        
+        # Format the data
+        display_standard['Odds'] = display_standard['Odds'].round(2)
+        display_standard['Edge %'] = display_standard['Edge %'].round(1)
+        display_standard['Score'] = display_standard['Score'].round(1)
+        
+        # Color coding by quality score
+        def highlight_quality(row):
+            score = row['Score']
+            if score >= 80:
+                return ['background-color: #d4edda'] * len(row)  # Green for high quality
+            elif score >= 70:
+                return ['background-color: #fff3cd'] * len(row)  # Yellow for medium quality
+            else:
+                return ['background-color: #f8f9fa'] * len(row)  # Light gray for standard quality
+        
+        styled_standard = display_standard.style.apply(highlight_quality, axis=1)
+        st.dataframe(styled_standard, width='stretch')
+
+st.markdown("---")
 
 # === AUTOMATIC BET LOGGING ===
 st.header("🤖 Automatic Bet Logging")
@@ -357,7 +480,7 @@ if not ai_opportunities.empty:
                 return ['background-color: #f8f9fa'] * len(row)  # Light gray for low edge
         
         styled_ai = display_ai.style.apply(highlight_edge, axis=1)
-        st.dataframe(styled_ai, use_container_width=True)
+        st.dataframe(styled_ai, width='stretch')
         
         st.info("💡 **Manual Decision Making**: These are ALL opportunities found by the AI. You can review these and decide which ones to place manually, or let the Auto Bet Logger handle them automatically.")
     
@@ -560,7 +683,7 @@ if not historical_bets.empty:
             return ['background-color: #f0f0f0'] * len(row)  # Gray for void
     
     styled_df = display_df.style.apply(highlight_results, axis=1)
-    st.dataframe(styled_df, use_container_width=True)
+    st.dataframe(styled_df, width='stretch')
     
     # Monthly performance breakdown
     if not completed_bets.empty:
@@ -585,7 +708,7 @@ if not historical_bets.empty:
             losses_month = len(month_data[month_data['outcome'] == 'loss'])
             monthly_stats.loc[month, 'Win/Loss'] = f"{wins_month}/{wins_month + losses_month}"
         
-        st.dataframe(monthly_stats, use_container_width=True)
+        st.dataframe(monthly_stats, width='stretch')
 
 else:
     st.info("📝 Current betting activity will appear here after placing bets")
