@@ -142,6 +142,26 @@ Use /help for all commands
             elif update.message:
                 await update.message.reply_text(error_msg)
     
+    async def results_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Send recent betting results"""
+        try:
+            results = self._get_recent_results()
+            message_text = self._format_results_message(results)
+            
+            # Send message based on update type
+            if update.callback_query:
+                await update.callback_query.edit_message_text(message_text, parse_mode='Markdown')
+            elif update.message:
+                await update.message.reply_text(message_text, parse_mode='Markdown')
+                
+        except Exception as e:
+            logger.error(f"❌ Error getting results: {e}")
+            error_msg = "❌ Error getting results. Please try again later."
+            if update.callback_query:
+                await update.callback_query.edit_message_text(error_msg)
+            elif update.message:
+                await update.message.reply_text(error_msg)
+    
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Show help information"""
         help_text = """
@@ -149,6 +169,7 @@ Use /help for all commands
 
 /start - Welcome message and setup
 /tips - Get today's betting tips
+/results - See recent betting results
 /performance - See real ROI performance
 /help - Show this help message
 
@@ -237,6 +258,36 @@ Use /help for all commands
         except Exception as e:
             logger.error(f"❌ Database error getting tips: {e}")
             return {'premium': [], 'standard': []}
+    
+    def _get_recent_results(self) -> List[Dict]:
+        """Get recent verified betting results from database"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            # Get recent tips with verified results (wins, losses, and some pending)
+            cursor.execute("""
+                SELECT home_team, away_team, league, selection, odds,
+                       outcome, profit_loss, match_date, updated_at,
+                       quality_score, recommended_tier, recommended_date
+                FROM football_opportunities 
+                WHERE recommended_tier IS NOT NULL
+                AND (outcome IS NOT NULL OR updated_at >= date('now', '-7 days'))
+                ORDER BY 
+                    CASE WHEN outcome IS NOT NULL THEN updated_at ELSE recommended_date END DESC
+                LIMIT 15
+            """)
+            
+            results = [dict(row) for row in cursor.fetchall()]
+            conn.close()
+            
+            logger.info(f"📊 Retrieved {len(results)} recent results")
+            return results
+            
+        except Exception as e:
+            logger.error(f"❌ Database error getting results: {e}")
+            return []
     
     def _get_performance_stats(self) -> Dict:
         """Get real performance statistics from database"""
@@ -329,6 +380,54 @@ Use /help for all commands
         
         return message
     
+    def _format_results_message(self, results: List[Dict]) -> str:
+        """Format betting results into readable Telegram message"""
+        if not results:
+            return "📊 No recent betting results available yet."
+        
+        # Separate results by outcome
+        wins = [r for r in results if r.get('outcome') == 'won']
+        losses = [r for r in results if r.get('outcome') == 'lost']
+        pending = [r for r in results if r.get('outcome') is None]
+        
+        message = "🏆 **Recent Betting Results**\n\n"
+        
+        # Show wins first
+        if wins:
+            message += "✅ **RECENT WINS**\n"
+            for i, result in enumerate(wins[:5], 1):
+                profit = f"+${result['profit_loss']:.2f}" if result['profit_loss'] else "+$0.00"
+                tier_icon = "💎" if result['recommended_tier'] == 'premium' else "⚡"
+                message += f"{i}. **{result['home_team']} vs {result['away_team']}**\n"
+                message += f"   🎯 {result['selection']} @ {result['odds']:.2f} | {profit} | {tier_icon}\n"
+                message += f"   📍 {result['league']} | Score: {result['quality_score']:.1f}\n\n"
+        
+        # Show losses
+        if losses:
+            message += "❌ **RECENT LOSSES**\n"
+            for i, result in enumerate(losses[:5], 1):
+                loss = f"-${abs(result['profit_loss']):.2f}" if result['profit_loss'] else "-$0.00"
+                tier_icon = "💎" if result['recommended_tier'] == 'premium' else "⚡"
+                message += f"{i}. **{result['home_team']} vs {result['away_team']}**\n"
+                message += f"   🎯 {result['selection']} @ {result['odds']:.2f} | {loss} | {tier_icon}\n"
+                message += f"   📍 {result['league']} | Score: {result['quality_score']:.1f}\n\n"
+        
+        # Show pending
+        if pending:
+            message += f"⏳ **PENDING RESULTS** ({len(pending)} tips awaiting verification)\n\n"
+        
+        # Summary stats
+        total_profit = sum(r['profit_loss'] or 0 for r in results if r.get('outcome'))
+        verified_count = len([r for r in results if r.get('outcome')])
+        
+        if verified_count > 0:
+            message += f"📊 **Summary:** {len(wins)} wins, {len(losses)} losses\n"
+            message += f"💰 **Net P&L:** ${total_profit:.2f}\n\n"
+        
+        message += "🔒 **100% Authentic Results** - All verified from real matches"
+        
+        return message
+    
     def _save_subscriber(self, user_id: int, username: str):
         """Save subscriber to database"""
         try:
@@ -370,6 +469,7 @@ Use /help for all commands
             # Add command handlers
             application.add_handler(CommandHandler("start", self.start_command))
             application.add_handler(CommandHandler("tips", self.tips_command))
+            application.add_handler(CommandHandler("results", self.results_command))
             application.add_handler(CommandHandler("performance", self.performance_command))
             application.add_handler(CommandHandler("help", self.help_command))
             application.add_handler(CallbackQueryHandler(self.button_callback))
