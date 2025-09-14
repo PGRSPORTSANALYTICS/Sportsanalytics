@@ -187,30 +187,45 @@ Use /help for all commands
             await self.help_command(update, context)
     
     def _get_todays_tips(self) -> Dict[str, List[Dict]]:
-        """Get today's premium and standard tips from database"""
+        """Get today's premium and standard tips from database, or recent tips if none today"""
         try:
             conn = sqlite3.connect(self.db_path)
             conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
             
             today = date.today().isoformat()
             
-            cursor = conn.cursor()
+            # First try to get today's tips
             cursor.execute("""
                 SELECT home_team, away_team, league, market, selection, odds,
                        quality_score, edge_percentage, confidence, match_date,
-                       kickoff_time, recommended_tier
+                       kickoff_time, recommended_tier, recommended_date
                 FROM football_opportunities 
                 WHERE recommended_date = ? 
                 AND recommended_tier IS NOT NULL
                 ORDER BY daily_rank ASC
             """, (today,))
             
-            all_tips = [dict(row) for row in cursor.fetchall()]
+            today_tips = [dict(row) for row in cursor.fetchall()]
+            
+            # If no tips for today, get the most recent tips from last 3 days
+            if not today_tips:
+                cursor.execute("""
+                    SELECT home_team, away_team, league, market, selection, odds,
+                           quality_score, edge_percentage, confidence, match_date,
+                           kickoff_time, recommended_tier, recommended_date
+                    FROM football_opportunities 
+                    WHERE recommended_tier IS NOT NULL
+                    AND recommended_date >= date('now', '-3 days')
+                    ORDER BY recommended_date DESC, daily_rank ASC
+                """)
+                today_tips = [dict(row) for row in cursor.fetchall()]
+            
             conn.close()
             
             # Separate premium and standard tips
-            premium_tips = [tip for tip in all_tips if tip['recommended_tier'] == 'premium']
-            standard_tips = [tip for tip in all_tips if tip['recommended_tier'] == 'standard']
+            premium_tips = [tip for tip in today_tips if tip['recommended_tier'] == 'premium']
+            standard_tips = [tip for tip in today_tips if tip['recommended_tier'] == 'standard']
             
             logger.info(f"📊 Retrieved {len(premium_tips)} premium + {len(standard_tips)} standard tips")
             
@@ -259,7 +274,16 @@ Use /help for all commands
     
     def _format_tips_message(self, tips: Dict[str, List[Dict]]) -> str:
         """Format tips into readable Telegram message"""
-        message = f"🏆 **Premium Football Tips - {date.today().strftime('%d/%m/%Y')}**\n\n"
+        # Get the date from the first tip, or use today if no tips
+        tip_date = date.today()
+        all_tips = tips['premium'] + tips['standard'] 
+        if all_tips:
+            tip_date_str = all_tips[0].get('recommended_date')
+            if tip_date_str:
+                from datetime import datetime
+                tip_date = datetime.fromisoformat(tip_date_str).date()
+        
+        message = f"🏆 **Premium Football Tips - {tip_date.strftime('%d/%m/%Y')}**\n\n"
         
         if tips['premium']:
             message += "💎 **PREMIUM TIPS** (Score 8.0+)\n"
