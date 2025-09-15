@@ -1192,39 +1192,88 @@ class RealFootballChampion:
         """Save opportunity to database (with duplicate prevention)"""
         cursor = self.conn.cursor()
         
-        # Check if this exact opportunity already exists
+        # Check if this exact opportunity already exists TODAY
+        today_start = int(time.time()) - (24 * 60 * 60)  # 24 hours ago
         cursor.execute('''
             SELECT COUNT(*) FROM football_opportunities 
             WHERE home_team = ? AND away_team = ? AND selection = ? 
-            AND status = 'pending'
-        ''', (opportunity.home_team, opportunity.away_team, opportunity.selection))
+            AND status = 'pending' AND timestamp > ?
+        ''', (opportunity.home_team, opportunity.away_team, opportunity.selection, today_start))
         
-        if cursor.fetchone()[0] > 0:
+        duplicate_count = cursor.fetchone()[0]
+        if duplicate_count > 0:
             # Duplicate found, skip saving
+            print(f"🔄 SKIPPED DUPLICATE: {opportunity.home_team} vs {opportunity.away_team} - {opportunity.selection}")
             return
+        else:
+            print(f"🆕 NEW OPPORTUNITY: {opportunity.home_team} vs {opportunity.away_team} - {opportunity.selection}")
             
+        # Calculate quality score and dashboard fields
+        quality_score = (opportunity.edge_percentage * 0.7) + (opportunity.confidence * 0.3)
+        today_date = datetime.now().strftime('%Y-%m-%d')
+        
+        try:
+            cursor.execute('''
+                INSERT INTO football_opportunities 
+                (timestamp, match_id, home_team, away_team, league, market, selection, 
+                 odds, edge_percentage, confidence, analysis, stake, match_date, kickoff_time,
+                 quality_score, recommended_date, recommended_tier, daily_rank)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                int(time.time()),
+                opportunity.match_id,
+                opportunity.home_team,
+                opportunity.away_team,
+                opportunity.league,
+                opportunity.market,
+                opportunity.selection,
+                opportunity.odds,
+                opportunity.edge_percentage,
+                opportunity.confidence,
+                json.dumps(opportunity.analysis),
+                opportunity.stake,
+                opportunity.match_date,
+                opportunity.kickoff_time,
+                quality_score,
+                today_date,
+                'standard',  # Will be updated in batch ranking
+                999  # Temporary rank, will be updated in batch
+            ))
+            self.conn.commit()
+            print(f"✅ SAVED: {opportunity.home_team} vs {opportunity.away_team} - Quality: {quality_score:.1f}, Date: {today_date}, Rank: 999")
+        except Exception as e:
+            print(f"❌ SAVE ERROR: {e}")
+            print(f"   🎯 Opportunity: {opportunity.home_team} vs {opportunity.away_team}")
+            print(f"   📊 Quality Score: {quality_score}")
+            print(f"   📅 Date: {today_date}")
+            raise e
+    
+    def rank_and_tier_opportunities(self):
+        """Rank today's opportunities and assign premium/standard tiers"""
+        today_date = datetime.now().strftime('%Y-%m-%d')
+        cursor = self.conn.cursor()
+        
+        # Get all today's opportunities ordered by quality score
         cursor.execute('''
-            INSERT INTO football_opportunities 
-            (timestamp, match_id, home_team, away_team, league, market, selection, 
-             odds, edge_percentage, confidence, analysis, stake, match_date, kickoff_time)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            int(time.time()),
-            opportunity.match_id,
-            opportunity.home_team,
-            opportunity.away_team,
-            opportunity.league,
-            opportunity.market,
-            opportunity.selection,
-            opportunity.odds,
-            opportunity.edge_percentage,
-            opportunity.confidence,
-            json.dumps(opportunity.analysis),
-            opportunity.stake,
-            opportunity.match_date,
-            opportunity.kickoff_time
-        ))
+            SELECT id, quality_score FROM football_opportunities 
+            WHERE recommended_date = ? AND daily_rank = 999
+            ORDER BY quality_score DESC
+        ''', (today_date,))
+        
+        opportunities = cursor.fetchall()
+        
+        for rank, (opp_id, quality_score) in enumerate(opportunities, 1):
+            # Top 10 = premium, next 30 = standard
+            tier = 'premium' if rank <= 10 else 'standard'
+            
+            cursor.execute('''
+                UPDATE football_opportunities 
+                SET daily_rank = ?, recommended_tier = ?
+                WHERE id = ?
+            ''', (rank, tier, opp_id))
+        
         self.conn.commit()
+        print(f"🏆 Ranked {len(opportunities)} opportunities: {min(10, len(opportunities))} premium, {max(0, len(opportunities)-10)} standard")
     
     def run_analysis_cycle(self):
         """Run complete analysis cycle"""
@@ -1254,6 +1303,11 @@ class RealFootballChampion:
                 total_opportunities += 1
         
         print(f"\n🏆 ANALYSIS COMPLETE: {total_opportunities} opportunities found")
+        
+        # Rank and tier all opportunities
+        if total_opportunities > 0:
+            self.rank_and_tier_opportunities()
+        
         print("⏱️ Next analysis cycle in 30 minutes...")
         
         return total_opportunities
