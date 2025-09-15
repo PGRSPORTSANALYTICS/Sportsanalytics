@@ -63,13 +63,13 @@ def load_performance():
         query = """
         SELECT 
             COUNT(*) as total_bets,
-            SUM(CASE WHEN outcome = 'win' THEN 1 ELSE 0 END) as wins,
-            SUM(CASE WHEN outcome = 'loss' THEN 1 ELSE 0 END) as losses,
+            SUM(CASE WHEN outcome IN ('win', 'won') THEN 1 ELSE 0 END) as wins,
+            SUM(CASE WHEN outcome IN ('loss', 'lost') THEN 1 ELSE 0 END) as losses,
             SUM(stake) as total_staked,
             SUM(profit_loss) as net_profit,
-            AVG(CASE WHEN outcome IN ('win', 'loss') THEN (profit_loss/stake)*100 END) as avg_roi
+            AVG(CASE WHEN outcome IN ('win', 'won', 'loss', 'lost') THEN (profit_loss/stake)*100 END) as avg_roi
         FROM football_opportunities 
-        WHERE outcome IS NOT NULL
+        WHERE outcome IS NOT NULL AND outcome != '' AND outcome != 'unknown'
         """
         result = pd.read_sql_query(query, conn)
         conn.close()
