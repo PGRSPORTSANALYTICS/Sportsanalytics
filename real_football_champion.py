@@ -927,10 +927,10 @@ class RealFootballChampion:
         under_2_5_odds = 1 / ((1 - over_2_5_prob) - margin) if (1 - over_2_5_prob) > margin else 2.0
         btts_yes_odds = 1 / (btts_prob - margin) if btts_prob > margin else 2.0
         
-        # Ensure odds are realistic - allow natural market odds
-        over_2_5_odds = max(1.10, min(10.0, over_2_5_odds))  # Realistic range
-        under_2_5_odds = max(1.10, min(10.0, under_2_5_odds))
-        btts_yes_odds = max(1.10, min(8.0, btts_yes_odds))
+        # Ensure odds meet minimum 1.75 requirement
+        over_2_5_odds = max(1.75, min(10.0, over_2_5_odds))
+        under_2_5_odds = max(1.75, min(10.0, under_2_5_odds))
+        btts_yes_odds = max(1.75, min(8.0, btts_yes_odds))
         
         return {
             'over_2_5': over_2_5_odds,
