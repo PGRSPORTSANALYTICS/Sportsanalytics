@@ -416,12 +416,14 @@ class RealFootballChampion:
         
         for league_id in league_ids[:20]:  # Limit to top 20 leagues to preserve quota
             try:
-                # Get today's fixtures with odds from API-Football
+                # Get upcoming fixtures for next 3 days (not just today!)
                 url = f"{self.api_football_base_url}/fixtures"
+                end_date = today + timedelta(days=3)
                 params = {
                     'league': league_id,
-                    'season': 2024,
-                    'date': today.strftime('%Y-%m-%d'),
+                    'season': 2025,  # FIXED: Using current season 2025!
+                    'from': today.strftime('%Y-%m-%d'),
+                    'to': end_date.strftime('%Y-%m-%d'),
                     'status': 'NS'  # Not started
                 }
                 
@@ -525,9 +527,9 @@ class RealFootballChampion:
         for league_id in league_ids:
             try:
                 url = f"{self.api_football_base_url}/fixtures"
-                # Get fixtures for TODAY and TOMORROW only - daily bets
+                # Get fixtures for next 7 days to capture weekend matches
                 from datetime import timedelta
-                end_date = today + timedelta(days=1)  # ONLY TODAY AND TOMORROW
+                end_date = today + timedelta(days=7)  # NEXT WEEK FOR WEEKEND MATCHES
                 
                 params = {
                     'league': league_id,
