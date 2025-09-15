@@ -147,25 +147,62 @@ class RealFootballChampion:
             'soccer_international_friendlies': 'International Friendlies'
         }
         
-        # API-Football league ID to name mapping
+        # API-Football league ID to name mapping - GLOBAL COVERAGE (NO DUPLICATES)
         self.league_id_to_name = {
-            # Club Competitions
+            # Major European Leagues
             39: 'Premier League',
+            40: 'English Championship', 
+            41: 'English League One',
+            42: 'English League Two',
             140: 'La Liga',
             135: 'Serie A', 
             78: 'Bundesliga',
             61: 'Ligue 1',
-            2: 'Champions League',
-            3: 'Europa League',
-            144: 'Belgian First Division',
             179: 'Eredivisie',
             94: 'Primeira Liga',
-            203: 'Turkish Super League',
-            262: 'Danish Superliga',
-            218: 'Swedish Allsvenskan',
+            144: 'Belgian First Division',
             88: 'Scottish Premiership',
             
-            # International Competitions - WORLD CUP MISMATCHES!
+            # Nordic/Eastern Europe
+            218: 'Swedish Allsvenskan',
+            103: 'Norwegian Eliteserien',
+            119: 'Danish Superliga',
+            106: 'Polish Ekstraklasa',
+            345: 'Czech First League',
+            203: 'Turkish Super League',
+            235: 'Russian Premier League',
+            
+            # European Cups
+            2: 'Champions League',
+            3: 'Europa League',
+            848: 'Conference League',
+            
+            # South America (24/7 Coverage)
+            71: 'Brazilian Serie A',
+            128: 'Argentinian Primera Division',
+            131: 'Chilean Primera Division',
+            239: 'Colombian Primera A',
+            267: 'Uruguayan Primera Division',  # Fixed unique ID
+            13: 'Copa Libertadores',
+            11: 'Copa Sudamericana',
+            
+            # North America (Evening Coverage)
+            253: 'Major League Soccer (MLS)',
+            262: 'Liga MX (Mexico)',
+            285: 'Canadian Premier League',
+            
+            # Asia-Pacific (Early Coverage)
+            98: 'Japanese J1 League',
+            292: 'Korean K League 1',
+            169: 'Chinese Super League',
+            188: 'Australian A-League',
+            323: 'Indian Super League',
+            
+            # Africa (Afternoon Coverage)
+            244: 'South African Premier Division',
+            233: 'Egyptian Premier League',
+            
+            # International Competitions
             1: 'FIFA World Cup',
             4: 'UEFA European Championship',
             5: 'UEFA Nations League',
@@ -178,7 +215,7 @@ class RealFootballChampion:
             36: 'World Cup Qualifiers (CAF)',
             37: 'World Cup Qualifiers (AFC)',
             38: 'World Cup Qualifiers (CONCACAF)',
-            40: 'World Cup Qualifiers (OFC)',
+            531: 'World Cup Qualifiers (OFC)',  # Fixed unique ID
             10: 'International Friendlies'
         }
         
@@ -361,9 +398,9 @@ class RealFootballChampion:
         for sport in football_sports:
             url = f"{self.odds_base_url}/sports/{sport}/odds"
             params = {
-                'apiKey': self.odds_api_key,
-                'regions': 'uk',
-                'markets': 'h2h,totals,btts',
+                'api_key': self.odds_api_key,
+                'regions': 'uk,us,eu',
+                'markets': 'h2h,totals',
                 'oddsFormat': 'decimal',
                 'dateFormat': 'iso'
             }
@@ -450,40 +487,8 @@ class RealFootballChampion:
             'X-RapidAPI-Host': 'v3.football.api-sports.io'
         }
         
-        # Major league IDs - expanded for daily coverage + WORLD CUP
-        league_ids = [
-            # Club Competitions
-            39,   # Premier League
-            140,  # La Liga  
-            135,  # Serie A
-            78,   # Bundesliga
-            61,   # Ligue 1
-            2,    # Champions League
-            3,    # Europa League
-            
-            # International Competitions - MASSIVE MISMATCHES!
-            1,    # FIFA World Cup
-            5,    # UEFA Nations League
-            4,    # UEFA European Championship
-            9,    # Copa America
-            15,   # Africa Cup of Nations
-            16,   # AFC Asian Cup
-            17,   # CONCACAF Gold Cup
-            32,   # World Cup Qualifiers (UEFA) - France vs Gibraltar!
-            34,   # World Cup Qualifiers (CONMEBOL) - Brazil vs Bolivia!
-            36,   # World Cup Qualifiers (CAF) - Morocco vs Chad!
-            37,   # World Cup Qualifiers (AFC) - Japan vs Myanmar!
-            38,   # World Cup Qualifiers (CONCACAF) - USA vs Bermuda!
-            40,   # World Cup Qualifiers (OFC) - New Zealand vs Samoa!
-            10,   # International Friendlies
-            144,  # Belgian First Division
-            179,  # Eredivisie (Netherlands)
-            94,   # Primeira Liga (Portugal)
-            203,  # Turkish Super League
-            262,  # Danish Superliga
-            218,  # Swedish Allsvenskan
-            88,   # Scottish Premiership
-        ]
+        # Use ALL expanded global league IDs for maximum 24/7 coverage
+        league_ids = list(self.league_id_to_name.keys())  # Dynamic list of all 50+ global leagues
         
         all_fixtures = []
         from datetime import datetime as dt_parser
