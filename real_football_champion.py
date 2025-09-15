@@ -395,41 +395,69 @@ class RealFootballChampion:
         
         all_matches = []
         
-        for sport in football_sports:
-            url = f"{self.odds_base_url}/sports/{sport}/odds"
-            params = {
-                'api_key': self.odds_api_key,
-                'regions': 'uk,us,eu',
-                'markets': 'h2h,totals',
-                'oddsFormat': 'decimal',
-                'dateFormat': 'iso'
-            }
-            
+        # SWITCH TO API-FOOTBALL (98% quota available!)
+        print("🎯 USING API-FOOTBALL INSTEAD - The Odds API quota exhausted!")
+        
+        if not self.api_football_key:
+            print("⚠️ No API-Football key available")
+            return []
+        
+        headers = {
+            'X-RapidAPI-Key': self.api_football_key,
+            'X-RapidAPI-Host': 'v3.football.api-sports.io'
+        }
+        
+        # Use dynamic league IDs instead of sport names
+        league_ids = list(self.league_id_to_name.keys())
+        print(f"🌍 Checking {len(league_ids)} global leagues via API-Football...")
+        
+        from datetime import datetime as dt_parser, timedelta
+        today = dt_parser.now()
+        
+        for league_id in league_ids[:20]:  # Limit to top 20 leagues to preserve quota
             try:
-                response = requests.get(url, params=params, timeout=10)
+                # Get today's fixtures with odds from API-Football
+                url = f"{self.api_football_base_url}/fixtures"
+                params = {
+                    'league': league_id,
+                    'season': 2024,
+                    'date': today.strftime('%Y-%m-%d'),
+                    'status': 'NS'  # Not started
+                }
+                
+                response = requests.get(url, headers=headers, params=params, timeout=10)
                 if response.status_code == 200:
-                    matches = response.json()
-                    for match in matches:
-                        match['sport'] = sport
-                        all_matches.append(match)
-                    print(f"⚽ Found {len(matches)} matches in {sport}")
-                elif response.status_code == 422:
-                    # Try with just h2h markets if full request fails
-                    print(f"⚠️  Markets not available for {sport}, trying h2h only...")
-                    params['markets'] = 'h2h'
-                    response = requests.get(url, params=params, timeout=10)
-                    if response.status_code == 200:
-                        matches = response.json()
-                        for match in matches:
-                            match['sport'] = sport
-                            all_matches.append(match)
-                        print(f"⚽ Found {len(matches)} matches in {sport} (h2h only)")
+                    data = response.json()
+                    fixtures = data.get('response', [])
+                    
+                    if fixtures:
+                        print(f"⚽ Found {len(fixtures)} fixtures in league {league_id}")
+                        
+                        # Convert API-Football fixtures to match expected format
+                        for fixture in fixtures:
+                            teams = fixture.get('teams', {})
+                            fixture_info = fixture.get('fixture', {})
+                            league_info = fixture.get('league', {})
+                            
+                            # Create basic odds structure (we'll get real odds separately if needed)
+                            match_data = {
+                                'id': fixture_info.get('id'),
+                                'sport_key': f"league_{league_id}",
+                                'sport_title': league_info.get('name', 'Unknown League'),
+                                'league_name': league_info.get('name', 'Unknown League'),
+                                'commence_time': fixture_info.get('date'),
+                                'home_team': teams.get('home', {}).get('name', 'Unknown'),
+                                'away_team': teams.get('away', {}).get('name', 'Unknown'),
+                                'bookmakers': [{'key': 'api-football', 'title': 'API-Football', 'markets': []}]
+                            }
+                            all_matches.append(match_data)
                     else:
-                        print(f"⚠️  No data for {sport}: {response.status_code}")
+                        print(f"📅 No fixtures today in league {league_id}")
                 else:
-                    print(f"⚠️  No data for {sport}: {response.status_code}")
+                    print(f"⚠️  League {league_id}: {response.status_code}")
+                    
             except Exception as e:
-                print(f"❌ Error fetching {sport}: {e}")
+                print(f"❌ Error fetching league {league_id}: {e}")
         
         # Filter matches to only near-time betting (next 3 days)
         near_time_matches = self.filter_near_time_matches(all_matches)
