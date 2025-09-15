@@ -58,16 +58,69 @@ class TheOddsAPI:
             print(f"⚠️ API quota reached ({self.max_requests} requests)")
             return []
         
-        # Focus on leagues that might have e-soccer/virtual games
+        # Comprehensive global league coverage for 24/7 betting opportunities
         soccer_sports = [
-            'soccer_epl',           # English Premier League (has virtual games)
-            'soccer_efl_champ',     # English Championship  
-            'soccer_germany_bundesliga',  # German Bundesliga (popular for e-soccer)
-            'soccer_spain_la_liga', # Spanish La Liga
-            'soccer_italy_serie_a', # Italian Serie A
-            'soccer_france_ligue_one', # French Ligue 1
-            'soccer_uefa_champs_league', # Champions League (e-soccer format)
-            'soccer_uefa_europa_league', # Europa League
+            # Major European Leagues (Prime Time EU)
+            'soccer_epl',                    # English Premier League
+            'soccer_efl_champ',             # English Championship
+            'soccer_spain_la_liga',         # Spanish La Liga
+            'soccer_italy_serie_a',         # Italian Serie A
+            'soccer_germany_bundesliga',    # German Bundesliga
+            'soccer_france_ligue_one',      # French Ligue 1
+            'soccer_netherlands_eredivisie', # Dutch Eredivisie
+            'soccer_portugal_primeira_liga', # Portuguese Primeira Liga
+            'soccer_belgium_first_div',     # Belgian First Division
+            'soccer_scotland_premiership',  # Scottish Premiership
+            
+            # European Cups (High Value)
+            'soccer_uefa_champs_league',    # Champions League
+            'soccer_uefa_europa_league',    # Europa League
+            'soccer_uefa_conference_league',# Conference League
+            
+            # Nordic/Eastern Europe (Different Schedules)
+            'soccer_sweden_allsvenskan',    # Swedish Allsvenskan
+            'soccer_norway_eliteserien',    # Norwegian Eliteserien
+            'soccer_denmark_superliga',     # Danish Superliga
+            'soccer_poland_ekstraklasa',    # Polish Ekstraklasa
+            'soccer_czech_1_liga',          # Czech First League
+            'soccer_turkey_super_league',   # Turkish Super League
+            'soccer_russia_premier_league', # Russian Premier League
+            
+            # South America (Different Time Zone - More Coverage)
+            'soccer_brazil_serie_a',        # Brazilian Serie A
+            'soccer_argentina_primera_division', # Argentinian Primera
+            'soccer_chile_primera_division', # Chilean Primera
+            'soccer_colombia_primera_a',    # Colombian Primera A
+            'soccer_uruguay_primera_division', # Uruguayan Primera
+            'soccer_conmebol_libertadores',  # Copa Libertadores
+            'soccer_conmebol_sudamericana',  # Copa Sudamericana
+            
+            # North America (Evening Coverage)
+            'soccer_usa_mls',               # Major League Soccer
+            'soccer_mexico_liga_mx',        # Liga MX (Mexico)
+            'soccer_canada_cpl',            # Canadian Premier League
+            
+            # Asia-Pacific (Early Coverage)
+            'soccer_japan_j_league',        # Japanese J1 League
+            'soccer_south_korea_k_league_1', # Korean K League 1
+            'soccer_china_super_league',    # Chinese Super League
+            'soccer_australia_a_league',    # Australian A-League
+            'soccer_india_super_league',    # Indian Super League
+            
+            # Africa (Afternoon Coverage)  
+            'soccer_south_africa_premier_division', # South African Premier
+            'soccer_egypt_premier_league',  # Egyptian Premier League
+            
+            # Lower English Leagues (More Matches)
+            'soccer_efl_league_one',        # English League One
+            'soccer_efl_league_two',        # English League Two
+            
+            # International Competitions
+            'soccer_uefa_nations_league',   # UEFA Nations League
+            'soccer_fifa_world_cup',        # FIFA World Cup
+            'soccer_uefa_euros',            # European Championship
+            'soccer_conmebol_copa_america', # Copa America
+            'soccer_international_friendlies', # International Friendlies
         ]
         
         all_odds = []

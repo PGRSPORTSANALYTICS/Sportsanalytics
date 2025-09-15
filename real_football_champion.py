@@ -73,22 +73,64 @@ class RealFootballChampion:
         self.odds_base_url = "https://api.the-odds-api.com/v4"
         self.api_football_base_url = "https://v3.football.api-sports.io"
         
-        # Sport key to league name mapping
+        # Sport key to league name mapping - GLOBAL COVERAGE
         self.sport_to_league = {
-            # Club Competitions
+            # Major European Leagues
             'soccer_epl': 'Premier League',
+            'soccer_efl_champ': 'English Championship',
             'soccer_spain_la_liga': 'La Liga',
             'soccer_italy_serie_a': 'Serie A',
             'soccer_germany_bundesliga': 'Bundesliga',
             'soccer_france_ligue_one': 'Ligue 1',
-            'soccer_uefa_champs_league': 'Champions League',
-            'soccer_uefa_europa_league': 'Europa League',
-            'soccer_belgium_first_div': 'Belgian First Division',
             'soccer_netherlands_eredivisie': 'Eredivisie',
             'soccer_portugal_primeira_liga': 'Primeira Liga',
-            'soccer_turkey_super_league': 'Turkish Super League',
+            'soccer_belgium_first_div': 'Belgian First Division',
+            'soccer_scotland_premiership': 'Scottish Premiership',
             
-            # International Competitions - WORLD CUP FOCUS!
+            # European Cups
+            'soccer_uefa_champs_league': 'Champions League',
+            'soccer_uefa_europa_league': 'Europa League',
+            'soccer_uefa_conference_league': 'Conference League',
+            
+            # Nordic/Eastern Europe
+            'soccer_sweden_allsvenskan': 'Swedish Allsvenskan',
+            'soccer_norway_eliteserien': 'Norwegian Eliteserien',
+            'soccer_denmark_superliga': 'Danish Superliga',
+            'soccer_poland_ekstraklasa': 'Polish Ekstraklasa',
+            'soccer_czech_1_liga': 'Czech First League',
+            'soccer_turkey_super_league': 'Turkish Super League',
+            'soccer_russia_premier_league': 'Russian Premier League',
+            
+            # South America
+            'soccer_brazil_serie_a': 'Brazilian Serie A',
+            'soccer_argentina_primera_division': 'Argentinian Primera Division',
+            'soccer_chile_primera_division': 'Chilean Primera Division',
+            'soccer_colombia_primera_a': 'Colombian Primera A',
+            'soccer_uruguay_primera_division': 'Uruguayan Primera Division',
+            'soccer_conmebol_libertadores': 'Copa Libertadores',
+            'soccer_conmebol_sudamericana': 'Copa Sudamericana',
+            
+            # North America
+            'soccer_usa_mls': 'Major League Soccer',
+            'soccer_mexico_liga_mx': 'Liga MX',
+            'soccer_canada_cpl': 'Canadian Premier League',
+            
+            # Asia-Pacific
+            'soccer_japan_j_league': 'Japanese J1 League',
+            'soccer_south_korea_k_league_1': 'Korean K League 1',
+            'soccer_china_super_league': 'Chinese Super League',
+            'soccer_australia_a_league': 'Australian A-League',
+            'soccer_india_super_league': 'Indian Super League',
+            
+            # Africa
+            'soccer_south_africa_premier_division': 'South African Premier Division',
+            'soccer_egypt_premier_league': 'Egyptian Premier League',
+            
+            # Lower English Leagues
+            'soccer_efl_league_one': 'English League One',
+            'soccer_efl_league_two': 'English League Two',
+            
+            # International Competitions
             'soccer_fifa_world_cup': 'FIFA World Cup',
             'soccer_fifa_world_cup_qualifier_afc': 'World Cup Qualifiers (AFC)',
             'soccer_fifa_world_cup_qualifier_caf': 'World Cup Qualifiers (CAF)',  
@@ -242,30 +284,76 @@ class RealFootballChampion:
     def get_football_odds(self) -> List[Dict]:
         """Get pre-match and upcoming football odds from The Odds API"""
         football_sports = [
-            # Club Competitions
-            'soccer_epl',  # English Premier League
-            'soccer_spain_la_liga',  # Spanish La Liga
-            'soccer_italy_serie_a',  # Italian Serie A
-            'soccer_germany_bundesliga',  # German Bundesliga
-            'soccer_france_ligue_one',  # French Ligue 1
-            'soccer_uefa_champs_league',  # Champions League
-            'soccer_uefa_europa_league',  # Europa League
+            # Major European Leagues (Prime Time EU)
+            'soccer_epl',                    # English Premier League
+            'soccer_efl_champ',             # English Championship
+            'soccer_spain_la_liga',         # Spanish La Liga
+            'soccer_italy_serie_a',         # Italian Serie A
+            'soccer_germany_bundesliga',    # German Bundesliga
+            'soccer_france_ligue_one',      # French Ligue 1
+            'soccer_netherlands_eredivisie', # Dutch Eredivisie
+            'soccer_portugal_primeira_liga', # Portuguese Primeira Liga
+            'soccer_belgium_first_div',     # Belgian First Division
+            'soccer_scotland_premiership',  # Scottish Premiership
             
-            # International Competitions - WORLD CUP GOLDMINE!
-            'soccer_fifa_world_cup',  # FIFA World Cup
-            'soccer_fifa_world_cup_qualifier_uefa',  # UEFA World Cup Qualifiers
-            'soccer_fifa_world_cup_qualifier_conmebol',  # CONMEBOL Qualifiers
-            'soccer_fifa_world_cup_qualifier_caf',  # CAF World Cup Qualifiers
-            'soccer_fifa_world_cup_qualifier_afc',  # AFC World Cup Qualifiers
-            'soccer_fifa_world_cup_qualifier_concacaf',  # CONCACAF Qualifiers
-            'soccer_fifa_world_cup_qualifier_ofc',  # OFC World Cup Qualifiers
-            'soccer_uefa_nations_league',  # UEFA Nations League
-            'soccer_uefa_euros',  # UEFA European Championship
-            'soccer_conmebol_copa_america',  # Copa America
-            'soccer_caf_african_cup_of_nations',  # Africa Cup of Nations
-            'soccer_afc_asian_cup',  # AFC Asian Cup
-            'soccer_concacaf_gold_cup',  # CONCACAF Gold Cup
-            'soccer_international_friendlies',  # International Friendlies
+            # European Cups (High Value)
+            'soccer_uefa_champs_league',    # Champions League
+            'soccer_uefa_europa_league',    # Europa League
+            'soccer_uefa_conference_league',# Conference League
+            
+            # Nordic/Eastern Europe (Different Schedules)
+            'soccer_sweden_allsvenskan',    # Swedish Allsvenskan
+            'soccer_norway_eliteserien',    # Norwegian Eliteserien
+            'soccer_denmark_superliga',     # Danish Superliga
+            'soccer_poland_ekstraklasa',    # Polish Ekstraklasa
+            'soccer_czech_1_liga',          # Czech First League
+            'soccer_turkey_super_league',   # Turkish Super League
+            'soccer_russia_premier_league', # Russian Premier League
+            
+            # South America (Different Time Zone - More Coverage)
+            'soccer_brazil_serie_a',        # Brazilian Serie A
+            'soccer_argentina_primera_division', # Argentinian Primera
+            'soccer_chile_primera_division', # Chilean Primera
+            'soccer_colombia_primera_a',    # Colombian Primera A
+            'soccer_uruguay_primera_division', # Uruguayan Primera
+            'soccer_conmebol_libertadores',  # Copa Libertadores
+            'soccer_conmebol_sudamericana',  # Copa Sudamericana
+            
+            # North America (Evening Coverage)
+            'soccer_usa_mls',               # Major League Soccer
+            'soccer_mexico_liga_mx',        # Liga MX (Mexico)
+            'soccer_canada_cpl',            # Canadian Premier League
+            
+            # Asia-Pacific (Early Coverage)
+            'soccer_japan_j_league',        # Japanese J1 League
+            'soccer_south_korea_k_league_1', # Korean K League 1
+            'soccer_china_super_league',    # Chinese Super League
+            'soccer_australia_a_league',    # Australian A-League
+            'soccer_india_super_league',    # Indian Super League
+            
+            # Africa (Afternoon Coverage)  
+            'soccer_south_africa_premier_division', # South African Premier
+            'soccer_egypt_premier_league',  # Egyptian Premier League
+            
+            # Lower English Leagues (More Matches)
+            'soccer_efl_league_one',        # English League One
+            'soccer_efl_league_two',        # English League Two
+            
+            # International Competitions
+            'soccer_uefa_nations_league',   # UEFA Nations League
+            'soccer_fifa_world_cup',        # FIFA World Cup
+            'soccer_uefa_euros',            # European Championship
+            'soccer_conmebol_copa_america', # Copa America
+            'soccer_fifa_world_cup_qualifier_uefa',     # UEFA World Cup Qualifiers
+            'soccer_fifa_world_cup_qualifier_conmebol', # CONMEBOL Qualifiers
+            'soccer_fifa_world_cup_qualifier_caf',      # CAF World Cup Qualifiers
+            'soccer_fifa_world_cup_qualifier_afc',      # AFC World Cup Qualifiers
+            'soccer_fifa_world_cup_qualifier_concacaf', # CONCACAF Qualifiers
+            'soccer_fifa_world_cup_qualifier_ofc',      # OFC World Cup Qualifiers
+            'soccer_caf_african_cup_of_nations',        # Africa Cup of Nations
+            'soccer_afc_asian_cup',                     # AFC Asian Cup
+            'soccer_concacaf_gold_cup',                 # CONCACAF Gold Cup
+            'soccer_international_friendlies',          # International Friendlies
         ]
         
         all_matches = []
