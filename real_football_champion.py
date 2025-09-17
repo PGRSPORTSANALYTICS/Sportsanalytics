@@ -967,47 +967,56 @@ class RealFootballChampion:
         if not bookmakers:
             estimated_odds = self.generate_estimated_odds(xg_analysis)
             
+            # Generate all potential opportunities and select the best one
+            potential_opportunities = []
+            
             # Check Over 2.5 opportunity
             implied_prob = 1.0 / estimated_odds['over_2_5']
             true_prob = xg_analysis['over_2_5_prob']
             edge = (true_prob - implied_prob) * 100
             
-            if edge >= self.min_edge and estimated_odds['over_2_5'] >= 1.5:  # Lower odds filter for more bets
+            if edge >= self.min_edge and estimated_odds['over_2_5'] >= 1.5:
                 opportunity = self.create_opportunity(
                     match, 'Over 2.5', estimated_odds['over_2_5'], edge,
                     home_form, away_form, h2h, xg_analysis
                 )
-                opportunities.append(opportunity)
+                potential_opportunities.append((opportunity, edge))
             
             # Check Under 2.5 opportunity
             implied_prob = 1.0 / estimated_odds['under_2_5']
             true_prob = 1.0 - xg_analysis['over_2_5_prob']
             edge = (true_prob - implied_prob) * 100
             
-            if edge >= self.min_edge and estimated_odds['under_2_5'] >= 1.7:  # No odds lower than 1.7
+            if edge >= self.min_edge and estimated_odds['under_2_5'] >= 1.7:
                 opportunity = self.create_opportunity(
                     match, 'Under 2.5', estimated_odds['under_2_5'], edge,
                     home_form, away_form, h2h, xg_analysis
                 )
-                opportunities.append(opportunity)
+                potential_opportunities.append((opportunity, edge))
             
             # Check BTTS opportunity
             implied_prob = 1.0 / estimated_odds['btts_yes']
             true_prob = xg_analysis['btts_prob']
             edge = (true_prob - implied_prob) * 100
             
-            if edge >= self.min_edge and estimated_odds['btts_yes'] >= 1.7:  # No odds lower than 1.7
+            if edge >= self.min_edge and estimated_odds['btts_yes'] >= 1.7:
                 opportunity = self.create_opportunity(
                     match, 'BTTS Yes', estimated_odds['btts_yes'], edge,
                     home_form, away_form, h2h, xg_analysis
                 )
-                opportunities.append(opportunity)
+                potential_opportunities.append((opportunity, edge))
+            
+            # Select only the opportunity with the highest edge (best quality)
+            if potential_opportunities:
+                best_opportunity = max(potential_opportunities, key=lambda x: x[1])
+                opportunities.append(best_opportunity[0])
             
             return opportunities
         
         # Track if we found the markets we're looking for
         found_totals = False
         found_btts = False
+        potential_opportunities = []
         
         for bookmaker in bookmakers:
             markets = bookmaker.get('markets', [])
@@ -1034,7 +1043,7 @@ class RealFootballChampion:
                                     match, 'Over 2.5', odds, edge, 
                                     home_form, away_form, h2h, xg_analysis
                                 )
-                                opportunities.append(opportunity)
+                                potential_opportunities.append((opportunity, edge))
                         
                         elif 'Under' in name and point == 2.5:
                             implied_prob = 1.0 / odds
@@ -1046,7 +1055,7 @@ class RealFootballChampion:
                                     match, 'Under 2.5', odds, edge,
                                     home_form, away_form, h2h, xg_analysis
                                 )
-                                opportunities.append(opportunity)
+                                potential_opportunities.append((opportunity, edge))
                 
                 elif market_key == 'btts':
                     found_btts = True
@@ -1065,7 +1074,7 @@ class RealFootballChampion:
                                     match, 'BTTS Yes', odds, edge,
                                     home_form, away_form, h2h, xg_analysis
                                 )
-                                opportunities.append(opportunity)
+                                potential_opportunities.append((opportunity, edge))
         
         # Fallback: If we have bookmakers but didn't find totals/btts markets, use estimated odds
         if not found_totals or not found_btts:
@@ -1082,7 +1091,7 @@ class RealFootballChampion:
                         match, 'Over 2.5', estimated_odds['over_2_5'], edge,
                         home_form, away_form, h2h, xg_analysis
                     )
-                    opportunities.append(opportunity)
+                    potential_opportunities.append((opportunity, edge))
                 
                 # Check Under 2.5 opportunity
                 implied_prob = 1.0 / estimated_odds['under_2_5']
@@ -1094,7 +1103,7 @@ class RealFootballChampion:
                         match, 'Under 2.5', estimated_odds['under_2_5'], edge,
                         home_form, away_form, h2h, xg_analysis
                     )
-                    opportunities.append(opportunity)
+                    potential_opportunities.append((opportunity, edge))
             
             # Check BTTS opportunity if btts market not found
             if not found_btts:
@@ -1107,7 +1116,12 @@ class RealFootballChampion:
                         match, 'BTTS Yes', estimated_odds['btts_yes'], edge,
                         home_form, away_form, h2h, xg_analysis
                     )
-                    opportunities.append(opportunity)
+                    potential_opportunities.append((opportunity, edge))
+        
+        # Select only the opportunity with the highest edge (best quality)
+        if potential_opportunities:
+            best_opportunity = max(potential_opportunities, key=lambda x: x[1])
+            opportunities.append(best_opportunity[0])
         
         return opportunities
     
