@@ -924,14 +924,193 @@ class RealFootballChampion:
         away_attack_strength = max(0.3, min(2.0, away_xg_adjusted))
         btts_prob = min(0.80, max(0.20, (home_attack_strength * away_attack_strength) / 4.0))
         
+        # Calculate exact score probabilities using Poisson distribution
+        exact_scores = self.calculate_exact_score_probabilities(home_xg_adjusted, away_xg_adjusted)
+        
         return {
             'home_xg': home_xg_adjusted,
             'away_xg': away_xg_adjusted,
             'total_xg': total_xg,
             'over_2_5_prob': over_2_5_prob,
             'over_3_5_prob': over_3_5_prob,
-            'btts_prob': btts_prob
+            'btts_prob': btts_prob,
+            'exact_scores': exact_scores
         }
+    
+    def calculate_exact_score_probabilities(self, home_xg: float, away_xg: float) -> Dict:
+        """Calculate exact score probabilities using Poisson distribution"""
+        import math
+        
+        def poisson_prob(k: int, lam: float) -> float:
+            """Calculate Poisson probability"""
+            if lam <= 0:
+                return 0.0
+            return (math.exp(-lam) * (lam ** k)) / math.factorial(k)
+        
+        # Calculate probabilities for common exact scores (0-0 to 4-4)
+        exact_scores = {}
+        
+        # Most likely exact scores to analyze
+        common_scores = [
+            (0, 0), (1, 0), (0, 1), (1, 1), (2, 0), (0, 2),
+            (2, 1), (1, 2), (2, 2), (3, 0), (0, 3), (3, 1),
+            (1, 3), (3, 2), (2, 3), (3, 3), (4, 0), (0, 4)
+        ]
+        
+        for home_goals, away_goals in common_scores:
+            home_prob = poisson_prob(home_goals, home_xg)
+            away_prob = poisson_prob(away_goals, away_xg)
+            score_prob = home_prob * away_prob
+            
+            score_key = f"{home_goals}-{away_goals}"
+            exact_scores[score_key] = {
+                'probability': score_prob,
+                'home_goals': home_goals,
+                'away_goals': away_goals
+            }
+        
+        # Sort by probability and return top scores
+        sorted_scores = sorted(exact_scores.items(), key=lambda x: x[1]['probability'], reverse=True)
+        
+        # Return top 5 most likely exact scores
+        top_scores = {}
+        for i, (score, data) in enumerate(sorted_scores[:5]):
+            top_scores[f"score_{i+1}"] = {
+                'score': score,
+                'probability': data['probability'],
+                'home_goals': data['home_goals'],
+                'away_goals': data['away_goals']
+            }
+        
+        return top_scores
+    
+    def create_exact_score_predictions(self, target_matches: List[str]) -> List[Dict]:
+        """Create exact score predictions for specific matches"""
+        print("\n🎯 GENERATING EXACT SCORE PREDICTIONS")
+        print("=" * 50)
+        
+        matches = self.get_football_odds()
+        exact_score_predictions = []
+        
+        for match in matches:
+            home_team = match['home_team']
+            away_team = match['away_team']
+            match_name = f"{home_team} vs {away_team}"
+            
+            # Check if this is one of our target matches
+            if any(target in match_name for target in target_matches):
+                print(f"\n🔍 ANALYZING EXACT SCORES: {match_name}")
+                
+                # Get analytics data
+                home_id = self.get_team_id_by_name(home_team) or 1
+                away_id = self.get_team_id_by_name(away_team) or 2
+                
+                home_form = self.analyze_team_form(home_team, home_id)
+                away_form = self.analyze_team_form(away_team, away_id)
+                h2h = self.get_head_to_head(home_team, away_team)
+                
+                if home_form and away_form:
+                    # Calculate xG and exact score probabilities
+                    xg_analysis = self.calculate_xg_edge(home_form, away_form, h2h)
+                    exact_scores = xg_analysis['exact_scores']
+                    
+                    # Generate odds for top exact scores
+                    import random
+                    margin = random.uniform(0.15, 0.25)  # Higher margin for exact scores
+                    
+                    score_predictions = []
+                    for score_key, score_data in exact_scores.items():
+                        probability = score_data['probability']
+                        if probability > 0.01:  # Only include scores with >1% chance
+                            # Calculate odds with bookmaker margin
+                            adjusted_prob = max(0.01, probability - margin)
+                            odds = round(1 / adjusted_prob, 2)
+                            odds = max(4.00, min(50.00, odds))  # Realistic bounds for exact scores
+                            
+                            score_predictions.append({
+                                'score': score_data['score'],
+                                'probability': probability,
+                                'odds': odds,
+                                'home_goals': score_data['home_goals'],
+                                'away_goals': score_data['away_goals']
+                            })
+                    
+                    # Sort by probability
+                    score_predictions.sort(key=lambda x: x['probability'], reverse=True)
+                    
+                    prediction = {
+                        'match': match_name,
+                        'home_team': home_team,
+                        'away_team': away_team,
+                        'home_xg': round(xg_analysis['home_xg'], 2),
+                        'away_xg': round(xg_analysis['away_xg'], 2),
+                        'top_scores': score_predictions[:3],  # Top 3 most likely scores
+                        'analysis': {
+                            'home_form_trend': home_form.form_trend,
+                            'away_form_trend': away_form.form_trend,
+                            'home_goals_avg': round(home_form.goals_scored, 2),
+                            'away_goals_avg': round(away_form.goals_scored, 2)
+                        }
+                    }
+                    
+                    exact_score_predictions.append(prediction)
+                    
+                    # Print the predictions
+                    print(f"📊 Expected Goals: {home_team} {xg_analysis['home_xg']:.2f} - {xg_analysis['away_xg']:.2f} {away_team}")
+                    print(f"🎯 TOP EXACT SCORE PREDICTIONS:")
+                    for i, score_pred in enumerate(score_predictions[:3], 1):
+                        print(f"   {i}. {score_pred['score']} @ {score_pred['odds']} ({score_pred['probability']*100:.1f}% chance)")
+        
+        return exact_score_predictions
+    
+    def save_exact_score_predictions(self, predictions: List[Dict]):
+        """Save exact score predictions to database"""
+        cursor = self.conn.cursor()
+        today_date = datetime.now().strftime('%Y-%m-%d')
+        
+        for prediction in predictions:
+            for i, score_pred in enumerate(prediction['top_scores']):
+                try:
+                    cursor.execute('''
+                        INSERT INTO football_opportunities 
+                        (timestamp, match_id, home_team, away_team, league, market, selection, 
+                         odds, edge_percentage, confidence, analysis, stake, match_date, kickoff_time,
+                         quality_score, recommended_date, recommended_tier, daily_rank)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (
+                        int(time.time()),
+                        f"{prediction['home_team']}_vs_{prediction['away_team']}_exact_score_{i+1}",
+                        prediction['home_team'],
+                        prediction['away_team'],
+                        'EXACT SCORE SPECIAL',
+                        'Exact Score',
+                        f"Exact Score {score_pred['score']}",
+                        score_pred['odds'],
+                        score_pred['probability'] * 100,  # Use probability as edge
+                        80 + i*5,  # High confidence for exact scores
+                        json.dumps({
+                            'score_prediction': score_pred,
+                            'xg_prediction': {
+                                'home_xg': prediction['home_xg'],
+                                'away_xg': prediction['away_xg']
+                            },
+                            'form_analysis': prediction['analysis']
+                        }),
+                        25.00,  # Higher stake for exact scores
+                        today_date,
+                        '20:00',  # Default kickoff time
+                        90 - i*5,  # Quality score decreases for less likely scores
+                        today_date,
+                        'premium',  # Mark exact scores as premium
+                        i  # Rank by likelihood
+                    ))
+                    
+                    print(f"✅ SAVED EXACT SCORE: {prediction['home_team']} vs {prediction['away_team']} - {score_pred['score']} @ {score_pred['odds']}")
+                    
+                except Exception as e:
+                    print(f"❌ ERROR saving exact score prediction: {e}")
+        
+        self.conn.commit()
     
     def generate_estimated_odds(self, xg_analysis: Dict) -> Dict:
         """Generate realistic varied odds based on xG analysis with market-like variation"""
@@ -973,7 +1152,8 @@ class RealFootballChampion:
         return {
             'over_2_5': over_2_5_odds,
             'under_2_5': under_2_5_odds,
-            'btts_yes': btts_yes_odds
+            'btts_yes': btts_yes_odds,
+            'exact_scores': xg_analysis.get('exact_scores', {})
         }
     
     def find_balanced_opportunities(self, match: Dict) -> List[FootballOpportunity]:
