@@ -10,8 +10,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
 
-# Import ROI tracking system
-from roi_tracker import ROITracker, get_current_roi_metrics
+# Removed ROI tracking system as requested
 
 # Database path
 DB_PATH = 'data/real_football.db'
@@ -292,264 +291,195 @@ st.info("🎯 **Tips Selling Mode Active** - Focus on quality tip recommendation
 
 st.markdown("---")
 
-# === ROI PROGRESS TRACKING SYSTEM ===
-st.header("🎯 ROI Progress Toward 70% Target")
+# === WINS & LOSSES TRACKING ===
+st.header("🏆 Betting Performance & Results")
 
-# Load ROI metrics
-@st.cache_data(ttl=60)
-def load_roi_metrics():
-    """Load current ROI metrics with caching"""
-    return get_current_roi_metrics()
+# Get performance stats
+@st.cache_data(ttl=30)
+def get_wins_losses_stats():
+    """Get current wins/losses performance stats"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        query = """
+        SELECT 
+            COUNT(*) as total_tips,
+            COUNT(CASE WHEN outcome IN ('won', 'win') THEN 1 END) as wins,
+            COUNT(CASE WHEN outcome IN ('lost', 'loss') THEN 1 END) as losses,
+            COUNT(CASE WHEN outcome IS NULL OR outcome = '' THEN 1 END) as pending,
+            SUM(CASE WHEN outcome IN ('won', 'win') THEN profit_loss ELSE 0 END) as win_profit,
+            SUM(CASE WHEN outcome IN ('lost', 'loss') THEN profit_loss ELSE 0 END) as loss_amount,
+            SUM(profit_loss) as total_profit,
+            ROUND(AVG(quality_score), 1) as avg_quality
+        FROM football_opportunities 
+        WHERE recommended_tier IS NOT NULL
+        """
+        result = pd.read_sql_query(query, conn)
+        conn.close()
+        return result.iloc[0] if not result.empty else None
+    except Exception as e:
+        st.error(f"Error loading performance: {e}")
+        return None
 
-roi_metrics = load_roi_metrics()
+perf_stats = get_wins_losses_stats()
 
-# ROI Status Header
-roi_status_color = "success" if roi_metrics['total_roi'] >= 70 else "info" if roi_metrics['total_roi'] >= 50 else "warning"
-if roi_status_color == "success":
-    st.success(f"🎉 **MONETIZATION READY!** Current ROI: {roi_metrics['total_roi']}% - {roi_metrics['roi_status']}")
-elif roi_status_color == "info":
-    st.info(f"📈 **STRONG PROGRESS** Current ROI: {roi_metrics['total_roi']}% - {roi_metrics['roi_status']}")
-else:
-    st.warning(f"🔥 **BUILDING** Current ROI: {roi_metrics['total_roi']}% - {roi_metrics['roi_status']}")
-
-# Main ROI Metrics Row
-col1, col2, col3, col4 = st.columns(4)
-
-with col1:
-    # Current ROI with progress indicator
-    progress_val = roi_metrics['progress_percentage'] / 100
-    st.metric(
-        "📊 Current ROI", 
-        f"{roi_metrics['total_roi']}%",
-        f"{roi_metrics['progress_percentage']:.1f}% to target"
-    )
-    st.progress(progress_val if progress_val <= 1.0 else 1.0)
-
-with col2:
-    # Next milestone
-    next_milestone = roi_metrics['next_milestone']
-    st.metric(
-        "🎯 Next Milestone", 
-        f"{next_milestone['target']}%",
-        f"{next_milestone['remaining']:.1f}% remaining"
-    )
-    milestone_progress = max(0, (next_milestone['target'] - next_milestone['remaining']) / next_milestone['target'])
-    st.progress(milestone_progress)
-
-with col3:
-    # Business readiness score
-    readiness = roi_metrics['business_ready']
-    readiness_color = "🟢" if readiness['is_ready'] else "🟡" if readiness['readiness_score'] >= 50 else "🔴"
-    st.metric(
-        "🏪 Business Ready", 
-        f"{readiness_color} {readiness['readiness_score']}%",
-        "Ready!" if readiness['is_ready'] else f"{len(readiness['recommendations'])} items left"
-    )
-    st.progress(readiness['readiness_score'] / 100)
-
-with col4:
-    # Consistency tracking
-    consistency = roi_metrics['consistency']
-    consistency_icon = "✅" if consistency['is_consistent'] else "⏳"
-    st.metric(
-        "📅 Consistency", 
-        f"{consistency_icon} {consistency['consistent_days']}/{consistency['required_days']} days",
-        f"{consistency['consistency_percentage']:.0f}% consistent"
-    )
-    st.progress(consistency['consistency_percentage'] / 100)
-
-# ROI Timeframe Breakdown
-st.subheader("📈 ROI Breakdown by Timeframe")
-
-col1, col2, col3 = st.columns(3)
-with col1:
-    daily_color = "success" if roi_metrics['daily_roi'] >= 70 else "info" if roi_metrics['daily_roi'] >= 0 else "error"
-    if daily_color == "success":
-        st.success(f"📅 **Daily ROI**: {roi_metrics['daily_roi']}%")
-    elif daily_color == "info":
-        st.info(f"📅 **Daily ROI**: {roi_metrics['daily_roi']}%")
-    else:
-        st.error(f"📅 **Daily ROI**: {roi_metrics['daily_roi']}%")
-
-with col2:
-    weekly_color = "success" if roi_metrics['weekly_roi'] >= 70 else "info" if roi_metrics['weekly_roi'] >= 0 else "error"
-    if weekly_color == "success":
-        st.success(f"📊 **Weekly ROI**: {roi_metrics['weekly_roi']}%")
-    elif weekly_color == "info":
-        st.info(f"📊 **Weekly ROI**: {roi_metrics['weekly_roi']}%")
-    else:
-        st.error(f"📊 **Weekly ROI**: {roi_metrics['weekly_roi']}%")
-
-with col3:
-    monthly_color = "success" if roi_metrics['monthly_roi'] >= 70 else "info" if roi_metrics['monthly_roi'] >= 0 else "error"
-    if monthly_color == "success":
-        st.success(f"📈 **Monthly ROI**: {roi_metrics['monthly_roi']}%")
-    elif monthly_color == "info":
-        st.info(f"📈 **Monthly ROI**: {roi_metrics['monthly_roi']}%")
-    else:
-        st.error(f"📈 **Monthly ROI**: {roi_metrics['monthly_roi']}%")
-
-# Milestone Progress Chart
-st.subheader("🏆 Milestone Progress")
-
-# Create milestone progress chart
-milestones_data = []
-for milestone, data in roi_metrics['milestones'].items():
-    milestone_name = milestone.replace('_percent', '').replace('_', ' ').title() + '%'
-    milestones_data.append({
-        'Milestone': milestone_name,
-        'Progress': data['progress'],
-        'Status': '✅ Achieved' if data['reached'] else f"🎯 {data['remaining']:.1f}% remaining"
-    })
-
-milestones_df = pd.DataFrame(milestones_data)
-
-# Create horizontal bar chart
-fig_milestones = px.bar(
-    milestones_df, 
-    x='Progress', 
-    y='Milestone', 
-    orientation='h',
-    title='Progress Toward ROI Milestones',
-    color='Progress',
-    color_continuous_scale=['red', 'yellow', 'green'],
-    range_color=[0, 100]
-)
-
-fig_milestones.update_layout(
-    xaxis_title="Progress (%)",
-    yaxis_title="Milestone",
-    showlegend=False,
-    height=300
-)
-
-# Add target line at 100%
-fig_milestones.add_vline(x=100, line_dash="dash", line_color="green", 
-                        annotation_text="Target", annotation_position="top")
-
-st.plotly_chart(fig_milestones, use_container_width=True)
-
-# Business Readiness Dashboard
-st.subheader("🏪 Business Readiness Dashboard")
-
-readiness = roi_metrics['business_ready']
-
-if readiness['is_ready']:
-    st.success("🎉 **BUSINESS IS READY FOR MONETIZATION!**")
-    st.success("✅ All criteria met - safe to start charging customers for tips")
+if perf_stats is not None:
+    # Calculate win rate
+    completed_tips = perf_stats['wins'] + perf_stats['losses']
+    win_rate = (perf_stats['wins'] / completed_tips * 100) if completed_tips > 0 else 0
     
-    # Show achievement metrics
-    col1, col2 = st.columns(2)
+    # Performance Summary Cards
+    col1, col2, col3, col4, col5 = st.columns(5)
+    
     with col1:
-        st.info(f"🎯 **ROI Target**: {roi_metrics['total_roi']}% (Target: {roi_metrics['target_roi']}%)")
-        st.info(f"📅 **Consistency**: {consistency['consistent_days']} consecutive days")
-    with col2:
-        st.info(f"📊 **Total Bets**: {roi_metrics['total_bets']} settled")
-        st.info(f"🎲 **Win Rate**: {roi_metrics['win_rate']}%")
-    
-else:
-    st.warning("⚠️ **Business not yet ready for monetization**")
-    st.info(f"📊 **Readiness Score**: {readiness['readiness_score']}/100")
-    
-    # Show criteria status
-    st.markdown("**📋 Readiness Criteria:**")
-    criteria = readiness['criteria']
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        roi_icon = "✅" if criteria['roi_target'] else "❌"
-        consistency_icon = "✅" if criteria['consistency'] else "❌"
-        st.write(f"{roi_icon} **ROI Target**: {roi_metrics['total_roi']}% (need 70%)")
-        st.write(f"{consistency_icon} **Consistency**: {consistency['consistent_days']}/7 days")
+        st.metric(
+            "📊 Total Tips", 
+            int(perf_stats['total_tips']),
+            "Quality recommendations"
+        )
     
     with col2:
-        bets_icon = "✅" if criteria['minimum_bets'] else "❌"
-        wr_icon = "✅" if criteria['win_rate'] else "❌"
-        st.write(f"{bets_icon} **Minimum Bets**: {roi_metrics['total_bets']}/50 settled")
-        st.write(f"{wr_icon} **Win Rate**: {roi_metrics['win_rate']}% (need 55%)")
-    
-    # Show recommendations
-    if readiness['recommendations']:
-        st.markdown("**💡 Next Steps:**")
-        for i, rec in enumerate(readiness['recommendations'], 1):
-            st.write(f"{i}. {rec}")
-    
-    # Estimated time to ready
-    if readiness.get('estimated_days_to_ready'):
-        st.info(f"⏱️ **Estimated time to ready**: {readiness['estimated_days_to_ready']} days (if current performance maintains)")
-
-# Initialize ROI tracker for the dashboard
-tracker = ROITracker()
-
-# ROI History Chart (if available)
-try:
-    roi_history = tracker.get_roi_history(30)  # Last 30 days
-    
-    if not roi_history.empty:
-        st.subheader("📈 ROI Trend (Last 30 Days)")
-        
-        # Create ROI trend chart
-        fig_trend = go.Figure()
-        
-        fig_trend.add_trace(go.Scatter(
-            x=roi_history['date'],
-            y=roi_history['total_roi'],
-            mode='lines+markers',
-            name='Total ROI',
-            line=dict(color='blue', width=2)
-        ))
-        
-        # Add target line
-        fig_trend.add_hline(
-            y=70, 
-            line_dash="dash", 
-            line_color="green",
-            annotation_text="70% Target",
-            annotation_position="bottom right"
+        st.metric(
+            "✅ Wins", 
+            int(perf_stats['wins']),
+            f"{win_rate:.1f}% win rate"
         )
-        
-        # Add milestone lines
-        fig_trend.add_hline(y=50, line_dash="dot", line_color="orange", opacity=0.5)
-        fig_trend.add_hline(y=60, line_dash="dot", line_color="orange", opacity=0.5)
-        
-        fig_trend.update_layout(
-            title="ROI Progress Over Time",
-            xaxis_title="Date",
-            yaxis_title="ROI (%)",
-            height=400,
-            showlegend=True
+    
+    with col3:
+        st.metric(
+            "❌ Losses", 
+            int(perf_stats['losses']),
+            f"{completed_tips} completed"
         )
+    
+    with col4:
+        profit_color = "normal" if perf_stats['total_profit'] >= 0 else "inverse"
+        st.metric(
+            "💰 Total P&L", 
+            f"${perf_stats['total_profit']:.2f}",
+            delta_color=profit_color
+        )
+    
+    with col5:
+        st.metric(
+            "⭐ Avg Quality", 
+            f"{perf_stats['avg_quality']:.1f}/100",
+            "AI confidence"
+        )
+    
+    # Win Rate Progress Bar
+    st.subheader("📈 Performance Overview")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Win rate visualization
+        if win_rate >= 60:
+            win_status = "Excellent"
+            win_color = "success"
+        elif win_rate >= 55:
+            win_status = "Good"
+            win_color = "info"
+        elif win_rate >= 50:
+            win_status = "Average"
+            win_color = "warning"
+        else:
+            win_status = "Building"
+            win_color = "error"
         
-        st.plotly_chart(fig_trend, use_container_width=True)
+        if win_color == "success":
+            st.success(f"🎯 **Win Rate: {win_rate:.1f}%** ({win_status})")
+        elif win_color == "info":
+            st.info(f"🎯 **Win Rate: {win_rate:.1f}%** ({win_status})")
+        elif win_color == "warning":
+            st.warning(f"🎯 **Win Rate: {win_rate:.1f}%** ({win_status})")
+        else:
+            st.error(f"🎯 **Win Rate: {win_rate:.1f}%** ({win_status})")
         
-except Exception as e:
-    st.info("📊 ROI history chart will appear as more data becomes available")
+        # Progress bar for win rate
+        st.progress(min(win_rate / 100, 1.0))
+    
+    with col2:
+        # Profit analysis
+        if perf_stats['total_profit'] > 0:
+            st.success(f"💰 **Profitable: +${perf_stats['total_profit']:.2f}**")
+            roi_percent = (perf_stats['total_profit'] / (completed_tips * 5)) * 100 if completed_tips > 0 else 0
+            st.info(f"📊 ROI: {roi_percent:.1f}% (${perf_stats['total_profit']:.2f} profit on ${completed_tips * 5:.2f} stakes)")
+        elif perf_stats['total_profit'] == 0:
+            st.info(f"📊 **Break Even: ${perf_stats['total_profit']:.2f}**")
+        else:
+            st.error(f"📉 **Loss: ${perf_stats['total_profit']:.2f}**")
+            st.info("🔄 Building authentic track record...")
+else:
+    st.warning("⚠️ Unable to load performance data")
 
-# Performance Summary
-st.subheader("📊 Performance Summary")
+# Recent Wins and Losses Display
+st.subheader("🎯 Recent Results")
 
-col1, col2, col3, col4 = st.columns(4)
+@st.cache_data(ttl=30)
+def get_recent_results():
+    """Get recent wins and losses"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        
+        # Get recent wins
+        wins_query = """
+        SELECT home_team, away_team, selection, odds, stake, profit_loss,
+               datetime(timestamp, 'unixepoch', 'localtime') as bet_time
+        FROM football_opportunities 
+        WHERE outcome IN ('won', 'win')
+        ORDER BY timestamp DESC 
+        LIMIT 10
+        """
+        wins_df = pd.read_sql_query(wins_query, conn)
+        
+        # Get recent losses
+        losses_query = """
+        SELECT home_team, away_team, selection, odds, stake, profit_loss,
+               datetime(timestamp, 'unixepoch', 'localtime') as bet_time
+        FROM football_opportunities 
+        WHERE outcome IN ('lost', 'loss')
+        ORDER BY timestamp DESC 
+        LIMIT 10
+        """
+        losses_df = pd.read_sql_query(losses_query, conn)
+        
+        conn.close()
+        return wins_df, losses_df
+    except Exception as e:
+        st.error(f"Error loading recent results: {e}")
+        return pd.DataFrame(), pd.DataFrame()
+
+wins_df, losses_df = get_recent_results()
+
+col1, col2 = st.columns(2)
 
 with col1:
-    st.metric("💰 Total Profit", f"${roi_metrics['total_profit_loss']:.2f}")
-with col2:
-    st.metric("💸 Total Stakes", f"${roi_metrics['total_stakes']:.2f}")
-with col3:
-    st.metric("🎲 Win Rate", f"{roi_metrics['win_rate']:.1f}%")
-with col4:
-    st.metric("📈 Total Bets", f"{roi_metrics['total_bets']}")
+    st.markdown("#### ✅ **Recent WINS**")
+    if not wins_df.empty:
+        for _, win in wins_df.head(5).iterrows():
+            profit = win['profit_loss']
+            st.success(f"""
+            **🎉 {win['selection']}** @ {win['odds']:.2f}  
+            ⚽ {win['home_team']} vs {win['away_team']}  
+            💰 **+${profit:.2f}** profit (${win['stake']:.2f} stake)  
+            🕒 {win['bet_time']}
+            """)
+    else:
+        st.info("🔄 Recent wins will appear here")
 
-# Latest milestone achievements
-try:
-    milestone_achievements = tracker.get_milestone_achievements()
-    if not milestone_achievements.empty:
-        st.subheader("🏆 Recent Milestones")
-        
-        with st.expander("View Milestone History", expanded=False):
-            for _, achievement in milestone_achievements.head(5).iterrows():
-                st.success(f"🎉 **{achievement['milestone_value']}% ROI** achieved on {achievement['achieved_date']} with {achievement['total_bets']} bets")
-except:
-    pass
+with col2:
+    st.markdown("#### ❌ **Recent LOSSES**")
+    if not losses_df.empty:
+        for _, loss in losses_df.head(5).iterrows():
+            loss_amount = abs(loss['profit_loss'])
+            st.error(f"""
+            **❌ {loss['selection']}** @ {loss['odds']:.2f}  
+            ⚽ {loss['home_team']} vs {loss['away_team']}  
+            💸 **-${loss_amount:.2f}** loss (${loss['stake']:.2f} stake)  
+            🕒 {loss['bet_time']}
+            """)
+    else:
+        st.info("🔄 Recent losses will appear here")
 
 st.markdown("---")
 
@@ -558,16 +488,17 @@ st.subheader("🎯 Update Bet Results")
 
 @st.cache_data(ttl=10)
 def load_pending_bets():
-    """Get REAL pending bets - only placed bets awaiting results"""
+    """Get pending tips awaiting results"""
     try:
         conn = sqlite3.connect('data/real_football.db')
         query = """
         SELECT id, home_team, away_team, selection, odds, stake, 
                datetime(timestamp, 'unixepoch', 'localtime') as bet_time
         FROM football_opportunities 
-        WHERE status = 'placed' 
-        AND (outcome IS NULL OR outcome = '')
+        WHERE (outcome IS NULL OR outcome = '' OR outcome = 'pending')
+        AND recommended_tier IS NOT NULL
         ORDER BY timestamp DESC
+        LIMIT 20
         """
         df = pd.read_sql_query(query, conn)
         conn.close()
