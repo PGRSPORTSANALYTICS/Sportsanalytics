@@ -1016,16 +1016,18 @@ class RealFootballChampion:
                     
                     # Generate odds for top exact scores
                     import random
-                    margin = random.uniform(0.15, 0.25)  # Higher margin for exact scores
+                    margin = random.uniform(0.02, 0.05)  # Lower margin for more realistic odds
                     
                     score_predictions = []
                     for score_key, score_data in exact_scores.items():
                         probability = score_data['probability']
-                        if probability > 0.01:  # Only include scores with >1% chance
-                            # Calculate odds with bookmaker margin
-                            adjusted_prob = max(0.01, probability - margin)
-                            odds = round(1 / adjusted_prob, 2)
-                            odds = max(4.00, min(50.00, odds))  # Realistic bounds for exact scores
+                        if probability > 0.005:  # Only include scores with >0.5% chance
+                            # Calculate fair odds from probability, then apply margin
+                            fair_odds = 1 / probability
+                            # Apply bookmaker margin
+                            odds_with_margin = fair_odds * (1 + margin)
+                            odds = round(odds_with_margin, 2)
+                            odds = max(4.00, min(200.00, odds))  # Realistic bounds for exact scores
                             
                             score_predictions.append({
                                 'score': score_data['score'],
@@ -1096,7 +1098,7 @@ class RealFootballChampion:
                             },
                             'form_analysis': prediction['analysis']
                         }),
-                        25.00,  # Higher stake for exact scores
+                        15.00,  # Moderate stake for exact scores
                         today_date,
                         '20:00',  # Default kickoff time
                         90 - i*5,  # Quality score decreases for less likely scores
