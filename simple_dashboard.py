@@ -241,6 +241,107 @@ if not standard_tips.empty:
 
 st.markdown("---")
 
+# === EXACT SCORE PREDICTIONS SECTION ===
+st.header("🎯 Exact Score Predictions")
+
+@st.cache_data(ttl=30)
+def get_exact_score_predictions():
+    """Get today's exact score predictions"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        from datetime import date
+        today = date.today().isoformat()
+        
+        query = """
+        SELECT home_team, away_team, selection, odds, edge_percentage, 
+               confidence, stake, league, match_date, kickoff_time,
+               datetime(timestamp, 'unixepoch', 'localtime') as found_time,
+               quality_score, analysis,
+               CASE 
+                   WHEN outcome = 'win' OR outcome = 'won' THEN '✅ Win'
+                   WHEN outcome = 'loss' OR outcome = 'lost' THEN '❌ Loss' 
+                   WHEN outcome = 'void' THEN '⚪ Void'
+                   ELSE '🔥 LIVE'
+               END as status
+        FROM football_opportunities 
+        WHERE market = 'exact_score' AND recommended_date = ?
+        ORDER BY timestamp DESC
+        """
+        df = pd.read_sql_query(query, conn, params=(today,))
+        conn.close()
+        return df
+    except Exception as e:
+        print(f"Error loading exact scores: {e}")
+        return pd.DataFrame()
+
+exact_scores = get_exact_score_predictions()
+
+if not exact_scores.empty:
+    st.success(f"🎯 **{len(exact_scores)} Exact Score Predictions for Today** - Special AI predictions with higher payouts")
+    
+    for idx, prediction in exact_scores.iterrows():
+        # Parse analysis for exact score details
+        try:
+            analysis = json.loads(prediction['analysis'])
+            exact_score_analysis = analysis.get('exact_score_analysis', {})
+            predicted_score = exact_score_analysis.get('predicted_score', 'Unknown')
+            probability = exact_score_analysis.get('probability', 0) * 100  # Convert to percentage
+            reasoning = exact_score_analysis.get('reasoning', 'AI-based prediction')
+        except:
+            predicted_score = 'Unknown'
+            probability = 0
+            reasoning = 'AI-based prediction'
+        
+        with st.expander(f"🎯 {prediction['home_team']} vs {prediction['away_team']} - Score: {predicted_score} | Status: {prediction['status']}", expanded=True):
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.write(f"**🏟️ Match:** {prediction['home_team']} vs {prediction['away_team']}")
+                st.write(f"**🏆 League:** {prediction['league']}")
+                st.write(f"**🎯 Predicted Score:** {predicted_score}")
+                st.write(f"**🎲 Probability:** {probability:.1f}%")
+                
+            with col2:
+                st.write(f"**📊 Odds:** {prediction['odds']:.2f}")
+                st.write(f"**📈 Edge:** {prediction['edge_percentage']:.1f}%")
+                st.write(f"**🎯 Confidence:** {prediction['confidence']}%")
+                st.write(f"**💰 Stake:** ${prediction['stake']:.2f}")
+                
+            with col3:
+                st.write(f"**⭐ Quality Score:** {prediction['quality_score']:.1f}/100")
+                st.write(f"**🗓️ Match Date:** {prediction['match_date']}")
+                st.write(f"**⏰ Kickoff:** {prediction['kickoff_time']}")
+                st.write(f"**📊 Status:** {prediction['status']}")
+            
+            # AI Reasoning
+            st.info(f"🧠 **AI Analysis:** {reasoning}")
+            
+            # Payout calculation
+            potential_payout = prediction['stake'] * prediction['odds']
+            potential_profit = potential_payout - prediction['stake']
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("💰 Potential Payout", f"${potential_payout:.2f}")
+            with col2:
+                st.metric("💵 Potential Profit", f"${potential_profit:.2f}")
+            with col3:
+                st.metric("🎯 Return on Investment", f"{((potential_profit / prediction['stake']) * 100):.1f}%")
+                
+            # Special exact score indicator
+            if prediction['odds'] >= 10:
+                st.warning("🚀 **HIGH ODDS EXACT SCORE** - Big payout potential but higher risk")
+            elif prediction['odds'] >= 6:
+                st.info("⭐ **MEDIUM ODDS EXACT SCORE** - Good balance of risk and reward")
+            else:
+                st.success("✅ **CONSERVATIVE EXACT SCORE** - Lower risk, solid prediction")
+
+else:
+    st.info("🎯 **Exact Score Predictions** - Today's special predictions will appear here")
+    st.caption("🤖 AI analyzes matches and selects the 2 best games for exact score predictions")
+
+st.markdown("---")
+
 # === TIPS SELLING DASHBOARD ===
 st.header("💡 Tips Analytics & Performance")
 
