@@ -1185,8 +1185,25 @@ class RealFootballChampion:
             kickoff_time=kickoff_time
         )
     
+    def get_todays_count(self):
+        """Get count of today's pending opportunities"""
+        today_date = datetime.now().strftime('%Y-%m-%d')
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            SELECT COUNT(*) FROM football_opportunities 
+            WHERE recommended_date = ? AND status = 'pending'
+        ''', (today_date,))
+        return cursor.fetchone()[0]
+    
     def save_opportunity(self, opportunity: FootballOpportunity):
-        """Save opportunity to database (with duplicate prevention)"""
+        """Save opportunity to database (with duplicate prevention and daily limit)"""
+        # Defense-in-depth: Check daily limit before saving
+        DAILY_LIMIT = 40
+        current_count = self.get_todays_count()
+        if current_count >= DAILY_LIMIT:
+            print(f"⚠️ DAILY LIMIT REACHED: {current_count}/{DAILY_LIMIT} bets already generated today")
+            return False
+        
         cursor = self.conn.cursor()
         
         # Check if this exact opportunity already exists TODAY
@@ -1238,23 +1255,27 @@ class RealFootballChampion:
             ))
             self.conn.commit()
             print(f"✅ SAVED: {opportunity.home_team} vs {opportunity.away_team} - Quality: {quality_score:.1f}, Date: {today_date}, Rank: 999")
+            return True
         except Exception as e:
             print(f"❌ SAVE ERROR: {e}")
             print(f"   🎯 Opportunity: {opportunity.home_team} vs {opportunity.away_team}")
             print(f"   📊 Quality Score: {quality_score}")
             print(f"   📅 Date: {today_date}")
             raise e
+        
+        return False
     
     def rank_and_tier_opportunities(self):
-        """Rank today's opportunities and assign premium/standard tiers"""
+        """Rank today's opportunities and assign premium/standard tiers (MAX 40)"""
         today_date = datetime.now().strftime('%Y-%m-%d')
         cursor = self.conn.cursor()
         
-        # Get all today's opportunities ordered by quality score
+        # Get TOP 40 today's opportunities ordered by quality score
         cursor.execute('''
             SELECT id, quality_score FROM football_opportunities 
             WHERE recommended_date = ? AND daily_rank = 999
             ORDER BY quality_score DESC
+            LIMIT 40
         ''', (today_date,))
         
         opportunities = cursor.fetchall()
@@ -1269,13 +1290,30 @@ class RealFootballChampion:
                 WHERE id = ?
             ''', (rank, tier, opp_id))
         
+        # Mark any excess opportunities as 'excess' (beyond top 40)
+        cursor.execute('''
+            UPDATE football_opportunities 
+            SET status = 'excess', recommended_tier = 'excess', daily_rank = 0
+            WHERE recommended_date = ? AND status = 'pending' AND daily_rank = 999
+        ''', (today_date,))
+        
         self.conn.commit()
         print(f"🏆 Ranked {len(opportunities)} opportunities: {min(10, len(opportunities))} premium, {max(0, len(opportunities)-10)} standard")
     
     def run_analysis_cycle(self):
-        """Run complete analysis cycle"""
+        """Run complete analysis cycle (MAX 40 bets per day)"""
         print("🏆 REAL FOOTBALL CHAMPION - ANALYSIS CYCLE")
         print("=" * 60)
+        
+        # Check daily limit first
+        DAILY_LIMIT = 40
+        current_count = self.get_todays_count()
+        if current_count >= DAILY_LIMIT:
+            print(f"⚠️ DAILY LIMIT REACHED: {current_count}/{DAILY_LIMIT} bets already generated today")
+            print("⏸️ Skipping analysis cycle until tomorrow")
+            return 0
+        
+        print(f"📊 Current daily count: {current_count}/{DAILY_LIMIT} bets")
         
         # Get matches (live or upcoming)
         matches = self.get_football_odds()
@@ -1284,11 +1322,21 @@ class RealFootballChampion:
         total_opportunities = 0
         
         for match in matches:
+            # Check if we've reached daily limit
+            if self.get_todays_count() >= DAILY_LIMIT:
+                print(f"\n⚠️ DAILY LIMIT REACHED: {DAILY_LIMIT} bets generated")
+                break
+            
             print(f"\n🔍 ANALYZING: {match['home_team']} vs {match['away_team']}")
             
             opportunities = self.find_balanced_opportunities(match)
             
             for opp in opportunities:
+                # Check limit before each save
+                if self.get_todays_count() >= DAILY_LIMIT:
+                    print(f"⚠️ DAILY LIMIT REACHED: {DAILY_LIMIT} bets generated")
+                    break
+                
                 print(f"🎯 OPPORTUNITY FOUND:")
                 print(f"   📊 {opp.selection} @ {opp.odds}")
                 print(f"   📈 Edge: {opp.edge_percentage:.1f}%")
@@ -1296,8 +1344,13 @@ class RealFootballChampion:
                 print(f"   💰 Stake: ${opp.stake:.2f}")
                 print(f"   🧠 xG Analysis: Home {opp.analysis['xg_prediction']['home_xg']:.1f}, Away {opp.analysis['xg_prediction']['away_xg']:.1f}")
                 
-                self.save_opportunity(opp)
-                total_opportunities += 1
+                saved = self.save_opportunity(opp)
+                if saved:
+                    total_opportunities += 1
+            
+            # Break outer loop if limit reached
+            if self.get_todays_count() >= DAILY_LIMIT:
+                break
         
         print(f"\n🏆 ANALYSIS COMPLETE: {total_opportunities} opportunities found")
         

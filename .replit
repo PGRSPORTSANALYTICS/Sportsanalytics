@@ -22,10 +22,6 @@ args = "install_dependencies"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Real Football Champion"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
 args = "Real Football Dashboard"
 
 [[workflows.workflow.tasks]]
@@ -47,17 +43,6 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "uv add plotly"
-
-[[workflows.workflow]]
-name = "Real Football Champion"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python real_football_champion.py"
-
-[workflows.workflow.metadata]
-outputType = "console"
 
 [[workflows.workflow]]
 name = "Real Football Dashboard"
