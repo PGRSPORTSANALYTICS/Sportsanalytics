@@ -587,56 +587,6 @@ with col2:
 
 st.markdown("---")
 
-# Update bet outcomes section
-st.subheader("🎯 Update Bet Results")
-
-@st.cache_data(ttl=10)
-def load_pending_bets():
-    """Get pending tips awaiting results"""
-    try:
-        conn = sqlite3.connect('data/real_football.db')
-        query = """
-        SELECT id, home_team, away_team, selection, odds, stake, 
-               datetime(timestamp, 'unixepoch', 'localtime') as bet_time
-        FROM football_opportunities 
-        WHERE (outcome IS NULL OR outcome = '' OR outcome = 'pending')
-        AND recommended_tier IS NOT NULL
-        ORDER BY timestamp DESC
-        LIMIT 20
-        """
-        df = pd.read_sql_query(query, conn)
-        conn.close()
-        return df
-    except:
-        return pd.DataFrame()
-
-@st.cache_data(ttl=10)
-def load_finished_bets():
-    try:
-        conn = sqlite3.connect('data/real_football.db')
-        query = """
-        SELECT home_team, away_team, selection, odds, stake, outcome, profit_loss,
-               datetime(timestamp, 'unixepoch', 'localtime') as bet_time
-        FROM football_opportunities 
-        WHERE outcome IS NOT NULL AND outcome != ''
-        ORDER BY timestamp DESC
-        LIMIT 50
-        """
-        df = pd.read_sql_query(query, conn)
-        conn.close()
-        return df
-    except:
-        return pd.DataFrame()
-
-pending_bets = load_pending_bets()
-
-if not pending_bets.empty:
-    st.warning(f"⚠️ {len(pending_bets)} old bets pending results - tips selling mode focuses on new recommendations")
-else:
-    st.success("🎉 No pending bets! All results are up to date.")
-
-st.markdown("---")
-
 # === ALL AI OPPORTUNITIES ===
 st.header("🤖 All AI Opportunities")
 
