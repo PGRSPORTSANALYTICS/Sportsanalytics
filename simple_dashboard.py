@@ -4,6 +4,7 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 import json
+import os
 from datetime import datetime
 import plotly.express as px
 import plotly.graph_objects as go
@@ -11,6 +12,16 @@ import numpy as np
 
 # Import ROI tracking system
 from roi_tracker import ROITracker, get_current_roi_metrics
+
+# Database path
+DB_PATH = 'data/real_football.db'
+
+def get_db_cache_key():
+    """Generate cache key based on database modification time"""
+    try:
+        return f"db_cache_{os.path.getmtime(DB_PATH)}"
+    except:
+        return f"db_cache_{datetime.now().timestamp()}"
 
 def confidence_to_stars(confidence):
     """Convert confidence score to stars"""
@@ -28,11 +39,11 @@ st.set_page_config(
 )
 
 # Load data functions
-@st.cache_data(ttl=30)
-def load_current_opportunities():
+@st.cache_data(ttl=10)
+def load_current_opportunities(cache_key=None):
     """Get recent betting opportunities"""
     try:
-        conn = sqlite3.connect('data/real_football.db')
+        conn = sqlite3.connect(DB_PATH)
         thirty_min_ago = datetime.now().timestamp() - (30 * 60)
         query = f"""
         SELECT home_team, away_team, selection, odds, edge_percentage, 
@@ -55,11 +66,11 @@ def load_current_opportunities():
     except:
         return pd.DataFrame()
 
-@st.cache_data(ttl=60)
-def load_performance():
+@st.cache_data(ttl=10)
+def load_performance(cache_key=None):
     """Get betting performance stats"""
     try:
-        conn = sqlite3.connect('data/real_football.db')
+        conn = sqlite3.connect(DB_PATH)
         query = """
         SELECT 
             COUNT(*) as total_bets,
@@ -77,11 +88,11 @@ def load_performance():
     except:
         return None
 
-@st.cache_data(ttl=60)
-def load_recent_bets():
+@st.cache_data(ttl=10)
+def load_recent_bets(cache_key=None):
     """Get recent betting history"""
     try:
-        conn = sqlite3.connect('data/real_football.db')
+        conn = sqlite3.connect(DB_PATH)
         query = """
         SELECT home_team, away_team, selection, odds, stake, outcome, profit_loss,
                datetime(timestamp, 'unixepoch', 'localtime') as bet_time
@@ -100,16 +111,22 @@ st.title("🏆 Premium Football Tips Platform")
 st.markdown("**AI-Powered Quality Tips with Daily Limits & ROI Focus**")
 
 # === TOP RECOMMENDED TIPS SECTION ===
-st.header("🌟 Today's Recommended Tips")
+col1, col2 = st.columns([3, 1])
+with col1:
+    st.header("🌟 Today's Recommended Tips")
+with col2:
+    if st.button("🔄 Refresh Data", help="Force refresh from database"):
+        st.cache_data.clear()
+        st.rerun()
 
-@st.cache_data(ttl=60)
-def load_recommended_tips():
+@st.cache_data(ttl=10)
+def load_recommended_tips(cache_key=None):
     """Load today's recommended tips with quality scoring"""
     try:
         from datetime import date
         today = date.today().isoformat()
         
-        conn = sqlite3.connect('data/real_football.db')
+        conn = sqlite3.connect(DB_PATH)
         
         # Get premium tips (top 10)
         premium_query = """
@@ -139,7 +156,9 @@ def load_recommended_tips():
         st.error(f"Error loading recommended tips: {e}")
         return pd.DataFrame(), pd.DataFrame()
 
-premium_tips, standard_tips = load_recommended_tips()
+# Load tips with cache-busting
+cache_key = get_db_cache_key()
+premium_tips, standard_tips = load_recommended_tips(cache_key)
 
 # Display daily tip usage metrics
 col1, col2, col3, col4 = st.columns(4)
