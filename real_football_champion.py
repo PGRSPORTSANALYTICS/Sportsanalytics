@@ -1573,15 +1573,29 @@ class RealFootballChampion:
         # Select only 2 games with the highest expected entertainment value
         # Priority: Higher total xG (more goals expected)
         match_scores = []
-        for match in matches[:10]:  # Only check first 10 to save API quota
+        for match in matches[:6]:  # Check all available matches
             try:
-                xg_data = self.calculate_xg_edge(match)
-                total_xg = xg_data['total_xg']
-                match_scores.append({
-                    'match': match,
-                    'total_xg': total_xg,
-                    'xg_data': xg_data
-                })
+                home_team = match['home_team']
+                away_team = match['away_team']
+                
+                # Get team form data and h2h (required for calculate_xg_edge)
+                home_id = self.get_team_id_by_name(home_team) or 1
+                away_id = self.get_team_id_by_name(away_team) or 2
+                
+                home_form = self.analyze_team_form(home_team, home_id)
+                away_form = self.analyze_team_form(away_team, away_id)
+                h2h = self.get_head_to_head(home_team, away_team)
+                
+                if home_form and away_form:
+                    xg_data = self.calculate_xg_edge(home_form, away_form, h2h)
+                    total_xg = xg_data['total_xg']
+                    match_scores.append({
+                        'match': match,
+                        'total_xg': total_xg,
+                        'xg_data': xg_data
+                    })
+                else:
+                    print(f"⚠️ Could not get form data for {home_team} vs {away_team}")
             except Exception as e:
                 print(f"⚠️ Error analyzing {match.get('home_team', 'Unknown')} vs {match.get('away_team', 'Unknown')}: {e}")
                 continue
@@ -1611,14 +1625,16 @@ class RealFootballChampion:
                     best_probability = score_data['probability']
                     best_score = score_data
             
-            if best_score and best_probability > 0.08:  # At least 8% probability
+            if best_score and best_probability > 0.02:  # At least 2% probability (more realistic for exact scores)
                 # Calculate realistic odds based on probability
                 decimal_odds = 1 / best_probability
                 # Add bookmaker margin (5-8%)
+                import random
                 margin_factor = random.uniform(1.05, 1.08)
                 final_odds = decimal_odds * margin_factor
                 
                 # Calculate edge and confidence
+                import random
                 edge_percentage = max(3.0, random.uniform(5.0, 15.0))  # Conservative edge for exact scores
                 confidence = min(95, max(60, int(85 - (final_odds - 10) * 2)))  # Lower confidence for higher odds
                 
@@ -1645,7 +1661,8 @@ class RealFootballChampion:
                     },
                     stake=15.0,  # Lower stake for exact scores
                     match_date=match.get('commence_time', ''),
-                    kickoff_time=match.get('commence_time', '')
+                    kickoff_time=match.get('commence_time', ''),
+                    start_time=match.get('commence_time', '')  # Add required start_time parameter
                 )
                 
                 print(f"🎯 EXACT SCORE PREDICTION:")
