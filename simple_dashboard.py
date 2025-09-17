@@ -280,9 +280,11 @@ if not exact_scores.empty:
     st.success(f"🎯 **{len(exact_scores)} Exact Score Predictions for Today** - Special AI predictions with higher payouts")
     
     for idx, prediction in exact_scores.iterrows():
+        if exact_scores.empty:
+            continue
         # Parse analysis for exact score details
         try:
-            analysis_str = str(prediction['analysis']) if pd.notna(prediction['analysis']) and prediction['analysis'] else '{}'
+            analysis_str = str(prediction['analysis']) if pd.notna(prediction['analysis']) else '{}'
             analysis = json.loads(analysis_str)
             exact_score_analysis = analysis.get('exact_score_analysis', {})
             predicted_score = exact_score_analysis.get('predicted_score', 'Unknown')

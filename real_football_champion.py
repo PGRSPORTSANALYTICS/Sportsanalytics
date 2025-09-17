@@ -462,7 +462,7 @@ class RealFootballChampion:
             except Exception as e:
                 print(f"❌ Error fetching league {league_id}: {e}")
         
-        # Filter matches to only near-time betting (next 3 days)
+        # Filter matches to only near-time betting (today/tomorrow only)
         near_time_matches = self.filter_near_time_matches(all_matches)
         
         # If no odds available after filtering, try getting upcoming fixtures
@@ -471,7 +471,7 @@ class RealFootballChampion:
             all_matches = self.get_upcoming_fixtures()
             near_time_matches = self.filter_near_time_matches(all_matches)
         
-        print(f"📅 Filtered to {len(near_time_matches)} near-time matches (next 3 days)")
+        print(f"📅 Filtered to {len(near_time_matches)} near-time matches (today/tomorrow only)")
         return near_time_matches
     
     def filter_near_time_matches(self, matches: List[Dict]) -> List[Dict]:
@@ -1575,7 +1575,7 @@ class RealFootballChampion:
         match_scores = []
         for match in matches[:10]:  # Only check first 10 to save API quota
             try:
-                xg_data = self.calculate_advanced_xg_metrics(match)
+                xg_data = self.calculate_xg_edge(match)
                 total_xg = xg_data['total_xg']
                 match_scores.append({
                     'match': match,
