@@ -417,9 +417,9 @@ class RealFootballChampion:
         
         for league_id in league_ids[:20]:  # Limit to top 20 leagues to preserve quota
             try:
-                # Get upcoming fixtures for next 3 days (not just today!)
+                # Get upcoming fixtures for TODAY and TOMORROW only
                 url = f"{self.api_football_base_url}/fixtures"
-                end_date = today + timedelta(days=3)
+                end_date = today + timedelta(days=1)  # Only today + tomorrow
                 params = {
                     'league': league_id,
                     'season': 2025,  # FIXED: Using current season 2025!
@@ -475,14 +475,14 @@ class RealFootballChampion:
         return near_time_matches
     
     def filter_near_time_matches(self, matches: List[Dict]) -> List[Dict]:
-        """Filter matches to only those happening in the next 3 days (near-time betting)"""
+        """Filter matches to only those happening TODAY and TOMORROW (near-time betting)"""
         from datetime import datetime, timedelta
         
         if not matches:
             return []
         
         now = datetime.now()
-        three_days_later = now + timedelta(days=3)
+        tomorrow_end = now + timedelta(days=1)  # Only today + tomorrow
         
         near_time_matches = []
         
@@ -497,8 +497,8 @@ class RealFootballChampion:
                 # Convert to local time for comparison
                 match_time_local = match_time.replace(tzinfo=None)
                 
-                # Only include matches starting within next 3 days
-                if now <= match_time_local <= three_days_later:
+                # Only include matches starting TODAY or TOMORROW
+                if now <= match_time_local <= tomorrow_end:
                     near_time_matches.append(match)
                     
             except Exception as e:
