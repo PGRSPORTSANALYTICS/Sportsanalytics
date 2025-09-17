@@ -267,7 +267,7 @@ def get_exact_score_predictions():
         WHERE market = 'exact_score' AND recommended_date = ?
         ORDER BY timestamp DESC
         """
-        df = pd.read_sql_query(query, conn, params=(today,))
+        df = pd.read_sql_query(query, conn, params=[today])
         conn.close()
         return df
     except Exception as e:
@@ -282,7 +282,8 @@ if not exact_scores.empty:
     for idx, prediction in exact_scores.iterrows():
         # Parse analysis for exact score details
         try:
-            analysis = json.loads(prediction['analysis'])
+            analysis_str = str(prediction['analysis']) if pd.notna(prediction['analysis']) and prediction['analysis'] else '{}'
+            analysis = json.loads(analysis_str)
             exact_score_analysis = analysis.get('exact_score_analysis', {})
             predicted_score = exact_score_analysis.get('predicted_score', 'Unknown')
             probability = exact_score_analysis.get('probability', 0) * 100  # Convert to percentage
