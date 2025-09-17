@@ -160,10 +160,6 @@ def load_recommended_tips(cache_key=None):
 cache_key = get_db_cache_key()
 premium_tips, standard_tips = load_recommended_tips(cache_key)
 
-# Debug information
-st.write(f"🔍 **Debug Info:** Found {len(premium_tips)} premium tips, {len(standard_tips)} standard tips")
-if not premium_tips.empty:
-    st.write(f"📊 **Sample Premium Tip:** {premium_tips.iloc[0]['home_team']} vs {premium_tips.iloc[0]['away_team']} - {premium_tips.iloc[0]['selection']} @ {premium_tips.iloc[0]['odds']}")
 
 # Display daily tip usage metrics
 col1, col2, col3, col4 = st.columns(4)
