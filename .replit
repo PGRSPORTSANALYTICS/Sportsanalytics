@@ -36,6 +36,10 @@ args = "Result Verifier"
 task = "workflow.run"
 args = "Telegram Tips Bot"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Real Football Champion"
+
 [[workflows.workflow]]
 name = "install_dependencies"
 author = "agent"
@@ -85,6 +89,17 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python3 telegram_bot.py"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow]]
+name = "Real Football Champion"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python real_football_champion.py"
 
 [workflows.workflow.metadata]
 outputType = "console"
