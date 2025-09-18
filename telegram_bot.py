@@ -49,7 +49,7 @@ class PremiumTipsBot:
         if not self.bot_token:
             raise ValueError("❌ TELEGRAM_BOT_TOKEN not found in environment variables")
         
-        logger.info("🤖 Premium Tips Bot initialized")
+        logger.info("🤖 Football Prophet Bot initialized")
     
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /start command - welcome new subscribers"""
@@ -62,7 +62,7 @@ class PremiumTipsBot:
         logger.info(f"👋 New user started bot: {username} (ID: {user_id})")
         
         welcome_message = """
-🏆 **Welcome to Premium Football Tips!**
+🏆 **Welcome to Football Prophet Bot!**
 
 Get daily AI-powered betting opportunities with:
 ✅ Quality scoring algorithm (only 40 tips/day max)
@@ -165,7 +165,7 @@ Use /help for all commands
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Show help information"""
         help_text = """
-🤖 **Premium Football Tips Bot Commands**
+🤖 **Football Prophet Bot Commands**
 
 /start - Welcome message and setup
 /tips - Get today's betting tips
@@ -334,7 +334,7 @@ Use /help for all commands
                 from datetime import datetime
                 tip_date = datetime.fromisoformat(tip_date_str).date()
         
-        message = f"🏆 **Premium Football Tips - {tip_date.strftime('%d/%m/%Y')}**\n\n"
+        message = f"🏆 **Football Prophet Tips - {tip_date.strftime('%d/%m/%Y')}**\n\n"
         
         if tips['premium']:
             message += "💎 **PREMIUM TIPS** (Score 8.0+)\n"
@@ -457,7 +457,7 @@ Use /help for all commands
     def run(self):
         """Start the Telegram bot"""
         try:
-            logger.info("🚀 Starting Premium Football Tips Bot")
+            logger.info("🚀 Starting Football Prophet Bot")
             
             if not self.bot_token:
                 logger.error("❌ Bot token not available")
