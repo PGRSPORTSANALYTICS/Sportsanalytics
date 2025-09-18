@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import streamlit as st
+import json
 import pandas as pd
 import sqlite3
 import json
@@ -64,6 +65,42 @@ def load_current_opportunities(cache_key=None):
         return df
     except:
         return pd.DataFrame()
+
+@st.cache_data(ttl=10)
+def load_ml_model_performance(cache_key=None):
+    """Get ML model performance stats"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        
+        # Get model metadata
+        model_query = """
+        SELECT name, market, trained_at, metrics_json, is_active
+        FROM model_metadata 
+        WHERE is_active = 1
+        ORDER BY trained_at DESC
+        """
+        models_df = pd.read_sql_query(model_query, conn)
+        
+        # Get recent predictions with ML data
+        predictions_query = """
+        SELECT 
+            home_team, away_team, market, selection, odds,
+            model_version, model_prob, calibrated_prob, kelly_stake,
+            outcome, edge_percentage, confidence,
+            datetime(timestamp, 'unixepoch', 'localtime') as prediction_time
+        FROM football_opportunities 
+        WHERE model_version IS NOT NULL 
+        AND timestamp >= strftime('%s', 'now', '-7 days')
+        ORDER BY timestamp DESC
+        LIMIT 50
+        """
+        predictions_df = pd.read_sql_query(predictions_query, conn)
+        
+        conn.close()
+        return models_df, predictions_df
+    except Exception as e:
+        st.error(f"Error loading ML data: {e}")
+        return pd.DataFrame(), pd.DataFrame()
 
 @st.cache_data(ttl=10)
 def load_performance(cache_key=None):
@@ -280,8 +317,6 @@ if not exact_scores.empty:
     st.success(f"🎯 **{len(exact_scores)} Exact Score Predictions for Today** - Special AI predictions with higher payouts")
     
     for idx, prediction in exact_scores.iterrows():
-        if exact_scores.empty:
-            continue
         # Parse analysis for exact score details
         try:
             analysis_str = str(prediction['analysis']) if pd.notna(prediction['analysis']) else '{}'
@@ -342,6 +377,82 @@ if not exact_scores.empty:
 else:
     st.info("🎯 **Exact Score Predictions** - Today's special predictions will appear here")
     st.caption("🤖 AI analyzes matches and selects the 2 best games for exact score predictions")
+
+st.markdown("---")
+
+# Machine Learning Model Performance section
+st.header("🧠 Machine Learning Model Performance")
+
+try:
+    models_df, predictions_df = load_ml_model_performance()
+    
+    if not models_df.empty:
+        st.success("🤖 **AI Learning System Active** - Machine learning models are enhancing prediction accuracy")
+        
+        # Model Performance Summary
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("🎯 Active Models")
+            for _, model in models_df.iterrows():
+                try:
+                    metrics = json.loads(model['metrics_json']) if model['metrics_json'] else {}
+                    auc = metrics.get('auc', 0)
+                    accuracy = metrics.get('accuracy', 0)
+                    samples = metrics.get('samples', 0)
+                    
+                    st.write(f"**{model['market'].upper()}**")
+                    st.write(f"- AUC Score: {auc:.3f}")
+                    st.write(f"- Accuracy: {accuracy:.1%}")
+                    st.write(f"- Training Samples: {samples}")
+                    st.write(f"- Last Trained: {model['trained_at'][:10]}")
+                    st.write("---")
+                except:
+                    st.write(f"**{model['market'].upper()}** - Model Active")
+        
+        with col2:
+            st.subheader("📊 Recent ML Predictions")
+            if not predictions_df.empty:
+                # Show recent predictions with ML data
+                display_predictions = predictions_df.head(10)[['prediction_time', 'home_team', 'away_team', 
+                                                               'selection', 'odds', 'model_prob', 'calibrated_prob']]
+                
+                # Format probabilities as percentages
+                if 'model_prob' in display_predictions.columns:
+                    display_predictions['model_prob'] = display_predictions['model_prob'].apply(
+                        lambda x: f"{x:.1%}" if pd.notna(x) else "N/A"
+                    )
+                if 'calibrated_prob' in display_predictions.columns:
+                    display_predictions['calibrated_prob'] = display_predictions['calibrated_prob'].apply(
+                        lambda x: f"{x:.1%}" if pd.notna(x) else "N/A"
+                    )
+                
+                st.dataframe(display_predictions, use_container_width=True)
+                
+                # ML vs Traditional Edge Comparison
+                if len(predictions_df) > 5:
+                    st.subheader("📈 ML Enhancement Analysis")
+                    
+                    # Calculate correlation between ML confidence and outcomes
+                    outcomes = predictions_df['outcome'].notna()
+                    if outcomes.sum() > 0:
+                        won_predictions = predictions_df[predictions_df['outcome'].isin(['win', 'won'])]
+                        if len(won_predictions) > 0:
+                            avg_ml_prob = won_predictions['calibrated_prob'].mean()
+                            avg_edge = won_predictions['edge_percentage'].mean()
+                            
+                            col_a, col_b = st.columns(2)
+                            with col_a:
+                                st.metric("Avg ML Probability (Wins)", f"{avg_ml_prob:.1%}" if pd.notna(avg_ml_prob) else "N/A")
+                            with col_b:
+                                st.metric("Avg Edge (Wins)", f"{avg_edge:.1f}%" if pd.notna(avg_edge) else "N/A")
+            else:
+                st.info("No recent ML predictions found. Models will enhance new opportunities.")
+    else:
+        st.warning("⚠️ **ML Models Not Found** - Learning system may be training or inactive")
+        
+except Exception as e:
+    st.error(f"❌ Error loading ML performance: {e}")
 
 st.markdown("---")
 

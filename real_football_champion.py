@@ -14,6 +14,7 @@ import statistics
 import math
 from dataclasses import dataclass
 from results_scraper import ResultsScraper
+from football_learning_system import FootballLearningSystem
 
 @dataclass
 class TeamForm:
@@ -65,6 +66,16 @@ class RealFootballChampion:
         self.odds_api_key = os.getenv('THE_ODDS_API_KEY')
         if not self.odds_api_key:
             raise Exception("❌ THE_ODDS_API_KEY required for real betting")
+        
+        # Initialize learning system
+        try:
+            self.learning_system = FootballLearningSystem()
+            self.learning_system.create_learning_tables()  # Ensure schema exists
+            self.learning_system.load_models()
+            print("🧠 Learning system initialized and models loaded")
+        except Exception as e:
+            print(f"⚠️ Learning system initialization failed: {e}")
+            self.learning_system = None
         
         # Get API-Football key from environment
         self.api_football_key = os.getenv('API_FOOTBALL_KEY')
@@ -1308,6 +1319,39 @@ class RealFootballChampion:
         kelly_fraction = edge / 100 / (odds - 1)
         stake = min(self.max_stake, max(5.0, self.base_stake * kelly_fraction))
         
+        # Get ML predictions if learning system is available
+        ml_predictions = {}
+        if self.learning_system:
+            try:
+                # Create opportunity dict for ML prediction
+                opportunity_data = {
+                    'match_id': f"{match['home_team']}_vs_{match['away_team']}",
+                    'market': 'Goals',
+                    'selection': selection,
+                    'odds': odds,
+                    'edge_percentage': edge,
+                    'confidence': confidence,
+                    'quality_score': min(10, edge),  # Simple quality score
+                    'analysis': json.dumps({
+                        'xg_prediction': xg_analysis,
+                        'home_form': {
+                            'goals_per_game': home_form.goals_scored,
+                            'xg_per_game': home_form.xg_for,
+                            'trend': home_form.form_trend
+                        },
+                        'away_form': {
+                            'goals_per_game': away_form.goals_scored,
+                            'xg_per_game': away_form.xg_for,
+                            'trend': away_form.form_trend
+                        }
+                    })
+                }
+                
+                ml_predictions = self.learning_system.predict_opportunity(opportunity_data)
+            except Exception as e:
+                print(f"⚠️ ML prediction failed: {e}")
+                ml_predictions = {}
+        
         # Compile analysis
         analysis = {
             'home_form': {
@@ -1326,7 +1370,8 @@ class RealFootballChampion:
                 'over_2_5_rate': h2h.over_2_5_rate
             },
             'xg_prediction': xg_analysis,
-            'edge_analysis': f"{edge:.1f}% mathematical edge identified"
+            'edge_analysis': f"{edge:.1f}% mathematical edge identified",
+            'ml_predictions': ml_predictions
         }
         
         # Extract match date and time
@@ -1408,13 +1453,21 @@ class RealFootballChampion:
         quality_score = (opportunity.edge_percentage * 0.7) + (opportunity.confidence * 0.3)
         today_date = datetime.now().strftime('%Y-%m-%d')
         
+        # Extract ML predictions from analysis
+        ml_predictions = opportunity.analysis.get('ml_predictions', {})
+        model_version = ml_predictions.get('model_version', None)
+        model_prob = ml_predictions.get('model_prob', None)
+        calibrated_prob = ml_predictions.get('calibrated_prob', None)
+        kelly_stake = ml_predictions.get('kelly_fraction', None)
+        
         try:
             cursor.execute('''
                 INSERT INTO football_opportunities 
                 (timestamp, match_id, home_team, away_team, league, market, selection, 
                  odds, edge_percentage, confidence, analysis, stake, match_date, kickoff_time,
-                 quality_score, recommended_date, recommended_tier, daily_rank)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 quality_score, recommended_date, recommended_tier, daily_rank,
+                 model_version, model_prob, calibrated_prob, kelly_stake)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 int(time.time()),
                 opportunity.match_id,
@@ -1433,7 +1486,11 @@ class RealFootballChampion:
                 quality_score,
                 today_date,
                 'standard',  # Will be updated in batch ranking
-                999  # Temporary rank, will be updated in batch
+                999,  # Temporary rank, will be updated in batch
+                model_version,
+                model_prob,
+                calibrated_prob,
+                kelly_stake
             ))
             self.conn.commit()
             print(f"✅ SAVED: {opportunity.home_team} vs {opportunity.away_team} - Quality: {quality_score:.1f}, Date: {today_date}, Rank: 999")

@@ -49,13 +49,14 @@ class FootballLearningSystem:
         
         # Model configuration
         self.markets = ['over_2_5', 'under_2_5', 'btts_yes', 'btts_no']
-        self.min_training_samples = 50
+        self.min_training_samples = 10  # Reduced for initial training
         self.validation_days = 30
         
         # Initialize model storage
         self.models = {}
         self.calibrators = {}
         self.scalers = {}
+        self.feature_names = {}
         
         logger.info("🧠 Football Learning System initialized")
     
@@ -149,7 +150,7 @@ class FootballLearningSystem:
             def extract_xg_features(analysis_str):
                 try:
                     if pd.isna(analysis_str):
-                        return {'home_xg': 1.5, 'away_xg': 1.5, 'total_xg': 3.0}
+                        return {'home_xg': 1.5, 'away_xg': 1.5, 'total_xg': 3.0, 'xg_diff': 0.0, 'xg_ratio': 1.0}
                     
                     analysis = json.loads(analysis_str)
                     xg_data = analysis.get('xg_prediction', {})
@@ -165,11 +166,15 @@ class FootballLearningSystem:
                         'xg_ratio': home_xg / max(away_xg, 0.1)
                     }
                 except:
-                    return {'home_xg': 1.5, 'away_xg': 1.5, 'total_xg': 3.0, 'xg_diff': 0, 'xg_ratio': 1.0}
+                    return {'home_xg': 1.5, 'away_xg': 1.5, 'total_xg': 3.0, 'xg_diff': 0.0, 'xg_ratio': 1.0}
             
             # Extract xG features
             xg_features = df['analysis'].apply(extract_xg_features)
             xg_df = pd.DataFrame(xg_features.tolist())
+            
+            # Reset indices to ensure proper concatenation
+            df = df.reset_index(drop=True)
+            xg_df = xg_df.reset_index(drop=True)
             df = pd.concat([df, xg_df], axis=1)
             
             # Time-based features
@@ -194,7 +199,18 @@ class FootballLearningSystem:
                 'is_over_market', 'is_under_market', 'is_btts_market'
             ]
             
-            return df[feature_columns + ['market', 'selection', 'outcome', 'match_date', 'match_id']]
+            # Check which columns actually exist
+            available_features = [col for col in feature_columns if col in df.columns]
+            missing_features = [col for col in feature_columns if col not in df.columns]
+            
+            if missing_features:
+                logger.warning(f"Missing features: {missing_features}")
+                logger.info(f"Available columns: {list(df.columns)}")
+            
+            metadata_columns = ['market', 'selection', 'outcome', 'match_date', 'match_id']
+            available_metadata = [col for col in metadata_columns if col in df.columns]
+            
+            return df[available_features + available_metadata]
             
         except Exception as e:
             logger.error(f"❌ Error extracting features: {e}")
@@ -221,20 +237,23 @@ class FootballLearningSystem:
                 FROM football_opportunities 
                 WHERE outcome IS NOT NULL 
                 AND recommended_tier IS NOT NULL
-                AND market LIKE ?
+                AND ((market LIKE ? AND selection LIKE ?) OR (market LIKE ? AND selection LIKE ?))
                 ORDER BY match_date ASC
             """
             
-            # Map market types to SQL patterns
-            market_patterns = {
-                'over_2_5': '%over%2.5%',
-                'under_2_5': '%under%2.5%', 
-                'btts_yes': '%btts%yes%',
-                'btts_no': '%btts%no%'
-            }
+            # Map market types to market and selection patterns
+            if market == 'over_2_5':
+                params = ('%goals%', '%over%2.5%', '%over%', '%2.5%')
+            elif market == 'under_2_5':
+                params = ('%goals%', '%under%2.5%', '%under%', '%2.5%')
+            elif market == 'btts_yes':
+                params = ('%teams%score%', '%btts%yes%', '%teams%score%', '%yes%')
+            elif market == 'btts_no':
+                params = ('%teams%score%', '%btts%no%', '%teams%score%', '%no%')
+            else:
+                params = (f'%{market}%', f'%{market}%', f'%{market}%', f'%{market}%')
             
-            pattern = market_patterns.get(market, f'%{market}%')
-            df = pd.read_sql_query(query, conn, params=(pattern,))
+            df = pd.read_sql_query(query, conn, params=params)
             conn.close()
             
             if len(df) < self.min_training_samples:
@@ -245,7 +264,7 @@ class FootballLearningSystem:
             features_df = self.extract_features(df)
             
             # Create binary labels (1 for win, 0 for loss)
-            labels = (df['outcome'] == 'won').astype(int)
+            labels = (df['outcome'].isin(['won', 'win'])).astype(int)
             
             logger.info(f"📊 Prepared {len(features_df)} training samples for {market}")
             return features_df, labels
@@ -277,19 +296,41 @@ class FootballLearningSystem:
             feature_cols = [col for col in features_df.columns 
                           if col not in ['market', 'selection', 'outcome', 'match_date', 'match_id']]
             
+            logger.info(f"Feature columns for {market}: {feature_cols}")
+            logger.info(f"Features shape before selection: {features_df.shape}")
+            
             X = features_df[feature_cols].fillna(0)
+            logger.info(f"X shape after feature selection: {X.shape}")
+            logger.info(f"Labels shape: {labels.shape}")
             y = labels
             
             # Time-based split for validation
             cutoff_date = features_df['match_date'].max() - timedelta(days=self.validation_days)
+            logger.info(f"Cutoff date: {cutoff_date}")
+            logger.info(f"Date range: {features_df['match_date'].min()} to {features_df['match_date'].max()}")
+            
             train_mask = features_df['match_date'] <= cutoff_date
             val_mask = features_df['match_date'] > cutoff_date
             
-            X_train, X_val = X[train_mask], X[val_mask]
-            y_train, y_val = y[train_mask], y[val_mask]
+            logger.info(f"Train mask sum: {train_mask.sum()}, Val mask sum: {val_mask.sum()}")
+            
+            # If no training data (all data is too recent), use 80/20 split instead
+            if train_mask.sum() == 0:
+                logger.info("All data is recent, using 80/20 split instead of time-based split")
+                split_idx = int(0.8 * len(X))
+                X_train = X.iloc[:split_idx]
+                X_val = X.iloc[split_idx:]
+                y_train = y.iloc[:split_idx]
+                y_val = y.iloc[split_idx:]
+            else:
+                X_train, X_val = X[train_mask], X[val_mask]
+                y_train, y_val = y[train_mask], y[val_mask]
+            
+            logger.info(f"Final X_train shape: {X_train.shape}, X_val shape: {X_val.shape}")
             
             if len(X_val) == 0:
                 # Use all data for training if no validation split possible
+                logger.info("No validation data, using all data for both train and val")
                 X_train, X_val = X, X
                 y_train, y_val = y, y
             
@@ -307,9 +348,9 @@ class FootballLearningSystem:
             )
             model.fit(X_train_scaled, y_train)
             
-            # Calibrate probabilities
-            calibrator = CalibratedClassifierCV(model, method='isotonic', cv=3)
-            calibrator.fit(X_train_scaled, y_train)
+            # Calibrate probabilities (use prefit to avoid refitting)
+            calibrator = CalibratedClassifierCV(model, method='isotonic', cv='prefit')
+            calibrator.fit(X_val_scaled, y_val)
             
             # Evaluate model
             val_probs = calibrator.predict_proba(X_val_scaled)[:, 1]
@@ -331,15 +372,18 @@ class FootballLearningSystem:
             model_path = self.models_dir / f'{market}_model_{version}.joblib'
             calibrator_path = self.models_dir / f'{market}_calibrator_{version}.joblib'
             scaler_path = self.models_dir / f'{market}_scaler_{version}.joblib'
+            features_path = self.models_dir / f'{market}_features_{version}.joblib'
             
             joblib.dump(model, model_path)
             joblib.dump(calibrator, calibrator_path)
             joblib.dump(scaler, scaler_path)
+            joblib.dump(feature_cols, features_path)  # Save feature order
             
             # Store in memory
             self.models[market] = model
             self.calibrators[market] = calibrator
             self.scalers[market] = scaler
+            self.feature_names[market] = feature_cols
             
             # Save metadata to database
             self._save_model_metadata(market, version, metrics)
@@ -375,10 +419,28 @@ class FootballLearningSystem:
                 }
             
             # Extract features for this opportunity
-            features = self._extract_opportunity_features(opportunity)
+            all_features = self._extract_opportunity_features(opportunity)
             
-            if features is None:
+            if all_features is None:
                 return self._fallback_prediction()
+            
+            # Get saved feature order for this market
+            if market_key not in self.feature_names:
+                logger.warning(f"No feature names saved for market {market_key}")
+                return self._fallback_prediction()
+            
+            feature_order = self.feature_names[market_key]
+            
+            # Create feature dict and reorder according to saved order
+            feature_dict = dict(zip([
+                'odds_implied_prob', 'edge_decimal', 'confidence_scaled', 'quality_scaled',
+                'home_xg', 'away_xg', 'total_xg', 'xg_diff', 'xg_ratio',
+                'day_of_week', 'month', 'league_frequency',
+                'is_over_market', 'is_under_market', 'is_btts_market'
+            ], all_features))
+            
+            # Select only features used by this market's model, in correct order
+            features = [feature_dict.get(fname, 0.0) for fname in feature_order]
             
             # Scale features
             scaler = self.scalers[market_key]
@@ -558,11 +620,13 @@ class FootballLearningSystem:
                     model_path = self.models_dir / f'{market}_model_{version}.joblib'
                     calibrator_path = self.models_dir / f'{market}_calibrator_{version}.joblib'
                     scaler_path = self.models_dir / f'{market}_scaler_{version}.joblib'
+                    features_path = self.models_dir / f'{market}_features_{version}.joblib'
                     
-                    if all(p.exists() for p in [model_path, calibrator_path, scaler_path]):
+                    if all(p.exists() for p in [model_path, calibrator_path, scaler_path, features_path]):
                         self.models[market] = joblib.load(model_path)
                         self.calibrators[market] = joblib.load(calibrator_path)
                         self.scalers[market] = joblib.load(scaler_path)
+                        self.feature_names[market] = joblib.load(features_path)
                         
                         logger.info(f"✅ Loaded model for {market} (version: {version})")
             
