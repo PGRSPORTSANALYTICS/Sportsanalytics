@@ -47,9 +47,9 @@ class FootballLearningSystem:
         self.models_dir = Path('data/models')
         self.models_dir.mkdir(exist_ok=True)
         
-        # Model configuration
+        # Model configuration - FIXED: Prevent overfitting with higher requirements
         self.markets = ['over_2_5', 'under_2_5', 'btts_yes', 'btts_no']
-        self.min_training_samples = 10  # Reduced for initial training
+        self.min_training_samples = 100  # 🔧 CRITICAL FIX: Increased from 10 to prevent overfitting
         self.validation_days = 30
         
         # Initialize model storage
@@ -339,11 +339,13 @@ class FootballLearningSystem:
             X_train_scaled = scaler.fit_transform(X_train)
             X_val_scaled = scaler.transform(X_val)
             
-            # Train base model
+            # Train base model - FIXED: More conservative to prevent overfitting
             model = GradientBoostingClassifier(
-                n_estimators=100,
-                max_depth=4,
-                learning_rate=0.1,
+                n_estimators=50,  # 🔧 Reduced from 100 to prevent overfitting
+                max_depth=3,      # 🔧 Reduced from 4 to prevent overfitting  
+                learning_rate=0.05, # 🔧 Reduced from 0.1 for more conservative learning
+                min_samples_split=20,  # 🔧 NEW: Require more samples to split
+                min_samples_leaf=10,   # 🔧 NEW: Require more samples per leaf
                 random_state=42
             )
             model.fit(X_train_scaled, y_train)
