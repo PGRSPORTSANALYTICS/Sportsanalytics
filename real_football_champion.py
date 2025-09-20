@@ -1222,36 +1222,14 @@ class RealFootballChampion:
                         point = outcome.get('point', 0)
                         
                         if 'Over' in name and point == 2.5 and 1.55 <= odds <= 2.50:
-                            implied_prob = 1.0 / odds
-                            true_prob = xg_analysis['over_2_5_prob']
-                            edge = (true_prob - implied_prob) * 100
-                            
-                            if edge >= self.min_edge:
-                                opportunity = self.create_opportunity(
-                                    match, 'Over 2.5', odds, edge, 
-                                    home_form, away_form, h2h, xg_analysis
-                                )
-                                # 🔧 CRITICAL: Enforce confidence filtering
-                                if opportunity.confidence >= self.min_confidence:
-                                    potential_opportunities.append((opportunity, edge))
-                                else:
-                                    print(f"⚠️ FILTERED LOW CONFIDENCE: {opportunity.home_team} vs {opportunity.away_team} - {opportunity.confidence}% < {self.min_confidence}%")
+                            # 🚫 GOALS MARKET DISABLED - Focus on BTTS (55% vs 51% win rate)
+                            print(f"🚫 SKIPPED GOALS MARKET: {match['home_team']} vs {match['away_team']} - Over 2.5 @ {odds} (Goals market disabled, BTTS focus only)")
+                            continue
                         
                         elif 'Under' in name and point == 2.5 and 1.55 <= odds <= 2.50:
-                            implied_prob = 1.0 / odds
-                            true_prob = 1.0 - xg_analysis['over_2_5_prob']
-                            edge = (true_prob - implied_prob) * 100
-                            
-                            if edge >= self.min_edge:
-                                opportunity = self.create_opportunity(
-                                    match, 'Under 2.5', odds, edge,
-                                    home_form, away_form, h2h, xg_analysis
-                                )
-                                # 🔧 CRITICAL: Enforce confidence filtering
-                                if opportunity.confidence >= self.min_confidence:
-                                    potential_opportunities.append((opportunity, edge))
-                                else:
-                                    print(f"⚠️ FILTERED LOW CONFIDENCE: {opportunity.home_team} vs {opportunity.away_team} - {opportunity.confidence}% < {self.min_confidence}%")
+                            # 🚫 GOALS MARKET DISABLED - Focus on BTTS (55% vs 51% win rate) 
+                            print(f"🚫 SKIPPED GOALS MARKET: {match['home_team']} vs {match['away_team']} - Under 2.5 @ {odds} (Goals market disabled, BTTS focus only)")
+                            continue
                 
                 elif market_key == 'btts':
                     found_btts = True
@@ -1279,38 +1257,12 @@ class RealFootballChampion:
         if not found_totals or not found_btts or not bookmakers:
             estimated_odds = self.generate_estimated_odds(xg_analysis)
             
-            # Add Over 2.5 if not found from bookmakers
+            # 🚫 GOALS MARKET DISABLED - Over 2.5 fallback disabled (Focus on BTTS: 55% vs 51% win rate)
             if not found_totals:
-                implied_prob = 1.0 / estimated_odds['over_2_5']
-                true_prob = xg_analysis['over_2_5_prob']
-                edge = (true_prob - implied_prob) * 100
+                print(f"🚫 SKIPPED GOALS FALLBACK: {match['home_team']} vs {match['away_team']} - Over 2.5 estimated @ {estimated_odds['over_2_5']:.2f} (Goals market disabled)")
                 
-                if edge >= self.min_edge and 1.55 <= estimated_odds['over_2_5'] <= 2.50:
-                    opportunity = self.create_opportunity(
-                        match, 'Over 2.5', estimated_odds['over_2_5'], edge,
-                        home_form, away_form, h2h, xg_analysis
-                    )
-                    # 🔧 CRITICAL: Enforce confidence filtering
-                    if opportunity.confidence >= self.min_confidence:
-                        potential_opportunities.append((opportunity, edge))
-                    else:
-                        print(f"⚠️ FILTERED LOW CONFIDENCE: {opportunity.home_team} vs {opportunity.away_team} - {opportunity.confidence}% < {self.min_confidence}%")
-                
-                # Add Under 2.5 if not found from bookmakers
-                implied_prob = 1.0 / estimated_odds['under_2_5']
-                true_prob = 1.0 - xg_analysis['over_2_5_prob']
-                edge = (true_prob - implied_prob) * 100
-                
-                if edge >= self.min_edge and 1.55 <= estimated_odds['under_2_5'] <= 2.50:
-                    opportunity = self.create_opportunity(
-                        match, 'Under 2.5', estimated_odds['under_2_5'], edge,
-                        home_form, away_form, h2h, xg_analysis
-                    )
-                    # 🔧 CRITICAL: Enforce confidence filtering
-                    if opportunity.confidence >= self.min_confidence:
-                        potential_opportunities.append((opportunity, edge))
-                    else:
-                        print(f"⚠️ FILTERED LOW CONFIDENCE: {opportunity.home_team} vs {opportunity.away_team} - {opportunity.confidence}% < {self.min_confidence}%")
+                # 🚫 GOALS MARKET DISABLED - Under 2.5 fallback disabled (Focus on BTTS: 55% vs 51% win rate)
+                print(f"🚫 SKIPPED GOALS FALLBACK: {match['home_team']} vs {match['away_team']} - Under 2.5 estimated @ {estimated_odds['under_2_5']:.2f} (Goals market disabled)")
             
             # Add BTTS if not found from bookmakers
             if not found_btts:
@@ -1585,7 +1537,7 @@ class RealFootballChampion:
         print(f"🏆 Ranked {len(opportunities)} opportunities: {min(10, len(opportunities))} premium, {max(0, len(opportunities)-10)} standard")
     
     def run_analysis_cycle(self):
-        """Run complete analysis cycle (MAX 40 bets per day)"""
+        """Run complete analysis cycle (MAX 10 BTTS bets per day - Goals market disabled)"""
         print("🏆 REAL FOOTBALL CHAMPION - ANALYSIS CYCLE")
         print("=" * 60)
         
