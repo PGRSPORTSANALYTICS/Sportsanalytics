@@ -285,6 +285,15 @@ class Bet365ESoccerScraper:
     
     def place_bet(self, match_data: Dict, market: str, odds: float, stake: float) -> Dict:
         """Place a real bet on bet365"""
+        
+        # 🛑 EMERGENCY KILL-SWITCH - PREVENT REAL MONEY BETTING
+        import os
+        enable_real_bets = os.getenv('ENABLE_REAL_BETS', '0')
+        if enable_real_bets != '1':
+            print("🛑 EMERGENCY KILL-SWITCH ACTIVE - BET365 BETTING DISABLED")
+            print("💡 Set ENABLE_REAL_BETS=1 environment variable to enable real betting")
+            return {'success': False, 'error': 'REAL_BETTING_DISABLED', 'blocked_bet': {'stake': stake, 'odds': odds, 'market': market}}
+        
         if not self.logged_in:
             return {'success': False, 'error': 'Not logged in'}
         
@@ -453,6 +462,15 @@ class RealESoccerChampion:
     
     async def place_real_bet(self, opportunity: Dict) -> bool:
         """Place a real bet"""
+        
+        # 🛑 EMERGENCY KILL-SWITCH - PREVENT REAL MONEY BETTING
+        import os
+        enable_real_bets = os.getenv('ENABLE_REAL_BETS', '0')
+        if enable_real_bets != '1':
+            print("🛑 EMERGENCY KILL-SWITCH ACTIVE - REAL E-SOCCER BETTING DISABLED")
+            print("💡 Set ENABLE_REAL_BETS=1 environment variable to enable real betting")
+            return False
+        
         stake = self.calculate_stake(opportunity)
         
         # Save to database first

@@ -219,6 +219,29 @@ class RealBettingSystem:
     def place_real_bet(self, opportunity: Dict, stake_amount: float) -> Dict:
         """Place a real bet (placeholder for actual betting API)"""
         
+        # 🛑 EMERGENCY KILL-SWITCH - PREVENT REAL MONEY BETTING
+        enable_real_bets = os.getenv('ENABLE_REAL_BETS', '0')
+        if enable_real_bets != '1':
+            print("🛑 EMERGENCY KILL-SWITCH ACTIVE - REAL BETTING DISABLED")
+            print("💡 Set ENABLE_REAL_BETS=1 environment variable to enable real betting")
+            print(f"🎯 WOULD PLACE REAL BET (BLOCKED):")
+            print(f"   🏟️  {opportunity['home_team']} vs {opportunity['away_team']}")
+            print(f"   📊 Market: {opportunity['market']}")
+            print(f"   💰 Odds: {opportunity['odds']}")
+            print(f"   🏪 Bookmaker: {opportunity['bookmaker']}")
+            print(f"   💵 Stake: ${stake_amount}")
+            
+            return {
+                'success': False,
+                'error': 'REAL_BETTING_DISABLED',
+                'message': 'Emergency kill-switch active - real betting disabled',
+                'blocked_bet': {
+                    'stake': stake_amount,
+                    'odds': opportunity['odds'],
+                    'market': opportunity['market']
+                }
+            }
+        
         print(f"🎯 PLACING REAL BET:")
         print(f"   🏟️  {opportunity['home_team']} vs {opportunity['away_team']}")
         print(f"   📊 Market: {opportunity['market']}")

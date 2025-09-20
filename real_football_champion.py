@@ -1078,6 +1078,16 @@ class RealFootballChampion:
     
     def save_exact_score_predictions(self, predictions: List[Dict]):
         """Save exact score predictions to database"""
+        
+        # 🛑 EMERGENCY KILL-SWITCH - PREVENT REAL MONEY BETTING
+        import os
+        enable_real_bets = os.getenv('ENABLE_REAL_BETS', '0')
+        if enable_real_bets != '1':
+            print("🛑 EMERGENCY KILL-SWITCH ACTIVE - EXACT SCORE PREDICTIONS DISABLED")
+            print("💡 Set ENABLE_REAL_BETS=1 environment variable to enable real betting")
+            print(f"🎯 WOULD SAVE {len(predictions)} EXACT SCORE PREDICTIONS (BLOCKED)")
+            return
+        
         cursor = self.conn.cursor()
         today_date = datetime.now().strftime('%Y-%m-%d')
         
@@ -1424,6 +1434,16 @@ class RealFootballChampion:
     
     def save_opportunity(self, opportunity: FootballOpportunity):
         """Save opportunity to database (with duplicate prevention and daily limit)"""
+        
+        # 🛑 EMERGENCY KILL-SWITCH - PREVENT REAL MONEY BETTING
+        import os
+        enable_real_bets = os.getenv('ENABLE_REAL_BETS', '0')
+        if enable_real_bets != '1':
+            print("🛑 EMERGENCY KILL-SWITCH ACTIVE - FOOTBALL BETTING DISABLED")
+            print("💡 Set ENABLE_REAL_BETS=1 environment variable to enable real betting")
+            print(f"🎯 WOULD SAVE OPPORTUNITY (BLOCKED): {opportunity.home_team} vs {opportunity.away_team} - {opportunity.selection} @ {opportunity.odds} - Stake: ${opportunity.stake}")
+            return False
+        
         # Defense-in-depth: Check daily limit before saving
         DAILY_LIMIT = 40
         current_count = self.get_todays_count()
@@ -1739,6 +1759,16 @@ class RealFootballChampion:
     
     def save_exact_score_opportunity(self, opportunity: FootballOpportunity):
         """Save exact score opportunity to database (separate from daily limit)"""
+        
+        # 🛑 EMERGENCY KILL-SWITCH - PREVENT REAL MONEY BETTING
+        import os
+        enable_real_bets = os.getenv('ENABLE_REAL_BETS', '0')
+        if enable_real_bets != '1':
+            print("🛑 EMERGENCY KILL-SWITCH ACTIVE - EXACT SCORE BETTING DISABLED")
+            print("💡 Set ENABLE_REAL_BETS=1 environment variable to enable real betting")
+            print(f"🎯 WOULD SAVE EXACT SCORE (BLOCKED): {opportunity.home_team} vs {opportunity.away_team} - {opportunity.selection} @ {opportunity.odds}")
+            return False
+        
         cursor = self.conn.cursor()
         
         # Check if this exact score already exists TODAY

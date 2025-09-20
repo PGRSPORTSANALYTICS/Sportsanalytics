@@ -220,6 +220,15 @@ class EliteEsoccerSystem:
     
     def find_elite_opportunities(self, matches: List) -> List[EliteBet]:
         """🏆 ELITE opportunity detection - superior to all competitors"""
+        
+        # 🛑 EMERGENCY KILL-SWITCH - PREVENT REAL MONEY BETTING  
+        import os
+        enable_real_bets = os.getenv('ENABLE_REAL_BETS', '0')
+        if enable_real_bets != '1':
+            print("🛑 EMERGENCY KILL-SWITCH ACTIVE - ELITE BETTING DISABLED")
+            print("💡 Set ENABLE_REAL_BETS=1 environment variable to enable real betting")
+            return []
+        
         elite_bets = []
         
         print(f"🏆 ELITE ANALYSIS: Scanning {len(matches)} matches with advanced AI...")

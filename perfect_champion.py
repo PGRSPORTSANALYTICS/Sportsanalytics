@@ -228,6 +228,16 @@ class PerfectChampionSystem:
     
     def save_champion_bet(self, bet: ChampionBet, league: str) -> bool:
         """Save bet to database with NO ERRORS"""
+        
+        # 🛑 EMERGENCY KILL-SWITCH - PREVENT REAL MONEY BETTING
+        import os
+        enable_real_bets = os.getenv('ENABLE_REAL_BETS', '0')
+        if enable_real_bets != '1':
+            print("🛑 EMERGENCY KILL-SWITCH ACTIVE - CHAMPION BETTING DISABLED")
+            print("💡 Set ENABLE_REAL_BETS=1 environment variable to enable real betting")
+            print(f"🎯 WOULD SAVE CHAMPION BET (BLOCKED): {bet.market} @ {bet.odds} - Stake: ${bet.stake}")
+            return False
+        
         try:
             conn = sqlite3.connect('data/esoccer.db')
             cur = conn.cursor()

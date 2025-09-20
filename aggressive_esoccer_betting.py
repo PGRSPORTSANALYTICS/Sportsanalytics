@@ -27,6 +27,15 @@ class AggressiveEsoccerBetting:
         
     def find_aggressive_opportunities(self, matches: List) -> List[AggressiveBet]:
         """Find betting opportunities with VERY low thresholds for continuous action"""
+        
+        # 🛑 EMERGENCY KILL-SWITCH - PREVENT REAL MONEY BETTING
+        import os
+        enable_real_bets = os.getenv('ENABLE_REAL_BETS', '0')
+        if enable_real_bets != '1':
+            print("🛑 EMERGENCY KILL-SWITCH ACTIVE - AGGRESSIVE BETTING DISABLED")
+            print("💡 Set ENABLE_REAL_BETS=1 environment variable to enable real betting")
+            return []
+        
         opportunities = []
         
         for match in matches:
