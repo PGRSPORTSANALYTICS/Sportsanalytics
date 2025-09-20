@@ -231,10 +231,11 @@ class RealFootballChampion:
             10: 'International Friendlies'
         }
         
-        # Analysis parameters - aggressive settings for good quality bets
-        self.min_edge = 1.0  # Just 1% edge for more opportunities
+        # Analysis parameters - STRICT SELECTIVITY: Quality over quantity 
+        self.min_edge = 8.0  # 🔧 CRITICAL: Increased from 1% to 8% minimum edge
         self.max_stake = 100.0  # Maximum stake per bet
         self.base_stake = 25.0  # Base stake amount
+        self.min_confidence = 70.0  # 🔧 NEW: Minimum 70% confidence required
         
         # Initialize database
         self.init_database()
@@ -1220,7 +1221,7 @@ class RealFootballChampion:
                         odds = outcome.get('price', 0)
                         point = outcome.get('point', 0)
                         
-                        if 'Over' in name and point == 2.5 and odds >= 1.5:
+                        if 'Over' in name and point == 2.5 and 1.55 <= odds <= 2.50:
                             implied_prob = 1.0 / odds
                             true_prob = xg_analysis['over_2_5_prob']
                             edge = (true_prob - implied_prob) * 100
@@ -1230,9 +1231,13 @@ class RealFootballChampion:
                                     match, 'Over 2.5', odds, edge, 
                                     home_form, away_form, h2h, xg_analysis
                                 )
-                                potential_opportunities.append((opportunity, edge))
+                                # 🔧 CRITICAL: Enforce confidence filtering
+                                if opportunity.confidence >= self.min_confidence:
+                                    potential_opportunities.append((opportunity, edge))
+                                else:
+                                    print(f"⚠️ FILTERED LOW CONFIDENCE: {opportunity.home_team} vs {opportunity.away_team} - {opportunity.confidence}% < {self.min_confidence}%")
                         
-                        elif 'Under' in name and point == 2.5 and odds >= 1.7:
+                        elif 'Under' in name and point == 2.5 and 1.55 <= odds <= 2.50:
                             implied_prob = 1.0 / odds
                             true_prob = 1.0 - xg_analysis['over_2_5_prob']
                             edge = (true_prob - implied_prob) * 100
@@ -1242,7 +1247,11 @@ class RealFootballChampion:
                                     match, 'Under 2.5', odds, edge,
                                     home_form, away_form, h2h, xg_analysis
                                 )
-                                potential_opportunities.append((opportunity, edge))
+                                # 🔧 CRITICAL: Enforce confidence filtering
+                                if opportunity.confidence >= self.min_confidence:
+                                    potential_opportunities.append((opportunity, edge))
+                                else:
+                                    print(f"⚠️ FILTERED LOW CONFIDENCE: {opportunity.home_team} vs {opportunity.away_team} - {opportunity.confidence}% < {self.min_confidence}%")
                 
                 elif market_key == 'btts':
                     found_btts = True
@@ -1250,7 +1259,7 @@ class RealFootballChampion:
                         name = outcome.get('name')
                         odds = outcome.get('price', 0)
                         
-                        if name == 'Yes' and odds >= 1.7:
+                        if name == 'Yes' and 1.55 <= odds <= 2.50:
                             implied_prob = 1.0 / odds
                             true_prob = xg_analysis['btts_prob']
                             edge = (true_prob - implied_prob) * 100
@@ -1260,7 +1269,11 @@ class RealFootballChampion:
                                     match, 'BTTS Yes', odds, edge,
                                     home_form, away_form, h2h, xg_analysis
                                 )
-                                potential_opportunities.append((opportunity, edge))
+                                # 🔧 CRITICAL: Enforce confidence filtering
+                                if opportunity.confidence >= self.min_confidence:
+                                    potential_opportunities.append((opportunity, edge))
+                                else:
+                                    print(f"⚠️ FILTERED LOW CONFIDENCE: {opportunity.home_team} vs {opportunity.away_team} - {opportunity.confidence}% < {self.min_confidence}%")
         
         # Fallback: Add estimated odds for missing markets
         if not found_totals or not found_btts or not bookmakers:
@@ -1272,24 +1285,32 @@ class RealFootballChampion:
                 true_prob = xg_analysis['over_2_5_prob']
                 edge = (true_prob - implied_prob) * 100
                 
-                if edge >= self.min_edge and estimated_odds['over_2_5'] >= 1.5:
+                if edge >= self.min_edge and 1.55 <= estimated_odds['over_2_5'] <= 2.50:
                     opportunity = self.create_opportunity(
                         match, 'Over 2.5', estimated_odds['over_2_5'], edge,
                         home_form, away_form, h2h, xg_analysis
                     )
-                    potential_opportunities.append((opportunity, edge))
+                    # 🔧 CRITICAL: Enforce confidence filtering
+                    if opportunity.confidence >= self.min_confidence:
+                        potential_opportunities.append((opportunity, edge))
+                    else:
+                        print(f"⚠️ FILTERED LOW CONFIDENCE: {opportunity.home_team} vs {opportunity.away_team} - {opportunity.confidence}% < {self.min_confidence}%")
                 
                 # Add Under 2.5 if not found from bookmakers
                 implied_prob = 1.0 / estimated_odds['under_2_5']
                 true_prob = 1.0 - xg_analysis['over_2_5_prob']
                 edge = (true_prob - implied_prob) * 100
                 
-                if edge >= self.min_edge and estimated_odds['under_2_5'] >= 1.7:
+                if edge >= self.min_edge and 1.55 <= estimated_odds['under_2_5'] <= 2.50:
                     opportunity = self.create_opportunity(
                         match, 'Under 2.5', estimated_odds['under_2_5'], edge,
                         home_form, away_form, h2h, xg_analysis
                     )
-                    potential_opportunities.append((opportunity, edge))
+                    # 🔧 CRITICAL: Enforce confidence filtering
+                    if opportunity.confidence >= self.min_confidence:
+                        potential_opportunities.append((opportunity, edge))
+                    else:
+                        print(f"⚠️ FILTERED LOW CONFIDENCE: {opportunity.home_team} vs {opportunity.away_team} - {opportunity.confidence}% < {self.min_confidence}%")
             
             # Add BTTS if not found from bookmakers
             if not found_btts:
@@ -1297,12 +1318,16 @@ class RealFootballChampion:
                 true_prob = xg_analysis['btts_prob']
                 edge = (true_prob - implied_prob) * 100
                 
-                if edge >= self.min_edge and estimated_odds['btts_yes'] >= 1.7:
+                if edge >= self.min_edge and 1.55 <= estimated_odds['btts_yes'] <= 2.50:
                     opportunity = self.create_opportunity(
                         match, 'BTTS Yes', estimated_odds['btts_yes'], edge,
                         home_form, away_form, h2h, xg_analysis
                     )
-                    potential_opportunities.append((opportunity, edge))
+                    # 🔧 CRITICAL: Enforce confidence filtering
+                    if opportunity.confidence >= self.min_confidence:
+                        potential_opportunities.append((opportunity, edge))
+                    else:
+                        print(f"⚠️ FILTERED LOW CONFIDENCE: {opportunity.home_team} vs {opportunity.away_team} - {opportunity.confidence}% < {self.min_confidence}%")
         
         # CRITICAL: Select only the SINGLE best opportunity with highest edge
         if potential_opportunities:
@@ -1444,8 +1469,8 @@ class RealFootballChampion:
             print(f"🎯 WOULD SAVE OPPORTUNITY (BLOCKED): {opportunity.home_team} vs {opportunity.away_team} - {opportunity.selection} @ {opportunity.odds} - Stake: ${opportunity.stake}")
             return False
         
-        # Defense-in-depth: Check daily limit before saving
-        DAILY_LIMIT = 40
+        # Defense-in-depth: Check daily limit before saving - STRICT SELECTIVITY
+        DAILY_LIMIT = 10  # 🔧 CRITICAL: Reduced from 40 to 10 max daily bets
         current_count = self.get_todays_count()
         if current_count >= DAILY_LIMIT:
             print(f"⚠️ DAILY LIMIT REACHED: {current_count}/{DAILY_LIMIT} bets already generated today")
@@ -1564,8 +1589,8 @@ class RealFootballChampion:
         print("🏆 REAL FOOTBALL CHAMPION - ANALYSIS CYCLE")
         print("=" * 60)
         
-        # Check daily limit first
-        DAILY_LIMIT = 40
+        # Check daily limit first - STRICT SELECTIVITY 
+        DAILY_LIMIT = 10  # 🔧 CRITICAL: Reduced from 40 to 10 max daily bets
         current_count = self.get_todays_count()
         if current_count >= DAILY_LIMIT:
             print(f"⚠️ DAILY LIMIT REACHED: {current_count}/{DAILY_LIMIT} bets already generated today")
