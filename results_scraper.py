@@ -262,13 +262,14 @@ class ResultsScraper:
                     if match_result:
                         outcome = self.determine_bet_outcome(selection, match_result)
                         profit_loss = self.calculate_profit_loss(outcome, odds, stake)
+                        payout = self.calculate_payout(outcome, odds, stake)  # 🔧 FIX: Calculate payout
                         
-                        # Update bet outcome
+                        # Update bet outcome with BOTH profit_loss AND payout
                         cursor.execute('''
                             UPDATE football_opportunities 
-                            SET outcome = ?, profit_loss = ?, updated_at = ?
+                            SET outcome = ?, profit_loss = ?, payout = ?, updated_at = ?
                             WHERE id = ?
-                        ''', (outcome, profit_loss, datetime.now().isoformat(), bet_id))
+                        ''', (outcome, profit_loss, payout, datetime.now().isoformat(), bet_id))
                         
                         updated_count += 1
                         logger.info(f"✅ Updated bet {bet_id}: {home_team} vs {away_team} | {selection} = {outcome}")
@@ -337,6 +338,15 @@ class ResultsScraper:
             return -float(stake)
         else:  # void
             return 0.0
+    
+    def calculate_payout(self, outcome, odds, stake):
+        """Calculate payout (total return) for a bet - THIS WAS THE MISSING PIECE!"""
+        if outcome == 'win':
+            return float(odds) * float(stake)  # Total return = stake × odds
+        elif outcome == 'loss':
+            return 0.0  # No payout for losses
+        else:  # void
+            return float(stake)  # Return original stake for void bets
 
 def main():
     """Main function to run results checking cycle"""
