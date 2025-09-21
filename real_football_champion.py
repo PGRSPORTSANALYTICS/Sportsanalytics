@@ -939,6 +939,43 @@ class RealFootballChampion:
         # Calculate exact score probabilities using Poisson distribution
         exact_scores = self.calculate_exact_score_probabilities(home_xg_adjusted, away_xg_adjusted)
         
+        # Calculate win probabilities for Moneyline markets using exact score matrix
+        # Sum exact score probabilities to get proper win probabilities
+        home_win_prob = 0.0
+        away_win_prob = 0.0
+        draw_prob = 0.0
+        
+        for score_key, score_data in exact_scores.items():
+            probability = score_data['probability']
+            home_goals = score_data['home_goals']
+            away_goals = score_data['away_goals']
+            
+            if home_goals > away_goals:
+                home_win_prob += probability
+            elif away_goals > home_goals:
+                away_win_prob += probability
+            else:
+                draw_prob += probability
+        
+        # Apply form adjustments with normalization
+        xg_differential = home_xg_adjusted - away_xg_adjusted
+        home_form_factor = (home_form.win_rate - 0.33) * 0.1  # Smaller adjustment
+        away_form_factor = (away_form.win_rate - 0.33) * 0.1
+        
+        # Adjust probabilities based on form and xG differential
+        home_win_prob += home_form_factor + (xg_differential * 0.05)
+        away_win_prob += away_form_factor - (xg_differential * 0.05)
+        
+        # Ensure probabilities stay positive and normalize to sum to 1
+        home_win_prob = max(0.05, home_win_prob)
+        away_win_prob = max(0.05, away_win_prob)
+        draw_prob = max(0.05, draw_prob)
+        
+        total_prob = home_win_prob + away_win_prob + draw_prob
+        home_win_prob = home_win_prob / total_prob
+        away_win_prob = away_win_prob / total_prob
+        draw_prob = draw_prob / total_prob
+        
         return {
             'home_xg': home_xg_adjusted,
             'away_xg': away_xg_adjusted,
@@ -946,6 +983,9 @@ class RealFootballChampion:
             'over_2_5_prob': over_2_5_prob,
             'over_3_5_prob': over_3_5_prob,
             'btts_prob': btts_prob,
+            'home_win_prob': home_win_prob,
+            'away_win_prob': away_win_prob,
+            'draw_prob': draw_prob,
             'exact_scores': exact_scores
         }
     
@@ -1206,6 +1246,8 @@ class RealFootballChampion:
         bookmakers = match.get('bookmakers', [])
         found_totals = False
         found_btts = False
+        found_h2h = False
+        found_spreads = False
         
         for bookmaker in bookmakers:
             markets = bookmaker.get('markets', [])
@@ -1222,14 +1264,97 @@ class RealFootballChampion:
                         point = outcome.get('point', 0)
                         
                         if 'Over' in name and point == 2.5 and 1.55 <= odds <= 2.50:
-                            # 🚫 GOALS MARKET DISABLED - Focus on BTTS (55% vs 51% win rate)
-                            print(f"🚫 SKIPPED GOALS MARKET: {match['home_team']} vs {match['away_team']} - Over 2.5 @ {odds} (Goals market disabled, BTTS focus only)")
-                            continue
+                            implied_prob = 1.0 / odds
+                            true_prob = xg_analysis['over_2_5_prob']
+                            edge = (true_prob - implied_prob) * 100
+                            
+                            if edge >= self.min_edge:
+                                opportunity = self.create_opportunity(
+                                    match, 'Over 2.5', odds, edge, 
+                                    home_form, away_form, h2h, xg_analysis
+                                )
+                                # 🔧 CRITICAL: Enforce confidence filtering
+                                if opportunity.confidence >= self.min_confidence:
+                                    potential_opportunities.append((opportunity, edge))
+                                else:
+                                    print(f"⚠️ FILTERED LOW CONFIDENCE: {opportunity.home_team} vs {opportunity.away_team} - {opportunity.confidence}% < {self.min_confidence}%")
                         
                         elif 'Under' in name and point == 2.5 and 1.55 <= odds <= 2.50:
-                            # 🚫 GOALS MARKET DISABLED - Focus on BTTS (55% vs 51% win rate) 
-                            print(f"🚫 SKIPPED GOALS MARKET: {match['home_team']} vs {match['away_team']} - Under 2.5 @ {odds} (Goals market disabled, BTTS focus only)")
-                            continue
+                            implied_prob = 1.0 / odds
+                            true_prob = 1.0 - xg_analysis['over_2_5_prob']
+                            edge = (true_prob - implied_prob) * 100
+                            
+                            if edge >= self.min_edge:
+                                opportunity = self.create_opportunity(
+                                    match, 'Under 2.5', odds, edge,
+                                    home_form, away_form, h2h, xg_analysis
+                                )
+                                # 🔧 CRITICAL: Enforce confidence filtering
+                                if opportunity.confidence >= self.min_confidence:
+                                    potential_opportunities.append((opportunity, edge))
+                                else:
+                                    print(f"⚠️ FILTERED LOW CONFIDENCE: {opportunity.home_team} vs {opportunity.away_team} - {opportunity.confidence}% < {self.min_confidence}%")
+                
+                elif market_key == 'h2h':  # Moneyline markets
+                    found_h2h = True
+                    for outcome in outcomes:
+                        name = outcome.get('name')
+                        odds = outcome.get('price', 0)
+                        
+                        # Process Home Win, Away Win (skip Draw - less predictable)
+                        if name in [match['home_team'], match['away_team']] and 1.55 <= odds <= 2.50:
+                            if name == match['home_team']:  # Home Win
+                                implied_prob = 1.0 / odds
+                                true_prob = xg_analysis.get('home_win_prob', 0.33)
+                                edge = (true_prob - implied_prob) * 100
+                                selection = 'Home Win'
+                            else:  # Away Win
+                                implied_prob = 1.0 / odds
+                                true_prob = xg_analysis.get('away_win_prob', 0.33)
+                                edge = (true_prob - implied_prob) * 100
+                                selection = 'Away Win'
+                            
+                            if edge >= self.min_edge:
+                                opportunity = self.create_opportunity(
+                                    match, selection, odds, edge,
+                                    home_form, away_form, h2h, xg_analysis
+                                )
+                                # 🔧 CRITICAL: Enforce confidence filtering
+                                if opportunity.confidence >= self.min_confidence:
+                                    potential_opportunities.append((opportunity, edge))
+                                else:
+                                    print(f"⚠️ FILTERED LOW CONFIDENCE: {opportunity.home_team} vs {opportunity.away_team} - {opportunity.confidence}% < {self.min_confidence}%")
+                
+                elif market_key == 'spreads':  # Asian Handicap markets
+                    found_spreads = True
+                    for outcome in outcomes:
+                        name = outcome.get('name')
+                        odds = outcome.get('price', 0)
+                        point = outcome.get('point', 0)
+                        
+                        # Process Asian Handicap (-0.5, +0.5, -1, +1) within odds range
+                        if abs(point) <= 1.5 and 1.55 <= odds <= 2.50:
+                            if point > 0:  # Team getting handicap advantage
+                                implied_prob = 1.0 / odds
+                                true_prob = 0.55  # Slightly favor the handicap receiver
+                                edge = (true_prob - implied_prob) * 100
+                                selection = f'{name} +{point}'
+                            else:  # Team giving handicap
+                                implied_prob = 1.0 / odds
+                                true_prob = 0.45  # Slightly against the handicap giver
+                                edge = (true_prob - implied_prob) * 100
+                                selection = f'{name} {point}'
+                            
+                            if edge >= self.min_edge:
+                                opportunity = self.create_opportunity(
+                                    match, selection, odds, edge,
+                                    home_form, away_form, h2h, xg_analysis
+                                )
+                                # 🔧 CRITICAL: Enforce confidence filtering
+                                if opportunity.confidence >= self.min_confidence:
+                                    potential_opportunities.append((opportunity, edge))
+                                else:
+                                    print(f"⚠️ FILTERED LOW CONFIDENCE: {opportunity.home_team} vs {opportunity.away_team} - {opportunity.confidence}% < {self.min_confidence}%")
                 
                 elif market_key == 'btts':
                     found_btts = True
@@ -1254,15 +1379,41 @@ class RealFootballChampion:
                                     print(f"⚠️ FILTERED LOW CONFIDENCE: {opportunity.home_team} vs {opportunity.away_team} - {opportunity.confidence}% < {self.min_confidence}%")
         
         # Fallback: Add estimated odds for missing markets
-        if not found_totals or not found_btts or not bookmakers:
+        if not found_totals or not found_btts or not found_h2h or not found_spreads or not bookmakers:
             estimated_odds = self.generate_estimated_odds(xg_analysis)
             
-            # 🚫 GOALS MARKET DISABLED - Over 2.5 fallback disabled (Focus on BTTS: 55% vs 51% win rate)
+            # Add Over 2.5 if not found from bookmakers
             if not found_totals:
-                print(f"🚫 SKIPPED GOALS FALLBACK: {match['home_team']} vs {match['away_team']} - Over 2.5 estimated @ {estimated_odds['over_2_5']:.2f} (Goals market disabled)")
+                implied_prob = 1.0 / estimated_odds['over_2_5']
+                true_prob = xg_analysis['over_2_5_prob']
+                edge = (true_prob - implied_prob) * 100
                 
-                # 🚫 GOALS MARKET DISABLED - Under 2.5 fallback disabled (Focus on BTTS: 55% vs 51% win rate)
-                print(f"🚫 SKIPPED GOALS FALLBACK: {match['home_team']} vs {match['away_team']} - Under 2.5 estimated @ {estimated_odds['under_2_5']:.2f} (Goals market disabled)")
+                if edge >= self.min_edge and 1.55 <= estimated_odds['over_2_5'] <= 2.50:
+                    opportunity = self.create_opportunity(
+                        match, 'Over 2.5', estimated_odds['over_2_5'], edge,
+                        home_form, away_form, h2h, xg_analysis
+                    )
+                    # 🔧 CRITICAL: Enforce confidence filtering
+                    if opportunity.confidence >= self.min_confidence:
+                        potential_opportunities.append((opportunity, edge))
+                    else:
+                        print(f"⚠️ FILTERED LOW CONFIDENCE: {opportunity.home_team} vs {opportunity.away_team} - {opportunity.confidence}% < {self.min_confidence}%")
+                
+                # Add Under 2.5 if not found from bookmakers
+                implied_prob = 1.0 / estimated_odds['under_2_5']
+                true_prob = 1.0 - xg_analysis['over_2_5_prob']
+                edge = (true_prob - implied_prob) * 100
+                
+                if edge >= self.min_edge and 1.55 <= estimated_odds['under_2_5'] <= 2.50:
+                    opportunity = self.create_opportunity(
+                        match, 'Under 2.5', estimated_odds['under_2_5'], edge,
+                        home_form, away_form, h2h, xg_analysis
+                    )
+                    # 🔧 CRITICAL: Enforce confidence filtering
+                    if opportunity.confidence >= self.min_confidence:
+                        potential_opportunities.append((opportunity, edge))
+                    else:
+                        print(f"⚠️ FILTERED LOW CONFIDENCE: {opportunity.home_team} vs {opportunity.away_team} - {opportunity.confidence}% < {self.min_confidence}%")
             
             # Add BTTS if not found from bookmakers
             if not found_btts:
@@ -1537,7 +1688,7 @@ class RealFootballChampion:
         print(f"🏆 Ranked {len(opportunities)} opportunities: {min(10, len(opportunities))} premium, {max(0, len(opportunities)-10)} standard")
     
     def run_analysis_cycle(self):
-        """Run complete analysis cycle (MAX 10 BTTS bets per day - Goals market disabled)"""
+        """Run complete analysis cycle (MAX 10 high-quality bets per day across all markets)"""
         print("🏆 REAL FOOTBALL CHAMPION - ANALYSIS CYCLE")
         print("=" * 60)
         
