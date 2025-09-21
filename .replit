@@ -97,12 +97,12 @@ outputType = "console"
 name = "Real Football Champion"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python real_football_champion.py"
-
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "ENABLE_REAL_BETS=1 python real_football_champion.py"
 
 [[ports]]
 localPort = 5000
