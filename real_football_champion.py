@@ -231,14 +231,39 @@ class RealFootballChampion:
             10: 'International Friendlies'
         }
         
-        # Analysis parameters - STRICT SELECTIVITY: Quality over quantity 
-        self.min_edge = 8.0  # 🔧 CRITICAL: Increased from 1% to 8% minimum edge
-        self.min_edge_under = 16.0  # 🚨 UNDER 2.5 CRISIS FIX: Double threshold for Under bets
-        self.max_stake = 100.0  # Maximum stake per bet
-        self.base_stake = 25.0  # Base stake amount
-        self.min_confidence = 70.0  # 🔧 NEW: Minimum 70% confidence required
-        self.min_confidence_under = 75.0  # 🚨 UNDER 2.5 CRISIS FIX: Higher confidence for Under bets
-        self.max_daily_under = 2  # 🚨 UNDER 2.5 CRISIS FIX: Maximum 2 Under bets per day
+        # 💰 TIERED SYSTEM: Balance quality with daily commercial viability
+        
+        # 🥇 PREMIUM TIER (Strict quality - main selling point)
+        self.premium_min_edge = 8.0
+        self.premium_min_confidence = 70.0
+        self.premium_min_edge_under = 16.0
+        self.premium_min_confidence_under = 75.0
+        self.premium_max_daily = 2
+        
+        # 🥈 STANDARD TIER (Good quality - daily volume)
+        self.standard_min_edge = 5.0
+        self.standard_min_confidence = 60.0
+        self.standard_min_edge_under = 12.0
+        self.standard_min_confidence_under = 70.0
+        self.standard_max_daily = 3
+        
+        # 🥉 BACKUP TIER (Emergency - commercial viability)
+        self.backup_min_edge = 4.0
+        self.backup_min_confidence = 55.0
+        self.backup_max_daily = 1
+        
+        # Business requirements
+        self.min_daily_tips = 2  # 💰 Minimum tips needed for commercial viability
+        self.max_daily_tips = 6  # Maximum total tips per day
+        
+        # Legacy parameters (for backward compatibility)
+        self.min_edge = self.premium_min_edge
+        self.min_confidence = self.premium_min_confidence
+        self.min_edge_under = self.premium_min_edge_under
+        self.min_confidence_under = self.premium_min_confidence_under
+        self.max_daily_under = 2
+        self.max_stake = 100.0
+        self.base_stake = 25.0
         
         # Initialize database
         self.init_database()
@@ -278,6 +303,149 @@ class RealFootballChampion:
         
         return True
     
+    def determine_opportunity_tier(self, opportunity) -> str:
+        """💰 Determine which tier an opportunity belongs to for commercial viability"""
+        
+        edge = opportunity.edge_percentage
+        confidence = opportunity.confidence
+        selection = opportunity.selection
+        
+        # Check Premium tier first (highest quality)
+        premium_edge_req = self.premium_min_edge_under if 'Under' in selection else self.premium_min_edge
+        premium_conf_req = self.premium_min_confidence_under if 'Under' in selection else self.premium_min_confidence
+        
+        if edge >= premium_edge_req and confidence >= premium_conf_req:
+            return 'premium'
+        
+        # Check Standard tier (good quality, daily volume)
+        standard_edge_req = self.standard_min_edge_under if 'Under' in selection else self.standard_min_edge
+        standard_conf_req = self.standard_min_confidence_under if 'Under' in selection else self.standard_min_confidence
+        
+        if edge >= standard_edge_req and confidence >= standard_conf_req:
+            return 'standard'
+        
+        # Check Backup tier (emergency only)
+        if edge >= self.backup_min_edge and confidence >= self.backup_min_confidence:
+            return 'backup'
+        
+        return 'rejected'
+    
+    def get_daily_tier_counts(self) -> dict:
+        """Get current daily tip counts by tier"""
+        from datetime import date
+        today = date.today().isoformat()
+        
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            SELECT 
+                COALESCE(tier, 'legacy') as tier_name,
+                COUNT(*) as count
+            FROM football_opportunities 
+            WHERE recommended_date = ? 
+            GROUP BY tier_name
+        ''', (today,))
+        
+        results = cursor.fetchall()
+        counts = {'premium': 0, 'standard': 0, 'backup': 0, 'total': 0}
+        
+        for tier_name, count in results:
+            if tier_name in counts:
+                counts[tier_name] = count
+            counts['total'] += count
+            
+        return counts
+    
+    def run_progressive_relaxation(self) -> int:
+        """💰 BUSINESS CRITICAL: Actually generate more tips with relaxed standards"""
+        print(f"\n🔄 PROGRESSIVE RELAXATION: Generating additional tips for commercial viability")
+        
+        # Temporarily lower thresholds for additional opportunities
+        original_min_edge = self.min_edge
+        original_min_confidence = self.min_confidence
+        
+        additional_tips = 0
+        
+        try:
+            # Step 1: Try Standard tier thresholds
+            print(f"   🥈 STANDARD TIER: Trying {self.standard_min_edge}% edge, {self.standard_min_confidence}% confidence")
+            self.min_edge = self.standard_min_edge
+            self.min_confidence = self.standard_min_confidence
+            
+            # Re-run analysis with relaxed standards
+            matches = self.get_football_odds()
+            for match in matches[:10]:  # Limit to avoid overwhelming
+                current_count = self.get_todays_count()
+                if current_count >= self.max_daily_tips:
+                    break
+                    
+                opportunities = self.find_balanced_opportunities(match)
+                for opp in opportunities[:1]:  # Just take best opportunity per match
+                    if self.get_todays_count() < self.max_daily_tips:
+                        saved = self.save_opportunity(opp)
+                        if saved:
+                            additional_tips += 1
+                            print(f"      ✅ STANDARD TIP: {opp.home_team} vs {opp.away_team} - {opp.selection}")
+                    
+            # Step 2: If still short, try Backup tier
+            current_total = self.get_todays_count()
+            if current_total < self.min_daily_tips:
+                print(f"   🥉 BACKUP TIER: Trying {self.backup_min_edge}% edge, {self.backup_min_confidence}% confidence")
+                self.min_edge = self.backup_min_edge
+                self.min_confidence = self.backup_min_confidence
+                
+                for match in matches[:5]:  # Even more limited for backup
+                    current_count = self.get_todays_count()
+                    if current_count >= self.min_daily_tips:
+                        break
+                        
+                    opportunities = self.find_balanced_opportunities(match)
+                    for opp in opportunities[:1]:
+                        if self.get_todays_count() < self.min_daily_tips:
+                            saved = self.save_opportunity(opp)
+                            if saved:
+                                additional_tips += 1
+                                print(f"      ✅ BACKUP TIP: {opp.home_team} vs {opp.away_team} - {opp.selection}")
+                        
+        finally:
+            # Restore original thresholds
+            self.min_edge = original_min_edge
+            self.min_confidence = original_min_confidence
+            
+        print(f"   📊 GENERATED: {additional_tips} additional tips via progressive relaxation")
+        return additional_tips
+    
+    def ensure_daily_commercial_viability(self):
+        """💰 BUSINESS CRITICAL: Ensure minimum daily tips for commercial viability"""
+        daily_counts = self.get_daily_tier_counts()
+        total_tips = daily_counts['total']
+        
+        print(f"\n💰 COMMERCIAL VIABILITY CHECK:")
+        print(f"   📊 Current: {total_tips} tips (Premium: {daily_counts['premium']}, Standard: {daily_counts['standard']}, Backup: {daily_counts['backup']})")
+        print(f"   🎯 Target: {self.min_daily_tips}+ tips needed for sales")
+        
+        if total_tips >= self.min_daily_tips:
+            print(f"   ✅ COMMERCIAL VIABILITY: {total_tips} tips available for sale")
+            return True
+        else:
+            print(f"   ⚠️ COMMERCIAL SHORTAGE: Only {total_tips} tips, need {self.min_daily_tips}+ for customer satisfaction")
+            
+            # 🚀 ACTUALLY GENERATE MORE TIPS (not just warn)
+            shortage = self.min_daily_tips - total_tips
+            print(f"   🔄 ACTIVATING PROGRESSIVE RELAXATION: Need {shortage} more tips...")
+            
+            additional_tips = self.run_progressive_relaxation()
+            
+            # Check final count
+            final_counts = self.get_daily_tier_counts()
+            final_total = final_counts['total']
+            
+            if final_total >= self.min_daily_tips:
+                print(f"   ✅ COMMERCIAL VIABILITY ACHIEVED: {final_total} tips now available")
+                return True
+            else:
+                print(f"   🚨 COMMERCIAL CRISIS: Only {final_total} tips even after relaxation!")
+                return False
+    
     def init_database(self):
         """Initialize SQLite database for football data"""
         self.conn = sqlite3.connect('data/real_football.db')
@@ -308,6 +476,19 @@ class RealFootballChampion:
                 kickoff_time TEXT
             )
         ''')
+        
+        # Add tier column for tiered system (BUSINESS VIABILITY FIX)
+        try:
+            cursor.execute('ALTER TABLE football_opportunities ADD COLUMN tier TEXT DEFAULT "legacy"')
+            print("✅ Added tier column for tiered betting system")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        
+        try:
+            cursor.execute('ALTER TABLE football_opportunities ADD COLUMN quality_score REAL DEFAULT 0')
+            print("✅ Added quality_score column for tiered ranking")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
         
         # Add new columns to existing table if they don't exist
         try:
@@ -1639,9 +1820,27 @@ class RealFootballChampion:
         else:
             print(f"🆕 NEW OPPORTUNITY: {opportunity.home_team} vs {opportunity.away_team} - {opportunity.selection}")
             
-        # Calculate quality score and dashboard fields
+        # 💰 TIERED SYSTEM: Classify opportunity tier for commercial viability
+        tier = self.determine_opportunity_tier(opportunity)
         quality_score = (opportunity.edge_percentage * 0.7) + (opportunity.confidence * 0.3)
         today_date = datetime.now().strftime('%Y-%m-%d')
+        
+        # Check tier-specific daily limits for business balance
+        daily_counts = self.get_daily_tier_counts()
+        
+        # Enforce tier-specific limits
+        if tier == 'premium' and daily_counts['premium'] >= self.premium_max_daily:
+            print(f"⚠️ PREMIUM TIER LIMIT REACHED: {daily_counts['premium']}/{self.premium_max_daily}")
+            return False
+        elif tier == 'standard' and daily_counts['standard'] >= self.standard_max_daily:
+            print(f"⚠️ STANDARD TIER LIMIT REACHED: {daily_counts['standard']}/{self.standard_max_daily}")
+            return False
+        elif tier == 'backup' and daily_counts['backup'] >= self.backup_max_daily:
+            print(f"⚠️ BACKUP TIER LIMIT REACHED: {daily_counts['backup']}/{self.backup_max_daily}")
+            return False
+        elif tier == 'rejected':
+            print(f"❌ OPPORTUNITY REJECTED: {opportunity.home_team} vs {opportunity.away_team} - Below all tier thresholds")
+            return False
         
         # Extract ML predictions from analysis
         ml_predictions = opportunity.analysis.get('ml_predictions', {})
@@ -1656,8 +1855,8 @@ class RealFootballChampion:
                 (timestamp, match_id, home_team, away_team, league, market, selection, 
                  odds, edge_percentage, confidence, analysis, stake, match_date, kickoff_time,
                  quality_score, recommended_date, recommended_tier, daily_rank,
-                 model_version, model_prob, calibrated_prob, kelly_stake)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 model_version, model_prob, calibrated_prob, kelly_stake, tier)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 int(time.time()),
                 opportunity.match_id,
@@ -1680,7 +1879,8 @@ class RealFootballChampion:
                 model_version,
                 model_prob,
                 calibrated_prob,
-                kelly_stake
+                kelly_stake,
+                tier  # 💰 TIERED SYSTEM: Save tier for commercial viability
             ))
             self.conn.commit()
             print(f"✅ SAVED: {opportunity.home_team} vs {opportunity.away_team} - Quality: {quality_score:.1f}, Date: {today_date}, Rank: 999")
@@ -1786,6 +1986,9 @@ class RealFootballChampion:
         # Rank and tier all opportunities
         if total_opportunities > 0:
             self.rank_and_tier_opportunities()
+        
+        # 💰 BUSINESS CRITICAL: Check commercial viability
+        self.ensure_daily_commercial_viability()
         
         print("⏱️ Next analysis cycle in 30 minutes...")
         
