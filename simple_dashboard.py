@@ -563,10 +563,11 @@ if perf_stats is not None:
     col1, col2, col3, col4, col5 = st.columns(5)
     
     with col1:
+        # Show completed tips instead of total to match wins+losses
         st.metric(
-            "📊 Total Tips", 
-            int(perf_stats['total_tips']),
-            "Quality recommendations"
+            "📊 Completed Tips", 
+            int(completed_tips),
+            f"{int(perf_stats['pending'])} pending"
         )
     
     with col2:
@@ -580,7 +581,7 @@ if perf_stats is not None:
         st.metric(
             "❌ Losses", 
             int(perf_stats['losses']),
-            f"{completed_tips} completed"
+            f"Total: {int(perf_stats['total_tips'])}"
         )
     
     with col4:
