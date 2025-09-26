@@ -44,11 +44,13 @@ def load_current_opportunities(cache_key=None):
     """Get recent betting opportunities"""
     try:
         conn = sqlite3.connect(DB_PATH)
-        thirty_min_ago = datetime.now().timestamp() - (30 * 60)
+        # Show tips from last 7 days instead of just 30 minutes
+        seven_days_ago = datetime.now().timestamp() - (7 * 24 * 60 * 60)
         query = f"""
         SELECT home_team, away_team, selection, odds, edge_percentage, 
                confidence, stake, league, match_date, kickoff_time,
                datetime(timestamp, 'unixepoch', 'localtime') as found_time,
+               tier,
                CASE 
                    WHEN outcome = 'win' THEN '✅ Win'
                    WHEN outcome = 'loss' THEN '❌ Loss' 
@@ -56,9 +58,9 @@ def load_current_opportunities(cache_key=None):
                    ELSE '🔥 LIVE'
                END as status
         FROM football_opportunities 
-        WHERE timestamp >= {thirty_min_ago}
+        WHERE timestamp >= {seven_days_ago}
         ORDER BY timestamp DESC 
-        LIMIT 10
+        LIMIT 20
         """
         df = pd.read_sql_query(query, conn)
         conn.close()
