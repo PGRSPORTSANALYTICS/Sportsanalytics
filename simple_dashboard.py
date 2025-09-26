@@ -321,7 +321,7 @@ if not exact_scores.empty:
     for idx, prediction in exact_scores.iterrows():
         # Parse analysis for exact score details
         try:
-            analysis_str = str(prediction['analysis']) if pd.notna(prediction['analysis']) else '{}'
+            analysis_str = str(prediction['analysis']) if prediction['analysis'] is not None and str(prediction['analysis']).strip() != '' else '{}'
             analysis = json.loads(analysis_str)
             exact_score_analysis = analysis.get('exact_score_analysis', {})
             predicted_score = exact_score_analysis.get('predicted_score', 'Unknown')
@@ -398,19 +398,22 @@ try:
             st.subheader("🎯 Active Models")
             for _, model in models_df.iterrows():
                 try:
-                    metrics = json.loads(model['metrics_json']) if model['metrics_json'] else {}
+                    metrics_json = str(model['metrics_json']) if model['metrics_json'] is not None else '{}'
+                    metrics = json.loads(metrics_json) if metrics_json.strip() != '' else {}
                     auc = metrics.get('auc', 0)
                     accuracy = metrics.get('accuracy', 0)
                     samples = metrics.get('samples', 0)
                     
-                    st.write(f"**{model['market'].upper()}**")
+                    market_name = str(model['market']).upper() if model['market'] is not None else 'UNKNOWN'
+                    st.write(f"**{market_name}**")
                     st.write(f"- AUC Score: {auc:.3f}")
                     st.write(f"- Accuracy: {accuracy:.1%}")
                     st.write(f"- Training Samples: {samples}")
                     st.write(f"- Last Trained: {model['trained_at'][:10]}")
                     st.write("---")
                 except:
-                    st.write(f"**{model['market'].upper()}** - Model Active")
+                    market_name = str(model['market']).upper() if model['market'] is not None else 'UNKNOWN'
+                    st.write(f"**{market_name}** - Model Active")
         
         with col2:
             st.subheader("📊 Recent ML Predictions")
@@ -420,13 +423,14 @@ try:
                                                                'selection', 'odds', 'model_prob', 'calibrated_prob']]
                 
                 # Format probabilities as percentages
+                display_predictions = display_predictions.copy()
                 if 'model_prob' in display_predictions.columns:
-                    display_predictions['model_prob'] = display_predictions['model_prob'].apply(
-                        lambda x: f"{x:.1%}" if pd.notna(x) else "N/A"
+                    display_predictions.loc[:, 'model_prob'] = display_predictions['model_prob'].apply(
+                        lambda x: f"{x:.1%}" if x is not None and pd.notna(x) else "N/A"
                     )
                 if 'calibrated_prob' in display_predictions.columns:
-                    display_predictions['calibrated_prob'] = display_predictions['calibrated_prob'].apply(
-                        lambda x: f"{x:.1%}" if pd.notna(x) else "N/A"
+                    display_predictions.loc[:, 'calibrated_prob'] = display_predictions['calibrated_prob'].apply(
+                        lambda x: f"{x:.1%}" if x is not None and pd.notna(x) else "N/A"
                     )
                 
                 st.dataframe(display_predictions, use_container_width=True)
@@ -436,8 +440,8 @@ try:
                     st.subheader("📈 ML Enhancement Analysis")
                     
                     # Calculate correlation between ML confidence and outcomes
-                    outcomes = predictions_df['outcome'].notna()
-                    if outcomes.sum() > 0:
+                    has_outcomes = predictions_df['outcome'].notna().sum() > 0
+                    if has_outcomes:
                         won_predictions = predictions_df[predictions_df['outcome'].isin(['win', 'won'])]
                         if len(won_predictions) > 0:
                             avg_ml_prob = won_predictions['calibrated_prob'].mean()
@@ -445,9 +449,11 @@ try:
                             
                             col_a, col_b = st.columns(2)
                             with col_a:
-                                st.metric("Avg ML Probability (Wins)", f"{avg_ml_prob:.1%}" if pd.notna(avg_ml_prob) else "N/A")
+                                metric_val = f"{avg_ml_prob:.1%}" if avg_ml_prob is not None and pd.notna(avg_ml_prob) else "N/A"
+                                st.metric("Avg ML Probability (Wins)", metric_val)
                             with col_b:
-                                st.metric("Avg Edge (Wins)", f"{avg_edge:.1f}%" if pd.notna(avg_edge) else "N/A")
+                                metric_val = f"{avg_edge:.1f}%" if avg_edge is not None and pd.notna(avg_edge) else "N/A"
+                                st.metric("Avg Edge (Wins)", metric_val)
             else:
                 st.info("No recent ML predictions found. Models will enhance new opportunities.")
     else:
