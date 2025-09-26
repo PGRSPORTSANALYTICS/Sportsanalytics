@@ -151,7 +151,7 @@ st.markdown("**AI-Powered Quality Tips with Daily Limits & ROI Focus**")
 # === TOP RECOMMENDED TIPS SECTION ===
 col1, col2 = st.columns([3, 1])
 with col1:
-    st.header("🌟 Today's Recommended Tips")
+    st.header("🌟 Recent Recommended Tips")
 with col2:
     if st.button("🔄 Refresh Data", help="Force refresh from database"):
         st.cache_data.clear()
@@ -159,34 +159,43 @@ with col2:
 
 @st.cache_data(ttl=10)
 def load_recommended_tips(cache_key=None):
-    """Load today's recommended tips with quality scoring"""
+    """Load recent recommended tips with quality scoring"""
     try:
-        from datetime import date
-        today = date.today().isoformat()
+        from datetime import date, timedelta
+        # Show tips from the past 7 days
+        seven_days_ago = (date.today() - timedelta(days=7)).isoformat()
         
         conn = sqlite3.connect(DB_PATH)
         
-        # Get premium tips (top 10)
+        # Get premium tips from past week
         premium_query = """
         SELECT home_team, away_team, league, selection, odds, edge_percentage, 
                confidence, quality_score, daily_rank, match_date, kickoff_time,
-               datetime(timestamp, 'unixepoch', 'localtime') as discovered
+               datetime(timestamp, 'unixepoch', 'localtime') as discovered,
+               recommended_tier, tier
         FROM football_opportunities 
-        WHERE recommended_date = ? AND recommended_tier = 'premium'
-        ORDER BY daily_rank ASC
+        WHERE (recommended_tier = 'premium' OR tier = 'premium' OR 
+               (edge_percentage >= 8 AND confidence >= 70))
+        AND timestamp >= strftime('%s', ?)
+        ORDER BY quality_score DESC, timestamp DESC
+        LIMIT 10
         """
-        premium_df = pd.read_sql_query(premium_query, conn, params=[today])
+        premium_df = pd.read_sql_query(premium_query, conn, params=[seven_days_ago])
         
-        # Get standard tips (next 30)
+        # Get standard tips from past week
         standard_query = """
         SELECT home_team, away_team, league, selection, odds, edge_percentage, 
                confidence, quality_score, daily_rank, match_date, kickoff_time,
-               datetime(timestamp, 'unixepoch', 'localtime') as discovered
+               datetime(timestamp, 'unixepoch', 'localtime') as discovered,
+               recommended_tier, tier
         FROM football_opportunities 
-        WHERE recommended_date = ? AND recommended_tier = 'standard'
-        ORDER BY daily_rank ASC
+        WHERE (recommended_tier = 'standard' OR tier = 'standard' OR 
+               (edge_percentage >= 5 AND confidence >= 60))
+        AND timestamp >= strftime('%s', ?)
+        ORDER BY quality_score DESC, timestamp DESC
+        LIMIT 20
         """
-        standard_df = pd.read_sql_query(standard_query, conn, params=[today])
+        standard_df = pd.read_sql_query(standard_query, conn, params=[seven_days_ago])
         
         conn.close()
         return premium_df, standard_df
@@ -246,7 +255,7 @@ if not premium_tips.empty:
                 st.warning("⚡ **GOOD QUALITY** - Solid opportunity")
 
 else:
-    st.info("🔍 **Generating today's premium tips...** Check back shortly for the top 10 recommendations")
+    st.info("🔍 **No premium tips found in recent data.** System may be generating new opportunities.")
 
 # Standard Tips Section (collapsed by default)
 if not standard_tips.empty:
