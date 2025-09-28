@@ -62,6 +62,7 @@ def load_historical_bets():
         WHERE recommended_tier IS NOT NULL
         AND outcome IS NOT NULL 
         AND outcome != ''
+        AND outcome != 'unknown'
         ORDER BY timestamp DESC 
         LIMIT 50
         """
