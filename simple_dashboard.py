@@ -53,8 +53,8 @@ def load_historical_bets():
                confidence, match_date, outcome, profit_loss, stake,
                datetime(timestamp, 'unixepoch', 'localtime') as bet_time,
                CASE 
-                   WHEN outcome = 'win' THEN '✅ Win'
-                   WHEN outcome = 'loss' THEN '❌ Loss' 
+                   WHEN outcome IN ('win', 'won') THEN '✅ Win'
+                   WHEN outcome IN ('loss', 'lost') THEN '❌ Loss' 
                    WHEN outcome = 'void' THEN '⚪ Void'
                    ELSE '🔥 Live'
                END as result
