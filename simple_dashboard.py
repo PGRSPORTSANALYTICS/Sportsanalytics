@@ -81,9 +81,9 @@ def load_performance():
             COUNT(*) as total_tips,
             COUNT(CASE WHEN outcome IN ('win', 'won') THEN 1 END) as wins,
             COUNT(CASE WHEN outcome IN ('loss', 'lost') THEN 1 END) as losses,
-            COUNT(CASE WHEN outcome IS NULL OR outcome = '' THEN 1 END) as pending,
-            SUM(CASE WHEN outcome IS NOT NULL THEN profit_loss ELSE 0 END) as net_profit,
-            SUM(stake) as total_staked
+            COUNT(CASE WHEN outcome IS NULL OR outcome = '' OR outcome = 'unknown' THEN 1 END) as pending,
+            SUM(CASE WHEN outcome IS NOT NULL AND outcome != '' AND outcome != 'unknown' THEN profit_loss ELSE 0 END) as net_profit,
+            SUM(CASE WHEN outcome IS NOT NULL AND outcome != '' AND outcome != 'unknown' THEN stake ELSE 0 END) as total_staked
         FROM football_opportunities 
         WHERE recommended_tier IS NOT NULL
         """
@@ -168,8 +168,8 @@ if not historical_bets.empty:
     st.success(f"📈 Track record: {len(historical_bets)} completed bets")
     
     # Summary stats for historical performance
-    wins = len(historical_bets[historical_bets['outcome'] == 'win'])
-    losses = len(historical_bets[historical_bets['outcome'] == 'loss'])
+    wins = len(historical_bets[historical_bets['outcome'].isin(['win', 'won'])])
+    losses = len(historical_bets[historical_bets['outcome'].isin(['loss', 'lost'])])
     total_profit = historical_bets['profit_loss'].sum()
     
     col1, col2, col3 = st.columns(3)
