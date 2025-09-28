@@ -16,11 +16,10 @@ st.set_page_config(
 )
 
 @st.cache_data(ttl=30)
-def load_recent_tips():
-    """Load recent betting tips - only current/today's opportunities"""
+def load_todays_tips():
+    """Load today's current betting opportunities"""
     try:
         conn = sqlite3.connect(DB_PATH)
-        # Only show today's tips and recent settled bets (last 3 days)
         today = date.today().isoformat()
         query = """
         SELECT home_team, away_team, selection, odds, edge_percentage, 
@@ -34,14 +33,39 @@ def load_recent_tips():
                END as status
         FROM football_opportunities 
         WHERE recommended_tier IS NOT NULL
-        AND (
-            DATE(match_date) = ? OR 
-            (outcome IS NOT NULL AND timestamp >= strftime('%s', 'now', '-3 days'))
-        )
+        AND DATE(match_date) >= ?
         ORDER BY timestamp DESC 
         LIMIT 10
         """
         df = pd.read_sql_query(query, conn, params=[today])
+        conn.close()
+        return df
+    except:
+        return pd.DataFrame()
+
+@st.cache_data(ttl=30)
+def load_historical_bets():
+    """Load historical completed betting results"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        query = """
+        SELECT home_team, away_team, selection, odds, edge_percentage, 
+               confidence, match_date, outcome, profit_loss, stake,
+               datetime(timestamp, 'unixepoch', 'localtime') as bet_time,
+               CASE 
+                   WHEN outcome = 'win' THEN '✅ Win'
+                   WHEN outcome = 'loss' THEN '❌ Loss' 
+                   WHEN outcome = 'void' THEN '⚪ Void'
+                   ELSE '🔥 Live'
+               END as result
+        FROM football_opportunities 
+        WHERE recommended_tier IS NOT NULL
+        AND outcome IS NOT NULL 
+        AND outcome != ''
+        ORDER BY timestamp DESC 
+        LIMIT 50
+        """
+        df = pd.read_sql_query(query, conn)
         conn.close()
         return df
     except:
@@ -101,14 +125,14 @@ if stats is not None:
         roi = (stats['net_profit'] / stats['total_staked'] * 100) if stats['total_staked'] > 0 else 0
         st.metric("📈 ROI", f"{roi:.1f}%")
 
-# Recent Tips
-st.header("🌟 Recent Tips")
+# Today's Current Tips
+st.header("🔥 Today's Tips")
 
-tips = load_recent_tips()
-if not tips.empty:
-    st.success(f"Showing {len(tips)} recent tips")
+todays_tips = load_todays_tips()
+if not todays_tips.empty:
+    st.success(f"🌟 {len(todays_tips)} current opportunities available")
     
-    for idx, tip in tips.iterrows():
+    for idx, tip in todays_tips.iterrows():
         with st.container():
             col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
             
@@ -131,9 +155,58 @@ if not tips.empty:
                     st.markdown(f"<span style='color: {profit_color}'>${tip['profit_loss']:.2f}</span>", unsafe_allow_html=True)
             
             st.divider()
-
 else:
-    st.info("🔍 No recent tips found. New opportunities will appear here.")
+    st.info("🔍 No current tips available. New opportunities will appear here when found.")
+
+st.markdown("---")
+
+# Historical Betting Results
+st.header("📊 Historical Results")
+
+historical_bets = load_historical_bets()
+if not historical_bets.empty:
+    st.success(f"📈 Track record: {len(historical_bets)} completed bets")
+    
+    # Summary stats for historical performance
+    wins = len(historical_bets[historical_bets['outcome'] == 'win'])
+    losses = len(historical_bets[historical_bets['outcome'] == 'loss'])
+    total_profit = historical_bets['profit_loss'].sum()
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        win_rate = (wins / (wins + losses) * 100) if (wins + losses) > 0 else 0
+        st.metric("🏆 Historical Win Rate", f"{win_rate:.1f}%")
+    with col2:
+        st.metric("💰 Total Profit", f"${total_profit:.2f}")
+    with col3:
+        st.metric("📝 Total Settled", f"{wins + losses}")
+    
+    # Display historical results in a clean table format
+    st.subheader("📋 Recent Completed Bets")
+    
+    display_historical = historical_bets.head(20).copy()
+    display_historical['Match'] = display_historical['home_team'] + ' vs ' + display_historical['away_team']
+    display_historical['Profit/Loss'] = display_historical['profit_loss'].apply(lambda x: f"${x:.2f}")
+    display_historical['Win Rate'] = display_historical['result']
+    
+    # Show table with key columns
+    table_data = display_historical[['Match', 'selection', 'odds', 'Win Rate', 'Profit/Loss', 'match_date']].copy()
+    table_data.columns = ['Match', 'Selection', 'Odds', 'Result', 'P&L', 'Date']
+    
+    # Color code the results
+    def color_results(row):
+        if '✅' in str(row['Result']):
+            return ['background-color: #d4edda'] * len(row)  # Green for wins
+        elif '❌' in str(row['Result']):
+            return ['background-color: #f8d7da'] * len(row)  # Red for losses  
+        else:
+            return [''] * len(row)
+    
+    styled_table = table_data.style.apply(color_results, axis=1)
+    st.dataframe(styled_table, width='stretch')
+    
+else:
+    st.info("📊 Historical betting results will appear here as bets are completed.")
 
 # Footer
 st.markdown("---")
