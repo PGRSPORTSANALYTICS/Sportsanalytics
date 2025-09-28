@@ -17,9 +17,11 @@ st.set_page_config(
 
 @st.cache_data(ttl=30)
 def load_recent_tips():
-    """Load recent betting tips"""
+    """Load recent betting tips - only current/today's opportunities"""
     try:
         conn = sqlite3.connect(DB_PATH)
+        # Only show today's tips and recent settled bets (last 3 days)
+        today = date.today().isoformat()
         query = """
         SELECT home_team, away_team, selection, odds, edge_percentage, 
                confidence, match_date, kickoff_time, outcome, profit_loss,
@@ -32,10 +34,14 @@ def load_recent_tips():
                END as status
         FROM football_opportunities 
         WHERE recommended_tier IS NOT NULL
+        AND (
+            DATE(match_date) = ? OR 
+            (outcome IS NOT NULL AND timestamp >= strftime('%s', 'now', '-3 days'))
+        )
         ORDER BY timestamp DESC 
-        LIMIT 20
+        LIMIT 10
         """
-        df = pd.read_sql_query(query, conn)
+        df = pd.read_sql_query(query, conn, params=[today])
         conn.close()
         return df
     except:
