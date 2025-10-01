@@ -136,8 +136,7 @@ class ResultsScraper:
             # API-Football endpoint for fixtures
             url = "https://v3.football.api-sports.io/fixtures"
             headers = {
-                'X-RapidAPI-Key': api_key,
-                'X-RapidAPI-Host': 'v3.football.api-sports.io'
+                'x-apisports-key': api_key
             }
             
             params = {

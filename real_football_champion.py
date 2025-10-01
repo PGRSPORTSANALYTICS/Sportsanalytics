@@ -628,8 +628,7 @@ class RealFootballChampion:
             return []
         
         headers = {
-            'X-RapidAPI-Key': self.api_football_key,
-            'X-RapidAPI-Host': 'v3.football.api-sports.io'
+            'x-apisports-key': self.api_football_key
         }
         
         # Use dynamic league IDs instead of sport names
@@ -749,8 +748,7 @@ class RealFootballChampion:
             return []
         
         headers = {
-            'X-RapidAPI-Key': self.api_football_key,
-            'X-RapidAPI-Host': 'v3.football.api-sports.io'
+            'x-apisports-key': self.api_football_key
         }
         
         # Use ALL expanded global league IDs for maximum 24/7 coverage
@@ -840,8 +838,7 @@ class RealFootballChampion:
             ]
         
         headers = {
-            'X-RapidAPI-Key': self.api_football_key,
-            'X-RapidAPI-Host': 'v3.football.api-sports.io'
+            'x-apisports-key': self.api_football_key
         }
         
         try:
@@ -948,8 +945,7 @@ class RealFootballChampion:
             return None
         
         headers = {
-            'X-RapidAPI-Key': self.api_football_key,
-            'X-RapidAPI-Host': 'v3.football.api-sports.io'
+            'x-apisports-key': self.api_football_key
         }
         
         try:
@@ -1012,8 +1008,7 @@ class RealFootballChampion:
             )
         
         headers = {
-            'X-RapidAPI-Key': self.api_football_key,
-            'X-RapidAPI-Host': 'v3.football.api-sports.io'
+            'x-apisports-key': self.api_football_key
         }
         
         try:
