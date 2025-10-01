@@ -644,9 +644,14 @@ class RealFootballChampion:
                 # Get upcoming fixtures for TODAY and TOMORROW only
                 url = f"{self.api_football_base_url}/fixtures"
                 end_date = today + timedelta(days=1)  # Only today + tomorrow
+                
+                # Calculate correct season: European leagues (Aug-May) use previous year before July
+                current_year = today.year
+                current_season = current_year if today.month >= 7 else current_year - 1
+                
                 params = {
                     'league': league_id,
-                    'season': 2025,  # FIXED: Using current season 2025!
+                    'season': current_season,  # Dynamic season calculation
                     'from': today.strftime('%Y-%m-%d'),
                     'to': end_date.strftime('%Y-%m-%d'),
                     'status': 'NS'  # Not started
@@ -655,6 +660,12 @@ class RealFootballChampion:
                 response = requests.get(url, headers=headers, params=params, timeout=10)
                 if response.status_code == 200:
                     data = response.json()
+                    
+                    # Check for API errors
+                    if 'errors' in data and data['errors']:
+                        print(f"❌ API error for league {league_id}: {data.get('errors')}")
+                        continue
+                    
                     fixtures = data.get('response', [])
                     
                     if fixtures:
@@ -679,9 +690,9 @@ class RealFootballChampion:
                             }
                             all_matches.append(match_data)
                     else:
-                        print(f"📅 No fixtures today in league {league_id}")
+                        print(f"📅 No fixtures today in league {league_id} (season {current_season}, date: {today.strftime('%Y-%m-%d')})")
                 else:
-                    print(f"⚠️  League {league_id}: {response.status_code}")
+                    print(f"⚠️  League {league_id}: HTTP {response.status_code} - {response.text[:200]}")
                     
             except Exception as e:
                 print(f"❌ Error fetching league {league_id}: {e}")
@@ -756,8 +767,13 @@ class RealFootballChampion:
                 from datetime import timedelta
                 end_date = today + timedelta(days=7)  # NEXT WEEK FOR WEEKEND MATCHES
                 
+                # Calculate correct season: European leagues (Aug-May) use previous year before July
+                current_year = today.year
+                current_season = current_year if today.month >= 7 else current_year - 1
+                
                 params = {
                     'league': league_id,
+                    'season': current_season,  # Dynamic season calculation
                     'from': today.strftime('%Y-%m-%d'),
                     'to': end_date.strftime('%Y-%m-%d'),
                     'status': 'NS'  # Not started
