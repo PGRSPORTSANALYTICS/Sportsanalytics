@@ -23,8 +23,16 @@ def load_todays_tips():
         today = date.today().isoformat()
         query = """
         SELECT home_team, away_team, selection, odds, edge_percentage, 
-               confidence, match_date, kickoff_time, outcome, profit_loss,
+               confidence, match_date, kickoff_time, outcome, profit_loss, tier,
                datetime(timestamp, 'unixepoch', 'localtime') as discovered,
+               CASE 
+                   WHEN tier = 'premium' THEN '💎 Premium'
+                   WHEN tier = 'standard' THEN '⚡ Standard'
+                   WHEN tier = 'value' THEN '💰 Value'
+                   WHEN tier = 'backup' THEN '🔧 Backup'
+                   WHEN tier = 'legacy' THEN '🎯 Exact Score'
+                   ELSE '📊 Tip'
+               END as tier_label,
                CASE 
                    WHEN outcome = 'win' THEN '✅ Win'
                    WHEN outcome = 'loss' THEN '❌ Loss' 
@@ -32,10 +40,18 @@ def load_todays_tips():
                    ELSE '🔥 Live'
                END as status
         FROM football_opportunities 
-        WHERE recommended_tier IS NOT NULL
-        AND DATE(match_date) >= ?
-        ORDER BY timestamp DESC 
-        LIMIT 10
+        WHERE tier IS NOT NULL
+        AND DATE(timestamp, 'unixepoch', 'localtime') = ?
+        ORDER BY 
+            CASE tier
+                WHEN 'premium' THEN 1
+                WHEN 'standard' THEN 2
+                WHEN 'value' THEN 3
+                WHEN 'backup' THEN 4
+                WHEN 'legacy' THEN 5
+            END,
+            edge_percentage DESC
+        LIMIT 15
         """
         df = pd.read_sql_query(query, conn, params=[today])
         conn.close()
@@ -50,7 +66,7 @@ def load_historical_bets():
         conn = sqlite3.connect(DB_PATH)
         query = """
         SELECT home_team, away_team, selection, odds, edge_percentage, 
-               confidence, match_date, outcome, profit_loss, stake,
+               confidence, match_date, outcome, profit_loss, stake, tier,
                datetime(timestamp, 'unixepoch', 'localtime') as bet_time,
                CASE 
                    WHEN outcome IN ('win', 'won') THEN '✅ Win'
@@ -59,7 +75,7 @@ def load_historical_bets():
                    ELSE '🔥 Live'
                END as result
         FROM football_opportunities 
-        WHERE recommended_tier IS NOT NULL
+        WHERE tier IS NOT NULL
         AND outcome IS NOT NULL 
         AND outcome != ''
         AND outcome != 'unknown'
@@ -86,7 +102,7 @@ def load_performance():
             SUM(CASE WHEN outcome IS NOT NULL AND outcome != '' AND outcome != 'unknown' THEN profit_loss ELSE 0 END) as net_profit,
             SUM(CASE WHEN outcome IS NOT NULL AND outcome != '' AND outcome != 'unknown' THEN stake ELSE 0 END) as total_staked
         FROM football_opportunities 
-        WHERE recommended_tier IS NOT NULL
+        WHERE tier IS NOT NULL
         """
         result = pd.read_sql_query(query, conn)
         conn.close()
@@ -135,7 +151,7 @@ if not todays_tips.empty:
     
     for idx, tip in todays_tips.iterrows():
         with st.container():
-            col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
+            col1, col2, col3, col4, col5 = st.columns([3, 2, 2, 1, 1])
             
             with col1:
                 st.write(f"**{tip['home_team']} vs {tip['away_team']}**")
@@ -150,6 +166,9 @@ if not todays_tips.empty:
                 st.caption(f"Date: {tip['match_date']}")
             
             with col4:
+                st.write(f"**{tip['tier_label']}**")
+            
+            with col5:
                 st.write(f"**{tip['status']}**")
                 if tip['outcome'] in ['win', 'loss']:
                     profit_color = "green" if tip['profit_loss'] > 0 else "red"
