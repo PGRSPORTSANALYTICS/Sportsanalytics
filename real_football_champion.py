@@ -234,27 +234,27 @@ class RealFootballChampion:
         # 💰 TIERED SYSTEM: Balance quality with daily commercial viability
         
         # 🥇 PREMIUM TIER (Strict quality - main selling point)
-        self.premium_min_edge = 8.0
-        self.premium_min_confidence = 70.0
-        self.premium_min_edge_under = 16.0
-        self.premium_min_confidence_under = 75.0
-        self.premium_max_daily = 2
+        self.premium_min_edge = 6.0
+        self.premium_min_confidence = 65.0
+        self.premium_min_edge_under = 8.0  # Lowered from 16% (too strict with real odds)
+        self.premium_min_confidence_under = 70.0  # Lowered from 75%
+        self.premium_max_daily = 5  # Increased from 2
         
         # 🥈 STANDARD TIER (Good quality - daily volume)
-        self.standard_min_edge = 5.0
-        self.standard_min_confidence = 60.0
-        self.standard_min_edge_under = 12.0
-        self.standard_min_confidence_under = 70.0
-        self.standard_max_daily = 3
+        self.standard_min_edge = 4.0
+        self.standard_min_confidence = 55.0
+        self.standard_min_edge_under = 6.0  # Lowered from 12%
+        self.standard_min_confidence_under = 65.0  # Lowered from 70%
+        self.standard_max_daily = 8  # Increased from 3
         
         # 🥉 BACKUP TIER (Emergency - commercial viability)
-        self.backup_min_edge = 4.0
-        self.backup_min_confidence = 55.0
-        self.backup_max_daily = 1
+        self.backup_min_edge = 3.0
+        self.backup_min_confidence = 50.0
+        self.backup_max_daily = 5  # Increased from 1
         
         # Business requirements
-        self.min_daily_tips = 2  # 💰 Minimum tips needed for commercial viability
-        self.max_daily_tips = 6  # Maximum total tips per day
+        self.min_daily_tips = 10  # 💰 Minimum tips needed for commercial viability
+        self.max_daily_tips = 25  # Maximum total tips per day
         
         # Legacy parameters (for backward compatibility)
         self.min_edge = self.premium_min_edge
