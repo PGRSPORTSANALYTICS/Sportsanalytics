@@ -102,7 +102,7 @@ Use /help for all commands
                 
             tips = self._get_todays_tips()
             
-            if not tips['premium'] and not tips['standard']:
+            if not any([tips['premium'], tips['standard'], tips['value'], tips['backup']]):
                 message_text = "⏳ No tips available yet today. Check back later!"
             else:
                 message_text = self._format_tips_message(tips)
@@ -208,7 +208,7 @@ Use /help for all commands
             await self.help_command(update, context)
     
     def _get_todays_tips(self) -> Dict[str, List[Dict]]:
-        """Get today's premium and standard tips from database, or recent tips if none today"""
+        """Get today's tips from database (all tiers), or recent tips if none today"""
         try:
             conn = sqlite3.connect(self.db_path)
             conn.row_factory = sqlite3.Row
@@ -244,20 +244,24 @@ Use /help for all commands
             
             conn.close()
             
-            # Separate premium and standard tips
+            # Separate tips by tier
             premium_tips = [tip for tip in today_tips if tip['recommended_tier'] == 'premium']
             standard_tips = [tip for tip in today_tips if tip['recommended_tier'] == 'standard']
+            value_tips = [tip for tip in today_tips if tip['recommended_tier'] == 'value']
+            backup_tips = [tip for tip in today_tips if tip['recommended_tier'] == 'backup']
             
-            logger.info(f"📊 Retrieved {len(premium_tips)} premium + {len(standard_tips)} standard tips")
+            logger.info(f"📊 Retrieved {len(premium_tips)} premium, {len(standard_tips)} standard, {len(value_tips)} value, {len(backup_tips)} backup tips")
             
             return {
-                'premium': premium_tips[:10],  # Limit to top 10
-                'standard': standard_tips[:30]  # Limit to top 30
+                'premium': premium_tips[:8],
+                'standard': standard_tips[:10],
+                'value': value_tips[:12],
+                'backup': backup_tips[:8]
             }
             
         except Exception as e:
             logger.error(f"❌ Database error getting tips: {e}")
-            return {'premium': [], 'standard': []}
+            return {'premium': [], 'standard': [], 'value': [], 'backup': []}
     
     def _get_recent_results(self) -> List[Dict]:
         """Get recent verified betting results from database"""
@@ -327,7 +331,7 @@ Use /help for all commands
         """Format tips into readable Telegram message"""
         # Get the date from the first tip, or use today if no tips
         tip_date = date.today()
-        all_tips = tips['premium'] + tips['standard'] 
+        all_tips = tips['premium'] + tips['standard'] + tips['value'] + tips['backup']
         if all_tips:
             tip_date_str = all_tips[0].get('recommended_date')
             if tip_date_str:
@@ -337,7 +341,7 @@ Use /help for all commands
         message = f"🏆 **Football Prophet Tips - {tip_date.strftime('%d/%m/%Y')}**\n\n"
         
         if tips['premium']:
-            message += "💎 **PREMIUM TIPS** (Score 8.0+)\n"
+            message += "💎 **PREMIUM TIPS** (Highest Quality)\n"
             for i, tip in enumerate(tips['premium'], 1):
                 # Scale confidence from database range (0-100) to display range (1-5)
                 scaled_confidence = min(5, max(1, int(tip['confidence'] / 20) + 1))
@@ -349,13 +353,26 @@ Use /help for all commands
                 message += f"   ⏰ {tip['kickoff_time'] or 'TBD'}\n\n"
         
         if tips['standard']:
-            message += "⚡ **STANDARD TIPS** (Score 6.0-7.9)\n"
-            for i, tip in enumerate(tips['standard'], 1):  # Show ALL standard tips
-                # Scale confidence from database range (0-100) to display range (1-5) 
+            message += "⚡ **STANDARD TIPS** (Good Quality)\n"
+            for i, tip in enumerate(tips['standard'], 1):
                 scaled_confidence = min(5, max(1, int(tip['confidence'] / 20) + 1))
                 stars = "⭐" * scaled_confidence
                 message += f"{i}. **{tip['home_team']} vs {tip['away_team']}**\n"
                 message += f"   🎯 {tip['selection']} @ {tip['odds']:.2f} | Score: {tip['quality_score']:.1f} | {stars}\n"
+        
+        if tips['value']:
+            message += "\n💰 **VALUE PICKS** (High Volume)\n"
+            for i, tip in enumerate(tips['value'], 1):
+                scaled_confidence = min(5, max(1, int(tip['confidence'] / 20) + 1))
+                stars = "⭐" * scaled_confidence
+                message += f"{i}. **{tip['home_team']} vs {tip['away_team']}**\n"
+                message += f"   🎯 {tip['selection']} @ {tip['odds']:.2f} | Score: {tip['quality_score']:.1f} | {stars}\n"
+        
+        if tips['backup']:
+            message += "\n🔧 **BACKUP TIPS** (Additional Options)\n"
+            for i, tip in enumerate(tips['backup'], 1):
+                message += f"{i}. **{tip['home_team']} vs {tip['away_team']}**\n"
+                message += f"   🎯 {tip['selection']} @ {tip['odds']:.2f} | Score: {tip['quality_score']:.1f}\n"
         
         message += "\n📝 **Note:** Tips are FREE during track record building phase"
         message += "\n🔒 **Guarantee:** 100% real results, no simulated data"
@@ -397,7 +414,8 @@ Use /help for all commands
             message += "✅ **RECENT WINS**\n"
             for i, result in enumerate(wins[:5], 1):
                 profit = f"+${result['profit_loss']:.2f}" if result['profit_loss'] else "+$0.00"
-                tier_icon = "💎" if result['recommended_tier'] == 'premium' else "⚡"
+                tier_icons = {'premium': '💎', 'standard': '⚡', 'value': '💰', 'backup': '🔧'}
+                tier_icon = tier_icons.get(result['recommended_tier'], '⚡')
                 message += f"{i}. **{result['home_team']} vs {result['away_team']}**\n"
                 message += f"   🎯 {result['selection']} @ {result['odds']:.2f} | {profit} | {tier_icon}\n"
                 message += f"   📍 {result['league']} | Score: {result['quality_score']:.1f}\n\n"
@@ -407,7 +425,8 @@ Use /help for all commands
             message += "❌ **RECENT LOSSES**\n"
             for i, result in enumerate(losses[:5], 1):
                 loss = f"-${abs(result['profit_loss']):.2f}" if result['profit_loss'] else "-$0.00"
-                tier_icon = "💎" if result['recommended_tier'] == 'premium' else "⚡"
+                tier_icons = {'premium': '💎', 'standard': '⚡', 'value': '💰', 'backup': '🔧'}
+                tier_icon = tier_icons.get(result['recommended_tier'], '⚡')
                 message += f"{i}. **{result['home_team']} vs {result['away_team']}**\n"
                 message += f"   🎯 {result['selection']} @ {result['odds']:.2f} | {loss} | {tier_icon}\n"
                 message += f"   📍 {result['league']} | Score: {result['quality_score']:.1f}\n\n"
