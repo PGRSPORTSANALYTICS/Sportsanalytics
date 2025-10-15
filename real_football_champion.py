@@ -2071,11 +2071,11 @@ class RealFootballChampion:
         return total_opportunities
     
     def run_exact_score_analysis(self):
-        """Run separate exact score analysis - ONLY 2 games, 1 tip per game"""
-        print("\n🎯 EXACT SCORE ANALYSIS - 2 Games Only")
+        """Run exact score analysis - NO LIMITS! Generate for all suitable matches"""
+        print("\n🎯 EXACT SCORE ANALYSIS - ALL AVAILABLE MATCHES")
         print("=" * 50)
         
-        # Check if we already have exact score predictions for today
+        # Check how many exact score predictions we have today
         today_date = datetime.now().strftime('%Y-%m-%d')
         cursor = self.conn.cursor()
         cursor.execute('''
@@ -2084,9 +2084,8 @@ class RealFootballChampion:
         ''', (today_date,))
         existing_count = cursor.fetchone()[0]
         
-        if existing_count >= 2:
-            print(f"✅ Already have {existing_count} exact score predictions for today")
-            return 0
+        print(f"📊 Already have {existing_count} exact score predictions today")
+        print("🚀 Generating more predictions (NO DAILY LIMIT)...")
         
         # Get matches (live or upcoming)
         matches = self.get_football_odds()
@@ -2096,10 +2095,10 @@ class RealFootballChampion:
             print("❌ No matches found for exact score analysis")
             return 0
         
-        # Select only 2 games with the highest expected entertainment value
-        # Priority: Higher total xG (more goals expected)
+        # Analyze ALL available matches (no limit)
+        # Priority: Higher total xG (more entertainment value)
         match_scores = []
-        for match in matches[:6]:  # Check all available matches
+        for match in matches:  # Check ALL available matches
             try:
                 home_team = match['home_team']
                 away_team = match['away_team']
@@ -2129,8 +2128,10 @@ class RealFootballChampion:
         # Sort by total expected goals (entertainment value)
         match_scores.sort(key=lambda x: x['total_xg'], reverse=True)
         
-        # Take top 2 matches
-        selected_matches = match_scores[:2]
+        # Take top 10 matches (or all available if less than 10)
+        max_predictions = min(10, len(match_scores))
+        selected_matches = match_scores[:max_predictions]
+        print(f"\n🎯 Selected {len(selected_matches)} matches for exact score predictions")
         total_exact_scores = 0
         
         for match_data in selected_matches:
@@ -2272,36 +2273,40 @@ class RealFootballChampion:
             return False
 
 def main():
-    """Main execution function"""
+    """Main execution function - EXACT SCORES ONLY"""
     try:
         champion = RealFootballChampion()
         last_results_check = 0
         
+        print("🎯 EXACT SCORE PREDICTIONS MODE")
+        print("📊 Regular betting tips DISABLED - focusing exclusively on exact scores")
+        print("=" * 60)
+        
         while True:
-            # Run main betting analysis cycle (40 bets max)
-            opportunities = champion.run_analysis_cycle()
+            # DISABLED: Regular betting analysis (underperforming -29% ROI)
+            # opportunities = champion.run_analysis_cycle()
             
-            # Run separate exact score analysis (2 games only)
+            # Run exact score analysis (proven +200% ROI)
             exact_scores = champion.run_exact_score_analysis()
             
             # Check if it's time for results update (every 5 minutes)
             current_time = time.time()
             if current_time - last_results_check >= 300:  # 5 minutes
-                print("\n🔄 CHECKING BET RESULTS...")
+                print("\n🔄 CHECKING EXACT SCORE RESULTS...")
                 updated_bets = champion.results_scraper.update_bet_outcomes()
                 if updated_bets > 0:
-                    print(f"✅ Updated {updated_bets} bet outcomes")
+                    print(f"✅ Updated {updated_bets} exact score outcomes")
                 else:
-                    print("📊 No pending bets to update")
+                    print("📊 No pending exact scores to update")
                 last_results_check = current_time
             
-            # Wait 30 minutes between cycles (slowed down to prevent duplicates)
+            # Wait 30 minutes between cycles
             time.sleep(1800)
             
     except KeyboardInterrupt:
-        print("\n🛑 Real Football Champion stopped by user")
+        print("\n🛑 Exact Score Predictions Bot stopped by user")
     except Exception as e:
-        print(f"❌ Error in Real Football Champion: {e}")
+        print(f"❌ Error in Exact Score Predictions Bot: {e}")
 
 if __name__ == "__main__":
     main()
