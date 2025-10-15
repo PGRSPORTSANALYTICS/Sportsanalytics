@@ -10,27 +10,176 @@ DB_PATH = 'data/real_football.db'
 
 # Page setup
 st.set_page_config(
-    page_title="🏆 Premium Football Tips",
+    page_title="🏆 Elite Football Intelligence",
     page_icon="🏆",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
+
+# Custom CSS for exclusive design
+st.markdown("""
+<style>
+    /* Main background and fonts */
+    .stApp {
+        background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
+    }
+    
+    /* Headers */
+    h1 {
+        color: #FFD700 !important;
+        font-size: 3.5rem !important;
+        font-weight: 800 !important;
+        text-align: center !important;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        padding: 20px 0;
+        margin-bottom: 10px !important;
+    }
+    
+    h2 {
+        color: #FFFFFF !important;
+        font-size: 2rem !important;
+        font-weight: 700 !important;
+        border-left: 5px solid #FFD700;
+        padding-left: 15px;
+        margin-top: 30px !important;
+    }
+    
+    h3 {
+        color: #E0E0E0 !important;
+        font-size: 1.3rem !important;
+    }
+    
+    /* Metrics styling */
+    [data-testid="stMetricValue"] {
+        font-size: 2rem !important;
+        font-weight: 700 !important;
+        color: #FFD700 !important;
+    }
+    
+    [data-testid="stMetricLabel"] {
+        color: #B0B0B0 !important;
+        font-size: 0.9rem !important;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    
+    /* Cards and containers */
+    .stMarkdown {
+        color: #E0E0E0;
+    }
+    
+    /* Dividers */
+    hr {
+        border-color: rgba(255, 215, 0, 0.3) !important;
+    }
+    
+    /* Buttons */
+    .stButton > button {
+        background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+        color: #000000;
+        font-weight: 700;
+        border: none;
+        border-radius: 8px;
+        padding: 10px 30px;
+        transition: all 0.3s ease;
+    }
+    
+    .stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(255, 215, 0, 0.4);
+    }
+    
+    /* Success/Info boxes */
+    .stAlert {
+        background-color: rgba(255, 215, 0, 0.1) !important;
+        border: 1px solid rgba(255, 215, 0, 0.3) !important;
+        border-radius: 10px;
+        color: #FFD700 !important;
+    }
+    
+    /* DataFrames */
+    [data-testid="stDataFrame"] {
+        background-color: rgba(255, 255, 255, 0.05);
+        border-radius: 10px;
+        padding: 10px;
+    }
+    
+    /* Caption text */
+    .caption {
+        color: #909090 !important;
+        font-size: 0.85rem;
+    }
+    
+    /* Subtitle */
+    .subtitle {
+        text-align: center;
+        color: #B0B0B0;
+        font-size: 1.1rem;
+        margin-bottom: 30px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+    }
+    
+    /* Premium badge */
+    .premium-badge {
+        background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+        color: #000000;
+        padding: 8px 20px;
+        border-radius: 20px;
+        font-weight: 700;
+        display: inline-block;
+        margin: 5px;
+        box-shadow: 0 2px 8px rgba(255, 215, 0, 0.3);
+    }
+    
+    /* Tier badges */
+    .tier-premium { 
+        background: linear-gradient(135deg, #9333EA 0%, #7C3AED 100%);
+        color: white;
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    
+    .tier-standard {
+        background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
+        color: white;
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    
+    .tier-value {
+        background: linear-gradient(135deg, #059669 0%, #047857 100%);
+        color: white;
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    
+    .tier-exact {
+        background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%);
+        color: white;
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 @st.cache_data(ttl=30)
 def load_regular_tips():
-    """Load today's regular betting opportunities (excluding exact scores)"""
+    """Load today's regular betting opportunities"""
     try:
         conn = sqlite3.connect(DB_PATH)
         today = date.today().isoformat()
         query = """
         SELECT home_team, away_team, selection, odds, edge_percentage, 
-               confidence, match_date, tier,
-               CASE 
-                   WHEN tier = 'premium' THEN '💎 Premium'
-                   WHEN tier = 'standard' THEN '⚡ Standard'
-                   WHEN tier = 'value' THEN '💰 Value'
-                   WHEN tier = 'backup' THEN '🔧 Backup'
-                   ELSE '📊 Tip'
-               END as tier_label
+               confidence, match_date, tier
         FROM football_opportunities 
         WHERE tier IS NOT NULL
         AND tier != 'legacy'
@@ -80,7 +229,6 @@ def load_regular_performance():
             COUNT(*) as total_tips,
             COUNT(CASE WHEN outcome IN ('win', 'won') THEN 1 END) as wins,
             COUNT(CASE WHEN outcome IN ('loss', 'lost') THEN 1 END) as losses,
-            COUNT(CASE WHEN outcome IS NULL OR outcome = '' OR outcome = 'unknown' THEN 1 END) as pending,
             SUM(CASE WHEN outcome IS NOT NULL AND outcome != '' AND outcome != 'unknown' THEN profit_loss ELSE 0 END) as net_profit,
             SUM(CASE WHEN outcome IS NOT NULL AND outcome != '' AND outcome != 'unknown' THEN stake ELSE 0 END) as total_staked
         FROM football_opportunities 
@@ -103,9 +251,7 @@ def load_exact_score_performance():
             COUNT(*) as total_tips,
             COUNT(CASE WHEN outcome IN ('win', 'won') THEN 1 END) as wins,
             COUNT(CASE WHEN outcome IN ('loss', 'lost') THEN 1 END) as losses,
-            COUNT(CASE WHEN outcome IS NULL OR outcome = '' OR outcome = 'unknown' THEN 1 END) as pending,
-            SUM(CASE WHEN outcome IS NOT NULL AND outcome != '' AND outcome != 'unknown' THEN profit_loss ELSE 0 END) as net_profit,
-            SUM(CASE WHEN outcome IS NOT NULL AND outcome != '' AND outcome != 'unknown' THEN stake ELSE 0 END) as total_staked
+            SUM(CASE WHEN outcome IS NOT NULL AND outcome != '' AND outcome != 'unknown' THEN profit_loss ELSE 0 END) as net_profit
         FROM football_opportunities 
         WHERE tier = 'legacy'
         """
@@ -123,18 +269,9 @@ def load_all_historical():
         query = """
         SELECT home_team, away_team, selection, odds, tier, outcome, profit_loss, match_date,
                CASE 
-                   WHEN tier = 'premium' THEN '💎 Premium'
-                   WHEN tier = 'standard' THEN '⚡ Standard'
-                   WHEN tier = 'value' THEN '💰 Value'
-                   WHEN tier = 'backup' THEN '🔧 Backup'
-                   WHEN tier = 'legacy' THEN '🎯 Exact Score'
-                   ELSE '📊 Tip'
-               END as tier_label,
-               CASE 
-                   WHEN outcome IN ('win', 'won') THEN '✅ Win'
-                   WHEN outcome IN ('loss', 'lost') THEN '❌ Loss' 
-                   WHEN outcome = 'void' THEN '⚪ Void'
-                   ELSE '🔥 Pending'
+                   WHEN outcome IN ('win', 'won') THEN '✅'
+                   WHEN outcome IN ('loss', 'lost') THEN '❌'
+                   ELSE '⚪'
                END as result
         FROM football_opportunities 
         WHERE tier IS NOT NULL
@@ -151,161 +288,157 @@ def load_all_historical():
         return pd.DataFrame()
 
 # ============================================================================
-# DASHBOARD LAYOUT
+# HEADER
 # ============================================================================
 
-st.title("🏆 Premium Football Tips")
-st.markdown("**Exclusive AI-Powered Betting Intelligence**")
+st.markdown("# 🏆 ELITE BETTING INTELLIGENCE")
+st.markdown('<p class="subtitle">Premium AI-Powered Football Predictions</p>', unsafe_allow_html=True)
 
-# Refresh button
-col1, col2 = st.columns([3, 1])
+col1, col2 = st.columns([4, 1])
 with col2:
-    if st.button("🔄 Refresh", help="Update data"):
+    if st.button("🔄 REFRESH"):
         st.cache_data.clear()
         st.rerun()
 
 st.markdown("---")
 
 # ============================================================================
-# TOP SECTION: REGULAR BETTING TIPS + TRACKER
+# TOP: PREMIUM BETTING TIPS
 # ============================================================================
 
-st.header("💎 Premium Betting Tips")
+st.markdown("## 💎 PREMIUM BETTING TIPS")
 
-# Regular betting tracker
 regular_stats = load_regular_performance()
 if regular_stats is not None:
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric("📊 Total Tips", int(regular_stats['total_tips']))
+        st.metric("TOTAL TIPS", int(regular_stats['total_tips']))
     
     with col2:
         win_rate = (regular_stats['wins'] / (regular_stats['wins'] + regular_stats['losses']) * 100) if (regular_stats['wins'] + regular_stats['losses']) > 0 else 0
-        st.metric("🏆 Win Rate", f"{win_rate:.1f}%")
+        st.metric("WIN RATE", f"{win_rate:.1f}%")
     
     with col3:
-        st.metric("💰 Net Profit", f"${regular_stats['net_profit']:.2f}")
+        st.metric("NET PROFIT", f"${regular_stats['net_profit']:.2f}")
     
     with col4:
         roi = (regular_stats['net_profit'] / regular_stats['total_staked'] * 100) if regular_stats['total_staked'] > 0 else 0
-        st.metric("📈 ROI", f"{roi:.1f}%")
+        st.metric("ROI", f"{roi:.1f}%")
 
 st.markdown("")
 
-# Today's regular tips
 regular_tips = load_regular_tips()
 if not regular_tips.empty:
-    st.success(f"🌟 {len(regular_tips)} premium tips available today")
-    
     for idx, tip in regular_tips.iterrows():
+        tier_class = f"tier-{tip['tier']}" if tip['tier'] in ['premium', 'standard', 'value'] else "tier-premium"
+        tier_icons = {'premium': '💎', 'standard': '⚡', 'value': '💰', 'backup': '🔧'}
+        tier_icon = tier_icons.get(tip['tier'], '📊')
+        
         col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
         
         with col1:
-            st.write(f"**{tip['home_team']} vs {tip['away_team']}**")
-            st.caption(f"{tip['selection']}")
+            st.markdown(f"### {tip['home_team']} vs {tip['away_team']}")
+            st.markdown(f"**{tip['selection']}**")
         
         with col2:
-            st.write(f"**Odds:** {tip['odds']:.2f}")
-            st.caption(f"Edge: {tip['edge_percentage']:.1f}%")
+            st.markdown(f"**Odds:** `{tip['odds']:.2f}`")
+            st.markdown(f"Edge: **{tip['edge_percentage']:.1f}%**")
         
         with col3:
-            st.write(f"**Confidence:** {tip['confidence']}%")
-            st.caption(f"Date: {tip['match_date']}")
+            st.markdown(f"**Confidence:** {tip['confidence']}%")
+            st.caption(f"{tip['match_date']}")
         
         with col4:
-            st.write(f"**{tip['tier_label']}**")
+            st.markdown(f'<div class="{tier_class}">{tier_icon} {tip["tier"].upper()}</div>', unsafe_allow_html=True)
         
-        st.divider()
+        st.markdown("---")
 else:
-    st.info("🔍 No premium tips available. Waiting for quality opportunities...")
+    st.info("🔍 No premium tips available. Waiting for high-quality opportunities...")
 
-st.markdown("---")
+st.markdown("<br>", unsafe_allow_html=True)
 
 # ============================================================================
-# MIDDLE SECTION: EXACT SCORE PREDICTIONS + TRACKER
+# MIDDLE: EXACT SCORE PREDICTIONS
 # ============================================================================
 
-st.header("🎯 Exact Score Predictions")
+st.markdown("## 🎯 EXACT SCORE PREDICTIONS")
 
-# Exact score tracker
 exact_stats = load_exact_score_performance()
 if exact_stats is not None and exact_stats['total_tips'] > 0:
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric("🎯 Total Predictions", int(exact_stats['total_tips']))
+        st.metric("PREDICTIONS", int(exact_stats['total_tips']))
     
     with col2:
         hit_rate = (exact_stats['wins'] / (exact_stats['wins'] + exact_stats['losses']) * 100) if (exact_stats['wins'] + exact_stats['losses']) > 0 else 0
-        st.metric("🎯 Hit Rate", f"{hit_rate:.1f}%")
+        st.metric("HIT RATE", f"{hit_rate:.1f}%")
     
     with col3:
-        st.metric("💰 Total Profit", f"${exact_stats['net_profit']:.2f}")
+        st.metric("PROFIT", f"${exact_stats['net_profit']:.2f}")
     
     with col4:
-        st.metric("📝 Settled", f"{exact_stats['wins'] + exact_stats['losses']}")
+        st.metric("SETTLED", f"{exact_stats['wins'] + exact_stats['losses']}")
 
 st.markdown("")
 
-# Today's exact scores
 exact_tips = load_exact_score_tips()
 if not exact_tips.empty:
-    st.success(f"🎯 {len(exact_tips)} exact score predictions today")
-    
     for idx, tip in exact_tips.iterrows():
         col1, col2, col3 = st.columns([3, 2, 2])
         
         with col1:
-            st.write(f"**{tip['home_team']} vs {tip['away_team']}**")
-            st.caption(f"{tip['selection']}")
+            st.markdown(f"### {tip['home_team']} vs {tip['away_team']}")
+            st.markdown(f"**{tip['selection']}**")
         
         with col2:
-            st.write(f"**Odds:** {tip['odds']:.2f}")
-            st.caption(f"Edge: {tip['edge_percentage']:.1f}%")
+            st.markdown(f"**Odds:** `{tip['odds']:.2f}`")
+            st.markdown(f"Edge: **{tip['edge_percentage']:.1f}%**")
         
         with col3:
-            st.write(f"**Confidence:** {tip['confidence']}%")
-            st.caption(f"Date: {tip['match_date']}")
+            st.markdown(f"**Confidence:** {tip['confidence']}%")
+            st.caption(f"{tip['match_date']}")
         
-        st.divider()
+        st.markdown("---")
 else:
-    st.info("🎯 No exact score predictions available today.")
+    st.info("🎯 No exact score predictions today.")
 
-st.markdown("---")
+st.markdown("<br>", unsafe_allow_html=True)
 
 # ============================================================================
-# BOTTOM SECTION: HISTORICAL BETS
+# BOTTOM: HISTORICAL PERFORMANCE
 # ============================================================================
 
-st.header("📊 Historical Performance")
+st.markdown("## 📊 HISTORICAL PERFORMANCE")
 
 historical = load_all_historical()
 if not historical.empty:
-    st.success(f"📈 Track Record: {len(historical)} completed bets")
+    st.success(f"📈 **{len(historical)} Completed Bets** | Authentic Results Only")
     
-    # Create display table
+    st.markdown("")
+    
     display_df = historical.head(50).copy()
     display_df['Match'] = display_df['home_team'] + ' vs ' + display_df['away_team']
     display_df['P&L'] = display_df['profit_loss'].apply(lambda x: f"${x:.2f}")
+    display_df['Tier'] = display_df['tier'].apply(lambda x: {'premium': '💎 Premium', 'standard': '⚡ Standard', 'value': '💰 Value', 'backup': '🔧 Backup', 'legacy': '🎯 Exact'}.get(x, '📊 Tip'))
     
-    table_data = display_df[['Match', 'selection', 'tier_label', 'odds', 'result', 'P&L', 'match_date']].copy()
+    table_data = display_df[['Match', 'selection', 'Tier', 'odds', 'result', 'P&L', 'match_date']].copy()
     table_data.columns = ['Match', 'Selection', 'Tier', 'Odds', 'Result', 'P&L', 'Date']
     
-    # Color code results
     def color_historical(row):
         if '✅' in str(row['Result']):
-            return ['background-color: #d4edda'] * len(row)
+            return ['background-color: rgba(16, 185, 129, 0.2)'] * len(row)
         elif '❌' in str(row['Result']):
-            return ['background-color: #f8d7da'] * len(row)
+            return ['background-color: rgba(239, 68, 68, 0.2)'] * len(row)
         else:
-            return [''] * len(row)
+            return ['background-color: rgba(255, 255, 255, 0.05)'] * len(row)
     
     styled_table = table_data.style.apply(color_historical, axis=1)
     st.dataframe(styled_table, use_container_width=True, height=600)
 else:
-    st.info("📊 Historical results will appear here as bets are completed.")
+    st.info("📊 Historical results will appear as bets settle.")
 
-# Footer
+st.markdown("<br><br>", unsafe_allow_html=True)
 st.markdown("---")
-st.caption("🔄 Dashboard auto-refreshes every 30 seconds | 🔒 100% Authentic Results")
+st.markdown('<p style="text-align: center; color: #808080; font-size: 0.9rem;">🔒 100% Authentic Results | 🔄 Auto-refresh every 30s | 🏆 Elite Betting Intelligence</p>', unsafe_allow_html=True)
