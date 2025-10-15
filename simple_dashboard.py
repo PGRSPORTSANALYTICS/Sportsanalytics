@@ -238,24 +238,8 @@ st.header("📊 Historical Results")
 
 historical_bets = load_historical_bets()
 if not historical_bets.empty:
-    st.success(f"📈 Track record: {len(historical_bets)} completed bets")
-    
-    # Summary stats for historical performance
-    wins = len(historical_bets[historical_bets['outcome'].isin(['win', 'won'])])
-    losses = len(historical_bets[historical_bets['outcome'].isin(['loss', 'lost'])])
-    total_profit = historical_bets['profit_loss'].sum()
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        win_rate = (wins / (wins + losses) * 100) if (wins + losses) > 0 else 0
-        st.metric("🏆 Historical Win Rate", f"{win_rate:.1f}%")
-    with col2:
-        st.metric("💰 Total Profit", f"${total_profit:.2f}")
-    with col3:
-        st.metric("📝 Total Settled", f"{wins + losses}")
-    
     # Display historical results in a clean table format
-    st.subheader("📋 Recent Completed Bets")
+    st.subheader("📋 Recent Completed Regular Bets")
     
     display_historical = historical_bets.head(20).copy()
     display_historical['Match'] = display_historical['home_team'] + ' vs ' + display_historical['away_team']
