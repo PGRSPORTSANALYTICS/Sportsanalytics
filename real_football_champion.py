@@ -2066,7 +2066,7 @@ class RealFootballChampion:
         # 💰 BUSINESS CRITICAL: Check commercial viability
         self.ensure_daily_commercial_viability()
         
-        print("⏱️ Next analysis cycle in 30 minutes...")
+        print("⏱️ Next analysis cycle in 60 minutes...")
         
         return total_opportunities
     
@@ -2308,8 +2308,8 @@ def main():
                     print("📊 No pending exact scores to update")
                 last_results_check = current_time
             
-            # Wait 30 minutes between cycles
-            time.sleep(1800)
+            # Wait 60 minutes between cycles (reduced API usage)
+            time.sleep(3600)
             
     except KeyboardInterrupt:
         print("\n🛑 Exact Score Predictions Bot stopped by user")
