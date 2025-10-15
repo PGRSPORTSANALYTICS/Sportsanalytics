@@ -96,7 +96,7 @@ class RealResultVerifier:
                 SELECT id, home_team, away_team, match_date, market, selection, 
                        odds, stake, status, outcome, profit_loss
                 FROM football_opportunities 
-                WHERE outcome IS NULL 
+                WHERE (outcome IS NULL OR outcome = '' OR outcome = 'unknown')
                 AND match_date <= date('now')
                 ORDER BY match_date DESC
                 LIMIT 50
@@ -340,13 +340,24 @@ class RealResultVerifier:
             words1 = set(team1.split())
             words2 = set(team2.split())
             
-            # If at least 2 words match or one significant word matches
+            # Remove common filler words
+            filler_words = {'fc', 'afc', 'united', 'city', 'town', 'athletic', 'wanderers', 'rovers', 'albion', 'county'}
+            words1_significant = words1 - filler_words
+            words2_significant = words2 - filler_words
+            
+            # If at least 2 words match
             common_words = words1.intersection(words2)
             if len(common_words) >= 2:
                 return True
             
-            # Check for single significant word matches (longer than 4 characters)
-            significant_matches = [word for word in common_words if len(word) > 4]
+            # If significant words match (excluding filler words)
+            if words1_significant and words2_significant:
+                common_significant = words1_significant.intersection(words2_significant)
+                if common_significant:
+                    return True
+            
+            # Check for single significant word matches (longer than 5 characters)
+            significant_matches = [word for word in common_words if len(word) > 5]
             if significant_matches:
                 return True
                 
@@ -391,8 +402,38 @@ class RealResultVerifier:
         return self._parse_flashscore_text(text, home_team, away_team)
     
     def _normalize_team_name(self, team_name: str) -> str:
-        """Normalize team names for matching"""
-        return re.sub(r'[^\w\s]', '', team_name.lower().strip())
+        """Normalize team names for matching with common abbreviations"""
+        normalized = re.sub(r'[^\w\s]', '', team_name.lower().strip())
+        
+        # Common team name mappings for better matching
+        team_mappings = {
+            'man united': 'manchester united',
+            'man utd': 'manchester united',
+            'man city': 'manchester city',
+            'west ham': 'west ham united',
+            'wolves': 'wolverhampton',
+            'spurs': 'tottenham',
+            'newcastle': 'newcastle united',
+            'leeds': 'leeds united',
+            'west brom': 'west bromwich',
+            'brighton': 'brighton hove',
+            'forest': 'nottingham forest',
+            'leicester': 'leicester city',
+            'norwich': 'norwich city',
+            'swansea': 'swansea city',
+            'cardiff': 'cardiff city',
+            'hull': 'hull city',
+            'stoke': 'stoke city',
+            'crystal palace': 'palace',
+            'bournemouth': 'afc bournemouth',
+        }
+        
+        # Check if normalized name matches any mapping
+        for abbrev, full_name in team_mappings.items():
+            if normalized == abbrev or normalized == full_name:
+                return full_name
+        
+        return normalized
     
     def _calculate_outcome(self, tip: Dict, match_result: Dict) -> str:
         """Calculate bet outcome based on real match result"""
@@ -404,12 +445,22 @@ class RealResultVerifier:
             market = tip['market'].lower()
             selection = tip['selection'].lower()
             
-            if 'over/under' in market or 'total goals' in market or 'goals' in market:
+            # Check for BTTS in selection first (can be in any market)
+            if 'btts' in selection or 'both teams to score' in selection:
+                both_scored = home_goals > 0 and away_goals > 0
+                if 'yes' in selection:
+                    return 'won' if both_scored else 'lost'
+                elif 'no' in selection:
+                    return 'won' if not both_scored else 'lost'
+            
+            # Then check for Over/Under goals
+            elif 'over/under' in market or 'total goals' in market or 'goals' in market:
                 if 'over 2.5' in selection or 'over2.5' in selection.replace(' ', ''):
                     return 'won' if total_goals > 2.5 else 'lost'
                 elif 'under 2.5' in selection or 'under2.5' in selection.replace(' ', ''):
                     return 'won' if total_goals < 2.5 else 'lost'
             
+            # Check for BTTS in market name
             elif 'both teams to score' in market or 'btts' in market:
                 both_scored = home_goals > 0 and away_goals > 0
                 if 'yes' in selection:
