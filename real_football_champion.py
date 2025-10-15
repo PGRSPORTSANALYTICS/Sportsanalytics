@@ -2071,11 +2071,12 @@ class RealFootballChampion:
         return total_opportunities
     
     def run_exact_score_analysis(self):
-        """Run exact score analysis - NO LIMITS! Generate for all suitable matches"""
-        print("\n🎯 EXACT SCORE ANALYSIS - ALL AVAILABLE MATCHES")
+        """Run exact score analysis - MAX 30 per day to control volume"""
+        print("\n🎯 EXACT SCORE ANALYSIS - INTELLIGENT VOLUME CONTROL")
         print("=" * 50)
         
         # Check how many exact score predictions we have today
+        DAILY_CAP = 30
         today_date = datetime.now().strftime('%Y-%m-%d')
         cursor = self.conn.cursor()
         cursor.execute('''
@@ -2084,8 +2085,15 @@ class RealFootballChampion:
         ''', (today_date,))
         existing_count = cursor.fetchone()[0]
         
-        print(f"📊 Already have {existing_count} exact score predictions today")
-        print("🚀 Generating more predictions (NO DAILY LIMIT)...")
+        print(f"📊 Current exact score predictions today: {existing_count}/{DAILY_CAP}")
+        
+        # Check if daily cap reached
+        if existing_count >= DAILY_CAP:
+            print(f"✅ Daily cap of {DAILY_CAP} predictions reached. Quality over quantity!")
+            return 0
+        
+        remaining_slots = DAILY_CAP - existing_count
+        print(f"🚀 Generating up to {remaining_slots} more predictions...")
         
         # Get matches (live or upcoming)
         matches = self.get_football_odds()
@@ -2128,10 +2136,10 @@ class RealFootballChampion:
         # Sort by total expected goals (entertainment value)
         match_scores.sort(key=lambda x: x['total_xg'], reverse=True)
         
-        # Take top 10 matches (or all available if less than 10)
-        max_predictions = min(10, len(match_scores))
-        selected_matches = match_scores[:max_predictions]
-        print(f"\n🎯 Selected {len(selected_matches)} matches for exact score predictions")
+        # Select matches up to remaining daily cap (max 10 per cycle)
+        max_this_cycle = min(10, remaining_slots, len(match_scores))
+        selected_matches = match_scores[:max_this_cycle]
+        print(f"\n🎯 Selected {len(selected_matches)} matches for exact score predictions (respecting daily cap)")
         total_exact_scores = 0
         
         for match_data in selected_matches:
