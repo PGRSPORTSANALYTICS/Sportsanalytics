@@ -196,18 +196,25 @@ class ResultsScraper:
         """Get results from multiple sources for a date (API-Football priority)"""
         logger.info(f"🔍 Getting results for {date_str}")
         
+        # Extract just the date part if timestamp is included
+        # Handles: 2025-10-04, 2025-10-04T14:00:00, 2025-10-04T14:00:00+00:00, etc.
+        if 'T' in date_str or len(date_str) > 10:
+            clean_date = date_str.split('T')[0]
+        else:
+            clean_date = date_str
+        
         # Try API-Football first (most reliable)
-        results = self.get_api_football_results(date_str)
+        results = self.get_api_football_results(clean_date)
         
         if not results:
             logger.info("📡 No results from API-Football, trying Sofascore...")
-            results = self.get_sofascore_results(date_str)
+            results = self.get_sofascore_results(clean_date)
         
         if not results:
             logger.info("📡 No results from Sofascore, trying Flashscore...")
-            results = self.get_flashscore_results(date_str)
+            results = self.get_flashscore_results(clean_date)
         
-        logger.info(f"📊 Found {len(results)} total results for {date_str}")
+        logger.info(f"📊 Found {len(results)} total results for {clean_date}")
         return results
     
     def update_bet_outcomes(self):

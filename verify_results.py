@@ -175,7 +175,9 @@ class RealResultVerifier:
     def _get_flashscore_result(self, home_team: str, away_team: str, match_date: str) -> Optional[Dict]:
         """Get real result from Flashscore"""
         try:
-            url = f"https://www.flashscore.com/football/fixtures/?date={match_date}"
+            # Extract just the date part (handles timestamps)
+            clean_date = match_date.split('T')[0] if 'T' in match_date else match_date[:10]
+            url = f"https://www.flashscore.com/football/fixtures/?date={clean_date}"
             
             downloaded = trafilatura.fetch_url(url)
             if not downloaded:
@@ -195,7 +197,9 @@ class RealResultVerifier:
     def _get_sofascore_result(self, home_team: str, away_team: str, match_date: str) -> Optional[Dict]:
         """Get real result from Sofascore"""
         try:
-            url = f"https://www.sofascore.com/football//{match_date}"
+            # Extract just the date part (handles timestamps)
+            clean_date = match_date.split('T')[0] if 'T' in match_date else match_date[:10]
+            url = f"https://www.sofascore.com/football//{clean_date}"
             
             downloaded = trafilatura.fetch_url(url)
             if not downloaded:
@@ -221,10 +225,15 @@ class RealResultVerifier:
             
             logger.info(f"🔍 Fetching result from API-Football: {home_team} vs {away_team} on {match_date}")
             
-            # Convert date to API-Football format
+            # Extract just the date part (handles timestamps like 2025-10-04T14:00:00+00:00)
+            if 'T' in match_date:
+                api_date = match_date.split('T')[0]
+            else:
+                api_date = match_date[:10] if len(match_date) >= 10 else match_date
+            
+            # Validate it's a proper date format
             try:
-                date_obj = datetime.strptime(match_date, '%Y-%m-%d')
-                api_date = date_obj.strftime('%Y-%m-%d')
+                datetime.strptime(api_date, '%Y-%m-%d')
             except ValueError:
                 logger.error(f"❌ Invalid date format: {match_date}")
                 raise Exception(f"Invalid date format: {match_date}")
