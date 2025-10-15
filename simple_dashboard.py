@@ -61,7 +61,7 @@ def load_todays_tips():
 
 @st.cache_data(ttl=30)
 def load_historical_bets():
-    """Load historical completed betting results"""
+    """Load historical completed betting results (excluding exact scores)"""
     try:
         conn = sqlite3.connect(DB_PATH)
         query = """
@@ -76,6 +76,36 @@ def load_historical_bets():
                END as result
         FROM football_opportunities 
         WHERE tier IS NOT NULL
+        AND tier != 'legacy'
+        AND outcome IS NOT NULL 
+        AND outcome != ''
+        AND outcome != 'unknown'
+        ORDER BY timestamp DESC 
+        LIMIT 50
+        """
+        df = pd.read_sql_query(query, conn)
+        conn.close()
+        return df
+    except:
+        return pd.DataFrame()
+
+@st.cache_data(ttl=30)
+def load_exact_score_history():
+    """Load historical exact score predictions"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        query = """
+        SELECT home_team, away_team, selection, odds, edge_percentage, 
+               confidence, match_date, outcome, profit_loss, stake,
+               datetime(timestamp, 'unixepoch', 'localtime') as bet_time,
+               CASE 
+                   WHEN outcome IN ('win', 'won') THEN '✅ Win'
+                   WHEN outcome IN ('loss', 'lost') THEN '❌ Loss' 
+                   WHEN outcome = 'void' THEN '⚪ Void'
+                   ELSE '🔥 Live'
+               END as result
+        FROM football_opportunities 
+        WHERE tier = 'legacy'
         AND outcome IS NOT NULL 
         AND outcome != ''
         AND outcome != 'unknown'
@@ -90,7 +120,7 @@ def load_historical_bets():
 
 @st.cache_data(ttl=30) 
 def load_performance():
-    """Get betting performance stats"""
+    """Get betting performance stats (excluding exact scores)"""
     try:
         conn = sqlite3.connect(DB_PATH)
         query = """
@@ -103,6 +133,29 @@ def load_performance():
             SUM(CASE WHEN outcome IS NOT NULL AND outcome != '' AND outcome != 'unknown' THEN stake ELSE 0 END) as total_staked
         FROM football_opportunities 
         WHERE tier IS NOT NULL
+        AND tier != 'legacy'
+        """
+        result = pd.read_sql_query(query, conn)
+        conn.close()
+        return result.iloc[0] if not result.empty else None
+    except:
+        return None
+
+@st.cache_data(ttl=30) 
+def load_exact_score_performance():
+    """Get exact score performance stats"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        query = """
+        SELECT 
+            COUNT(*) as total_tips,
+            COUNT(CASE WHEN outcome IN ('win', 'won') THEN 1 END) as wins,
+            COUNT(CASE WHEN outcome IN ('loss', 'lost') THEN 1 END) as losses,
+            COUNT(CASE WHEN outcome IS NULL OR outcome = '' OR outcome = 'unknown' THEN 1 END) as pending,
+            SUM(CASE WHEN outcome IS NOT NULL AND outcome != '' AND outcome != 'unknown' THEN profit_loss ELSE 0 END) as net_profit,
+            SUM(CASE WHEN outcome IS NOT NULL AND outcome != '' AND outcome != 'unknown' THEN stake ELSE 0 END) as total_staked
+        FROM football_opportunities 
+        WHERE tier = 'legacy'
         """
         result = pd.read_sql_query(query, conn)
         conn.close()
@@ -227,6 +280,56 @@ if not historical_bets.empty:
     
 else:
     st.info("📊 Historical betting results will appear here as bets are completed.")
+
+st.markdown("---")
+
+# Exact Score Historical Results
+st.header("🎯 Exact Score Predictions")
+
+exact_score_stats = load_exact_score_performance()
+exact_score_history = load_exact_score_history()
+
+if exact_score_stats is not None and exact_score_stats['total_tips'] > 0:
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("🎯 Total Exact Scores", int(exact_score_stats['total_tips']))
+    
+    with col2:
+        es_win_rate = (exact_score_stats['wins'] / (exact_score_stats['wins'] + exact_score_stats['losses']) * 100) if (exact_score_stats['wins'] + exact_score_stats['losses']) > 0 else 0
+        st.metric("🏆 Hit Rate", f"{es_win_rate:.1f}%")
+    
+    with col3:
+        st.metric("💰 Total Profit", f"${exact_score_stats['net_profit']:.2f}")
+    
+    with col4:
+        st.metric("📝 Settled", f"{exact_score_stats['wins'] + exact_score_stats['losses']}")
+    
+    # Display exact score history
+    if not exact_score_history.empty:
+        st.subheader("📋 Recent Exact Score Results")
+        
+        display_exact = exact_score_history.head(20).copy()
+        display_exact['Match'] = display_exact['home_team'] + ' vs ' + display_exact['away_team']
+        display_exact['Profit/Loss'] = display_exact['profit_loss'].apply(lambda x: f"${x:.2f}")
+        
+        # Show table with key columns
+        table_data_exact = display_exact[['Match', 'selection', 'odds', 'result', 'Profit/Loss', 'match_date']].copy()
+        table_data_exact.columns = ['Match', 'Prediction', 'Odds', 'Result', 'P&L', 'Date']
+        
+        # Color code the results
+        def color_exact_results(row):
+            if '✅' in str(row['Result']):
+                return ['background-color: #d4edda'] * len(row)  # Green for wins
+            elif '❌' in str(row['Result']):
+                return ['background-color: #f8d7da'] * len(row)  # Red for losses  
+            else:
+                return [''] * len(row)
+        
+        styled_exact_table = table_data_exact.style.apply(color_exact_results, axis=1)
+        st.dataframe(styled_exact_table, width='stretch')
+else:
+    st.info("🎯 Exact score predictions will appear here as they are generated and settled.")
 
 # Footer
 st.markdown("---")
