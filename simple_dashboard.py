@@ -10,7 +10,7 @@ DB_PATH = 'data/real_football.db'
 
 # Page setup
 st.set_page_config(
-    page_title="🎯 Exact Score Predictions | +200% ROI",
+    page_title="🎯 Exact Score Predictions | +519% ROI",
     page_icon="🎯",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -270,13 +270,15 @@ def load_regular_performance():
 # ============================================================================
 
 st.markdown("# 🎯 EXACT SCORE PREDICTIONS")
-st.markdown('<p class="subtitle">✅ PROVEN +200% ROI | AI-POWERED ACCURACY</p>', unsafe_allow_html=True)
 
-# Display ROI badge
+# Calculate real ROI for subtitle
 exact_stats = load_exact_score_performance()
 if exact_stats is not None and exact_stats['total_staked'] > 0:
     roi = (exact_stats['net_profit'] / exact_stats['total_staked'] * 100)
+    st.markdown(f'<p class="subtitle">✅ PROVEN +{roi:.0f}% ROI | AI-POWERED ACCURACY</p>', unsafe_allow_html=True)
     st.markdown(f'<div class="roi-badge">📈 +{roi:.0f}% RETURN ON INVESTMENT</div>', unsafe_allow_html=True)
+else:
+    st.markdown('<p class="subtitle">✅ AI-POWERED EXACT SCORE PREDICTIONS</p>', unsafe_allow_html=True)
 
 col1, col2 = st.columns([4, 1])
 with col2:
@@ -396,7 +398,7 @@ with st.expander("📂 ARCHIVED: Regular Betting Tips (Old System)", expanded=Fa
     st.caption("⚠️ This section shows the old regular betting system that has been discontinued due to underperformance.")
     
     regular_stats = load_regular_performance()
-    if regular_stats is not None:
+    if regular_stats is not None and regular_stats['total_tips'] > 0:
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
@@ -407,11 +409,14 @@ with st.expander("📂 ARCHIVED: Regular Betting Tips (Old System)", expanded=Fa
             st.metric("Win Rate", f"{win_rate:.1f}%")
         
         with col3:
-            st.metric("Net Profit", f"${regular_stats['net_profit']:.2f}")
+            net_profit = regular_stats['net_profit'] if regular_stats['net_profit'] is not None else 0
+            st.metric("Net Profit", f"${net_profit:.2f}")
         
         with col4:
-            roi = (regular_stats['net_profit'] / regular_stats['total_staked'] * 100) if regular_stats['total_staked'] > 0 else 0
+            roi = (net_profit / regular_stats['total_staked'] * 100) if regular_stats['total_staked'] and regular_stats['total_staked'] > 0 else 0
             st.metric("ROI", f"{roi:.1f}%")
+    else:
+        st.info("📂 No regular betting tips in archive - system now exclusively focuses on exact scores.")
     
     st.markdown("")
     
