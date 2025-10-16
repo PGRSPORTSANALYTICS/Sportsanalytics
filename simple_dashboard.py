@@ -158,19 +158,18 @@ st.markdown("""
 
 @st.cache_data(ttl=30)
 def load_exact_score_tips():
-    """Load today's exact score predictions"""
+    """Load all pending exact score predictions (until game is over)"""
     try:
         conn = sqlite3.connect(DB_PATH)
-        today = date.today().isoformat()
         query = """
         SELECT home_team, away_team, selection, odds, edge_percentage, 
-               confidence, match_date
+               confidence, match_date, recommended_date
         FROM football_opportunities 
-        WHERE tier = 'legacy'
-        AND DATE(timestamp, 'unixepoch', 'localtime') = ?
-        ORDER BY edge_percentage DESC
+        WHERE market = 'exact_score'
+        AND (outcome IS NULL OR outcome = '' OR outcome = 'unknown')
+        ORDER BY match_date ASC
         """
-        df = pd.read_sql_query(query, conn, params=[today])
+        df = pd.read_sql_query(query, conn)
         conn.close()
         return df
     except:
@@ -323,11 +322,11 @@ st.markdown("<br>", unsafe_allow_html=True)
 # TODAY'S EXACT SCORE PREDICTIONS
 # ============================================================================
 
-st.markdown("## 🎯 TODAY'S PREDICTIONS")
+st.markdown("## 🎯 ACTIVE PREDICTIONS")
 
 exact_tips = load_exact_score_tips()
 if not exact_tips.empty:
-    st.info(f"📊 **{len(exact_tips)} Exact Score Predictions** available today")
+    st.info(f"📊 **{len(exact_tips)} Active Exact Score Predictions** (pending until match completion)")
     
     st.markdown("")
     
@@ -348,7 +347,7 @@ if not exact_tips.empty:
         
         st.markdown("---")
 else:
-    st.info("🎯 No exact score predictions today. The system only generates predictions when high-quality opportunities are available.")
+    st.info("🎯 No active predictions. All recent predictions have been settled. Check back soon for new opportunities!")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
