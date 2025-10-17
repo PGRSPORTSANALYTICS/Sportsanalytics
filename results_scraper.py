@@ -139,54 +139,74 @@ class ResultsScraper:
                 'x-apisports-key': api_key
             }
             
-            params = {
-                'date': date_str,
-                'status': 'FT'  # Only finished matches
-            }
+            # Major European leagues to check (covers 95% of matches)
+            EUROPEAN_LEAGUES = [
+                39, 40, 41, 42,  # England (EPL, Championship, League One, Two)
+                61,  # France Ligue 1
+                78,  # Germany Bundesliga
+                135,  # Italy Serie A
+                140,  # Spain La Liga
+                88,  # Netherlands Eredivisie
+                94,  # Portugal Primeira Liga
+                106,  # Poland Ekstraklasa
+                119,  # Denmark Superliga
+                144,  # Belgium Pro League
+                203,  # Turkey Super Lig
+                2, 3  # Champions League, Europa League
+            ]
             
-            response = requests.get(url, headers=headers, params=params, timeout=30)
+            all_results = []
             
-            if response.status_code != 200:
-                logger.error(f"❌ API-Football HTTP error: {response.status_code}")
-                return []
-            
-            data = response.json()
-            
-            if data.get('errors'):
-                logger.error(f"❌ API-Football errors: {data['errors']}")
-                return []
-            
-            fixtures = data.get('response', [])
-            logger.info(f"📊 Found {len(fixtures)} finished matches from API-Football")
-            
-            results = []
-            for fixture in fixtures:
-                try:
-                    teams = fixture.get('teams', {})
-                    goals = fixture.get('goals', {})
-                    
-                    home_team = teams.get('home', {}).get('name', '')
-                    away_team = teams.get('away', {}).get('name', '')
-                    home_score = goals.get('home')
-                    away_score = goals.get('away')
-                    
-                    if home_score is not None and away_score is not None:
-                        results.append({
-                            'home_team': home_team,
-                            'away_team': away_team,
-                            'home_score': int(home_score),
-                            'away_score': int(away_score),
-                            'total_goals': int(home_score) + int(away_score),
-                            'result': 'home' if home_score > away_score else ('away' if away_score > home_score else 'draw'),
-                            'source': 'api-football'
-                        })
+            # Try both current and next season to handle transition periods
+            for season in [2024, 2025]:
+                for league_id in EUROPEAN_LEAGUES:
+                    try:
+                        params = {
+                            'date': date_str,
+                            'league': league_id,
+                            'season': season,
+                            'status': 'FT'  # Only finished matches
+                        }
                         
-                except Exception as e:
-                    logger.warning(f"⚠️ Error processing fixture: {e}")
-                    continue
+                        response = requests.get(url, headers=headers, params=params, timeout=10)
+                        
+                        if response.status_code == 200:
+                            data = response.json()
+                            fixtures = data.get('response', [])
+                            
+                            for fixture in fixtures:
+                                teams = fixture.get('teams', {})
+                                goals = fixture.get('goals', {})
+                                
+                                home_team = teams.get('home', {}).get('name', '')
+                                away_team = teams.get('away', {}).get('name', '')
+                                home_score = goals.get('home')
+                                away_score = goals.get('away')
+                                
+                                if home_score is not None and away_score is not None:
+                                    all_results.append({
+                                        'home_team': home_team,
+                                        'away_team': away_team,
+                                        'home_score': int(home_score),
+                                        'away_score': int(away_score),
+                                        'total_goals': int(home_score) + int(away_score),
+                                        'result': 'home' if home_score > away_score else ('away' if away_score > home_score else 'draw'),
+                                        'source': 'api-football'
+                                    })
+                    except Exception as e:
+                        continue  # Skip failed leagues
             
-            logger.info(f"✅ Parsed {len(results)} results from API-Football")
-            return results
+            # Remove duplicates (same match might appear in multiple seasons)
+            unique_results = []
+            seen = set()
+            for result in all_results:
+                key = (result['home_team'], result['away_team'], result['home_score'], result['away_score'])
+                if key not in seen:
+                    seen.add(key)
+                    unique_results.append(result)
+            
+            logger.info(f"📊 Found {len(unique_results)} finished matches from API-Football")
+            return unique_results
             
         except Exception as e:
             logger.error(f"❌ Error fetching API-Football results: {e}")
@@ -292,13 +312,43 @@ class ResultsScraper:
     
     def team_match(self, scraped_team, bet_team):
         """Check if team names match (allowing for variations)"""
-        scraped_clean = re.sub(r'[^a-zA-Z]', '', scraped_team.lower())
-        bet_clean = re.sub(r'[^a-zA-Z]', '', bet_team.lower())
+        # Normalize both teams - remove special chars, extra spaces, common prefixes
+        def normalize(team):
+            team = team.lower()
+            # Remove common prefixes
+            team = re.sub(r'^(fc|afc|bfc|cfc|dfc|ssc|sfc|ac|as|cd|cf|sd|us|sv|vfb|fk|hsk|nk|sk|gks|mks|ks|lks|standard|royal|racing|sporting|athletic)\s+', '', team)
+            # Remove special characters but keep letters and numbers
+            team = re.sub(r'[^a-z0-9]', '', team)
+            return team
         
-        # Check exact match or if one contains the other
-        return (scraped_clean == bet_clean or 
-                scraped_clean in bet_clean or 
-                bet_clean in scraped_clean)
+        scraped_norm = normalize(scraped_team)
+        bet_norm = normalize(bet_team)
+        
+        # Exact match after normalization
+        if scraped_norm == bet_norm:
+            return True
+        
+        # One contains the other (handles shortened names)
+        if scraped_norm in bet_norm or bet_norm in scraped_norm:
+            return True
+        
+        # Check if main city/club name matches (first significant word)
+        def get_main_name(team):
+            words = team.lower().split()
+            # Skip common prefixes
+            skip_words = ['fc', 'afc', 'bfc', 'ac', 'as', 'cd', 'cf', 'sd', 'us', 'sv', 'vfb', 'fk', 'standard', 'royal', 'racing', 'sporting']
+            for word in words:
+                if word not in skip_words and len(word) > 2:
+                    return word
+            return words[0] if words else ''
+        
+        scraped_main = get_main_name(scraped_team)
+        bet_main = get_main_name(bet_team)
+        
+        if scraped_main and bet_main and scraped_main == bet_main:
+            return True
+        
+        return False
     
     def determine_bet_outcome(self, selection, match_result):
         """Determine if bet won or lost based on selection and result"""
