@@ -304,7 +304,28 @@ class ResultsScraper:
         """Determine if bet won or lost based on selection and result"""
         selection_lower = selection.lower()
         
-        if 'over' in selection_lower:
+        # Exact Score predictions
+        if 'exact score' in selection_lower or 'correct score' in selection_lower:
+            # Extract predicted score (e.g., "Exact Score: 2-1" -> 2, 1)
+            score_match = re.search(r'(\d+)-(\d+)', selection)
+            if score_match:
+                predicted_home = int(score_match.group(1))
+                predicted_away = int(score_match.group(2))
+                actual_home = match_result['home_score']
+                actual_away = match_result['away_score']
+                
+                # Win if exact match, loss otherwise
+                if predicted_home == actual_home and predicted_away == actual_away:
+                    logger.info(f"✅ EXACT SCORE WIN: Predicted {predicted_home}-{predicted_away}, Actual {actual_home}-{actual_away}")
+                    return 'win'
+                else:
+                    logger.info(f"❌ EXACT SCORE LOSS: Predicted {predicted_home}-{predicted_away}, Actual {actual_home}-{actual_away}")
+                    return 'loss'
+            else:
+                logger.warning(f"⚠️ Could not parse exact score from: {selection}")
+                return 'void'
+        
+        elif 'over' in selection_lower:
             # Over/Under bets
             threshold = float(re.findall(r'(\d+\.?\d*)', selection)[0])
             return 'win' if match_result['total_goals'] > threshold else 'loss'
