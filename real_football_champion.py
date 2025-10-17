@@ -269,8 +269,8 @@ class RealFootballChampion:
         self.min_edge_under = self.premium_min_edge_under
         self.min_confidence_under = self.premium_min_confidence_under
         self.max_daily_under = 2
-        self.max_stake = 100.0
-        self.base_stake = 25.0
+        self.max_stake = 1050.0  # SEK
+        self.base_stake = 260.0  # SEK
         
         # Initialize database
         self.init_database()
@@ -2194,7 +2194,7 @@ class RealFootballChampion:
                             'reasoning': f"AI predicts {score_text} based on xG analysis. Home xG: {xg_data['home_xg']:.1f}, Away xG: {xg_data['away_xg']:.1f}"
                         }
                     },
-                    stake=15.0,  # Lower stake for exact scores
+                    stake=160.0,  # SEK - Lower stake for exact scores
                     match_date=match.get('commence_time', ''),
                     kickoff_time=match.get('commence_time', ''),
                     start_time=match.get('commence_time', '')  # Add required start_time parameter
@@ -2204,7 +2204,7 @@ class RealFootballChampion:
                 print(f"   📊 {opportunity.selection} @ {opportunity.odds}")
                 print(f"   📈 Edge: {opportunity.edge_percentage:.1f}%")
                 print(f"   🎯 Confidence: {opportunity.confidence}/100")
-                print(f"   💰 Stake: ${opportunity.stake:.2f}")
+                print(f"   💰 Stake: {opportunity.stake:.0f} SEK")
                 print(f"   🎲 Probability: {best_probability:.1%}")
                 
                 # Save exact score opportunity (bypass daily limit)

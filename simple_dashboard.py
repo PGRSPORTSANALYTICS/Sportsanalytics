@@ -308,7 +308,7 @@ if exact_stats is not None:
         st.metric("HIT RATE", f"{hit_rate:.1f}%")
     
     with col4:
-        st.metric("TOTAL PROFIT", f"${exact_stats['net_profit']:.2f}", delta="Authentic Results")
+        st.metric("TOTAL PROFIT", f"{exact_stats['net_profit']:,.0f} SEK", delta="Authentic Results")
     
     with col5:
         roi = (exact_stats['net_profit'] / exact_stats['total_staked'] * 100) if exact_stats['total_staked'] > 0 else 0
@@ -368,7 +368,7 @@ if not historical.empty:
     
     display_df = historical.head(50).copy()
     display_df['Match'] = display_df['home_team'] + ' vs ' + display_df['away_team']
-    display_df['P&L'] = display_df['profit_loss'].apply(lambda x: f"${x:.2f}")
+    display_df['P&L'] = display_df['profit_loss'].apply(lambda x: f"{x:,.0f} SEK")
     display_df['Score'] = display_df['selection']
     
     table_data = display_df[['Match', 'Score', 'odds', 'result', 'P&L', 'match_date']].copy()
@@ -409,7 +409,7 @@ with st.expander("📂 ARCHIVED: Regular Betting Tips (Old System)", expanded=Fa
         
         with col3:
             net_profit = regular_stats['net_profit'] if regular_stats['net_profit'] is not None else 0
-            st.metric("Net Profit", f"${net_profit:.2f}")
+            st.metric("Net Profit", f"{net_profit:,.0f} SEK")
         
         with col4:
             roi = (net_profit / regular_stats['total_staked'] * 100) if regular_stats['total_staked'] and regular_stats['total_staked'] > 0 else 0
