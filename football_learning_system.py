@@ -129,7 +129,8 @@ class FootballLearningSystem:
     
     def extract_features(self, opportunities_df: pd.DataFrame) -> pd.DataFrame:
         """
-        Extract and engineer features for machine learning from betting opportunities.
+        🚀 ENHANCED: Extract and engineer features for machine learning from betting opportunities.
+        Now includes team form, H2H, league position, and odds movement features.
         
         Args:
             opportunities_df: DataFrame with betting opportunities and outcomes
@@ -146,41 +147,84 @@ class FootballLearningSystem:
             df['confidence_scaled'] = df['confidence'] / 100
             df['quality_scaled'] = df['quality_score'] / 10
             
-            # Parse analysis JSON for xG features
-            def extract_xg_features(analysis_str):
+            # 🆕 ENHANCED: Parse analysis JSON for ALL advanced features
+            def extract_all_features(analysis_str):
                 try:
                     if pd.isna(analysis_str):
-                        return {'home_xg': 1.5, 'away_xg': 1.5, 'total_xg': 3.0, 'xg_diff': 0.0, 'xg_ratio': 1.0}
+                        return self._default_features()
                     
                     analysis = json.loads(analysis_str)
-                    xg_data = analysis.get('xg_prediction', {})
                     
+                    # Basic xG features
+                    xg_data = analysis.get('xg_prediction', {})
                     home_xg = float(xg_data.get('home_xg', 1.5))
                     away_xg = float(xg_data.get('away_xg', 1.5))
                     
-                    return {
+                    features = {
+                        # xG features
                         'home_xg': home_xg,
                         'away_xg': away_xg,
                         'total_xg': home_xg + away_xg,
                         'xg_diff': home_xg - away_xg,
-                        'xg_ratio': home_xg / max(away_xg, 0.1)
+                        'xg_ratio': home_xg / max(away_xg, 0.1),
+                        
+                        # 🆕 Team Form features (from advanced_features module)
+                        'home_win_rate': analysis.get('home_form', {}).get('win_rate', 0.4),
+                        'away_win_rate': analysis.get('away_form', {}).get('win_rate', 0.4),
+                        'home_goals_avg': analysis.get('home_form', {}).get('goals_per_game', 1.2),
+                        'away_goals_avg': analysis.get('away_form', {}).get('goals_per_game', 1.2),
+                        'home_conceded_avg': analysis.get('home_form', {}).get('conceded_per_game', 1.2),
+                        'away_conceded_avg': analysis.get('away_form', {}).get('conceded_per_game', 1.2),
+                        'home_clean_sheet_rate': analysis.get('home_form', {}).get('clean_sheet_rate', 0.2),
+                        'away_clean_sheet_rate': analysis.get('away_form', {}).get('clean_sheet_rate', 0.2),
+                        'home_ppg': analysis.get('home_form', {}).get('points_per_game', 1.4),
+                        'away_ppg': analysis.get('away_form', {}).get('points_per_game', 1.4),
+                        
+                        # 🆕 H2H features
+                        'h2h_total_matches': analysis.get('h2h', {}).get('total_matches', 0),
+                        'h2h_home_win_rate': analysis.get('h2h', {}).get('team1_win_rate', 0.33),
+                        'h2h_avg_goals': analysis.get('h2h', {}).get('avg_total_goals', 2.5),
+                        'h2h_over_25_rate': analysis.get('h2h', {}).get('over_2_5_rate', 0.5),
+                        'h2h_btts_rate': analysis.get('h2h', {}).get('btts_rate', 0.6),
+                        
+                        # 🆕 League Position features
+                        'home_league_rank': analysis.get('home_standings', {}).get('rank', 10),
+                        'away_league_rank': analysis.get('away_standings', {}).get('rank', 10),
+                        'rank_difference': abs(analysis.get('home_standings', {}).get('rank', 10) - 
+                                             analysis.get('away_standings', {}).get('rank', 10)),
+                        'home_points': analysis.get('home_standings', {}).get('points', 20),
+                        'away_points': analysis.get('away_standings', {}).get('points', 20),
+                        
+                        # 🆕 Odds Movement features
+                        'odds_movement_pct': analysis.get('odds_movement', {}).get('movement_percent', 0),
+                        'odds_velocity': analysis.get('odds_movement', {}).get('velocity', 0),
+                        'sharp_money': 1 if analysis.get('odds_movement', {}).get('sharp_money_indicator') else 0,
+                        
+                        # 🆕 Injuries/Lineups features
+                        'lineups_confirmed': 1 if analysis.get('lineups', {}).get('lineups_confirmed') else 0,
+                        'key_injuries': analysis.get('lineups', {}).get('home_injuries', 0) + 
+                                       analysis.get('lineups', {}).get('away_injuries', 0)
                     }
-                except:
-                    return {'home_xg': 1.5, 'away_xg': 1.5, 'total_xg': 3.0, 'xg_diff': 0.0, 'xg_ratio': 1.0}
+                    
+                    return features
+                except Exception as e:
+                    logger.warning(f"Feature extraction error: {e}")
+                    return self._default_features()
             
-            # Extract xG features
-            xg_features = df['analysis'].apply(extract_xg_features)
-            xg_df = pd.DataFrame(xg_features.tolist())
+            # Extract all features
+            all_features = df['analysis'].apply(extract_all_features)
+            features_df = pd.DataFrame(all_features.tolist())
             
             # Reset indices to ensure proper concatenation
             df = df.reset_index(drop=True)
-            xg_df = xg_df.reset_index(drop=True)
-            df = pd.concat([df, xg_df], axis=1)
+            features_df = features_df.reset_index(drop=True)
+            df = pd.concat([df, features_df], axis=1)
             
             # Time-based features
             df['match_date'] = pd.to_datetime(df['match_date'])
             df['day_of_week'] = df['match_date'].dt.dayofweek
             df['month'] = df['match_date'].dt.month
+            df['is_weekend'] = df['day_of_week'].isin([5, 6]).astype(int)
             
             # League encoding (simple frequency encoding)
             league_counts = df['league'].value_counts()
@@ -190,13 +234,38 @@ class FootballLearningSystem:
             df['is_over_market'] = df['market'].str.contains('over', case=False, na=False).astype(int)
             df['is_under_market'] = df['market'].str.contains('under', case=False, na=False).astype(int)
             df['is_btts_market'] = df['market'].str.contains('btts', case=False, na=False).astype(int)
+            df['is_exact_score'] = df['market'].str.contains('exact', case=False, na=False).astype(int)
             
-            # Select feature columns
+            # 🆕 Derived features (feature engineering)
+            df['form_difference'] = df['home_win_rate'] - df['away_win_rate']
+            df['goals_balance'] = (df['home_goals_avg'] + df['away_conceded_avg']) - (df['away_goals_avg'] + df['home_conceded_avg'])
+            df['quality_x_confidence'] = df['quality_scaled'] * df['confidence_scaled']
+            df['value_score'] = df['edge_decimal'] * df['confidence_scaled']
+            
+            # Select feature columns (EXPANDED)
             feature_columns = [
+                # Basic features
                 'odds_implied_prob', 'edge_decimal', 'confidence_scaled', 'quality_scaled',
+                # xG features
                 'home_xg', 'away_xg', 'total_xg', 'xg_diff', 'xg_ratio',
-                'day_of_week', 'month', 'league_frequency',
-                'is_over_market', 'is_under_market', 'is_btts_market'
+                # Team form features
+                'home_win_rate', 'away_win_rate', 'home_goals_avg', 'away_goals_avg',
+                'home_conceded_avg', 'away_conceded_avg', 'home_clean_sheet_rate', 'away_clean_sheet_rate',
+                'home_ppg', 'away_ppg',
+                # H2H features
+                'h2h_total_matches', 'h2h_home_win_rate', 'h2h_avg_goals', 'h2h_over_25_rate', 'h2h_btts_rate',
+                # League position features
+                'home_league_rank', 'away_league_rank', 'rank_difference', 'home_points', 'away_points',
+                # Odds movement features
+                'odds_movement_pct', 'odds_velocity', 'sharp_money',
+                # Injuries/Lineups
+                'lineups_confirmed', 'key_injuries',
+                # Time features
+                'day_of_week', 'month', 'is_weekend', 'league_frequency',
+                # Market features
+                'is_over_market', 'is_under_market', 'is_btts_market', 'is_exact_score',
+                # Derived features
+                'form_difference', 'goals_balance', 'quality_x_confidence', 'value_score'
             ]
             
             # Check which columns actually exist
@@ -205,7 +274,8 @@ class FootballLearningSystem:
             
             if missing_features:
                 logger.warning(f"Missing features: {missing_features}")
-                logger.info(f"Available columns: {list(df.columns)}")
+            
+            logger.info(f"✅ Extracted {len(available_features)} features (up from 15)")
             
             metadata_columns = ['market', 'selection', 'outcome', 'match_date', 'match_id']
             available_metadata = [col for col in metadata_columns if col in df.columns]
@@ -215,6 +285,23 @@ class FootballLearningSystem:
         except Exception as e:
             logger.error(f"❌ Error extracting features: {e}")
             return pd.DataFrame()
+    
+    def _default_features(self) -> Dict:
+        """Default feature values when parsing fails"""
+        return {
+            'home_xg': 1.5, 'away_xg': 1.5, 'total_xg': 3.0, 'xg_diff': 0.0, 'xg_ratio': 1.0,
+            'home_win_rate': 0.4, 'away_win_rate': 0.4,
+            'home_goals_avg': 1.2, 'away_goals_avg': 1.2,
+            'home_conceded_avg': 1.2, 'away_conceded_avg': 1.2,
+            'home_clean_sheet_rate': 0.2, 'away_clean_sheet_rate': 0.2,
+            'home_ppg': 1.4, 'away_ppg': 1.4,
+            'h2h_total_matches': 0, 'h2h_home_win_rate': 0.33,
+            'h2h_avg_goals': 2.5, 'h2h_over_25_rate': 0.5, 'h2h_btts_rate': 0.6,
+            'home_league_rank': 10, 'away_league_rank': 10, 'rank_difference': 0,
+            'home_points': 20, 'away_points': 20,
+            'odds_movement_pct': 0, 'odds_velocity': 0, 'sharp_money': 0,
+            'lineups_confirmed': 0, 'key_injuries': 0
+        }
     
     def prepare_training_data(self, market: str) -> Tuple[pd.DataFrame, pd.Series]:
         """

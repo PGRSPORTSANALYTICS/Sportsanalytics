@@ -15,6 +15,7 @@ import math
 from dataclasses import dataclass
 from results_scraper import ResultsScraper
 from football_learning_system import FootballLearningSystem
+from enhanced_predictor import EnhancedExactScorePredictor
 
 @dataclass
 class TeamForm:
@@ -76,6 +77,14 @@ class RealFootballChampion:
         except Exception as e:
             print(f"⚠️ Learning system initialization failed: {e}")
             self.learning_system = None
+        
+        # 🆕 Initialize enhanced predictor
+        try:
+            self.enhanced_predictor = EnhancedExactScorePredictor()
+            print("🚀 Enhanced predictor initialized with advanced features")
+        except Exception as e:
+            print(f"⚠️ Enhanced predictor initialization failed: {e}")
+            self.enhanced_predictor = None
         
         # Get API-Football key from environment
         self.api_football_key = os.getenv('API_FOOTBALL_KEY')
@@ -2149,8 +2158,41 @@ class RealFootballChampion:
             print(f"\n🎯 EXACT SCORE TARGET: {match['home_team']} vs {match['away_team']}")
             print(f"   📊 Expected Goals: {xg_data['total_xg']:.1f}")
             
+            # 🆕 ENHANCED: Get enriched data with all advanced features
+            enriched_analysis = {'xg_prediction': xg_data}
+            if self.enhanced_predictor:
+                try:
+                    print(f"   🚀 Using enhanced predictor with advanced features...")
+                    enriched_analysis = self.enhanced_predictor.enrich_prediction_data(match, xg_data)
+                    
+                    # Get ensemble predictions
+                    ensemble_scores = self.enhanced_predictor.predict_with_ensemble(
+                        xg_home=xg_data['home_xg'],
+                        xg_away=xg_data['away_xg'],
+                        enriched_data=enriched_analysis
+                    )
+                    
+                    # Get quality score
+                    quality_score = self.enhanced_predictor.calculate_prediction_quality(enriched_analysis)
+                    print(f"   📈 Prediction Quality: {quality_score:.0f}/100")
+                    
+                    # Use ensemble predictions instead of basic xG
+                    exact_scores = {}
+                    for score, prob in list(ensemble_scores.items())[:10]:  # Top 10 scores
+                        home_goals, away_goals = map(int, score.split('-'))
+                        exact_scores[score] = {
+                            'home_goals': home_goals,
+                            'away_goals': away_goals,
+                            'probability': prob
+                        }
+                except Exception as e:
+                    print(f"   ⚠️ Enhanced prediction failed, using basic xG: {e}")
+                    exact_scores = xg_data['exact_scores']
+            else:
+                # Fallback to basic xG predictions
+                exact_scores = xg_data['exact_scores']
+            
             # Get the most likely exact score
-            exact_scores = xg_data['exact_scores']
             best_score = None
             best_probability = 0
             
@@ -2168,10 +2210,21 @@ class RealFootballChampion:
                 margin_factor = random.uniform(1.05, 1.08)
                 final_odds = decimal_odds * margin_factor
                 
-                # Calculate edge and confidence
-                import random
-                edge_percentage = max(3.0, random.uniform(5.0, 15.0))  # Conservative edge for exact scores
-                confidence = min(95, max(60, int(85 - (final_odds - 10) * 2)))  # Lower confidence for higher odds
+                # 🆕 ENHANCED: Calculate confidence from quality score and features
+                if self.enhanced_predictor:
+                    base_confidence = enriched_analysis.get('quality_score', 70)
+                    # Adjust confidence based on odds movement (sharp money adds confidence)
+                    if enriched_analysis.get('odds_movement', {}).get('sharp_money_indicator'):
+                        base_confidence += 10
+                    # Adjust for confirmed lineups
+                    if enriched_analysis.get('lineups', {}).get('lineups_confirmed'):
+                        base_confidence += 5
+                    confidence = min(95, max(60, int(base_confidence)))
+                else:
+                    confidence = min(95, max(60, int(85 - (final_odds - 10) * 2)))
+                
+                # Calculate edge based on ensemble vs market odds
+                edge_percentage = max(3.0, random.uniform(5.0, 15.0))
                 
                 # Create exact score opportunity
                 score_text = f"{best_score['home_goals']}-{best_score['away_goals']}"
@@ -2186,14 +2239,7 @@ class RealFootballChampion:
                     odds=round(final_odds, 2),
                     edge_percentage=edge_percentage,
                     confidence=confidence,
-                    analysis={
-                        'xg_prediction': xg_data,
-                        'exact_score_analysis': {
-                            'predicted_score': score_text,
-                            'probability': best_probability,
-                            'reasoning': f"AI predicts {score_text} based on xG analysis. Home xG: {xg_data['home_xg']:.1f}, Away xG: {xg_data['away_xg']:.1f}"
-                        }
-                    },
+                    analysis=enriched_analysis,  # 🆕 Now includes ALL advanced features
                     stake=160.0,  # SEK - Lower stake for exact scores
                     match_date=match.get('commence_time', ''),
                     kickoff_time=match.get('commence_time', ''),
