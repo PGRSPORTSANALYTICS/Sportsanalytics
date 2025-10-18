@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from results_scraper import ResultsScraper
 from football_learning_system import FootballLearningSystem
 from enhanced_predictor import EnhancedExactScorePredictor
+from feature_analytics import FeatureAnalytics
 
 @dataclass
 class TeamForm:
@@ -85,6 +86,14 @@ class RealFootballChampion:
         except Exception as e:
             print(f"⚠️ Enhanced predictor initialization failed: {e}")
             self.enhanced_predictor = None
+        
+        # 📊 Initialize feature analytics
+        try:
+            self.feature_analytics = FeatureAnalytics()
+            print("📊 Feature analytics system initialized")
+        except Exception as e:
+            print(f"⚠️ Feature analytics initialization failed: {e}")
+            self.feature_analytics = None
         
         # Get API-Football key from environment
         self.api_football_key = os.getenv('API_FOOTBALL_KEY')
@@ -2261,6 +2270,77 @@ class RealFootballChampion:
         print(f"\n🎯 EXACT SCORE ANALYSIS COMPLETE: {total_exact_scores} predictions generated")
         return total_exact_scores
     
+    def _extract_features_for_logging(self, analysis: Dict) -> Dict:
+        """Extract all features from enriched analysis for logging"""
+        features = {}
+        
+        # xG features
+        xg = analysis.get('xg_prediction', {})
+        features['home_xg'] = xg.get('home_xg', 0)
+        features['away_xg'] = xg.get('away_xg', 0)
+        features['total_xg'] = xg.get('total_xg', 0)
+        features['xg_difference'] = xg.get('home_xg', 0) - xg.get('away_xg', 0)
+        features['xg_ratio'] = xg.get('home_xg', 0.1) / max(xg.get('away_xg', 0.1), 0.1)
+        
+        # Home team form
+        home_form = analysis.get('home_form', {})
+        features['home_win_rate'] = home_form.get('win_rate', 0)
+        features['home_goals_per_game'] = home_form.get('goals_per_game', 0)
+        features['home_conceded_per_game'] = home_form.get('conceded_per_game', 0)
+        features['home_clean_sheet_rate'] = home_form.get('clean_sheet_rate', 0)
+        features['home_ppg'] = home_form.get('points_per_game', 0)
+        features['home_matches_played'] = home_form.get('matches_played', 0)
+        
+        # Away team form
+        away_form = analysis.get('away_form', {})
+        features['away_win_rate'] = away_form.get('win_rate', 0)
+        features['away_goals_per_game'] = away_form.get('goals_per_game', 0)
+        features['away_conceded_per_game'] = away_form.get('conceded_per_game', 0)
+        features['away_clean_sheet_rate'] = away_form.get('clean_sheet_rate', 0)
+        features['away_ppg'] = away_form.get('points_per_game', 0)
+        features['away_matches_played'] = away_form.get('matches_played', 0)
+        
+        # H2H features
+        h2h = analysis.get('h2h', {})
+        features['h2h_total_matches'] = h2h.get('total_matches', 0)
+        features['h2h_team1_win_rate'] = h2h.get('team1_win_rate', 0)
+        features['h2h_avg_total_goals'] = h2h.get('avg_total_goals', 0)
+        features['h2h_over_2_5_rate'] = h2h.get('over_2_5_rate', 0)
+        features['h2h_btts_rate'] = h2h.get('btts_rate', 0)
+        features['h2h_avg_team1_goals'] = h2h.get('avg_team1_goals', 0)
+        features['h2h_avg_team2_goals'] = h2h.get('avg_team2_goals', 0)
+        
+        # League standings
+        home_standings = analysis.get('home_standings', {})
+        away_standings = analysis.get('away_standings', {})
+        features['home_rank'] = home_standings.get('rank', 0)
+        features['away_rank'] = away_standings.get('rank', 0)
+        features['rank_difference'] = abs(home_standings.get('rank', 0) - away_standings.get('rank', 0))
+        features['home_points'] = home_standings.get('points', 0)
+        features['away_points'] = away_standings.get('points', 0)
+        features['home_goal_diff'] = home_standings.get('goalsDiff', 0)
+        features['away_goal_diff'] = away_standings.get('goalsDiff', 0)
+        
+        # Odds movement
+        odds_movement = analysis.get('odds_movement', {})
+        features['odds_movement_percent'] = odds_movement.get('movement_percent', 0)
+        features['odds_velocity'] = odds_movement.get('velocity', 0)
+        features['sharp_money_indicator'] = 1 if odds_movement.get('sharp_money_indicator') else 0
+        
+        # Lineups/injuries
+        lineups = analysis.get('lineups', {})
+        features['lineups_confirmed'] = 1 if lineups.get('lineups_confirmed') else 0
+        features['home_injuries'] = lineups.get('home_injuries', 0)
+        features['away_injuries'] = lineups.get('away_injuries', 0)
+        features['total_injuries'] = lineups.get('home_injuries', 0) + lineups.get('away_injuries', 0)
+        
+        # Derived features
+        features['form_difference'] = features['home_win_rate'] - features['away_win_rate']
+        features['goals_balance'] = features['home_goals_per_game'] - features['away_conceded_per_game']
+        features['quality_score'] = analysis.get('quality_score', 0)
+        
+        return features
+    
     def save_exact_score_opportunity(self, opportunity: FootballOpportunity):
         """Save exact score opportunity to database (separate from daily limit)"""
         
@@ -2321,6 +2401,23 @@ class RealFootballChampion:
             ))
             self.conn.commit()
             print(f"✅ EXACT SCORE SAVED: {opportunity.home_team} vs {opportunity.away_team}")
+            
+            # 📊 Log features for analytics
+            if self.feature_analytics:
+                try:
+                    features = self._extract_features_for_logging(opportunity.analysis)
+                    self.feature_analytics.log_prediction_features(
+                        prediction_id=f"{opportunity.match_id}_{int(time.time())}",
+                        match_id=opportunity.match_id,
+                        home_team=opportunity.home_team,
+                        away_team=opportunity.away_team,
+                        predicted_score=opportunity.selection.replace("Exact Score: ", ""),
+                        features=features,
+                        quality_score=quality_score
+                    )
+                except Exception as e:
+                    print(f"⚠️ Feature logging failed: {e}")
+            
             return True
         except Exception as e:
             print(f"❌ EXACT SCORE SAVE ERROR: {e}")
