@@ -2,7 +2,7 @@
 
 ## Overview
 
-This is an AI-powered exact score prediction platform achieving +354% ROI through advanced ML and ensemble predictions. The system features a premium Streamlit dashboard, Telegram bot delivery, and automatic result verification. After proving significant performance advantage (exact scores: +354% ROI vs regular tips: -29.2% ROI), the platform now exclusively focuses on high-odds exact score predictions with typical odds ranging from 7.0 to 15.0.
+This is an AI-powered exact score prediction platform achieving +340% ROI through advanced ML and ensemble predictions. The system features a premium Streamlit dashboard, Telegram bot delivery, and automatic result verification. After proving significant performance advantage (exact scores: +354% ROI vs regular tips: -29.2% ROI), the platform now exclusively focuses on high-odds exact score predictions with typical odds ranging from 7.0 to 15.0.
 
 ## 🚀 Recent Enhancements (October 2025)
 
@@ -137,5 +137,5 @@ Preferred communication style: Simple, everyday language.
 - **Telegram Bot**: ExactScoreBot delivers predictions with 7-15x odds to subscribers
 - **Real Result Verification**: Multi-source scraping with enhanced team name matching
 - **Volume Generation**: Up to 10 exact score predictions per cycle, no daily limits
-- **Proven Performance**: 131 exact scores tracked, 50% hit rate, +$2,237 profit on $1,109 staked
+- **Proven Performance**: 31 settled exact scores, 10 wins (32.3% hit rate), +16,582 SEK profit on 4,883 SEK staked (+340% ROI)
 - **Authentic ROI Tracking**: No simulated data, only real match outcomes
