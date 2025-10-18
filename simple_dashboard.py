@@ -4,6 +4,7 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 from datetime import datetime, date
+from feature_analytics import FeatureAnalytics
 
 # Database path
 DB_PATH = 'data/real_football.db'
@@ -315,6 +316,100 @@ if exact_stats is not None:
         st.metric("ROI", f"+{roi:.1f}%")
 
 st.success("🔒 **100% Authentic Performance** | Real match results verified from API-Football")
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# ============================================================================
+# FEATURE ANALYTICS - WHAT'S WORKING
+# ============================================================================
+
+st.markdown("## 📊 FEATURE ANALYTICS - What's Driving Success")
+
+try:
+    analytics = FeatureAnalytics()
+    importance_df = analytics.calculate_feature_importance()
+    summary = analytics.get_feature_performance_summary()
+    
+    if not importance_df.empty and len(importance_df) > 0:
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            st.markdown("### 🎯 Top 10 Winning Features")
+            st.caption("Features that correlate most with successful predictions")
+            
+            # Show top 10 features for wins
+            top_winning = importance_df.nlargest(10, 'importance_score')
+            
+            for idx, row in top_winning.iterrows():
+                feature_emoji = "🔥" if row['importance_score'] > 50 else "✅" if row['importance_score'] > 25 else "📊"
+                
+                # Format feature name (make it readable)
+                feature_display = row['feature_name'].replace('_', ' ').title()
+                
+                # Show difference between win avg and loss avg
+                if row['relative_diff_pct'] > 0:
+                    trend_text = f"+{row['relative_diff_pct']:.0f}% higher in wins"
+                    trend_color = "🟢"
+                else:
+                    trend_text = f"{row['relative_diff_pct']:.0f}% lower in wins"
+                    trend_color = "🔴"
+                
+                st.markdown(f"{feature_emoji} **{feature_display}** ({row['category']})")
+                st.caption(f"{trend_color} {trend_text} | Sample: {row['sample_size']} predictions")
+                st.progress(min(row['importance_score'] / 100, 1.0))
+                st.markdown("")
+        
+        with col2:
+            st.markdown("### 📈 Performance by Category")
+            st.caption("How different feature types contribute to accuracy")
+            
+            # Group by category
+            category_perf = importance_df.groupby('category').agg({
+                'importance_score': 'mean',
+                'sample_size': 'sum'
+            }).sort_values('importance_score', ascending=False)
+            
+            for category, data in category_perf.iterrows():
+                avg_importance = data['importance_score']
+                
+                category_emoji = {
+                    'Team Form': '⚽',
+                    'Head-to-Head': '🤝',
+                    'Expected Goals': '🎯',
+                    'Odds Movement': '📈',
+                    'League Standings': '🏆',
+                    'Injuries/Lineup': '🏥',
+                    'Prediction Metrics': '📊'
+                }.get(category, '📊')
+                
+                st.markdown(f"{category_emoji} **{category}**")
+                st.caption(f"Average importance: {avg_importance:.1f}")
+                st.progress(min(avg_importance / 100, 1.0))
+                st.markdown("")
+        
+        # Quality tier performance
+        if summary and 'quality_tiers' in summary and summary['quality_tiers']:
+            st.markdown("### 🎚️ Quality Score vs Hit Rate")
+            st.caption("Higher quality scores lead to better accuracy")
+            
+            quality_cols = st.columns(len(summary['quality_tiers']))
+            
+            for idx, tier_data in enumerate(summary['quality_tiers']):
+                with quality_cols[idx]:
+                    tier_name = tier_data['quality_tier']
+                    total = tier_data['wins'] + tier_data['losses']
+                    hit_rate = (tier_data['wins'] / total * 100) if total > 0 else 0
+                    
+                    st.metric(
+                        tier_name,
+                        f"{hit_rate:.1f}%",
+                        delta=f"{tier_data['wins']}/{total} wins"
+                    )
+    else:
+        st.info("📊 Feature analytics will appear after more predictions are settled. Keep tracking!")
+        
+except Exception as e:
+    st.info(f"📊 Feature analytics coming soon (waiting for settled predictions)")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
