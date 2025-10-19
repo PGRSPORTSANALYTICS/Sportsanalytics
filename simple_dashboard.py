@@ -295,7 +295,7 @@ st.markdown("---")
 st.markdown("## 🏆 PERFORMANCE OVERVIEW")
 
 if exact_stats is not None:
-    col1, col2, col3, col4, col5 = st.columns(5)
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
     
     with col1:
         st.metric("TOTAL PREDICTIONS", int(exact_stats['total_tips']))
@@ -309,9 +309,12 @@ if exact_stats is not None:
         st.metric("HIT RATE", f"{hit_rate:.1f}%")
     
     with col4:
-        st.metric("TOTAL PROFIT", f"{exact_stats['net_profit']:,.0f} SEK", delta="Authentic Results")
+        st.metric("MONEY SPENT", f"{exact_stats['total_staked']:,.0f} SEK")
     
     with col5:
+        st.metric("TOTAL PROFIT", f"{exact_stats['net_profit']:,.0f} SEK", delta="Authentic Results")
+    
+    with col6:
         roi = (exact_stats['net_profit'] / exact_stats['total_staked'] * 100) if exact_stats['total_staked'] > 0 else 0
         st.metric("ROI", f"+{roi:.1f}%")
 
