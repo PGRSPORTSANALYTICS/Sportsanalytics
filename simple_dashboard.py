@@ -471,6 +471,7 @@ if not historical.empty:
     
     table_data = display_df[['Match', 'Score', 'odds', 'result', 'P&L', 'match_date']].copy()
     table_data.columns = ['Match', 'Predicted Score', 'Odds', 'Result', 'P&L', 'Date']
+    table_data.index = range(1, len(table_data) + 1)
     
     def color_historical(row):
         if '✅' in str(row['Result']):
