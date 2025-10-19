@@ -464,7 +464,7 @@ if not historical.empty:
     
     st.markdown("")
     
-    display_df = historical.head(50).copy()
+    display_df = historical.copy()
     display_df['Match'] = display_df['home_team'] + ' vs ' + display_df['away_team']
     display_df['P&L'] = display_df['profit_loss'].apply(lambda x: f"{x:,.0f} SEK")
     display_df['Score'] = display_df['selection']
