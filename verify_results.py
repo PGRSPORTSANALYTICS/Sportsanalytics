@@ -445,8 +445,27 @@ class RealResultVerifier:
             market = tip['market'].lower()
             selection = tip['selection'].lower()
             
-            # Check for BTTS in selection first (can be in any market)
-            if 'btts' in selection or 'both teams to score' in selection:
+            # Check for Exact Score predictions FIRST (most specific)
+            if 'exact_score' in market or 'exact score' in selection or 'correct score' in selection:
+                # Extract predicted score from selection (e.g., "Exact Score: 2-1" -> 2, 1)
+                score_match = re.search(r'(\d+)-(\d+)', tip['selection'])
+                if score_match:
+                    predicted_home = int(score_match.group(1))
+                    predicted_away = int(score_match.group(2))
+                    
+                    # Win if exact match, loss otherwise
+                    if predicted_home == home_goals and predicted_away == away_goals:
+                        logger.info(f"✅ EXACT SCORE WIN: Predicted {predicted_home}-{predicted_away}, Actual {home_goals}-{away_goals}")
+                        return 'won'
+                    else:
+                        logger.info(f"❌ EXACT SCORE LOSS: Predicted {predicted_home}-{predicted_away}, Actual {home_goals}-{away_goals}")
+                        return 'lost'
+                else:
+                    logger.warning(f"⚠️ Could not parse exact score from: {tip['selection']}")
+                    return 'unknown'
+            
+            # Check for BTTS in selection
+            elif 'btts' in selection or 'both teams to score' in selection:
                 both_scored = home_goals > 0 and away_goals > 0
                 if 'yes' in selection:
                     return 'won' if both_scored else 'lost'
