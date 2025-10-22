@@ -265,6 +265,42 @@ def load_regular_performance():
     except:
         return None
 
+@st.cache_data(ttl=30)
+def load_learning_status():
+    """Get ML learning system status"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        
+        # Get feature logs stats
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT COUNT(*) as total_logged,
+                   SUM(CASE WHEN outcome IN ('won','win','lost','loss') THEN 1 ELSE 0 END) as settled,
+                   SUM(CASE WHEN outcome IN ('won','win') THEN 1 ELSE 0 END) as wins,
+                   AVG(data_completeness) as avg_completeness
+            FROM feature_logs
+        """)
+        row = cursor.fetchone()
+        
+        cursor.execute("SELECT COUNT(*) FROM feature_importance")
+        importance_count = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT MAX(last_updated) FROM feature_importance")
+        last_updated = cursor.fetchone()[0]
+        
+        conn.close()
+        
+        return {
+            'total_logged': row[0] or 0,
+            'settled': row[1] or 0,
+            'wins': row[2] or 0,
+            'avg_completeness': row[3] or 0,
+            'features_analyzed': importance_count,
+            'last_report': last_updated
+        }
+    except:
+        return None
+
 # ============================================================================
 # HEADER
 # ============================================================================
@@ -319,6 +355,77 @@ if exact_stats is not None:
         st.metric("ROI", f"+{roi:.1f}%")
 
 st.success("🔒 **100% Authentic Performance** | Real match results verified from API-Football")
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# ============================================================================
+# ML LEARNING SYSTEM STATUS
+# ============================================================================
+
+st.markdown("## 🧠 AI LEARNING SYSTEM STATUS")
+
+learning_status = load_learning_status()
+if learning_status:
+    settled_count = learning_status['settled']
+    milestone_100 = 100
+    milestone_500 = 500
+    
+    # Progress calculations
+    progress_to_100 = min(settled_count / milestone_100, 1.0)
+    progress_to_500 = min(settled_count / milestone_500, 1.0)
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("Predictions Logged", f"{learning_status['total_logged']}")
+        st.caption("🔬 With 50+ features each")
+    
+    with col2:
+        st.metric("Settled & Learning", f"{settled_count}")
+        st.caption(f"📊 {learning_status['avg_completeness']:.0f}% data quality")
+    
+    with col3:
+        features_status = "✅ Active" if learning_status['features_analyzed'] > 0 else "⏳ Pending"
+        st.metric("Feature Analysis", features_status)
+        st.caption(f"{learning_status['features_analyzed']} features analyzed")
+    
+    with col4:
+        if settled_count >= milestone_100:
+            next_milestone = milestone_500
+            status_text = f"{settled_count}/{next_milestone}"
+            milestone_name = "→ 500 Target"
+        else:
+            next_milestone = milestone_100
+            status_text = f"{settled_count}/{next_milestone}"
+            milestone_name = "→ First Report"
+        
+        st.metric("Progress", status_text)
+        st.caption(milestone_name)
+    
+    # Progress bars
+    st.markdown("")
+    
+    if settled_count < milestone_100:
+        remaining = milestone_100 - settled_count
+        st.progress(progress_to_100, text=f"🎯 First Report Milestone: {settled_count}/{milestone_100} ({remaining} needed)")
+        
+        if remaining <= 10:
+            st.info(f"🔥 **Almost there!** Only {remaining} more settled predictions until your first feature importance report!")
+        elif remaining <= 30:
+            st.info(f"⚡ **Getting close!** {remaining} more predictions needed for automated learning insights.")
+    else:
+        st.progress(1.0, text=f"✅ First Milestone Complete: {settled_count}/{milestone_100}")
+        st.success("🎉 **Learning Active!** Feature importance reports are being generated automatically.")
+        
+        if settled_count < milestone_500:
+            remaining_500 = milestone_500 - settled_count
+            st.progress(progress_to_500, text=f"🚀 Next Milestone: {settled_count}/{milestone_500} (statistical significance)")
+            st.info(f"📈 {remaining_500} more predictions until statistical significance threshold")
+    
+    if learning_status['last_report']:
+        st.caption(f"📅 Last analysis: {learning_status['last_report']}")
+else:
+    st.info("🧠 ML learning system initializing...")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
