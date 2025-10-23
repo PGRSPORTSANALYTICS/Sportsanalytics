@@ -2282,9 +2282,17 @@ class RealFootballChampion:
             current_scores = {row[0].replace('Exact Score: ', ''): row[1] for row in cursor.fetchall()}
             total_current = sum(current_scores.values()) or 1
             
-            # Calculate elite value score for each potential exact score
+            # 🎯 20% HIT RATE OPTIMIZATION: Only predict simple scores that actually win!
+            # Data shows: 1-0 (20%), 0-1 (7%), 1-1 (25%), 2-1 (11%) vs exotic scores (0%)
+            PROVEN_SCORES = ['1-0', '0-1', '1-1', '2-1']
+            
+            # Calculate value score for ONLY proven winning scores
             score_candidates = []
             for score_key, score_data in exact_scores.items():
+                # 🚫 SKIP ALL EXOTIC SCORES (they have 0% hit rate!)
+                if score_key not in PROVEN_SCORES:
+                    continue
+                
                 prob = score_data['probability']
                 if prob < 0.02:  # Skip unlikely scores
                     continue
@@ -2292,32 +2300,30 @@ class RealFootballChampion:
                 # Calculate implied odds
                 implied_odds = 1 / prob
                 
-                # 🎯 Multi-factor value score
-                # Factor 1: Base value (probability × potential return)
+                # 🎯 SIMPLE VALUE: Probability × Odds (no exotic bonuses!)
+                # Factor 1: Base value
                 base_value = prob * implied_odds
                 
-                # Factor 2: Odds sweet spot bonus (prefer 10-20x range)
-                if 10 <= implied_odds <= 20:
-                    odds_bonus = 1.3  # 30% bonus for sweet spot
-                elif 8 <= implied_odds <= 25:
-                    odds_bonus = 1.15  # 15% bonus for good range
+                # Factor 2: Odds quality (prefer 8-12x based on winning data)
+                if 8 <= implied_odds <= 12:
+                    odds_bonus = 1.4  # 40% bonus for proven range
+                elif implied_odds < 14:
+                    odds_bonus = 1.1  # 10% bonus for acceptable
                 else:
-                    odds_bonus = 1.0
+                    odds_bonus = 0.7  # Penalty for too high (14x+ = 0% win rate)
                 
-                # Factor 3: Diversity bonus (favor underrepresented scores)
-                current_count = current_scores.get(score_key, 0)
-                diversity_ratio = 1 - (current_count / max(total_current, 1))
-                diversity_bonus = 1 + (diversity_ratio * 0.5)  # Up to 50% bonus
+                # Factor 3: Score type preference (based on actual hit rates)
+                if score_key == '1-1':
+                    score_bonus = 1.3  # 25% hit rate
+                elif score_key == '1-0':
+                    score_bonus = 1.2  # 20% hit rate  
+                elif score_key == '2-1':
+                    score_bonus = 1.1  # 11% hit rate
+                else:  # 0-1
+                    score_bonus = 1.0  # 7% hit rate
                 
-                # Factor 4: Score type variety bonus
-                score_variety_bonus = 1.0
-                if score_key in ['2-1', '1-2', '2-0', '0-2']:
-                    score_variety_bonus = 1.25  # 25% bonus for interesting scores
-                elif score_key in ['3-1', '1-3', '2-2', '3-0', '0-3']:
-                    score_variety_bonus = 1.35  # 35% bonus for rare valuable scores
-                
-                # Combined elite value score
-                elite_value = base_value * odds_bonus * diversity_bonus * score_variety_bonus
+                # Combined value (NO diversity bonus - focus on winners!)
+                elite_value = base_value * odds_bonus * score_bonus
                 
                 score_candidates.append({
                     'score': score_data,
@@ -2325,8 +2331,8 @@ class RealFootballChampion:
                     'probability': prob,
                     'implied_odds': implied_odds,
                     'elite_value': elite_value,
-                    'diversity_bonus': diversity_bonus,
-                    'variety_bonus': score_variety_bonus
+                    'score_bonus': score_bonus,
+                    'odds_bonus': odds_bonus
                 })
             
             # Sort by elite value and use balanced weighted random selection
@@ -2348,7 +2354,7 @@ class RealFootballChampion:
             best_probability = selected['probability']
             
             print(f"   🎯 Selected score: {selected['score_text']} (Elite Value: {selected['elite_value']:.2f})")
-            print(f"   📊 Diversity bonus: {selected['diversity_bonus']:.2f}x, Variety bonus: {selected['variety_bonus']:.2f}x")
+            print(f"   📊 Score type bonus: {selected['score_bonus']:.2f}x, Odds bonus: {selected['odds_bonus']:.2f}x")
             
             if best_score and best_probability > 0.02:  # At least 2% probability (more realistic for exact scores)
                 # Calculate realistic odds based on probability
@@ -2373,11 +2379,13 @@ class RealFootballChampion:
                 value_boost = min(10, int(selected['elite_value'] * 5))
                 base_confidence += value_boost
                 
-                # Adjust based on odds quality (sweet spot 10-15x gets bonus)
-                if 10 <= final_odds <= 15:
-                    base_confidence += 5
-                elif final_odds < 7 or final_odds > 25:
-                    base_confidence -= 5
+                # Adjust based on odds quality (sweet spot 8-12x based on data)
+                if 8 <= final_odds <= 12:
+                    base_confidence += 8  # Strong bonus for proven range
+                elif final_odds < 14:
+                    base_confidence += 3  # Small bonus
+                else:
+                    base_confidence -= 8  # Penalty for 14x+ (0% win rate)
                 
                 # Adjust based on probability (higher probability = higher confidence)
                 if best_probability > 0.08:  # >8% is very strong for exact score
@@ -2385,9 +2393,13 @@ class RealFootballChampion:
                 elif best_probability > 0.06:  # >6% is good
                     base_confidence += 4
                 
-                # Adjust for diversity/variety bonuses (unique picks get slight boost)
-                if selected['diversity_bonus'] > 1.3:
-                    base_confidence += 3
+                # Adjust for score type (based on proven hit rates)
+                if selected['score_text'] == '1-1':
+                    base_confidence += 5  # 25% hit rate
+                elif selected['score_text'] == '1-0':
+                    base_confidence += 4  # 20% hit rate
+                elif selected['score_text'] == '2-1':
+                    base_confidence += 2  # 11% hit rate
                 
                 # Advanced features boost (if available)
                 if self.enhanced_predictor and enriched_analysis:
@@ -2438,19 +2450,23 @@ class RealFootballChampion:
                 print(f"   💰 Stake: {opportunity.stake:.0f} SEK")
                 print(f"   🎲 Probability: {best_probability:.1%}")
                 
-                # 🏆 ELITE QUALITY FILTER - Only save the best predictions
+                # 🏆 20% HIT RATE QUALITY FILTER - Maximum strictness!
                 quality_score = enriched_analysis.get('quality_score', 50)
                 league = match.get('league_name', '')
-                is_major_league = any(major in league for major in ['Premier League', 'La Liga', 'Serie A', 'Bundesliga', 'Ligue 1', 'Champions League', 'Europa League'])
                 
-                # Quality gates (relaxed for major leagues)
-                min_quality = 45 if is_major_league else 55  # Lower threshold for major leagues
-                passes_quality = quality_score >= min_quality
-                passes_odds = 7 <= final_odds <= 25  # Sweet spot range
-                passes_confidence = confidence >= 65  # High confidence
-                passes_elite_value = selected['elite_value'] >= 0.5  # Good value score
+                # ⚠️ TOP 5 LEAGUES ONLY (better data quality)
+                TOP_5_LEAGUES = ['Premier League', 'La Liga', 'Serie A', 'Bundesliga', 'Ligue 1']
+                is_top_league = any(top in league for top in TOP_5_LEAGUES)
                 
-                if passes_quality and passes_odds and passes_confidence and passes_elite_value:
+                # ⚠️ STRICT QUALITY GATES based on winning data
+                passes_league = is_top_league  # Only top 5 leagues
+                passes_quality = quality_score >= 50  # Minimum viable quality
+                passes_odds = 7 <= final_odds <= 12  # Proven winning range (14x+ = 0% wins)
+                passes_confidence = confidence >= 75  # High confidence only
+                passes_elite_value = selected['elite_value'] >= 0.8  # Strong value requirement
+                passes_score_type = selected['score_text'] in ['1-0', '0-1', '1-1', '2-1']  # Already enforced but double-check
+                
+                if passes_league and passes_quality and passes_odds and passes_confidence and passes_elite_value and passes_score_type:
                     # Save exact score opportunity (bypass daily limit)
                     saved = self.save_exact_score_opportunity(opportunity)
                     if saved:
@@ -2459,6 +2475,8 @@ class RealFootballChampion:
                 else:
                     # Skip low-quality predictions
                     skip_reasons = []
+                    if not passes_league:
+                        skip_reasons.append(f"league={league}")
                     if not passes_quality:
                         skip_reasons.append(f"quality={quality_score:.0f}")
                     if not passes_odds:
@@ -2467,7 +2485,9 @@ class RealFootballChampion:
                         skip_reasons.append(f"confidence={confidence}")
                     if not passes_elite_value:
                         skip_reasons.append(f"value={selected['elite_value']:.2f}")
-                    print(f"   ⏭️ SKIPPED (Quality filter: {', '.join(skip_reasons)})")
+                    if not passes_score_type:
+                        skip_reasons.append(f"score={selected['score_text']}")
+                    print(f"   ⏭️ SKIPPED (20% optimization filter: {', '.join(skip_reasons)})")
         
         print(f"\n🎯 EXACT SCORE ANALYSIS COMPLETE: {total_exact_scores} predictions generated")
         return total_exact_scores
