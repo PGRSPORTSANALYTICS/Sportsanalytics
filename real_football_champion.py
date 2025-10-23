@@ -2201,15 +2201,42 @@ class RealFootballChampion:
                 # Fallback to basic xG predictions
                 exact_scores = xg_data['exact_scores']
             
-            # Get the most likely exact score
-            best_score = None
-            best_probability = 0
+            # 🎯 SMART SELECTION: Use weighted randomness for diversity
+            # Instead of always picking #1, consider value (probability × odds)
+            import random
             
-            # Find the best probability exact score
+            # Calculate value score for each potential exact score
+            score_candidates = []
             for score_key, score_data in exact_scores.items():
-                if score_data['probability'] > best_probability:
-                    best_probability = score_data['probability']
-                    best_score = score_data
+                prob = score_data['probability']
+                if prob > 0.02:  # At least 2% probability
+                    # Calculate implied odds
+                    implied_odds = 1 / prob
+                    # Value score combines probability and potential return
+                    value_score = prob * implied_odds * 0.8  # Slightly favor higher odds
+                    score_candidates.append({
+                        'score': score_data,
+                        'score_text': score_key,
+                        'probability': prob,
+                        'value': value_score
+                    })
+            
+            # Sort by value and use weighted random selection
+            if not score_candidates:
+                continue
+            
+            score_candidates.sort(key=lambda x: x['value'], reverse=True)
+            
+            # Weighted random: 50% pick #1, 30% pick #2, 15% pick #3, 5% pick #4
+            weights = [0.50, 0.30, 0.15, 0.05]
+            selection_idx = random.choices(
+                range(min(len(score_candidates), 4)), 
+                weights=weights[:min(len(score_candidates), 4)]
+            )[0]
+            
+            selected = score_candidates[selection_idx]
+            best_score = selected['score']
+            best_probability = selected['probability']
             
             if best_score and best_probability > 0.02:  # At least 2% probability (more realistic for exact scores)
                 # Calculate realistic odds based on probability
