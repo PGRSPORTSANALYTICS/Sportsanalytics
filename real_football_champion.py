@@ -791,18 +791,18 @@ class RealFootballChampion:
             all_matches = self.get_upcoming_fixtures()
             near_time_matches = self.filter_near_time_matches(all_matches)
         
-        print(f"📅 Filtered to {len(near_time_matches)} near-time matches (today/tomorrow only)")
+        print(f"📅 Filtered to {len(near_time_matches)} upcoming matches (next 7 days)")
         return near_time_matches
     
     def filter_near_time_matches(self, matches: List[Dict]) -> List[Dict]:
-        """Filter matches to only those happening TODAY and TOMORROW (near-time betting)"""
+        """Filter matches to only those happening in the next 7 days (captures weekends)"""
         from datetime import datetime, timedelta
         
         if not matches:
             return []
         
         now = datetime.now()
-        tomorrow_end = now + timedelta(days=1)  # Only today + tomorrow
+        week_end = now + timedelta(days=7)  # Look ahead 7 days to capture weekend matches
         
         near_time_matches = []
         
@@ -817,8 +817,8 @@ class RealFootballChampion:
                 # Convert to local time for comparison
                 match_time_local = match_time.replace(tzinfo=None)
                 
-                # Only include matches starting TODAY or TOMORROW
-                if now <= match_time_local <= tomorrow_end:
+                # Include matches starting in the next 7 days
+                if now <= match_time_local <= week_end:
                     near_time_matches.append(match)
                     
             except Exception as e:
