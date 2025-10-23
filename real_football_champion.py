@@ -723,11 +723,11 @@ class RealFootballChampion:
             from datetime import datetime as dt_parser, timedelta
             today = dt_parser.now()
             
-            for league_id in league_ids[:20]:  # Limit to top 20 leagues to preserve quota
+            for league_id in league_ids[:30]:  # Check top 30 leagues (includes European cups)
                 try:
-                    # Get upcoming fixtures for TODAY and TOMORROW only
+                    # Get upcoming fixtures for next 7 days
                     url = f"{self.api_football_base_url}/fixtures"
-                    end_date = today + timedelta(days=1)  # Only today + tomorrow
+                    end_date = today + timedelta(days=7)  # Next 7 days to capture weekends
                     
                     # Calculate correct season: European leagues (Aug-May) use previous year before July
                     current_year = today.year
@@ -2242,7 +2242,7 @@ class RealFootballChampion:
                     match_id=match.get('id', f"{match['home_team']}_vs_{match['away_team']}"),
                     home_team=match['home_team'],
                     away_team=match['away_team'],
-                    league=match.get('league', 'Unknown League'),
+                    league=match.get('league_name', 'Unknown League'),
                     market='exact_score',
                     selection=f"Exact Score: {score_text}",
                     odds=round(final_odds, 2),
