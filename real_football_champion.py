@@ -2151,13 +2151,34 @@ class RealFootballChampion:
                 print(f"⚠️ Error analyzing {match.get('home_team', 'Unknown')} vs {match.get('away_team', 'Unknown')}: {e}")
                 continue
         
-        # Sort by total expected goals (entertainment value)
-        match_scores.sort(key=lambda x: x['total_xg'], reverse=True)
+        # 🏆 ELITE MATCH PRIORITIZATION
+        # Prioritize major leagues and high-quality matches
+        MAJOR_LEAGUES = [
+            'Premier League', 'La Liga', 'Serie A', 'Bundesliga', 'Ligue 1',
+            'Champions League', 'Europa League', 'Eredivisie', 'Primeira Liga'
+        ]
+        
+        for match_data in match_scores:
+            league = match_data['match'].get('league_name', '')
+            # Bonus for major leagues
+            if any(major in league for major in MAJOR_LEAGUES):
+                match_data['league_bonus'] = 2.0
+            else:
+                match_data['league_bonus'] = 1.0
+            # Combined elite score (xG × league quality)
+            match_data['elite_score'] = match_data['total_xg'] * match_data['league_bonus']
+        
+        # Sort by elite score (major leagues + entertainment value)
+        match_scores.sort(key=lambda x: x['elite_score'], reverse=True)
         
         # Select matches up to remaining daily cap (max 10 per cycle)
         max_this_cycle = min(10, remaining_slots, len(match_scores))
         selected_matches = match_scores[:max_this_cycle]
-        print(f"\n🎯 Selected {len(selected_matches)} matches for exact score predictions (respecting daily cap)")
+        print(f"\n🎯 Selected {len(selected_matches)} ELITE matches for exact score predictions")
+        
+        # Show prioritization
+        major_count = sum(1 for m in selected_matches if m['league_bonus'] > 1.0)
+        print(f"   📊 {major_count} major league matches, {len(selected_matches) - major_count} others")
         total_exact_scores = 0
         
         for match_data in selected_matches:
@@ -2201,34 +2222,76 @@ class RealFootballChampion:
                 # Fallback to basic xG predictions
                 exact_scores = xg_data['exact_scores']
             
-            # 🎯 SMART SELECTION: Use weighted randomness for diversity
-            # Instead of always picking #1, consider value (probability × odds)
+            # 🏆 ELITE SELECTION ALGORITHM: Multi-factor value optimization
             import random
             
-            # Calculate value score for each potential exact score
+            # Get current score distribution for diversity bonus
+            cursor = self.conn.cursor()
+            cursor.execute('''
+                SELECT selection, COUNT(*) as count 
+                FROM football_opportunities 
+                WHERE market = 'exact_score' AND (outcome IS NULL OR outcome = '')
+                GROUP BY selection
+            ''')
+            current_scores = {row[0].replace('Exact Score: ', ''): row[1] for row in cursor.fetchall()}
+            total_current = sum(current_scores.values()) or 1
+            
+            # Calculate elite value score for each potential exact score
             score_candidates = []
             for score_key, score_data in exact_scores.items():
                 prob = score_data['probability']
-                if prob > 0.02:  # At least 2% probability
-                    # Calculate implied odds
-                    implied_odds = 1 / prob
-                    # Value score combines probability and potential return
-                    value_score = prob * implied_odds * 0.8  # Slightly favor higher odds
-                    score_candidates.append({
-                        'score': score_data,
-                        'score_text': score_key,
-                        'probability': prob,
-                        'value': value_score
-                    })
+                if prob < 0.02:  # Skip unlikely scores
+                    continue
+                
+                # Calculate implied odds
+                implied_odds = 1 / prob
+                
+                # 🎯 Multi-factor value score
+                # Factor 1: Base value (probability × potential return)
+                base_value = prob * implied_odds
+                
+                # Factor 2: Odds sweet spot bonus (prefer 10-20x range)
+                if 10 <= implied_odds <= 20:
+                    odds_bonus = 1.3  # 30% bonus for sweet spot
+                elif 8 <= implied_odds <= 25:
+                    odds_bonus = 1.15  # 15% bonus for good range
+                else:
+                    odds_bonus = 1.0
+                
+                # Factor 3: Diversity bonus (favor underrepresented scores)
+                current_count = current_scores.get(score_key, 0)
+                diversity_ratio = 1 - (current_count / max(total_current, 1))
+                diversity_bonus = 1 + (diversity_ratio * 0.5)  # Up to 50% bonus
+                
+                # Factor 4: Score type variety bonus
+                score_variety_bonus = 1.0
+                if score_key in ['2-1', '1-2', '2-0', '0-2']:
+                    score_variety_bonus = 1.25  # 25% bonus for interesting scores
+                elif score_key in ['3-1', '1-3', '2-2', '3-0', '0-3']:
+                    score_variety_bonus = 1.35  # 35% bonus for rare valuable scores
+                
+                # Combined elite value score
+                elite_value = base_value * odds_bonus * diversity_bonus * score_variety_bonus
+                
+                score_candidates.append({
+                    'score': score_data,
+                    'score_text': score_key,
+                    'probability': prob,
+                    'implied_odds': implied_odds,
+                    'elite_value': elite_value,
+                    'diversity_bonus': diversity_bonus,
+                    'variety_bonus': score_variety_bonus
+                })
             
-            # Sort by value and use weighted random selection
+            # Sort by elite value and use balanced weighted random selection
             if not score_candidates:
                 continue
             
-            score_candidates.sort(key=lambda x: x['value'], reverse=True)
+            score_candidates.sort(key=lambda x: x['elite_value'], reverse=True)
             
-            # Weighted random: 50% pick #1, 30% pick #2, 15% pick #3, 5% pick #4
-            weights = [0.50, 0.30, 0.15, 0.05]
+            # 🎯 BALANCED WEIGHTS for maximum diversity
+            # 35% pick #1, 30% pick #2, 20% pick #3, 15% pick #4+
+            weights = [0.35, 0.30, 0.20, 0.15]
             selection_idx = random.choices(
                 range(min(len(score_candidates), 4)), 
                 weights=weights[:min(len(score_candidates), 4)]
@@ -2237,6 +2300,9 @@ class RealFootballChampion:
             selected = score_candidates[selection_idx]
             best_score = selected['score']
             best_probability = selected['probability']
+            
+            print(f"   🎯 Selected score: {selected['score_text']} (Elite Value: {selected['elite_value']:.2f})")
+            print(f"   📊 Diversity bonus: {selected['diversity_bonus']:.2f}x, Variety bonus: {selected['variety_bonus']:.2f}x")
             
             if best_score and best_probability > 0.02:  # At least 2% probability (more realistic for exact scores)
                 # Calculate realistic odds based on probability
@@ -2289,10 +2355,36 @@ class RealFootballChampion:
                 print(f"   💰 Stake: {opportunity.stake:.0f} SEK")
                 print(f"   🎲 Probability: {best_probability:.1%}")
                 
-                # Save exact score opportunity (bypass daily limit)
-                saved = self.save_exact_score_opportunity(opportunity)
-                if saved:
-                    total_exact_scores += 1
+                # 🏆 ELITE QUALITY FILTER - Only save the best predictions
+                quality_score = enriched_analysis.get('quality_score', 50)
+                league = match.get('league_name', '')
+                is_major_league = any(major in league for major in ['Premier League', 'La Liga', 'Serie A', 'Bundesliga', 'Ligue 1', 'Champions League', 'Europa League'])
+                
+                # Quality gates (relaxed for major leagues)
+                min_quality = 45 if is_major_league else 55  # Lower threshold for major leagues
+                passes_quality = quality_score >= min_quality
+                passes_odds = 7 <= final_odds <= 25  # Sweet spot range
+                passes_confidence = confidence >= 65  # High confidence
+                passes_elite_value = selected['elite_value'] >= 0.5  # Good value score
+                
+                if passes_quality and passes_odds and passes_confidence and passes_elite_value:
+                    # Save exact score opportunity (bypass daily limit)
+                    saved = self.save_exact_score_opportunity(opportunity)
+                    if saved:
+                        total_exact_scores += 1
+                        print(f"   ✅ ELITE PREDICTION SAVED")
+                else:
+                    # Skip low-quality predictions
+                    skip_reasons = []
+                    if not passes_quality:
+                        skip_reasons.append(f"quality={quality_score:.0f}")
+                    if not passes_odds:
+                        skip_reasons.append(f"odds={final_odds:.1f}")
+                    if not passes_confidence:
+                        skip_reasons.append(f"confidence={confidence}")
+                    if not passes_elite_value:
+                        skip_reasons.append(f"value={selected['elite_value']:.2f}")
+                    print(f"   ⏭️ SKIPPED (Quality filter: {', '.join(skip_reasons)})")
         
         print(f"\n🎯 EXACT SCORE ANALYSIS COMPLETE: {total_exact_scores} predictions generated")
         return total_exact_scores
