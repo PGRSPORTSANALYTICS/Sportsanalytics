@@ -97,7 +97,7 @@ class RealResultVerifier:
                        odds, stake, status, outcome, profit_loss
                 FROM football_opportunities 
                 WHERE (outcome IS NULL OR outcome = '' OR outcome = 'unknown')
-                AND match_date <= date('now')
+                AND date(match_date) <= date('now')
                 ORDER BY match_date DESC
                 LIMIT 50
             """)
