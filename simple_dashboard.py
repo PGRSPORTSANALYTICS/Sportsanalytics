@@ -566,8 +566,10 @@ historical = load_exact_score_history()
 if not historical.empty:
     wins = len(historical[historical['result'] == '✅'])
     losses = len(historical[historical['result'] == '❌'])
+    settled_total = wins + losses
+    actual_hit_rate = (wins / settled_total * 100) if settled_total > 0 else 0
     
-    st.success(f"📈 **{len(historical)} Completed Predictions** | {wins} Wins | {losses} Losses | 50% Hit Rate")
+    st.success(f"📈 **{len(historical)} Completed Predictions** | {wins} Wins | {losses} Losses | {actual_hit_rate:.1f}% Hit Rate")
     
     st.markdown("")
     
