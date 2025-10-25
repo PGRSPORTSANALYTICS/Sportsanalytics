@@ -2621,14 +2621,18 @@ class RealFootballChampion:
                 0  # Not part of daily ranking
             ))
             self.conn.commit()
-            print(f"✅ EXACT SCORE SAVED: {opportunity.home_team} vs {opportunity.away_team}")
+            
+            # Get the actual prediction ID from the database
+            prediction_id = cursor.lastrowid
+            
+            print(f"✅ EXACT SCORE SAVED: {opportunity.home_team} vs {opportunity.away_team} (ID: {prediction_id})")
             
             # 📊 Log features for analytics
             if self.feature_analytics:
                 try:
                     features = self._extract_features_for_logging(opportunity.analysis)
                     self.feature_analytics.log_prediction_features(
-                        prediction_id=f"{opportunity.match_id}_{int(time.time())}",
+                        prediction_id=str(prediction_id),  # Use actual database ID
                         match_id=opportunity.match_id,
                         home_team=opportunity.home_team,
                         away_team=opportunity.away_team,
@@ -2636,6 +2640,7 @@ class RealFootballChampion:
                         features=features,
                         quality_score=quality_score
                     )
+                    print(f"📊 Features logged for prediction ID {prediction_id}")
                 except Exception as e:
                     print(f"⚠️ Feature logging failed: {e}")
             
