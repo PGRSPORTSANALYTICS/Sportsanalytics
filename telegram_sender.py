@@ -9,7 +9,7 @@ import requests
 import sqlite3
 import logging
 from datetime import datetime
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -50,11 +50,12 @@ class TelegramBroadcaster:
                 CREATE TABLE IF NOT EXISTS telegram_subscribers (
                     chat_id TEXT PRIMARY KEY,
                     username TEXT,
-                    subscribed_at INTEGER
+                    subscribed_at INTEGER,
+                    is_channel INTEGER DEFAULT 0
                 )
             ''')
             
-            cursor.execute('SELECT chat_id FROM telegram_subscribers')
+            cursor.execute('SELECT chat_id FROM telegram_subscribers WHERE is_channel = 0')
             subscribers = [row[0] for row in cursor.fetchall()]
             conn.close()
             
@@ -63,6 +64,44 @@ class TelegramBroadcaster:
             logger.error(f"❌ Failed to get subscribers: {e}")
             return []
     
+    def get_channel(self) -> Optional[str]:
+        """Get configured channel ID (if any)"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute('SELECT chat_id FROM telegram_subscribers WHERE is_channel = 1 LIMIT 1')
+            result = cursor.fetchone()
+            conn.close()
+            
+            return result[0] if result else None
+        except Exception as e:
+            logger.error(f"❌ Failed to get channel: {e}")
+            return None
+    
+    def set_channel(self, channel_id: str, channel_name: str = "Channel") -> bool:
+        """Set the broadcast channel"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # Remove old channel if exists
+            cursor.execute('DELETE FROM telegram_subscribers WHERE is_channel = 1')
+            
+            # Add new channel
+            cursor.execute('''
+                INSERT INTO telegram_subscribers (chat_id, username, subscribed_at, is_channel)
+                VALUES (?, ?, ?, 1)
+            ''', (channel_id, channel_name, int(datetime.now().timestamp())))
+            
+            conn.commit()
+            conn.close()
+            logger.info(f"✅ Channel set: {channel_name} ({channel_id})")
+            return True
+        except Exception as e:
+            logger.error(f"❌ Failed to set channel: {e}")
+            return False
+    
     def add_subscriber(self, chat_id: str, username: str = "Unknown") -> bool:
         """Add a new subscriber"""
         try:
@@ -70,8 +109,8 @@ class TelegramBroadcaster:
             cursor = conn.cursor()
             
             cursor.execute('''
-                INSERT OR REPLACE INTO telegram_subscribers (chat_id, username, subscribed_at)
-                VALUES (?, ?, ?)
+                INSERT OR REPLACE INTO telegram_subscribers (chat_id, username, subscribed_at, is_channel)
+                VALUES (?, ?, ?, 0)
             ''', (chat_id, username, int(datetime.now().timestamp())))
             
             conn.commit()
@@ -83,20 +122,31 @@ class TelegramBroadcaster:
             return False
     
     def broadcast_prediction(self, prediction: Dict) -> int:
-        """Broadcast a prediction to all subscribers"""
+        """Broadcast a prediction to all subscribers AND channel"""
         message = self._format_prediction(prediction)
         subscribers = self.get_subscribers()
-        
-        if not subscribers:
-            logger.warning("⚠️ No subscribers to broadcast to")
-            return 0
+        channel_id = self.get_channel()
         
         success_count = 0
-        for chat_id in subscribers:
-            if self.send_message(chat_id, message):
-                success_count += 1
         
-        logger.info(f"📤 Broadcasted to {success_count}/{len(subscribers)} subscribers")
+        # Send to channel first (public visibility)
+        if channel_id:
+            if self.send_message(channel_id, message):
+                logger.info(f"📢 Posted to channel: {channel_id}")
+                success_count += 1
+            else:
+                logger.warning(f"⚠️ Failed to post to channel: {channel_id}")
+        
+        # Send to individual subscribers
+        if not subscribers:
+            logger.warning("⚠️ No individual subscribers")
+        else:
+            for chat_id in subscribers:
+                if self.send_message(chat_id, message):
+                    success_count += 1
+        
+        total_targets = (1 if channel_id else 0) + len(subscribers)
+        logger.info(f"📤 Broadcasted to {success_count}/{total_targets} targets")
         return success_count
     
     def _format_prediction(self, prediction: Dict) -> str:
@@ -163,20 +213,31 @@ class TelegramBroadcaster:
         return message
     
     def broadcast_result(self, result: Dict) -> int:
-        """Broadcast a settled result to all subscribers"""
+        """Broadcast a settled result to all subscribers AND channel"""
         message = self._format_result(result)
         subscribers = self.get_subscribers()
-        
-        if not subscribers:
-            logger.warning("⚠️ No subscribers to broadcast result to")
-            return 0
+        channel_id = self.get_channel()
         
         success_count = 0
-        for chat_id in subscribers:
-            if self.send_message(chat_id, message):
-                success_count += 1
         
-        logger.info(f"📤 Broadcasted result to {success_count}/{len(subscribers)} subscribers")
+        # Send to channel first (public visibility)
+        if channel_id:
+            if self.send_message(channel_id, message):
+                logger.info(f"📢 Posted result to channel: {channel_id}")
+                success_count += 1
+            else:
+                logger.warning(f"⚠️ Failed to post result to channel: {channel_id}")
+        
+        # Send to individual subscribers
+        if not subscribers:
+            logger.warning("⚠️ No individual subscribers")
+        else:
+            for chat_id in subscribers:
+                if self.send_message(chat_id, message):
+                    success_count += 1
+        
+        total_targets = (1 if channel_id else 0) + len(subscribers)
+        logger.info(f"📤 Broadcasted result to {success_count}/{total_targets} targets")
         return success_count
     
     def get_todays_predictions(self) -> List[Dict]:
