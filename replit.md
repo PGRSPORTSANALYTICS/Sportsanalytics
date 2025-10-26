@@ -177,5 +177,49 @@ Preferred communication style: Simple, everyday language.
 - **Telegram Bot**: ExactScoreBot delivers predictions with 7-15x odds to subscribers
 - **Real Result Verification**: Multi-source scraping with enhanced team name matching
 - **Volume Generation**: Up to 10 exact score predictions per cycle, no daily limits
-- **Proven Performance**: 31 settled exact scores, 10 wins (32.3% hit rate), +16,582 SEK profit on 4,883 SEK staked (+340% ROI)
+- **Proven Performance**: 123 settled exact scores, 16 wins (13.0% win rate), +12,912 SEK profit on 19,128 SEK staked (+67.5% ROI)
 - **Authentic ROI Tracking**: No simulated data, only real match outcomes
+- **Live Performance Stats**: Every prediction and result shows real-time win rate, profit, and ROI
+
+### Legal Framework (October 26, 2025)
+Complete legal documentation prepared for January 2026 subscription launch:
+
+**Legal Documents (Bilingual - Swedish/English):**
+- **Terms of Service** (`legal/terms_of_service_en.md` + `legal/terms_of_service_sv.md`)
+  - Subscription pricing: 499 SEK/month (Standard), 999 SEK/month (VIP)
+  - Non-refundable payment policy
+  - No guarantees clause for legal protection
+  - User age restriction (18+) and responsibilities
+  - Intellectual property protection (no sharing predictions)
+  
+- **Risk Disclaimer** (`legal/disclaimer_en.md` + `legal/disclaimer_sv.md`)
+  - Clear gambling risk warnings
+  - No profit guarantees
+  - Past performance ≠ future results disclaimer
+  - Responsible gambling guidelines
+  - Swedish gambling support (Stödlinjen: 020-819 100)
+  
+- **Privacy Policy** (`legal/privacy_policy_en.md` + `legal/privacy_policy_sv.md`)
+  - GDPR compliant data handling
+  - Telegram data collection (username, chat ID)
+  - No selling of personal information
+  - User rights (access, deletion, opt-out)
+
+**Legal Protections:**
+- Limitation of liability (max = last monthly fee)
+- No responsibility for betting losses or technical errors
+- Governed by Swedish law, disputes in Swedish courts
+- Termination rights for ToS violations
+
+**Compliance Features:**
+- Transparent live performance tracking on every prediction
+- Real-time ROI and profit/loss display
+- Responsible gambling messaging
+- Age verification requirement (18+)
+- Swedish gambling support information
+
+**Launch Readiness:**
+- Legal documents posted to Telegram channel (Swedish + English)
+- Risk disclaimers on all predictions
+- Ready for January 2026 paid subscription launch
+- Script available: `python3 post_legal_to_channel.py`
