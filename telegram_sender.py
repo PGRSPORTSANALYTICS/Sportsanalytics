@@ -158,10 +158,10 @@ class TelegramBroadcaster:
             cursor.execute('''
                 SELECT 
                     COUNT(*) as total_bets,
-                    SUM(CASE WHEN outcome = 'won' THEN 1 ELSE 0 END) as wins,
-                    SUM(CASE WHEN outcome = 'lost' THEN 1 ELSE 0 END) as losses,
+                    SUM(CASE WHEN outcome IN ('won', 'win') THEN 1 ELSE 0 END) as wins,
+                    SUM(CASE WHEN outcome IN ('lost', 'loss') THEN 1 ELSE 0 END) as losses,
                     SUM(stake) as total_staked,
-                    SUM(CASE WHEN outcome = 'won' THEN stake * (odds - 1) ELSE -stake END) as net_profit
+                    SUM(CASE WHEN outcome IN ('won', 'win') THEN stake * (odds - 1) ELSE -stake END) as net_profit
                 FROM football_opportunities 
                 WHERE market = 'exact_score'
                 AND outcome IS NOT NULL
