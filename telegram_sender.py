@@ -138,7 +138,7 @@ class TelegramBroadcaster:
             
             cursor.execute('''
                 SELECT home_team, away_team, selection, odds, confidence, 
-                       stake, datetime, league
+                       stake, match_date, kickoff_time, league
                 FROM football_opportunities
                 WHERE DATE(datetime(timestamp, 'unixepoch')) = ?
                 AND outcome IS NULL
@@ -147,6 +147,7 @@ class TelegramBroadcaster:
             
             predictions = []
             for row in cursor.fetchall():
+                match_datetime = f"{row[6]} {row[7]}" if row[6] and row[7] else "TBA"
                 predictions.append({
                     'home_team': row[0],
                     'away_team': row[1],
@@ -154,8 +155,8 @@ class TelegramBroadcaster:
                     'odds': row[3],
                     'confidence': row[4],
                     'stake': row[5],
-                    'datetime': row[6],
-                    'league': row[7]
+                    'datetime': match_datetime,
+                    'league': row[8]
                 })
             
             conn.close()
