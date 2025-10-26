@@ -164,7 +164,7 @@ def load_exact_score_tips():
         conn = sqlite3.connect(DB_PATH)
         query = """
         SELECT home_team, away_team, selection, odds, edge_percentage, 
-               confidence, match_date, recommended_date
+               confidence, match_date, recommended_date, analysis
         FROM football_opportunities 
         WHERE market = 'exact_score'
         AND (outcome IS NULL OR outcome = '' OR outcome = 'unknown')
@@ -638,6 +638,36 @@ st.markdown("<br>", unsafe_allow_html=True)
 
 st.markdown("## 🎯 ACTIVE PREDICTIONS")
 
+def generate_dashboard_analysis(analysis_json, home_team, away_team):
+    """Generate human-readable analysis from JSON for dashboard"""
+    import json
+    try:
+        if not analysis_json or analysis_json == '':
+            return ""
+        
+        analysis = json.loads(analysis_json) if isinstance(analysis_json, str) else analysis_json
+        parts = []
+        
+        xg = analysis.get('xg_prediction', {})
+        if xg.get('home_xg', 0) > 0:
+            parts.append(f"⚽ **xG**: {home_team} {xg['home_xg']:.1f}, {away_team} {xg['away_xg']:.1f}")
+        
+        home_form = analysis.get('home_form', {})
+        if home_form.get('matches_played', 0) > 0:
+            parts.append(f"🏠 {home_team}: {home_form['win_rate']:.0f}% WR, {home_form['goals_per_game']:.1f} goals/game")
+        
+        away_form = analysis.get('away_form', {})
+        if away_form.get('matches_played', 0) > 0:
+            parts.append(f"✈️ {away_team}: {away_form['win_rate']:.0f}% WR, {away_form['goals_per_game']:.1f} goals/game")
+        
+        h2h = analysis.get('h2h', {})
+        if h2h.get('matches_played', 0) >= 3:
+            parts.append(f"📜 H2H: {h2h['avg_total_goals']:.1f} avg goals in {h2h['matches_played']} games")
+        
+        return " | ".join(parts) if parts else ""
+    except:
+        return ""
+
 exact_tips = load_exact_score_tips()
 if not exact_tips.empty:
     st.info(f"📊 **{len(exact_tips)} Active Exact Score Predictions** (pending until match completion)")
@@ -658,6 +688,10 @@ if not exact_tips.empty:
         with col3:
             st.markdown(f"**Confidence:** {tip['confidence']}%")
             st.caption(f"⏰ {tip['match_date']}")
+        
+        analysis_text = generate_dashboard_analysis(tip.get('analysis', ''), tip['home_team'], tip['away_team'])
+        if analysis_text:
+            st.caption(f"📊 {analysis_text}")
         
         st.markdown("---")
 else:
