@@ -149,6 +149,46 @@ class TelegramBroadcaster:
         logger.info(f"📤 Broadcasted to {success_count}/{total_targets} targets")
         return success_count
     
+    def _get_live_stats(self) -> Dict:
+        """Get live ROI and performance stats from database"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT 
+                    COUNT(*) as total_bets,
+                    SUM(CASE WHEN outcome = 'won' THEN 1 ELSE 0 END) as wins,
+                    SUM(CASE WHEN outcome = 'lost' THEN 1 ELSE 0 END) as losses,
+                    SUM(stake) as total_staked,
+                    SUM(CASE WHEN outcome = 'won' THEN stake * (odds - 1) ELSE -stake END) as net_profit
+                FROM football_opportunities 
+                WHERE market = 'exact_score'
+                AND outcome IS NOT NULL
+            ''')
+            
+            result = cursor.fetchone()
+            conn.close()
+            
+            total = result[0] or 0
+            wins = result[1] or 0
+            staked = result[3] or 1
+            profit = result[4] or 0
+            
+            win_rate = (wins / total * 100) if total > 0 else 0
+            roi = (profit / staked * 100) if staked > 0 else 0
+            
+            return {
+                'total': total,
+                'wins': wins,
+                'win_rate': win_rate,
+                'profit': profit,
+                'roi': roi
+            }
+        except Exception as e:
+            logger.error(f"❌ Failed to get live stats: {e}")
+            return {'total': 0, 'wins': 0, 'win_rate': 0, 'profit': 0, 'roi': 0}
+    
     def _format_prediction(self, prediction: Dict) -> str:
         """Format prediction as Telegram message"""
         home = prediction['home_team']
@@ -157,6 +197,9 @@ class TelegramBroadcaster:
         odds = prediction['odds']
         confidence = prediction.get('confidence', 'N/A')
         stake = prediction.get('stake', 160)
+        
+        # Get live performance stats
+        stats = self._get_live_stats()
         
         message = f"""🎯 **NEW EXACT SCORE PREDICTION**
 
@@ -172,9 +215,10 @@ class TelegramBroadcaster:
 ⏰ Match Time: {prediction.get('datetime', 'TBA')}
 🏆 League: {prediction.get('league', 'N/A')}
 
-✅ ULTRA-AGGRESSIVE FILTER
-📊 System Hit Rate: 13%
-💰 Total Profit: +11,889 SEK (+60.3% ROI)
+📊 **LIVE SYSTEM PERFORMANCE**
+✅ {stats['wins']}/{stats['total']} wins ({stats['win_rate']:.1f}%)
+💰 Total Profit: {stats['profit']:.0f} SEK ({stats['roi']:.1f}% ROI)
+🎯 Target: 20-25% WR, +100-200% ROI
 """
         return message
     
@@ -188,6 +232,9 @@ class TelegramBroadcaster:
         stake = result['stake']
         odds = result['odds']
         profit = result.get('profit_loss', 0)
+        
+        # Get updated performance stats
+        stats = self._get_live_stats()
         
         if outcome in ('won', 'win'):
             emoji = "🎉"
@@ -209,6 +256,10 @@ class TelegramBroadcaster:
 {result_line}
 
 🏆 League: {result.get('league', 'N/A')}
+
+📊 **UPDATED SYSTEM STATS**
+✅ {stats['wins']}/{stats['total']} wins ({stats['win_rate']:.1f}%)
+💰 Total Profit: {stats['profit']:.0f} SEK ({stats['roi']:.1f}% ROI)
 """
         return message
     
