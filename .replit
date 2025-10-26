@@ -40,6 +40,10 @@ args = "Telegram Tips Bot"
 task = "workflow.run"
 args = "Real Football Champion"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Performance Updates"
+
 [[workflows.workflow]]
 name = "install_dependencies"
 author = "agent"
@@ -103,6 +107,17 @@ outputType = "console"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "ENABLE_REAL_BETS=1 python real_football_champion.py"
+
+[[workflows.workflow]]
+name = "Performance Updates"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python3 schedule_performance_updates.py"
+
+[workflows.workflow.metadata]
+outputType = "console"
 
 [[ports]]
 localPort = 5000
