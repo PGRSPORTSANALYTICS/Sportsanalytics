@@ -197,6 +197,7 @@ class TelegramBroadcaster:
         odds = prediction['odds']
         confidence = prediction.get('confidence', 'N/A')
         stake = prediction.get('stake', 160)
+        analysis = prediction.get('analysis', '')
         
         # Get live performance stats
         stats = self._get_live_stats()
@@ -214,6 +215,8 @@ class TelegramBroadcaster:
 
 ⏰ Match Time: {prediction.get('datetime', 'TBA')}
 🏆 League: {prediction.get('league', 'N/A')}
+
+{analysis}
 
 📊 **LIVE SYSTEM PERFORMANCE**
 ✅ {stats['wins']}/{stats['total']} wins ({stats['win_rate']:.1f}%)
