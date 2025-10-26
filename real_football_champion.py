@@ -2291,10 +2291,12 @@ class RealFootballChampion:
             current_scores = {row[0].replace('Exact Score: ', ''): row[1] for row in cursor.fetchall()}
             total_current = sum(current_scores.values()) or 1
             
-            # 🎯 ULTRA-AGGRESSIVE: ONLY predict the BEST winning scores!
-            # Data shows: 1-1 (25%), 1-0 (20%) vs 0-1 (7%), 2-1 (11%)
-            # Zero compromise - we want bookies to close our account!
-            PROVEN_SCORES = ['1-0', '1-1']  # ONLY the best performers!
+            # 💰 DATA-PROVEN MONEY PRINTER: Focus on ACTUAL winning patterns!
+            # 73 settled bets analyzed - clear winners identified:
+            # 1-1: 25% win rate, +211% ROI (CHAMPION!)
+            # 2-1: 16.7% win rate, +123% ROI (STRONG!)
+            # 1-0: 12.5% win rate, +33% ROI (BACKUP)
+            PROVEN_SCORES = ['1-1', '2-1', '1-0']  # Priority order by performance!
             
             # Calculate value score for ONLY proven winning scores
             score_candidates = []
@@ -2314,19 +2316,26 @@ class RealFootballChampion:
                 # Factor 1: Base value
                 base_value = prob * implied_odds
                 
-                # Factor 2: Odds quality (<10x = 14.3% hit rate! Best performing range)
-                if implied_odds < 10:
-                    odds_bonus = 1.5  # 50% bonus for <10x (14.3% hit rate!)
-                elif 10 <= implied_odds <= 11:
-                    odds_bonus = 1.2  # 20% bonus for 10-11x
+                # Factor 2: Odds quality (DATA-PROVEN from 73 bets!)
+                # 11-13x = 25% win rate, +203% ROI (SWEET SPOT!)
+                if 11 <= implied_odds <= 13:
+                    odds_bonus = 2.0  # 100% bonus for proven sweet spot!
+                elif 9 <= implied_odds < 11:
+                    odds_bonus = 1.3  # 30% bonus for near sweet spot
+                elif implied_odds < 9:
+                    odds_bonus = 1.1  # 10% bonus for lower odds
+                elif 13 < implied_odds <= 15:
+                    odds_bonus = 0.7  # Penalty for 13-15x (0% win rate)
                 else:
-                    odds_bonus = 0.5  # Heavy penalty for 12x+ (worse performance)
+                    odds_bonus = 0.3  # Heavy penalty for >15x (0% win rate)
                 
-                # Factor 3: Score type preference (ONLY the winners!)
+                # Factor 3: Score type preference (REAL WIN RATES from data!)
                 if score_key == '1-1':
-                    score_bonus = 1.4  # 25% hit rate - BEST!
+                    score_bonus = 1.8  # 25% win rate, +211% ROI - CHAMPION!
+                elif score_key == '2-1':
+                    score_bonus = 1.5  # 16.7% win rate, +123% ROI - STRONG!
                 elif score_key == '1-0':
-                    score_bonus = 1.3  # 20% hit rate - EXCELLENT!
+                    score_bonus = 1.2  # 12.5% win rate, +33% ROI - BACKUP!
                 else:
                     score_bonus = 1.0  # Fallback (should never happen)
                 
@@ -2466,13 +2475,13 @@ class RealFootballChampion:
                 TOP_5_LEAGUES = ['Premier League', 'La Liga', 'Serie A', 'Bundesliga', 'Ligue 1']
                 is_top_league = any(top in league for top in TOP_5_LEAGUES)
                 
-                # ⚠️ ULTRA-AGGRESSIVE GATES: Make bookies fear us!
+                # 💰 DATA-PROVEN GATES: Optimize for 20-25% win rate!
                 passes_league = is_top_league  # Only top 5 leagues
                 passes_quality = quality_score >= 55  # Higher quality threshold
-                passes_odds = 7 <= final_odds <= 11  # Target <10x sweet spot (14.3% hit rate)
-                passes_confidence = confidence >= 80  # Very high confidence only
+                passes_odds = 7 <= final_odds <= 14  # Target 11-13x sweet spot (allow 7-14 range)
+                passes_confidence = confidence >= 75  # High confidence (slightly relaxed for 2-1)
                 passes_elite_value = selected['elite_value'] >= 1.0  # Maximum value requirement
-                passes_score_type = selected['score_text'] in ['1-0', '1-1']  # ONLY the best!
+                passes_score_type = selected['score_text'] in ['1-1', '2-1', '1-0']  # All proven winners!
                 
                 if passes_league and passes_quality and passes_odds and passes_confidence and passes_elite_value and passes_score_type:
                     # Save exact score opportunity (bypass daily limit)
