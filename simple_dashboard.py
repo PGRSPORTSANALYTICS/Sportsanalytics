@@ -14,7 +14,7 @@ st.set_page_config(
     page_title="🎯 Exact Score Predictions | +519% ROI",
     page_icon="🎯",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
 # Custom CSS for exclusive design
@@ -303,6 +303,115 @@ def load_learning_status():
 
 # ============================================================================
 # HEADER
+# ============================================================================
+
+# ============================================================================
+# SIDEBAR NAVIGATION
+# ============================================================================
+
+with st.sidebar:
+    st.markdown("## 📋 Navigation")
+    page = st.radio(
+        "Choose Section:",
+        ["📊 Dashboard", "📜 Terms & Legal"],
+        label_visibility="collapsed"
+    )
+    
+    st.markdown("---")
+    st.markdown("### 🎯 Exact Score Predictions")
+    st.caption("AI-Powered Exact Score Tips")
+    st.caption("Launching January 2026")
+    
+    st.markdown("---")
+    st.markdown("### 💰 Subscription")
+    st.markdown("**Standard:** 499 SEK/month")
+    st.markdown("**VIP:** 999 SEK/month")
+    
+    st.markdown("---")
+    st.caption("🔒 100% Transparent Performance")
+    st.caption("📊 Live ROI Tracking")
+
+# ============================================================================
+# PAGE: TERMS & LEGAL
+# ============================================================================
+
+if page == "📜 Terms & Legal":
+    st.markdown("# 📜 Terms of Service & Legal")
+    st.markdown('<p class="subtitle">LEGAL INFORMATION & DISCLAIMERS</p>', unsafe_allow_html=True)
+    
+    # Language selector
+    language = st.radio("Select Language / Välj språk:", ["🇬🇧 English", "🇸🇪 Svenska"], horizontal=True)
+    
+    st.markdown("---")
+    
+    if "English" in language:
+        # English Terms
+        with st.expander("📋 Terms of Service", expanded=True):
+            try:
+                with open('legal/terms_of_service_en.md', 'r', encoding='utf-8') as f:
+                    st.markdown(f.read())
+            except:
+                st.error("Terms of Service document not found")
+        
+        with st.expander("⚠️ Risk Disclaimer", expanded=False):
+            try:
+                with open('legal/disclaimer_en.md', 'r', encoding='utf-8') as f:
+                    st.markdown(f.read())
+            except:
+                st.error("Risk Disclaimer document not found")
+        
+        with st.expander("🔒 Privacy Policy", expanded=False):
+            try:
+                with open('legal/privacy_policy_en.md', 'r', encoding='utf-8') as f:
+                    st.markdown(f.read())
+            except:
+                st.error("Privacy Policy document not found")
+    
+    else:
+        # Swedish Terms
+        with st.expander("📋 Användarvillkor", expanded=True):
+            try:
+                with open('legal/terms_of_service_sv.md', 'r', encoding='utf-8') as f:
+                    st.markdown(f.read())
+            except:
+                st.error("Användarvillkor hittades inte")
+        
+        with st.expander("⚠️ Riskvarning", expanded=False):
+            try:
+                with open('legal/disclaimer_sv.md', 'r', encoding='utf-8') as f:
+                    st.markdown(f.read())
+            except:
+                st.error("Riskvarning hittades inte")
+        
+        with st.expander("🔒 Integritetspolicy", expanded=False):
+            try:
+                with open('legal/privacy_policy_sv.md', 'r', encoding='utf-8') as f:
+                    st.markdown(f.read())
+            except:
+                st.error("Integritetspolicy hittades inte")
+    
+    st.markdown("---")
+    st.markdown("## 🇸🇪 Responsible Gambling Support")
+    st.info("""
+    **Stödlinjen (Swedish Gambling Support):**
+    - Phone: 020-819 100
+    - Website: [stodlinjen.se](https://www.stodlinjen.se)
+    
+    **Important:** Gambling involves risk. Only bet what you can afford to lose.
+    """)
+    
+    st.markdown("---")
+    st.markdown("## 📧 Contact")
+    st.markdown("For questions about these terms, contact us via Telegram channel.")
+    
+    st.markdown("---")
+    st.caption("Last Updated: October 26, 2025")
+    st.caption("Governed by Swedish Law | All Rights Reserved")
+    
+    st.stop()  # Stop here if on Terms page
+
+# ============================================================================
+# PAGE: DASHBOARD (Main Content)
 # ============================================================================
 
 st.markdown("# 🎯 EXACT SCORE PREDICTIONS")
