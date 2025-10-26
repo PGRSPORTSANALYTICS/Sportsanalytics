@@ -10,8 +10,20 @@ import requests
 from datetime import datetime, timedelta
 
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-TELEGRAM_CHANNEL_ID = "@ExactScoreBettingTips"
 DB_PATH = 'data/real_football.db'
+
+def get_channel_id():
+    """Get the Telegram channel ID from database"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute('SELECT chat_id FROM telegram_subscribers WHERE is_channel = 1 LIMIT 1')
+        result = cursor.fetchone()
+        conn.close()
+        return result[0] if result else None
+    except Exception as e:
+        print(f"❌ Failed to get channel ID: {e}")
+        return None
 
 
 def get_performance_stats(start_date, end_date, period_name):
@@ -24,8 +36,7 @@ def get_performance_stats(start_date, end_date, period_name):
             COUNT(*) as total_bets,
             SUM(CASE WHEN outcome = 'win' THEN 1 ELSE 0 END) as wins,
             SUM(CASE WHEN outcome = 'loss' THEN 1 ELSE 0 END) as losses,
-            SUM(CASE WHEN outcome = 'win' THEN profit ELSE 0 END) as total_profit,
-            SUM(CASE WHEN outcome = 'loss' THEN -stake ELSE 0 END) as total_loss,
+            SUM(profit_loss) as net_profit,
             SUM(stake) as total_staked
         FROM football_opportunities
         WHERE market = 'exact_score'
@@ -38,15 +49,13 @@ def get_performance_stats(start_date, end_date, period_name):
     conn.close()
     
     if result and result[0] > 0:
-        total_bets, wins, losses, total_profit, total_loss, total_staked = result
+        total_bets, wins, losses, net_profit, total_staked = result
         wins = wins or 0
         losses = losses or 0
-        total_profit = total_profit or 0
-        total_loss = total_loss or 0
+        net_profit = net_profit or 0
         total_staked = total_staked or 0
         
         hit_rate = (wins / total_bets * 100) if total_bets > 0 else 0
-        net_profit = total_profit + total_loss
         roi = (net_profit / total_staked * 100) if total_staked > 0 else 0
         
         return {
@@ -75,34 +84,34 @@ def format_performance_message(stats, update_type):
     
     emoji = emoji_map.get(update_type, '📈')
     
-    message = f"{emoji} **{update_type.upper()} PERFORMANCE UPDATE**\n"
+    message = f"{emoji} *{update_type.upper()} PERFORMANCE UPDATE*\n"
     message += f"Period: {stats['period']}\n"
     message += "━━━━━━━━━━━━━━━━━━━━\n\n"
     
-    message += f"📊 **STATISTICS**\n"
+    message += f"📊 *STATISTICS*\n"
     message += f"• Total Predictions: {stats['total_bets']}\n"
     message += f"• Wins: {stats['wins']} ✅\n"
     message += f"• Losses: {stats['losses']} ❌\n"
-    message += f"• Hit Rate: **{stats['hit_rate']:.1f}%**\n\n"
+    message += f"• Hit Rate: *{stats['hit_rate']:.1f}%*\n\n"
     
-    message += f"💰 **FINANCIAL**\n"
+    message += f"💰 *FINANCIAL*\n"
     message += f"• Total Staked: {stats['total_staked']:.0f} SEK\n"
     
     if stats['net_profit'] >= 0:
-        message += f"• Net Profit: **+{stats['net_profit']:.0f} SEK** 📈\n"
+        message += f"• Net Profit: *+{stats['net_profit']:.0f} SEK* 📈\n"
     else:
-        message += f"• Net Profit: **{stats['net_profit']:.0f} SEK** 📉\n"
+        message += f"• Net Profit: *{stats['net_profit']:.0f} SEK* 📉\n"
     
-    message += f"• ROI: **{stats['roi']:+.1f}%**\n\n"
+    message += f"• ROI: *{stats['roi']:+.1f}%*\n\n"
     
     if stats['hit_rate'] >= 20:
-        message += "🔥 **ELITE PERFORMANCE!** Target hit rate achieved!\n"
+        message += "🔥 *ELITE PERFORMANCE!* Target hit rate achieved!\n"
     elif stats['hit_rate'] >= 15:
-        message += "💪 **STRONG PERFORMANCE!** Above industry standard!\n"
+        message += "💪 *STRONG PERFORMANCE!* Above industry standard!\n"
     elif stats['hit_rate'] >= 10:
-        message += "✅ **SOLID PERFORMANCE** Within expected range.\n"
+        message += "✅ *SOLID PERFORMANCE* Within expected range.\n"
     else:
-        message += "⚠️ **BELOW TARGET** - Variance expected, tracking continues.\n"
+        message += "⚠️ *BELOW TARGET* - Variance expected, tracking continues.\n"
     
     message += "\n━━━━━━━━━━━━━━━━━━━━\n"
     message += "📈 Transparency is our priority. Every result tracked & verified.\n"
@@ -113,13 +122,20 @@ def format_performance_message(stats, update_type):
 def send_telegram_message(text):
     """Send message via Telegram API"""
     try:
+        channel_id = get_channel_id()
+        if not channel_id:
+            print("❌ No Telegram channel configured")
+            return False
+        
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         payload = {
-            'chat_id': TELEGRAM_CHANNEL_ID,
+            'chat_id': channel_id,
             'text': text,
             'parse_mode': 'Markdown'
         }
         response = requests.post(url, json=payload, timeout=10)
+        if response.status_code != 200:
+            print(f"❌ Telegram API Error: {response.text}")
         response.raise_for_status()
         return True
     except Exception as e:
