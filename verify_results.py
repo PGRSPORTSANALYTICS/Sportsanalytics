@@ -24,6 +24,7 @@ from datetime import datetime, timedelta, date
 import time
 import sys
 from typing import List, Dict, Optional, Tuple
+from telegram_sender import TelegramBroadcaster
 
 # Setup comprehensive logging
 logging.basicConfig(
@@ -47,6 +48,14 @@ class RealResultVerifier:
         self.verified_count = 0
         self.failed_count = 0
         self.api_failures = 0
+        
+        # Initialize Telegram broadcaster
+        try:
+            self.telegram = TelegramBroadcaster()
+            logger.info("📱 Telegram result notifications enabled")
+        except Exception as e:
+            logger.warning(f"⚠️ Telegram broadcaster disabled: {e}")
+            self.telegram = None
         
     def verify_pending_tips(self) -> Dict[str, int]:
         """
@@ -517,6 +526,14 @@ class RealResultVerifier:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
+            # Get tip details before updating
+            cursor.execute("""
+                SELECT home_team, away_team, selection, odds, stake, league
+                FROM football_opportunities
+                WHERE id = ?
+            """, (tip_id,))
+            tip_data = cursor.fetchone()
+            
             cursor.execute("""
                 UPDATE football_opportunities 
                 SET outcome = ?, 
@@ -536,6 +553,25 @@ class RealResultVerifier:
             conn.close()
             
             logger.info(f"💾 Updated tip {tip_id} with real result")
+            
+            # 📱 Send Telegram notification
+            if self.telegram and tip_data:
+                try:
+                    result_data = {
+                        'home_team': tip_data[0],
+                        'away_team': tip_data[1],
+                        'predicted_score': tip_data[2].replace('Exact Score: ', ''),
+                        'actual_score': f"{match_result['home_goals']}-{match_result['away_goals']}",
+                        'outcome': outcome,
+                        'odds': tip_data[3],
+                        'stake': tip_data[4],
+                        'profit_loss': profit_loss,
+                        'league': tip_data[5]
+                    }
+                    sent = self.telegram.broadcast_result(result_data)
+                    logger.info(f"📱 Result notification sent to {sent} subscriber(s)")
+                except Exception as e:
+                    logger.warning(f"⚠️ Failed to send Telegram notification: {e}")
             
         except Exception as e:
             logger.error(f"❌ Database update error: {e}")

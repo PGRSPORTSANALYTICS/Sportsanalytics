@@ -128,6 +128,57 @@ class TelegramBroadcaster:
 """
         return message
     
+    def _format_result(self, result: Dict) -> str:
+        """Format settled result as Telegram message"""
+        home = result['home_team']
+        away = result['away_team']
+        predicted = result['predicted_score']
+        actual = result['actual_score']
+        outcome = result['outcome']
+        stake = result['stake']
+        odds = result['odds']
+        profit = result.get('profit_loss', 0)
+        
+        if outcome in ('won', 'win'):
+            emoji = "🎉"
+            status = "**WIN!**"
+            result_line = f"💰 Profit: **+{int(profit)} SEK**"
+        else:
+            emoji = "❌"
+            status = "**LOSS**"
+            result_line = f"💸 Loss: **{int(profit)} SEK**"
+        
+        message = f"""{emoji} **RESULT: {status}**
+
+⚽ **{home} vs {away}**
+📊 Predicted: **{predicted}**
+🎯 Actual Score: **{actual}**
+
+💰 Stake: {stake} SEK
+📈 Odds: {odds}x
+{result_line}
+
+🏆 League: {result.get('league', 'N/A')}
+"""
+        return message
+    
+    def broadcast_result(self, result: Dict) -> int:
+        """Broadcast a settled result to all subscribers"""
+        message = self._format_result(result)
+        subscribers = self.get_subscribers()
+        
+        if not subscribers:
+            logger.warning("⚠️ No subscribers to broadcast result to")
+            return 0
+        
+        success_count = 0
+        for chat_id in subscribers:
+            if self.send_message(chat_id, message):
+                success_count += 1
+        
+        logger.info(f"📤 Broadcasted result to {success_count}/{len(subscribers)} subscribers")
+        return success_count
+    
     def get_todays_predictions(self) -> List[Dict]:
         """Get today's predictions from database"""
         try:
