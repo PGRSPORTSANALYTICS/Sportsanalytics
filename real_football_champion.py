@@ -2733,14 +2733,6 @@ class RealFootballChampion:
             # 📱 Broadcast to Telegram subscribers
             if self.telegram:
                 try:
-                    predicted_score = opportunity.selection.replace("Exact Score: ", "")
-                    analysis_text = self._generate_analysis_text(
-                        opportunity.analysis, 
-                        predicted_score,
-                        opportunity.home_team, 
-                        opportunity.away_team
-                    )
-                    
                     prediction_data = {
                         'home_team': opportunity.home_team,
                         'away_team': opportunity.away_team,
@@ -2750,7 +2742,7 @@ class RealFootballChampion:
                         'stake': opportunity.stake,
                         'datetime': opportunity.start_time,
                         'league': opportunity.league,
-                        'analysis': analysis_text
+                        'analysis_json': opportunity.analysis
                     }
                     sent_count = self.telegram.broadcast_prediction(prediction_data)
                     print(f"📱 Telegram broadcast: {sent_count} subscribers notified")

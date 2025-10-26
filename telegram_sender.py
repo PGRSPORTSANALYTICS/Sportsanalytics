@@ -189,6 +189,46 @@ class TelegramBroadcaster:
             logger.error(f"❌ Failed to get live stats: {e}")
             return {'total': 0, 'wins': 0, 'win_rate': 0, 'profit': 0, 'roi': 0}
     
+    def _escape_markdown(self, text: str) -> str:
+        """Escape Markdown special characters for Telegram"""
+        special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+        for char in special_chars:
+            text = text.replace(char, f'\\{char}')
+        return text
+    
+    def _generate_analysis_from_json(self, analysis_json, home_team: str, away_team: str, predicted_score: str) -> str:
+        """Generate human-readable analysis from JSON"""
+        import json
+        try:
+            if not analysis_json:
+                return ""
+            
+            analysis = analysis_json if isinstance(analysis_json, dict) else json.loads(analysis_json)
+            parts = []
+            
+            parts.append(f"📊 *WHY {predicted_score}?*")
+            
+            xg = analysis.get('xg_prediction', {})
+            if xg.get('home_xg', 0) > 0:
+                parts.append(f"⚽ xG: {home_team} {xg['home_xg']:.1f}, {away_team} {xg['away_xg']:.1f}")
+            
+            home_form = analysis.get('home_form', {})
+            if home_form.get('matches_played', 0) > 0:
+                parts.append(f"🏠 {home_team}: {home_form['win_rate']:.0f}% WR, {home_form['goals_per_game']:.1f} goals/game")
+            
+            away_form = analysis.get('away_form', {})
+            if away_form.get('matches_played', 0) > 0:
+                parts.append(f"✈️ {away_team}: {away_form['win_rate']:.0f}% WR, {away_form['goals_per_game']:.1f} goals/game")
+            
+            h2h = analysis.get('h2h', {})
+            if h2h.get('matches_played', 0) >= 3:
+                parts.append(f"📜 H2H: {h2h['avg_total_goals']:.1f} avg goals ({h2h['matches_played']} games)")
+            
+            return "\n".join(parts)
+        except Exception as e:
+            logger.error(f"Failed to generate analysis: {e}")
+            return ""
+    
     def _format_prediction(self, prediction: Dict) -> str:
         """Format prediction as Telegram message"""
         home = prediction['home_team']
@@ -197,31 +237,46 @@ class TelegramBroadcaster:
         odds = prediction['odds']
         confidence = prediction.get('confidence', 'N/A')
         stake = prediction.get('stake', 160)
-        analysis = prediction.get('analysis', '')
+        
+        analysis_text = ""
+        if prediction.get('analysis_json'):
+            analysis_text = self._generate_analysis_from_json(
+                prediction['analysis_json'],
+                home,
+                away,
+                score
+            )
+            analysis_text = self._escape_markdown(analysis_text)
         
         # Get live performance stats
         stats = self._get_live_stats()
         
-        message = f"""🎯 **NEW EXACT SCORE PREDICTION**
+        # Escape team names and league for Markdown
+        home_escaped = self._escape_markdown(home)
+        away_escaped = self._escape_markdown(away)
+        league_escaped = self._escape_markdown(prediction.get('league', 'N/A'))
+        datetime_escaped = self._escape_markdown(prediction.get('datetime', 'TBA'))
+        
+        message = f"""🎯 *NEW EXACT SCORE PREDICTION*
 
-⚽ **{home} vs {away}**
-📊 Predicted Score: **{score}**
-💰 Odds: **{odds}x**
+⚽ *{home_escaped} vs {away_escaped}*
+📊 Predicted Score: *{score}*
+💰 Odds: *{odds}x*
 🎯 Confidence: {confidence}/100
 💵 Recommended Stake: {stake} SEK
 
-🚀 Potential Return: **{int(stake * odds)} SEK**
-📈 Profit: **{int(stake * (odds - 1))} SEK**
+🚀 Potential Return: *{int(stake * odds)} SEK*
+📈 Profit: *{int(stake * (odds - 1))} SEK*
 
-⏰ Match Time: {prediction.get('datetime', 'TBA')}
-🏆 League: {prediction.get('league', 'N/A')}
+⏰ Match Time: {datetime_escaped}
+🏆 League: {league_escaped}
 
-{analysis}
+{analysis_text}
 
-📊 **LIVE SYSTEM PERFORMANCE**
+📊 *LIVE SYSTEM PERFORMANCE*
 ✅ {stats['wins']}/{stats['total']} wins ({stats['win_rate']:.1f}%)
 💰 Total Profit: {stats['profit']:.0f} SEK ({stats['roi']:.1f}% ROI)
-🎯 Target: 20-25% WR, +100-200% ROI
+🎯 Target: 20\\-25% WR, \\+100\\-200% ROI
 """
         return message
     
