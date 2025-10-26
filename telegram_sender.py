@@ -257,6 +257,13 @@ class TelegramBroadcaster:
         league_escaped = self._escape_markdown(prediction.get('league', 'N/A'))
         datetime_escaped = self._escape_markdown(prediction.get('datetime', 'TBA'))
         
+        glossary = """
+📖 *Quick Guide:*
+• WR \\= Win Rate \\(% of games won\\)
+• xG \\= Expected Goals \\(statistical prediction\\)
+• H2H \\= Head\\-to\\-Head \\(past matches between teams\\)
+"""
+        
         message = f"""🎯 *NEW EXACT SCORE PREDICTION*
 
 ⚽ *{home_escaped} vs {away_escaped}*
@@ -272,7 +279,7 @@ class TelegramBroadcaster:
 🏆 League: {league_escaped}
 
 {analysis_text}
-
+{glossary}
 📊 *LIVE SYSTEM PERFORMANCE*
 ✅ {stats['wins']}/{stats['total']} wins ({stats['win_rate']:.1f}%)
 💰 Total Profit: {stats['profit']:.0f} SEK ({stats['roi']:.1f}% ROI)
