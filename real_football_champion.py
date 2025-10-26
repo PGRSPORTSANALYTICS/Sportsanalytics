@@ -17,6 +17,7 @@ from results_scraper import ResultsScraper
 from football_learning_system import FootballLearningSystem
 from enhanced_predictor import EnhancedExactScorePredictor
 from feature_analytics import FeatureAnalytics
+from telegram_sender import TelegramBroadcaster
 
 @dataclass
 class TeamForm:
@@ -94,6 +95,14 @@ class RealFootballChampion:
         except Exception as e:
             print(f"⚠️ Feature analytics initialization failed: {e}")
             self.feature_analytics = None
+        
+        # 📱 Initialize Telegram broadcaster
+        try:
+            self.telegram = TelegramBroadcaster()
+            print("📱 Telegram broadcaster initialized")
+        except Exception as e:
+            print(f"⚠️ Telegram broadcaster initialization failed: {e}")
+            self.telegram = None
         
         # Get API-Football key from environment
         self.api_football_key = os.getenv('API_FOOTBALL_KEY')
@@ -2643,6 +2652,24 @@ class RealFootballChampion:
                     print(f"📊 Features logged for prediction ID {prediction_id}")
                 except Exception as e:
                     print(f"⚠️ Feature logging failed: {e}")
+            
+            # 📱 Broadcast to Telegram subscribers
+            if self.telegram:
+                try:
+                    prediction_data = {
+                        'home_team': opportunity.home_team,
+                        'away_team': opportunity.away_team,
+                        'selection': opportunity.selection,
+                        'odds': opportunity.odds,
+                        'confidence': opportunity.confidence,
+                        'stake': opportunity.stake,
+                        'datetime': opportunity.start_time,
+                        'league': opportunity.league
+                    }
+                    sent_count = self.telegram.broadcast_prediction(prediction_data)
+                    print(f"📱 Telegram broadcast: {sent_count} subscribers notified")
+                except Exception as e:
+                    print(f"⚠️ Telegram broadcast failed: {e}")
             
             return True
         except Exception as e:

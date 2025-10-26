@@ -86,12 +86,12 @@ outputType = "console"
 name = "Telegram Tips Bot"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python3 telegram_bot.py"
-
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "echo \"📱 Telegram broadcaster integrated into Real Football Champion. Predictions auto-send when generated. Run 'python3 add_telegram_subscriber.py' to subscribe.\" && sleep infinity"
 
 [[workflows.workflow]]
 name = "Real Football Champion"
