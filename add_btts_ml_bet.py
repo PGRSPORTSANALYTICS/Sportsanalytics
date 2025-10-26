@@ -49,6 +49,38 @@ def add_bet():
     match_date = input("Match date (YYYY-MM-DD, e.g., 2025-10-27): ").strip()
     kickoff_time = input("Kickoff time (HH:MM, e.g., 15:00): ").strip()
     
+    # Check for existing exact score prediction on this match
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT COUNT(*) FROM football_opportunities
+            WHERE market = 'exact_score'
+            AND home_team = ?
+            AND away_team = ?
+            AND match_date = ?
+        """, (home_team, away_team, match_date))
+        
+        exact_score_count = cursor.fetchone()[0]
+        conn.close()
+        
+        if exact_score_count > 0:
+            print("\n" + "=" * 50)
+            print("⛔ CANNOT ADD BET - EXACT SCORE CONFLICT")
+            print("=" * 50)
+            print(f"❌ This match already has an exact score prediction!")
+            print(f"Match: {home_team} vs {away_team} on {match_date}")
+            print("")
+            print("🎯 Policy: Exact score predictions take priority")
+            print("   BTTS/ML bets are only for matches WITHOUT exact score predictions")
+            print("=" * 50)
+            return
+    
+    except Exception as e:
+        print(f"⚠️ Warning: Could not check for exact score conflict: {e}")
+        print("Proceeding anyway...")
+    
     # Confirm
     print("\n" + "=" * 50)
     print(f"Match: {home_team} vs {away_team}")
@@ -60,6 +92,7 @@ def add_bet():
     print(f"Potential return: {stake * odds:.0f} SEK")
     print(f"Confidence: {confidence}%")
     print(f"Match: {match_date} at {kickoff_time}")
+    print("✅ No exact score conflict - OK to proceed")
     print("=" * 50)
     
     confirm = input("\nAdd this bet? (y/n): ").strip().lower()

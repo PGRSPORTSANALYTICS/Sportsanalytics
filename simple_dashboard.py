@@ -712,12 +712,13 @@ st.markdown("<br><br>", unsafe_allow_html=True)
 
 st.markdown("## 💰 Supplementary Income - BTTS & ML Tracker")
 st.caption("🎯 Small volume tracker for Both Teams To Score and Moneyline bets (5-10 active bets)")
+st.info("⚠️ **Policy:** Only bets on matches WITHOUT exact score predictions. Exact scores take priority!")
 
 # Load BTTS and ML data
 try:
     conn = sqlite3.connect(DB_PATH)
     
-    # BTTS Performance
+    # BTTS Performance (exclude matches with exact score predictions)
     btts_query = """
     SELECT 
         COUNT(*) as total,
@@ -727,10 +728,17 @@ try:
         SUM(CASE WHEN outcome IS NOT NULL AND outcome != '' AND outcome NOT IN ('unknown', 'void') THEN stake ELSE 0 END) as staked
     FROM football_opportunities 
     WHERE market = 'btts'
+    AND NOT EXISTS (
+        SELECT 1 FROM football_opportunities es
+        WHERE es.market = 'exact_score'
+        AND es.home_team = football_opportunities.home_team
+        AND es.away_team = football_opportunities.away_team
+        AND es.match_date = football_opportunities.match_date
+    )
     """
     btts_stats = pd.read_sql_query(btts_query, conn)
     
-    # ML Performance
+    # ML Performance (exclude matches with exact score predictions)
     ml_query = """
     SELECT 
         COUNT(*) as total,
@@ -740,21 +748,35 @@ try:
         SUM(CASE WHEN outcome IS NOT NULL AND outcome != '' AND outcome NOT IN ('unknown', 'void') THEN stake ELSE 0 END) as staked
     FROM football_opportunities 
     WHERE market IN ('match_winner', 'moneyline', '1x2')
+    AND NOT EXISTS (
+        SELECT 1 FROM football_opportunities es
+        WHERE es.market = 'exact_score'
+        AND es.home_team = football_opportunities.home_team
+        AND es.away_team = football_opportunities.away_team
+        AND es.match_date = football_opportunities.match_date
+    )
     """
     ml_stats = pd.read_sql_query(ml_query, conn)
     
-    # Active bets for both
+    # Active bets for both (exclude matches with exact score predictions)
     active_query = """
     SELECT home_team, away_team, market, selection, odds, match_date, confidence
     FROM football_opportunities 
     WHERE market IN ('btts', 'match_winner', 'moneyline', '1x2')
     AND (outcome IS NULL OR outcome = '' OR outcome = 'unknown')
+    AND NOT EXISTS (
+        SELECT 1 FROM football_opportunities es
+        WHERE es.market = 'exact_score'
+        AND es.home_team = football_opportunities.home_team
+        AND es.away_team = football_opportunities.away_team
+        AND es.match_date = football_opportunities.match_date
+    )
     ORDER BY match_date ASC
     LIMIT 10
     """
     active_bets = pd.read_sql_query(active_query, conn)
     
-    # Recent settled for both
+    # Recent settled for both (exclude matches with exact score predictions)
     settled_query = """
     SELECT home_team, away_team, market, selection, odds, outcome, profit_loss, match_date,
            CASE 
@@ -767,6 +789,13 @@ try:
     AND outcome IS NOT NULL 
     AND outcome != ''
     AND outcome NOT IN ('unknown')
+    AND NOT EXISTS (
+        SELECT 1 FROM football_opportunities es
+        WHERE es.market = 'exact_score'
+        AND es.home_team = football_opportunities.home_team
+        AND es.away_team = football_opportunities.away_team
+        AND es.match_date = football_opportunities.match_date
+    )
     ORDER BY timestamp DESC 
     LIMIT 20
     """
