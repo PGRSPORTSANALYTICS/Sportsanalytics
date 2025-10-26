@@ -2477,9 +2477,9 @@ class RealFootballChampion:
                 
                 # 💰 DATA-PROVEN GATES: Optimize for 20-25% win rate!
                 passes_league = is_top_league  # Only top 5 leagues
-                passes_quality = quality_score >= 55  # Higher quality threshold
+                passes_quality = quality_score >= 50  # Balanced quality (matches system output)
                 passes_odds = 7 <= final_odds <= 14  # Target 11-13x sweet spot (allow 7-14 range)
-                passes_confidence = confidence >= 75  # High confidence (slightly relaxed for 2-1)
+                passes_confidence = confidence >= 70  # Good confidence threshold
                 passes_elite_value = selected['elite_value'] >= 1.0  # Maximum value requirement
                 passes_score_type = selected['score_text'] in ['1-1', '2-1', '1-0']  # All proven winners!
                 
