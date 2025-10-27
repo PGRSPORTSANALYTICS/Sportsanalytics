@@ -19,6 +19,7 @@ from enhanced_predictor import EnhancedExactScorePredictor
 from feature_analytics import FeatureAnalytics
 from telegram_sender import TelegramBroadcaster
 from api_football_client import APIFootballClient
+from confidence_scorer import ConfidenceScorer
 
 @dataclass
 class TeamForm:
@@ -113,6 +114,10 @@ class RealFootballChampion:
             print(f"⚠️ API-Football client initialization failed: {e}")
             print("   Will continue without injury filtering and lineup confirmations")
             self.api_football_client = None
+        
+        # 🎯 Initialize confidence scorer for selective betting
+        self.confidence_scorer = ConfidenceScorer()
+        print("🎯 Confidence scorer initialized for selective betting")
         
         # Get API-Football key from environment
         self.api_football_key = os.getenv('API_FOOTBALL_KEY')
@@ -1585,9 +1590,33 @@ class RealFootballChampion:
         cursor = self.conn.cursor()
         today_date = datetime.now().strftime('%Y-%m-%d')
         
+        saved_count = 0
+        filtered_count = 0
+        
         for prediction in predictions:
             for i, score_pred in enumerate(prediction['top_scores']):
                 try:
+                    # 🎯 Calculate confidence score
+                    pred_data = {
+                        'prediction': score_pred['score'],
+                        'odds': score_pred['odds'],
+                        'home_team': prediction['home_team'],
+                        'away_team': prediction['away_team'],
+                        'sport_key': prediction.get('league', ''),
+                        'value_score': score_pred['probability'] * score_pred['odds'] * 100,
+                        'quality': 75,
+                        'analysis': prediction.get('analysis', {})
+                    }
+                    
+                    confidence_result = self.confidence_scorer.calculate_confidence(pred_data)
+                    confidence_score = confidence_result['confidence']
+                    
+                    # 🔥 Only save 85+ confidence predictions
+                    if not confidence_result['should_bet']:
+                        filtered_count += 1
+                        print(f"   ⚠️ FILTERED: {prediction['home_team']} vs {prediction['away_team']} → {pred_data['prediction']} (confidence: {confidence_score})")
+                        continue
+                    
                     cursor.execute('''
                         INSERT INTO football_opportunities 
                         (timestamp, match_id, home_team, away_team, league, market, selection, 
@@ -1603,29 +1632,35 @@ class RealFootballChampion:
                         'Exact Score',
                         f"Exact Score {score_pred['score']}",
                         score_pred['odds'],
-                        score_pred['probability'] * 100,  # Use probability as edge
-                        80 + i*5,  # High confidence for exact scores
+                        score_pred['probability'] * 100,
+                        confidence_score,  # Real confidence score
                         json.dumps({
                             'score_prediction': score_pred,
                             'xg_prediction': {
                                 'home_xg': prediction['home_xg'],
                                 'away_xg': prediction['away_xg']
                             },
-                            'form_analysis': prediction['analysis']
+                            'form_analysis': prediction['analysis'],
+                            'confidence_breakdown': confidence_result['breakdown']
                         }),
-                        15.00,  # Moderate stake for exact scores
+                        15.00,
                         today_date,
-                        '20:00',  # Default kickoff time
-                        90 - i*5,  # Quality score decreases for less likely scores
+                        '20:00',
+                        confidence_score,  # Use confidence as quality
                         today_date,
-                        'premium',  # Mark exact scores as premium
-                        i  # Rank by likelihood
+                        'premium',
+                        i
                     ))
                     
-                    print(f"✅ SAVED EXACT SCORE: {prediction['home_team']} vs {prediction['away_team']} - {score_pred['score']} @ {score_pred['odds']}")
+                    saved_count += 1
+                    print(f"✅ SAVED: {prediction['home_team']} vs {prediction['away_team']} → {score_pred['score']} @ {score_pred['odds']:.1f} (confidence: {confidence_score})")
                     
                 except Exception as e:
                     print(f"❌ ERROR saving exact score prediction: {e}")
+        
+        print(f"\n📊 CONFIDENCE FILTERING RESULTS:")
+        print(f"   ✅ Saved: {saved_count} predictions (85+ confidence)")
+        print(f"   ⚠️ Filtered: {filtered_count} predictions (<85 confidence)")
         
         self.conn.commit()
     
