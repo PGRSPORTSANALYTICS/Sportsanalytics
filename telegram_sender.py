@@ -206,23 +206,23 @@ class TelegramBroadcaster:
             analysis = analysis_json if isinstance(analysis_json, dict) else json.loads(analysis_json)
             parts = []
             
-            parts.append(f"📊 *WHY {predicted_score}?*")
+            parts.append(f"*WHY {predicted_score}?*")
             
             xg = analysis.get('xg_prediction', {})
             if xg.get('home_xg', 0) > 0:
-                parts.append(f"⚽ xG: {home_team} {xg['home_xg']:.1f}, {away_team} {xg['away_xg']:.1f}")
+                parts.append(f"xG: {home_team} {xg['home_xg']:.1f}, {away_team} {xg['away_xg']:.1f}")
             
             home_form = analysis.get('home_form', {})
             if home_form.get('matches_played', 0) > 0:
-                parts.append(f"🏠 {home_team}: {home_form['win_rate']:.0f}% WR, {home_form['goals_per_game']:.1f} goals/game")
+                parts.append(f"{home_team}: {home_form['win_rate']:.0f}% WR, {home_form['goals_per_game']:.1f} goals/game")
             
             away_form = analysis.get('away_form', {})
             if away_form.get('matches_played', 0) > 0:
-                parts.append(f"✈️ {away_team}: {away_form['win_rate']:.0f}% WR, {away_form['goals_per_game']:.1f} goals/game")
+                parts.append(f"{away_team}: {away_form['win_rate']:.0f}% WR, {away_form['goals_per_game']:.1f} goals/game")
             
             h2h = analysis.get('h2h', {})
             if h2h.get('matches_played', 0) >= 3:
-                parts.append(f"📜 H2H: {h2h['avg_total_goals']:.1f} avg goals ({h2h['matches_played']} games)")
+                parts.append(f"H2H: {h2h['avg_total_goals']:.1f} avg goals ({h2h['matches_played']} games)")
             
             return "\n".join(parts)
         except Exception as e:
@@ -258,32 +258,34 @@ class TelegramBroadcaster:
         datetime_escaped = self._escape_markdown(prediction.get('datetime', 'TBA'))
         
         glossary = """
-📖 *Quick Guide:*
+*Quick Guide:*
 • WR \\= Win Rate \\(% of games won\\)
 • xG \\= Expected Goals \\(statistical prediction\\)
 • H2H \\= Head\\-to\\-Head \\(past matches between teams\\)
 """
         
-        message = f"""🎯 *NEW EXACT SCORE PREDICTION*
+        message = f"""⚽ *NEW EXACT SCORE PREDICTION*
 
-⚽ *{home_escaped} vs {away_escaped}*
-📊 Predicted Score: *{score}*
-💰 Odds: *{odds}x*
-🎯 Confidence: {confidence}/100
-💵 Recommended Stake: {stake} SEK
+*{home_escaped} vs {away_escaped}*
+Predicted Score: *{score}*
+Odds: *{odds}x*
+Confidence: {confidence}/100
+Recommended Stake: {stake} SEK
 
-🚀 Potential Return: *{int(stake * odds)} SEK*
-📈 Profit: *{int(stake * (odds - 1))} SEK*
+Potential Return: *{int(stake * odds)} SEK*
+Profit: *{int(stake * (odds - 1))} SEK*
 
-⏰ Match Time: {datetime_escaped}
-🏆 League: {league_escaped}
+Match Time: {datetime_escaped}
+League: {league_escaped}
 
 {analysis_text}
+
 {glossary}
-📊 *LIVE SYSTEM PERFORMANCE*
-✅ {stats['wins']}/{stats['total']} wins ({stats['win_rate']:.1f}%)
-💰 Total Profit: {stats['profit']:.0f} SEK ({stats['roi']:.1f}% ROI)
-🎯 Target: 20\\-25% WR, \\+100\\-200% ROI
+
+📊 *LIVE PERFORMANCE*
+{stats['wins']}/{stats['total']} wins \\({stats['win_rate']:.1f}%\\)
+Total Profit: {stats['profit']:.0f} SEK \\({stats['roi']:.1f}% ROI\\)
+Target: 20\\-25% WR, \\+100\\-200% ROI
 """
         return message
     
@@ -302,29 +304,29 @@ class TelegramBroadcaster:
         stats = self._get_live_stats()
         
         if outcome in ('won', 'win'):
-            emoji = "🎉"
-            status = "**WIN!**"
-            result_line = f"💰 Profit: **+{int(profit)} SEK**"
+            emoji = "✅"
+            status = "*WIN!*"
+            result_line = f"Profit: *+{int(profit)} SEK*"
         else:
             emoji = "❌"
-            status = "**LOSS**"
-            result_line = f"💸 Loss: **{int(profit)} SEK**"
+            status = "*LOSS*"
+            result_line = f"Loss: *{int(profit)} SEK*"
         
-        message = f"""{emoji} **RESULT: {status}**
+        message = f"""{emoji} *RESULT: {status}*
 
-⚽ **{home} vs {away}**
-📊 Predicted: **{predicted}**
-🎯 Actual Score: **{actual}**
+*{home} vs {away}*
+Predicted: *{predicted}*
+Actual Score: *{actual}*
 
-💰 Stake: {stake} SEK
-📈 Odds: {odds}x
+Stake: {stake} SEK
+Odds: {odds}x
 {result_line}
 
-🏆 League: {result.get('league', 'N/A')}
+League: {result.get('league', 'N/A')}
 
-📊 **UPDATED SYSTEM STATS**
-✅ {stats['wins']}/{stats['total']} wins ({stats['win_rate']:.1f}%)
-💰 Total Profit: {stats['profit']:.0f} SEK ({stats['roi']:.1f}% ROI)
+📊 *UPDATED PERFORMANCE*
+{stats['wins']}/{stats['total']} wins \\({stats['win_rate']:.1f}%\\)
+Total Profit: {stats['profit']:.0f} SEK \\({stats['roi']:.1f}% ROI\\)
 """
         return message
     
