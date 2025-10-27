@@ -84,34 +84,34 @@ def format_performance_message(stats, update_type):
     
     emoji = emoji_map.get(update_type, '📈')
     
-    message = f"{emoji} *{update_type.upper()} PERFORMANCE UPDATE*\n"
+    message = f"{emoji} {update_type.upper()} PERFORMANCE UPDATE\n"
     message += f"Period: {stats['period']}\n"
     message += "━━━━━━━━━━━━━━━━━━━━\n\n"
     
-    message += f"📊 *STATISTICS*\n"
+    message += f"📊 STATISTICS\n"
     message += f"• Total Predictions: {stats['total_bets']}\n"
     message += f"• Wins: {stats['wins']} ✅\n"
     message += f"• Losses: {stats['losses']} ❌\n"
-    message += f"• Hit Rate: *{stats['hit_rate']:.1f}%*\n\n"
+    message += f"• Hit Rate: {stats['hit_rate']:.1f}%\n\n"
     
-    message += f"💰 *FINANCIAL*\n"
+    message += f"💰 FINANCIAL\n"
     message += f"• Total Staked: {stats['total_staked']:.0f} SEK\n"
     
     if stats['net_profit'] >= 0:
-        message += f"• Net Profit: *+{stats['net_profit']:.0f} SEK* 📈\n"
+        message += f"• Net Profit: +{stats['net_profit']:.0f} SEK 📈\n"
     else:
-        message += f"• Net Profit: *{stats['net_profit']:.0f} SEK* 📉\n"
+        message += f"• Net Profit: {stats['net_profit']:.0f} SEK 📉\n"
     
-    message += f"• ROI: *{stats['roi']:+.1f}%*\n\n"
+    message += f"• ROI: {stats['roi']:+.1f}%\n\n"
     
     if stats['hit_rate'] >= 20:
-        message += "🔥 *ELITE PERFORMANCE!* Target hit rate achieved!\n"
+        message += "🔥 ELITE PERFORMANCE! Target hit rate achieved!\n"
     elif stats['hit_rate'] >= 15:
-        message += "💪 *STRONG PERFORMANCE!* Above industry standard!\n"
+        message += "💪 STRONG PERFORMANCE! Above industry standard!\n"
     elif stats['hit_rate'] >= 10:
-        message += "✅ *SOLID PERFORMANCE* Within expected range.\n"
+        message += "✅ SOLID PERFORMANCE - Within expected range.\n"
     else:
-        message += "⚠️ *BELOW TARGET* - Variance expected, tracking continues.\n"
+        message += "⚠️ BELOW TARGET - Variance expected, tracking continues.\n"
     
     message += "\n━━━━━━━━━━━━━━━━━━━━\n"
     message += "📈 Transparency is our priority. Every result tracked & verified.\n"
@@ -130,8 +130,7 @@ def send_telegram_message(text):
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         payload = {
             'chat_id': channel_id,
-            'text': text,
-            'parse_mode': 'Markdown'
+            'text': text
         }
         response = requests.post(url, json=payload, timeout=10)
         if response.status_code != 200:

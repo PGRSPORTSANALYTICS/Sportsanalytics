@@ -30,8 +30,7 @@ class TelegramBroadcaster:
             url = f"{self.api_url}/sendMessage"
             payload = {
                 'chat_id': chat_id,
-                'text': text,
-                'parse_mode': 'Markdown'
+                'text': text
             }
             response = requests.post(url, json=payload, timeout=10)
             response.raise_for_status()
@@ -206,7 +205,7 @@ class TelegramBroadcaster:
             analysis = analysis_json if isinstance(analysis_json, dict) else json.loads(analysis_json)
             parts = []
             
-            parts.append(f"*WHY {predicted_score}?*")
+            parts.append(f"WHY {predicted_score}?")
             
             xg = analysis.get('xg_prediction', {})
             if xg.get('home_xg', 0) > 0:
@@ -246,46 +245,41 @@ class TelegramBroadcaster:
                 away,
                 score
             )
-            analysis_text = self._escape_markdown(analysis_text)
         
         # Get live performance stats
         stats = self._get_live_stats()
         
-        # Escape team names and league for Markdown
-        home_escaped = self._escape_markdown(home)
-        away_escaped = self._escape_markdown(away)
-        league_escaped = self._escape_markdown(prediction.get('league', 'N/A'))
-        datetime_escaped = self._escape_markdown(prediction.get('datetime', 'TBA'))
+        league = prediction.get('league', 'N/A')
+        match_time = prediction.get('datetime', 'TBA')
         
-        glossary = """
-*Quick Guide:*
-• WR \\= Win Rate \\(% of games won\\)
-• xG \\= Expected Goals \\(statistical prediction\\)
-• H2H \\= Head\\-to\\-Head \\(past matches between teams\\)
+        glossary = """Quick Guide:
+• WR = Win Rate (% of games won)
+• xG = Expected Goals (statistical prediction)
+• H2H = Head-to-Head (past matches between teams)
 """
         
-        message = f"""⚽ *NEW EXACT SCORE PREDICTION*
+        message = f"""⚽ NEW EXACT SCORE PREDICTION
 
-*{home_escaped} vs {away_escaped}*
-Predicted Score: *{score}*
-Odds: *{odds}x*
+{home} vs {away}
+Predicted Score: {score}
+Odds: {odds}x
 Confidence: {confidence}/100
 Recommended Stake: {stake} SEK
 
-Potential Return: *{int(stake * odds)} SEK*
-Profit: *{int(stake * (odds - 1))} SEK*
+Potential Return: {int(stake * odds)} SEK
+Profit: {int(stake * (odds - 1))} SEK
 
-Match Time: {datetime_escaped}
-League: {league_escaped}
+Match Time: {match_time}
+League: {league}
 
 {analysis_text}
 
 {glossary}
 
-📊 *LIVE PERFORMANCE*
-{stats['wins']}/{stats['total']} wins \\({stats['win_rate']:.1f}%\\)
-Total Profit: {stats['profit']:.0f} SEK \\({stats['roi']:.1f}% ROI\\)
-Target: 20\\-25% WR, \\+100\\-200% ROI
+📊 LIVE PERFORMANCE
+{stats['wins']}/{stats['total']} wins ({stats['win_rate']:.1f}%)
+Total Profit: {stats['profit']:.0f} SEK ({stats['roi']:.1f}% ROI)
+Target: 20-25% WR, +100-200% ROI
 """
         return message
     
@@ -305,18 +299,18 @@ Target: 20\\-25% WR, \\+100\\-200% ROI
         
         if outcome in ('won', 'win'):
             emoji = "✅"
-            status = "*WIN!*"
-            result_line = f"Profit: *+{int(profit)} SEK*"
+            status = "WIN!"
+            result_line = f"Profit: +{int(profit)} SEK"
         else:
             emoji = "❌"
-            status = "*LOSS*"
-            result_line = f"Loss: *{int(profit)} SEK*"
+            status = "LOSS"
+            result_line = f"Loss: {int(profit)} SEK"
         
-        message = f"""{emoji} *RESULT: {status}*
+        message = f"""{emoji} RESULT: {status}
 
-*{home} vs {away}*
-Predicted: *{predicted}*
-Actual Score: *{actual}*
+{home} vs {away}
+Predicted: {predicted}
+Actual Score: {actual}
 
 Stake: {stake} SEK
 Odds: {odds}x
@@ -324,9 +318,9 @@ Odds: {odds}x
 
 League: {result.get('league', 'N/A')}
 
-📊 *UPDATED PERFORMANCE*
-{stats['wins']}/{stats['total']} wins \\({stats['win_rate']:.1f}%\\)
-Total Profit: {stats['profit']:.0f} SEK \\({stats['roi']:.1f}% ROI\\)
+📊 UPDATED PERFORMANCE
+{stats['wins']}/{stats['total']} wins ({stats['win_rate']:.1f}%)
+Total Profit: {stats['profit']:.0f} SEK ({stats['roi']:.1f}% ROI)
 """
         return message
     
