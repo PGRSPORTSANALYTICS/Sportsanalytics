@@ -2265,13 +2265,14 @@ class RealFootballChampion:
             print("❌ No matches found for exact score analysis")
             return 0
         
-        # Top 5 leagues for API-Football data (to save API quota)
-        TOP_5_LEAGUES = {
+        # Top leagues for API-Football data (to save API quota)
+        TOP_LEAGUES_FOR_API = {
             'soccer_epl',  # Premier League
             'soccer_spain_la_liga',  # La Liga
             'soccer_italy_serie_a',  # Serie A
             'soccer_germany_bundesliga',  # Bundesliga
-            'soccer_france_ligue_one'  # Ligue 1
+            'soccer_france_ligue_one',  # Ligue 1
+            'soccer_uefa_champs_league'  # Champions League
         }
         
         # Analyze ALL available matches (no limit)
@@ -2285,11 +2286,11 @@ class RealFootballChampion:
                 league = match.get('sport_key', '')
                 fixture_id = None
                 
-                # 🏥 INJURY FILTERING: Only check Top 5 leagues to save API quota
+                # 🏥 INJURY FILTERING: Only check top leagues to save API quota
                 should_check_api_football = (
                     self.api_football_client and 
                     match_date and 
-                    league in TOP_5_LEAGUES
+                    league in TOP_LEAGUES_FOR_API
                 )
                 
                 if should_check_api_football:
