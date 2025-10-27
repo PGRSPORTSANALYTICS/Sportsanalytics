@@ -33,10 +33,6 @@ print("⏰ Monthly Updates: 1st of month at 12:00 CET")
 print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 print("Running... Press Ctrl+C to stop\n")
 
-# Run immediately on first start for testing
-print(f"[{datetime.now()}] Running initial weekly update...")
-send_weekly_update()
-
 # Keep running
 while True:
     schedule.run_pending()
