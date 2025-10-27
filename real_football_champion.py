@@ -18,6 +18,7 @@ from football_learning_system import FootballLearningSystem
 from enhanced_predictor import EnhancedExactScorePredictor
 from feature_analytics import FeatureAnalytics
 from telegram_sender import TelegramBroadcaster
+from api_football_client import APIFootballClient
 
 @dataclass
 class TeamForm:
@@ -103,6 +104,15 @@ class RealFootballChampion:
         except Exception as e:
             print(f"⚠️ Telegram broadcaster initialization failed: {e}")
             self.telegram = None
+        
+        # 🏥 Initialize API-Football client for injuries and lineups
+        try:
+            self.api_football_client = APIFootballClient()
+            print("🏥 API-Football client initialized for injuries/lineups")
+        except Exception as e:
+            print(f"⚠️ API-Football client initialization failed: {e}")
+            print("   Will continue without injury filtering and lineup confirmations")
+            self.api_football_client = None
         
         # Get API-Football key from environment
         self.api_football_key = os.getenv('API_FOOTBALL_KEY')
@@ -1218,6 +1228,89 @@ class RealFootballChampion:
                 btts_rate=0.5
             )
     
+    def check_lineups_for_upcoming_matches(self):
+        """
+        Check lineup confirmations for matches starting within 1-3 hours
+        Updates predictions with lineup information when available
+        """
+        if not self.api_football_client:
+            return
+        
+        print("\n🔍 CHECKING LINEUPS FOR UPCOMING MATCHES")
+        print("=" * 50)
+        
+        cursor = self.conn.cursor()
+        
+        # Get exact score predictions for matches in the next 1-3 hours
+        current_time = datetime.now()
+        one_hour_from_now = (current_time + timedelta(hours=1)).isoformat()
+        three_hours_from_now = (current_time + timedelta(hours=3)).isoformat()
+        
+        cursor.execute('''
+            SELECT id, home_team, away_team, kickoff_time 
+            FROM football_opportunities
+            WHERE market = 'exact_score' 
+            AND outcome IS NULL
+            AND kickoff_time BETWEEN ? AND ?
+        ''', (one_hour_from_now, three_hours_from_now))
+        
+        upcoming_matches = cursor.fetchall()
+        
+        if not upcoming_matches:
+            print("📭 No matches found in lineup confirmation window (1-3 hours)")
+            return
+        
+        print(f"📋 Found {len(upcoming_matches)} matches to check for lineups")
+        
+        for match_id, home_team, away_team, kickoff_time in upcoming_matches:
+            try:
+                print(f"\n🏟️ {home_team} vs {away_team}")
+                
+                # Get fixture and check lineups
+                fixture = self.api_football_client.get_fixture_by_teams_and_date(
+                    home_team, away_team, kickoff_time
+                )
+                
+                if not fixture:
+                    print(f"   ⚠️ Fixture not found in API-Football")
+                    continue
+                
+                fixture_id = fixture.get('fixture', {}).get('id')
+                lineups = self.api_football_client.get_lineups(fixture_id)
+                
+                if lineups['confirmed']:
+                    print(f"   ✅ Lineups confirmed!")
+                    print(f"      Home: {lineups['home_formation']} ({lineups['home_starters']} starters)")
+                    print(f"      Away: {lineups['away_formation']} ({lineups['away_starters']} starters)")
+                    
+                    # Update analysis JSON with lineup info
+                    cursor.execute('''
+                        SELECT analysis FROM football_opportunities WHERE id = ?
+                    ''', (match_id,))
+                    
+                    result = cursor.fetchone()
+                    if result and result[0]:
+                        import json
+                        analysis = json.loads(result[0]) if isinstance(result[0], str) else result[0]
+                        analysis['lineups_confirmed'] = True
+                        analysis['home_formation'] = lineups['home_formation']
+                        analysis['away_formation'] = lineups['away_formation']
+                        
+                        cursor.execute('''
+                            UPDATE football_opportunities 
+                            SET analysis = ?
+                            WHERE id = ?
+                        ''', (json.dumps(analysis), match_id))
+                        
+                        self.conn.commit()
+                else:
+                    print(f"   ⏳ Lineups not yet available (normal for 2+ hours before kickoff)")
+                    
+            except Exception as e:
+                print(f"   ❌ Error checking lineup: {e}")
+        
+        print(f"\n✅ Lineup check complete")
+    
     def estimate_xg_from_odds(self, match: Dict) -> Dict:
         """Estimate expected goals from odds when form data is unavailable"""
         import random
@@ -2179,6 +2272,33 @@ class RealFootballChampion:
             try:
                 home_team = match['home_team']
                 away_team = match['away_team']
+                match_date = match.get('commence_time', '')
+                fixture_id = None
+                
+                # 🏥 INJURY FILTERING: Skip matches with key injuries
+                if self.api_football_client and match_date:
+                    try:
+                        validation = self.api_football_client.validate_match(home_team, away_team, match_date)
+                        
+                        if not validation['valid']:
+                            print(f"   ⚠️ Skipping {home_team} vs {away_team}: {validation['reason']}")
+                            continue
+                        
+                        fixture_id = validation.get('fixture_id')
+                        if fixture_id:
+                            # Get team IDs for proper injury classification
+                            home_team_id = self.api_football_client.get_team_id(home_team)
+                            away_team_id = self.api_football_client.get_team_id(away_team)
+                            
+                            injuries = self.api_football_client.get_injuries(fixture_id, home_team_id, away_team_id)
+                            
+                            if injuries['has_key_injuries']:
+                                print(f"   🏥 Skipping {home_team} vs {away_team}: {injuries['total_injuries']} injuries (H:{injuries['home_injuries']}, A:{injuries['away_injuries']})")
+                                continue
+                            elif injuries['total_injuries'] > 0:
+                                print(f"   📋 {home_team} vs {away_team}: {injuries['total_injuries']} minor injuries (continuing)")
+                    except Exception as e:
+                        print(f"   ⚠️ Injury check failed for {home_team} vs {away_team}, continuing: {e}")
                 
                 # Get team form data and h2h (optional - we'll estimate if missing)
                 home_id = self.get_team_id_by_name(home_team) or 1
@@ -2188,12 +2308,32 @@ class RealFootballChampion:
                 away_form = self.analyze_team_form(away_team, away_id)
                 h2h = self.get_head_to_head(home_team, away_team)
                 
+                # 📊 REAL xG DATA: Try to get actual statistics from API-Football
+                real_xg_data = None
+                if self.api_football_client and fixture_id:
+                    try:
+                        stats = self.api_football_client.get_fixture_statistics(fixture_id)
+                        if stats['has_xg']:
+                            real_xg_data = {
+                                'home_xg': stats['home'].get('xg', 0),
+                                'away_xg': stats['away'].get('xg', 0),
+                                'total_xg': stats['home'].get('xg', 0) + stats['away'].get('xg', 0),
+                                'source': 'api_football'
+                            }
+                            print(f"   📊 Real xG data: Home {real_xg_data['home_xg']:.1f}, Away {real_xg_data['away_xg']:.1f}")
+                    except Exception as e:
+                        print(f"   ⚠️ Could not fetch real xG data: {e}")
+                
                 # Try to get xG data (with or without form)
-                if home_form and away_form:
+                if real_xg_data:
+                    xg_data = real_xg_data
+                elif home_form and away_form:
                     xg_data = self.calculate_xg_edge(home_form, away_form, h2h)
+                    xg_data['source'] = 'calculated'
                 else:
                     # Estimate xG from odds if no form data available
                     xg_data = self.estimate_xg_from_odds(match)
+                    xg_data['source'] = 'estimated'
                 
                 total_xg = xg_data.get('total_xg', 2.5)
                 match_scores.append({

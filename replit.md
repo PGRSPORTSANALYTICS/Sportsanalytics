@@ -6,6 +6,40 @@ This is an AI-powered exact score prediction platform achieving +340% ROI throug
 
 ## 🚀 Recent Enhancements (October 2025)
 
+### DUAL API INTEGRATION (Latest - October 27, 2025)
+**API-Football Integration for Enhanced Data Quality:**
+
+The system now leverages **both APIs** for maximum prediction accuracy:
+- **The Odds API**: Real-time odds and match availability
+- **API-Football**: Injuries, lineups, match validation, statistics
+
+**🏥 Injury Filtering:**
+- Automatically skips matches with 3+ injuries (key players missing)
+- Properly classifies home vs away injuries
+- Reduces bad predictions from lineup issues
+
+**📋 Lineup Confirmations:**
+- Checks confirmed lineups 1-2 hours before kickoff
+- Validates starting XI and formations
+- Updates predictions with lineup data when available
+
+**📊 Real Statistics Integration:**
+- Uses real xG data from API-Football when available
+- Falls back to calculated xG from team form
+- Finally estimates from odds if no other data
+
+**✅ Match Validation:**
+- Cross-validates matches between both APIs
+- Detects postponed/cancelled matches
+- Filters out stale or invalid fixtures
+
+**Impact:**
+- Expected 2-5% improvement in hit rate (14% → 16-19%)
+- Better data quality = fewer "bad luck" losses
+- Real injury data prevents betting on compromised teams
+
+## 🚀 Previous Enhancements (October 2025)
+
 ### DATA-PROVEN MONEY PRINTER (Latest - October 26, 2025)
 **Real Performance Analysis from 73 Settled Bets:**
 

@@ -129,10 +129,10 @@ class APIFootballClient:
             logger.error(f"❌ Error getting team ID for {team_name}: {e}")
             return None
     
-    def get_injuries(self, fixture_id: int) -> Dict:
+    def get_injuries(self, fixture_id: int, home_team_id: int = None, away_team_id: int = None) -> Dict:
         """
         Get injury data for a specific fixture
-        Returns dict with home and away team injuries
+        Returns dict with home and away team injuries properly classified
         """
         self._rate_limit()
         
@@ -152,33 +152,44 @@ class APIFootballClient:
                 for injury in injuries:
                     team = injury.get('team', {})
                     player = injury.get('player', {})
-                    injury_type = player.get('type', 'Unknown')
-                    reason = player.get('reason', 'Unknown')
+                    team_id = team.get('id')
                     
                     injury_info = {
                         'player_name': player.get('name', 'Unknown'),
-                        'type': injury_type,
-                        'reason': reason,
-                        'team_id': team.get('id')
+                        'type': player.get('type', 'Unknown'),
+                        'reason': player.get('reason', 'Unknown'),
+                        'team_id': team_id,
+                        'team_name': team.get('name', 'Unknown')
                     }
                     
-                    if team.get('name'):
+                    if home_team_id and team_id == home_team_id:
+                        home_injuries.append(injury_info)
+                    elif away_team_id and team_id == away_team_id:
+                        away_injuries.append(injury_info)
+                    elif home_team_id is None and away_team_id is None:
                         home_injuries.append(injury_info)
                 
-                logger.info(f"📋 Found {len(home_injuries)} injuries for fixture {fixture_id}")
+                total_injuries = len(home_injuries) + len(away_injuries)
+                has_key_injuries = total_injuries > 3
+                
+                logger.info(f"📋 Found {len(home_injuries)} home, {len(away_injuries)} away injuries for fixture {fixture_id}")
                 
                 return {
-                    'total_injuries': len(home_injuries),
-                    'injuries': home_injuries,
-                    'has_key_injuries': len(home_injuries) > 2
+                    'total_injuries': total_injuries,
+                    'home_injuries': len(home_injuries),
+                    'away_injuries': len(away_injuries),
+                    'injuries': home_injuries + away_injuries,
+                    'home_injury_list': home_injuries,
+                    'away_injury_list': away_injuries,
+                    'has_key_injuries': has_key_injuries
                 }
             else:
                 logger.warning(f"⚠️ Could not fetch injuries: {response.status_code}")
-                return {'total_injuries': 0, 'injuries': [], 'has_key_injuries': False}
+                return {'total_injuries': 0, 'home_injuries': 0, 'away_injuries': 0, 'injuries': [], 'has_key_injuries': False}
                 
         except Exception as e:
             logger.error(f"❌ Error fetching injuries: {e}")
-            return {'total_injuries': 0, 'injuries': [], 'has_key_injuries': False}
+            return {'total_injuries': 0, 'home_injuries': 0, 'away_injuries': 0, 'injuries': [], 'has_key_injuries': False}
     
     def get_lineups(self, fixture_id: int) -> Dict:
         """
