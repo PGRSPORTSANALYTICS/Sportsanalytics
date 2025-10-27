@@ -28,10 +28,17 @@ class APIFootballClient:
         }
         self.request_count = 0
         self.last_request_time = 0
+        self.daily_quota_limit = 90  # Stay under 100/day limit
+        self.team_id_cache = {}  # Cache team IDs to avoid repeated lookups
         logger.info("✅ API-Football client initialized")
     
     def _rate_limit(self):
         """Rate limiting to avoid API quota issues (100 requests/day on free tier)"""
+        # Check if we've hit daily quota
+        if self.request_count >= self.daily_quota_limit:
+            logger.warning(f"⚠️ Daily quota limit reached ({self.daily_quota_limit}), skipping API call")
+            raise Exception(f"Daily API quota limit reached: {self.daily_quota_limit}")
+        
         current_time = time.time()
         time_since_last = current_time - self.last_request_time
         
@@ -42,7 +49,7 @@ class APIFootballClient:
         self.request_count += 1
         
         if self.request_count % 10 == 0:
-            logger.info(f"📊 API-Football requests made: {self.request_count}")
+            logger.info(f"📊 API-Football requests: {self.request_count}/{self.daily_quota_limit}")
     
     def get_fixture_by_teams_and_date(self, home_team: str, away_team: str, match_date: str) -> Optional[Dict]:
         """

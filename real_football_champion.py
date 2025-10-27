@@ -2265,6 +2265,15 @@ class RealFootballChampion:
             print("❌ No matches found for exact score analysis")
             return 0
         
+        # Top 5 leagues for API-Football data (to save API quota)
+        TOP_5_LEAGUES = {
+            'soccer_epl',  # Premier League
+            'soccer_spain_la_liga',  # La Liga
+            'soccer_italy_serie_a',  # Serie A
+            'soccer_germany_bundesliga',  # Bundesliga
+            'soccer_france_ligue_one'  # Ligue 1
+        }
+        
         # Analyze ALL available matches (no limit)
         # Priority: Higher total xG (more entertainment value)
         match_scores = []
@@ -2273,10 +2282,17 @@ class RealFootballChampion:
                 home_team = match['home_team']
                 away_team = match['away_team']
                 match_date = match.get('commence_time', '')
+                league = match.get('sport_key', '')
                 fixture_id = None
                 
-                # 🏥 INJURY FILTERING: Try to get injury data from API-Football
-                if self.api_football_client and match_date:
+                # 🏥 INJURY FILTERING: Only check Top 5 leagues to save API quota
+                should_check_api_football = (
+                    self.api_football_client and 
+                    match_date and 
+                    league in TOP_5_LEAGUES
+                )
+                
+                if should_check_api_football:
                     try:
                         validation = self.api_football_client.validate_match(home_team, away_team, match_date)
                         
