@@ -2275,15 +2275,17 @@ class RealFootballChampion:
                 match_date = match.get('commence_time', '')
                 fixture_id = None
                 
-                # 🏥 INJURY FILTERING: Skip matches with key injuries
+                # 🏥 INJURY FILTERING: Try to get injury data from API-Football
                 if self.api_football_client and match_date:
                     try:
                         validation = self.api_football_client.validate_match(home_team, away_team, match_date)
                         
-                        if not validation['valid']:
+                        # Only skip if match is postponed/cancelled, not if just not found
+                        if not validation['valid'] and 'postponed' in validation['reason'].lower():
                             print(f"   ⚠️ Skipping {home_team} vs {away_team}: {validation['reason']}")
                             continue
                         
+                        # If match found in API-Football, check injuries
                         fixture_id = validation.get('fixture_id')
                         if fixture_id:
                             # Get team IDs for proper injury classification
@@ -2297,6 +2299,7 @@ class RealFootballChampion:
                                 continue
                             elif injuries['total_injuries'] > 0:
                                 print(f"   📋 {home_team} vs {away_team}: {injuries['total_injuries']} minor injuries (continuing)")
+                        # If not found, proceed without injury data (graceful degradation)
                     except Exception as e:
                         print(f"   ⚠️ Injury check failed for {home_team} vs {away_team}, continuing: {e}")
                 
