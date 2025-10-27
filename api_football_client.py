@@ -29,8 +29,15 @@ class APIFootballClient:
         self.request_count = 0
         self.last_request_time = 0
         self.daily_quota_limit = 90  # Stay under 100/day limit
-        self.team_id_cache = {}  # Cache team IDs to avoid repeated lookups
-        logger.info("✅ API-Football client initialized")
+        
+        # Caching to minimize API calls
+        self.team_id_cache = {}  # Cache team IDs
+        self.fixture_cache = {}  # Cache fixture lookups by teams+date
+        self.injury_cache = {}  # Cache injury data (expires in 2 hours)
+        self.lineup_cache = {}  # Cache lineup data once fetched
+        self.stats_cache = {}  # Cache statistics for the day
+        
+        logger.info("✅ API-Football client initialized with smart caching")
     
     def _rate_limit(self):
         """Rate limiting to avoid API quota issues (100 requests/day on free tier)"""
@@ -53,9 +60,15 @@ class APIFootballClient:
     
     def get_fixture_by_teams_and_date(self, home_team: str, away_team: str, match_date: str) -> Optional[Dict]:
         """
-        Find fixture ID by team names and match date
+        Find fixture ID by team names and match date (with caching)
         Returns fixture with detailed information
         """
+        # Check cache first
+        cache_key = f"{home_team}_{away_team}_{match_date}"
+        if cache_key in self.fixture_cache:
+            logger.info(f"📦 Using cached fixture for {home_team} vs {away_team}")
+            return self.fixture_cache[cache_key]
+        
         self._rate_limit()
         
         try:
@@ -64,6 +77,7 @@ class APIFootballClient:
             
             if not home_id or not away_id:
                 logger.warning(f"⚠️ Could not find team IDs for {home_team} vs {away_team}")
+                self.fixture_cache[cache_key] = None
                 return None
             
             date_obj = datetime.fromisoformat(match_date.replace('Z', '+00:00'))
@@ -86,9 +100,12 @@ class APIFootballClient:
                     if (teams.get('home', {}).get('id') == home_id and 
                         teams.get('away', {}).get('id') == away_id):
                         logger.info(f"✅ Found fixture: {fixture.get('fixture', {}).get('id')}")
+                        # Cache the result
+                        self.fixture_cache[cache_key] = fixture
                         return fixture
                 
                 logger.warning(f"⚠️ No matching fixture found for {home_team} vs {away_team} on {date_str}")
+                self.fixture_cache[cache_key] = None
                 return None
             else:
                 logger.error(f"❌ API error: {response.status_code}")
@@ -138,9 +155,17 @@ class APIFootballClient:
     
     def get_injuries(self, fixture_id: int, home_team_id: int = None, away_team_id: int = None) -> Dict:
         """
-        Get injury data for a specific fixture
+        Get injury data for a specific fixture (cached for 2 hours)
         Returns dict with home and away team injuries properly classified
         """
+        # Check cache first (expires after 2 hours)
+        cache_key = f"injury_{fixture_id}"
+        if cache_key in self.injury_cache:
+            cached_data, cache_time = self.injury_cache[cache_key]
+            if time.time() - cache_time < 7200:  # 2 hours in seconds
+                logger.info(f"📦 Using cached injury data for fixture {fixture_id}")
+                return cached_data
+        
         self._rate_limit()
         
         try:
@@ -181,7 +206,7 @@ class APIFootballClient:
                 
                 logger.info(f"📋 Found {len(home_injuries)} home, {len(away_injuries)} away injuries for fixture {fixture_id}")
                 
-                return {
+                result = {
                     'total_injuries': total_injuries,
                     'home_injuries': len(home_injuries),
                     'away_injuries': len(away_injuries),
@@ -190,6 +215,10 @@ class APIFootballClient:
                     'away_injury_list': away_injuries,
                     'has_key_injuries': has_key_injuries
                 }
+                
+                # Cache the result with timestamp
+                self.injury_cache[cache_key] = (result, time.time())
+                return result
             else:
                 logger.warning(f"⚠️ Could not fetch injuries: {response.status_code}")
                 return {'total_injuries': 0, 'home_injuries': 0, 'away_injuries': 0, 'injuries': [], 'has_key_injuries': False}
@@ -200,9 +229,15 @@ class APIFootballClient:
     
     def get_lineups(self, fixture_id: int) -> Dict:
         """
-        Get confirmed lineups for a fixture (available 1-2 hours before kickoff)
+        Get confirmed lineups for a fixture (cached once fetched)
         Returns dict with lineup confirmation status and key player info
         """
+        # Check cache first (lineups don't change once confirmed)
+        cache_key = f"lineup_{fixture_id}"
+        if cache_key in self.lineup_cache:
+            logger.info(f"📦 Using cached lineup data for fixture {fixture_id}")
+            return self.lineup_cache[cache_key]
+        
         self._rate_limit()
         
         try:
@@ -244,6 +279,9 @@ class APIFootballClient:
                         result['away_starters'] = len(start_xi)
                 
                 logger.info(f"✅ Lineups confirmed for fixture {fixture_id}")
+                
+                # Cache the confirmed lineup (doesn't change once set)
+                self.lineup_cache[cache_key] = result
                 return result
             else:
                 logger.info(f"⏳ Lineups not yet available for fixture {fixture_id}")
