@@ -1594,6 +1594,22 @@ class RealFootballChampion:
         filtered_count = 0
         
         for prediction in predictions:
+            # 🎯 Check if this match already has a prediction (prevent duplicates)
+            cursor.execute('''
+                SELECT COUNT(*) FROM football_opportunities
+                WHERE home_team = ? AND away_team = ? 
+                AND market = 'Exact Score'
+                AND (outcome IS NULL OR outcome = '' OR outcome = 'unknown')
+            ''', (prediction['home_team'], prediction['away_team']))
+            
+            if cursor.fetchone()[0] > 0:
+                print(f"   🔄 DUPLICATE BLOCKED: {prediction['home_team']} vs {prediction['away_team']} already has prediction")
+                continue
+            
+            # 🎯 Evaluate all top scores and pick the BEST one
+            best_prediction = None
+            best_confidence = 0
+            
             for i, score_pred in enumerate(prediction['top_scores']):
                 try:
                     # 🎯 Calculate confidence score
@@ -1611,11 +1627,28 @@ class RealFootballChampion:
                     confidence_result = self.confidence_scorer.calculate_confidence(pred_data)
                     confidence_score = confidence_result['confidence']
                     
-                    # 🔥 Only save 85+ confidence predictions
-                    if not confidence_result['should_bet']:
-                        filtered_count += 1
-                        print(f"   ⚠️ FILTERED: {prediction['home_team']} vs {prediction['away_team']} → {pred_data['prediction']} (confidence: {confidence_score})")
-                        continue
+                    # Track the best prediction
+                    if confidence_score > best_confidence:
+                        best_confidence = confidence_score
+                        best_prediction = {
+                            'score_pred': score_pred,
+                            'confidence_result': confidence_result,
+                            'confidence_score': confidence_score,
+                            'rank': i
+                        }
+                    
+                    print(f"   📊 {prediction['home_team']} vs {prediction['away_team']} → {score_pred['score']} @ {score_pred['odds']:.1f} (confidence: {confidence_score})")
+                    
+                except Exception as e:
+                    print(f"❌ ERROR evaluating score prediction: {e}")
+            
+            # 🔥 Only save THE BEST prediction if it meets threshold
+            if best_prediction and best_prediction['confidence_score'] >= 85:
+                try:
+                    score_pred = best_prediction['score_pred']
+                    confidence_result = best_prediction['confidence_result']
+                    confidence_score = best_prediction['confidence_score']
+                    i = best_prediction['rank']
                     
                     cursor.execute('''
                         INSERT INTO football_opportunities 
@@ -1653,14 +1686,21 @@ class RealFootballChampion:
                     ))
                     
                     saved_count += 1
-                    print(f"✅ SAVED: {prediction['home_team']} vs {prediction['away_team']} → {score_pred['score']} @ {score_pred['odds']:.1f} (confidence: {confidence_score})")
+                    print(f"✅ SAVED BEST: {prediction['home_team']} vs {prediction['away_team']} → {score_pred['score']} @ {score_pred['odds']:.1f} (confidence: {confidence_score})")
                     
                 except Exception as e:
                     print(f"❌ ERROR saving exact score prediction: {e}")
+            else:
+                # All predictions filtered out
+                filtered_count += 1
+                if best_prediction:
+                    print(f"   ⚠️ FILTERED: {prediction['home_team']} vs {prediction['away_team']} → Best was {best_prediction['score_pred']['score']} (confidence: {best_prediction['confidence_score']})")
+                else:
+                    print(f"   ⚠️ FILTERED: {prediction['home_team']} vs {prediction['away_team']} → No valid predictions")
         
         print(f"\n📊 CONFIDENCE FILTERING RESULTS:")
-        print(f"   ✅ Saved: {saved_count} predictions (85+ confidence)")
-        print(f"   ⚠️ Filtered: {filtered_count} predictions (<85 confidence)")
+        print(f"   ✅ Saved: {saved_count} predictions (ONE per match, 85+ confidence)")
+        print(f"   ⚠️ Filtered: {filtered_count} matches (<85 confidence or duplicate)")
         
         self.conn.commit()
     
