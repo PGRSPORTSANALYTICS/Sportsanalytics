@@ -1612,6 +1612,11 @@ class RealFootballChampion:
             
             for i, score_pred in enumerate(prediction['top_scores']):
                 try:
+                    # 🎯 Build analysis with xG data for confidence scorer
+                    analysis_with_xg = prediction.get('analysis', {}).copy()
+                    analysis_with_xg['home_xg'] = prediction.get('home_xg', 0)
+                    analysis_with_xg['away_xg'] = prediction.get('away_xg', 0)
+                    
                     # 🎯 Calculate confidence score
                     pred_data = {
                         'prediction': score_pred['score'],
@@ -1621,7 +1626,7 @@ class RealFootballChampion:
                         'sport_key': prediction.get('league', ''),
                         'value_score': score_pred['probability'] * score_pred['odds'] * 100,
                         'quality': 75,
-                        'analysis': prediction.get('analysis', {})
+                        'analysis': analysis_with_xg
                     }
                     
                     confidence_result = self.confidence_scorer.calculate_confidence(pred_data)
