@@ -46,6 +46,7 @@ class ConfidenceScorer:
         
         Scoring breakdown:
         - Score pattern strength: 0-30 points (1-1 = best)
+        - xG alignment bonus/penalty: -15 to +15 points
         - Odds proximity to sweet spot: 0-25 points (11-13x = best)
         - Data quality: 0-20 points (injuries, lineups, real xG)
         - League quality: 0-15 points (Top 6 leagues = best)
@@ -60,8 +61,16 @@ class ConfidenceScorer:
             # 1. SCORE PATTERN STRENGTH (0-30 points)
             predicted_score = prediction.get('prediction', '')
             pattern_score = self.SCORE_PATTERN_SCORES.get(predicted_score, 5)
+            
+            # 1b. XG ALIGNMENT ADJUSTMENT (-15 to +15 points)
+            analysis = prediction.get('analysis', {})
+            xg_adjustment = self._score_xg_alignment(predicted_score, analysis)
+            pattern_score += xg_adjustment
+            pattern_score = max(0, min(45, pattern_score))  # Cap at 0-45
+            
             score += pattern_score
             breakdown['score_pattern'] = pattern_score
+            breakdown['xg_alignment'] = xg_adjustment
             
             # 2. ODDS PROXIMITY TO SWEET SPOT (0-25 points)
             odds = prediction.get('odds', 0)
@@ -142,6 +151,79 @@ class ConfidenceScorer:
             return 12  # Lower confidence
         
         return 5  # Edge of acceptable range
+    
+    def _score_xg_alignment(self, predicted_score: str, analysis: Dict) -> float:
+        """
+        Adjust score based on how well prediction aligns with xG data
+        Returns -15 to +15 adjustment
+        """
+        home_xg = analysis.get('home_xg', 0)
+        away_xg = analysis.get('away_xg', 0)
+        
+        # If no xG data, neutral adjustment
+        if home_xg == 0 or away_xg == 0:
+            return 0
+        
+        adjustment = 0
+        
+        # HIGH SCORING MATCH (both xG > 2.0)
+        if home_xg > 2.0 and away_xg > 2.0:
+            if predicted_score == '1-1':
+                adjustment = 15  # Perfect! Both will score
+            elif predicted_score == '2-1':
+                adjustment = 10  # Good, high scoring
+            elif predicted_score == '2-2':
+                adjustment = 8   # Logical but unproven
+            elif predicted_score == '1-0' or predicted_score == '0-1':
+                adjustment = -15  # Contradicts xG!
+            else:
+                adjustment = 0
+        
+        # LOW SCORING MATCH (both xG < 1.5)
+        elif home_xg < 1.5 and away_xg < 1.5:
+            if predicted_score == '1-0' or predicted_score == '0-1':
+                adjustment = 10  # Tight defensive game
+            elif predicted_score == '0-0':
+                adjustment = 5   # Possible
+            elif predicted_score == '1-1':
+                adjustment = 5   # Still possible
+            elif predicted_score in ['2-1', '2-2']:
+                adjustment = -10  # Unlikely with low xG
+            else:
+                adjustment = 0
+        
+        # HOME DOMINANT (home xG > 2.0, away xG < 1.5)
+        elif home_xg > 2.0 and away_xg < 1.5:
+            if predicted_score == '2-1' or predicted_score == '2-0':
+                adjustment = 15  # Home wins with goals
+            elif predicted_score == '1-0':
+                adjustment = 10  # Home wins tight
+            elif predicted_score == '1-1':
+                adjustment = -10  # Home should dominate
+            else:
+                adjustment = 0
+        
+        # AWAY DOMINANT (away xG > 2.0, home xG < 1.5)
+        elif away_xg > 2.0 and home_xg < 1.5:
+            if predicted_score == '1-2' or predicted_score == '0-2':
+                adjustment = 15  # Away wins with goals
+            elif predicted_score == '0-1':
+                adjustment = 10  # Away wins tight
+            elif predicted_score == '1-1':
+                adjustment = -10  # Away should dominate
+            else:
+                adjustment = 0
+        
+        # BALANCED ATTACK (both xG between 1.5-2.5)
+        elif 1.5 <= home_xg <= 2.5 and 1.5 <= away_xg <= 2.5:
+            if predicted_score == '1-1':
+                adjustment = 10  # Evenly matched
+            elif predicted_score == '2-1':
+                adjustment = 5   # Slight edge
+            else:
+                adjustment = 0
+        
+        return adjustment
     
     def _score_data_quality(self, analysis: Dict) -> float:
         """
