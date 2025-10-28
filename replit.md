@@ -44,6 +44,17 @@ The platform now includes an intelligent confidence scoring system that filters 
 - ✅ Telegram messages show confidence tier
 - 📊 Currently testing on live predictions
 
+**📊 Milestone Strategy:**
+- **250 Settled Predictions**: Mid-point evaluation checkpoint
+  - Assess confidence filter effectiveness (targeting 18-21% hit rate)
+  - Review score pattern performance (1-1, 2-1, 1-0)
+  - Validate odds sweet spot (11-13x) results
+  - Adjust strategy if needed before final push
+- **500 Settled Predictions**: Launch threshold
+  - Final performance validation
+  - Subscription pricing confirmation (499-999 SEK/month)
+  - January 2026 paid launch
+
 ### DUAL API INTEGRATION (October 27, 2025)
 **API-Football Integration for Enhanced Data Quality:**
 
