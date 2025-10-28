@@ -9,6 +9,7 @@ import time
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import logging
+from team_id_mappings import get_team_id_from_mapping
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -144,13 +145,20 @@ class APIFootballClient:
         return team.strip()
     
     def get_team_id(self, team_name: str, league_id: int = None) -> Optional[int]:
-        """Get team ID by name with caching and normalization"""
+        """Get team ID by name with caching, hardcoded mappings, and API search"""
         if not hasattr(self, '_team_cache'):
             self._team_cache = {}
         
         cache_key = f"{team_name}_{league_id}" if league_id else team_name
         if cache_key in self._team_cache:
             return self._team_cache[cache_key]
+        
+        # Try hardcoded mapping first (no API call needed!)
+        mapped_id = get_team_id_from_mapping(team_name)
+        if mapped_id:
+            self._team_cache[cache_key] = mapped_id
+            logger.info(f"✅ Found team ID from mapping for {team_name}: {mapped_id}")
+            return mapped_id
         
         self._rate_limit()
         
