@@ -115,19 +115,54 @@ class APIFootballClient:
             logger.error(f"❌ Error finding fixture: {e}")
             return None
     
-    def get_team_id(self, team_name: str) -> Optional[int]:
-        """Get team ID by name with caching"""
+    def _normalize_team_name(self, team_name: str) -> str:
+        """Normalize team name to handle variations between APIs"""
+        import re
+        team = team_name.lower()
+        
+        # Remove common prefixes
+        team = re.sub(r'^(fc|afc|bfc|cfc|dfc|ssc|sfc|ac|as|cd|cf|sd|us|sv|vfb|fk|hsk|nk|sk|gks|mks|ks|lks|standard|royal|racing|sporting|athletic)\s+', '', team)
+        
+        # Common team name variations
+        variations = {
+            'manchester united': 'man united',
+            'manchester city': 'man city',
+            'tottenham hotspur': 'tottenham',
+            'brighton and hove albion': 'brighton',
+            'wolverhampton wanderers': 'wolves',
+            'west ham united': 'west ham',
+            'newcastle united': 'newcastle',
+            'nottingham forest': 'nottingham',
+            'leeds united': 'leeds'
+        }
+        
+        if team in variations:
+            team = variations[team]
+        
+        # Remove special characters but keep letters and numbers
+        team = re.sub(r'[^a-z0-9\s]', '', team)
+        return team.strip()
+    
+    def get_team_id(self, team_name: str, league_id: int = None) -> Optional[int]:
+        """Get team ID by name with caching and normalization"""
         if not hasattr(self, '_team_cache'):
             self._team_cache = {}
         
-        if team_name in self._team_cache:
-            return self._team_cache[team_name]
+        cache_key = f"{team_name}_{league_id}" if league_id else team_name
+        if cache_key in self._team_cache:
+            return self._team_cache[cache_key]
         
         self._rate_limit()
         
         try:
+            # Build search params
             url = f"{self.base_url}/teams"
             params = {'search': team_name}
+            
+            # Add league filter if provided (helps narrow search)
+            if league_id:
+                params['league'] = league_id
+                params['season'] = 2024  # Current season
             
             response = requests.get(url, headers=self.headers, params=params, timeout=15)
             
@@ -135,18 +170,52 @@ class APIFootballClient:
                 data = response.json()
                 teams = data.get('response', [])
                 
+                # Normalize the search term
+                normalized_search = self._normalize_team_name(team_name)
+                
+                # Try exact match first
                 for team_data in teams:
                     team = team_data.get('team', {})
-                    if team.get('name', '').lower() == team_name.lower():
+                    team_api_name = team.get('name', '')
+                    
+                    if team_api_name.lower() == team_name.lower():
                         team_id = team.get('id')
-                        self._team_cache[team_name] = team_id
+                        self._team_cache[cache_key] = team_id
+                        logger.info(f"✅ Found team ID for {team_name}: {team_id}")
                         return team_id
                 
+                # Try normalized match
+                for team_data in teams:
+                    team = team_data.get('team', {})
+                    team_api_name = team.get('name', '')
+                    normalized_api_name = self._normalize_team_name(team_api_name)
+                    
+                    if normalized_api_name == normalized_search:
+                        team_id = team.get('id')
+                        self._team_cache[cache_key] = team_id
+                        logger.info(f"✅ Found team ID for {team_name} (normalized): {team_id}")
+                        return team_id
+                
+                # Try substring match as fallback
+                for team_data in teams:
+                    team = team_data.get('team', {})
+                    team_api_name = team.get('name', '')
+                    normalized_api_name = self._normalize_team_name(team_api_name)
+                    
+                    if normalized_search in normalized_api_name or normalized_api_name in normalized_search:
+                        team_id = team.get('id')
+                        self._team_cache[cache_key] = team_id
+                        logger.info(f"✅ Found team ID for {team_name} (substring match): {team_id}")
+                        return team_id
+                
+                # If we have any results, take the first one
                 if teams:
                     team_id = teams[0].get('team', {}).get('id')
-                    self._team_cache[team_name] = team_id
+                    self._team_cache[cache_key] = team_id
+                    logger.info(f"⚠️ Using first match for {team_name}: {team_id}")
                     return team_id
             
+            logger.warning(f"⚠️ No team ID found for: {team_name}")
             return None
             
         except Exception as e:
