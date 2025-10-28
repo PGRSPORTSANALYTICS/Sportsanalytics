@@ -28,7 +28,7 @@ class APIFootballClient:
         }
         self.request_count = 0
         self.last_request_time = 0
-        self.daily_quota_limit = 90  # Stay under 100/day limit
+        self.daily_quota_limit = 7000  # 7500 total, leave buffer for safety
         
         # Caching to minimize API calls
         self.team_id_cache = {}  # Cache team IDs
