@@ -252,12 +252,6 @@ class TelegramBroadcaster:
         league = prediction.get('league', 'N/A')
         match_time = prediction.get('datetime', 'TBA')
         
-        glossary = """Quick Guide:
-• WR = Win Rate (% of games won)
-• xG = Expected Goals (statistical prediction)
-• H2H = Head-to-Head (past matches between teams)
-"""
-        
         message = f"""⚽ NEW EXACT SCORE PREDICTION
 
 {home} vs {away}
@@ -273,8 +267,6 @@ Match Time: {match_time}
 League: {league}
 
 {analysis_text}
-
-{glossary}
 
 📊 LIVE PERFORMANCE
 {stats['wins']}/{stats['total']} wins ({stats['win_rate']:.1f}%)
