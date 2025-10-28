@@ -721,6 +721,9 @@ if not historical.empty:
     display_df['P&L'] = display_df['profit_loss'].apply(lambda x: f"{x:,.0f} SEK")
     display_df['Score'] = display_df['selection']
     
+    # Sort by match_date in descending order (newest first)
+    display_df = display_df.sort_values('match_date', ascending=False)
+    
     table_data = display_df[['Match', 'Score', 'odds', 'result', 'P&L', 'match_date']].copy()
     table_data.columns = ['Match', 'Predicted Score', 'Odds', 'Result', 'P&L', 'Date']
     table_data.index = range(1, len(table_data) + 1)
