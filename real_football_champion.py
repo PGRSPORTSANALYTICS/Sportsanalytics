@@ -1648,7 +1648,7 @@ class RealFootballChampion:
                     print(f"❌ ERROR evaluating score prediction: {e}")
             
             # 🔥 Only save THE BEST prediction if it meets threshold
-            if best_prediction and best_prediction['confidence_score'] >= 85 and best_prediction.get('score_pred', '') in ['2-0', '2-1']:
+            if best_prediction and best_prediction['confidence_score'] >= 70 and best_prediction.get('score_pred', '') in ['2-0', '2-1']:
                 try:
                     score_pred = best_prediction['score_pred']
                     confidence_result = best_prediction['confidence_result']

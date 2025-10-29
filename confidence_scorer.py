@@ -28,9 +28,12 @@ class ConfidenceScorer:
             '0-0': -10,   # Low scoring risky
         }
         
-        # Odds sweet spot: 11-13x = 23.1% WR (6/26) - PROVEN!
+        # REAL DATA: 12-14x = 4 wins (BEST), 10-12x = 2 wins
+        # AVOID: 9-11x (4% WR), 13-15x for 2-1 (0% WR)
         self.OPTIMAL_ODDS_MIN = 11.0
-        self.OPTIMAL_ODDS_MAX = 13.0
+        self.OPTIMAL_ODDS_MAX = 14.0  # Extended to 14x based on 4 wins
+        self.BEST_ODDS_MIN = 12.0
+        self.BEST_ODDS_MAX = 14.0  # 12-14x has most wins
         
         # REAL DATA: Ligue 1 = 25% WR, Serie A/EPL = 0% WR
         self.PREMIUM_LEAGUES = {
@@ -124,11 +127,16 @@ class ConfidenceScorer:
             else:
                 tier = "LOW"
             
+            # REAL DATA: wins happen at conf 70-94, odds 11-14x, scores 2-0/2-1
+            odds = prediction.get('odds', 0)
+            is_good_odds = 11.0 <= odds <= 14.0 or (odds <= 16.0 and predicted_score == '2-0')
+            is_good_score = predicted_score in ['2-0', '2-1']
+            
             result = {
                 'confidence': confidence,
                 'tier': tier,
                 'breakdown': breakdown,
-                'should_bet': confidence >= 85 and predicted_score in ['2-0', '2-1']  # ONLY bet on proven winners
+                'should_bet': confidence >= 70 and is_good_score and is_good_odds  # Real data shows 70+ works
             }
             
             logger.info(f"📊 Confidence: {confidence} ({tier}) - {prediction.get('home_team')} vs {prediction.get('away_team')} → {predicted_score}")
@@ -146,23 +154,30 @@ class ConfidenceScorer:
     
     def _score_odds(self, odds: float) -> float:
         """
-        Score odds based on proximity to proven sweet spot (11-13x)
-        Perfect score: 25 points for odds in 11-13 range
+        Score odds based on REAL winning data
+        12-14x = 4 wins (BEST), 10-12x = 2 wins
+        9-11x = 1 win (4% WR - BAD), <10x = 2 wins
         """
-        if odds < 7.0 or odds > 14.0:
+        if odds < 7.0 or odds > 16.0:
             return 0  # Outside acceptable range
         
-        if self.OPTIMAL_ODDS_MIN <= odds <= self.OPTIMAL_ODDS_MAX:
-            return 25  # Perfect sweet spot
+        # BEST RANGE: 12-14x (4 wins)
+        if self.BEST_ODDS_MIN <= odds <= self.BEST_ODDS_MAX:
+            return 30  # PERFECT - Most wins here
         
-        # Gradual falloff outside sweet spot
-        if 9.0 <= odds < 11.0 or 13.0 < odds <= 14.0:
-            return 18  # Acceptable range
+        # GOOD RANGE: 10-12x (2 wins)
+        if 10.0 <= odds < 12.0:
+            return 22  # Good
         
-        if 7.0 <= odds < 9.0:
-            return 12  # Lower confidence
+        # ACCEPTABLE: 14-16x (Union Saint-Gilloise 2-0 won at 15.92x)
+        if 14.0 < odds <= 16.0:
+            return 15  # OK for 2-0 only
         
-        return 5  # Edge of acceptable range
+        # WEAK: <10x (2 wins but lower sample)
+        if 7.0 <= odds < 10.0:
+            return 10  # Weak
+        
+        return 0
     
     def _score_xg_alignment(self, predicted_score: str, analysis: Dict) -> float:
         """
