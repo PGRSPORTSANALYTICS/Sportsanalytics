@@ -32,11 +32,17 @@ class ConfidenceScorer:
         self.OPTIMAL_ODDS_MIN = 11.0
         self.OPTIMAL_ODDS_MAX = 13.0
         
-        # Top leagues with best data quality
+        # REAL DATA: Ligue 1 = 25% WR, Serie A/EPL = 0% WR
         self.PREMIUM_LEAGUES = {
-            'soccer_epl', 'soccer_spain_la_liga', 'soccer_italy_serie_a',
-            'soccer_germany_bundesliga', 'soccer_france_ligue_one',
-            'soccer_uefa_champs_league'
+            'soccer_france_ligue_one',  # 25% win rate - BEST
+            'soccer_uefa_europa_league',  # 50% win rate
+            'soccer_belgium_first_div',  # 100% win rate (small sample)
+        }
+        
+        # AVOID these leagues - 0% win rate
+        self.AVOID_LEAGUES = {
+            'soccer_italy_serie_a',  # 0/16 = 0%
+            'soccer_epl',  # 0/4 = 0%
         }
         
         logger.info("✅ Confidence scorer initialized with proven patterns")
@@ -85,9 +91,14 @@ class ConfidenceScorer:
             score += data_score
             breakdown['data_quality'] = data_score
             
-            # 4. LEAGUE QUALITY (0-15 points)
+            # 4. LEAGUE QUALITY (0-20 points) - BASED ON REAL DATA
             league = prediction.get('sport_key', '')
-            league_score = 15 if league in self.PREMIUM_LEAGUES else 8
+            if league in self.AVOID_LEAGUES:
+                league_score = -30  # SKIP Serie A and Premier League (0% win rate)
+            elif league in self.PREMIUM_LEAGUES:
+                league_score = 20  # Ligue 1, Europa, Belgian (25-100% win rates)
+            else:
+                league_score = 5  # Unknown leagues
             score += league_score
             breakdown['league_quality'] = league_score
             
