@@ -20,9 +20,24 @@ class FBrefScraper:
     
     def __init__(self):
         self.base_url = "https://fbref.com"
+        
+        # Rotate user agents to avoid blocking
+        self.user_agents = [
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        ]
+        
         self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            'User-Agent': self.user_agents[0],
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1'
         }
+        
+        self.request_count = 0
         
         # League URLs on FBref
         self.leagues = {
@@ -56,10 +71,15 @@ class FBrefScraper:
                 logger.warning(f"League {league} not found in FBref")
                 return None
             
-            # Get league page
+            # Get league page with rotating headers
+            self.request_count += 1
+            self.headers['User-Agent'] = self.user_agents[self.request_count % len(self.user_agents)]
+            
             url = f"{self.base_url}{league_url}"
-            response = requests.get(url, headers=self.headers, timeout=10)
-            time.sleep(3)  # Respect rate limits
+            response = requests.get(url, headers=self.headers, timeout=15)
+            
+            # Longer delays to avoid blocking
+            time.sleep(5 + (self.request_count % 3))  # 5-7 seconds between requests
             
             if response.status_code != 200:
                 logger.error(f"FBref returned {response.status_code}")

@@ -22,6 +22,8 @@ from api_football_client import APIFootballClient
 from confidence_scorer import ConfidenceScorer
 from poisson_predictor import PoissonScorePredictor
 from xg_predictor import ExpectedGoalsPredictor
+from referee_analyzer import RefereeAnalyzer
+from team_name_mapper import TeamNameMapper
 
 @dataclass
 class TeamForm:
@@ -139,6 +141,19 @@ class RealFootballChampion:
             self.poisson_predictor = None
             self.xg_predictor = None
             self.use_poisson_system = False
+        
+        # 🏆 Initialize TOP 1% FEATURES
+        try:
+            self.referee_analyzer = RefereeAnalyzer()
+            self.team_mapper = TeamNameMapper()
+            print("🏆 ELITE FEATURES LOADED:")
+            print("   ✅ Referee Analysis (KILLER EDGE)")
+            print("   ✅ Team Name Mapping (Cross-source compatibility)")
+            print("   🎯 Target: 23-30% hit rate")
+        except Exception as e:
+            print(f"⚠️ Elite features initialization failed: {e}")
+            self.referee_analyzer = None
+            self.team_mapper = None
         
         # Get API-Football key from environment
         self.api_football_key = os.getenv('API_FOOTBALL_KEY')
