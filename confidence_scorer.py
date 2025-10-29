@@ -180,12 +180,12 @@ class ConfidenceScorer:
         
         # HIGH SCORING MATCH (both xG > 2.0)
         if home_xg > 2.0 and away_xg > 2.0:
-            if predicted_score == '1-1':
-                adjustment = 15  # Perfect! Both will score
-            elif predicted_score == '2-1':
-                adjustment = 10  # Good, high scoring
-            elif predicted_score == '2-2':
-                adjustment = 8   # Logical but unproven
+            if predicted_score == '2-1':
+                adjustment = 15  # BEST - High scoring but one wins
+            elif predicted_score == '2-0':
+                adjustment = 10  # One team dominates
+            elif predicted_score == '1-1':
+                adjustment = -10  # 1-1 has 10% win rate - AVOID
             elif predicted_score == '1-0' or predicted_score == '0-1':
                 adjustment = -15  # Contradicts xG!
             else:
@@ -206,12 +206,14 @@ class ConfidenceScorer:
         
         # HOME DOMINANT (home xG > 2.0, away xG < 1.5)
         elif home_xg > 2.0 and away_xg < 1.5:
-            if predicted_score == '2-1' or predicted_score == '2-0':
-                adjustment = 15  # Home wins with goals
+            if predicted_score == '2-0':
+                adjustment = 20  # PERFECT - Home dominant, 66.7% WR
+            elif predicted_score == '2-1':
+                adjustment = 15  # Good - Home wins with goals
             elif predicted_score == '1-0':
-                adjustment = 10  # Home wins tight
+                adjustment = -10  # 8.7% WR - AVOID
             elif predicted_score == '1-1':
-                adjustment = -10  # Home should dominate
+                adjustment = -15  # Home should dominate
             else:
                 adjustment = 0
         
@@ -228,10 +230,12 @@ class ConfidenceScorer:
         
         # BALANCED ATTACK (both xG between 1.5-2.5)
         elif 1.5 <= home_xg <= 2.5 and 1.5 <= away_xg <= 2.5:
-            if predicted_score == '1-1':
-                adjustment = 10  # Evenly matched
-            elif predicted_score == '2-1':
-                adjustment = 5   # Slight edge
+            if predicted_score == '2-1':
+                adjustment = 15  # Best for balanced - 15% WR
+            elif predicted_score == '2-0':
+                adjustment = 10  # One edges it - 66.7% WR
+            elif predicted_score == '1-1':
+                adjustment = -10  # Only 10% WR - AVOID
             else:
                 adjustment = 0
         
