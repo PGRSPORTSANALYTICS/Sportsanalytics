@@ -18,13 +18,14 @@ class ConfidenceScorer:
     
     def __init__(self):
         # REAL DATA from 153 settled predictions (Oct 2025)
+        # FOCUS ON WINNERS: 2-0 (66.7%), 2-1 (15%), 11-13x odds (23.1%)
         self.SCORE_PATTERN_SCORES = {
-            '2-0': 40,  # 66.7% WR (2/3) - CHAMPION!
-            '2-1': 30,  # 15% WR (3/20) - STRONG
-            '1-1': 10,  # 10% WR (1/10) - WEAK
-            '1-0': 5,   # 8.7% WR (2/23) - WEAK
-            '0-1': 0,   # 4.5% WR (1/22) - SKIP
-            '0-0': 5,   # Low scoring risky
+            '2-0': 50,  # 66.7% WR (2/3) - ONLY WINNER! PRIORITIZE THIS
+            '2-1': 25,  # 15% WR (3/20) - ACCEPTABLE
+            '1-1': -10,  # 10% WR (1/10) - SKIP
+            '1-0': -10,   # 8.7% WR (2/23) - SKIP
+            '0-1': -20,   # 4.5% WR (1/22) - NEVER BET
+            '0-0': -10,   # Low scoring risky
         }
         
         # Odds sweet spot: 11-13x = 23.1% WR (6/26) - PROVEN!
@@ -116,7 +117,7 @@ class ConfidenceScorer:
                 'confidence': confidence,
                 'tier': tier,
                 'breakdown': breakdown,
-                'should_bet': confidence >= 90  # ONLY ELITE BETS - Real data shows we need higher quality
+                'should_bet': confidence >= 85 and predicted_score in ['2-0', '2-1']  # ONLY bet on proven winners
             }
             
             logger.info(f"📊 Confidence: {confidence} ({tier}) - {prediction.get('home_team')} vs {prediction.get('away_team')} → {predicted_score}")
