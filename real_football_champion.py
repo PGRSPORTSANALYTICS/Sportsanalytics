@@ -20,6 +20,8 @@ from feature_analytics import FeatureAnalytics
 from telegram_sender import TelegramBroadcaster
 from api_football_client import APIFootballClient
 from confidence_scorer import ConfidenceScorer
+from poisson_predictor import PoissonScorePredictor
+from xg_predictor import ExpectedGoalsPredictor
 
 @dataclass
 class TeamForm:
@@ -118,6 +120,25 @@ class RealFootballChampion:
         # 🎯 Initialize confidence scorer for selective betting
         self.confidence_scorer = ConfidenceScorer()
         print("🎯 Confidence scorer initialized for selective betting")
+        
+        # 🔥 Initialize Poisson + XGBoost system (PROFESSIONAL APPROACH)
+        try:
+            self.poisson_predictor = PoissonScorePredictor()
+            self.xg_predictor = ExpectedGoalsPredictor()
+            
+            # Load trained XGBoost models
+            if self.xg_predictor.load_models():
+                print("🔥 Poisson + XGBoost system loaded - PROFESSIONAL MODE ACTIVE")
+                print("   Using industry-standard statistical prediction")
+                self.use_poisson_system = True
+            else:
+                print("⚠️ XGBoost models not found - training on first run")
+                self.use_poisson_system = False
+        except Exception as e:
+            print(f"⚠️ Poisson system initialization failed: {e}")
+            self.poisson_predictor = None
+            self.xg_predictor = None
+            self.use_poisson_system = False
         
         # Get API-Football key from environment
         self.api_football_key = os.getenv('API_FOOTBALL_KEY')
@@ -1448,7 +1469,40 @@ class RealFootballChampion:
         }
     
     def calculate_exact_score_probabilities(self, home_xg: float, away_xg: float) -> Dict:
-        """Calculate exact score probabilities using Poisson distribution"""
+        """
+        Calculate exact score probabilities using Poisson + Dixon-Coles
+        
+        🔥 PROFESSIONAL MODE: Uses Poisson + Dixon-Coles with industry-standard methods
+        Industry benchmark: 15-25% hit rate for exact scores
+        """
+        
+        # 🔥 USE PROFESSIONAL POISSON + DIXON-COLES SYSTEM
+        if self.use_poisson_system and self.poisson_predictor:
+            try:
+                # Get top 10 scores using professional Poisson + Dixon-Coles
+                top_scores_list = self.poisson_predictor.get_top_scores(
+                    lambda_home=home_xg,
+                    lambda_away=away_xg,
+                    top_n=10,
+                    min_probability=0.02  # Only scores with 2%+ probability
+                )
+                
+                # Convert to expected format
+                top_scores = {}
+                for i, score_info in enumerate(top_scores_list[:5], 1):
+                    top_scores[f"score_{i}"] = {
+                        'score': score_info['score'],
+                        'probability': score_info['probability'],
+                        'home_goals': score_info['home_goals'],
+                        'away_goals': score_info['away_goals']
+                    }
+                
+                return top_scores
+                
+            except Exception as e:
+                print(f"⚠️ Professional Poisson system failed: {e}, falling back to basic")
+        
+        # FALLBACK: Basic Poisson (old method)
         import math
         
         def poisson_prob(k: int, lam: float) -> float:
@@ -1457,10 +1511,8 @@ class RealFootballChampion:
                 return 0.0
             return (math.exp(-lam) * (lam ** k)) / math.factorial(k)
         
-        # Calculate probabilities for common exact scores (0-0 to 4-4)
+        # Calculate probabilities for common exact scores
         exact_scores = {}
-        
-        # Most likely exact scores to analyze
         common_scores = [
             (0, 0), (1, 0), (0, 1), (1, 1), (2, 0), (0, 2),
             (2, 1), (1, 2), (2, 2), (3, 0), (0, 3), (3, 1),
@@ -1479,13 +1531,11 @@ class RealFootballChampion:
                 'away_goals': away_goals
             }
         
-        # Sort by probability and return top scores
         sorted_scores = sorted(exact_scores.items(), key=lambda x: x[1]['probability'], reverse=True)
         
-        # Return top 5 most likely exact scores
         top_scores = {}
-        for i, (score, data) in enumerate(sorted_scores[:5]):
-            top_scores[f"score_{i+1}"] = {
+        for i, (score, data) in enumerate(sorted_scores[:5], 1):
+            top_scores[f"score_{i}"] = {
                 'score': score,
                 'probability': data['probability'],
                 'home_goals': data['home_goals'],
@@ -1647,8 +1697,41 @@ class RealFootballChampion:
                 except Exception as e:
                     print(f"❌ ERROR evaluating score prediction: {e}")
             
-            # 🔥 Only save THE BEST prediction if it meets threshold
-            if best_prediction and best_prediction['confidence_score'] >= 70 and best_prediction.get('score_pred', '') in ['2-0', '2-1']:
+            # 🔥 PROFESSIONAL FILTERING: Poisson probability + value betting
+            should_save = False
+            if best_prediction:
+                score_pred = best_prediction.get('score_pred', {})
+                confidence_score = best_prediction['confidence_score']
+                poisson_prob = score_pred.get('probability', 0)
+                odds = score_pred.get('odds', 0)
+                score = score_pred.get('score', '')
+                
+                # VALUE BETTING CRITERIA (Professional Standard):
+                # 1. Poisson probability ≥ 7% (realistic for exact scores)
+                # 2. Expected value ≥ 1.15 (15%+ edge)
+                # 3. Proven scores: 2-0, 2-1, 1-1, 1-0
+                # 4. Odds: 7-16x range
+                expected_value = poisson_prob * odds if odds > 0 else 0
+                
+                is_proven_score = score in ['2-0', '2-1', '1-1', '1-0']
+                has_good_probability = poisson_prob >= 0.07  # 7%+
+                has_value = expected_value >= 1.15  # 15% edge
+                good_odds = 7.0 <= odds <= 16.0
+                
+                should_save = (
+                    is_proven_score and
+                    has_good_probability and
+                    has_value and
+                    good_odds and
+                    confidence_score >= 70
+                )
+                
+                if not should_save:
+                    filtered_count += 1
+                    print(f"   ⚠️ FILTERED: {prediction['home_team']} vs {prediction['away_team']} → {score} @ {odds:.1f}x")
+                    print(f"      Prob: {poisson_prob*100:.1f}% | EV: {expected_value:.2f} | Conf: {confidence_score}")
+            
+            if should_save and best_prediction:
                 try:
                     score_pred = best_prediction['score_pred']
                     confidence_result = best_prediction['confidence_result']
@@ -1695,17 +1778,10 @@ class RealFootballChampion:
                     
                 except Exception as e:
                     print(f"❌ ERROR saving exact score prediction: {e}")
-            else:
-                # All predictions filtered out
-                filtered_count += 1
-                if best_prediction:
-                    print(f"   ⚠️ FILTERED: {prediction['home_team']} vs {prediction['away_team']} → Best was {best_prediction['score_pred']['score']} (confidence: {best_prediction['confidence_score']})")
-                else:
-                    print(f"   ⚠️ FILTERED: {prediction['home_team']} vs {prediction['away_team']} → No valid predictions")
         
-        print(f"\n📊 CONFIDENCE FILTERING RESULTS:")
-        print(f"   ✅ Saved: {saved_count} predictions (ONE per match, 85+ confidence)")
-        print(f"   ⚠️ Filtered: {filtered_count} matches (<85 confidence or duplicate)")
+        print(f"\n📊 POISSON + VALUE BETTING RESULTS:")
+        print(f"   ✅ Saved: {saved_count} predictions (7%+ Poisson probability, 15%+ edge)")
+        print(f"   ⚠️ Filtered: {filtered_count} matches (low probability or value)")
         
         self.conn.commit()
     
