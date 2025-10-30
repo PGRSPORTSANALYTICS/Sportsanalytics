@@ -5,6 +5,7 @@ import pandas as pd
 import sqlite3
 from datetime import datetime, date
 from feature_analytics import FeatureAnalytics
+from highlights_detector import HighlightsDetector
 
 # Database path
 DB_PATH = 'data/real_football.db'
@@ -464,6 +465,63 @@ if exact_stats is not None:
         st.metric("ROI", f"+{roi:.1f}%")
 
 st.success("🔒 **100% Authentic Performance** | Real match results verified from API-Football")
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# ============================================================================
+# HIGHLIGHT MOMENTS
+# ============================================================================
+
+st.markdown("## 🌟 HIGHLIGHT MOMENTS")
+
+try:
+    highlights_detector = HighlightsDetector()
+    highlights = highlights_detector.get_all_highlights()
+    
+    if highlights:
+        st.caption("Your best performances and achievements")
+        
+        for highlight in highlights:
+            emoji = highlight.get('emoji', '⭐')
+            tier = highlight.get('tier', 'HIGHLIGHT')
+            title = highlight.get('title', 'Achievement')
+            description = highlight.get('description', '')
+            is_active = highlight.get('active', False)
+            
+            tier_colors = {
+                'LEGENDARY': '#FFD700',
+                'EPIC': '#FF6B6B',
+                'GREAT': '#4ECDC4',
+                'MILESTONE': '#95E1D3'
+            }
+            tier_color = tier_colors.get(tier, '#FFFFFF')
+            
+            active_badge = " 🔥 ACTIVE" if is_active else ""
+            
+            st.markdown(f"""
+            <div style="
+                background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%);
+                border-left: 4px solid {tier_color};
+                padding: 15px 20px;
+                margin: 10px 0;
+                border-radius: 8px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            ">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span style="font-size: 2.5rem;">{emoji}</span>
+                    <div style="flex: 1;">
+                        <div style="color: {tier_color}; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 2px;">{tier}{active_badge}</div>
+                        <div style="color: #FFFFFF; font-size: 1.25rem; font-weight: 700; margin-top: 2px;">{title}</div>
+                        <div style="color: #B0B0B0; font-size: 0.9rem; margin-top: 5px;">{description}</div>
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+    else:
+        st.info("🎯 Keep building your track record - highlights will appear as you achieve milestones!")
+        
+except Exception as e:
+    st.info("🌟 Highlight moments will appear as you build your prediction history")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
