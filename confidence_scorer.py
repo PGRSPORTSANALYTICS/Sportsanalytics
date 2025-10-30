@@ -254,12 +254,41 @@ class ConfidenceScorer:
             else:
                 adjustment = 0
         
+        # REFEREE IMPACT BONUS (MONEY FEATURE!)
+        referee_style = analysis.get('referee_style', 'balanced')
+        if referee_style:
+            # Low scoring predictions favor strict refs
+            if predicted_score in ['1-0', '0-1', '0-0']:
+                if referee_style == 'strict':
+                    adjustment += 8  # Strict ref = fewer goals = good match
+                elif referee_style == 'lenient':
+                    adjustment -= 5  # Lenient ref = more goals = bad match
+            
+            # High scoring predictions favor lenient refs
+            elif predicted_score in ['2-1', '3-1', '2-2', '3-2']:
+                if referee_style == 'lenient':
+                    adjustment += 8  # Lenient ref = more goals = good match
+                elif referee_style == 'strict':
+                    adjustment -= 5  # Strict ref = fewer goals = bad match
+        
+        # REST DAYS / FATIGUE PENALTY (MONEY FEATURE!)
+        home_rest = analysis.get('home_rest_days', 4)
+        away_rest = analysis.get('away_rest_days', 4)
+        
+        # Fatigue penalty (<3 days rest)
+        if home_rest < 3 or away_rest < 3:
+            adjustment -= 10  # Fatigued team = unpredictable
+        
+        # Major rest difference (unfair advantage)
+        elif abs(home_rest - away_rest) > 5:
+            adjustment -= 8  # Uneven rest = unpredictable outcome
+        
         return adjustment
     
     def _score_data_quality(self, analysis: Dict) -> float:
         """
         Score data quality based on what real data we have
-        Max 20 points for complete data
+        Max 30 points for complete data (ENHANCED with referee + rest days)
         """
         score = 0
         
@@ -281,6 +310,14 @@ class ConfidenceScorer:
             score += 7
         elif analysis.get('lineups_checked', False):
             score += 3
+        
+        # REFEREE DATA (MONEY FEATURE!) - 5 points
+        if analysis.get('referee_style'):
+            score += 5
+        
+        # REST DAYS DATA (MONEY FEATURE!) - 5 points
+        if analysis.get('has_rest_data', False):
+            score += 5
         
         return score
     
