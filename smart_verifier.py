@@ -54,27 +54,39 @@ class SmartVerifier:
         verified_count = 0
         for home, away, date, selection in pending:
             try:
-                # Use scraper which has caching
-                results = self.scraper.get_match_results_multi_source(home, away, date)
+                # Extract date for API call
+                if 'T' in date:
+                    date_obj = datetime.fromisoformat(date.replace('Z', '+00:00'))
+                else:
+                    date_obj = datetime.fromtimestamp(int(date)) if date.isdigit() else datetime.fromisoformat(date)
                 
-                if results:
-                    # Update outcome
-                    actual_score = f"{results['home_score']}-{results['away_score']}"
-                    predicted_score = selection.split(':')[-1].strip()
-                    
-                    outcome = 'won' if actual_score == predicted_score else 'lost'
-                    
-                    cursor.execute('''
-                        UPDATE football_opportunities
-                        SET outcome = ?, actual_score = ?
-                        WHERE home_team = ? AND away_team = ? AND match_date = ?
-                    ''', (outcome, actual_score, home, away, date))
-                    
-                    verified_count += 1
-                    logger.info(f"✅ Verified: {home} vs {away} = {actual_score}")
+                date_str = date_obj.strftime('%Y-%m-%d')
                 
-                # Small delay between checks
-                time.sleep(2)
+                # Get all results for that day (uses caching!)
+                all_results = self.scraper.get_results_for_date(date_str)
+                
+                # Find matching result
+                match_found = False
+                for result in all_results:
+                    if (result['home_team'] == home and result['away_team'] == away):
+                        actual_score = result['score']
+                        predicted_score = selection.split(':')[-1].strip()
+                        
+                        outcome = 'won' if actual_score == predicted_score else 'lost'
+                        
+                        cursor.execute('''
+                            UPDATE football_opportunities
+                            SET outcome = ?, actual_score = ?
+                            WHERE home_team = ? AND away_team = ? AND match_date = ?
+                        ''', (outcome, actual_score, home, away, date))
+                        
+                        verified_count += 1
+                        match_found = True
+                        logger.info(f"✅ Verified: {home} vs {away} = {actual_score}")
+                        break
+                
+                if not match_found:
+                    logger.debug(f"⏳ No result yet for {home} vs {away}")
                 
             except Exception as e:
                 logger.error(f"Error verifying {home} vs {away}: {e}")
