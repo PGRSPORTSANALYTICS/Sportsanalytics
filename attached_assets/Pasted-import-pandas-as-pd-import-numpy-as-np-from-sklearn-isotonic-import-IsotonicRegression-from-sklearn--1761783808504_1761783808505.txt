@@ -1,0 +1,51 @@
+import pandas as pd
+import numpy as np
+from sklearn.isotonic import IsotonicRegression
+from sklearn.metrics import brier_score_loss
+import joblib
+import os
+
+class AutoLeagueCalibrator:
+    """
+    Självjusterande kalibreringssystem per liga.
+    Data in -> kalibrering tränas/uppdateras -> används vid nästa körning.
+    """
+
+    def __init__(self, path="league_calibrators.joblib", retrain_every=100):
+        self.path = path
+        self.retrain_every = retrain_every
+        self.models = {}
+        self.counts = {}
+        if os.path.exists(path):
+            self.models = joblib.load(path)
+
+    def update(self, df, league_col="league", prob_col="pred_prob", outcome_col="outcome"):
+        """Tar in nya matcher och uppdaterar kalibrering automatiskt."""
+        for league, data in df.groupby(league_col):
+            if league not in self.counts:
+                self.counts[league] = 0
+            self.counts[league] += len(data)
+
+            if (league not in self.models) or (self.counts[league] >= self.retrain_every):
+                iso = IsotonicRegression(out_of_bounds="clip")
+                iso.fit(data[prob_col], data[outcome_col])
+                self.models[league] = iso
+                self.counts[league] = 0
+
+        joblib.dump(self.models, self.path)
+
+    def predict(self, league, raw_probs):
+        """Returnerar kalibrerade sannolikheter för angiven liga."""
+        if league in self.models:
+            return np.clip(self.models[league].predict(raw_probs), 0.001, 0.999)
+        else:
+            return np.clip(raw_probs, 0.001, 0.999)
+
+    def score(self, df, league_col="league", prob_col="pred_prob", outcome_col="outcome"):
+        """Ger Brier-score före/efter kalibrering."""
+        scores = {}
+        for league, data in df.groupby(league_col):
+            raw = brier_score_loss(data[outcome_col], data[prob_col])
+            cal = brier_score_loss(data[outcome_col], self.predict(league, data[prob_col]))
+            scores[league] = {"before": raw, "after": cal, "improvement_%": 100*(raw-cal)/raw}
+        return pd.DataFrame(scores).T
