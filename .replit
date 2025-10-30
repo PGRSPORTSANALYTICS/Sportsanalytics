@@ -30,10 +30,6 @@ args = "Auto Bet Logger"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Result Verifier"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
 args = "Telegram Tips Bot"
 
 [[workflows.workflow.tasks]]
@@ -43,6 +39,10 @@ args = "Real Football Champion"
 [[workflows.workflow.tasks]]
 task = "workflow.run"
 args = "Performance Updates"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Smart Verifier"
 
 [[workflows.workflow]]
 name = "install_dependencies"
@@ -76,17 +76,6 @@ args = "python auto_bet_logger.py"
 outputType = "console"
 
 [[workflows.workflow]]
-name = "Result Verifier"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python3 schedule_verification.py"
-
-[workflows.workflow.metadata]
-outputType = "console"
-
-[[workflows.workflow]]
 name = "Telegram Tips Bot"
 author = "agent"
 
@@ -115,6 +104,17 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python3 schedule_performance_updates.py"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow]]
+name = "Smart Verifier"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python3 smart_verifier.py"
 
 [workflows.workflow.metadata]
 outputType = "console"
