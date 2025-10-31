@@ -6,6 +6,7 @@ Scores predictions 0-100 based on proven winning factors
 from typing import Dict, Optional
 import logging
 from similar_matches_finder import SimilarMatchesFinder
+from similar_matches_tracker import SimilarMatchesTracker
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -56,6 +57,14 @@ class ConfidenceScorer:
         except Exception as e:
             logger.warning(f"⚠️ Could not initialize Similar Matches Finder: {e}")
             self.similar_finder = None
+        
+        # Initialize Impact Tracker to measure SM effectiveness
+        try:
+            self.sm_tracker = SimilarMatchesTracker()
+            logger.info("✅ Similar Matches Impact Tracker initialized")
+        except Exception as e:
+            logger.warning(f"⚠️ Could not initialize SM Tracker: {e}")
+            self.sm_tracker = None
         
         logger.info("✅ Confidence scorer initialized with proven patterns")
     
@@ -170,6 +179,32 @@ class ConfidenceScorer:
             odds = prediction.get('odds', 0)
             is_good_odds = 11.0 <= odds <= 14.0 or (odds <= 16.0 and predicted_score == '2-0')
             is_good_score = predicted_score in ['2-0', '2-1']
+            
+            # Track Similar Matches impact for analysis
+            if self.sm_tracker and similar_score != 0:
+                try:
+                    base_confidence = confidence - similar_score
+                    match_info = f"{prediction.get('home_team', 'Team A')} vs {prediction.get('away_team', 'Team B')}"
+                    
+                    sm_data = {
+                        'matches_found': breakdown.get('similar_matches_count', 0),
+                        'pattern_strength': breakdown.get('pattern_strength', 0),
+                        'predicted_score_frequency': 0.0
+                    }
+                    
+                    suggestion_id = prediction.get('suggestion_id', f"{match_info}_{predicted_score}")
+                    
+                    self.sm_tracker.track_prediction(
+                        suggestion_id=suggestion_id,
+                        match_info=match_info,
+                        predicted_score=predicted_score,
+                        base_confidence=int(base_confidence),
+                        sm_adjustment=int(similar_score),
+                        final_confidence=int(confidence),
+                        sm_data=sm_data
+                    )
+                except Exception as e:
+                    logger.debug(f"SM tracking failed: {e}")
             
             result = {
                 'confidence': confidence,

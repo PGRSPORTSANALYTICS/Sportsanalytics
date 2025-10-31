@@ -20,7 +20,8 @@ The system employs advanced prediction features including:
 - **Injury and Lineup Data:** Tracks key player injuries and confirms lineups 1-2 hours before kickoff.
 - **Neural Network Predictions:** A deep learning model for exact scores, trained on 50+ features.
 - **Ensemble Prediction System:** Combines Poisson distribution (xG-based), neural network probabilities, and H2H patterns with weighted averaging.
-- **Similar Matches Technology:** Analyzes historical matches with similar characteristics to adjust prediction confidence based on past outcomes.
+- **Similar Matches Technology:** Analyzes historical matches with similar characteristics to adjust prediction confidence based on past outcomes. Uses league grouping (Top 5 leagues pooled together) for larger sample sizes. Adjusts confidence -30 to +30 points based on pattern strength.
+- **Similar Matches Impact Tracker:** Automatically tracks every prediction to measure if Similar Matches is improving hit rate. Compares WITH vs WITHOUT Similar Matches adjustments, tracks predictions saved/blocked, and provides verdict after 20+ settled predictions. View with: `python3 view_sm_impact.py`
 - **Confidence Scoring System:** Filters predictions with a threshold of 85+, using factors like proven score bonuses, odds sweet spot (11-13x), league quality, value score, match context, and injury impact.
 - **Dual API Integration:** Leverages The Odds API for real-time odds and API-Football for injuries, lineups, and statistics, cross-validating data for accuracy.
 - **Ultra-Aggressive Filters:** Targets 1-0 and 1-1 scores in Top 5 leagues with odds 7-11x, based on data-proven winning patterns (1-1 scores with 25% win rate, 2-1 with 16.7%, and 1-0 with 12.5%).
