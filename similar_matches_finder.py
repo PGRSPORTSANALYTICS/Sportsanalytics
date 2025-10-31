@@ -19,6 +19,31 @@ class SimilarMatchesFinder:
     
     def __init__(self, db_path: str = 'data/real_football.db'):
         self.db_path = db_path
+        
+        # League groupings for better sample sizes
+        # Top 5 leagues have similar quality and can be grouped together
+        self.TOP_5_LEAGUES = {
+            'soccer_epl',
+            'soccer_spain_la_liga',
+            'soccer_italy_serie_a',
+            'soccer_germany_bundesliga',
+            'soccer_france_ligue_one'
+        }
+        
+        self.ELITE_EUROPEAN = {
+            'soccer_uefa_champs_league',
+            'soccer_uefa_europa_league',
+            'soccer_uefa_conference_league'
+        }
+        
+        self.SECOND_TIER = {
+            'soccer_netherlands_eredivisie',
+            'soccer_portugal_primeira_liga',
+            'soccer_belgium_first_div',
+            'soccer_scotland_premiership',
+            'soccer_efl_champ'
+        }
+        
         logger.info("✅ Similar Matches Finder initialized")
     
     def find_similar_matches(
@@ -56,9 +81,27 @@ class SimilarMatchesFinder:
             home_gpg = home_form.get('goals_per_game', 1.5)
             away_gpg = away_form.get('goals_per_game', 1.0)
             
+            # Determine league group for better sample size
+            if league in self.TOP_5_LEAGUES:
+                league_group = self.TOP_5_LEAGUES
+                group_name = "Top 5 Leagues"
+            elif league in self.ELITE_EUROPEAN:
+                league_group = self.ELITE_EUROPEAN
+                group_name = "Elite European"
+            elif league in self.SECOND_TIER:
+                league_group = self.SECOND_TIER
+                group_name = "Second Tier"
+            else:
+                # Unknown league - just use exact match
+                league_group = {league}
+                group_name = league
+            
+            # Build IN clause for league group
+            placeholders = ','.join('?' * len(league_group))
+            
             # Find settled matches with similar characteristics
-            # Include league filter for better similarity matching
-            query = """
+            # Use league GROUP instead of exact league for better sample size
+            query = f"""
             SELECT 
                 home_team,
                 away_team,
@@ -76,18 +119,21 @@ class SimilarMatchesFinder:
             AND outcome != ''
             AND outcome NOT IN ('unknown', 'void')
             AND odds BETWEEN ? AND ?
-            AND sport_key = ?
+            AND sport_key IN ({placeholders})
             ORDER BY timestamp DESC
             LIMIT ?
             """
             
-            cursor.execute(query, (odds_min, odds_max, league, max_matches * 3))
+            params = [odds_min, odds_max] + list(league_group) + [max_matches * 3]
+            cursor.execute(query, params)
             rows = cursor.fetchall()
             conn.close()
             
             if not rows:
-                logger.warning(f"No similar matches found for odds {odds:.1f}x")
+                logger.warning(f"No similar matches found for {group_name}, odds {odds:.1f}x")
                 return self._empty_result()
+            
+            logger.info(f"🔍 Searching {group_name} group ({len(league_group)} leagues) for similar matches")
             
             # Filter by form and xG similarity
             similar_matches = []
