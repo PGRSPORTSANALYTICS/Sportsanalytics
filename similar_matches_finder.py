@@ -57,6 +57,7 @@ class SimilarMatchesFinder:
             away_gpg = away_form.get('goals_per_game', 1.0)
             
             # Find settled matches with similar characteristics
+            # Include league filter for better similarity matching
             query = """
             SELECT 
                 home_team,
@@ -66,7 +67,8 @@ class SimilarMatchesFinder:
                 outcome,
                 actual_score,
                 analysis,
-                match_date
+                match_date,
+                sport_key
             FROM football_opportunities
             WHERE (market = 'exact_score' OR selection LIKE 'Exact Score:%')
             AND selection NOT LIKE 'PARLAY%'
@@ -74,11 +76,12 @@ class SimilarMatchesFinder:
             AND outcome != ''
             AND outcome NOT IN ('unknown', 'void')
             AND odds BETWEEN ? AND ?
+            AND sport_key = ?
             ORDER BY timestamp DESC
             LIMIT ?
             """
             
-            cursor.execute(query, (odds_min, odds_max, max_matches * 2))
+            cursor.execute(query, (odds_min, odds_max, league, max_matches * 3))
             rows = cursor.fetchall()
             conn.close()
             
@@ -86,7 +89,7 @@ class SimilarMatchesFinder:
                 logger.warning(f"No similar matches found for odds {odds:.1f}x")
                 return self._empty_result()
             
-            # Filter by form similarity
+            # Filter by form and xG similarity
             similar_matches = []
             for row in rows:
                 analysis_json = row[6]
@@ -107,14 +110,34 @@ class SimilarMatchesFinder:
                         away_diff = abs(hist_away_ppg - away_ppg) / max(away_ppg, 0.1)
                         
                         if home_diff < 0.4 and away_diff < 0.4:
-                            similar_matches.append({
-                                'match': f"{row[0]} vs {row[1]}",
-                                'predicted_score': row[2].split(':')[-1].strip(),
-                                'actual_score': row[5] if row[5] else 'unknown',
-                                'odds': row[3],
-                                'outcome': row[4],
-                                'date': row[7]
-                            })
+                            # Check xG similarity if xG data is available
+                            passes_xg_check = True
+                            if home_xg is not None and away_xg is not None:
+                                hist_xg = analysis.get('xg_prediction', {})
+                                hist_home_xg = hist_xg.get('home_xg')
+                                hist_away_xg = hist_xg.get('away_xg')
+                                
+                                if hist_home_xg is not None and hist_away_xg is not None:
+                                    # ±0.5 xG tolerance for similarity
+                                    home_xg_diff = abs(hist_home_xg - home_xg)
+                                    away_xg_diff = abs(hist_away_xg - away_xg)
+                                    
+                                    if home_xg_diff > 0.5 or away_xg_diff > 0.5:
+                                        passes_xg_check = False
+                            
+                            if passes_xg_check:
+                                similar_matches.append({
+                                    'match': f"{row[0]} vs {row[1]}",
+                                    'predicted_score': row[2].split(':')[-1].strip(),
+                                    'actual_score': row[5] if row[5] else 'unknown',
+                                    'odds': row[3],
+                                    'outcome': row[4],
+                                    'date': row[7]
+                                })
+                                
+                                # Enforce hard cap of 100 matches
+                                if len(similar_matches) >= max_matches:
+                                    break
                 except:
                     continue
             
