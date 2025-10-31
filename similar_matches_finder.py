@@ -53,8 +53,8 @@ class SimilarMatchesFinder:
         home_form: Dict,
         away_form: Dict,
         predicted_score: str,
-        home_xg: float = None,
-        away_xg: float = None,
+        home_xg: Optional[float] = None,
+        away_xg: Optional[float] = None,
         min_matches: int = 20,
         max_matches: int = 100
     ) -> Dict:
