@@ -204,7 +204,7 @@ def load_exact_score_history():
     try:
         conn = sqlite3.connect(DB_PATH)
         query = """
-        SELECT home_team, away_team, selection, odds, outcome, profit_loss, match_date,
+        SELECT home_team, away_team, selection, odds, outcome, profit_loss, match_date, actual_score,
                CASE 
                    WHEN outcome IN ('win', 'won') THEN '✅'
                    WHEN outcome IN ('loss', 'lost') THEN '❌'
@@ -777,13 +777,14 @@ if not historical.empty:
     display_df = historical.copy()
     display_df['Match'] = display_df['home_team'] + ' vs ' + display_df['away_team']
     display_df['P&L'] = display_df['profit_loss'].apply(lambda x: f"{x:,.0f} SEK")
-    display_df['Score'] = display_df['selection']
+    display_df['Predicted Score'] = display_df['selection'].apply(lambda x: x.replace('Exact Score: ', ''))
+    display_df['Actual Score'] = display_df['actual_score'].apply(lambda x: x if pd.notna(x) and x != '' else '⏳')
     
     # Sort by match_date in descending order (newest first)
     display_df = display_df.sort_values('match_date', ascending=False)
     
-    table_data = display_df[['Match', 'Score', 'odds', 'result', 'P&L', 'match_date']].copy()
-    table_data.columns = ['Match', 'Predicted Score', 'Odds', 'Result', 'P&L', 'Date']
+    table_data = display_df[['Match', 'Predicted Score', 'Actual Score', 'odds', 'result', 'P&L', 'match_date']].copy()
+    table_data.columns = ['Match', 'Predicted Score', 'Actual Score', 'Odds', 'Result', 'P&L', 'Date']
     table_data.index = range(1, len(table_data) + 1)
     
     def color_historical(row):
