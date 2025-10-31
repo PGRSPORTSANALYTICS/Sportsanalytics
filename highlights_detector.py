@@ -21,7 +21,8 @@ class HighlightsDetector:
         SELECT home_team, away_team, selection, odds, outcome, profit_loss, 
                match_date, timestamp, stake
         FROM football_opportunities 
-        WHERE tier = 'legacy'
+        WHERE (market = 'exact_score' OR selection LIKE 'Exact Score:%')
+        AND selection NOT LIKE 'PARLAY%'
         AND outcome IS NOT NULL 
         AND outcome != ''
         AND outcome NOT IN ('unknown', 'void')

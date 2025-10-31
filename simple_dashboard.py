@@ -190,7 +190,8 @@ def load_exact_score_performance():
             SUM(CASE WHEN outcome IS NOT NULL AND outcome != '' AND outcome NOT IN ('unknown', 'void') THEN profit_loss ELSE 0 END) as net_profit,
             SUM(CASE WHEN outcome IS NOT NULL AND outcome != '' AND outcome NOT IN ('unknown', 'void') THEN stake ELSE 0 END) as total_staked
         FROM football_opportunities 
-        WHERE tier = 'legacy'
+        WHERE (market = 'exact_score' OR selection LIKE 'Exact Score:%')
+        AND selection NOT LIKE 'PARLAY%'
         """
         result = pd.read_sql_query(query, conn)
         conn.close()
@@ -211,7 +212,8 @@ def load_exact_score_history():
                    ELSE '⚪'
                END as result
         FROM football_opportunities 
-        WHERE tier = 'legacy'
+        WHERE (market = 'exact_score' OR selection LIKE 'Exact Score:%')
+        AND selection NOT LIKE 'PARLAY%'
         AND outcome IS NOT NULL 
         AND outcome != ''
         AND outcome NOT IN ('unknown')
