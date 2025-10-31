@@ -5,6 +5,7 @@ Scores predictions 0-100 based on proven winning factors
 
 from typing import Dict, Optional
 import logging
+from similar_matches_finder import SimilarMatchesFinder
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -47,6 +48,14 @@ class ConfidenceScorer:
             'soccer_italy_serie_a',  # 0/16 = 0%
             'soccer_epl',  # 0/4 = 0%
         }
+        
+        # Initialize Similar Matches Finder (AIstats-style pattern matching)
+        try:
+            self.similar_finder = SimilarMatchesFinder()
+            logger.info("✅ Similar Matches Finder integrated (AIstats technology)")
+        except Exception as e:
+            logger.warning(f"⚠️ Could not initialize Similar Matches Finder: {e}")
+            self.similar_finder = None
         
         logger.info("✅ Confidence scorer initialized with proven patterns")
     
@@ -112,8 +121,38 @@ class ConfidenceScorer:
             score += model_score
             breakdown['model_agreement'] = round(model_score, 1)
             
+            # 6. SIMILAR MATCHES PATTERN (AIstats Technology) (-30 to +30 points)
+            similar_score = 0
+            if self.similar_finder:
+                try:
+                    home_form = analysis.get('home_form', {})
+                    away_form = analysis.get('away_form', {})
+                    home_xg = analysis.get('xg_prediction', {}).get('home_xg', None)
+                    away_xg = analysis.get('xg_prediction', {}).get('away_xg', None)
+                    
+                    similar_result = self.similar_finder.find_similar_matches(
+                        league=league,
+                        odds=odds,
+                        home_form=home_form,
+                        away_form=away_form,
+                        predicted_score=predicted_score,
+                        home_xg=home_xg,
+                        away_xg=away_xg
+                    )
+                    
+                    similar_score = similar_result.get('confidence_adjustment', 0)
+                    breakdown['similar_matches'] = similar_score
+                    breakdown['similar_matches_count'] = similar_result.get('similar_matches_count', 0)
+                    breakdown['pattern_strength'] = similar_result.get('pattern_strength', 0)
+                    
+                except Exception as e:
+                    logger.warning(f"Similar matches analysis failed: {e}")
+                    similar_score = 0
+            
+            score += similar_score
+            
             # Final confidence score (0-100)
-            confidence = round(min(100, score), 1)
+            confidence = round(min(100, max(0, score)), 1)
             
             # Determine confidence tier
             if confidence >= 90:
