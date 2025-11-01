@@ -121,7 +121,13 @@ class TelegramBroadcaster:
             return False
     
     def broadcast_prediction(self, prediction: Dict) -> int:
-        """Broadcast a prediction to all subscribers AND channel"""
+        """Broadcast a prediction to all subscribers AND channel (ONLY TODAY'S BETS)"""
+        # Filter: Only broadcast today's bets to reduce clutter
+        bet_category = prediction.get('bet_category', 'today')
+        if bet_category != 'today':
+            logger.info(f"🔕 Skipping broadcast - {bet_category} bet (not today)")
+            return 0
+        
         message = self._format_prediction(prediction)
         subscribers = self.get_subscribers()
         channel_id = self.get_channel()

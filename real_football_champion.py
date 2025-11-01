@@ -2261,14 +2261,26 @@ class RealFootballChampion:
         calibrated_prob = ml_predictions.get('calibrated_prob', None)
         kelly_stake = ml_predictions.get('kelly_fraction', None)
         
+        # Determine bet category (today vs future)
+        try:
+            if 'T' in opportunity.match_date:
+                match_dt = datetime.fromisoformat(opportunity.match_date.replace('Z', '+00:00'))
+            else:
+                match_dt = datetime.fromtimestamp(int(opportunity.match_date)) if opportunity.match_date.isdigit() else datetime.fromisoformat(opportunity.match_date)
+            match_date_only = match_dt.date()
+            today_only = datetime.now().date()
+            bet_category = 'today' if match_date_only == today_only else 'future'
+        except:
+            bet_category = 'today'  # Default to today on parsing errors
+        
         try:
             cursor.execute('''
                 INSERT INTO football_opportunities 
                 (timestamp, match_id, home_team, away_team, league, market, selection, 
                  odds, edge_percentage, confidence, analysis, stake, match_date, kickoff_time,
                  quality_score, recommended_date, recommended_tier, daily_rank,
-                 model_version, model_prob, calibrated_prob, kelly_stake, tier)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 model_version, model_prob, calibrated_prob, kelly_stake, tier, bet_category)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 int(time.time()),
                 opportunity.match_id,
@@ -2292,7 +2304,8 @@ class RealFootballChampion:
                 model_prob,
                 calibrated_prob,
                 kelly_stake,
-                tier  # 💰 TIERED SYSTEM: Save tier for commercial viability
+                tier,  # 💰 TIERED SYSTEM: Save tier for commercial viability
+                bet_category  # 📅 Categorize for dashboard/Telegram organization
             ))
             self.conn.commit()
             print(f"✅ SAVED: {opportunity.home_team} vs {opportunity.away_team} - Quality: {quality_score:.1f}, Date: {today_date}, Rank: 999")
