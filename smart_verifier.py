@@ -7,6 +7,7 @@ import schedule
 import time
 from datetime import datetime, timedelta
 from results_scraper import ResultsScraper
+from telegram_sender import TelegramBroadcaster
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -24,6 +25,7 @@ class SmartVerifier:
     def __init__(self):
         self.conn = sqlite3.connect('data/real_football.db')
         self.scraper = ResultsScraper()
+        self.telegram = TelegramBroadcaster()
     
     def verify_recent_matches(self):
         """Verify only recent unverified matches (last 7 days)"""
@@ -106,6 +108,24 @@ class SmartVerifier:
                         verified_count += 1
                         match_found = True
                         logger.info(f"✅ Settled: {home} vs {away} = {actual_score} (predicted: {predicted_score}) → {outcome.upper()} | P&L: {profit_loss:+.0f} SEK")
+                        
+                        # Send Telegram notification
+                        try:
+                            result_data = {
+                                'home_team': home,
+                                'away_team': away,
+                                'predicted_score': predicted_score,
+                                'actual_score': actual_score,
+                                'outcome': outcome,
+                                'stake': stake,
+                                'odds': odds,
+                                'profit_loss': profit_loss
+                            }
+                            sent_count = self.telegram.broadcast_result(result_data)
+                            logger.info(f"📱 Result sent to {sent_count} Telegram subscribers")
+                        except Exception as e:
+                            logger.error(f"Failed to send Telegram notification: {e}")
+                        
                         break
                 
                 if not match_found:
