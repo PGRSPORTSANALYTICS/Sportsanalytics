@@ -538,13 +538,13 @@ class RealResultVerifier:
                 UPDATE football_opportunities 
                 SET outcome = ?, 
                     profit_loss = ?,
-                    result = ?,
+                    actual_score = ?,
                     updated_at = ?
                 WHERE id = ?
             """, (
                 outcome,
                 profit_loss,
-                f"{match_result['home_goals']}-{match_result['away_goals']} ({match_result['source']})",
+                f"{match_result['home_goals']}-{match_result['away_goals']}",
                 datetime.now().isoformat(),
                 tip_id
             ))

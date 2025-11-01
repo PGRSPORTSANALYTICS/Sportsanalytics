@@ -10,11 +10,11 @@ def comprehensive_backtest():
     conn = sqlite3.connect('data/real_football.db')
     cursor = conn.cursor()
     
-    # Get ALL settled predictions
+    # Get ALL settled predictions (including old "win"/"loss" values before fix)
     cursor.execute('''
         SELECT id, home_team, away_team, selection, outcome, odds, timestamp, match_date
         FROM football_opportunities
-        WHERE outcome IN ('won', 'lost')
+        WHERE outcome IN ('won', 'lost', 'win', 'loss')
         ORDER BY timestamp ASC
     ''')
     
