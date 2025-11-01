@@ -426,12 +426,23 @@ if page == "📜 Terms & Legal":
 st.markdown("# 🎯 EXACT SCORE PREDICTIONS")
 
 # Calculate real ROI for subtitle
-exact_stats = load_exact_score_performance()
-if exact_stats is not None and exact_stats['total_staked'] > 0:
-    roi = (exact_stats['net_profit'] / exact_stats['total_staked'] * 100)
-    st.markdown(f'<p class="subtitle">✅ PROVEN +{roi:.0f}% ROI | AI-POWERED ACCURACY</p>', unsafe_allow_html=True)
-    st.markdown(f'<div class="roi-badge">📈 +{roi:.0f}% RETURN ON INVESTMENT</div>', unsafe_allow_html=True)
-else:
+try:
+    exact_stats = load_exact_score_performance()
+    total_staked = 0
+    net_profit = 0
+    
+    # Safely extract values
+    if hasattr(exact_stats, 'get'):
+        total_staked = exact_stats.get('total_staked', 0) or 0
+        net_profit = exact_stats.get('net_profit', 0) or 0
+    
+    if total_staked > 0:
+        roi = (net_profit / total_staked * 100)
+        st.markdown(f'<p class="subtitle">✅ PROVEN +{roi:.0f}% ROI | AI-POWERED ACCURACY</p>', unsafe_allow_html=True)
+        st.markdown(f'<div class="roi-badge">📈 +{roi:.0f}% RETURN ON INVESTMENT</div>', unsafe_allow_html=True)
+    else:
+        st.markdown('<p class="subtitle">✅ AI-POWERED EXACT SCORE PREDICTIONS</p>', unsafe_allow_html=True)
+except Exception:
     st.markdown('<p class="subtitle">✅ AI-POWERED EXACT SCORE PREDICTIONS</p>', unsafe_allow_html=True)
 
 col1, col2 = st.columns([4, 1])
@@ -448,29 +459,38 @@ st.markdown("---")
 
 st.markdown("## 🏆 PERFORMANCE OVERVIEW")
 
-if exact_stats is not None:
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
-    
-    with col1:
-        st.metric("TOTAL PREDICTIONS", int(exact_stats['total_tips']))
-    
-    with col2:
-        settled = exact_stats['wins'] + exact_stats['losses']
-        st.metric("SETTLED", int(settled))
-    
-    with col3:
-        hit_rate = (exact_stats['wins'] / (exact_stats['wins'] + exact_stats['losses']) * 100) if (exact_stats['wins'] + exact_stats['losses']) > 0 else 0
-        st.metric("HIT RATE", f"{hit_rate:.1f}%")
-    
-    with col4:
-        st.metric("MONEY SPENT", f"{exact_stats['total_staked']:,.0f} SEK")
-    
-    with col5:
-        st.metric("TOTAL PROFIT", f"{exact_stats['net_profit']:,.0f} SEK", delta="Authentic Results")
-    
-    with col6:
-        roi = (exact_stats['net_profit'] / exact_stats['total_staked'] * 100) if exact_stats['total_staked'] > 0 else 0
-        st.metric("ROI", f"+{roi:.1f}%")
+try:
+    if hasattr(exact_stats, 'get'):
+        col1, col2, col3, col4, col5, col6 = st.columns(6)
+        
+        total_tips = exact_stats.get('total_tips', 0) or 0
+        wins = exact_stats.get('wins', 0) or 0
+        losses = exact_stats.get('losses', 0) or 0
+        total_staked_val = exact_stats.get('total_staked', 0) or 0
+        net_profit_val = exact_stats.get('net_profit', 0) or 0
+        
+        with col1:
+            st.metric("TOTAL PREDICTIONS", int(total_tips))
+        
+        with col2:
+            settled = wins + losses
+            st.metric("SETTLED", int(settled))
+        
+        with col3:
+            hit_rate = (wins / (wins + losses) * 100) if (wins + losses) > 0 else 0
+            st.metric("HIT RATE", f"{hit_rate:.1f}%")
+        
+        with col4:
+            st.metric("MONEY SPENT", f"{total_staked_val:,.0f} SEK")
+        
+        with col5:
+            st.metric("TOTAL PROFIT", f"{net_profit_val:,.0f} SEK", delta="Authentic Results")
+        
+        with col6:
+            roi = (net_profit_val / total_staked_val * 100) if total_staked_val > 0 else 0
+            st.metric("ROI", f"+{roi:.1f}%")
+except Exception:
+    st.warning("Loading performance data...")
 
 st.success("🔒 **100% Authentic Performance** | Real match results verified from API-Football")
 
