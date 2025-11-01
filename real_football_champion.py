@@ -2635,12 +2635,13 @@ class RealFootballChampion:
             current_scores = {row[0].replace('Exact Score: ', ''): row[1] for row in cursor.fetchall()}
             total_current = sum(current_scores.values()) or 1
             
-            # 💰 DATA-PROVEN MONEY PRINTER: Focus on ACTUAL winning patterns!
-            # 159 settled bets analyzed - clear winners identified:
-            # 2-0: 66.7% win rate, +3,941 SEK (CHAMPION!)
-            # 3-1: 28.6% win rate, +3,685 SEK (STRONG!)
-            # 2-1: 16.1% win rate, +5,091 SEK (ELITE PROFIT!)
-            PROVEN_SCORES = ['2-0', '3-1', '2-1']  # Priority order by win rate!
+            # 💰 DATA-DRIVEN SCORE SELECTION: All scores valid when data supports them
+            # Historical performance (159 bets):
+            # 2-0: 66.7% win rate, +3,941 SEK | 3-1: 28.6% WR, +3,685 SEK | 2-1: 16.1% WR, +5,091 SEK
+            # 1-0: 6.9% WR (low, but valid for ultra-defensive matches)
+            # 1-1: 8.3% WR (low, but valid for evenly matched low-scoring teams)
+            # Smart AI picks ANY score when real data supports it!
+            PROVEN_SCORES = ['2-0', '3-1', '2-1', '1-0', '1-1']  # All scores available
             
             # Calculate value score for ONLY proven winning scores
             score_candidates = []
@@ -2738,7 +2739,7 @@ class RealFootballChampion:
             best_match = None
             match_score = 0
             
-            for candidate in score_candidates[:3]:  # Only consider top 3
+            for candidate in score_candidates[:5]:  # Consider top 5 scores
                 score = candidate['score_text']
                 data_match_score = 0
                 
@@ -2762,6 +2763,20 @@ class RealFootballChampion:
                     if 2.2 <= total_expected <= 3.3: data_match_score += 35  # Balanced total
                     if home_goals_per_game > away_goals_per_game: data_match_score += 25  # Home slightly better
                     if 0.8 <= away_goals_per_game <= 1.5: data_match_score += 20  # Away can get 1
+                
+                # Score 1-0: Ultra-defensive, low-scoring
+                elif score == '1-0':
+                    if total_expected < 1.8: data_match_score += 60  # Very low-scoring expected
+                    if home_goals_per_game < 1.3 and away_goals_per_game < 0.9: data_match_score += 40  # Both low-scoring
+                    if home_clean_sheet_rate > 50: data_match_score += 35  # Home very defensive
+                    if away_conceded_per_game < 1.0: data_match_score += 25  # Away strong defense
+                
+                # Score 1-1: Evenly matched low-scoring
+                elif score == '1-1':
+                    if 1.8 <= total_expected <= 2.5: data_match_score += 50  # Low-moderate scoring
+                    if abs(home_goals_per_game - away_goals_per_game) < 0.3: data_match_score += 45  # Very evenly matched
+                    if 0.8 <= home_goals_per_game <= 1.3 and 0.8 <= away_goals_per_game <= 1.3: data_match_score += 40  # Both score ~1/game
+                    if home_clean_sheet_rate < 30 and away_clean_sheet_rate < 30: data_match_score += 20  # Both concede
                 
                 # Combine elite_value with data matching
                 total_score = (candidate['elite_value'] * 25) + data_match_score
