@@ -186,7 +186,7 @@ def load_exact_score_performance():
         conn = sqlite3.connect(DB_PATH)
         query = """
         SELECT 
-            COUNT(*) as total_tips,
+            (SELECT COUNT(*) FROM football_opportunities WHERE market = 'exact_score') as total_tips,
             COUNT(CASE WHEN outcome IN ('win', 'won') THEN 1 END) as wins,
             COUNT(CASE WHEN outcome IN ('loss', 'lost') THEN 1 END) as losses,
             SUM(profit_loss) as net_profit,
