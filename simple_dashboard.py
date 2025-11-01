@@ -158,9 +158,9 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=10)
 def load_exact_score_tips(category='today'):
-    """Load exact score predictions by category (today/future)"""
+    """Load exact score predictions by category (today/future) - excludes historical"""
     try:
         conn = sqlite3.connect(DB_PATH)
         query = """
@@ -168,14 +168,15 @@ def load_exact_score_tips(category='today'):
                confidence, match_date, recommended_date, analysis, bet_category
         FROM football_opportunities 
         WHERE market = 'exact_score'
-        AND (outcome IS NULL OR outcome = '' OR outcome = 'unknown')
+        AND status = 'pending'
         AND bet_category = ?
         ORDER BY match_date ASC
         """
         df = pd.read_sql_query(query, conn, params=(category,))
         conn.close()
         return df
-    except:
+    except Exception as e:
+        st.error(f"Error loading tips: {e}")
         return pd.DataFrame()
 
 @st.cache_data(ttl=30) 
