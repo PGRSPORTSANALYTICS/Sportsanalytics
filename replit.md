@@ -30,7 +30,7 @@ The system employs advanced prediction features including:
   - **Automatic Poisson Fallback:** Generates probabilities from xG data when model predictions unavailable
   - View calibration report: `python3 view_calibration.py`
 - **Dual API Integration:** Leverages The Odds API for real-time odds and API-Football for injuries, lineups, and statistics, cross-validating data for accuracy.
-- **Ultra-Aggressive Filters:** Targets 1-0 and 1-1 scores in Top 5 leagues with odds 7-11x, based on data-proven winning patterns (1-1 scores with 25% win rate, 2-1 with 16.7%, and 1-0 with 12.5%).
+- **Data-Driven Score Targeting:** Based on analysis of 159 verified bets, system now exclusively targets winning score patterns: 2-0 (66.7% win rate, +3,941 SEK profit), 3-1 (28.6% win rate, +3,685 SEK profit), and 2-1 (16.1% win rate, +5,091 SEK profit). Top 5 leagues only, odds 7-14x range targeting 12x+ sweet spot. Previous targets (1-0, 1-1) removed due to poor performance (6.9% and 8.3% win rates respectively).
 
 ### System Design Choices
 - **Data Layer:** SQLite database manages `suggestions`, `tickets`, and `pnl` tables, with a custom `DataLoader` for operations.

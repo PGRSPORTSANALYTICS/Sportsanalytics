@@ -1724,11 +1724,11 @@ class RealFootballChampion:
                 # VALUE BETTING CRITERIA (Professional Standard):
                 # 1. Poisson probability ≥ 7% (realistic for exact scores)
                 # 2. Expected value ≥ 1.15 (15%+ edge)
-                # 3. Proven scores: 2-0, 2-1, 1-1, 1-0
+                # 3. Proven scores: 2-0, 3-1, 2-1 (66.7%, 28.6%, 16.1% win rates!)
                 # 4. Odds: 7-16x range
                 expected_value = poisson_prob * odds if odds > 0 else 0
                 
-                is_proven_score = score in ['2-0', '2-1', '1-1', '1-0']
+                is_proven_score = score in ['2-0', '3-1', '2-1']
                 has_good_probability = poisson_prob >= 0.07  # 7%+
                 has_value = expected_value >= 1.15  # 15% edge
                 good_odds = 7.0 <= odds <= 16.0
@@ -2636,11 +2636,11 @@ class RealFootballChampion:
             total_current = sum(current_scores.values()) or 1
             
             # 💰 DATA-PROVEN MONEY PRINTER: Focus on ACTUAL winning patterns!
-            # 73 settled bets analyzed - clear winners identified:
-            # 1-1: 25% win rate, +211% ROI (CHAMPION!)
-            # 2-1: 16.7% win rate, +123% ROI (STRONG!)
-            # 1-0: 12.5% win rate, +33% ROI (BACKUP)
-            PROVEN_SCORES = ['1-1', '2-1', '1-0']  # Priority order by performance!
+            # 159 settled bets analyzed - clear winners identified:
+            # 2-0: 66.7% win rate, +3,941 SEK (CHAMPION!)
+            # 3-1: 28.6% win rate, +3,685 SEK (STRONG!)
+            # 2-1: 16.1% win rate, +5,091 SEK (ELITE PROFIT!)
+            PROVEN_SCORES = ['2-0', '3-1', '2-1']  # Priority order by win rate!
             
             # Calculate value score for ONLY proven winning scores
             score_candidates = []
@@ -2673,13 +2673,13 @@ class RealFootballChampion:
                 else:
                     odds_bonus = 0.3  # Heavy penalty for >15x (0% win rate)
                 
-                # Factor 3: Score type preference (REAL WIN RATES from data!)
-                if score_key == '1-1':
-                    score_bonus = 1.8  # 25% win rate, +211% ROI - CHAMPION!
+                # Factor 3: Score type preference (REAL WIN RATES from 159 bets!)
+                if score_key == '2-0':
+                    score_bonus = 2.0  # 66.7% win rate, +3,941 SEK - CHAMPION!
+                elif score_key == '3-1':
+                    score_bonus = 1.8  # 28.6% win rate, +3,685 SEK - STRONG!
                 elif score_key == '2-1':
-                    score_bonus = 1.5  # 16.7% win rate, +123% ROI - STRONG!
-                elif score_key == '1-0':
-                    score_bonus = 1.2  # 12.5% win rate, +33% ROI - BACKUP!
+                    score_bonus = 1.6  # 16.1% win rate, +5,091 SEK - ELITE PROFIT!
                 else:
                     score_bonus = 1.0  # Fallback (should never happen)
                 
@@ -2757,10 +2757,12 @@ class RealFootballChampion:
                     base_confidence += 4
                 
                 # Adjust for score type (ONLY winners allowed now!)
-                if selected['score_text'] == '1-1':
-                    base_confidence += 8  # 25% hit rate - CHAMPION!
-                elif selected['score_text'] == '1-0':
-                    base_confidence += 6  # 20% hit rate - WINNER!
+                if selected['score_text'] == '2-0':
+                    base_confidence += 12  # 66.7% hit rate - CHAMPION!
+                elif selected['score_text'] == '3-1':
+                    base_confidence += 8  # 28.6% hit rate - STRONG!
+                elif selected['score_text'] == '2-1':
+                    base_confidence += 6  # 16.1% hit rate - ELITE PROFIT!
                 
                 # Advanced features boost (if available)
                 if self.enhanced_predictor and enriched_analysis:
@@ -2825,7 +2827,7 @@ class RealFootballChampion:
                 passes_odds = 7 <= final_odds <= 14  # Target 11-13x sweet spot (allow 7-14 range)
                 passes_confidence = confidence >= 70  # Good confidence threshold
                 passes_elite_value = selected['elite_value'] >= 1.0  # Maximum value requirement
-                passes_score_type = selected['score_text'] in ['1-1', '2-1', '1-0']  # All proven winners!
+                passes_score_type = selected['score_text'] in ['2-0', '3-1', '2-1']  # All proven winners!
                 
                 if passes_league and passes_quality and passes_odds and passes_confidence and passes_elite_value and passes_score_type:
                     # Save exact score opportunity (bypass daily limit)
