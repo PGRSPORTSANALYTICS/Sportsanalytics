@@ -2851,6 +2851,12 @@ class RealFootballChampion:
                 # Combine elite_value with data matching
                 total_score = (candidate['elite_value'] * 25) + data_match_score
                 
+                # 🎯 PREFERENCE LOGIC: Natural preference via scoring (1-2 > 0-1 > 0-2)
+                # 1-2 gets highest data_match_scores (easier criteria, target 15-20%)
+                # 0-1 gets moderate scores (stricter criteria, target 12-15%)
+                # 0-2 gets lowest scores (ultra-strict criteria, target 10-12%)
+                # Combined with different thresholds (110, 130, 150), this ensures quality
+                
                 if total_score > match_score:
                     match_score = total_score
                     best_match = candidate
