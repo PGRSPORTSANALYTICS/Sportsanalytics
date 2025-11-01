@@ -179,9 +179,9 @@ def load_exact_score_tips(category='today'):
         st.error(f"Error loading tips: {e}")
         return pd.DataFrame()
 
-@st.cache_data(ttl=30) 
+@st.cache_data(ttl=10) 
 def load_exact_score_performance():
-    """Get exact score performance stats"""
+    """Get exact score performance stats - excludes unverifiable bets"""
     try:
         conn = sqlite3.connect(DB_PATH)
         query = """
@@ -189,11 +189,14 @@ def load_exact_score_performance():
             COUNT(*) as total_tips,
             COUNT(CASE WHEN outcome IN ('win', 'won') THEN 1 END) as wins,
             COUNT(CASE WHEN outcome IN ('loss', 'lost') THEN 1 END) as losses,
-            SUM(CASE WHEN outcome IS NOT NULL AND outcome != '' AND outcome NOT IN ('unknown', 'void') THEN profit_loss ELSE 0 END) as net_profit,
-            SUM(CASE WHEN outcome IS NOT NULL AND outcome != '' AND outcome NOT IN ('unknown', 'void') THEN stake ELSE 0 END) as total_staked
+            SUM(CASE WHEN outcome IS NOT NULL AND outcome != '' THEN profit_loss ELSE 0 END) as net_profit,
+            SUM(CASE WHEN outcome IS NOT NULL AND outcome != '' THEN stake ELSE 0 END) as total_staked
         FROM football_opportunities 
         WHERE (market = 'exact_score' OR selection LIKE 'Exact Score:%')
         AND selection NOT LIKE 'PARLAY%'
+        AND outcome NOT IN ('unknown', 'void')
+        AND outcome IS NOT NULL
+        AND outcome != ''
         """
         result = pd.read_sql_query(query, conn)
         conn.close()
