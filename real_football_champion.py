@@ -2696,26 +2696,67 @@ class RealFootballChampion:
                     'odds_bonus': odds_bonus
                 })
             
-            # Sort by elite value and use balanced weighted random selection
+            # Sort by elite value and SELECT INTELLIGENTLY based on match data
             if not score_candidates:
                 continue
             
             score_candidates.sort(key=lambda x: x['elite_value'], reverse=True)
             
-            # 🎯 BALANCED WEIGHTS for maximum diversity
-            # 35% pick #1, 30% pick #2, 20% pick #3, 15% pick #4+
-            weights = [0.35, 0.30, 0.20, 0.15]
-            selection_idx = random.choices(
-                range(min(len(score_candidates), 4)), 
-                weights=weights[:min(len(score_candidates), 4)]
-            )[0]
+            # 🧠 INTELLIGENT SELECTION: Use xG data to pick the RIGHT score, not random!
+            home_xg = xg_data.get('home_xg', 1.5)
+            away_xg = xg_data.get('away_xg', 1.5)
+            total_xg = home_xg + away_xg
+            xg_ratio = home_xg / away_xg if away_xg > 0 else 2.0
             
-            selected = score_candidates[selection_idx]
+            # Determine match characteristics from xG
+            is_high_scoring = total_xg > 3.5  # Both teams attack
+            is_dominant_home = xg_ratio > 2.5  # Home team much stronger
+            is_low_scoring = total_xg < 2.5   # Defensive match
+            
+            # INTELLIGENT score matching based on data
+            best_match = None
+            match_score = 0
+            
+            for candidate in score_candidates[:3]:  # Only consider top 3
+                score = candidate['score_text']
+                data_match_score = 0
+                
+                # Score 3-1: High-scoring match, home dominant
+                if score == '3-1':
+                    if is_high_scoring: data_match_score += 40
+                    if xg_ratio > 1.5: data_match_score += 30
+                    if away_xg > 1.0: data_match_score += 20  # Away can score
+                
+                # Score 2-0: Home dominant, away weak
+                elif score == '2-0':
+                    if is_dominant_home: data_match_score += 50
+                    if away_xg < 0.8: data_match_score += 30
+                    if home_xg > 2.0: data_match_score += 20
+                
+                # Score 2-1: Balanced, both can score
+                elif score == '2-1':
+                    if 1.2 <= xg_ratio <= 2.2: data_match_score += 40  # Balanced
+                    if 2.5 <= total_xg <= 3.5: data_match_score += 30
+                    if away_xg > 0.8: data_match_score += 20  # Away can score
+                
+                # Combine elite_value with data matching
+                total_score = (candidate['elite_value'] * 30) + data_match_score
+                
+                if total_score > match_score:
+                    match_score = total_score
+                    best_match = candidate
+            
+            # Only bet if we have a clear data-supported winner
+            if not best_match or match_score < 70:
+                print(f"   ⏭️ SKIPPED: No clear score match for xG data (home {home_xg:.1f}, away {away_xg:.1f})")
+                continue
+            
+            selected = best_match
             best_score = selected['score']
             best_probability = selected['probability']
             
-            print(f"   🎯 Selected score: {selected['score_text']} (Elite Value: {selected['elite_value']:.2f})")
-            print(f"   📊 Score type bonus: {selected['score_bonus']:.2f}x, Odds bonus: {selected['odds_bonus']:.2f}x")
+            print(f"   🧠 INTELLIGENT PICK: {selected['score_text']} (xG: {home_xg:.1f} - {away_xg:.1f}, Match Score: {match_score:.0f})")
+            print(f"   📊 Elite Value: {selected['elite_value']:.2f}, Data Alignment: {match_score - (selected['elite_value'] * 30):.0f}/100")
             
             if best_score and best_probability > 0.02:  # At least 2% probability (more realistic for exact scores)
                 # Calculate realistic odds based on probability
