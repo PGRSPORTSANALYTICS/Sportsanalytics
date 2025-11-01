@@ -7,6 +7,8 @@ from typing import Dict, Optional
 import logging
 from similar_matches_finder import SimilarMatchesFinder
 from similar_matches_tracker import SimilarMatchesTracker
+from expected_value_calculator import ExpectedValueCalculator
+from model_calibration_tracker import ModelCalibrationTracker
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -66,7 +68,23 @@ class ConfidenceScorer:
             logger.warning(f"⚠️ Could not initialize SM Tracker: {e}")
             self.sm_tracker = None
         
-        logger.info("✅ Confidence scorer initialized with proven patterns")
+        # Initialize Expected Value Calculator (PROBABILITY-BASED FILTERING)
+        try:
+            self.ev_calculator = ExpectedValueCalculator(min_edge=0.15)  # Require 15%+ edge
+            logger.info("✅ Expected Value Calculator initialized (15%+ edge required)")
+        except Exception as e:
+            logger.warning(f"⚠️ Could not initialize EV Calculator: {e}")
+            self.ev_calculator = None
+        
+        # Initialize Model Calibration Tracker
+        try:
+            self.calibration_tracker = ModelCalibrationTracker()
+            logger.info("✅ Model Calibration Tracker initialized")
+        except Exception as e:
+            logger.warning(f"⚠️ Could not initialize Calibration Tracker: {e}")
+            self.calibration_tracker = None
+        
+        logger.info("✅ Confidence scorer initialized with EV-based filtering")
     
     def calculate_confidence(self, prediction: Dict) -> Dict:
         """
@@ -180,6 +198,78 @@ class ConfidenceScorer:
             is_good_odds = 11.0 <= odds <= 14.0 or (odds <= 16.0 and predicted_score == '2-0')
             is_good_score = predicted_score in ['2-0', '2-1']
             
+            # ======================================================================
+            # EXPECTED VALUE CALCULATION (PROBABILITY-BASED FILTERING)
+            # ======================================================================
+            ev_data = None
+            has_mathematical_edge = False
+            
+            if self.ev_calculator:
+                try:
+                    # Extract probability distributions from analysis
+                    ensemble_probs = analysis.get('ensemble_probs', {})
+                    poisson_probs = analysis.get('poisson_probs', ensemble_probs)  # Fallback to ensemble
+                    neural_probs = analysis.get('neural_probs', None)
+                    
+                    # If no probabilities in analysis, calculate from xG using Poisson
+                    if not poisson_probs and analysis.get('home_xg') and analysis.get('away_xg'):
+                        from scipy.stats import poisson
+                        home_xg = analysis.get('home_xg', 1.5)
+                        away_xg = analysis.get('away_xg', 1.5)
+                        
+                        poisson_probs = {}
+                        for h in range(7):
+                            for a in range(7):
+                                score = f"{h}-{a}"
+                                prob = poisson.pmf(h, home_xg) * poisson.pmf(a, away_xg)
+                                poisson_probs[score] = prob
+                        
+                        # Normalize
+                        total = sum(poisson_probs.values())
+                        if total > 0:
+                            poisson_probs = {k: v/total for k, v in poisson_probs.items()}
+                        
+                        logger.debug(f"Generated Poisson probs from xG: {home_xg:.2f} vs {away_xg:.2f}")
+                    
+                    # If probabilities available, calculate EV
+                    if poisson_probs:
+                        ev_data = self.ev_calculator.calculate_ev(
+                            predicted_score=predicted_score,
+                            odds=odds,
+                            poisson_probs=poisson_probs,
+                            neural_probs=neural_probs,
+                            similar_matches_probs=None  # TODO: Add SM probabilities
+                        )
+                        
+                        has_mathematical_edge = ev_data.get('has_edge', False)
+                        breakdown['expected_value'] = ev_data.get('ev_percentage', 0)
+                        breakdown['ensemble_probability'] = ev_data.get('ensemble_probability', 0) * 100
+                        breakdown['model_agreement'] = ev_data.get('model_agreement', False)
+                        
+                        # Track calibration
+                        if self.calibration_tracker:
+                            try:
+                                match_info = f"{prediction.get('home_team', 'Team A')} vs {prediction.get('away_team', 'Team B')}"
+                                suggestion_id = prediction.get('suggestion_id', f"{match_info}_{predicted_score}")
+                                
+                                self.calibration_tracker.track_prediction(
+                                    suggestion_id=suggestion_id,
+                                    match_info=match_info,
+                                    predicted_score=predicted_score,
+                                    ensemble_prob=ev_data['ensemble_probability'],
+                                    individual_probs=ev_data['individual_probabilities'],
+                                    odds=odds,
+                                    ev_data=ev_data
+                                )
+                            except Exception as e:
+                                logger.debug(f"Calibration tracking failed: {e}")
+                        
+                        logger.info(f"💰 EV: {ev_data['ev_percentage']:+.1f}% "
+                                   f"(Prob: {ev_data['ensemble_probability']*100:.1f}%, Edge: {has_mathematical_edge})")
+                    
+                except Exception as e:
+                    logger.warning(f"EV calculation failed: {e}")
+            
             # Track Similar Matches impact for analysis
             if self.sm_tracker and similar_score != 0:
                 try:
@@ -206,11 +296,26 @@ class ConfidenceScorer:
                 except Exception as e:
                     logger.debug(f"SM tracking failed: {e}")
             
+            # ======================================================================
+            # FINAL DECISION: USE EV IF AVAILABLE, FALLBACK TO CONFIDENCE
+            # ======================================================================
+            if ev_data:
+                # PROBABILITY-BASED FILTERING (preferred)
+                should_bet = has_mathematical_edge and ev_data.get('model_agreement', True)
+                decision_reason = "EV-based" if should_bet else "No mathematical edge"
+            else:
+                # CONFIDENCE-BASED FILTERING (fallback)
+                should_bet = confidence >= 70 and is_good_score and is_good_odds
+                decision_reason = "Confidence-based (no EV data)"
+            
             result = {
                 'confidence': confidence,
                 'tier': tier,
                 'breakdown': breakdown,
-                'should_bet': confidence >= 70 and is_good_score and is_good_odds  # Real data shows 70+ works
+                'should_bet': should_bet,
+                'ev_data': ev_data,
+                'has_mathematical_edge': has_mathematical_edge,
+                'decision_method': decision_reason
             }
             
             logger.info(f"📊 Confidence: {confidence} ({tier}) - {prediction.get('home_team')} vs {prediction.get('away_team')} → {predicted_score}")
