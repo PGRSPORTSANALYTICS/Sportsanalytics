@@ -2637,11 +2637,10 @@ class RealFootballChampion:
             
             # 💰 DATA-DRIVEN SCORE SELECTION: All scores valid when data supports them
             # Historical performance (159 bets):
-            # 2-0: 66.7% win rate, +3,941 SEK | 3-1: 28.6% WR, +3,685 SEK | 2-1: 16.1% WR, +5,091 SEK
-            # 1-0: 6.9% WR (low, but valid for ultra-defensive matches)
-            # 1-1: 8.3% WR (low, but valid for evenly matched low-scoring teams)
+            # HOME WINS: 2-0 (66.7% WR, +3,941 SEK) | 3-1 (28.6% WR, +3,685 SEK) | 2-1 (16.1% WR, +5,091 SEK)
+            # AWAY WINS: 0-2 (dominant away) | 0-1 (narrow away) | 1-2 (comeback away)
             # Smart AI picks ANY score when real data supports it!
-            PROVEN_SCORES = ['2-0', '3-1', '2-1', '1-0', '1-1']  # All scores available
+            PROVEN_SCORES = ['2-0', '3-1', '2-1', '0-2', '0-1', '1-2']  # Home + Away wins
             
             # Calculate value score for ONLY proven winning scores
             score_candidates = []
@@ -2675,12 +2674,20 @@ class RealFootballChampion:
                     odds_bonus = 0.3  # Heavy penalty for >15x (0% win rate)
                 
                 # Factor 3: Score type preference (REAL WIN RATES from 159 bets!)
+                # HOME WINS
                 if score_key == '2-0':
                     score_bonus = 2.0  # 66.7% win rate, +3,941 SEK - CHAMPION!
                 elif score_key == '3-1':
                     score_bonus = 1.8  # 28.6% win rate, +3,685 SEK - STRONG!
                 elif score_key == '2-1':
                     score_bonus = 1.6  # 16.1% win rate, +5,091 SEK - ELITE PROFIT!
+                # AWAY WINS
+                elif score_key == '0-2':
+                    score_bonus = 2.0  # Dominant away win - same strength as 2-0
+                elif score_key == '0-1':
+                    score_bonus = 1.7  # Narrow away win - solid pick
+                elif score_key == '1-2':
+                    score_bonus = 1.6  # Away comeback - same as 2-1
                 else:
                     score_bonus = 1.0  # Fallback (should never happen)
                 
@@ -2730,9 +2737,17 @@ class RealFootballChampion:
             total_expected = expected_home_goals + expected_away_goals
             
             # Match characteristics based on REAL data
+            # HOME TEAM
             home_very_strong_attack = home_goals_per_game > 2.0  # Scores 2+ per game
-            away_very_weak_defense = away_conceded_per_game > 1.8  # Concedes a lot
+            home_weak_attack = home_goals_per_game < 1.0  # Struggles to score
+            home_very_weak_defense = home_conceded_per_game > 1.8  # Concedes a lot
+            
+            # AWAY TEAM
+            away_very_strong_attack = away_goals_per_game > 2.0  # Scores 2+ per game
             away_weak_attack = away_goals_per_game < 1.0  # Struggles to score
+            away_very_weak_defense = away_conceded_per_game > 1.8  # Concedes a lot
+            
+            # BOTH TEAMS
             both_score_regularly = home_goals_per_game >= 1.3 and away_goals_per_game >= 0.8
             
             # INTELLIGENT score matching based on REAL team performance
@@ -2777,6 +2792,29 @@ class RealFootballChampion:
                     if abs(home_goals_per_game - away_goals_per_game) < 0.3: data_match_score += 45  # Very evenly matched
                     if 0.8 <= home_goals_per_game <= 1.3 and 0.8 <= away_goals_per_game <= 1.3: data_match_score += 40  # Both score ~1/game
                     if home_clean_sheet_rate < 30 and away_clean_sheet_rate < 30: data_match_score += 20  # Both concede
+                
+                # 🚀 AWAY WIN PATTERNS (Arsenal, Man City away dominance)
+                
+                # Score 0-2: Away dominant, home can't score (Arsenal style!)
+                elif score == '0-2':
+                    if away_very_strong_attack: data_match_score += 40  # Away scores well
+                    if home_weak_attack: data_match_score += 50  # Home struggles
+                    if away_clean_sheet_rate > 40: data_match_score += 30  # Away keeps clean sheets
+                    if home_very_weak_defense and home_weak_attack: data_match_score += 25  # Perfect combo
+                
+                # Score 0-1: Narrow away win, defensive masterclass
+                elif score == '0-1':
+                    if away_goals_per_game >= 1.2 and home_weak_attack: data_match_score += 50  # Away can score, home can't
+                    if away_clean_sheet_rate > 45: data_match_score += 40  # Away very defensive
+                    if total_expected < 2.0: data_match_score += 35  # Low-scoring match
+                    if home_conceded_per_game > 1.2: data_match_score += 20  # Home concedes regularly
+                
+                # Score 1-2: Away win, both teams score (away comeback)
+                elif score == '1-2':
+                    if both_score_regularly: data_match_score += 50  # Both score
+                    if 2.2 <= total_expected <= 3.3: data_match_score += 35  # Balanced total
+                    if away_goals_per_game > home_goals_per_game: data_match_score += 25  # Away slightly better
+                    if 0.8 <= home_goals_per_game <= 1.5: data_match_score += 20  # Home can get 1
                 
                 # Combine elite_value with data matching
                 total_score = (candidate['elite_value'] * 25) + data_match_score
@@ -2839,12 +2877,20 @@ class RealFootballChampion:
                     base_confidence += 4
                 
                 # Adjust for score type (ONLY winners allowed now!)
+                # HOME WINS
                 if selected['score_text'] == '2-0':
                     base_confidence += 12  # 66.7% hit rate - CHAMPION!
                 elif selected['score_text'] == '3-1':
                     base_confidence += 8  # 28.6% hit rate - STRONG!
                 elif selected['score_text'] == '2-1':
                     base_confidence += 6  # 16.1% hit rate - ELITE PROFIT!
+                # AWAY WINS
+                elif selected['score_text'] == '0-2':
+                    base_confidence += 12  # Dominant away - same as 2-0
+                elif selected['score_text'] == '0-1':
+                    base_confidence += 8  # Narrow away - solid
+                elif selected['score_text'] == '1-2':
+                    base_confidence += 6  # Away comeback - same as 2-1
                 
                 # Advanced features boost (if available)
                 if self.enhanced_predictor and enriched_analysis:
@@ -2913,7 +2959,7 @@ class RealFootballChampion:
                 passes_odds = 7 <= final_odds <= 14  # Target 11-13x sweet spot (allow 7-14 range)
                 passes_confidence = confidence >= 70  # Good confidence threshold
                 passes_elite_value = selected['elite_value'] >= 1.0  # Maximum value requirement
-                passes_score_type = selected['score_text'] in ['2-0', '3-1', '2-1']  # All proven winners!
+                passes_score_type = selected['score_text'] in ['2-0', '3-1', '2-1', '0-2', '0-1', '1-2']  # Home + Away wins!
                 
                 if passes_league and passes_quality and passes_odds and passes_confidence and passes_elite_value and passes_score_type:
                     # Save exact score opportunity (bypass daily limit)
