@@ -2702,18 +2702,39 @@ class RealFootballChampion:
             
             score_candidates.sort(key=lambda x: x['elite_value'], reverse=True)
             
-            # 🧠 INTELLIGENT SELECTION: Use xG data to pick the RIGHT score, not random!
-            home_xg = xg_data.get('home_xg', 1.5)
-            away_xg = xg_data.get('away_xg', 1.5)
-            total_xg = home_xg + away_xg
-            xg_ratio = home_xg / away_xg if away_xg > 0 else 2.0
+            # 🧠 INTELLIGENT SELECTION: Use REAL team data, not estimated xG!
+            # Get REAL form data if available
+            home_form = enriched_analysis.get('home_form', {})
+            away_form = enriched_analysis.get('away_form', {})
             
-            # Determine match characteristics from xG
-            is_high_scoring = total_xg > 3.5  # Both teams attack
-            is_dominant_home = xg_ratio > 2.5  # Home team much stronger
-            is_low_scoring = total_xg < 2.5   # Defensive match
+            # Extract actual performance metrics
+            home_goals_per_game = home_form.get('goals_per_game', 0)
+            away_goals_per_game = away_form.get('goals_per_game', 0)
+            home_conceded_per_game = home_form.get('conceded_per_game', 0)
+            away_conceded_per_game = away_form.get('conceded_per_game', 0)
+            home_clean_sheet_rate = home_form.get('clean_sheet_rate', 0)
+            away_clean_sheet_rate = away_form.get('clean_sheet_rate', 0)
             
-            # INTELLIGENT score matching based on data
+            # Skip if we have NO real form data (all zeros = no data)
+            has_real_data = (home_goals_per_game > 0 or away_goals_per_game > 0 or 
+                            home_conceded_per_game > 0 or away_conceded_per_game > 0)
+            
+            if not has_real_data:
+                print(f"   ⏭️ SKIPPED: No real team form data available - would be guessing")
+                continue
+            
+            # Calculate expected goals from REAL performance
+            expected_home_goals = (home_goals_per_game + away_conceded_per_game) / 2
+            expected_away_goals = (away_goals_per_game + home_conceded_per_game) / 2
+            total_expected = expected_home_goals + expected_away_goals
+            
+            # Match characteristics based on REAL data
+            home_very_strong_attack = home_goals_per_game > 2.0  # Scores 2+ per game
+            away_very_weak_defense = away_conceded_per_game > 1.8  # Concedes a lot
+            away_weak_attack = away_goals_per_game < 1.0  # Struggles to score
+            both_score_regularly = home_goals_per_game >= 1.3 and away_goals_per_game >= 0.8
+            
+            # INTELLIGENT score matching based on REAL team performance
             best_match = None
             match_score = 0
             
@@ -2721,42 +2742,47 @@ class RealFootballChampion:
                 score = candidate['score_text']
                 data_match_score = 0
                 
-                # Score 3-1: High-scoring match, home dominant
+                # Score 3-1: High-scoring, both teams score
                 if score == '3-1':
-                    if is_high_scoring: data_match_score += 40
-                    if xg_ratio > 1.5: data_match_score += 30
-                    if away_xg > 1.0: data_match_score += 20  # Away can score
+                    if total_expected > 3.5: data_match_score += 50  # High-scoring match expected
+                    if home_very_strong_attack: data_match_score += 30  # Home scores a lot
+                    if away_goals_per_game >= 1.0: data_match_score += 25  # Away can score
+                    if both_score_regularly: data_match_score += 20  # Both teams score
                 
-                # Score 2-0: Home dominant, away weak
+                # Score 2-0: Home dominant, away can't score
                 elif score == '2-0':
-                    if is_dominant_home: data_match_score += 50
-                    if away_xg < 0.8: data_match_score += 30
-                    if home_xg > 2.0: data_match_score += 20
+                    if home_very_strong_attack: data_match_score += 40  # Home scores well
+                    if away_weak_attack: data_match_score += 50  # Away struggles
+                    if home_clean_sheet_rate > 40: data_match_score += 30  # Home keeps clean sheets
+                    if away_very_weak_defense and away_weak_attack: data_match_score += 25  # Perfect combo
                 
                 # Score 2-1: Balanced, both can score
                 elif score == '2-1':
-                    if 1.2 <= xg_ratio <= 2.2: data_match_score += 40  # Balanced
-                    if 2.5 <= total_xg <= 3.5: data_match_score += 30
-                    if away_xg > 0.8: data_match_score += 20  # Away can score
+                    if both_score_regularly: data_match_score += 50  # Both score
+                    if 2.2 <= total_expected <= 3.3: data_match_score += 35  # Balanced total
+                    if home_goals_per_game > away_goals_per_game: data_match_score += 25  # Home slightly better
+                    if 0.8 <= away_goals_per_game <= 1.5: data_match_score += 20  # Away can get 1
                 
                 # Combine elite_value with data matching
-                total_score = (candidate['elite_value'] * 30) + data_match_score
+                total_score = (candidate['elite_value'] * 25) + data_match_score
                 
                 if total_score > match_score:
                     match_score = total_score
                     best_match = candidate
             
             # Only bet if we have a clear data-supported winner
-            if not best_match or match_score < 70:
-                print(f"   ⏭️ SKIPPED: No clear score match for xG data (home {home_xg:.1f}, away {away_xg:.1f})")
+            if not best_match or match_score < 90:
+                print(f"   ⏭️ SKIPPED: No strong match pattern (H: {expected_home_goals:.1f}g/gm, A: {expected_away_goals:.1f}g/gm)")
                 continue
             
             selected = best_match
             best_score = selected['score']
             best_probability = selected['probability']
             
-            print(f"   🧠 INTELLIGENT PICK: {selected['score_text']} (xG: {home_xg:.1f} - {away_xg:.1f}, Match Score: {match_score:.0f})")
-            print(f"   📊 Elite Value: {selected['elite_value']:.2f}, Data Alignment: {match_score - (selected['elite_value'] * 30):.0f}/100")
+            print(f"   🧠 SMART PICK: {selected['score_text']} based on REAL form data")
+            print(f"   📊 Home: {home_goals_per_game:.1f} goals/gm, {home_conceded_per_game:.1f} conceded/gm, {home_clean_sheet_rate:.0f}% clean sheets")
+            print(f"   📊 Away: {away_goals_per_game:.1f} goals/gm, {away_conceded_per_game:.1f} conceded/gm")
+            print(f"   🎯 Match Score: {match_score:.0f}/200 (threshold: 90)")
             
             if best_score and best_probability > 0.02:  # At least 2% probability (more realistic for exact scores)
                 # Calculate realistic odds based on probability
