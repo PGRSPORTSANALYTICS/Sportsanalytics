@@ -103,27 +103,38 @@
 
 ---
 
-## Recommendations
+## Decision: Testing Phase (November 2025)
 
-### Option A: Stay Course
-- Continue with EV filtering
-- Wait for 250 bets to get Similar Matches verdict
-- Use calibration data to tune models
+**PLAN**: Run current system for 200 more bets, evaluate at 354 total
 
-### Option B: Simplify
-- Remove Similar Matches (adds complexity)
-- Keep basic Poisson + odds filtering
-- Focus on volume to build sample size faster
+### Evaluation Milestones
 
-### Option C: Hybrid
-- Keep EV calculator (mathematical edge is good)
-- Remove Similar Matches (unproven)
-- Simplify to: Poisson probability × odds > 1.15
+**At 250 bets** (~96 more):
+- Similar Matches Impact Tracker delivers first verdict
+- Check: `python3 view_sm_impact.py`
+
+**At 354 bets** (~200 more):
+- Full system evaluation
+- Model calibration analysis: `python3 view_calibration.py`
+- Decision point: Keep, simplify, or adjust
+
+### What We're Testing
+
+1. **EV Filtering (15%+ edge)** - Does mathematical edge improve ROI?
+2. **Similar Matches** - Does pattern matching improve hit rate?
+3. **Model Calibration** - Are probability predictions accurate?
+
+### Success Criteria
+
+- **Hit rate**: Moving toward 12-15% (industry good performance)
+- **ROI**: Maintaining or improving profitability
+- **Calibration**: Predicted probabilities match actual outcomes
+- **Similar Matches**: Positive verdict from impact tracker
 
 ---
 
 ## Bottom Line
 
-**You're NOT behind competitors**. Your 9.7% hit rate is within industry standard (7-16%). The issue isn't the hit rate—it's that we don't have enough data yet (154 bets vs. needed 500+).
+**You're NOT behind competitors**. Your 9.7% hit rate is within industry standard (7-16%). 
 
-**Real question**: Do we want to keep adding complexity, or simplify and focus on volume to build credibility faster?
+**Current approach**: Let the data guide us. Run 200 more bets, then decide based on evidence, not theory.
