@@ -22,7 +22,13 @@ The system employs advanced prediction features including:
 - **Ensemble Prediction System:** Combines Poisson distribution (xG-based), neural network probabilities, and H2H patterns with weighted averaging.
 - **Similar Matches Technology:** Analyzes historical matches with similar characteristics to adjust prediction confidence based on past outcomes. Uses league grouping (Top 5 leagues pooled together) for larger sample sizes. Adjusts confidence -30 to +30 points based on pattern strength.
 - **Similar Matches Impact Tracker:** Automatically tracks every prediction to measure if Similar Matches is improving hit rate. Compares WITH vs WITHOUT Similar Matches adjustments, tracks predictions saved/blocked, and provides verdict after 20+ settled predictions. View with: `python3 view_sm_impact.py`
-- **Confidence Scoring System:** Filters predictions with a threshold of 85+, using factors like proven score bonuses, odds sweet spot (11-13x), league quality, value score, match context, and injury impact.
+- **Expected Value (EV) Filtering System:** Mathematical edge calculation replacing arbitrary confidence scores. Only bets when model probability × odds provides genuine edge (EV > 15%). Includes:
+  - **EV Calculator:** Combines Poisson, Neural Network, and Similar Matches probabilities with weighted averaging
+  - **Model Agreement Checker:** Only bets when all models predict the same score
+  - **Kelly Criterion Bet Sizing:** Optimal stake calculation based on edge and bankroll
+  - **Model Calibration Tracker:** Validates if predicted probabilities match actual win rates across probability buckets
+  - **Automatic Poisson Fallback:** Generates probabilities from xG data when model predictions unavailable
+  - View calibration report: `python3 view_calibration.py`
 - **Dual API Integration:** Leverages The Odds API for real-time odds and API-Football for injuries, lineups, and statistics, cross-validating data for accuracy.
 - **Ultra-Aggressive Filters:** Targets 1-0 and 1-1 scores in Top 5 leagues with odds 7-11x, based on data-proven winning patterns (1-1 scores with 25% win rate, 2-1 with 16.7%, and 1-0 with 12.5%).
 
@@ -39,6 +45,7 @@ The system employs advanced prediction features including:
 - **plotly**: Interactive charting library.
 - **pandas**: Data manipulation and analysis.
 - **numpy**: Numerical computations.
+- **scipy**: Statistical functions for Poisson probability calculations.
 
 ### Communication & Distribution
 - **python-telegram-bot**: Telegram Bot API integration for prediction delivery.
