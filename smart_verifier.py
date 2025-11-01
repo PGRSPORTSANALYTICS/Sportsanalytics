@@ -35,12 +35,12 @@ class SmartVerifier:
         seven_days_ago = int(time.time()) - (7 * 86400)
         
         cursor.execute('''
-            SELECT home_team, away_team, match_date, selection
+            SELECT id, home_team, away_team, match_date, selection, odds, stake
             FROM football_opportunities
-            WHERE outcome IS NULL OR outcome = ''
+            WHERE status != 'settled'
             AND timestamp > ?
             ORDER BY match_date DESC
-            LIMIT 50
+            LIMIT 100
         ''', (seven_days_ago,))
         
         pending = cursor.fetchall()
@@ -52,7 +52,7 @@ class SmartVerifier:
         
         # Batch verify
         verified_count = 0
-        for home, away, date, selection in pending:
+        for bet_id, home, away, date, selection, odds, stake in pending:
             try:
                 # Extract date for API call
                 if 'T' in date:
@@ -72,17 +72,40 @@ class SmartVerifier:
                         actual_score = result['score']
                         predicted_score = selection.split(':')[-1].strip()
                         
-                        outcome = 'won' if actual_score == predicted_score else 'lost'
+                        # Determine outcome
+                        if actual_score == predicted_score:
+                            outcome = 'won'
+                            payout = stake * odds
+                            profit_loss = payout - stake
+                        else:
+                            outcome = 'lost'
+                            payout = 0
+                            profit_loss = -stake
                         
+                        # Calculate ROI
+                        roi_percentage = (profit_loss / stake) * 100 if stake > 0 else 0
+                        
+                        # Get current timestamp for settlement
+                        settled_ts = int(time.time())
+                        
+                        # COMPLETE UPDATE - all fields properly set
                         cursor.execute('''
                             UPDATE football_opportunities
-                            SET outcome = ?, actual_score = ?
-                            WHERE home_team = ? AND away_team = ? AND match_date = ?
-                        ''', (outcome, actual_score, home, away, date))
+                            SET 
+                                outcome = ?,
+                                result = ?,
+                                status = 'settled',
+                                payout = ?,
+                                profit_loss = ?,
+                                roi_percentage = ?,
+                                settled_timestamp = ?,
+                                updated_at = datetime('now')
+                            WHERE id = ?
+                        ''', (outcome, actual_score, payout, profit_loss, roi_percentage, settled_ts, bet_id))
                         
                         verified_count += 1
                         match_found = True
-                        logger.info(f"✅ Verified: {home} vs {away} = {actual_score}")
+                        logger.info(f"✅ Settled: {home} vs {away} = {actual_score} (predicted: {predicted_score}) → {outcome.upper()} | P&L: {profit_loss:+.0f} SEK")
                         break
                 
                 if not match_found:
