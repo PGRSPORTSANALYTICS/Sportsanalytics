@@ -5,6 +5,7 @@ Scores predictions 0-100 based on proven winning factors
 
 from typing import Dict, Optional
 import logging
+from scipy.stats import poisson
 from similar_matches_finder import SimilarMatchesFinder
 from similar_matches_tracker import SimilarMatchesTracker
 from expected_value_calculator import ExpectedValueCalculator
@@ -213,7 +214,6 @@ class ConfidenceScorer:
                     
                     # If no probabilities in analysis, calculate from xG using Poisson
                     if not poisson_probs and analysis.get('home_xg') and analysis.get('away_xg'):
-                        from scipy.stats import poisson
                         home_xg = analysis.get('home_xg', 1.5)
                         away_xg = analysis.get('away_xg', 1.5)
                         
