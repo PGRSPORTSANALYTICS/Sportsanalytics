@@ -139,12 +139,12 @@ localPort = 5000
 externalPort = 80
 
 [[ports]]
-localPort = 40633
-externalPort = 3000
+localPort = 32937
+externalPort = 3001
 
 [[ports]]
-localPort = 41897
-externalPort = 3001
+localPort = 40633
+externalPort = 3000
 
 [agent]
 integrations = ["web_scraper==1.0.0"]

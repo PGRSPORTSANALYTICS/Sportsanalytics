@@ -68,8 +68,8 @@ class EnhancedExactScorePredictor:
                     return cached_id
             
             try:
-                # Search for team
-                params = {'name': team_name}
+                # Search for team (API-Football uses 'search' parameter, not 'name')
+                params = {'search': team_name}
                 data = self.advanced_api._make_request('teams', params)
                 
                 if data and 'response' in data and data['response']:
