@@ -159,19 +159,20 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 @st.cache_data(ttl=30)
-def load_exact_score_tips():
-    """Load all pending exact score predictions (until game is over)"""
+def load_exact_score_tips(category='today'):
+    """Load exact score predictions by category (today/future)"""
     try:
         conn = sqlite3.connect(DB_PATH)
         query = """
         SELECT home_team, away_team, selection, odds, edge_percentage, 
-               confidence, match_date, recommended_date, analysis
+               confidence, match_date, recommended_date, analysis, bet_category
         FROM football_opportunities 
         WHERE market = 'exact_score'
         AND (outcome IS NULL OR outcome = '' OR outcome = 'unknown')
+        AND bet_category = ?
         ORDER BY match_date ASC
         """
-        df = pd.read_sql_query(query, conn)
+        df = pd.read_sql_query(query, conn, params=(category,))
         conn.close()
         return df
     except:
@@ -728,34 +729,70 @@ def generate_dashboard_analysis(analysis_json, home_team, away_team):
     except:
         return ""
 
-exact_tips = load_exact_score_tips()
-if not exact_tips.empty:
-    st.info(f"📊 **{len(exact_tips)} Active Exact Score Predictions** (pending until match completion)")
+# Create tabs for Today vs Future bets
+tab1, tab2 = st.tabs(["📅 Today's Bets", "📆 Future Bets"])
+
+with tab1:
+    st.markdown("### 🔥 Matches Playing Today")
+    today_tips = load_exact_score_tips('today')
     
-    st.markdown("")
+    if not today_tips.empty:
+        st.info(f"📊 **{len(today_tips)} predictions for today's matches**")
+        st.markdown("")
+        
+        for idx, tip in today_tips.iterrows():
+            col1, col2, col3 = st.columns([3, 2, 2])
+            
+            with col1:
+                st.markdown(f"### {tip['home_team']} vs {tip['away_team']}")
+                st.markdown(f'<div class="exact-badge">{tip["selection"]}</div>', unsafe_allow_html=True)
+            
+            with col2:
+                st.markdown(f"**Odds:** `{tip['odds']:.2f}x`")
+                st.markdown(f"Edge: **+{tip['edge_percentage']:.1f}%**")
+            
+            with col3:
+                st.markdown(f"**Confidence:** {tip['confidence']}%")
+                st.caption(f"⏰ {tip['match_date']}")
+            
+            analysis_text = generate_dashboard_analysis(tip.get('analysis', ''), tip['home_team'], tip['away_team'])
+            if analysis_text:
+                st.caption(f"📊 {analysis_text}")
+            
+            st.markdown("---")
+    else:
+        st.info("🎯 No bets today. All today's matches have been settled or no predictions generated yet.")
+
+with tab2:
+    st.markdown("### 📆 Upcoming Matches (Tomorrow+)")
+    future_tips = load_exact_score_tips('future')
     
-    for idx, tip in exact_tips.iterrows():
-        col1, col2, col3 = st.columns([3, 2, 2])
+    if not future_tips.empty:
+        st.info(f"📊 **{len(future_tips)} predictions for upcoming matches**")
+        st.markdown("")
         
-        with col1:
-            st.markdown(f"### {tip['home_team']} vs {tip['away_team']}")
-            st.markdown(f'<div class="exact-badge">{tip["selection"]}</div>', unsafe_allow_html=True)
-        
-        with col2:
-            st.markdown(f"**Odds:** `{tip['odds']:.2f}x`")
-            st.markdown(f"Edge: **+{tip['edge_percentage']:.1f}%**")
-        
-        with col3:
-            st.markdown(f"**Confidence:** {tip['confidence']}%")
-            st.caption(f"⏰ {tip['match_date']}")
-        
-        analysis_text = generate_dashboard_analysis(tip.get('analysis', ''), tip['home_team'], tip['away_team'])
-        if analysis_text:
-            st.caption(f"📊 {analysis_text}")
-        
-        st.markdown("---")
-else:
-    st.info("🎯 No active predictions. All recent predictions have been settled. Check back soon for new opportunities!")
+        for idx, tip in future_tips.iterrows():
+            col1, col2, col3 = st.columns([3, 2, 2])
+            
+            with col1:
+                st.markdown(f"### {tip['home_team']} vs {tip['away_team']}")
+                st.markdown(f'<div class="exact-badge">{tip["selection"]}</div>', unsafe_allow_html=True)
+            
+            with col2:
+                st.markdown(f"**Odds:** `{tip['odds']:.2f}x`")
+                st.markdown(f"Edge: **+{tip['edge_percentage']:.1f}%**")
+            
+            with col3:
+                st.markdown(f"**Confidence:** {tip['confidence']}%")
+                st.caption(f"⏰ {tip['match_date']}")
+            
+            analysis_text = generate_dashboard_analysis(tip.get('analysis', ''), tip['home_team'], tip['away_team'])
+            if analysis_text:
+                st.caption(f"📊 {analysis_text}")
+            
+            st.markdown("---")
+    else:
+        st.info("📆 No future predictions yet. Check back soon for upcoming matches!")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
