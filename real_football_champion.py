@@ -2817,12 +2817,16 @@ class RealFootballChampion:
                 quality_score = enriched_analysis.get('quality_score', 50)
                 league = match.get('league_name', '')
                 
-                # ⚠️ TOP 5 LEAGUES ONLY (better data quality)
-                TOP_5_LEAGUES = ['Premier League', 'La Liga', 'Serie A', 'Bundesliga', 'Ligue 1']
-                is_top_league = any(top in league for top in TOP_5_LEAGUES)
+                # ⚠️ QUALITY LEAGUES (Top 5 + Champions/Europa + Strong Second Tier)
+                QUALITY_LEAGUES = [
+                    'Premier League', 'La Liga', 'Serie A', 'Bundesliga', 'Ligue 1',  # Top 5
+                    'Champions League', 'Europa League',  # Elite European
+                    'Eredivisie', 'Primeira Liga', 'Belgian', 'Championship'  # Strong second tier
+                ]
+                is_quality_league = any(qual in league for qual in QUALITY_LEAGUES)
                 
                 # 💰 DATA-PROVEN GATES: Optimize for 20-25% win rate!
-                passes_league = is_top_league  # Only top 5 leagues
+                passes_league = is_quality_league  # Quality leagues with good data
                 passes_quality = quality_score >= 50  # Balanced quality (matches system output)
                 passes_odds = 7 <= final_odds <= 14  # Target 11-13x sweet spot (allow 7-14 range)
                 passes_confidence = confidence >= 70  # Good confidence threshold
