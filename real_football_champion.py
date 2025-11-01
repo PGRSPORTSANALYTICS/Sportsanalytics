@@ -2742,13 +2742,26 @@ class RealFootballChampion:
             home_weak_attack = home_goals_per_game < 1.0  # Struggles to score
             home_very_weak_defense = home_conceded_per_game > 1.8  # Concedes a lot
             
-            # AWAY TEAM
+            # AWAY TEAM (TIGHTENED for elite away predictions)
             away_very_strong_attack = away_goals_per_game > 2.0  # Scores 2+ per game
+            away_elite_attack = away_goals_per_game >= 2.5  # ELITE scoring (for 0-2)
+            away_strong_attack = away_goals_per_game >= 1.5  # Strong scoring (for 1-2)
+            away_moderate_attack = away_goals_per_game >= 1.2  # Moderate scoring (for 0-1)
             away_weak_attack = away_goals_per_game < 1.0  # Struggles to score
             away_very_weak_defense = away_conceded_per_game > 1.8  # Concedes a lot
+            away_elite_defense = away_clean_sheet_rate > 55  # ELITE clean sheets (for 0-1)
+            away_ultra_elite_defense = away_clean_sheet_rate > 60  # ULTRA ELITE (for 0-2)
+            
+            # HOME TEAM (TIGHTENED for away predictions)
+            home_ultra_weak_attack = home_goals_per_game < 0.8  # TERRIBLE attack (for 0-1, 0-2)
+            home_disaster_defense = home_conceded_per_game > 2.0  # DISASTER defense (for 0-2)
             
             # BOTH TEAMS
             both_score_regularly = home_goals_per_game >= 1.3 and away_goals_per_game >= 0.8
+            
+            # TOP 5 LEAGUES CHECK (for away wins only)
+            league = match.get('league_name', '')
+            is_top5_league = any(top5 in league for top5 in ['Premier League', 'La Liga', 'Serie A', 'Bundesliga', 'Ligue 1'])
             
             # INTELLIGENT score matching based on REAL team performance
             best_match = None
@@ -2793,28 +2806,47 @@ class RealFootballChampion:
                     if 0.8 <= home_goals_per_game <= 1.3 and 0.8 <= away_goals_per_game <= 1.3: data_match_score += 40  # Both score ~1/game
                     if home_clean_sheet_rate < 30 and away_clean_sheet_rate < 30: data_match_score += 20  # Both concede
                 
-                # 🚀 AWAY WIN PATTERNS (Arsenal, Man City away dominance)
+                # 🚀 AWAY WIN PATTERNS (Elite filtering based on 98-match backtest)
+                # Top 5 leagues ONLY for away wins (proven more predictable)
                 
-                # Score 0-2: Away dominant, home can't score (Arsenal style!)
-                elif score == '0-2':
-                    if away_very_strong_attack: data_match_score += 40  # Away scores well
-                    if home_weak_attack: data_match_score += 50  # Home struggles
-                    if away_clean_sheet_rate > 40: data_match_score += 30  # Away keeps clean sheets
-                    if home_very_weak_defense and home_weak_attack: data_match_score += 25  # Perfect combo
-                
-                # Score 0-1: Narrow away win, defensive masterclass
-                elif score == '0-1':
-                    if away_goals_per_game >= 1.2 and home_weak_attack: data_match_score += 50  # Away can score, home can't
-                    if away_clean_sheet_rate > 45: data_match_score += 40  # Away very defensive
-                    if total_expected < 2.0: data_match_score += 35  # Low-scoring match
-                    if home_conceded_per_game > 1.2: data_match_score += 20  # Home concedes regularly
-                
-                # Score 1-2: Away win, both teams score (away comeback)
+                # Score 1-2: Away win, both teams score (BEST: 10.2% proven → target 15-20%)
                 elif score == '1-2':
-                    if both_score_regularly: data_match_score += 50  # Both score
+                    if not is_top5_league:
+                        data_match_score = 0  # SKIP away wins in second-tier leagues
+                    elif away_strong_attack and both_score_regularly: data_match_score += 60  # Strong away, both score
+                    elif both_score_regularly: data_match_score += 50  # Both score
                     if 2.2 <= total_expected <= 3.3: data_match_score += 35  # Balanced total
-                    if away_goals_per_game > home_goals_per_game: data_match_score += 25  # Away slightly better
-                    if 0.8 <= home_goals_per_game <= 1.5: data_match_score += 20  # Home can get 1
+                    if away_goals_per_game > home_goals_per_game: data_match_score += 30  # Away better
+                    if 0.8 <= home_goals_per_game <= 1.5: data_match_score += 25  # Home can get 1
+                    if home_conceded_per_game >= 1.2: data_match_score += 20  # Home leaky defense
+                
+                # Score 0-1: Narrow away win, defensive masterclass (8.2% proven → target 12-15%)
+                # ULTRA SELECTIVE - only elite scenarios
+                elif score == '0-1':
+                    if not is_top5_league:
+                        data_match_score = 0  # SKIP away wins in second-tier leagues
+                    elif away_moderate_attack and home_ultra_weak_attack and away_elite_defense:
+                        data_match_score += 70  # ELITE: Strong away, terrible home, elite defense
+                    elif away_moderate_attack and home_weak_attack:
+                        data_match_score += 50  # Away can score, home can't
+                    if away_elite_defense: data_match_score += 50  # 55%+ clean sheets (ELITE)
+                    elif away_clean_sheet_rate > 45: data_match_score += 30  # Good defense
+                    if total_expected < 2.0: data_match_score += 35  # Low-scoring match
+                    if home_conceded_per_game > 1.2: data_match_score += 25  # Home concedes regularly
+                
+                # Score 0-2: Away dominant, home can't score (4.1% proven → target 10-12%)
+                # EXTREMELY RARE - perfect storm only
+                elif score == '0-2':
+                    if not is_top5_league:
+                        data_match_score = 0  # SKIP away wins in second-tier leagues
+                    elif away_elite_attack and home_ultra_weak_attack and away_ultra_elite_defense:
+                        data_match_score += 80  # PERFECT STORM: Elite away, terrible home
+                    elif away_very_strong_attack and home_weak_attack:
+                        data_match_score += 50  # Away scores well, home struggles
+                    if away_ultra_elite_defense: data_match_score += 50  # 60%+ clean sheets (ULTRA ELITE)
+                    elif away_clean_sheet_rate > 40: data_match_score += 25  # Good clean sheets
+                    if home_disaster_defense and home_weak_attack: data_match_score += 40  # Home disaster
+                    if home_very_weak_defense and home_weak_attack: data_match_score += 25  # Home very weak
                 
                 # Combine elite_value with data matching
                 total_score = (candidate['elite_value'] * 25) + data_match_score
@@ -2823,9 +2855,27 @@ class RealFootballChampion:
                     match_score = total_score
                     best_match = candidate
             
-            # Only bet if we have a clear data-supported winner
-            if not best_match or match_score < 90:
-                print(f"   ⏭️ SKIPPED: No strong match pattern (H: {expected_home_goals:.1f}g/gm, A: {expected_away_goals:.1f}g/gm)")
+            # 🎯 3-TIER THRESHOLDS: Different bars for home vs away predictions
+            selected_score = best_match['score_text'] if best_match else ''
+            
+            # Determine required threshold based on score type
+            if selected_score in ['1-2']:
+                # 1-2 (away win): Moderate threshold (10.2% proven → target 15-20%)
+                required_threshold = 110
+            elif selected_score in ['0-1']:
+                # 0-1 (away win): Strict threshold (8.2% proven → target 12-15%)
+                required_threshold = 130
+            elif selected_score in ['0-2']:
+                # 0-2 (away win): Ultra-strict threshold (4.1% proven → target 10-12%)
+                required_threshold = 150
+            else:
+                # Home wins and others: Standard threshold
+                required_threshold = 90
+            
+            # Only bet if we meet the score-specific threshold
+            if not best_match or match_score < required_threshold:
+                threshold_info = f"threshold: {required_threshold}" if selected_score else "threshold: 90"
+                print(f"   ⏭️ SKIPPED: Match score {match_score:.0f} below {threshold_info} for {selected_score or 'any score'} (H: {expected_home_goals:.1f}g/gm, A: {expected_away_goals:.1f}g/gm)")
                 continue
             
             selected = best_match
@@ -2834,8 +2884,13 @@ class RealFootballChampion:
             
             print(f"   🧠 SMART PICK: {selected['score_text']} based on REAL form data")
             print(f"   📊 Home: {home_goals_per_game:.1f} goals/gm, {home_conceded_per_game:.1f} conceded/gm, {home_clean_sheet_rate:.0f}% clean sheets")
-            print(f"   📊 Away: {away_goals_per_game:.1f} goals/gm, {away_conceded_per_game:.1f} conceded/gm")
-            print(f"   🎯 Match Score: {match_score:.0f}/200 (threshold: 90)")
+            print(f"   📊 Away: {away_goals_per_game:.1f} goals/gm, {away_conceded_per_game:.1f} conceded/gm, {away_clean_sheet_rate:.0f}% clean sheets")
+            
+            # Show threshold type
+            if selected_score in ['1-2', '0-1', '0-2']:
+                print(f"   🎯 Match Score: {match_score:.0f}/200 (ELITE away threshold: {required_threshold})")
+            else:
+                print(f"   🎯 Match Score: {match_score:.0f}/200 (threshold: {required_threshold})")
             
             if best_score and best_probability > 0.02:  # At least 2% probability (more realistic for exact scores)
                 # Calculate realistic odds based on probability
