@@ -1,0 +1,92 @@
+"""
+Automatic Bet Categorization System
+Runs daily to organize bets into: today, future, historical
+"""
+import sqlite3
+from datetime import datetime, timedelta
+import pytz
+
+def categorize_all_bets():
+    """Categorize all bets based on their match dates"""
+    conn = sqlite3.connect('data/real_football.db')
+    cursor = conn.cursor()
+    
+    # Get Stockholm timezone
+    stockholm_tz = pytz.timezone('Europe/Stockholm')
+    now = datetime.now(stockholm_tz)
+    today = now.date()
+    
+    print(f"📅 Categorizing bets for {today}")
+    print("="*60)
+    
+    # Get all unsettled bets
+    cursor.execute('''
+        SELECT id, match_date, home_team, away_team, status
+        FROM football_opportunities
+        WHERE status != 'settled'
+    ''')
+    
+    bets = cursor.fetchall()
+    print(f"📊 Found {len(bets)} unsettled bets to categorize\n")
+    
+    today_count = 0
+    future_count = 0
+    historical_count = 0
+    
+    for bet_id, match_date_str, home, away, status in bets:
+        try:
+            # Parse match date
+            if 'T' in match_date_str:
+                match_dt = datetime.fromisoformat(match_date_str.replace('Z', '+00:00'))
+            else:
+                match_dt = datetime.fromtimestamp(int(match_date_str)) if match_date_str.isdigit() else datetime.fromisoformat(match_date_str)
+            
+            match_date = match_dt.date()
+            
+            # Categorize
+            if match_date < today:
+                category = 'historical'
+                historical_count += 1
+            elif match_date == today:
+                category = 'today'
+                today_count += 1
+            else:  # match_date > today
+                category = 'future'
+                future_count += 1
+            
+            # Update category
+            cursor.execute('''
+                UPDATE football_opportunities
+                SET bet_category = ?
+                WHERE id = ?
+            ''', (category, bet_id))
+            
+        except Exception as e:
+            print(f"⚠️ Error processing {home} vs {away}: {e}")
+            # Default to 'future' on error
+            cursor.execute('''
+                UPDATE football_opportunities
+                SET bet_category = 'future'
+                WHERE id = ?
+            ''', (bet_id,))
+    
+    # Also categorize settled bets as historical
+    cursor.execute('''
+        UPDATE football_opportunities
+        SET bet_category = 'historical'
+        WHERE status = 'settled'
+    ''')
+    
+    conn.commit()
+    
+    print(f"✅ Categorization complete:")
+    print(f"   📅 Today's bets: {today_count}")
+    print(f"   📆 Future bets: {future_count}")
+    print(f"   📜 Historical bets: {historical_count}")
+    print(f"   ✅ Settled bets moved to historical")
+    
+    conn.close()
+    return today_count, future_count, historical_count
+
+if __name__ == '__main__':
+    categorize_all_bets()
