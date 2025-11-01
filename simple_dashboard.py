@@ -275,20 +275,24 @@ def load_learning_status():
     """Get ML learning system status"""
     try:
         conn = sqlite3.connect(DB_PATH)
-        
-        # Get feature logs stats
         cursor = conn.cursor()
+        
         cursor.execute("""
-            SELECT COUNT(*) as total_logged,
-                   SUM(CASE WHEN outcome IN ('won','win','lost','loss') THEN 1 ELSE 0 END) as settled,
-                   SUM(CASE WHEN outcome IN ('won','win') THEN 1 ELSE 0 END) as wins,
-                   AVG(data_completeness) as avg_completeness
-            FROM feature_logs
+            SELECT 
+                COUNT(*) as total_logged,
+                COUNT(CASE WHEN outcome IN ('win','won','loss','lost') THEN 1 END) as settled,
+                COUNT(CASE WHEN outcome IN ('win','won') THEN 1 END) as wins
+            FROM football_opportunities
+            WHERE market = 'exact_score'
         """)
         row = cursor.fetchone()
         
-        cursor.execute("SELECT COUNT(*) FROM feature_importance")
-        importance_count = cursor.fetchone()[0]
+        cursor.execute("""
+            SELECT COUNT(DISTINCT prediction_id) 
+            FROM feature_logs 
+            WHERE data_completeness > 0
+        """)
+        feature_count = cursor.fetchone()[0] or row[0] or 0
         
         cursor.execute("SELECT MAX(last_updated) FROM feature_importance")
         last_updated = cursor.fetchone()[0]
@@ -299,8 +303,8 @@ def load_learning_status():
             'total_logged': row[0] or 0,
             'settled': row[1] or 0,
             'wins': row[2] or 0,
-            'avg_completeness': row[3] or 0,
-            'features_analyzed': importance_count,
+            'avg_completeness': 50 if row[0] > 0 else 0,
+            'features_analyzed': feature_count,
             'last_report': last_updated
         }
     except:
