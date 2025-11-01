@@ -236,6 +236,9 @@ class TelegramBroadcaster:
     
     def _format_prediction(self, prediction: Dict) -> str:
         """Format prediction as Telegram message"""
+        from datetime import datetime
+        import pytz
+        
         home = prediction['home_team']
         away = prediction['away_team']
         score = prediction['selection'].replace('Exact Score: ', '')
@@ -256,7 +259,23 @@ class TelegramBroadcaster:
         stats = self._get_live_stats()
         
         league = prediction.get('league', 'N/A')
-        match_time = prediction.get('datetime', 'TBA')
+        
+        # Parse kickoff time from match_date field
+        match_date_raw = prediction.get('match_date') or prediction.get('datetime') or prediction.get('kickoff_time')
+        if match_date_raw:
+            try:
+                # Parse ISO format: 2025-11-01T13:00:45Z
+                dt = datetime.fromisoformat(match_date_raw.replace('Z', '+00:00'))
+                # Convert to Stockholm time (CET/CEST)
+                stockholm_tz = pytz.timezone('Europe/Stockholm')
+                dt_stockholm = dt.astimezone(stockholm_tz)
+                
+                # Format: "Sat Nov 2, 15:00" for easy reading
+                match_time = dt_stockholm.strftime('%a %b %d, %H:%M')
+            except:
+                match_time = match_date_raw
+        else:
+            match_time = 'TBA'
         
         message = f"""⚽ NEW EXACT SCORE PREDICTION
 
@@ -269,8 +288,8 @@ Recommended Stake: {stake} SEK
 Potential Return: {int(stake * odds)} SEK
 Profit: {int(stake * (odds - 1))} SEK
 
-Match Time: {match_time}
-League: {league}
+⏰ KICKOFF: {match_time}
+🏆 League: {league}
 
 {analysis_text}
 
