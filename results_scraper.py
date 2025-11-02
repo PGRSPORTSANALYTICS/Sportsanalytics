@@ -7,6 +7,7 @@ import json
 from datetime import datetime, timedelta
 import time
 import logging
+from calendar_translator import translator
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -131,7 +132,9 @@ class ResultsScraper:
                 logger.warning("❌ No API_FOOTBALL_KEY found in environment")
                 return []
             
-            logger.info(f"🔍 Fetching API-Football results for {date_str}")
+            # Translate sandbox date to real-world date for API call
+            real_date_str = translator.to_real_world(date_str)
+            logger.info(f"🔍 Fetching API-Football results for {date_str} → {real_date_str}")
             
             # API-Football endpoint for fixtures
             url = "https://v3.football.api-sports.io/fixtures"
@@ -162,7 +165,7 @@ class ResultsScraper:
                 for league_id in EUROPEAN_LEAGUES:
                     try:
                         params = {
-                            'date': date_str,
+                            'date': real_date_str,
                             'league': league_id,
                             'season': season,
                             'status': 'FT'  # Only finished matches

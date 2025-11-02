@@ -505,10 +505,14 @@ class APIFootballClient:
             start_date = (target_date - timedelta(days=14)).strftime('%Y-%m-%d')
             end_date = (target_date - timedelta(days=1)).strftime('%Y-%m-%d')
             
+            # Translate to real-world dates for API call
+            real_start_date = translator.to_real_world(start_date)
+            real_end_date = translator.to_real_world(end_date)
+            
             params = {
                 'team': team_id,
-                'from': start_date,
-                'to': end_date,
+                'from': real_start_date,
+                'to': real_end_date,
                 'status': 'FT'  # Only finished matches
             }
             
