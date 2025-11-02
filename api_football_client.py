@@ -87,8 +87,7 @@ class APIFootballClient:
             url = f"{self.base_url}/fixtures"
             params = {
                 'date': date_str,
-                'team': home_id,
-                'season': 2024  # 2024-25 season
+                'team': home_id
             }
             
             response = requests.get(url, headers=self.headers, params=params, timeout=15)
