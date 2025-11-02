@@ -95,6 +95,7 @@ class APIFootballClient:
             if response.status_code == 200:
                 data = response.json()
                 fixtures = data.get('response', [])
+                logger.info(f"🔍 API-Football returned {len(fixtures)} fixtures for {home_team} (ID: {home_id}) on {date_str}")
                 
                 for fixture in fixtures:
                     teams = fixture.get('teams', {})
