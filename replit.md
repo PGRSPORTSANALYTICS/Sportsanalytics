@@ -29,7 +29,13 @@ The system employs advanced prediction features including:
   - **Model Calibration Tracker:** Validates if predicted probabilities match actual win rates across probability buckets
   - **Automatic Poisson Fallback:** Generates probabilities from xG data when model predictions unavailable
   - View calibration report: `python3 view_calibration.py`
-- **Dual API Integration:** Leverages The Odds API for real-time odds and API-Football for injuries, lineups, and statistics, cross-validating data for accuracy.
+- **Multi-Source Data Resilience:** Triple-layer fallback system ensures predictions continue even during API outages:
+  - **Primary**: API-Football for injuries, lineups, H2H, form data, and standings
+  - **Secondary**: Web scrapers (Transfermarkt for injuries, SofaScore for H2H/form/standings)
+  - **Tertiary**: Safe default structures prevent crashes
+  - All scrapers include 12-24 hour caching and rate limiting to minimize load
+  - System automatically switches between sources without manual intervention
+- **Odds Integration:** The Odds API provides real-time odds and match availability data.
 - **Data-Driven Score Targeting:** Based on analysis of 159 verified bets, system now exclusively targets winning score patterns: 2-0 (66.7% win rate, +3,941 SEK profit), 3-1 (28.6% win rate, +3,685 SEK profit), and 2-1 (16.1% win rate, +5,091 SEK profit). Top 5 leagues only, odds 7-14x range targeting 12x+ sweet spot. Previous targets (1-0, 1-1) removed due to poor performance (6.9% and 8.3% win rates respectively).
 
 ### System Design Choices
