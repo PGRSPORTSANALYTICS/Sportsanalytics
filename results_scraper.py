@@ -18,18 +18,27 @@ class ResultsScraper:
     def get_flashscore_results(self, date_str):
         """Get results from Flashscore for a specific date (YYYY-MM-DD)"""
         try:
-            url = f"https://www.flashscore.com/football/fixtures/?date={date_str}"
+            # Use main page since date-specific URLs return 404
+            url = "https://www.flashscore.com/"
             logger.info(f"Scraping Flashscore results for {date_str}")
             
-            downloaded = trafilatura.fetch_url(url)
-            if not downloaded:
-                logger.error(f"Failed to fetch Flashscore page for {date_str}")
+            # Use requests with proper headers to avoid blocking
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+            response = requests.get(url, headers=headers, timeout=10)
+            
+            if response.status_code != 200:
+                logger.error(f"Failed to fetch Flashscore page, status: {response.status_code}")
                 return []
                 
-            text = trafilatura.extract(downloaded)
+            html_content = response.text
+            
+            # Extract text for parsing
+            text = trafilatura.extract(html_content)
             if not text:
-                logger.error(f"Failed to extract text from Flashscore page for {date_str}")
-                return []
+                # Fallback to raw HTML if extraction fails
+                text = html_content
             
             return self.parse_flashscore_results(text)
             
