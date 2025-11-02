@@ -171,51 +171,50 @@ class SofaScoreScraper:
                 logger.info(f"📦 Using cached H2H data for {team1} vs {team2} ({len(cached)} matches)")
                 return cached
         
-        team1_id = self.get_team_id(team1, league)
-        team2_id = self.get_team_id(team2, league)
+        team1_form = self.get_team_form(team1, league, last_n=20, use_cache=use_cache)
+        team2_form = self.get_team_form(team2, league, last_n=20, use_cache=use_cache)
         
-        if not team1_id or not team2_id:
-            logger.error(f"❌ Could not find team IDs for {team1} or {team2}")
-            return []
-        
-        endpoint = f"team/{team1_id}/team/{team2_id}/h2h/events"
-        data = self._make_request(endpoint)
-        
-        if not data or 'events' not in data:
-            logger.warning(f"⚠️ No H2H data found for {team1} vs {team2}")
-            return []
-        
-        matches = []
+        h2h_matches = []
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         scraped_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         
-        for event in data['events']:
-            match = {
-                'date': datetime.fromtimestamp(event.get('startTimestamp')).strftime('%Y-%m-%d'),
-                'home_team': event.get('homeTeam', {}).get('name', ''),
-                'away_team': event.get('awayTeam', {}).get('name', ''),
-                'home_score': event.get('homeScore', {}).get('current', 0),
-                'away_score': event.get('awayScore', {}).get('current', 0),
-                'tournament': event.get('tournament', {}).get('name', ''),
-                'status': event.get('status', {}).get('type', '')
-            }
-            
-            if match['status'] == 'finished':
-                matches.append(match)
+        for match1 in team1_form:
+            if match1['opponent'] == team2:
+                home_team = team1 if match1['home_away'] == 'H' else team2
+                away_team = team2 if match1['home_away'] == 'H' else team1
+                score_parts = match1['score'].split('-')
+                
+                if match1['home_away'] == 'H':
+                    home_score = int(score_parts[0])
+                    away_score = int(score_parts[1])
+                else:
+                    home_score = int(score_parts[1])
+                    away_score = int(score_parts[0])
+                
+                h2h_match = {
+                    'date': match1['date'],
+                    'home_team': home_team,
+                    'away_team': away_team,
+                    'home_score': home_score,
+                    'away_score': away_score,
+                    'tournament': league
+                }
+                h2h_matches.append(h2h_match)
                 
                 cursor.execute('''
                     INSERT OR REPLACE INTO sofascore_h2h_cache 
                     (team1, team2, league, match_date, home_team, away_team, home_score, away_score, tournament, scraped_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (team1, team2, league, match['date'], match['home_team'], match['away_team'],
-                      match['home_score'], match['away_score'], match['tournament'], scraped_at))
+                ''', (team1, team2, league, h2h_match['date'], home_team, away_team,
+                      home_score, away_score, league, scraped_at))
         
         conn.commit()
         conn.close()
         
-        logger.info(f"✅ Scraped {len(matches)} H2H matches for {team1} vs {team2}")
-        return matches
+        h2h_matches.sort(key=lambda x: x['date'], reverse=True)
+        logger.info(f"✅ Found {len(h2h_matches)} H2H matches for {team1} vs {team2}")
+        return h2h_matches
     
     def _get_cached_h2h(self, team1: str, team2: str, max_age_hours: int = 24) -> List[Dict]:
         """Get cached H2H data if fresh enough"""
@@ -348,6 +347,41 @@ class SofaScoreScraper:
             })
         
         return matches
+    
+    def get_league_standings(self, league: str, use_cache: bool = True) -> List[Dict]:
+        """Get current league standings"""
+        
+        league_id = self.LEAGUE_IDS.get(league)
+        if not league_id:
+            logger.warning(f"⚠️ Unknown league: {league}")
+            return []
+        
+        endpoint = f"unique-tournament/{league_id}/season/current/standings/total"
+        data = self._make_request(endpoint)
+        
+        if not data or 'standings' not in data:
+            logger.warning(f"⚠️ No standings found for {league}")
+            return []
+        
+        standings = []
+        for standing_group in data['standings']:
+            for row in standing_group.get('rows', []):
+                team_data = {
+                    'position': row.get('position'),
+                    'team': row.get('team', {}).get('name', ''),
+                    'played': row.get('matches', 0),
+                    'wins': row.get('wins', 0),
+                    'draws': row.get('draws', 0),
+                    'losses': row.get('losses', 0),
+                    'goals_for': row.get('scoresFor', 0),
+                    'goals_against': row.get('scoresAgainst', 0),
+                    'goal_difference': row.get('scoresFor', 0) - row.get('scoresAgainst', 0),
+                    'points': row.get('points', 0)
+                }
+                standings.append(team_data)
+        
+        logger.info(f"✅ Scraped standings for {league} ({len(standings)} teams)")
+        return standings
     
     def clear_old_cache(self, days: int = 30):
         """Clear cached data older than specified days"""
