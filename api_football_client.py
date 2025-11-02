@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import logging
 from team_id_mappings import get_team_id_from_mapping
+from calendar_translator import translator
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -84,9 +85,13 @@ class APIFootballClient:
             date_obj = datetime.fromisoformat(match_date.replace('Z', '+00:00'))
             date_str = date_obj.strftime('%Y-%m-%d')
             
+            # Translate sandbox date to real-world date for API call
+            real_date_str = translator.to_real_world(date_str)
+            logger.info(f"📅 Translated {date_str} → {real_date_str} for API call")
+            
             url = f"{self.base_url}/fixtures"
             params = {
-                'date': date_str,
+                'date': real_date_str,
                 'team': home_id
             }
             
