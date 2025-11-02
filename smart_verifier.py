@@ -76,11 +76,11 @@ class SmartVerifier:
                         
                         # Determine outcome
                         if actual_score == predicted_score:
-                            outcome = 'won'
+                            outcome = 'win'
                             payout = stake * odds
                             profit_loss = payout - stake
                         else:
-                            outcome = 'lost'
+                            outcome = 'loss'
                             payout = 0
                             profit_loss = -stake
                         
@@ -90,10 +90,11 @@ class SmartVerifier:
                         # Get current timestamp for settlement
                         settled_ts = int(time.time())
                         
-                        # COMPLETE UPDATE - all fields properly set
+                        # COMPLETE UPDATE - all fields properly set (including actual_score for dashboard)
                         cursor.execute('''
                             UPDATE football_opportunities
                             SET 
+                                actual_score = ?,
                                 outcome = ?,
                                 result = ?,
                                 status = 'settled',
@@ -103,7 +104,7 @@ class SmartVerifier:
                                 settled_timestamp = ?,
                                 updated_at = datetime('now')
                             WHERE id = ?
-                        ''', (outcome, actual_score, payout, profit_loss, roi_percentage, settled_ts, bet_id))
+                        ''', (actual_score, outcome, actual_score, payout, profit_loss, roi_percentage, settled_ts, bet_id))
                         
                         verified_count += 1
                         match_found = True
