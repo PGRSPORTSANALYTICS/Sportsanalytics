@@ -111,13 +111,19 @@ class RealFootballChampion:
             self.telegram = None
         
         # 🏥 Initialize API-Football client for injuries and lineups
-        try:
-            self.api_football_client = APIFootballClient()
-            print("🏥 API-Football client initialized for injuries/lineups")
-        except Exception as e:
-            print(f"⚠️ API-Football client initialization failed: {e}")
-            print("   Will continue without injury filtering and lineup confirmations")
+        # TEMPORARY: Disabled due to API-Football having no November 2025+ fixture data
+        use_api_football = os.getenv('USE_API_FOOTBALL', 'false').lower() == 'true'
+        if use_api_football:
+            try:
+                self.api_football_client = APIFootballClient()
+                print("🏥 API-Football client initialized for injuries/lineups")
+            except Exception as e:
+                print(f"⚠️ API-Football client initialization failed: {e}")
+                print("   Will continue without injury filtering and lineup confirmations")
+                self.api_football_client = None
+        else:
             self.api_football_client = None
+            print("⚙️  API-Football DISABLED - using Odds API + statistical models only")
         
         # 🎯 Initialize confidence scorer for selective betting
         self.confidence_scorer = ConfidenceScorer()
