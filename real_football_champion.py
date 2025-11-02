@@ -2214,7 +2214,7 @@ class RealFootballChampion:
             return False
         
         # Defense-in-depth: Check daily limit before saving - STRICT SELECTIVITY
-        DAILY_LIMIT = 10  # 🔧 CRITICAL: Reduced from 40 to 10 max daily bets
+        DAILY_LIMIT = 15  # 🔧 CRITICAL: High-quality predictions, balanced quantity
         current_count = self.get_todays_count()
         if current_count >= DAILY_LIMIT:
             print(f"⚠️ DAILY LIMIT REACHED: {current_count}/{DAILY_LIMIT} bets already generated today")
@@ -2363,7 +2363,7 @@ class RealFootballChampion:
         print("=" * 60)
         
         # Check daily limit first - STRICT SELECTIVITY 
-        DAILY_LIMIT = 10  # 🔧 CRITICAL: Reduced from 40 to 10 max daily bets
+        DAILY_LIMIT = 15  # 🔧 CRITICAL: High-quality predictions, balanced quantity
         current_count = self.get_todays_count()
         if current_count >= DAILY_LIMIT:
             print(f"⚠️ DAILY LIMIT REACHED: {current_count}/{DAILY_LIMIT} bets already generated today")
