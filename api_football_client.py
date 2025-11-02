@@ -10,7 +10,6 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import logging
 from team_id_mappings import get_team_id_from_mapping
-from calendar_translator import translator
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -85,13 +84,9 @@ class APIFootballClient:
             date_obj = datetime.fromisoformat(match_date.replace('Z', '+00:00'))
             date_str = date_obj.strftime('%Y-%m-%d')
             
-            # Translate sandbox date to real-world date for API call
-            real_date_str = translator.to_real_world(date_str)
-            logger.info(f"📅 Translated {date_str} → {real_date_str} for API call")
-            
             url = f"{self.base_url}/fixtures"
             params = {
-                'date': real_date_str,
+                'date': date_str,
                 'team': home_id
             }
             
@@ -505,14 +500,10 @@ class APIFootballClient:
             start_date = (target_date - timedelta(days=14)).strftime('%Y-%m-%d')
             end_date = (target_date - timedelta(days=1)).strftime('%Y-%m-%d')
             
-            # Translate to real-world dates for API call
-            real_start_date = translator.to_real_world(start_date)
-            real_end_date = translator.to_real_world(end_date)
-            
             params = {
                 'team': team_id,
-                'from': real_start_date,
-                'to': real_end_date,
+                'from': start_date,
+                'to': end_date,
                 'status': 'FT'  # Only finished matches
             }
             
