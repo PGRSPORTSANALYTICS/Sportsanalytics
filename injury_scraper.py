@@ -91,13 +91,14 @@ class InjuryScraper:
         cursor = conn.cursor()
         
         cutoff_time = datetime.now() - timedelta(hours=max_age_hours)
+        cutoff_str = cutoff_time.strftime('%Y-%m-%d %H:%M:%S')
         
         cursor.execute('''
             SELECT club, player, injury_type, expected_return, scraped_at, source
             FROM injury_cache
             WHERE league = ? AND scraped_at > ?
             ORDER BY scraped_at DESC
-        ''', (league, cutoff_time.isoformat()))
+        ''', (league, cutoff_str))
         
         results = cursor.fetchall()
         conn.close()
@@ -386,8 +387,9 @@ class InjuryScraper:
         cursor = conn.cursor()
         
         cutoff_time = datetime.now() - timedelta(days=days)
+        cutoff_str = cutoff_time.strftime('%Y-%m-%d %H:%M:%S')
         
-        cursor.execute('DELETE FROM injury_cache WHERE scraped_at < ?', (cutoff_time.isoformat(),))
+        cursor.execute('DELETE FROM injury_cache WHERE scraped_at < ?', (cutoff_str,))
         deleted = cursor.rowcount
         
         conn.commit()

@@ -169,12 +169,32 @@ class EnhancedExactScorePredictor:
                 enriched['away_standings'] = standings.get(away_id, {})
             
             # 4. INJURIES AND LINEUPS
-            if 'fixture_id' in match:
-                # Use API-Football for full injury and lineup data
-                logger.info(f"🏥 Fetching injuries and lineups from API-Football")
-                enriched['lineups'] = self.advanced_api.get_injuries_and_lineups(match['fixture_id'])
-            elif self.injury_scraper:
-                # Fallback to injury scraper when API-Football unavailable
+            # Initialize with default structure
+            enriched['lineups'] = {
+                'home_injuries': 0,
+                'away_injuries': 0,
+                'key_players_out': [],
+                'lineups_confirmed': False,
+                'home_formation': None,
+                'away_formation': None
+            }
+            
+            injury_data_obtained = False
+            
+            # Try API-Football first if fixture_id available
+            if 'fixture_id' in match and self.advanced_api:
+                try:
+                    logger.info(f"🏥 Fetching injuries and lineups from API-Football")
+                    api_lineups = self.advanced_api.get_injuries_and_lineups(match['fixture_id'])
+                    if api_lineups:
+                        enriched['lineups'] = api_lineups
+                        injury_data_obtained = True
+                        logger.info(f"✅ API-Football injuries obtained")
+                except Exception as e:
+                    logger.warning(f"⚠️ API-Football injuries failed: {e}")
+            
+            # Fallback to injury scraper if API-Football failed or unavailable
+            if not injury_data_obtained and self.injury_scraper:
                 logger.info(f"🏥 Fetching injuries from web scraper (API-Football unavailable)")
                 try:
                     # Map league name for scraper
@@ -184,7 +204,7 @@ class EnhancedExactScorePredictor:
                     home_injuries_list = self.injury_scraper.get_team_injuries(home_team, league_name, use_cache=True)
                     away_injuries_list = self.injury_scraper.get_team_injuries(away_team, league_name, use_cache=True)
                     
-                    # Convert to expected format
+                    # Always update lineups with scraper data (even if lists are empty)
                     enriched['lineups'] = {
                         'home_injuries': len(home_injuries_list),
                         'away_injuries': len(away_injuries_list),
@@ -201,17 +221,10 @@ class EnhancedExactScorePredictor:
                     }
                     
                     logger.info(f"✅ Scraped injuries: {home_team} ({len(home_injuries_list)}), {away_team} ({len(away_injuries_list)})")
+                    injury_data_obtained = True
                     
                 except Exception as e:
-                    logger.warning(f"⚠️ Injury scraper failed: {e}")
-                    enriched['lineups'] = {
-                        'home_injuries': 0,
-                        'away_injuries': 0,
-                        'key_players_out': [],
-                        'lineups_confirmed': False,
-                        'home_formation': None,
-                        'away_formation': None
-                    }
+                    logger.warning(f"⚠️ Injury scraper failed: {e}, using default empty structure")
             
             # 5. ODDS MOVEMENT TRACKING
             match_id = match.get('id', f"{home_team}_vs_{away_team}")
