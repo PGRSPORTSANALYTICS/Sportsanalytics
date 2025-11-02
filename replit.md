@@ -17,7 +17,7 @@ The system employs advanced prediction features including:
 - **Head-to-Head Historical Analysis:** Examines the last 10 H2H matches for score patterns, Over 2.5 goals, and BTTS rates.
 - **League Standings Integration:** Incorporates current league position, points, goal difference, and rank difference.
 - **Odds Movement Tracking:** Monitors opening vs. current odds, movement velocity, sharp money indicators, and closing line value.
-- **Injury and Lineup Data:** Tracks key player injuries and confirms lineups 1-2 hours before kickoff.
+- **Injury and Lineup Data:** Dual-source system prioritizing API-Football for injuries and lineups, with automatic fallback to Transfermarkt web scraper when API unavailable. Scraper covers all Top 5 leagues + Champions League with 12-hour caching. Currently tracking 283 active injuries across major European leagues.
 - **Neural Network Predictions:** A deep learning model for exact scores, trained on 50+ features.
 - **Ensemble Prediction System:** Combines Poisson distribution (xG-based), neural network probabilities, and H2H patterns with weighted averaging.
 - **Similar Matches Technology:** Analyzes historical matches with similar characteristics to adjust prediction confidence based on past outcomes. Uses league grouping (Top 5 leagues pooled together) for larger sample sizes. Adjusts confidence -30 to +30 points based on pattern strength.
