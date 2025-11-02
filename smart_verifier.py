@@ -28,22 +28,20 @@ class SmartVerifier:
         self.telegram = TelegramBroadcaster()
     
     def verify_recent_matches(self):
-        """Verify only recent unverified matches (last 7 days)"""
-        logger.info("🔍 SMART VERIFICATION - Daily batch check")
+        """Verify ALL unverified matches (no time limit for historical backfill)"""
+        logger.info("🔍 SMART VERIFICATION - Full historical check")
         
         cursor = self.conn.cursor()
         
-        # Get unverified bets from last 7 days only
-        seven_days_ago = int(time.time()) - (7 * 86400)
-        
+        # Get ALL unverified bets (removed 7-day limit)
         cursor.execute('''
             SELECT id, home_team, away_team, match_date, selection, odds, stake
             FROM football_opportunities
             WHERE status != 'settled'
-            AND timestamp > ?
-            ORDER BY match_date DESC
-            LIMIT 100
-        ''', (seven_days_ago,))
+            AND match_date < datetime('now')
+            ORDER BY match_date ASC
+            LIMIT 200
+        ''')
         
         pending = cursor.fetchall()
         logger.info(f"📊 Found {len(pending)} recent unverified matches")
@@ -67,10 +65,24 @@ class SmartVerifier:
                 # Get all results for that day (uses caching!)
                 all_results = self.scraper.get_results_for_date(date_str)
                 
-                # Find matching result
+                # Find matching result (with fuzzy team name matching)
                 match_found = False
                 for result in all_results:
-                    if (result['home_team'] == home and result['away_team'] == away):
+                    # Normalize team names for comparison
+                    result_home = result['home_team'].lower().replace('&', 'and')
+                    result_away = result['away_team'].lower().replace('&', 'and')
+                    pred_home = home.lower().replace('&', 'and')
+                    pred_away = away.lower().replace('&', 'and')
+                    
+                    # Check for exact or partial match
+                    home_match = (result_home == pred_home or 
+                                 result_home in pred_home or 
+                                 pred_home in result_home)
+                    away_match = (result_away == pred_away or 
+                                 result_away in pred_away or 
+                                 pred_away in result_away)
+                    
+                    if home_match and away_match:
                         actual_score = result['score']
                         predicted_score = selection.split(':')[-1].strip()
                         

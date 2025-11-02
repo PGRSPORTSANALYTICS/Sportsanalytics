@@ -189,6 +189,7 @@ class ResultsScraper:
                                         'away_team': away_team,
                                         'home_score': int(home_score),
                                         'away_score': int(away_score),
+                                        'score': f"{int(home_score)}-{int(away_score)}",
                                         'total_goals': int(home_score) + int(away_score),
                                         'result': 'home' if home_score > away_score else ('away' if away_score > home_score else 'draw'),
                                         'source': 'api-football'
