@@ -2514,9 +2514,11 @@ class RealFootballChampion:
                 home_id = self.get_team_id_by_name(home_team) or 1
                 away_id = self.get_team_id_by_name(away_team) or 2
                 
+                print(f"   📊 Analyzing {home_team} vs {away_team}...")
                 home_form = self.analyze_team_form(home_team, home_id)
                 away_form = self.analyze_team_form(away_team, away_id)
                 h2h = self.get_head_to_head(home_team, away_team)
+                print(f"   ✅ Analysis complete")
                 
                 # 📊 REAL xG DATA: Try to get actual statistics from API-Football
                 real_xg_data = None
