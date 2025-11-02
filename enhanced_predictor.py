@@ -21,6 +21,14 @@ except ImportError as e:
     logger.warning(f"⚠️ Advanced features not available: {e}")
     ADVANCED_FEATURES_AVAILABLE = False
 
+# Import injury scraper for fallback when API-Football is unavailable
+try:
+    from injury_scraper import InjuryScraper
+    INJURY_SCRAPER_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"⚠️ Injury scraper not available: {e}")
+    INJURY_SCRAPER_AVAILABLE = False
+
 
 class EnhancedExactScorePredictor:
     """
@@ -35,6 +43,7 @@ class EnhancedExactScorePredictor:
         self.advanced_api = None
         self.odds_tracker = None
         self.neural_predictor = None
+        self.injury_scraper = None
         
         if ADVANCED_FEATURES_AVAILABLE:
             try:
@@ -45,6 +54,14 @@ class EnhancedExactScorePredictor:
                 logger.info("✅ Enhanced predictor initialized with all features")
             except Exception as e:
                 logger.warning(f"⚠️ Could not initialize all features: {e}")
+        
+        # Initialize injury scraper as fallback
+        if INJURY_SCRAPER_AVAILABLE:
+            try:
+                self.injury_scraper = InjuryScraper()
+                logger.info("✅ Injury scraper initialized for fallback data")
+            except Exception as e:
+                logger.warning(f"⚠️ Could not initialize injury scraper: {e}")
     
     def get_team_ids(self, home_team: str, away_team: str, league_id: Optional[int] = None) -> Tuple[Optional[int], Optional[int]]:
         """
@@ -151,10 +168,50 @@ class EnhancedExactScorePredictor:
                 enriched['home_standings'] = standings.get(home_id, {})
                 enriched['away_standings'] = standings.get(away_id, {})
             
-            # 4. INJURIES AND LINEUPS (if fixture ID available)
+            # 4. INJURIES AND LINEUPS
             if 'fixture_id' in match:
-                logger.info(f"🏥 Fetching injuries and lineups")
+                # Use API-Football for full injury and lineup data
+                logger.info(f"🏥 Fetching injuries and lineups from API-Football")
                 enriched['lineups'] = self.advanced_api.get_injuries_and_lineups(match['fixture_id'])
+            elif self.injury_scraper:
+                # Fallback to injury scraper when API-Football unavailable
+                logger.info(f"🏥 Fetching injuries from web scraper (API-Football unavailable)")
+                try:
+                    # Map league name for scraper
+                    league_name = match.get('league', 'Premier League')
+                    
+                    # Get injuries for both teams
+                    home_injuries_list = self.injury_scraper.get_team_injuries(home_team, league_name, use_cache=True)
+                    away_injuries_list = self.injury_scraper.get_team_injuries(away_team, league_name, use_cache=True)
+                    
+                    # Convert to expected format
+                    enriched['lineups'] = {
+                        'home_injuries': len(home_injuries_list),
+                        'away_injuries': len(away_injuries_list),
+                        'key_players_out': [
+                            {'team': home_team, 'player': inj['player'], 'injury': inj['injury_type']}
+                            for inj in home_injuries_list
+                        ] + [
+                            {'team': away_team, 'player': inj['player'], 'injury': inj['injury_type']}
+                            for inj in away_injuries_list
+                        ],
+                        'lineups_confirmed': False,
+                        'home_formation': None,
+                        'away_formation': None
+                    }
+                    
+                    logger.info(f"✅ Scraped injuries: {home_team} ({len(home_injuries_list)}), {away_team} ({len(away_injuries_list)})")
+                    
+                except Exception as e:
+                    logger.warning(f"⚠️ Injury scraper failed: {e}")
+                    enriched['lineups'] = {
+                        'home_injuries': 0,
+                        'away_injuries': 0,
+                        'key_players_out': [],
+                        'lineups_confirmed': False,
+                        'home_formation': None,
+                        'away_formation': None
+                    }
             
             # 5. ODDS MOVEMENT TRACKING
             match_id = match.get('id', f"{home_team}_vs_{away_team}")
