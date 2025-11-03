@@ -497,6 +497,78 @@ st.success("🔒 **100% Authentic Performance** | Real match results verified fr
 st.markdown("<br>", unsafe_allow_html=True)
 
 # ============================================================================
+# LEAGUE PERFORMANCE TRACKER
+# ============================================================================
+
+st.markdown("## 🌍 LEAGUE PERFORMANCE")
+
+try:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT 
+            league,
+            COUNT(*) as total_predictions,
+            SUM(CASE WHEN outcome IN ('won', 'win') THEN 1 ELSE 0 END) as wins,
+            SUM(CASE WHEN outcome IN ('lost', 'loss') THEN 1 ELSE 0 END) as losses,
+            SUM(CASE WHEN outcome IS NULL THEN 1 ELSE 0 END) as pending,
+            SUM(CASE WHEN outcome IN ('won', 'win', 'lost', 'loss') THEN stake ELSE 0 END) as total_staked,
+            SUM(CASE WHEN outcome IN ('won', 'win') THEN stake * (odds - 1) 
+                     WHEN outcome IN ('lost', 'loss') THEN -stake 
+                     ELSE 0 END) as net_profit,
+            AVG(odds) as avg_odds
+        FROM football_opportunities
+        WHERE market = 'exact_score'
+        GROUP BY league
+        ORDER BY total_predictions DESC
+    ''')
+    
+    league_data = []
+    for row in cursor.fetchall():
+        settled = row[2] + row[3]
+        win_rate = (row[2] / settled * 100) if settled > 0 else 0
+        roi = (row[6] / row[5] * 100) if row[5] > 0 else 0
+        
+        # Status indicator
+        if settled >= 10:
+            if win_rate >= 20:
+                status = "🟢"
+            elif win_rate >= 15:
+                status = "🟡"
+            else:
+                status = "🔴"
+        else:
+            status = "⚪"
+        
+        league_data.append({
+            'Status': status,
+            'League': row[0],
+            'Total': row[1],
+            'Settled': settled,
+            'Wins': row[2],
+            'Hit Rate': f"{win_rate:.1f}%",
+            'ROI': f"{roi:.1f}%",
+            'Profit': f"{row[6]:.0f} SEK",
+            'Avg Odds': f"{row[7]:.1f}x" if row[7] else "N/A"
+        })
+    
+    conn.close()
+    
+    if league_data:
+        df = pd.DataFrame(league_data)
+        st.dataframe(df, use_container_width=True, hide_index=True)
+        
+        st.caption("🟢 Strong (20%+ hit rate) | 🟡 Good (15-20%) | 🔴 Weak (<15%) | ⚪ Early (<10 settled)")
+    else:
+        st.info("No league data available yet")
+        
+except Exception as e:
+    st.warning(f"Loading league performance... {str(e)}")
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# ============================================================================
 # HIGHLIGHT MOMENTS
 # ============================================================================
 
