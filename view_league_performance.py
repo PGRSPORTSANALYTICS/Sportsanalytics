@@ -20,7 +20,7 @@ def get_league_performance() -> List[Dict]:
             SUM(CASE WHEN outcome IN ('won', 'win') THEN 1 ELSE 0 END) as wins,
             SUM(CASE WHEN outcome IN ('lost', 'loss') THEN 1 ELSE 0 END) as losses,
             SUM(CASE WHEN outcome IS NULL THEN 1 ELSE 0 END) as pending,
-            SUM(stake) as total_staked,
+            SUM(CASE WHEN outcome IN ('won', 'win', 'lost', 'loss') THEN stake ELSE 0 END) as total_staked,
             SUM(CASE WHEN outcome IN ('won', 'win') THEN stake * (odds - 1) 
                      WHEN outcome IN ('lost', 'loss') THEN -stake 
                      ELSE 0 END) as net_profit,
