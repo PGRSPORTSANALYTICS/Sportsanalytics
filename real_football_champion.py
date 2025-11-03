@@ -2643,19 +2643,14 @@ class RealFootballChampion:
             current_scores = {row[0].replace('Exact Score: ', ''): row[1] for row in cursor.fetchall()}
             total_current = sum(current_scores.values()) or 1
             
-            # 💰 DATA-DRIVEN SCORE SELECTION: All scores valid when data supports them
-            # Historical performance (159 bets):
-            # HOME WINS: 2-0 (66.7% WR, +3,941 SEK) | 3-1 (28.6% WR, +3,685 SEK) | 2-1 (16.1% WR, +5,091 SEK)
-            # AWAY WINS: 0-2 (dominant away) | 0-1 (narrow away) | 1-2 (comeback away)
-            # Smart AI picks ANY score when real data supports it!
-            PROVEN_SCORES = ['2-0', '3-1', '2-1', '0-2', '0-1', '1-2']  # Home + Away wins
+            # 💰 DATA-DRIVEN SCORE SELECTION: Let data determine best scores!
+            # Historical performance shows 2-0, 3-1, 2-1 performed well (159 bets)
+            # But we'll let the models predict ANY score that meets quality criteria
+            # Smart AI picks BEST score when real data supports it!
             
-            # Calculate value score for ONLY proven winning scores
+            # Calculate value score for ALL scores (data-driven approach!)
             score_candidates = []
             for score_key, score_data in exact_scores.items():
-                # 🚫 SKIP ALL EXOTIC SCORES (they have 0% hit rate!)
-                if score_key not in PROVEN_SCORES:
-                    continue
                 
                 prob = score_data['probability']
                 if prob < 0.02:  # Skip unlikely scores
@@ -3023,15 +3018,15 @@ class RealFootballChampion:
                 ]
                 is_quality_league = any(qual in league for qual in QUALITY_LEAGUES)
                 
-                # 💰 DATA-PROVEN GATES: Optimize for 20-25% win rate!
+                # 💰 DATA-DRIVEN GATES: Let the data determine best scores!
                 passes_league = is_quality_league  # Quality leagues with good data
                 passes_quality = quality_score >= 50  # Balanced quality (matches system output)
                 passes_odds = 7 <= final_odds <= 14  # Target 11-13x sweet spot (allow 7-14 range)
                 passes_confidence = confidence >= 70  # Good confidence threshold
                 passes_elite_value = selected['elite_value'] >= 1.0  # Maximum value requirement
-                passes_score_type = selected['score_text'] in ['2-0', '3-1', '2-1', '0-2', '0-1', '1-2']  # Home + Away wins!
+                # 🆕 NO PATTERN FILTER - Let models predict ANY score based on data analysis
                 
-                if passes_league and passes_quality and passes_odds and passes_confidence and passes_elite_value and passes_score_type:
+                if passes_league and passes_quality and passes_odds and passes_confidence and passes_elite_value:
                     # Save exact score opportunity (bypass daily limit)
                     saved = self.save_exact_score_opportunity(opportunity)
                     if saved:
@@ -3050,9 +3045,7 @@ class RealFootballChampion:
                         skip_reasons.append(f"confidence={confidence}")
                     if not passes_elite_value:
                         skip_reasons.append(f"value={selected['elite_value']:.2f}")
-                    if not passes_score_type:
-                        skip_reasons.append(f"score={selected['score_text']}")
-                    print(f"   ⏭️ SKIPPED (20% optimization filter: {', '.join(skip_reasons)})")
+                    print(f"   ⏭️ SKIPPED (data-driven filter: {', '.join(skip_reasons)})")
         
         print(f"\n🎯 EXACT SCORE ANALYSIS COMPLETE: {total_exact_scores} predictions generated")
         return total_exact_scores
