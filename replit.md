@@ -1,7 +1,7 @@
 # Exact Score Predictions Platform
 
 ## Overview
-This project is an AI-powered platform for exact football score predictions, aiming for significant ROI through advanced machine learning and ensemble modeling. It features a premium Streamlit dashboard and Telegram bot delivery for predictions, coupled with automatic result verification. The system is highly optimized with "ULTRA-AGGRESSIVE filters," specifically targeting a 20-25% hit rate by focusing exclusively on 1-0 and 1-1 scores in top 5 leagues with odds between 7x and 11x. The business vision includes a paid subscription launch in January 2026, offering transparent, data-driven predictions with a focus on quality over quantity and projected ROI of +100-200%.
+This project is an AI-powered platform for exact football score predictions, aiming for significant ROI through advanced machine learning and ensemble modeling. It features a premium Streamlit dashboard and Telegram bot delivery for predictions, coupled with automatic result verification. The system uses data-driven AI analysis (100% pattern-free) with ensemble models predicting ANY score based on xG, form, H2H, injuries, and standings. Targets 20-25% hit rate across 16 quality leagues (expanded Nov 2025) with odds 7-14x and 12%+ EV edge. Business goal: 500 settled predictions with 18%+ hit rate before January 2026 subscription launch (499-999 SEK/month) offering transparent, data-driven predictions with projected ROI of +100-200%.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -36,7 +36,13 @@ The system employs advanced prediction features including:
   - All scrapers include 12-24 hour caching and rate limiting to minimize load
   - System automatically switches between sources without manual intervention
 - **Odds Integration:** The Odds API provides real-time odds and match availability data.
-- **Data-Driven Score Targeting:** Based on analysis of 159 verified bets, system now exclusively targets winning score patterns: 2-0 (66.7% win rate, +3,941 SEK profit), 3-1 (28.6% win rate, +3,685 SEK profit), and 2-1 (16.1% win rate, +5,091 SEK profit). Top 5 leagues only, odds 7-14x range targeting 12x+ sweet spot. Previous targets (1-0, 1-1) removed due to poor performance (6.9% and 8.3% win rates respectively).
+- **Data-Driven Score Targeting:** System removed pattern filters (Nov 2025) to become 100% data-driven AI. Models now predict ANY score (1-0, 2-0, 2-1, 3-1, etc.) based on ensemble analysis. EV threshold lowered to 12% (from 15%) to enable predictions while maintaining quality edge.
+- **League Coverage Expansion (Nov 3, 2025):** Expanded from 11 to 16 quality leagues to achieve 500 prediction volume goal by January 2026:
+  - **Tier 1 (11 leagues):** Top 5 European (Premier, La Liga, Serie A, Bundesliga, Ligue 1), Elite European (Champions, Europa), Strong Second Tier (Eredivisie, Primeira, Belgian, Championship)
+  - **Tier 2 (5 new leagues):** Scottish Premiership, Turkish Super League, Swedish Allsvenskan, Brazilian Serie A, Major League Soccer
+  - **Target:** 30-40 predictions/week (up from 10-15/week) through different time zones and fixture schedules
+  - **Per-League Tracking:** New monitoring script `view_league_performance.py` tracks hit rate, ROI, and volume per league. Underperforming leagues (< 15% hit rate after 20+ settled) can be removed.
+- **Telegram Broadcast Fix (Nov 3, 2025):** Changed filter from unreliable bet_category to actual match_date check. Now only broadcasts predictions for matches playing TODAY, eliminating future prediction spam.
 
 ### System Design Choices
 - **Data Layer:** SQLite database manages `suggestions`, `tickets`, and `pnl` tables, with a custom `DataLoader` for operations.
