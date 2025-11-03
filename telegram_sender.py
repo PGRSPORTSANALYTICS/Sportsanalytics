@@ -121,11 +121,26 @@ class TelegramBroadcaster:
             return False
     
     def broadcast_prediction(self, prediction: Dict) -> int:
-        """Broadcast a prediction to all subscribers AND channel (ONLY TODAY'S BETS)"""
-        # Filter: Only broadcast today's bets to reduce clutter
-        bet_category = prediction.get('bet_category', 'today')
-        if bet_category != 'today':
-            logger.info(f"🔕 Skipping broadcast - {bet_category} bet (not today)")
+        """Broadcast a prediction to all subscribers AND channel (ONLY TODAY'S MATCHES)"""
+        # Filter: Only broadcast if match is playing TODAY
+        match_date_raw = prediction.get('match_date') or prediction.get('datetime') or prediction.get('kickoff_time')
+        
+        if match_date_raw:
+            try:
+                # Parse ISO format: 2025-11-01T13:00:45Z
+                from datetime import datetime
+                dt = datetime.fromisoformat(match_date_raw.replace('Z', '+00:00'))
+                match_date = dt.date()
+                today = datetime.now().date()
+                
+                if match_date != today:
+                    logger.info(f"🔕 Skipping broadcast - Match plays on {match_date}, not today ({today})")
+                    return 0
+            except Exception as e:
+                logger.warning(f"⚠️ Could not parse match date '{match_date_raw}': {e}")
+                return 0
+        else:
+            logger.warning(f"⚠️ No match date found in prediction - skipping broadcast")
             return 0
         
         message = self._format_prediction(prediction)
