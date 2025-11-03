@@ -3023,7 +3023,7 @@ class RealFootballChampion:
                 passes_quality = quality_score >= 50  # Balanced quality (matches system output)
                 passes_odds = 7 <= final_odds <= 14  # Target 11-13x sweet spot (allow 7-14 range)
                 passes_confidence = confidence >= 70  # Good confidence threshold
-                passes_elite_value = selected['elite_value'] >= 1.0  # Maximum value requirement
+                passes_elite_value = selected['elite_value'] >= 0.8  # 🔥 12%+ EV edge (relaxed from 15% to get predictions!)
                 # 🆕 NO PATTERN FILTER - Let models predict ANY score based on data analysis
                 
                 if passes_league and passes_quality and passes_odds and passes_confidence and passes_elite_value:

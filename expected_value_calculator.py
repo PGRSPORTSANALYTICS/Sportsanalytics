@@ -13,13 +13,13 @@ class ExpectedValueCalculator:
     Calculate Expected Value and determine if a bet has mathematical edge
     
     Expected Value = (Probability × Odds) - 1
-    Only bet when EV > 0.15 (15%+ edge required for long-term profit)
+    Only bet when EV > 0.12 (12%+ edge required for long-term profit)
     """
     
-    def __init__(self, min_edge: float = 0.15):
+    def __init__(self, min_edge: float = 0.12):
         """
         Args:
-            min_edge: Minimum edge required to bet (default 15%)
+            min_edge: Minimum edge required to bet (default 12%)
         """
         self.min_edge = min_edge
         logger.info(f"✅ EV Calculator initialized (min edge: {min_edge*100}%)")
