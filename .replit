@@ -99,7 +99,7 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "ENABLE_REAL_BETS=1 python real_football_champion.py"
+args = "ENABLE_REAL_BETS=1 USE_API_FOOTBALL=true python real_football_champion.py"
 
 [[workflows.workflow]]
 name = "Performance Updates"
