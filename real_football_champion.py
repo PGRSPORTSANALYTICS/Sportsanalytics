@@ -3010,11 +3010,23 @@ class RealFootballChampion:
                 quality_score = enriched_analysis.get('quality_score', 50)
                 league = match.get('league_name', '')
                 
-                # ⚠️ QUALITY LEAGUES (Top 5 + Champions/Europa + Strong Second Tier)
+                # ⚠️ QUALITY LEAGUES (Expanded for 500 prediction goal by January 2026)
                 QUALITY_LEAGUES = [
-                    'Premier League', 'La Liga', 'Serie A', 'Bundesliga', 'Ligue 1',  # Top 5
-                    'Champions League', 'Europa League',  # Elite European
-                    'Eredivisie', 'Primeira Liga', 'Belgian', 'Championship'  # Strong second tier
+                    # Top 5 European Leagues
+                    'Premier League', 'La Liga', 'Serie A', 'Bundesliga', 'Ligue 1',
+                    
+                    # Elite European Competitions
+                    'Champions League', 'Europa League',
+                    
+                    # Strong Second Tier European
+                    'Eredivisie', 'Primeira Liga', 'Belgian', 'Championship',
+                    
+                    # NEW: Expanded Coverage (Nov 2025 - for volume + per-league tracking)
+                    'Scottish Premiership',  # 🏴󠁧󠁢󠁳󠁣󠁴󠁿 Good data quality, consistent fixtures
+                    'Turkish Super League',  # 🇹🇷 Popular league, reliable stats
+                    'Swedish Allsvenskan',   # 🇸🇪 Nordic quality, evening matches
+                    'Brazilian Serie A',      # 🇧🇷 24/7 coverage, different timezone
+                    'Major League Soccer'     # 🇺🇸 Evening coverage, growing data quality
                 ]
                 is_quality_league = any(qual in league for qual in QUALITY_LEAGUES)
                 
