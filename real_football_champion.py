@@ -3147,17 +3147,17 @@ class RealFootballChampion:
         
         cursor = self.conn.cursor()
         
-        # Check if this exact score already exists TODAY
-        today_start = int(time.time()) - (24 * 60 * 60)  # 24 hours ago
+        # Check if this exact score already exists for this SPECIFIC MATCH DATE
+        # This prevents duplicate predictions when the system runs multiple times
         cursor.execute('''
             SELECT COUNT(*) FROM football_opportunities 
             WHERE home_team = ? AND away_team = ? AND market = 'exact_score'
-            AND timestamp > ?
-        ''', (opportunity.home_team, opportunity.away_team, today_start))
+            AND match_date = ?
+        ''', (opportunity.home_team, opportunity.away_team, opportunity.match_date))
         
         duplicate_count = cursor.fetchone()[0]
         if duplicate_count > 0:
-            print(f"🔄 EXACT SCORE ALREADY EXISTS: {opportunity.home_team} vs {opportunity.away_team}")
+            print(f"🔄 DUPLICATE BLOCKED: {opportunity.home_team} vs {opportunity.away_team} on {opportunity.match_date} already predicted")
             return False
         
         # Calculate quality score and dashboard fields
