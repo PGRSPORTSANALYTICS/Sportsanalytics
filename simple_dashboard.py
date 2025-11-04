@@ -165,12 +165,12 @@ def load_exact_score_tips(category='today'):
         conn = sqlite3.connect(DB_PATH)
         query = """
         SELECT home_team, away_team, selection, odds, edge_percentage, 
-               confidence, match_date, recommended_date, analysis, bet_category
+               confidence, match_date, recommended_date, analysis, bet_category, kickoff_time
         FROM football_opportunities 
         WHERE market = 'exact_score'
         AND status = 'pending'
         AND bet_category = ?
-        ORDER BY match_date ASC
+        ORDER BY match_date ASC, kickoff_time ASC
         """
         df = pd.read_sql_query(query, conn, params=(category,))
         conn.close()
@@ -796,6 +796,44 @@ st.markdown("<br>", unsafe_allow_html=True)
 
 st.markdown("## 🎯 ACTIVE PREDICTIONS")
 
+def format_kickoff_time(kickoff_time, match_date):
+    """Format kickoff time for display"""
+    try:
+        if pd.isna(kickoff_time) or kickoff_time == '' or kickoff_time is None:
+            # Try to extract time from match_date if kickoff_time is missing
+            if pd.notna(match_date) and 'T' in str(match_date):
+                dt = datetime.fromisoformat(str(match_date).replace('Z', '+00:00'))
+                return dt.strftime('%H:%M')
+            return "TBD"
+        
+        kickoff_str = str(kickoff_time)
+        
+        # Handle ISO format with T separator (e.g., "2025-11-04T19:45:00Z")
+        if 'T' in kickoff_str:
+            dt = datetime.fromisoformat(kickoff_str.replace('Z', '+00:00'))
+            return dt.strftime('%H:%M')
+        
+        # Handle full datetime string (e.g., "2025-11-04 19:45:00")
+        if ' ' in kickoff_str and len(kickoff_str) >= 16:
+            # Split by space and take the time part
+            time_part = kickoff_str.split(' ')[1]
+            return time_part[:5]  # Return HH:MM
+        
+        # Handle time-only format (e.g., "19:45:00" or "19:45")
+        if ':' in kickoff_str and len(kickoff_str) <= 10:
+            return kickoff_str[:5]  # Return HH:MM
+        
+        # If all else fails, try to extract from match_date
+        if pd.notna(match_date):
+            match_str = str(match_date)
+            if 'T' in match_str:
+                dt = datetime.fromisoformat(match_str.replace('Z', '+00:00'))
+                return dt.strftime('%H:%M')
+        
+        return "TBD"
+    except Exception as e:
+        return "TBD"
+
 def generate_dashboard_analysis(analysis_json, home_team, away_team):
     """Generate human-readable analysis from JSON for dashboard"""
     import json
@@ -840,9 +878,12 @@ with tab1:
         for idx, tip in today_tips.iterrows():
             col1, col2, col3 = st.columns([3, 2, 2])
             
+            kickoff = format_kickoff_time(tip.get('kickoff_time'), tip.get('match_date'))
+            
             with col1:
                 st.markdown(f"### {tip['home_team']} vs {tip['away_team']}")
                 st.markdown(f'<div class="exact-badge">{tip["selection"]}</div>', unsafe_allow_html=True)
+                st.caption(f"🕐 Kickoff: **{kickoff}**")
             
             with col2:
                 st.markdown(f"**Odds:** `{tip['odds']:.2f}x`")
@@ -850,7 +891,7 @@ with tab1:
             
             with col3:
                 st.markdown(f"**Confidence:** {tip['confidence']}%")
-                st.caption(f"⏰ {tip['match_date']}")
+                st.caption(f"📅 {tip['match_date'][:10] if pd.notna(tip['match_date']) else 'TBD'}")
             
             analysis_text = generate_dashboard_analysis(tip.get('analysis', ''), tip['home_team'], tip['away_team'])
             if analysis_text:
@@ -871,9 +912,12 @@ with tab2:
         for idx, tip in future_tips.iterrows():
             col1, col2, col3 = st.columns([3, 2, 2])
             
+            kickoff = format_kickoff_time(tip.get('kickoff_time'), tip.get('match_date'))
+            
             with col1:
                 st.markdown(f"### {tip['home_team']} vs {tip['away_team']}")
                 st.markdown(f'<div class="exact-badge">{tip["selection"]}</div>', unsafe_allow_html=True)
+                st.caption(f"🕐 Kickoff: **{kickoff}**")
             
             with col2:
                 st.markdown(f"**Odds:** `{tip['odds']:.2f}x`")
@@ -881,7 +925,7 @@ with tab2:
             
             with col3:
                 st.markdown(f"**Confidence:** {tip['confidence']}%")
-                st.caption(f"⏰ {tip['match_date']}")
+                st.caption(f"📅 {tip['match_date'][:10] if pd.notna(tip['match_date']) else 'TBD'}")
             
             analysis_text = generate_dashboard_analysis(tip.get('analysis', ''), tip['home_team'], tip['away_team'])
             if analysis_text:

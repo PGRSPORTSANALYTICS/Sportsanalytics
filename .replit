@@ -48,6 +48,10 @@ args = "Smart Verifier"
 task = "workflow.run"
 args = "Daily Categorizer"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Daily Games Reminder"
+
 [[workflows.workflow]]
 name = "install_dependencies"
 author = "agent"
@@ -134,9 +138,24 @@ args = "python3 daily_bet_categorizer.py"
 [workflows.workflow.metadata]
 outputType = "console"
 
+[[workflows.workflow]]
+name = "Daily Games Reminder"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python3 daily_games_reminder.py"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
 [[ports]]
 localPort = 5000
 externalPort = 80
+
+[[ports]]
+localPort = 36445
+externalPort = 6000
 
 [[ports]]
 localPort = 37557
