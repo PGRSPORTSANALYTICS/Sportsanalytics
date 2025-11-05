@@ -3147,17 +3147,18 @@ class RealFootballChampion:
         
         cursor = self.conn.cursor()
         
-        # Check if this exact score already exists for this SPECIFIC MATCH DATE
-        # This prevents duplicate predictions when the system runs multiple times
+        # Check if this match already has ANY prediction (regardless of score)
+        # This prevents duplicate predictions with different scores for the same match
         cursor.execute('''
             SELECT COUNT(*) FROM football_opportunities 
             WHERE home_team = ? AND away_team = ? AND market = 'exact_score'
             AND match_date = ?
+            AND status = 'pending'
         ''', (opportunity.home_team, opportunity.away_team, opportunity.match_date))
         
         duplicate_count = cursor.fetchone()[0]
         if duplicate_count > 0:
-            print(f"🔄 DUPLICATE BLOCKED: {opportunity.home_team} vs {opportunity.away_team} on {opportunity.match_date} already predicted")
+            print(f"🔄 DUPLICATE BLOCKED: {opportunity.home_team} vs {opportunity.away_team} on {opportunity.match_date} already has an active prediction")
             return False
         
         # Calculate quality score and dashboard fields
