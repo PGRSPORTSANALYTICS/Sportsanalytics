@@ -221,13 +221,14 @@ def load_todays_predictions():
         
         exact_predictions = []
         for row in cursor.fetchall():
+            match_time = datetime.fromtimestamp(row[6]) if isinstance(row[6], (int, float)) else datetime.fromisoformat(row[6])
             exact_predictions.append({
                 'Match': f"{row[0]} vs {row[1]}",
                 'Prediction': row[2],
                 'Odds': f"{row[3]:.2f}x",
                 'Edge': f"{row[4]:.1f}%",
                 'League': row[5],
-                'Time': datetime.fromisoformat(row[6]).strftime('%H:%M')
+                'Time': match_time.strftime('%H:%M')
             })
         
         # Today's SGPs
@@ -242,12 +243,13 @@ def load_todays_predictions():
         
         sgp_predictions = []
         for row in cursor.fetchall():
+            match_time = datetime.fromtimestamp(row[5]) if isinstance(row[5], (int, float)) else datetime.fromisoformat(row[5])
             sgp_predictions.append({
                 'Match': f"{row[0]} vs {row[1]}",
                 'Parlay': row[2],
                 'Odds': f"{row[3]:.2f}x",
                 'Edge': f"{row[4]:.1f}%",
-                'Time': datetime.fromisoformat(row[5]).strftime('%H:%M')
+                'Time': match_time.strftime('%H:%M')
             })
         
         conn.close()
@@ -566,7 +568,8 @@ try:
     
     all_exact = []
     for row in cursor.fetchall():
-        match_time = datetime.fromisoformat(row[6])
+        # Convert Unix timestamp to datetime
+        match_time = datetime.fromtimestamp(row[6]) if isinstance(row[6], (int, float)) else datetime.fromisoformat(row[6])
         all_exact.append({
             'Match': f"{row[0]} vs {row[1]}",
             'Prediction': row[2],
@@ -591,7 +594,8 @@ try:
     
     all_sgp = []
     for row in cursor.fetchall():
-        match_time = datetime.fromisoformat(row[5])
+        # Convert Unix timestamp to datetime
+        match_time = datetime.fromtimestamp(row[5]) if isinstance(row[5], (int, float)) else datetime.fromisoformat(row[5])
         all_sgp.append({
             'Match': f"{row[0]} vs {row[1]}",
             'Parlay': row[2][:50] + '...' if len(row[2]) > 50 else row[2],
