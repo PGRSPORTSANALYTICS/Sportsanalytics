@@ -179,10 +179,18 @@ class BetStatusService:
     def _calculate_live_status(self, row) -> str:
         """Calculate if match is LIVE, UPCOMING, or FINISHED"""
         try:
-            match_datetime_str = f"{row['match_date']} {row['kickoff_time']}"
-            match_time = datetime.strptime(match_datetime_str, '%Y-%m-%d %H:%M')
-            match_time = self.stockholm_tz.localize(match_time)
-            now = datetime.now(self.stockholm_tz)
+            kickoff = row['kickoff_time']
+            
+            # Handle ISO format with timezone (2025-11-06T20:00:00Z)
+            if 'T' in kickoff:
+                match_time = datetime.fromisoformat(kickoff.replace('Z', '+00:00'))
+            else:
+                # Handle simple format (HH:MM)
+                match_datetime_str = f"{row['match_date']} {kickoff}"
+                match_time = datetime.strptime(match_datetime_str, '%Y-%m-%d %H:%M')
+                match_time = self.stockholm_tz.localize(match_time)
+            
+            now = datetime.now(pytz.UTC)
             
             # Match is live if started within last 2 hours
             if now >= match_time and now <= match_time + timedelta(hours=2):
@@ -191,20 +199,28 @@ class BetStatusService:
                 return 'UPCOMING'
             else:
                 return 'FINISHED'
-        except:
+        except Exception as e:
             return 'UNKNOWN'
     
     def _minutes_to_kickoff(self, row) -> int:
         """Calculate minutes until kickoff (negative if started)"""
         try:
-            match_datetime_str = f"{row['match_date']} {row['kickoff_time']}"
-            match_time = datetime.strptime(match_datetime_str, '%Y-%m-%d %H:%M')
-            match_time = self.stockholm_tz.localize(match_time)
-            now = datetime.now(self.stockholm_tz)
+            kickoff = row['kickoff_time']
+            
+            # Handle ISO format with timezone (2025-11-06T20:00:00Z)
+            if 'T' in kickoff:
+                match_time = datetime.fromisoformat(kickoff.replace('Z', '+00:00'))
+            else:
+                # Handle simple format (HH:MM)
+                match_datetime_str = f"{row['match_date']} {kickoff}"
+                match_time = datetime.strptime(match_datetime_str, '%Y-%m-%d %H:%M')
+                match_time = self.stockholm_tz.localize(match_time)
+            
+            now = datetime.now(pytz.UTC)
             
             delta = (match_time - now).total_seconds() / 60
             return int(delta)
-        except:
+        except Exception as e:
             return 999
 
     def format_bet_for_telegram(self, bet_row) -> str:
