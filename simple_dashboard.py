@@ -359,8 +359,15 @@ if page == "📜 Terms & Legal":
 # MAIN DASHBOARD PAGE
 # ============================================================================
 
-# Header
-st.markdown("# 🎯 AI PREDICTIONS PLATFORM")
+# Hero Banner with Logo
+col1, col2, col3 = st.columns([1, 2, 1])
+with col2:
+    try:
+        st.image("assets/logo.png", use_column_width=True)
+    except:
+        st.markdown("# 🎯 AI PREDICTIONS PLATFORM")
+
+st.markdown("")  # Spacing
 
 # Load performance data
 stats = load_performance_summary()
