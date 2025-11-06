@@ -569,6 +569,116 @@ except Exception as e:
 st.markdown("<br>", unsafe_allow_html=True)
 
 # ============================================================================
+# SGP (SAME GAME PARLAY) PERFORMANCE - SEPARATED TRACKING
+# ============================================================================
+
+st.markdown("## 🎰 SGP PARLAY PERFORMANCE")
+st.markdown("*Same Game Parlays - Completely Separate Product*")
+
+try:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    # Get SGP overall stats
+    cursor.execute('''
+        SELECT 
+            COUNT(*) as total_sgps,
+            SUM(CASE WHEN outcome = 'win' THEN 1 ELSE 0 END) as wins,
+            SUM(CASE WHEN outcome = 'loss' THEN 1 ELSE 0 END) as losses,
+            SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+            SUM(CASE WHEN status = 'settled' THEN stake ELSE 0 END) as total_staked,
+            SUM(profit_loss) as net_profit,
+            AVG(CASE WHEN status = 'settled' THEN bookmaker_odds END) as avg_odds,
+            AVG(CASE WHEN status = 'settled' THEN ev_percentage END) as avg_ev
+        FROM sgp_predictions
+    ''')
+    
+    sgp_stats = cursor.fetchone()
+    
+    if sgp_stats and sgp_stats[0] > 0:
+        # Display SGP metrics
+        col1, col2, col3, col4, col5, col6 = st.columns(6)
+        
+        total_sgps = sgp_stats[0] or 0
+        wins = sgp_stats[1] or 0
+        losses = sgp_stats[2] or 0
+        pending = sgp_stats[3] or 0
+        total_staked = sgp_stats[4] or 0
+        net_profit = sgp_stats[5] or 0
+        avg_odds = sgp_stats[6] or 0
+        avg_ev = sgp_stats[7] or 0
+        
+        settled = wins + losses
+        hit_rate = (wins / settled * 100) if settled > 0 else 0
+        roi = (net_profit / total_staked * 100) if total_staked > 0 else 0
+        
+        with col1:
+            st.metric("TOTAL SGPs", int(total_sgps))
+        
+        with col2:
+            st.metric("SETTLED", int(settled))
+        
+        with col3:
+            st.metric("HIT RATE", f"{hit_rate:.1f}%")
+        
+        with col4:
+            st.metric("AVG ODDS", f"{avg_odds:.2f}x")
+        
+        with col5:
+            st.metric("NET PROFIT", f"{net_profit:,.0f} SEK")
+        
+        with col6:
+            st.metric("ROI", f"{roi:+.1f}%")
+        
+        st.success(f"🎲 **SGP System Active** | Avg Edge: +{avg_ev:.1f}% | Copula Monte Carlo (200k sims)")
+        
+        # Recent SGP predictions
+        st.markdown("### 📋 Recent SGP Predictions")
+        
+        cursor.execute('''
+            SELECT 
+                home_team, away_team, parlay_description, 
+                parlay_probability, bookmaker_odds, ev_percentage,
+                status, outcome, profit_loss, match_date
+            FROM sgp_predictions
+            ORDER BY timestamp DESC
+            LIMIT 10
+        ''')
+        
+        sgp_rows = cursor.fetchall()
+        
+        if sgp_rows:
+            sgp_display_data = []
+            for row in sgp_rows:
+                status_emoji = "✅" if row[7] == "win" else "❌" if row[7] == "loss" else "⏳"
+                sgp_display_data.append({
+                    '': status_emoji,
+                    'Match': f"{row[0]} vs {row[1]}",
+                    'Parlay': row[2],
+                    'Probability': f"{row[3]*100:.2f}%",
+                    'Odds': f"{row[4]:.2f}x",
+                    'EV': f"+{row[5]:.1f}%",
+                    'Status': row[6].title(),
+                    'P/L': f"{row[8]:+.0f} SEK" if row[8] else "-"
+                })
+            
+            df_sgp = pd.DataFrame(sgp_display_data)
+            st.dataframe(df_sgp, use_container_width=True, hide_index=True)
+        else:
+            st.info("No SGP predictions generated yet")
+    
+    else:
+        st.info("🎰 **SGP System Running** - Analyzing matches for parlay opportunities (5%+ EV threshold)")
+        st.caption("SGP predictions will appear here when the system finds value opportunities")
+    
+    conn.close()
+    
+except Exception as e:
+    st.warning(f"Loading SGP performance... {str(e)}")
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# ============================================================================
 # HIGHLIGHT MOMENTS
 # ============================================================================
 
