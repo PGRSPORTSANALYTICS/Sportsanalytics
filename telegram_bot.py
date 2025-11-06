@@ -24,6 +24,9 @@ import sys
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler
 
+# Import Bet Status Service for live monitoring
+from bet_status_service import BetStatusService
+
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
@@ -171,6 +174,9 @@ Use /help for all commands
 /predictions - Get today's exact score predictions
 /results - See recent prediction results
 /performance - See +200% ROI performance
+/active - View all active bets (Exact Score + SGP)
+/live - View matches currently in play
+/today - View all bets for today
 /help - Show this help message
 
 **Our Proven Track Record:**
@@ -193,6 +199,126 @@ Use /help for all commands
             await update.callback_query.edit_message_text(help_text, parse_mode='Markdown')
         elif update.message:
             await update.message.reply_text(help_text, parse_mode='Markdown')
+    
+    async def active_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show all active bets (Exact Score + SGP)"""
+        try:
+            service = BetStatusService()
+            all_bets = service.get_all_active_bets()
+            stats = service.get_summary_stats()
+            
+            if all_bets.empty:
+                message_text = "📋 No active bets at the moment."
+            else:
+                message_text = f"📋 **ALL ACTIVE BETS**\n\n"
+                message_text += f"📊 **Summary:**\n"
+                message_text += f"• Total Active: {stats['total_active']}\n"
+                message_text += f"• Exact Score: {stats['exact_score']}\n"
+                message_text += f"• SGP Parlays: {stats['sgp']}\n"
+                message_text += f"• Total Stake: {stats['total_stake']:.0f} SEK\n\n"
+                
+                # Show up to 10 most recent bets
+                for _, bet in all_bets.head(10).iterrows():
+                    message_text += service.format_bet_for_telegram(bet)
+                
+                if len(all_bets) > 10:
+                    message_text += f"\n...and {len(all_bets) - 10} more bets\n"
+                
+                message_text += f"\nUse /live to see matches currently in play"
+            
+            # Send message
+            if update.callback_query:
+                await update.callback_query.edit_message_text(message_text, parse_mode='Markdown')
+            elif update.message:
+                await update.message.reply_text(message_text, parse_mode='Markdown')
+                
+        except Exception as e:
+            logger.error(f"❌ Error in /active command: {e}")
+            error_msg = "❌ Error getting active bets. Please try again later."
+            if update.callback_query:
+                await update.callback_query.edit_message_text(error_msg)
+            elif update.message:
+                await update.message.reply_text(error_msg)
+    
+    async def live_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show matches currently in play"""
+        try:
+            service = BetStatusService()
+            live_bets = service.get_live_bets()
+            
+            if live_bets.empty:
+                message_text = "🔵 No matches currently in play.\n\n"
+                message_text += "Use /today to see upcoming matches today."
+            else:
+                message_text = f"🔴 **LIVE NOW - {len(live_bets)} MATCHES IN PLAY**\n\n"
+                
+                for _, bet in live_bets.iterrows():
+                    message_text += service.format_bet_for_telegram(bet)
+                
+                message_text += f"\n💡 Check back soon for results!"
+            
+            # Send message
+            if update.callback_query:
+                await update.callback_query.edit_message_text(message_text, parse_mode='Markdown')
+            elif update.message:
+                await update.message.reply_text(message_text, parse_mode='Markdown')
+                
+        except Exception as e:
+            logger.error(f"❌ Error in /live command: {e}")
+            error_msg = "❌ Error getting live matches. Please try again later."
+            if update.callback_query:
+                await update.callback_query.edit_message_text(error_msg)
+            elif update.message:
+                await update.message.reply_text(error_msg)
+    
+    async def today_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show all bets for today"""
+        try:
+            service = BetStatusService()
+            today_bets = service.get_today_bets()
+            
+            if today_bets.empty:
+                message_text = "📅 No bets scheduled for today."
+            else:
+                message_text = f"📅 **TODAY'S BETS - {len(today_bets)} PREDICTIONS**\n\n"
+                
+                # Group by live status
+                live = today_bets[today_bets['live_status'] == 'LIVE']
+                upcoming = today_bets[today_bets['live_status'] == 'UPCOMING']
+                finished = today_bets[today_bets['live_status'] == 'FINISHED']
+                
+                if not live.empty:
+                    message_text += f"🔴 **LIVE NOW ({len(live)})**\n"
+                    for _, bet in live.iterrows():
+                        message_text += service.format_bet_for_telegram(bet)
+                    message_text += "\n"
+                
+                if not upcoming.empty:
+                    message_text += f"⏰ **UPCOMING ({len(upcoming)})**\n"
+                    for _, bet in upcoming.iterrows():
+                        message_text += service.format_bet_for_telegram(bet)
+                    message_text += "\n"
+                
+                if not finished.empty:
+                    message_text += f"✅ **FINISHED ({len(finished)})**\n"
+                    for _, bet in finished.iterrows():
+                        message_text += service.format_bet_for_telegram(bet)
+                
+                message_text += f"\n💡 Use /live to see only live matches"
+            
+            # Send message
+            if update.callback_query:
+                await update.callback_query.edit_message_text(message_text, parse_mode='Markdown')
+            elif update.message:
+                await update.message.reply_text(message_text, parse_mode='Markdown')
+                
+        except Exception as e:
+            logger.error(f"❌ Error in /today command: {e}")
+            error_msg = "❌ Error getting today's bets. Please try again later."
+            if update.callback_query:
+                await update.callback_query.edit_message_text(error_msg)
+            elif update.message:
+                await update.message.reply_text(error_msg)
     
     async def button_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle inline keyboard button callbacks"""
@@ -435,6 +561,9 @@ Use /help for all commands
             application.add_handler(CommandHandler("tips", self.tips_command))  # Alias for backwards compatibility
             application.add_handler(CommandHandler("results", self.results_command))
             application.add_handler(CommandHandler("performance", self.performance_command))
+            application.add_handler(CommandHandler("active", self.active_command))  # NEW: All active bets
+            application.add_handler(CommandHandler("live", self.live_command))  # NEW: Live matches
+            application.add_handler(CommandHandler("today", self.today_command))  # NEW: Today's bets
             application.add_handler(CommandHandler("help", self.help_command))
             application.add_handler(CallbackQueryHandler(self.button_callback))
             
