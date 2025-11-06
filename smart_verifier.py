@@ -8,6 +8,7 @@ import time
 from datetime import datetime, timedelta
 from results_scraper import ResultsScraper
 from telegram_sender import TelegramBroadcaster
+from sgp_verifier import SGPVerifier
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -26,6 +27,7 @@ class SmartVerifier:
         self.conn = sqlite3.connect('data/real_football.db')
         self.scraper = ResultsScraper()
         self.telegram = TelegramBroadcaster()
+        self.sgp_verifier = SGPVerifier()
     
     def verify_recent_matches(self):
         """Verify ALL unverified matches (no time limit for historical backfill)"""
@@ -148,8 +150,17 @@ class SmartVerifier:
                 logger.error(f"Error verifying {home} vs {away}: {e}")
         
         self.conn.commit()
-        logger.info(f"🎯 Verified {verified_count}/{len(pending)} matches")
+        logger.info(f"🎯 Verified {verified_count}/{len(pending)} exact score matches")
         logger.info(f"💾 Saved ~{len(pending) * 3} API calls with smart caching")
+        
+        # Also verify SGP predictions
+        logger.info("\n" + "="*80)
+        logger.info("🎲 VERIFYING SGP PARLAYS")
+        logger.info("="*80)
+        try:
+            self.sgp_verifier.run_verification()
+        except Exception as e:
+            logger.error(f"❌ SGP verification error: {e}")
     
     def run_daily(self):
         """Run verification once per day at midnight"""
