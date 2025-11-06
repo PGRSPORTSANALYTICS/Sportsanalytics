@@ -223,5 +223,9 @@ externalPort = 5000
 localPort = 44999
 externalPort = 3002
 
+[[ports]]
+localPort = 45961
+externalPort = 8008
+
 [agent]
 integrations = ["web_scraper==1.0.0"]

@@ -322,7 +322,7 @@ with st.sidebar:
     st.markdown("## 📋 Navigation")
     page = st.radio(
         "Choose Section:",
-        ["📊 Dashboard", "📜 Terms & Legal"],
+        ["📊 Dashboard", "🔴 Live Bet Control", "📜 Terms & Legal"],
         label_visibility="collapsed"
     )
     
@@ -418,6 +418,274 @@ if page == "📜 Terms & Legal":
     st.caption("Governed by Swedish Law | All Rights Reserved")
     
     st.stop()  # Stop here if on Terms page
+
+# ============================================================================
+# PAGE: LIVE BET CONTROL CENTER
+# ============================================================================
+
+if page == "🔴 Live Bet Control":
+    from bet_status_service import BetStatusService
+    from streamlit_autorefresh import st_autorefresh
+    
+    # Auto-refresh every 45 seconds
+    try:
+        count = st_autorefresh(interval=45000, limit=None, key="bet_control_refresh")
+    except:
+        # If st_autorefresh not available, use manual refresh button
+        pass
+    
+    st.markdown("# 🔴 LIVE BET CONTROL CENTER")
+    st.markdown('<p class="subtitle">REAL-TIME MONITORING | EXACT SCORE + SGP</p>', unsafe_allow_html=True)
+    
+    # Initialize service
+    service = BetStatusService()
+    
+    # Header with refresh button
+    col1, col2 = st.columns([4, 1])
+    with col2:
+        if st.button("🔄 REFRESH NOW"):
+            st.cache_data.clear()
+            st.rerun()
+    
+    st.markdown("---")
+    
+    # Summary Stats
+    st.markdown("## 📊 LIVE STATUS")
+    stats = service.get_summary_stats()
+    
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
+    
+    with col1:
+        st.metric("TOTAL ACTIVE", stats['total_active'])
+    
+    with col2:
+        st.metric("EXACT SCORE", stats['exact_score'])
+    
+    with col3:
+        st.metric("SGP PARLAYS", stats['sgp'])
+    
+    with col4:
+        st.metric("TODAY", stats['today'])
+    
+    with col5:
+        st.metric("LIVE NOW", stats['live'], delta="🔴" if stats['live'] > 0 else None)
+    
+    with col6:
+        st.metric("TOTAL STAKE", f"{stats['total_stake']:.0f} SEK")
+    
+    st.markdown("---")
+    
+    # Live Bets Section
+    live_bets = service.get_live_bets()
+    if not live_bets.empty:
+        st.markdown("## 🔴 LIVE NOW")
+        st.markdown(f"**{len(live_bets)} matches in play**")
+        
+        for _, bet in live_bets.iterrows():
+            with st.container():
+                col1, col2, col3 = st.columns([3, 2, 2])
+                
+                with col1:
+                    type_emoji = "⚽" if bet['type'] == 'Exact Score' else "🎯"
+                    st.markdown(f"### {type_emoji} {bet['match']}")
+                    st.caption(f"**{bet['league']}**")
+                
+                with col2:
+                    st.markdown(f"**Prediction:** {bet['prediction']}")
+                    st.caption(f"Odds: {bet['odds']:.2f} | EV: {bet['ev']:.1f}%")
+                
+                with col3:
+                    st.markdown(f"**Stake:** {bet['stake']:.0f} SEK")
+                    st.markdown(f"🔴 **LIVE**")
+                
+                st.markdown("---")
+    else:
+        st.info("🔵 No matches currently in play")
+    
+    # Today's Bets
+    today_bets = service.get_today_bets()
+    if not today_bets.empty:
+        st.markdown("## 📅 TODAY'S BETS")
+        st.markdown(f"**{len(today_bets)} predictions for today**")
+        
+        # Group by status
+        for status in ['LIVE', 'UPCOMING', 'FINISHED']:
+            status_bets = today_bets[today_bets['live_status'] == status]
+            
+            if not status_bets.empty:
+                if status == 'LIVE':
+                    st.markdown(f"### 🔴 Live ({len(status_bets)})")
+                elif status == 'UPCOMING':
+                    st.markdown(f"### ⏰ Upcoming ({len(status_bets)})")
+                else:
+                    st.markdown(f"### ✅ Finished ({len(status_bets)})")
+                
+                for _, bet in status_bets.iterrows():
+                    col1, col2, col3, col4 = st.columns([2, 3, 2, 2])
+                    
+                    with col1:
+                        type_badge = "⚽ Exact" if bet['type'] == 'Exact Score' else "🎯 SGP"
+                        st.markdown(f"**{type_badge}**")
+                        st.caption(bet['kickoff_time'])
+                    
+                    with col2:
+                        st.markdown(f"**{bet['match']}**")
+                        st.caption(f"{bet['league']}")
+                    
+                    with col3:
+                        st.markdown(f"{bet['prediction']}")
+                        st.caption(f"Odds: {bet['odds']:.2f} | EV: {bet['ev']:.1f}%")
+                    
+                    with col4:
+                        st.markdown(f"**{bet['stake']:.0f} SEK**")
+                        
+                        # Countdown or status
+                        if status == 'UPCOMING':
+                            mins = bet['minutes_to_kickoff']
+                            if mins < 60:
+                                st.caption(f"⏰ {mins} min")
+                            else:
+                                hours = mins // 60
+                                st.caption(f"⏰ {hours}h {mins % 60}m")
+                        elif status == 'LIVE':
+                            st.caption("🔴 LIVE")
+                        else:
+                            st.caption("✅ Done")
+                    
+                    st.markdown("---")
+    else:
+        st.info("📅 No bets scheduled for today")
+    
+    # All Active Bets Section
+    st.markdown("## 📋 ALL ACTIVE BETS")
+    all_bets = service.get_all_active_bets()
+    
+    if not all_bets.empty:
+        st.markdown(f"**{len(all_bets)} total active predictions**")
+        
+        # Filters
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            filter_type = st.selectbox("Filter by Type:", ["All", "Exact Score", "SGP"])
+        
+        with col2:
+            filter_status = st.selectbox("Filter by Status:", ["All", "LIVE", "UPCOMING", "FINISHED"])
+        
+        with col3:
+            sort_by = st.selectbox("Sort by:", ["Match Date", "EV", "Odds", "Stake"])
+        
+        # Apply filters
+        filtered_bets = all_bets.copy()
+        
+        if filter_type != "All":
+            filtered_bets = filtered_bets[filtered_bets['type'] == filter_type]
+        
+        if filter_status != "All":
+            filtered_bets = filtered_bets[filtered_bets['live_status'] == filter_status]
+        
+        # Sort
+        if sort_by == "Match Date":
+            filtered_bets = filtered_bets.sort_values(['match_date', 'kickoff_time'])
+        elif sort_by == "EV":
+            filtered_bets = filtered_bets.sort_values('ev', ascending=False)
+        elif sort_by == "Odds":
+            filtered_bets = filtered_bets.sort_values('odds', ascending=False)
+        elif sort_by == "Stake":
+            filtered_bets = filtered_bets.sort_values('stake', ascending=False)
+        
+        # Display filtered results
+        st.markdown(f"**Showing {len(filtered_bets)} bets**")
+        
+        # Show as dataframe
+        display_df = filtered_bets[[
+            'type', 'match', 'league', 'prediction', 
+            'odds', 'ev', 'stake', 'match_date', 'kickoff_time', 'live_status'
+        ]].copy()
+        
+        display_df.columns = [
+            'Type', 'Match', 'League', 'Prediction',
+            'Odds', 'EV %', 'Stake (SEK)', 'Date', 'Time', 'Status'
+        ]
+        
+        st.dataframe(
+            display_df,
+            use_container_width=True,
+            height=400,
+            hide_index=True
+        )
+        
+        # Export button
+        csv = filtered_bets.to_csv(index=False)
+        st.download_button(
+            label="📥 Export to CSV",
+            data=csv,
+            file_name=f"active_bets_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+            mime="text/csv"
+        )
+    else:
+        st.info("📋 No active bets at the moment")
+    
+    # Settled Today Section
+    st.markdown("---")
+    st.markdown("## ✅ SETTLED TODAY")
+    
+    settled_today = service.get_settled_today()
+    if not settled_today.empty:
+        st.markdown(f"**{len(settled_today)} bets settled today**")
+        
+        wins = settled_today[settled_today['result'].isin(['win', 'won', '✅'])]
+        losses = settled_today[settled_today['result'].isin(['loss', 'lost', '❌'])]
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Settled", len(settled_today))
+        
+        with col2:
+            st.metric("Wins", len(wins), delta="✅")
+        
+        with col3:
+            st.metric("Losses", len(losses), delta="❌")
+        
+        with col4:
+            total_pnl = settled_today['profit_loss'].sum()
+            st.metric("Today P&L", f"{total_pnl:.0f} SEK", delta=f"{'+' if total_pnl > 0 else ''}{total_pnl:.0f}")
+        
+        st.markdown("---")
+        
+        # Show settled bets
+        for _, bet in settled_today.iterrows():
+            col1, col2, col3, col4 = st.columns([2, 3, 2, 2])
+            
+            with col1:
+                result_emoji = "✅" if bet['result'] in ['win', 'won', '✅'] else "❌"
+                type_badge = "⚽" if bet['type'] == 'Exact Score' else "🎯"
+                st.markdown(f"{result_emoji} {type_badge}")
+            
+            with col2:
+                st.markdown(f"**{bet['match']}**")
+                st.caption(f"{bet['league']}")
+            
+            with col3:
+                st.markdown(f"{bet['prediction']}")
+                st.caption(f"Odds: {bet['odds']:.2f}")
+            
+            with col4:
+                pnl_color = "green" if bet['profit_loss'] > 0 else "red"
+                st.markdown(f"**:{pnl_color}[{bet['profit_loss']:.0f} SEK]**")
+                st.caption(f"Stake: {bet['stake']:.0f} SEK")
+            
+            st.markdown("---")
+    else:
+        st.info("✅ No bets settled today yet")
+    
+    # Footer
+    st.markdown("---")
+    st.caption("🔄 Auto-refreshes every 45 seconds | Manual refresh button available")
+    st.caption(f"Last update: {datetime.now().strftime('%H:%M:%S')}")
+    
+    st.stop()  # Stop here if on Live Bet Control page
 
 # ============================================================================
 # PAGE: DASHBOARD (Main Content)
