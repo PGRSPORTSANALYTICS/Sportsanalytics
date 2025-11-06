@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from results_scraper import ResultsScraper
 from telegram_sender import TelegramBroadcaster
 from sgp_verifier import SGPVerifier
+from daily_results_summary import send_results_summary
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -169,8 +170,12 @@ class SmartVerifier:
         """Run verification continuously every 10 minutes"""
         logger.info("📅 Smart Verifier running every 10 minutes")
         
-        # Schedule every 10 minutes
+        # Schedule verification every 10 minutes
         schedule.every(10).minutes.do(self.verify_recent_matches)
+        
+        # Schedule daily results summary at 23:00 (11 PM) every day
+        schedule.every().day.at("23:00").do(send_results_summary)
+        logger.info("📊 Daily results summary scheduled for 23:00")
         
         # Also run immediately
         self.verify_recent_matches()
