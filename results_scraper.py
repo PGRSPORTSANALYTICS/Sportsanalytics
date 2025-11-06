@@ -7,6 +7,11 @@ import json
 from datetime import datetime, timedelta
 import time
 import logging
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.options import Options
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -16,34 +21,106 @@ class ResultsScraper:
         self.db_path = db_path
         
     def get_flashscore_results(self, date_str):
-        """Get results from Flashscore for a specific date (YYYY-MM-DD)"""
+        """Get results from Flashscore for a specific date using Selenium (YYYY-MM-DD)"""
+        driver = None
         try:
-            # Use main page since date-specific URLs return 404
+            logger.info(f"🌐 Scraping Flashscore results for {date_str} with Selenium")
+            
+            # Configure Chrome for headless mode
+            chrome_options = Options()
+            chrome_options.add_argument('--headless')
+            chrome_options.add_argument('--no-sandbox')
+            chrome_options.add_argument('--disable-dev-shm-usage')
+            chrome_options.add_argument('--disable-gpu')
+            chrome_options.add_argument('--window-size=1920,1080')
+            chrome_options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
+            
+            # Initialize driver
+            driver = webdriver.Chrome(options=chrome_options)
+            
+            # Navigate to Flashscore
             url = "https://www.flashscore.com/"
-            logger.info(f"Scraping Flashscore results for {date_str}")
+            driver.get(url)
             
-            # Use requests with proper headers to avoid blocking
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            }
-            response = requests.get(url, headers=headers, timeout=10)
+            # Wait for content to load (max 10 seconds)
+            wait = WebDriverWait(driver, 10)
             
-            if response.status_code != 200:
-                logger.error(f"Failed to fetch Flashscore page, status: {response.status_code}")
-                return []
-                
-            html_content = response.text
+            # Wait for match elements to appear
+            time.sleep(3)  # Give JS time to render
             
-            # Extract text for parsing
-            text = trafilatura.extract(html_content)
-            if not text:
-                # Fallback to raw HTML if extraction fails
-                text = html_content
+            # Get page source after JS rendering
+            html_content = driver.page_source
             
-            return self.parse_flashscore_results(text)
+            # Parse results from rendered HTML
+            results = self.parse_flashscore_html(html_content, date_str)
+            
+            logger.info(f"✅ Found {len(results)} matches from Flashscore")
+            return results
             
         except Exception as e:
-            logger.error(f"Error scraping Flashscore: {e}")
+            logger.error(f"❌ Error scraping Flashscore with Selenium: {e}")
+            return []
+        finally:
+            if driver:
+                driver.quit()
+    
+    def parse_flashscore_html(self, html_content, date_str):
+        """Parse Flashscore HTML to extract finished match results"""
+        results = []
+        
+        try:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(html_content, 'html.parser')
+            
+            # Flashscore uses specific classes for match elements
+            # Look for finished matches with scores
+            match_elements = soup.find_all('div', class_=re.compile(r'event__match|sportName'))
+            
+            # Also try to find score patterns in text
+            text_content = soup.get_text()
+            
+            # Pattern: Team1 0 - 1 Team2 or Team1 2 Team2 3
+            score_pattern = r'([A-Za-z\s\.]+?)\s+(\d+)\s*[-:]\s*(\d+)\s+([A-Za-z\s\.]+?)(?:\n|$|[A-Z])'
+            matches = re.findall(score_pattern, text_content)
+            
+            for match in matches:
+                home_team = match[0].strip()
+                home_score = int(match[1])
+                away_score = int(match[2])
+                away_team = match[3].strip()
+                
+                # Skip if team names are too short (likely noise)
+                if len(home_team) < 3 or len(away_team) < 3:
+                    continue
+                
+                # Skip if contains numbers (likely noise)
+                if any(char.isdigit() for char in home_team + away_team):
+                    continue
+                
+                results.append({
+                    'home_team': home_team,
+                    'away_team': away_team,
+                    'home_score': home_score,
+                    'away_score': away_score,
+                    'score': f"{home_score}-{away_score}",
+                    'total_goals': home_score + away_score,
+                    'result': 'home' if home_score > away_score else ('away' if away_score > home_score else 'draw'),
+                    'source': 'flashscore'
+                })
+            
+            # Remove duplicates
+            unique_results = []
+            seen = set()
+            for result in results:
+                key = (result['home_team'], result['away_team'], result['score'])
+                if key not in seen:
+                    seen.add(key)
+                    unique_results.append(result)
+            
+            return unique_results
+            
+        except Exception as e:
+            logger.error(f"Error parsing Flashscore HTML: {e}")
             return []
     
     def get_sofascore_results(self, date_str):
@@ -161,7 +238,11 @@ class ResultsScraper:
                 119,  # Denmark Superliga
                 144,  # Belgium Pro League
                 203,  # Turkey Super Lig
-                2, 3  # Champions League, Europa League
+                2, 3, 848,  # Champions League, Europa League, Conference League
+                113,  # Scottish Premiership
+                179,  # Swedish Allsvenskan
+                71,  # Brazilian Serie A
+                253  # MLS (USA)
             ]
             
             all_results = []
