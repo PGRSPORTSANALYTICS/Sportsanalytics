@@ -52,6 +52,14 @@ args = "Daily Categorizer"
 task = "workflow.run"
 args = "Daily Games Reminder"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "SGP Champion"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "SGP Verifier"
+
 [[workflows.workflow]]
 name = "install_dependencies"
 author = "agent"
@@ -149,6 +157,28 @@ args = "python3 daily_games_reminder.py"
 [workflows.workflow.metadata]
 outputType = "console"
 
+[[workflows.workflow]]
+name = "SGP Champion"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python3 sgp_champion.py"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow]]
+name = "SGP Verifier"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "echo \"SGP Verifier runs at midnight via Smart Verifier integration\" && sleep infinity"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
 [[ports]]
 localPort = 5000
 externalPort = 80
@@ -180,6 +210,10 @@ externalPort = 3001
 [[ports]]
 localPort = 42973
 externalPort = 4200
+
+[[ports]]
+localPort = 43429
+externalPort = 8000
 
 [[ports]]
 localPort = 44535
