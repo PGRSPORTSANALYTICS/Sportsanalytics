@@ -50,6 +50,13 @@ The system employs advanced prediction features including:
   - **6 New SGP Types:** Player to Score + Over/BTTS (both home/away), Player Shots 2+ + Over 2.5 + BTTS (3-leg premium parlays)
   - **Graceful Fallback:** System automatically falls back to basic parlays (Over/Under + BTTS) when player data unavailable or API-Football credentials missing
   - **Total SGP Offerings:** 9 combinations (3 basic goals + 6 player props) targeting 5-14% EV with odds 2-4.5x for basic, 5-12x for player props
+- **Half-Time & Corners SGP Markets (Nov 6, 2025):** Further expanded SGP system with time-based and corners markets:
+  - **Half-Time Goals Probability:** Calculates 1st half Over/Under using adjusted Poisson (45% of total xG)
+  - **Second Half Goals Probability:** Calculates 2nd half Over/Under using adjusted Poisson (55% of total xG)
+  - **Corners Probability:** Calibrated formula using xG correlation (total_corners = total_xG × 3.0 + 2.5, targeting 10-11 corner average). For typical xG 2.7: ~10.6 expected corners with Over 9.5 at ~62% probability
+  - **6 New SGP Combinations:** 1H Over + 2H Over, 1H Over + BTTS, 2H Over + BTTS, Corners Over + Goals Over, Corners Over + BTTS, Premium 3-leg (Corners + 1H + Over 2.5)
+  - **Correlation Matrix:** Updated with half-time, second half, and corners correlations for accurate joint probability pricing
+  - **Total SGP Offerings:** 15 combinations (3 basic + 6 player props + 6 time/corners) targeting 5-15% EV
 
 ### System Design Choices
 - **Data Layer:** SQLite database manages `suggestions`, `tickets`, and `pnl` tables, with a custom `DataLoader` for operations.
