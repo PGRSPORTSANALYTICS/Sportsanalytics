@@ -57,6 +57,11 @@ The system employs advanced prediction features including:
   - **6 New SGP Combinations:** 1H Over + 2H Over, 1H Over + BTTS, 2H Over + BTTS, Corners Over + Goals Over, Corners Over + BTTS, Premium 3-leg (Corners + 1H + Over 2.5)
   - **Correlation Matrix:** Updated with half-time, second half, and corners correlations for accurate joint probability pricing
   - **Total SGP Offerings:** 15 combinations (3 basic + 6 player props + 6 time/corners) targeting 5-15% EV
+- **Hybrid Bet Monitoring System (Nov 6, 2025):** Unified real-time tracking solution for both Exact Score and SGP predictions:
+  - **BetStatusService:** Centralized service querying both prediction products from single database with live status calculation (LIVE/UPCOMING/FINISHED based on 2-hour match window)
+  - **Live Bet Control Center (Dashboard):** New Streamlit page with auto-refresh (45s), six-metric summary (Total Active, Exact Score, SGP, Today, Live, Total Stake), live bets section with countdown timers, today's bets grouped by status, all active bets with filters/sorting, settled today section with daily P&L, and CSV export
+  - **Telegram Bot Commands:** Extended existing bot with `/active` (all bets summary), `/live` (matches in play), `/today` (today's bets grouped by status) for mobile monitoring
+  - **Single Source of Truth:** Both dashboard and Telegram use shared BetStatusService ensuring data consistency
 
 ### System Design Choices
 - **Data Layer:** SQLite database manages `suggestions`, `tickets`, and `pnl` tables, with a custom `DataLoader` for operations.
