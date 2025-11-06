@@ -453,7 +453,7 @@ if page == "🔴 Live Bet Control":
     st.markdown("## 📊 LIVE STATUS")
     stats = service.get_summary_stats()
     
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
+    col1, col2, col3, col4, col5 = st.columns(5)
     
     with col1:
         st.metric("TOTAL ACTIVE", stats['total_active'])
@@ -470,8 +470,23 @@ if page == "🔴 Live Bet Control":
     with col5:
         st.metric("LIVE NOW", stats['live'], delta="🔴" if stats['live'] > 0 else None)
     
-    with col6:
-        st.metric("TOTAL STAKE", f"{stats['total_stake']:.0f} SEK")
+    st.markdown("---")
+    
+    # Separate stakes by product
+    st.markdown("### 💰 ACTIVE STAKES BY PRODUCT")
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric("⚽ Exact Score Stake", f"{stats['exact_score_stake']:.0f} SEK", 
+                 delta=f"{stats['exact_score']} bets")
+    
+    with col2:
+        st.metric("🎯 SGP Stake", f"{stats['sgp_stake']:.0f} SEK", 
+                 delta=f"{stats['sgp']} bets")
+    
+    with col3:
+        st.metric("📊 Total Stake", f"{stats['total_stake']:.0f} SEK", 
+                 delta="Combined")
     
     st.markdown("---")
     

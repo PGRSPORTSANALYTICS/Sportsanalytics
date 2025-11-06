@@ -213,9 +213,12 @@ Use /help for all commands
                 message_text = f"📋 **ALL ACTIVE BETS**\n\n"
                 message_text += f"📊 **Summary:**\n"
                 message_text += f"• Total Active: {stats['total_active']}\n"
-                message_text += f"• Exact Score: {stats['exact_score']}\n"
-                message_text += f"• SGP Parlays: {stats['sgp']}\n"
-                message_text += f"• Total Stake: {stats['total_stake']:.0f} SEK\n\n"
+                message_text += f"• Exact Score: {stats['exact_score']} bets\n"
+                message_text += f"• SGP Parlays: {stats['sgp']} bets\n\n"
+                message_text += f"💰 **Stakes by Product:**\n"
+                message_text += f"• ⚽ Exact Score: {stats['exact_score_stake']:.0f} SEK\n"
+                message_text += f"• 🎯 SGP: {stats['sgp_stake']:.0f} SEK\n"
+                message_text += f"• 📊 Total: {stats['total_stake']:.0f} SEK\n\n"
                 
                 # Show up to 10 most recent bets
                 for _, bet in all_bets.head(10).iterrows():

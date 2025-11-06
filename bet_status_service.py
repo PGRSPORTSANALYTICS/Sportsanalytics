@@ -119,13 +119,26 @@ class BetStatusService:
         today_bets = self.get_today_bets()
         live_bets = self.get_live_bets()
         
+        # Calculate separate stakes for each product
+        exact_score_stake = 0
+        sgp_stake = 0
+        
+        if not all_bets.empty:
+            exact_score_bets = all_bets[all_bets['type'] == 'Exact Score']
+            sgp_bets = all_bets[all_bets['type'] == 'SGP']
+            
+            exact_score_stake = exact_score_bets['stake'].sum() if not exact_score_bets.empty else 0
+            sgp_stake = sgp_bets['stake'].sum() if not sgp_bets.empty else 0
+        
         return {
             'total_active': len(all_bets),
             'exact_score': len(all_bets[all_bets['type'] == 'Exact Score']) if not all_bets.empty else 0,
             'sgp': len(all_bets[all_bets['type'] == 'SGP']) if not all_bets.empty else 0,
             'today': len(today_bets),
             'live': len(live_bets),
-            'total_stake': all_bets['stake'].sum() if not all_bets.empty else 0
+            'exact_score_stake': exact_score_stake,
+            'sgp_stake': sgp_stake,
+            'total_stake': exact_score_stake + sgp_stake
         }
     
     def get_settled_today(self) -> pd.DataFrame:
