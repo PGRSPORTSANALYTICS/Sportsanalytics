@@ -34,10 +34,12 @@ class SGPChampion:
     def get_todays_matches(self) -> List[Dict[str, Any]]:
         """Get today's matches from The Odds API"""
         try:
-            # Import odds fetcher
-            from odds_api_client import OddsAPIClient
+            import requests
             
-            odds_client = OddsAPIClient()
+            odds_api_key = os.getenv('THE_ODDS_API_KEY')
+            if not odds_api_key:
+                logger.error("❌ THE_ODDS_API_KEY not found")
+                return []
             
             # Target leagues (same as exact scores)
             target_leagues = [
@@ -55,17 +57,35 @@ class SGPChampion:
             ]
             
             all_matches = []
+            base_url = "https://api.the-odds-api.com/v4"
             
             for league in target_leagues:
                 try:
-                    matches = odds_client.get_odds(league)
-                    if matches:
-                        all_matches.extend(matches)
+                    url = f"{base_url}/sports/{league}/odds"
+                    params = {
+                        'apiKey': odds_api_key,
+                        'regions': 'uk,eu,us',
+                        'markets': 'h2h,totals',
+                        'oddsFormat': 'decimal',
+                        'dateFormat': 'iso'
+                    }
+                    
+                    response = requests.get(url, params=params, timeout=10)
+                    
+                    if response.status_code == 200:
+                        matches = response.json()
+                        if matches:
+                            all_matches.extend(matches)
+                    elif response.status_code == 429:
+                        logger.warning("⚠️ Odds API quota exhausted")
+                        break
+                    
                 except Exception as e:
-                    logger.warning(f"⚠️  Odds API error for {league}: {e}")
+                    logger.warning(f"⚠️ Odds API error for {league}: {e}")
             
             # Filter for next 24 hours
-            today = datetime.now()
+            from datetime import timezone
+            today = datetime.now(timezone.utc)
             tomorrow = today + timedelta(hours=24)
             
             filtered_matches = []
@@ -222,13 +242,28 @@ class SGPChampion:
 
 
 def main():
-    """Run SGP Champion"""
+    """Run SGP Champion continuously"""
+    import time
+    
     try:
         champion = SGPChampion()
-        champion.generate_daily_sgps()
         
+        while True:
+            try:
+                champion.generate_daily_sgps()
+            except Exception as e:
+                logger.error(f"❌ Error in SGP generation cycle: {e}")
+                import traceback
+                traceback.print_exc()
+            
+            # Wait 60 minutes between cycles
+            logger.info("⏰ Waiting 60 minutes before next SGP generation cycle...")
+            time.sleep(3600)
+        
+    except KeyboardInterrupt:
+        logger.info("🛑 SGP Champion stopped by user")
     except Exception as e:
-        logger.error(f"❌ SGP Champion error: {e}")
+        logger.error(f"❌ SGP Champion fatal error: {e}")
         import traceback
         traceback.print_exc()
 
