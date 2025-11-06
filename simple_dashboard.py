@@ -211,8 +211,8 @@ def load_todays_predictions():
         cursor = conn.cursor()
         cursor.execute('''
             SELECT 
-                home_team, away_team, prediction, odds, 
-                ev, league, timestamp
+                home_team, away_team, selection, odds, 
+                edge_percentage, league, timestamp
             FROM football_opportunities
             WHERE market = 'exact_score'
             AND DATE(timestamp) = ?
@@ -363,7 +363,7 @@ if page == "📜 Terms & Legal":
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
     try:
-        st.image("assets/logo.png", use_column_width=True)
+        st.image("assets/logo.png", use_container_width=True)
     except:
         st.markdown("# 🎯 AI PREDICTIONS PLATFORM")
 
@@ -555,11 +555,11 @@ try:
     cursor = conn.cursor()
     cursor.execute('''
         SELECT 
-            home_team, away_team, prediction, odds, 
-            ev, league, timestamp, stake
+            home_team, away_team, selection, odds, 
+            edge_percentage, league, timestamp, stake
         FROM football_opportunities
         WHERE market = 'exact_score'
-        AND outcome IS NULL
+        AND result IS NULL
         ORDER BY timestamp DESC
         LIMIT 50
     ''')
