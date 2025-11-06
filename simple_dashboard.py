@@ -205,7 +205,11 @@ def load_todays_predictions():
     """Load predictions for today"""
     try:
         conn = sqlite3.connect(DB_PATH)
-        today = date.today().isoformat()
+        
+        # Calculate today's timestamp range
+        from datetime import datetime, time
+        today_start = datetime.combine(date.today(), time.min).timestamp()
+        today_end = datetime.combine(date.today(), time.max).timestamp()
         
         # Today's exact scores
         cursor = conn.cursor()
@@ -215,9 +219,9 @@ def load_todays_predictions():
                 edge_percentage, league, timestamp
             FROM football_opportunities
             WHERE market = 'exact_score'
-            AND DATE(timestamp) = ?
+            AND timestamp BETWEEN ? AND ?
             ORDER BY timestamp DESC
-        ''', (today,))
+        ''', (today_start, today_end))
         
         exact_predictions = []
         for row in cursor.fetchall():
@@ -237,9 +241,9 @@ def load_todays_predictions():
                 home_team, away_team, parlay_description,
                 bookmaker_odds, ev_percentage, timestamp
             FROM sgp_predictions
-            WHERE DATE(timestamp) = ?
+            WHERE timestamp BETWEEN ? AND ?
             ORDER BY timestamp DESC
-        ''', (today,))
+        ''', (today_start, today_end))
         
         sgp_predictions = []
         for row in cursor.fetchall():
