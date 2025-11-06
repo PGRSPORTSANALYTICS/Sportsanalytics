@@ -21,11 +21,21 @@ DB_PATH = 'data/real_football.db'
 
 # Correlation heuristics between SGP legs
 CORR_RULES = {
+    # Goals correlations
     ("OVER_UNDER_GOALS:OVER", "BTTS:YES"): 0.35,
-    ("PLAYER_TO_SCORE:TRUE", "OVER_UNDER_GOALS:OVER"): 0.25,
-    ("PLAYER_TO_SCORE:TRUE", "BTTS:YES"): 0.20,
     ("OVER_UNDER_GOALS:UNDER", "BTTS:NO"): 0.30,
-    ("PLAYER_TO_SCORE:FALSE", "BTTS:NO"): 0.15,
+    
+    # Player props correlations
+    ("PLAYER_TO_SCORE:YES", "OVER_UNDER_GOALS:OVER"): 0.25,
+    ("PLAYER_TO_SCORE:YES", "BTTS:YES"): 0.20,
+    ("PLAYER_TO_SCORE:YES", "MATCH_RESULT:HOME"): 0.18,
+    ("PLAYER_TO_SCORE:YES", "MATCH_RESULT:AWAY"): 0.18,
+    ("PLAYER_SHOTS:OVER", "PLAYER_TO_SCORE:YES"): 0.40,
+    ("PLAYER_SHOTS:OVER", "OVER_UNDER_GOALS:OVER"): 0.28,
+    
+    # Negative correlations
+    ("PLAYER_TO_SCORE:NO", "BTTS:NO"): 0.15,
+    ("OVER_UNDER_GOALS:UNDER", "PLAYER_TO_SCORE:YES"): -0.15,
 }
 
 class SGPPredictor:
@@ -137,6 +147,49 @@ class SGPPredictor:
         
         return prob_btts_yes if btts else (1.0 - prob_btts_yes)
     
+    def calculate_player_to_score_prob(self, player_scoring_rate: float, team_lambda: float, match_duration: int = 90) -> float:
+        """
+        Calculate probability of a specific player scoring (anytime goalscorer)
+        
+        Args:
+            player_scoring_rate: Player's goals per game (from historical data)
+            team_lambda: Team's expected goals for this match (from Poisson xG)
+            match_duration: Match minutes (default 90, can adjust for subs)
+        
+        Returns:
+            Probability of player scoring at least once
+        """
+        # Adjust player rate based on team's expected output for this match
+        # If team expected to score more, player's chances increase proportionally
+        adjusted_lambda = player_scoring_rate * (team_lambda / 1.5)  # 1.5 = league avg
+        
+        # Poisson: P(X >= 1) = 1 - P(X = 0) = 1 - e^(-lambda)
+        prob_scores = 1.0 - poisson.pmf(0, adjusted_lambda)
+        
+        # Clamp to realistic range (5-70%)
+        return max(0.05, min(0.70, prob_scores))
+    
+    def calculate_player_shots_prob(self, player_shots_per_game: float, threshold: int = 2) -> float:
+        """
+        Calculate probability of player achieving X+ shots on target
+        
+        Args:
+            player_shots_per_game: Player's avg shots per game
+            threshold: Minimum shots (default 2+)
+        
+        Returns:
+            Probability of player getting threshold+ shots
+        """
+        # Use Poisson for shot count probability
+        lambda_shots = player_shots_per_game
+        
+        # P(X >= threshold) = 1 - P(X < threshold) = 1 - sum(P(X=k) for k=0 to threshold-1)
+        prob_under = sum(poisson.pmf(k, lambda_shots) for k in range(threshold))
+        prob_over = 1.0 - prob_under
+        
+        # Clamp to realistic range
+        return max(0.10, min(0.80, prob_over))
+    
     def build_corr_matrix(self, legs: List[Dict[str, Any]]) -> np.ndarray:
         """Build correlation matrix for SGP legs"""
         n = len(legs)
@@ -196,7 +249,8 @@ class SGPPredictor:
         p_all = hits.mean()
         return float(p_all)
     
-    def generate_sgp_for_match(self, match_data: Dict[str, Any], lambda_home: float, lambda_away: float) -> Optional[Dict[str, Any]]:
+    def generate_sgp_for_match(self, match_data: Dict[str, Any], lambda_home: float, lambda_away: float, 
+                              player_data: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
         """
         Generate SGP prediction for a single match
         
@@ -204,11 +258,12 @@ class SGPPredictor:
             match_data: Match information (teams, league, date, etc.)
             lambda_home: Expected goals for home team
             lambda_away: Expected goals for away team
+            player_data: Optional dict with top scorers data from API-Football
         
         Returns:
             SGP prediction dict or None if no value found
         """
-        # Generate popular SGP combinations
+        # Generate popular SGP combinations (goals-only)
         sgp_combinations = [
             # Over 2.5 + BTTS
             {
@@ -236,6 +291,73 @@ class SGPPredictor:
             },
         ]
         
+        # Add player prop combinations if player data available
+        if player_data and (player_data.get('home_scorers') or player_data.get('away_scorers')):
+            # Get top scorer from each team
+            top_home = player_data.get('home_scorers', [{}])[0] if player_data.get('home_scorers') else {}
+            top_away = player_data.get('away_scorers', [{}])[0] if player_data.get('away_scorers') else {}
+            
+            # Player prop combinations (6 new types)
+            if top_home.get('name') and top_home.get('scoring_rate', 0) > 0.15:  # Min threshold
+                home_player = top_home['name']
+                sgp_combinations.extend([
+                    # Player to Score + Over 2.5
+                    {
+                        'legs': [
+                            {'market_type': 'PLAYER_TO_SCORE', 'outcome': 'YES', 'player': home_player, 'team': 'home'},
+                            {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5}
+                        ],
+                        'description': f'{home_player} to Score + Over 2.5'
+                    },
+                    # Player to Score + BTTS Yes
+                    {
+                        'legs': [
+                            {'market_type': 'PLAYER_TO_SCORE', 'outcome': 'YES', 'player': home_player, 'team': 'home'},
+                            {'market_type': 'BTTS', 'outcome': 'YES'}
+                        ],
+                        'description': f'{home_player} to Score + BTTS Yes'
+                    },
+                    # Player Shots 2+ + Over 2.5 + BTTS (3-leg premium)
+                    {
+                        'legs': [
+                            {'market_type': 'PLAYER_SHOTS', 'outcome': 'OVER', 'threshold': 2, 'player': home_player, 'team': 'home'},
+                            {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
+                            {'market_type': 'BTTS', 'outcome': 'YES'}
+                        ],
+                        'description': f'{home_player} 2+ Shots + Over 2.5 + BTTS'
+                    }
+                ])
+            
+            if top_away.get('name') and top_away.get('scoring_rate', 0) > 0.15:
+                away_player = top_away['name']
+                sgp_combinations.extend([
+                    # Player to Score + Over 2.5
+                    {
+                        'legs': [
+                            {'market_type': 'PLAYER_TO_SCORE', 'outcome': 'YES', 'player': away_player, 'team': 'away'},
+                            {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5}
+                        ],
+                        'description': f'{away_player} to Score + Over 2.5'
+                    },
+                    # Player to Score + BTTS Yes
+                    {
+                        'legs': [
+                            {'market_type': 'PLAYER_TO_SCORE', 'outcome': 'YES', 'player': away_player, 'team': 'away'},
+                            {'market_type': 'BTTS', 'outcome': 'YES'}
+                        ],
+                        'description': f'{away_player} to Score + BTTS Yes'
+                    },
+                    # Player Shots 2+ + Over 2.5 + BTTS (3-leg premium)
+                    {
+                        'legs': [
+                            {'market_type': 'PLAYER_SHOTS', 'outcome': 'OVER', 'threshold': 2, 'player': away_player, 'team': 'away'},
+                            {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
+                            {'market_type': 'BTTS', 'outcome': 'YES'}
+                        ],
+                        'description': f'{away_player} 2+ Shots + Over 2.5 + BTTS'
+                    }
+                ])
+        
         best_sgp = None
         best_ev = -100
         
@@ -244,6 +366,8 @@ class SGPPredictor:
             legs_with_probs = []
             
             for leg in sgp['legs']:
+                prob = None
+                
                 if leg['market_type'] == 'OVER_UNDER_GOALS':
                     prob = self.calculate_over_under_prob(
                         lambda_home, lambda_away, 
@@ -255,14 +379,56 @@ class SGPPredictor:
                         lambda_home, lambda_away,
                         leg['outcome'] == 'YES'
                     )
+                elif leg['market_type'] == 'PLAYER_TO_SCORE':
+                    # Get player's scoring rate and team lambda
+                    if not player_data:
+                        continue
+                    
+                    team = leg.get('team', 'home')
+                    player_name = leg.get('player')
+                    scorers = player_data.get(f'{team}_scorers', [])
+                    
+                    # Find player in scorers list
+                    player_stats = next((p for p in scorers if p.get('name') == player_name), None)
+                    if not player_stats:
+                        continue
+                    
+                    scoring_rate = player_stats.get('scoring_rate', 0)
+                    team_lambda = lambda_home if team == 'home' else lambda_away
+                    
+                    prob = self.calculate_player_to_score_prob(scoring_rate, team_lambda)
+                    
+                elif leg['market_type'] == 'PLAYER_SHOTS':
+                    # Get player's shots per game
+                    if not player_data:
+                        continue
+                    
+                    team = leg.get('team', 'home')
+                    player_name = leg.get('player')
+                    scorers = player_data.get(f'{team}_scorers', [])
+                    
+                    # Find player in scorers list
+                    player_stats = next((p for p in scorers if p.get('name') == player_name), None)
+                    if not player_stats:
+                        continue
+                    
+                    shots_per_game = player_stats.get('shots_per_game', 0)
+                    threshold = leg.get('threshold', 2)
+                    
+                    prob = self.calculate_player_shots_prob(shots_per_game, threshold)
                 else:
+                    continue
+                
+                if prob is None:
                     continue
                 
                 legs_with_probs.append({
                     'market_type': leg['market_type'],
                     'outcome': leg['outcome'],
                     'probability': prob,
-                    'line': leg.get('line')
+                    'line': leg.get('line'),
+                    'player': leg.get('player'),
+                    'threshold': leg.get('threshold')
                 })
             
             # Price the parlay using copula

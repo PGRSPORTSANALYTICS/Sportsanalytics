@@ -724,3 +724,81 @@ class APIFootballClient:
                 'reason': f'Validation error: {str(e)}',
                 'status': 'error'
             }
+    
+    def get_top_scorers(self, fixture_id: int, home_team_id: int, away_team_id: int, league_id: int, season: int = 2024) -> Dict:
+        """
+        Get top scorers for both teams (for player props SGP)
+        Returns top 3 players from each team with scoring stats
+        
+        Returns:
+            {
+                'home_scorers': [{'name': str, 'goals': int, 'shots_per_game': float, 'scoring_rate': float}],
+                'away_scorers': [...]
+            }
+        """
+        self._rate_limit()
+        
+        try:
+            # Get lineup to know who's playing
+            lineups = self.get_lineups(fixture_id)
+            
+            # Get top scorers from the league
+            url = f"{self.base_url}/players/topscorers"
+            params = {
+                'league': league_id,
+                'season': season
+            }
+            
+            response = requests.get(url, headers=self.headers, params=params, timeout=15)
+            
+            if response.status_code == 200:
+                data = response.json()
+                all_scorers = data.get('response', [])
+                
+                home_scorers = []
+                away_scorers = []
+                
+                # Filter scorers by team
+                for player_data in all_scorers:
+                    stats = player_data.get('statistics', [{}])[0]
+                    player_team_id = stats.get('team', {}).get('id')
+                    
+                    player_info = player_data.get('player', {})
+                    games = stats.get('games', {})
+                    goals_data = stats.get('goals', {})
+                    shots_data = stats.get('shots', {})
+                    
+                    appearances = games.get('appearences', 1) or 1
+                    total_goals = goals_data.get('total', 0) or 0
+                    total_shots = shots_data.get('total', 0) or 0
+                    
+                    scorer = {
+                        'name': player_info.get('name', 'Unknown'),
+                        'goals': total_goals,
+                        'appearances': appearances,
+                        'shots_per_game': total_shots / appearances if appearances > 0 else 0,
+                        'scoring_rate': total_goals / appearances if appearances > 0 else 0
+                    }
+                    
+                    if player_team_id == home_team_id and len(home_scorers) < 3:
+                        home_scorers.append(scorer)
+                    elif player_team_id == away_team_id and len(away_scorers) < 3:
+                        away_scorers.append(scorer)
+                    
+                    if len(home_scorers) >= 3 and len(away_scorers) >= 3:
+                        break
+                
+                logger.info(f"⚽ Found {len(home_scorers)} home scorers, {len(away_scorers)} away scorers")
+                
+                return {
+                    'home_scorers': home_scorers,
+                    'away_scorers': away_scorers,
+                    'lineups_confirmed': lineups.get('confirmed', False)
+                }
+            else:
+                logger.warning(f"⚠️ Could not fetch top scorers: {response.status_code}")
+                return {'home_scorers': [], 'away_scorers': [], 'lineups_confirmed': False}
+                
+        except Exception as e:
+            logger.error(f"❌ Error fetching top scorers: {e}")
+            return {'home_scorers': [], 'away_scorers': [], 'lineups_confirmed': False}

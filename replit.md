@@ -43,6 +43,13 @@ The system employs advanced prediction features including:
   - **Target:** 30-40 predictions/week (up from 10-15/week) through different time zones and fixture schedules
   - **Per-League Tracking:** New monitoring script `view_league_performance.py` tracks hit rate, ROI, and volume per league. Underperforming leagues (< 15% hit rate after 20+ settled) can be removed.
 - **Telegram Broadcast Fix (Nov 3, 2025):** Changed filter from unreliable bet_category to actual match_date check. Now only broadcasts predictions for matches playing TODAY, eliminating future prediction spam.
+- **Player Props SGP System (Nov 6, 2025):** Expanded SGP (Same Game Parlay) system to include player-based predictions using API-Football player statistics:
+  - **Player Statistics Fetcher:** Retrieves top scorers' goals per game, appearances, and shots per game from league data
+  - **Anytime Goalscorer Probability:** Calculates player scoring probability using Poisson distribution adjusted for team's expected goals
+  - **Player Shots Probability:** Estimates probability of player achieving 2+ shots on target
+  - **6 New SGP Types:** Player to Score + Over/BTTS (both home/away), Player Shots 2+ + Over 2.5 + BTTS (3-leg premium parlays)
+  - **Graceful Fallback:** System automatically falls back to basic parlays (Over/Under + BTTS) when player data unavailable or API-Football credentials missing
+  - **Total SGP Offerings:** 9 combinations (3 basic goals + 6 player props) targeting 5-14% EV with odds 2-4.5x for basic, 5-12x for player props
 
 ### System Design Choices
 - **Data Layer:** SQLite database manages `suggestions`, `tickets`, and `pnl` tables, with a custom `DataLoader` for operations.

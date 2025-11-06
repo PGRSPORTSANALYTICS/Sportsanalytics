@@ -15,6 +15,7 @@ import sys
 # Import existing systems
 from sgp_predictor import SGPPredictor
 from telegram_sender import TelegramBroadcaster
+from api_football_client import APIFootballClient
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -28,6 +29,14 @@ class SGPChampion:
         self.db_path = DB_PATH
         self.sgp_predictor = SGPPredictor()
         self.telegram = TelegramBroadcaster()
+        
+        # Try to initialize API-Football client for player props (optional)
+        try:
+            self.api_football = APIFootballClient()
+            logger.info("✅ API-Football client initialized for player props")
+        except (ValueError, Exception) as e:
+            self.api_football = None
+            logger.warning(f"⚠️ API-Football client not available ({e}). Player props disabled, generating basic SGPs only.")
         
         logger.info("✅ SGP Champion initialized")
     
@@ -182,6 +191,29 @@ class SGPChampion:
             logger.info(f"   📊 Analyzing {home_team} vs {away_team}...")
             lambda_home, lambda_away = self.get_xg_predictions(home_team, away_team, league)
             
+            # Fetch player data for player props (only if API-Football available)
+            player_data = None
+            if self.api_football:
+                try:
+                    # Get fixture from API-Football to fetch player stats
+                    fixture = self.api_football.get_fixture_by_teams_and_date(
+                        home_team, away_team, match['commence_time']
+                    )
+                    
+                    if fixture:
+                        fixture_id = fixture.get('fixture', {}).get('id')
+                        home_team_id = fixture.get('teams', {}).get('home', {}).get('id')
+                        away_team_id = fixture.get('teams', {}).get('away', {}).get('id')
+                        league_id = fixture.get('league', {}).get('id', 39)  # Default Premier League
+                        
+                        if fixture_id and home_team_id and away_team_id:
+                            player_data = self.api_football.get_top_scorers(
+                                fixture_id, home_team_id, away_team_id, league_id
+                            )
+                            logger.info(f"   ⚽ Fetched player data for props")
+                except Exception as e:
+                    logger.warning(f"   ⚠️ Could not fetch player data: {e}")
+            
             # Generate SGP
             match_data = {
                 'match_id': match.get('id', ''),
@@ -192,7 +224,7 @@ class SGPChampion:
                 'kickoff_time': match['commence_time']
             }
             
-            sgp = self.sgp_predictor.generate_sgp_for_match(match_data, lambda_home, lambda_away)
+            sgp = self.sgp_predictor.generate_sgp_for_match(match_data, lambda_home, lambda_away, player_data)
             
             if sgp:
                 self.sgp_predictor.save_sgp_prediction(sgp)
