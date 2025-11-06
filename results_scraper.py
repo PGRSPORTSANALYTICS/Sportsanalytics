@@ -12,6 +12,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
+from selenium.common.exceptions import TimeoutException
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -38,15 +39,36 @@ class ResultsScraper:
             # Initialize driver
             driver = webdriver.Chrome(options=chrome_options)
             
-            # Navigate to Flashscore
-            url = "https://www.flashscore.com/"
-            driver.get(url)
+            # Set page load timeout to prevent hanging (20 seconds max)
+            driver.set_page_load_timeout(20)
             
-            # Wait for content to load (max 10 seconds)
-            wait = WebDriverWait(driver, 10)
+            # Navigate to Flashscore date-specific URL
+            url = f"https://www.flashscore.com/football/?d={date_str}"
+            logger.info(f"📡 Loading: {url}")
             
-            # Wait for match elements to appear
-            time.sleep(3)  # Give JS time to render
+            try:
+                driver.get(url)
+            except TimeoutException:
+                logger.warning("⏱️ Page load timeout, continuing with partial content...")
+            
+            # Try to dismiss cookie banner if present
+            try:
+                cookie_button = WebDriverWait(driver, 3).until(
+                    EC.element_to_be_clickable((By.ID, "onetrust-accept-btn-handler"))
+                )
+                cookie_button.click()
+                logger.info("✅ Dismissed cookie banner")
+            except:
+                pass  # Banner not present or already dismissed
+            
+            # Wait for match elements to appear (max 10 seconds)
+            try:
+                WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.CLASS_NAME, "event__match"))
+                )
+                logger.info("✅ Match elements loaded")
+            except TimeoutException:
+                logger.warning("⏱️ No match elements found, parsing what's available...")
             
             # Get page source after JS rendering
             html_content = driver.page_source
@@ -62,7 +84,10 @@ class ResultsScraper:
             return []
         finally:
             if driver:
-                driver.quit()
+                try:
+                    driver.quit()
+                except:
+                    pass
     
     def parse_flashscore_html(self, html_content, date_str):
         """Parse Flashscore HTML to extract finished match results"""
