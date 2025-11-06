@@ -274,6 +274,79 @@ with st.sidebar:
     )
     
     st.markdown("---")
+    
+    # Historical Results Section
+    st.markdown("### 📊 HISTORICAL RESULTS")
+    
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Exact Score History
+        cursor.execute('''
+            SELECT 
+                COUNT(*) as settled,
+                SUM(CASE WHEN result = 'won' THEN 1 ELSE 0 END) as wins,
+                SUM(stake) as total_staked,
+                SUM(CASE WHEN result = 'won' THEN payout - stake 
+                         WHEN result = 'lost' THEN -stake 
+                         ELSE 0 END) as net_profit
+            FROM football_opportunities
+            WHERE market = 'exact_score'
+            AND result IN ('won', 'lost')
+        ''')
+        exact_hist = cursor.fetchone()
+        
+        # SGP History
+        cursor.execute('''
+            SELECT 
+                COUNT(*) as settled,
+                SUM(CASE WHEN outcome = 'win' THEN 1 ELSE 0 END) as wins,
+                SUM(stake) as total_staked,
+                SUM(profit_loss) as net_profit
+            FROM sgp_predictions
+            WHERE status = 'settled'
+        ''')
+        sgp_hist = cursor.fetchone()
+        
+        conn.close()
+        
+        # Display Exact Score Results
+        st.markdown("**⚽ Exact Score**")
+        if exact_hist and exact_hist[0] > 0:
+            settled = exact_hist[0]
+            wins = exact_hist[1] or 0
+            staked = exact_hist[2] or 0
+            profit = exact_hist[3] or 0
+            hit_rate = (wins / settled * 100) if settled > 0 else 0
+            roi = (profit / staked * 100) if staked > 0 else 0
+            
+            st.metric("Settled", f"{settled}", delta=f"{hit_rate:.1f}% hit rate")
+            st.metric("ROI", f"{roi:+.0f}%", delta=f"{profit:+.0f} SEK")
+        else:
+            st.caption("No settled predictions yet")
+        
+        st.markdown("")
+        
+        # Display SGP Results
+        st.markdown("**🎲 SGP Parlays**")
+        if sgp_hist and sgp_hist[0] > 0:
+            settled = sgp_hist[0]
+            wins = sgp_hist[1] or 0
+            staked = sgp_hist[2] or 0
+            profit = sgp_hist[3] or 0
+            hit_rate = (wins / settled * 100) if settled > 0 else 0
+            roi = (profit / staked * 100) if staked > 0 else 0
+            
+            st.metric("Settled", f"{settled}", delta=f"{hit_rate:.1f}% hit rate")
+            st.metric("ROI", f"{roi:+.0f}%", delta=f"{profit:+.0f} SEK")
+        else:
+            st.caption("No settled predictions yet")
+            
+    except Exception as e:
+        st.caption("Loading results...")
+    
+    st.markdown("---")
     st.markdown("### 🎯 Premium AI Platform")
     st.caption("Exact Score & SGP Predictions")
     st.caption("100% Data-Driven Analysis")
