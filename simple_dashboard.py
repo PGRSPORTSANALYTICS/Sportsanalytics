@@ -153,15 +153,15 @@ def load_performance_summary():
         cursor.execute('''
             SELECT 
                 COUNT(*) as total,
-                SUM(CASE WHEN outcome IN ('won', 'win') THEN 1 ELSE 0 END) as wins,
-                SUM(CASE WHEN outcome IN ('lost', 'loss') THEN 1 ELSE 0 END) as losses,
-                SUM(CASE WHEN outcome IN ('won', 'win', 'lost', 'loss') THEN stake ELSE 0 END) as staked,
-                SUM(CASE WHEN outcome IN ('won', 'win') THEN stake * (odds - 1) 
-                         WHEN outcome IN ('lost', 'loss') THEN -stake 
-                         ELSE 0 END) as profit,
-                AVG(CASE WHEN outcome IN ('won', 'win', 'lost', 'loss') THEN odds END) as avg_odds
+                SUM(CASE WHEN payout > 0 THEN 1 ELSE 0 END) as wins,
+                SUM(CASE WHEN payout = 0 THEN 1 ELSE 0 END) as losses,
+                SUM(stake) as staked,
+                SUM(CASE WHEN payout > 0 THEN payout - stake 
+                         ELSE -stake END) as profit,
+                AVG(odds) as avg_odds
             FROM football_opportunities
             WHERE market = 'exact_score'
+            AND result IS NOT NULL
         ''')
         exact = cursor.fetchone()
         
@@ -287,14 +287,13 @@ with st.sidebar:
         cursor.execute('''
             SELECT 
                 COUNT(*) as settled,
-                SUM(CASE WHEN result = 'won' THEN 1 ELSE 0 END) as wins,
+                SUM(CASE WHEN payout > 0 THEN 1 ELSE 0 END) as wins,
                 SUM(stake) as total_staked,
-                SUM(CASE WHEN result = 'won' THEN payout - stake 
-                         WHEN result = 'lost' THEN -stake 
-                         ELSE 0 END) as net_profit
+                SUM(CASE WHEN payout > 0 THEN payout - stake 
+                         ELSE -stake END) as net_profit
             FROM football_opportunities
             WHERE market = 'exact_score'
-            AND result IN ('won', 'lost')
+            AND result IS NOT NULL
         ''')
         exact_hist = cursor.fetchone()
         
@@ -454,17 +453,16 @@ if page == "⚽ Exact Score Analytics":
         cursor.execute('''
             SELECT 
                 COUNT(*) as total,
-                SUM(CASE WHEN result = 'won' THEN 1 ELSE 0 END) as wins,
-                SUM(CASE WHEN result = 'lost' THEN 1 ELSE 0 END) as losses,
+                SUM(CASE WHEN payout > 0 THEN 1 ELSE 0 END) as wins,
+                SUM(CASE WHEN payout = 0 THEN 1 ELSE 0 END) as losses,
                 SUM(stake) as total_staked,
-                SUM(CASE WHEN result = 'won' THEN payout - stake 
-                         WHEN result = 'lost' THEN -stake 
-                         ELSE 0 END) as net_profit,
+                SUM(CASE WHEN payout > 0 THEN payout - stake 
+                         ELSE -stake END) as net_profit,
                 AVG(odds) as avg_odds,
                 AVG(edge_percentage) as avg_edge
             FROM football_opportunities
             WHERE market = 'exact_score'
-            AND result IN ('won', 'lost')
+            AND result IS NOT NULL
         ''')
         stats = cursor.fetchone()
         
@@ -502,12 +500,11 @@ if page == "⚽ Exact Score Analytics":
                 SELECT 
                     timestamp,
                     stake,
-                    CASE WHEN result = 'won' THEN payout - stake 
-                         WHEN result = 'lost' THEN -stake 
-                         ELSE 0 END as profit
+                    CASE WHEN payout > 0 THEN payout - stake 
+                         ELSE -stake END as profit
                 FROM football_opportunities
                 WHERE market = 'exact_score'
-                AND result IN ('won', 'lost')
+                AND result IS NOT NULL
                 ORDER BY timestamp ASC
             ''')
             
@@ -566,16 +563,15 @@ if page == "⚽ Exact Score Analytics":
                 SELECT 
                     league,
                     COUNT(*) as bets,
-                    SUM(CASE WHEN result = 'won' THEN 1 ELSE 0 END) as wins,
+                    SUM(CASE WHEN payout > 0 THEN 1 ELSE 0 END) as wins,
                     SUM(stake) as staked,
-                    SUM(CASE WHEN result = 'won' THEN payout - stake 
-                             WHEN result = 'lost' THEN -stake 
-                             ELSE 0 END) as profit
+                    SUM(CASE WHEN payout > 0 THEN payout - stake 
+                             ELSE -stake END) as profit
                 FROM football_opportunities
                 WHERE market = 'exact_score'
-                AND result IN ('won', 'lost')
+                AND result IS NOT NULL
                 GROUP BY league
-                HAVING COUNT(*) >= 3
+                HAVING COUNT(*) >= 2
                 ORDER BY profit DESC
             ''')
             
