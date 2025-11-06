@@ -593,6 +593,103 @@ if page == "⚽ Exact Score Analytics":
                 
                 # Table
                 st.dataframe(df_leagues, width='stretch', hide_index=True)
+            
+            st.markdown("---")
+            
+            # Historical Bets List
+            st.markdown("### 📜 HISTORICAL BETS")
+            
+            cursor.execute('''
+                SELECT 
+                    home_team,
+                    away_team,
+                    selection,
+                    actual_score,
+                    outcome,
+                    odds,
+                    profit_loss,
+                    match_date
+                FROM football_opportunities
+                WHERE market = 'exact_score'
+                AND result IS NOT NULL
+                ORDER BY settled_timestamp DESC
+                LIMIT 50
+            ''')
+            
+            st.markdown('<div style="max-height: 600px; overflow-y: auto;">', unsafe_allow_html=True)
+            
+            for row in cursor.fetchall():
+                home = row[0]
+                away = row[1]
+                selection = row[2]
+                actual_score = row[3] or "N/A"
+                outcome = row[4]
+                odds = row[5]
+                profit = row[6]
+                match_date = row[7]
+                
+                # Extract just the score from selection (remove "Exact Score: " prefix if present)
+                predicted_score = selection.replace('Exact Score: ', '') if selection else 'N/A'
+                
+                # Format date
+                try:
+                    if isinstance(match_date, str):
+                        dt = datetime.fromisoformat(match_date.replace('Z', '+00:00'))
+                    else:
+                        dt = datetime.fromtimestamp(match_date)
+                    date_str = dt.strftime('%b %d')
+                except:
+                    date_str = "N/A"
+                
+                # Color code based on outcome
+                if outcome == 'win':
+                    bg_color = "#1a4d2e"  # Dark green
+                    border_color = "#3FB950"  # Green
+                    icon = "🟢"
+                    outcome_text = "WIN"
+                else:
+                    bg_color = "#4d1a1a"  # Dark red
+                    border_color = "#FF4444"  # Red
+                    icon = "🔴"
+                    outcome_text = "LOSS"
+                
+                # Display bet card
+                st.markdown(f'''
+                <div style="
+                    background: {bg_color};
+                    border-left: 4px solid {border_color};
+                    padding: 12px 16px;
+                    margin-bottom: 8px;
+                    border-radius: 6px;
+                ">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div style="flex: 1;">
+                            <div style="font-size: 0.95rem; font-weight: 600; color: #E6EDF3; margin-bottom: 4px;">
+                                {icon} {home} vs {away}
+                            </div>
+                            <div style="font-size: 0.85rem; color: #8B949E; margin-bottom: 4px;">
+                                Predicted: {predicted_score}
+                            </div>
+                            <div style="font-size: 0.8rem; color: #6E7681;">
+                                Result: {actual_score} | {date_str}
+                            </div>
+                        </div>
+                        <div style="text-align: right; min-width: 120px;">
+                            <div style="font-size: 0.9rem; font-weight: 700; color: {border_color};">
+                                {outcome_text}
+                            </div>
+                            <div style="font-size: 0.85rem; color: #8B949E;">
+                                @{odds:.2f}x
+                            </div>
+                            <div style="font-size: 0.9rem; font-weight: 600; color: {'#3FB950' if profit > 0 else '#FF4444'};">
+                                {profit:+.0f} SEK
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                ''', unsafe_allow_html=True)
+            
+            st.markdown('</div>', unsafe_allow_html=True)
         
         else:
             st.info("No settled predictions yet. Check back after matches complete!")
