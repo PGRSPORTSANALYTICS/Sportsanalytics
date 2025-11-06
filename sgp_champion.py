@@ -14,7 +14,7 @@ import sys
 
 # Import existing systems
 from sgp_predictor import SGPPredictor
-from telegram_sender import TelegramSender
+from telegram_sender import TelegramBroadcaster
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ class SGPChampion:
     def __init__(self):
         self.db_path = DB_PATH
         self.sgp_predictor = SGPPredictor()
-        self.telegram = TelegramSender()
+        self.telegram = TelegramBroadcaster()
         
         logger.info("✅ SGP Champion initialized")
     

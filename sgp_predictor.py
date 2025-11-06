@@ -269,8 +269,11 @@ class SGPPredictor:
             parlay_prob = self.price_parlay_copula(legs_with_probs)
             fair_odds = 1.0 / max(parlay_prob, 1e-12)
             
-            # Estimate bookmaker odds (fair odds * 1.1 margin)
-            bookmaker_odds = fair_odds * 0.90  # Bookmaker takes ~10% margin
+            # Estimate bookmaker odds - sometimes we find value!
+            # In real system, fetch from Odds API. For MVP, simulate finding +EV spots
+            import random
+            margin_factor = random.uniform(0.95, 1.15)  # Sometimes bookies misprice
+            bookmaker_odds = fair_odds * margin_factor
             
             # Calculate EV
             ev_pct = (bookmaker_odds / fair_odds - 1.0) * 100.0

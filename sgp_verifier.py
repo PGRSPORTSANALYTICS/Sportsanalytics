@@ -11,7 +11,7 @@ from typing import List, Dict, Any, Optional
 import re
 
 from results_scraper import ResultsScraper
-from telegram_sender import TelegramSender
+from telegram_sender import TelegramBroadcaster
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ class SGPVerifier:
     def __init__(self):
         self.db_path = DB_PATH
         self.results_scraper = ResultsScraper()
-        self.telegram = TelegramSender()
+        self.telegram = TelegramBroadcaster()
         
         logger.info("✅ SGP Verifier initialized")
     
