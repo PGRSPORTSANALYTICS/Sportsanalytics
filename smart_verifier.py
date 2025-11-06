@@ -30,20 +30,23 @@ class SmartVerifier:
         self.sgp_verifier = SGPVerifier()
     
     def verify_recent_matches(self):
-        """Verify ALL unverified matches (no time limit for historical backfill)"""
-        logger.info("🔍 SMART VERIFICATION - Full historical check")
+        """Verify matches that kicked off 95+ minutes ago"""
+        logger.info("🔍 SMART VERIFICATION - Checking matches 95+ min after kickoff")
         
         cursor = self.conn.cursor()
         
-        # Get ALL unverified bets (removed 7-day limit)
+        # Get bets for matches that kicked off 95+ minutes ago (match should be finished)
+        from datetime import datetime, timedelta
+        cutoff_time = (datetime.now() - timedelta(minutes=95)).isoformat()
+        
         cursor.execute('''
             SELECT id, home_team, away_team, match_date, selection, odds, stake
             FROM football_opportunities
             WHERE status != 'settled'
-            AND match_date < datetime('now')
+            AND match_date <= ?
             ORDER BY match_date ASC
             LIMIT 200
-        ''')
+        ''', (cutoff_time,))
         
         pending = cursor.fetchall()
         logger.info(f"📊 Found {len(pending)} recent unverified matches")
@@ -162,30 +165,30 @@ class SmartVerifier:
         except Exception as e:
             logger.error(f"❌ SGP verification error: {e}")
     
-    def run_daily(self):
-        """Run verification once per day at midnight"""
-        logger.info("📅 Smart Verifier scheduled for daily 00:00 run")
+    def run_continuous(self):
+        """Run verification continuously every 10 minutes"""
+        logger.info("📅 Smart Verifier running every 10 minutes")
         
-        # Schedule for midnight
-        schedule.every().day.at("00:00").do(self.verify_recent_matches)
+        # Schedule every 10 minutes
+        schedule.every(10).minutes.do(self.verify_recent_matches)
         
-        # Also run now if there are pending
+        # Also run immediately
         self.verify_recent_matches()
         
         # Keep running
         while True:
             schedule.run_pending()
-            time.sleep(3600)  # Check every hour
+            time.sleep(60)  # Check every minute
 
 
 if __name__ == '__main__':
     verifier = SmartVerifier()
     
     logger.info("="*80)
-    logger.info("SMART VERIFIER - ULTRA EFFICIENT")
+    logger.info("SMART VERIFIER - FAST RESULTS")
     logger.info("="*80)
-    logger.info("Runs: ONCE per day at midnight")
-    logger.info("API Savings: 90%+ reduction vs old verifier")
+    logger.info("Runs: Every 10 minutes")
+    logger.info("Checks: Matches 95+ min after kickoff")
     logger.info("="*80)
     
-    verifier.run_daily()
+    verifier.run_continuous()

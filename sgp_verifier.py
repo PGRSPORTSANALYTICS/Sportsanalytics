@@ -29,20 +29,20 @@ class SGPVerifier:
         logger.info("✅ SGP Verifier initialized")
     
     def get_unverified_sgps(self) -> List[Dict[str, Any]]:
-        """Get SGP predictions that need verification"""
+        """Get SGP predictions that need verification (95+ min after kickoff)"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        # Get SGPs from yesterday and earlier that are still pending
-        cutoff_date = (datetime.now() - timedelta(days=1)).date().isoformat()
+        # Get SGPs that kicked off 95+ minutes ago (match should be finished)
+        cutoff_time = (datetime.now() - timedelta(minutes=95)).isoformat()
         
         cursor.execute('''
             SELECT id, match_id, home_team, away_team, league, match_date, 
                    legs, parlay_description, stake, bookmaker_odds
             FROM sgp_predictions
             WHERE status = 'pending'
-            AND DATE(match_date) <= ?
-        ''', (cutoff_date,))
+            AND kickoff_time <= ?
+        ''', (cutoff_time,))
         
         rows = cursor.fetchall()
         conn.close()
@@ -139,14 +139,19 @@ class SGPVerifier:
         # Get match result
         match_date = sgp['match_date'].split('T')[0]  # Extract date
         
-        results = self.results_scraper.get_results(match_date)
+        results = self.results_scraper.get_results_for_date(match_date)
         
         # Find this specific match
         actual_score = None
         for result in results:
-            if (sgp['home_team'].lower() in result['match'].lower() and 
-                sgp['away_team'].lower() in result['match'].lower()):
-                actual_score = result['score']
+            # Fuzzy team name matching
+            home_match = (sgp['home_team'].lower() in result['home_team'].lower() or 
+                         result['home_team'].lower() in sgp['home_team'].lower())
+            away_match = (sgp['away_team'].lower() in result['away_team'].lower() or 
+                         result['away_team'].lower() in sgp['away_team'].lower())
+            
+            if home_match and away_match:
+                actual_score = result.get('score', f"{result['home_score']}-{result['away_score']}")
                 break
         
         if not actual_score:
@@ -166,7 +171,7 @@ class SGPVerifier:
         
         return 'win' if all_legs_won else 'loss'
     
-    def mark_sgp_result(self, sgp_id: int, outcome: str, actual_score: str = None):
+    def mark_sgp_result(self, sgp_id: int, outcome: str, actual_score: Optional[str] = None):
         """Mark SGP as won or lost"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
@@ -220,9 +225,10 @@ class SGPVerifier:
         for sgp in sgps:
             logger.info(f"🔍 Checking: {sgp['home_team']} vs {sgp['away_team']} | {sgp['description']}")
             
-            outcome = self.verify_sgp(sgp)
+            result_data = self.verify_sgp(sgp)
             
-            if outcome:
+            if result_data:
+                outcome = result_data
                 self.mark_sgp_result(sgp['id'], outcome)
                 verified_count += 1
                 
@@ -248,17 +254,17 @@ class SGPVerifier:
             hit_rate = (wins / total * 100) if total > 0 else 0
             
             message = f"""
-📊 **SGP DAILY RESULTS**
+📊 SGP RESULTS
 
 ✅ Wins: {wins}
 ❌ Losses: {losses}
 🎯 Hit Rate: {hit_rate:.1f}%
 
----
-🎰 Same Game Parlays | AI-Powered
+Same Game Parlays | AI-Powered
             """.strip()
             
-            self.telegram.send_message(message, parse_mode='Markdown')
+            # Broadcast to all subscribers
+            self.telegram.broadcast_message(message)
             
         except Exception as e:
             logger.error(f"❌ Telegram summary failed: {e}")
