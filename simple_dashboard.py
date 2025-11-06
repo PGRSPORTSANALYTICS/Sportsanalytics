@@ -543,6 +543,98 @@ else:
 st.markdown("---")
 
 # ============================================================================
+# ALL ACTIVE PREDICTIONS
+# ============================================================================
+
+st.markdown("## 📋 ALL ACTIVE PREDICTIONS")
+
+try:
+    conn = sqlite3.connect(DB_PATH)
+    
+    # Get all pending exact scores
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT 
+            home_team, away_team, prediction, odds, 
+            ev, league, timestamp, stake
+        FROM football_opportunities
+        WHERE market = 'exact_score'
+        AND outcome IS NULL
+        ORDER BY timestamp DESC
+        LIMIT 50
+    ''')
+    
+    all_exact = []
+    for row in cursor.fetchall():
+        match_time = datetime.fromisoformat(row[6])
+        all_exact.append({
+            'Match': f"{row[0]} vs {row[1]}",
+            'Prediction': row[2],
+            'Odds': f"{row[3]:.2f}x",
+            'Edge': f"{row[4]:.1f}%",
+            'League': row[5],
+            'Date': match_time.strftime('%Y-%m-%d'),
+            'Time': match_time.strftime('%H:%M'),
+            'Stake': f"{row[7]:.0f} SEK"
+        })
+    
+    # Get all pending SGPs
+    cursor.execute('''
+        SELECT 
+            home_team, away_team, parlay_description,
+            bookmaker_odds, ev_percentage, timestamp, stake
+        FROM sgp_predictions
+        WHERE status = 'pending'
+        ORDER BY timestamp DESC
+        LIMIT 50
+    ''')
+    
+    all_sgp = []
+    for row in cursor.fetchall():
+        match_time = datetime.fromisoformat(row[5])
+        all_sgp.append({
+            'Match': f"{row[0]} vs {row[1]}",
+            'Parlay': row[2][:50] + '...' if len(row[2]) > 50 else row[2],
+            'Odds': f"{row[3]:.2f}x",
+            'Edge': f"{row[4]:.1f}%",
+            'Date': match_time.strftime('%Y-%m-%d'),
+            'Time': match_time.strftime('%H:%M'),
+            'Stake': f"{row[6]:.0f} SEK"
+        })
+    
+    conn.close()
+    
+    if all_exact or all_sgp:
+        tab1, tab2 = st.tabs([f"⚽ Exact Score ({len(all_exact)})", f"🎲 SGP ({len(all_sgp)})"])
+        
+        with tab1:
+            if all_exact:
+                df_all_exact = pd.DataFrame(all_exact)
+                st.dataframe(df_all_exact, width='stretch', hide_index=True)
+                
+                total_stake = sum([float(p['Stake'].replace(' SEK', '')) for p in all_exact])
+                st.caption(f"💰 Total Active Stake: {total_stake:,.0f} SEK across {len(all_exact)} predictions")
+            else:
+                st.info("No active exact score predictions")
+        
+        with tab2:
+            if all_sgp:
+                df_all_sgp = pd.DataFrame(all_sgp)
+                st.dataframe(df_all_sgp, width='stretch', hide_index=True)
+                
+                total_stake = sum([float(p['Stake'].replace(' SEK', '')) for p in all_sgp])
+                st.caption(f"💰 Total Active Stake: {total_stake:,.0f} SEK across {len(all_sgp)} predictions")
+            else:
+                st.info("No active SGP predictions")
+    else:
+        st.info("No active predictions at the moment")
+
+except Exception as e:
+    st.warning(f"Loading predictions... {str(e)}")
+
+st.markdown("---")
+
+# ============================================================================
 # LEAGUE BREAKDOWN (Compact View)
 # ============================================================================
 
