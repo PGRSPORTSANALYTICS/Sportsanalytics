@@ -33,9 +33,24 @@ CORR_RULES = {
     ("PLAYER_SHOTS:OVER", "PLAYER_TO_SCORE:YES"): 0.40,
     ("PLAYER_SHOTS:OVER", "OVER_UNDER_GOALS:OVER"): 0.28,
     
+    # Half-time/Second half correlations
+    ("HALF_TIME_GOALS:OVER", "SECOND_HALF_GOALS:OVER"): 0.25,
+    ("HALF_TIME_GOALS:OVER", "OVER_UNDER_GOALS:OVER"): 0.45,
+    ("SECOND_HALF_GOALS:OVER", "OVER_UNDER_GOALS:OVER"): 0.50,
+    ("HALF_TIME_GOALS:OVER", "BTTS:YES"): 0.30,
+    ("SECOND_HALF_GOALS:OVER", "BTTS:YES"): 0.28,
+    
+    # Corners correlations
+    ("CORNERS:OVER", "OVER_UNDER_GOALS:OVER"): 0.40,
+    ("CORNERS:OVER", "BTTS:YES"): 0.35,
+    ("CORNERS:OVER", "HALF_TIME_GOALS:OVER"): 0.30,
+    ("CORNERS:OVER", "SECOND_HALF_GOALS:OVER"): 0.32,
+    
     # Negative correlations
     ("PLAYER_TO_SCORE:NO", "BTTS:NO"): 0.15,
     ("OVER_UNDER_GOALS:UNDER", "PLAYER_TO_SCORE:YES"): -0.15,
+    ("CORNERS:UNDER", "OVER_UNDER_GOALS:OVER"): -0.20,
+    ("HALF_TIME_GOALS:UNDER", "OVER_UNDER_GOALS:OVER"): -0.25,
 }
 
 class SGPPredictor:
@@ -190,6 +205,104 @@ class SGPPredictor:
         # Clamp to realistic range
         return max(0.10, min(0.80, prob_over))
     
+    def calculate_half_time_goals_prob(self, lambda_home: float, lambda_away: float, line: float = 0.5, over: bool = True) -> float:
+        """
+        Calculate 1st half goals Over/Under probability
+        
+        Args:
+            lambda_home: Expected goals for home team (full match)
+            lambda_away: Expected goals for away team (full match)
+            line: Goals line (e.g., 0.5, 1.5)
+            over: True for Over, False for Under
+        
+        Returns:
+            Probability of the outcome
+        """
+        # 1st half typically sees ~45% of total goals
+        lambda_home_1h = lambda_home * 0.45
+        lambda_away_1h = lambda_away * 0.45
+        
+        max_goals = 6
+        prob_result = 0.0
+        
+        for h in range(max_goals + 1):
+            for a in range(max_goals + 1):
+                total_goals = h + a
+                prob_score = poisson.pmf(h, lambda_home_1h) * poisson.pmf(a, lambda_away_1h)
+                
+                if over and total_goals > line:
+                    prob_result += prob_score
+                elif not over and total_goals < line:
+                    prob_result += prob_score
+        
+        return prob_result
+    
+    def calculate_second_half_goals_prob(self, lambda_home: float, lambda_away: float, line: float = 0.5, over: bool = True) -> float:
+        """
+        Calculate 2nd half goals Over/Under probability
+        
+        Args:
+            lambda_home: Expected goals for home team (full match)
+            lambda_away: Expected goals for away team (full match)
+            line: Goals line (e.g., 0.5, 1.5)
+            over: True for Over, False for Under
+        
+        Returns:
+            Probability of the outcome
+        """
+        # 2nd half typically sees ~55% of total goals (teams push harder)
+        lambda_home_2h = lambda_home * 0.55
+        lambda_away_2h = lambda_away * 0.55
+        
+        max_goals = 6
+        prob_result = 0.0
+        
+        for h in range(max_goals + 1):
+            for a in range(max_goals + 1):
+                total_goals = h + a
+                prob_score = poisson.pmf(h, lambda_home_2h) * poisson.pmf(a, lambda_away_2h)
+                
+                if over and total_goals > line:
+                    prob_result += prob_score
+                elif not over and total_goals < line:
+                    prob_result += prob_score
+        
+        return prob_result
+    
+    def calculate_corners_prob(self, lambda_home: float, lambda_away: float, line: float = 9.5, over: bool = True) -> float:
+        """
+        Calculate total corners Over/Under probability
+        
+        Args:
+            lambda_home: Expected goals for home team
+            lambda_away: Expected goals for away team
+            line: Corners line (e.g., 9.5, 10.5, 11.5)
+            over: True for Over, False for Under
+        
+        Returns:
+            Probability of the outcome
+        """
+        # Corners correlate with attacking intensity and xG
+        # Typical match: 10-12 corners, higher for attacking teams
+        # Rule of thumb: corners ≈ xG * 5 + baseline
+        expected_corners_home = lambda_home * 5 + 3  # 3 baseline corners
+        expected_corners_away = lambda_away * 5 + 3
+        expected_total_corners = expected_corners_home + expected_corners_away
+        
+        # Use Poisson distribution for total corners
+        max_corners = 25
+        prob_result = 0.0
+        
+        for corners in range(max_corners + 1):
+            prob_corners = poisson.pmf(corners, expected_total_corners)
+            
+            if over and corners > line:
+                prob_result += prob_corners
+            elif not over and corners < line:
+                prob_result += prob_corners
+        
+        return prob_result
+    
     def build_corr_matrix(self, legs: List[Dict[str, Any]]) -> np.ndarray:
         """Build correlation matrix for SGP legs"""
         n = len(legs)
@@ -288,6 +401,51 @@ class SGPPredictor:
                     {'market_type': 'BTTS', 'outcome': 'YES'}
                 ],
                 'description': 'Over 1.5 Goals + BTTS Yes'
+            },
+            # Half-time/Second half combinations
+            {
+                'legs': [
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
+                    {'market_type': 'SECOND_HALF_GOALS', 'outcome': 'OVER', 'line': 0.5}
+                ],
+                'description': '1H Over 0.5 + 2H Over 0.5'
+            },
+            {
+                'legs': [
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
+                    {'market_type': 'BTTS', 'outcome': 'YES'}
+                ],
+                'description': '1H Over 0.5 + BTTS Yes'
+            },
+            {
+                'legs': [
+                    {'market_type': 'SECOND_HALF_GOALS', 'outcome': 'OVER', 'line': 1.5},
+                    {'market_type': 'BTTS', 'outcome': 'YES'}
+                ],
+                'description': '2H Over 1.5 + BTTS Yes'
+            },
+            # Corners combinations
+            {
+                'legs': [
+                    {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 9.5},
+                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5}
+                ],
+                'description': 'Corners Over 9.5 + Over 2.5 Goals'
+            },
+            {
+                'legs': [
+                    {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 10.5},
+                    {'market_type': 'BTTS', 'outcome': 'YES'}
+                ],
+                'description': 'Corners Over 10.5 + BTTS Yes'
+            },
+            {
+                'legs': [
+                    {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 11.5},
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
+                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5}
+                ],
+                'description': 'Corners 11.5+ + 1H Over 0.5 + Over 2.5 (Premium)'
             },
         ]
         
@@ -416,6 +574,27 @@ class SGPPredictor:
                     threshold = leg.get('threshold', 2)
                     
                     prob = self.calculate_player_shots_prob(shots_per_game, threshold)
+                    
+                elif leg['market_type'] == 'HALF_TIME_GOALS':
+                    prob = self.calculate_half_time_goals_prob(
+                        lambda_home, lambda_away,
+                        leg.get('line', 0.5),
+                        leg['outcome'] == 'OVER'
+                    )
+                    
+                elif leg['market_type'] == 'SECOND_HALF_GOALS':
+                    prob = self.calculate_second_half_goals_prob(
+                        lambda_home, lambda_away,
+                        leg.get('line', 0.5),
+                        leg['outcome'] == 'OVER'
+                    )
+                    
+                elif leg['market_type'] == 'CORNERS':
+                    prob = self.calculate_corners_prob(
+                        lambda_home, lambda_away,
+                        leg.get('line', 9.5),
+                        leg['outcome'] == 'OVER'
+                    )
                 else:
                     continue
                 
