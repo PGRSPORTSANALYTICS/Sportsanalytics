@@ -631,13 +631,20 @@ if page == "⚽ Exact Score Analytics":
                 # Extract just the score from selection (remove "Exact Score: " prefix if present)
                 predicted_score = selection.replace('Exact Score: ', '') if selection else 'N/A'
                 
-                # Format date
+                # Format date from match_date
                 try:
                     if isinstance(match_date, str):
-                        dt = datetime.fromisoformat(match_date.replace('Z', '+00:00'))
-                    else:
+                        # Handle ISO format dates like "2025-11-06T20:00:00Z" or "2025-11-06"
+                        if 'T' in match_date:
+                            dt = datetime.fromisoformat(match_date.replace('Z', '+00:00'))
+                        else:
+                            dt = datetime.fromisoformat(match_date)
+                        date_str = dt.strftime('%b %d, %Y')
+                    elif isinstance(match_date, (int, float)):
                         dt = datetime.fromtimestamp(match_date)
-                    date_str = dt.strftime('%b %d')
+                        date_str = dt.strftime('%b %d, %Y')
+                    else:
+                        date_str = "N/A"
                 except:
                     date_str = "N/A"
                 
@@ -850,13 +857,20 @@ if page == "🎲 SGP Analytics":
                 profit = row[6]
                 match_date = row[7]
                 
-                # Format date
+                # Format date from match_date
                 try:
                     if isinstance(match_date, str):
-                        dt = datetime.fromisoformat(match_date.replace('Z', '+00:00'))
-                    else:
+                        # Handle ISO format dates like "2025-11-06T20:00:00Z" or "2025-11-06"
+                        if 'T' in match_date:
+                            dt = datetime.fromisoformat(match_date.replace('Z', '+00:00'))
+                        else:
+                            dt = datetime.fromisoformat(match_date)
+                        date_str = dt.strftime('%b %d, %Y')
+                    elif isinstance(match_date, (int, float)):
                         dt = datetime.fromtimestamp(match_date)
-                    date_str = dt.strftime('%b %d')
+                        date_str = dt.strftime('%b %d, %Y')
+                    else:
+                        date_str = "N/A"
                 except:
                     date_str = "N/A"
                 
