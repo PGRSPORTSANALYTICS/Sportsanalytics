@@ -739,41 +739,96 @@ if page == "🎲 SGP Analytics":
             
             st.markdown("---")
             
-            # Parlay Type Performance
-            st.markdown("### 🎯 PERFORMANCE BY PARLAY TYPE")
+            # Historical Bets List
+            st.markdown("### 📜 HISTORICAL BETS")
             
             cursor.execute('''
                 SELECT 
+                    home_team,
+                    away_team,
                     parlay_description,
-                    COUNT(*) as bets,
-                    SUM(CASE WHEN outcome = 'win' THEN 1 ELSE 0 END) as wins,
-                    SUM(stake) as staked,
-                    SUM(profit_loss) as profit,
-                    AVG(bookmaker_odds) as avg_odds
+                    result,
+                    outcome,
+                    bookmaker_odds,
+                    profit_loss,
+                    match_date
                 FROM sgp_predictions
                 WHERE status = 'settled'
-                GROUP BY parlay_description
-                HAVING COUNT(*) >= 2
-                ORDER BY profit DESC
-                LIMIT 10
+                ORDER BY match_date DESC
+                LIMIT 50
             ''')
             
-            parlay_data = []
-            for row in cursor.fetchall():
-                parlay_roi = (row[4] / row[3] * 100) if row[3] > 0 else 0
-                hit_rate = (row[2] / row[1] * 100) if row[1] > 0 else 0
-                parlay_data.append({
-                    'Parlay Type': row[0][:40] + '...' if len(row[0]) > 40 else row[0],
-                    'Bets': row[1],
-                    'Hit Rate': f"{hit_rate:.1f}%",
-                    'Profit': f"{row[4]:+.0f} SEK",
-                    'ROI': f"{parlay_roi:+.1f}%",
-                    'Avg Odds': f"{row[5]:.2f}x"
-                })
+            st.markdown('<div style="max-height: 600px; overflow-y: auto;">', unsafe_allow_html=True)
             
-            if parlay_data:
-                df_parlays = pd.DataFrame(parlay_data)
-                st.dataframe(df_parlays, width='stretch', hide_index=True)
+            for row in cursor.fetchall():
+                home = row[0]
+                away = row[1]
+                parlay = row[2]
+                actual_result = row[3] or "N/A"
+                outcome = row[4]
+                odds = row[5]
+                profit = row[6]
+                match_date = row[7]
+                
+                # Format date
+                try:
+                    if isinstance(match_date, str):
+                        dt = datetime.fromisoformat(match_date.replace('Z', '+00:00'))
+                    else:
+                        dt = datetime.fromtimestamp(match_date)
+                    date_str = dt.strftime('%b %d')
+                except:
+                    date_str = "N/A"
+                
+                # Color code based on outcome
+                if outcome == 'win':
+                    bg_color = "#1a4d2e"  # Dark green
+                    border_color = "#3FB950"  # Green
+                    icon = "🟢"
+                    outcome_text = "WIN"
+                else:
+                    bg_color = "#4d1a1a"  # Dark red
+                    border_color = "#FF4444"  # Red
+                    icon = "🔴"
+                    outcome_text = "LOSS"
+                
+                # Display bet card
+                st.markdown(f'''
+                <div style="
+                    background: {bg_color};
+                    border-left: 4px solid {border_color};
+                    padding: 12px 16px;
+                    margin-bottom: 8px;
+                    border-radius: 6px;
+                ">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div style="flex: 1;">
+                            <div style="font-size: 0.95rem; font-weight: 600; color: #E6EDF3; margin-bottom: 4px;">
+                                {icon} {home} vs {away}
+                            </div>
+                            <div style="font-size: 0.85rem; color: #8B949E; margin-bottom: 4px;">
+                                {parlay}
+                            </div>
+                            <div style="font-size: 0.8rem; color: #6E7681;">
+                                Result: {actual_result} | {date_str}
+                            </div>
+                        </div>
+                        <div style="text-align: right; min-width: 120px;">
+                            <div style="font-size: 0.9rem; font-weight: 700; color: {border_color};">
+                                {outcome_text}
+                            </div>
+                            <div style="font-size: 0.85rem; color: #8B949E;">
+                                @{odds:.2f}x
+                            </div>
+                            <div style="font-size: 0.9rem; font-weight: 600; color: {'#3FB950' if profit > 0 else '#FF4444'};">
+                                {profit:+.0f} SEK
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                ''', unsafe_allow_html=True)
+            
+            st.markdown('</div>', unsafe_allow_html=True)
         
         else:
             st.info("No settled SGP predictions yet. Check back after matches complete!")
