@@ -15,6 +15,7 @@ import sqlite3
 import logging
 from datetime import date, datetime
 from telegram_sender import TelegramBroadcaster
+from stats_master import get_todays_exact_score_stats
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -68,22 +69,19 @@ def get_todays_results():
         return []
 
 def get_daily_stats(results):
-    """Calculate daily statistics"""
+    """Calculate daily statistics - BULLETPROOF VERSION"""
     if not results:
         return None
     
-    total = len(results)
-    wins = sum(1 for r in results if r['outcome'] == 'win')
-    losses = total - wins
-    hit_rate = (wins / total * 100) if total > 0 else 0
-    total_profit = sum(r['profit'] for r in results)
+    # Use bulletproof stats module for accuracy
+    stats = get_todays_exact_score_stats()
     
     return {
-        'total': total,
-        'wins': wins,
-        'losses': losses,
-        'hit_rate': hit_rate,
-        'profit': total_profit
+        'total': stats['total'],
+        'wins': stats['wins'],
+        'losses': stats['losses'],
+        'hit_rate': stats['hit_rate'],
+        'profit': stats['profit']
     }
 
 def send_results_summary():

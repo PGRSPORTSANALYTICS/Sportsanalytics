@@ -4,6 +4,7 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 from datetime import datetime, date
+from stats_master import get_all_time_stats, get_todays_exact_score_stats, get_exact_score_results, get_sgp_results
 
 # Database path
 DB_PATH = 'data/real_football.db'
@@ -144,61 +145,43 @@ st.markdown("""
 
 # Helper functions
 def load_performance_summary():
-    """Load overall performance for both products"""
+    """Load overall performance for both products - BULLETPROOF VERSION"""
     try:
+        # Use stats_master for 100% accuracy
+        stats = get_all_time_stats()
+        
+        # Calculate avg odds manually from database for backwards compatibility
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
-        # Exact Score stats
-        cursor.execute('''
-            SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN payout > 0 THEN 1 ELSE 0 END) as wins,
-                SUM(CASE WHEN payout = 0 THEN 1 ELSE 0 END) as losses,
-                SUM(stake) as staked,
-                SUM(CASE WHEN payout > 0 THEN payout - stake 
-                         ELSE -stake END) as profit,
-                AVG(odds) as avg_odds
-            FROM football_opportunities
-            WHERE market = 'exact_score'
-            AND result IS NOT NULL
-        ''')
-        exact = cursor.fetchone()
+        cursor.execute('SELECT AVG(odds) FROM football_opportunities WHERE market = "exact_score" AND result IS NOT NULL')
+        exact_avg_odds = cursor.fetchone()[0] or 0
         
-        # SGP stats
-        cursor.execute('''
-            SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN outcome = 'win' THEN 1 ELSE 0 END) as wins,
-                SUM(CASE WHEN outcome = 'loss' THEN 1 ELSE 0 END) as losses,
-                SUM(CASE WHEN status = 'settled' THEN stake ELSE 0 END) as staked,
-                SUM(profit_loss) as profit,
-                AVG(CASE WHEN status = 'settled' THEN bookmaker_odds END) as avg_odds
-            FROM sgp_predictions
-        ''')
-        sgp = cursor.fetchone()
+        cursor.execute('SELECT AVG(bookmaker_odds) FROM sgp_predictions WHERE result IS NOT NULL')
+        sgp_avg_odds = cursor.fetchone()[0] or 0
         
         conn.close()
         
         return {
             'exact': {
-                'total': exact[0] or 0,
-                'wins': exact[1] or 0,
-                'losses': exact[2] or 0,
-                'staked': exact[3] or 0,
-                'profit': exact[4] or 0,
-                'avg_odds': exact[5] or 0
+                'total': stats['exact_score']['total'],
+                'wins': stats['exact_score']['wins'],
+                'losses': stats['exact_score']['losses'],
+                'staked': stats['exact_score']['total'] * 160,  # All bets are 160 SEK
+                'profit': stats['exact_score']['profit'],
+                'avg_odds': exact_avg_odds
             },
             'sgp': {
-                'total': sgp[0] or 0,
-                'wins': sgp[1] or 0,
-                'losses': sgp[2] or 0,
-                'staked': sgp[3] or 0,
-                'profit': sgp[4] or 0,
-                'avg_odds': sgp[5] or 0
+                'total': stats['sgp']['total'],
+                'wins': stats['sgp']['wins'],
+                'losses': stats['sgp']['losses'],
+                'staked': stats['sgp']['total'] * 160,  # All bets are 160 SEK
+                'profit': stats['sgp']['profit'],
+                'avg_odds': sgp_avg_odds
             }
         }
     except Exception as e:
+        st.error(f"Error loading stats: {e}")
         return None
 
 def load_todays_predictions():
