@@ -269,14 +269,15 @@ with st.sidebar:
     st.markdown("## 📋 Navigation")
     page = st.radio(
         "Choose Section:",
-        ["📊 Dashboard", "📜 Terms & Legal"],
+        ["📊 Dashboard", "⚽ Exact Score Analytics", "🎲 SGP Analytics", "📜 Terms & Legal"],
         label_visibility="collapsed"
     )
     
     st.markdown("---")
     
-    # Historical Results Section
+    # Historical Results Section - Now clickable
     st.markdown("### 📊 HISTORICAL RESULTS")
+    st.caption("Click sections above to view detailed analytics")
     
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -431,6 +432,360 @@ if page == "📜 Terms & Legal":
     st.markdown("---")
     st.caption("Last Updated: October 26, 2025")
     st.caption("Governed by Swedish Law | All Rights Reserved")
+    
+    st.stop()
+
+# ============================================================================
+# PAGE: EXACT SCORE ANALYTICS (Technical Dashboard)
+# ============================================================================
+
+if page == "⚽ Exact Score Analytics":
+    st.markdown("# ⚽ EXACT SCORE ANALYTICS")
+    st.markdown('<p class="subtitle">Detailed Performance Analysis | ROI Tracking</p>', unsafe_allow_html=True)
+    
+    try:
+        import plotly.graph_objects as go
+        import plotly.express as px
+        
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Overall Stats
+        cursor.execute('''
+            SELECT 
+                COUNT(*) as total,
+                SUM(CASE WHEN result = 'won' THEN 1 ELSE 0 END) as wins,
+                SUM(CASE WHEN result = 'lost' THEN 1 ELSE 0 END) as losses,
+                SUM(stake) as total_staked,
+                SUM(CASE WHEN result = 'won' THEN payout - stake 
+                         WHEN result = 'lost' THEN -stake 
+                         ELSE 0 END) as net_profit,
+                AVG(odds) as avg_odds,
+                AVG(edge_percentage) as avg_edge
+            FROM football_opportunities
+            WHERE market = 'exact_score'
+            AND result IN ('won', 'lost')
+        ''')
+        stats = cursor.fetchone()
+        
+        if stats and stats[0] > 0:
+            total = stats[0]
+            wins = stats[1] or 0
+            losses = stats[2] or 0
+            staked = stats[3] or 0
+            profit = stats[4] or 0
+            avg_odds = stats[5] or 0
+            avg_edge = stats[6] or 0
+            
+            hit_rate = (wins / total * 100) if total > 0 else 0
+            roi = (profit / staked * 100) if staked > 0 else 0
+            
+            # Key Metrics
+            col1, col2, col3, col4, col5 = st.columns(5)
+            with col1:
+                st.metric("Total Settled", total)
+            with col2:
+                st.metric("Hit Rate", f"{hit_rate:.1f}%", delta=f"{wins}W / {losses}L")
+            with col3:
+                st.metric("ROI", f"{roi:+.1f}%")
+            with col4:
+                st.metric("Profit", f"{profit:+,.0f} SEK")
+            with col5:
+                st.metric("Avg Odds", f"{avg_odds:.2f}x")
+            
+            st.markdown("---")
+            
+            # ROI Over Time Chart
+            st.markdown("### 📈 ROI OVER TIME")
+            
+            cursor.execute('''
+                SELECT 
+                    timestamp,
+                    stake,
+                    CASE WHEN result = 'won' THEN payout - stake 
+                         WHEN result = 'lost' THEN -stake 
+                         ELSE 0 END as profit
+                FROM football_opportunities
+                WHERE market = 'exact_score'
+                AND result IN ('won', 'lost')
+                ORDER BY timestamp ASC
+            ''')
+            
+            cumulative_profit = 0
+            cumulative_stake = 0
+            roi_data = []
+            
+            for row in cursor.fetchall():
+                ts = row[0]
+                stake = row[1]
+                profit = row[2]
+                
+                cumulative_profit += profit
+                cumulative_stake += stake
+                roi_pct = (cumulative_profit / cumulative_stake * 100) if cumulative_stake > 0 else 0
+                
+                dt = datetime.fromtimestamp(ts)
+                roi_data.append({
+                    'Date': dt.strftime('%Y-%m-%d'),
+                    'Cumulative Profit': cumulative_profit,
+                    'ROI %': roi_pct
+                })
+            
+            if roi_data:
+                df_roi = pd.DataFrame(roi_data)
+                
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(
+                    x=df_roi['Date'],
+                    y=df_roi['ROI %'],
+                    mode='lines+markers',
+                    name='ROI %',
+                    line=dict(color='#FFD700', width=3),
+                    fill='tozeroy',
+                    fillcolor='rgba(255, 215, 0, 0.1)'
+                ))
+                
+                fig.update_layout(
+                    plot_bgcolor='#0D1117',
+                    paper_bgcolor='#0D1117',
+                    font=dict(color='#E6EDF3'),
+                    xaxis=dict(showgrid=True, gridcolor='#21262D'),
+                    yaxis=dict(showgrid=True, gridcolor='#21262D', title='ROI %'),
+                    hovermode='x unified',
+                    height=400
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+            
+            st.markdown("---")
+            
+            # Profit Distribution by League
+            st.markdown("### 🌍 PROFIT BY LEAGUE")
+            
+            cursor.execute('''
+                SELECT 
+                    league,
+                    COUNT(*) as bets,
+                    SUM(CASE WHEN result = 'won' THEN 1 ELSE 0 END) as wins,
+                    SUM(stake) as staked,
+                    SUM(CASE WHEN result = 'won' THEN payout - stake 
+                             WHEN result = 'lost' THEN -stake 
+                             ELSE 0 END) as profit
+                FROM football_opportunities
+                WHERE market = 'exact_score'
+                AND result IN ('won', 'lost')
+                GROUP BY league
+                HAVING COUNT(*) >= 3
+                ORDER BY profit DESC
+            ''')
+            
+            league_data = []
+            for row in cursor.fetchall():
+                league_roi = (row[4] / row[3] * 100) if row[3] > 0 else 0
+                league_data.append({
+                    'League': row[0],
+                    'Bets': row[1],
+                    'Hit Rate': f"{(row[2]/row[1]*100):.1f}%",
+                    'Profit': row[4],
+                    'ROI': league_roi
+                })
+            
+            if league_data:
+                df_leagues = pd.DataFrame(league_data)
+                
+                # Bar chart
+                fig = px.bar(
+                    df_leagues,
+                    x='League',
+                    y='Profit',
+                    color='ROI',
+                    color_continuous_scale=['#FF4444', '#FFD700', '#3FB950'],
+                    title='Profit by League'
+                )
+                
+                fig.update_layout(
+                    plot_bgcolor='#0D1117',
+                    paper_bgcolor='#0D1117',
+                    font=dict(color='#E6EDF3'),
+                    height=400
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Table
+                st.dataframe(df_leagues, width='stretch', hide_index=True)
+        
+        else:
+            st.info("No settled predictions yet. Check back after matches complete!")
+        
+        conn.close()
+        
+    except Exception as e:
+        st.error(f"Error loading analytics: {str(e)}")
+    
+    st.stop()
+
+# ============================================================================
+# PAGE: SGP ANALYTICS (Technical Dashboard)
+# ============================================================================
+
+if page == "🎲 SGP Analytics":
+    st.markdown("# 🎲 SGP ANALYTICS")
+    st.markdown('<p class="subtitle">Same Game Parlay Performance | ROI Tracking</p>', unsafe_allow_html=True)
+    
+    try:
+        import plotly.graph_objects as go
+        import plotly.express as px
+        
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Overall Stats
+        cursor.execute('''
+            SELECT 
+                COUNT(*) as total,
+                SUM(CASE WHEN outcome = 'win' THEN 1 ELSE 0 END) as wins,
+                SUM(CASE WHEN outcome = 'loss' THEN 1 ELSE 0 END) as losses,
+                SUM(stake) as total_staked,
+                SUM(profit_loss) as net_profit,
+                AVG(bookmaker_odds) as avg_odds,
+                AVG(ev_percentage) as avg_edge
+            FROM sgp_predictions
+            WHERE status = 'settled'
+        ''')
+        stats = cursor.fetchone()
+        
+        if stats and stats[0] > 0:
+            total = stats[0]
+            wins = stats[1] or 0
+            losses = stats[2] or 0
+            staked = stats[3] or 0
+            profit = stats[4] or 0
+            avg_odds = stats[5] or 0
+            avg_edge = stats[6] or 0
+            
+            hit_rate = (wins / total * 100) if total > 0 else 0
+            roi = (profit / staked * 100) if staked > 0 else 0
+            
+            # Key Metrics
+            col1, col2, col3, col4, col5 = st.columns(5)
+            with col1:
+                st.metric("Total Settled", total)
+            with col2:
+                st.metric("Hit Rate", f"{hit_rate:.1f}%", delta=f"{wins}W / {losses}L")
+            with col3:
+                st.metric("ROI", f"{roi:+.1f}%")
+            with col4:
+                st.metric("Profit", f"{profit:+,.0f} SEK")
+            with col5:
+                st.metric("Avg Odds", f"{avg_odds:.2f}x")
+            
+            st.markdown("---")
+            
+            # ROI Over Time Chart
+            st.markdown("### 📈 ROI OVER TIME")
+            
+            cursor.execute('''
+                SELECT 
+                    timestamp,
+                    stake,
+                    profit_loss
+                FROM sgp_predictions
+                WHERE status = 'settled'
+                ORDER BY timestamp ASC
+            ''')
+            
+            cumulative_profit = 0
+            cumulative_stake = 0
+            roi_data = []
+            
+            for row in cursor.fetchall():
+                ts = row[0]
+                stake = row[1]
+                profit = row[2]
+                
+                cumulative_profit += profit
+                cumulative_stake += stake
+                roi_pct = (cumulative_profit / cumulative_stake * 100) if cumulative_stake > 0 else 0
+                
+                dt = datetime.fromtimestamp(ts) if isinstance(ts, (int, float)) else datetime.fromisoformat(ts)
+                roi_data.append({
+                    'Date': dt.strftime('%Y-%m-%d'),
+                    'Cumulative Profit': cumulative_profit,
+                    'ROI %': roi_pct
+                })
+            
+            if roi_data:
+                df_roi = pd.DataFrame(roi_data)
+                
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(
+                    x=df_roi['Date'],
+                    y=df_roi['ROI %'],
+                    mode='lines+markers',
+                    name='ROI %',
+                    line=dict(color='#FFD700', width=3),
+                    fill='tozeroy',
+                    fillcolor='rgba(255, 215, 0, 0.1)'
+                ))
+                
+                fig.update_layout(
+                    plot_bgcolor='#0D1117',
+                    paper_bgcolor='#0D1117',
+                    font=dict(color='#E6EDF3'),
+                    xaxis=dict(showgrid=True, gridcolor='#21262D'),
+                    yaxis=dict(showgrid=True, gridcolor='#21262D', title='ROI %'),
+                    hovermode='x unified',
+                    height=400
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+            
+            st.markdown("---")
+            
+            # Parlay Type Performance
+            st.markdown("### 🎯 PERFORMANCE BY PARLAY TYPE")
+            
+            cursor.execute('''
+                SELECT 
+                    parlay_description,
+                    COUNT(*) as bets,
+                    SUM(CASE WHEN outcome = 'win' THEN 1 ELSE 0 END) as wins,
+                    SUM(stake) as staked,
+                    SUM(profit_loss) as profit,
+                    AVG(bookmaker_odds) as avg_odds
+                FROM sgp_predictions
+                WHERE status = 'settled'
+                GROUP BY parlay_description
+                HAVING COUNT(*) >= 2
+                ORDER BY profit DESC
+                LIMIT 10
+            ''')
+            
+            parlay_data = []
+            for row in cursor.fetchall():
+                parlay_roi = (row[4] / row[3] * 100) if row[3] > 0 else 0
+                hit_rate = (row[2] / row[1] * 100) if row[1] > 0 else 0
+                parlay_data.append({
+                    'Parlay Type': row[0][:40] + '...' if len(row[0]) > 40 else row[0],
+                    'Bets': row[1],
+                    'Hit Rate': f"{hit_rate:.1f}%",
+                    'Profit': f"{row[4]:+.0f} SEK",
+                    'ROI': f"{parlay_roi:+.1f}%",
+                    'Avg Odds': f"{row[5]:.2f}x"
+                })
+            
+            if parlay_data:
+                df_parlays = pd.DataFrame(parlay_data)
+                st.dataframe(df_parlays, width='stretch', hide_index=True)
+        
+        else:
+            st.info("No settled SGP predictions yet. Check back after matches complete!")
+        
+        conn.close()
+        
+    except Exception as e:
+        st.error(f"Error loading analytics: {str(e)}")
     
     st.stop()
 
