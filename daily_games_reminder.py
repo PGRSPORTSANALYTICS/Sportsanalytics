@@ -67,20 +67,25 @@ def get_todays_matches():
         logger.error(f"❌ Error getting today's matches: {e}")
         return []
 
-def format_kickoff_time(kickoff_time):
-    """Format kickoff time for display"""
-    if not kickoff_time:
-        return "TBD"
+def format_match_datetime(match_date, kickoff_time):
+    """Format match date and time for display"""
+    if not match_date:
+        return "TBD", "TBD"
     
     try:
-        # Handle different time formats
-        if 'T' in kickoff_time:
-            dt = datetime.fromisoformat(kickoff_time.replace('Z', '+00:00'))
-            return dt.strftime('%H:%M')
+        # Parse match_date
+        if 'T' in match_date:
+            dt = datetime.fromisoformat(match_date.replace('Z', '+00:00'))
         else:
-            return kickoff_time
+            dt = datetime.fromisoformat(match_date)
+        
+        # Format: "Fri, Nov 8" and "20:00"
+        date_str = dt.strftime('%a, %b %d')
+        time_str = dt.strftime('%H:%M')
+        
+        return date_str, time_str
     except:
-        return kickoff_time
+        return str(match_date), str(kickoff_time) if kickoff_time else "TBD"
 
 def send_daily_reminder():
     """Send morning reminder with today's matches"""
@@ -94,23 +99,23 @@ def send_daily_reminder():
     
     # Format message
     today_str = date.today().strftime('%A, %B %d, %Y')
-    message = f"🌅 **GOOD MORNING! TODAY'S PREDICTIONS**\n"
+    message = f"🌅 GOOD MORNING! TODAY'S PREDICTIONS\n"
     message += f"📅 {today_str}\n\n"
-    message += f"⚽ **{len(matches)} Predictions Playing Today**\n"
+    message += f"⚽ {len(matches)} Predictions Playing Today\n"
     message += "=" * 40 + "\n\n"
     
     for i, match in enumerate(matches, 1):
-        kickoff = format_kickoff_time(match['kickoff_time'])
+        match_date_str, kickoff_time = format_match_datetime(match['match_date'], match['kickoff_time'])
         
-        message += f"**{i}. {match['home_team']} vs {match['away_team']}**\n"
-        message += f"   🕐 Kickoff: {kickoff}\n"
+        message += f"{i}. {match['home_team']} vs {match['away_team']}\n"
+        message += f"   📅 {match_date_str} at {kickoff_time}\n"
         message += f"   🎯 Prediction: {match['selection']}\n"
         message += f"   💰 Odds: {match['odds']:.2f}x\n"
         message += f"   📊 Edge: {match['edge']:.1f}% | Confidence: {match['confidence']:.0f}\n"
         message += f"   🏆 {match['league']}\n\n"
     
     message += "=" * 40 + "\n"
-    message += "🔥 **Good luck today!**\n"
+    message += "🔥 Good luck today!\n"
     message += "📊 Results will be posted after matches finish\n"
     
     # Broadcast to subscribers
