@@ -205,7 +205,6 @@ class SmartVerifier:
                     logger.info(f"📊 All matches for {match_date} are settled! Sending summary...")
                     
                     # Send summary for this specific date
-                    from daily_results_summary import send_results_summary_for_date_for_date
                     send_results_summary_for_date(match_date)
                     
                     # Mark as sent
