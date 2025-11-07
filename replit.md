@@ -43,6 +43,20 @@ The system employs advanced prediction features including:
   - **Target:** 30-40 predictions/week (up from 10-15/week) through different time zones and fixture schedules
   - **Per-League Tracking:** New monitoring script `view_league_performance.py` tracks hit rate, ROI, and volume per league. Underperforming leagues (< 15% hit rate after 20+ settled) can be removed.
 - **Telegram Broadcast Fix (Nov 3, 2025):** Changed filter from unreliable bet_category to actual match_date check. Now only broadcasts predictions for matches playing TODAY, eliminating future prediction spam.
+- **SGP Self-Learning System (Nov 7, 2025):** SGP predictor now features adaptive learning capabilities:
+  - **Probability Calibration:** Online Platt-style calibration learns from bet outcomes to adjust future predictions (tracks if model over/under-confident)
+  - **Correlation Learning:** Learns actual correlations between bet legs from settled parlays instead of using hardcoded values
+  - **Dynamic Kelly Sizing:** Automatically adjusts stake sizes based on calibration quality (aggressive when good, conservative when poor)
+  - **Graceful Degradation:** Continues operating even with limited data, improves over time as more bets settle
+  - **Calibration Tracking:** Brier score monitoring, parameter history, and performance analysis via `python3 view_sgp_calibration.py`
+- **Live SGP Odds Integration (Nov 7, 2025):** SGP system now uses real bookmaker odds from The Odds API instead of simulated values:
+  - **OddsPricingService:** Intelligent pricing service that fetches individual leg odds (Over/Under, Match Result) and combines them into parlay odds
+  - **Three Pricing Modes:** Live (all legs from bookmaker), Hybrid (some legs live, some simulated), Simulated (fallback when match unavailable)
+  - **Parlay Margin:** Applies realistic 7% bookmaker vig to mimic real-world parlay pricing
+  - **Odds Caching:** 5-minute TTL cache minimizes API calls while maintaining fresh odds
+  - **Visual Indicators:** Dashboard shows 🟢 for live odds, 🟡 for hybrid, ⚪ for simulated
+  - **Graceful Fallback:** System works even when matches not found in odds feed, falls back to simulated pricing
+  - **Database Tracking:** Each SGP stored with pricing_mode and pricing_metadata for transparency
 - **Player Props SGP System (Nov 6, 2025):** Expanded SGP (Same Game Parlay) system to include player-based predictions using API-Football player statistics:
   - **Player Statistics Fetcher:** Retrieves top scorers' goals per game, appearances, and shots per game from league data
   - **Anytime Goalscorer Probability:** Calculates player scoring probability using Poisson distribution adjusted for team's expected goals

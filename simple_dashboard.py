@@ -222,7 +222,7 @@ def load_todays_predictions():
         cursor.execute('''
             SELECT 
                 home_team, away_team, parlay_description,
-                bookmaker_odds, ev_percentage, timestamp
+                bookmaker_odds, ev_percentage, timestamp, pricing_mode
             FROM sgp_predictions
             WHERE timestamp BETWEEN ? AND ?
             ORDER BY timestamp DESC
@@ -231,10 +231,20 @@ def load_todays_predictions():
         sgp_predictions = []
         for row in cursor.fetchall():
             match_time = datetime.fromtimestamp(row[5]) if isinstance(row[5], (int, float)) else datetime.fromisoformat(row[5])
+            pricing_mode = row[6] if row[6] else 'simulated'
+            
+            # Add icon based on pricing mode
+            if pricing_mode == 'live':
+                odds_display = f"🟢 {row[3]:.2f}x"
+            elif pricing_mode == 'hybrid':
+                odds_display = f"🟡 {row[3]:.2f}x"
+            else:
+                odds_display = f"⚪ {row[3]:.2f}x"
+            
             sgp_predictions.append({
                 'Match': f"{row[0]} vs {row[1]}",
                 'Parlay': row[2],
-                'Odds': f"{row[3]:.2f}x",
+                'Odds': odds_display,
                 'Edge': f"{row[4]:.1f}%",
                 'Time': match_time.strftime('%H:%M')
             })
@@ -1148,6 +1158,7 @@ if exact_today or sgp_today:
     with tab2:
         if sgp_today:
             st.markdown(f"**{len(sgp_today)} SGP predictions today**")
+            st.caption("🟢 Live bookmaker odds | 🟡 Hybrid pricing | ⚪ Simulated odds")
             df_sgp = pd.DataFrame(sgp_today)
             st.dataframe(df_sgp, width='stretch', hide_index=True)
         else:

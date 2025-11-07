@@ -15,6 +15,7 @@ from scipy.special import erf
 import os
 
 from sgp_self_learner import SGPSelfLearner
+from sgp_odds_pricing import OddsPricingService
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -62,7 +63,8 @@ class SGPPredictor:
         self.db_path = DB_PATH
         self._init_database()
         self.self_learner = SGPSelfLearner()
-        logger.info("✅ SGP Predictor initialized with self-learning")
+        self.odds_pricing = OddsPricingService(parlay_margin=0.07)
+        logger.info("✅ SGP Predictor initialized with self-learning and live odds")
     
     def _init_database(self):
         """Create SGP predictions table"""
@@ -105,7 +107,11 @@ class SGPPredictor:
                 -- Model metadata
                 model_version TEXT,
                 simulations INTEGER DEFAULT 200000,
-                correlation_method TEXT DEFAULT 'copula'
+                correlation_method TEXT DEFAULT 'copula',
+                
+                -- Odds pricing metadata
+                pricing_mode TEXT DEFAULT 'simulated',
+                pricing_metadata TEXT
             )
         ''')
         
@@ -622,11 +628,16 @@ class SGPPredictor:
             
             logger.info(f"   📊 Calibrated: {raw_parlay_prob:.3f} → {parlay_prob:.3f}")
             
-            # Estimate bookmaker odds - sometimes we find value!
-            # In real system, fetch from Odds API. For MVP, simulate finding +EV spots
-            import random
-            margin_factor = random.uniform(0.95, 1.15)  # Sometimes bookies misprice
-            bookmaker_odds = fair_odds * margin_factor
+            # Get REAL bookmaker odds from The Odds API
+            bookmaker_odds, pricing_mode, pricing_metadata = self.odds_pricing.price_sgp_parlay(
+                home_team=match_data['home_team'],
+                away_team=match_data['away_team'],
+                league=match_data.get('league', ''),
+                legs=legs_with_probs,
+                fair_odds=fair_odds
+            )
+            
+            logger.info(f"   💰 Odds pricing: {pricing_mode.upper()} mode → {bookmaker_odds:.2f}x")
             
             # Calculate EV
             ev_pct = (bookmaker_odds / fair_odds - 1.0) * 100.0
@@ -641,7 +652,9 @@ class SGPPredictor:
                     'fair_odds': fair_odds,
                     'bookmaker_odds': bookmaker_odds,
                     'ev_percentage': ev_pct,
-                    'match_data': match_data
+                    'match_data': match_data,
+                    'pricing_mode': pricing_mode,
+                    'pricing_metadata': pricing_metadata
                 }
         
         return best_sgp
@@ -665,12 +678,17 @@ class SGPPredictor:
         kelly_fraction = (sgp['parlay_probability'] * sgp['bookmaker_odds'] - 1.0) / (sgp['bookmaker_odds'] - 1.0)
         kelly_stake = max(0, min(kelly_fraction * kelly_multiplier, 0.05)) * 1000  # 5% max, 1000 SEK bankroll
         
+        # Convert pricing metadata to JSON string
+        import json
+        pricing_metadata_str = json.dumps(sgp.get('pricing_metadata', {}))
+        
         cursor.execute('''
             INSERT INTO sgp_predictions (
                 timestamp, match_id, home_team, away_team, league, match_date, kickoff_time,
                 legs, parlay_description, parlay_probability, fair_odds, bookmaker_odds, ev_percentage,
-                stake, kelly_stake, model_version, simulations, correlation_method
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                stake, kelly_stake, model_version, simulations, correlation_method,
+                pricing_mode, pricing_metadata
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             int(datetime.now().timestamp()),
             match_data.get('match_id', ''),
@@ -687,9 +705,11 @@ class SGPPredictor:
             sgp['ev_percentage'],
             160.0,  # Default stake
             kelly_stake,
-            'v1.0_copula_poisson',
+            'v1.0_copula_poisson_live',
             200000,
-            'copula'
+            'copula',
+            sgp.get('pricing_mode', 'simulated'),
+            pricing_metadata_str
         ))
         
         conn.commit()
