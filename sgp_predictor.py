@@ -525,8 +525,8 @@ class SGPPredictor:
                     }
                 ])
         
-        best_sgp = None
-        best_ev = -100
+        # Keep top 3 SGPs by EV instead of just 1
+        all_sgps = []
         
         for sgp in sgp_combinations:
             # Calculate probabilities for each leg
@@ -643,9 +643,8 @@ class SGPPredictor:
             ev_pct = (bookmaker_odds / fair_odds - 1.0) * 100.0
             
             # Only keep if EV > 5% (lower threshold than exact scores)
-            if ev_pct > 5.0 and ev_pct > best_ev:
-                best_ev = ev_pct
-                best_sgp = {
+            if ev_pct > 5.0:
+                all_sgps.append({
                     'legs': legs_with_probs,
                     'description': sgp['description'],
                     'parlay_probability': parlay_prob,
@@ -655,9 +654,11 @@ class SGPPredictor:
                     'match_data': match_data,
                     'pricing_mode': pricing_mode,
                     'pricing_metadata': pricing_metadata
-                }
+                })
         
-        return best_sgp
+        # Sort by EV and return top 3
+        all_sgps.sort(key=lambda x: x['ev_percentage'], reverse=True)
+        return all_sgps[:3]  # Return top 3 SGPs instead of just 1
     
     def save_sgp_prediction(self, sgp: Dict[str, Any]):
         """Save SGP prediction to database"""

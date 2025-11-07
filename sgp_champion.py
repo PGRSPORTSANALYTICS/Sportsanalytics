@@ -214,7 +214,7 @@ class SGPChampion:
                 except Exception as e:
                     logger.warning(f"   ⚠️ Could not fetch player data: {e}")
             
-            # Generate SGP
+            # Generate SGPs (returns top 3 by EV)
             match_data = {
                 'match_id': match.get('id', ''),
                 'home_team': home_team,
@@ -224,14 +224,20 @@ class SGPChampion:
                 'kickoff_time': match['commence_time']
             }
             
-            sgp = self.sgp_predictor.generate_sgp_for_match(match_data, lambda_home, lambda_away, player_data)
+            sgps = self.sgp_predictor.generate_sgp_for_match(match_data, lambda_home, lambda_away, player_data)
             
-            if sgp:
-                self.sgp_predictor.save_sgp_prediction(sgp)
-                sgps_generated += 1
+            if sgps:
+                # sgps is now a list of up to 3 predictions
+                for sgp in sgps:
+                    self.sgp_predictor.save_sgp_prediction(sgp)
+                    sgps_generated += 1
+                    
+                    # Send to Telegram
+                    self._send_telegram_notification(sgp)
                 
-                # Send to Telegram
-                self._send_telegram_notification(sgp)
+                logger.info(f"   ✅ Generated {len(sgps)} SGPs for this match")
+            else:
+                logger.info(f"   ⚠️ No qualifying SGPs found")
             
             logger.info(f"   ✅ Analysis complete")
         
