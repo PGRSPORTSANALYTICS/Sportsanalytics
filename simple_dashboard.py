@@ -1135,26 +1135,37 @@ try:
     cursor.execute('''
         SELECT 
             home_team, away_team, selection, odds, 
-            edge_percentage, league, timestamp, stake
+            edge_percentage, league, match_date, stake
         FROM football_opportunities
         WHERE market = 'exact_score'
         AND result IS NULL
-        ORDER BY timestamp DESC
+        ORDER BY match_date ASC
         LIMIT 50
     ''')
     
     all_exact = []
     for row in cursor.fetchall():
-        # Convert Unix timestamp to datetime
-        match_time = datetime.fromtimestamp(row[6]) if isinstance(row[6], (int, float)) else datetime.fromisoformat(row[6])
+        # Parse match_date
+        try:
+            if 'T' in str(row[6]):
+                match_dt = datetime.fromisoformat(str(row[6]).replace('Z', '+00:00'))
+            else:
+                match_dt = datetime.fromisoformat(str(row[6]))
+            
+            date_str = match_dt.strftime('%a, %b %d')  # "Sat, Nov 08"
+            time_str = match_dt.strftime('%H:%M')       # "20:00"
+        except:
+            date_str = "TBD"
+            time_str = "TBD"
+        
         all_exact.append({
             'Match': f"{row[0]} vs {row[1]}",
             'Prediction': row[2],
             'Odds': f"{row[3]:.2f}x",
             'Edge': f"{row[4]:.1f}%",
             'League': row[5],
-            'Date': match_time.strftime('%Y-%m-%d'),
-            'Time': match_time.strftime('%H:%M'),
+            'Match Date': date_str,
+            'Kickoff': time_str,
             'Stake': f"{row[7]:.0f} SEK"
         })
     
@@ -1162,24 +1173,35 @@ try:
     cursor.execute('''
         SELECT 
             home_team, away_team, parlay_description,
-            bookmaker_odds, ev_percentage, timestamp, stake
+            bookmaker_odds, ev_percentage, match_date, stake
         FROM sgp_predictions
         WHERE status = 'pending'
-        ORDER BY timestamp DESC
+        ORDER BY match_date ASC
         LIMIT 50
     ''')
     
     all_sgp = []
     for row in cursor.fetchall():
-        # Convert Unix timestamp to datetime
-        match_time = datetime.fromtimestamp(row[5]) if isinstance(row[5], (int, float)) else datetime.fromisoformat(row[5])
+        # Parse match_date
+        try:
+            if 'T' in str(row[5]):
+                match_dt = datetime.fromisoformat(str(row[5]).replace('Z', '+00:00'))
+            else:
+                match_dt = datetime.fromisoformat(str(row[5]))
+            
+            date_str = match_dt.strftime('%a, %b %d')  # "Sat, Nov 08"
+            time_str = match_dt.strftime('%H:%M')       # "20:00"
+        except:
+            date_str = "TBD"
+            time_str = "TBD"
+        
         all_sgp.append({
             'Match': f"{row[0]} vs {row[1]}",
             'Parlay': row[2][:50] + '...' if len(row[2]) > 50 else row[2],
             'Odds': f"{row[3]:.2f}x",
             'Edge': f"{row[4]:.1f}%",
-            'Date': match_time.strftime('%Y-%m-%d'),
-            'Time': match_time.strftime('%H:%M'),
+            'Match Date': date_str,
+            'Kickoff': time_str,
             'Stake': f"{row[6]:.0f} SEK"
         })
     
