@@ -1016,6 +1016,44 @@ if stats:
     except:
         roi_30d = None
     
+    # Overall Stats Header
+    st.markdown("## 📊 PLATFORM OVERVIEW")
+    
+    # Calculate totals
+    total_settled = (exact['wins'] + exact['losses']) + (sgp['wins'] + sgp['losses'])
+    
+    # Get active predictions count
+    try:
+        conn_active = sqlite3.connect(DB_PATH)
+        cursor_active = conn_active.cursor()
+        
+        cursor_active.execute('SELECT COUNT(*) FROM football_opportunities WHERE market = "exact_score" AND result IS NULL')
+        active_exact = cursor_active.fetchone()[0] or 0
+        
+        cursor_active.execute('SELECT COUNT(*) FROM sgp_predictions WHERE status = "pending"')
+        active_sgp = cursor_active.fetchone()[0] or 0
+        
+        total_active = active_exact + active_sgp
+        conn_active.close()
+    except:
+        total_active = 0
+    
+    # Display overview metrics
+    overview_col1, overview_col2, overview_col3 = st.columns(3)
+    with overview_col1:
+        st.metric("📈 SETTLED PREDICTIONS", f"{total_settled}")
+        st.caption("Verified results tracked")
+    with overview_col2:
+        st.metric("⏳ ACTIVE PREDICTIONS", f"{total_active}")
+        st.caption("Pending settlement")
+    with overview_col3:
+        total_wins = exact['wins'] + sgp['wins']
+        overall_hit_rate = (total_wins / total_settled * 100) if total_settled > 0 else 0
+        st.metric("🎯 OVERALL HIT RATE", f"{overall_hit_rate:.1f}%")
+        st.caption(f"{total_wins} wins / {total_settled} settled")
+    
+    st.markdown("---")
+    
     # Two-product layout
     col1, col2 = st.columns(2)
     
