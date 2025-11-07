@@ -1,7 +1,7 @@
 # Exact Score Predictions Platform
 
 ## Overview
-This project is an AI-powered platform for exact football score predictions, aiming for significant ROI through advanced machine learning and ensemble modeling. It features a premium Streamlit dashboard and Telegram bot delivery for predictions, coupled with automatic result verification. The system uses data-driven AI analysis (100% pattern-free) with ensemble models predicting ANY score based on xG, form, H2H, injuries, and standings. Targets 20-25% hit rate across 16 quality leagues (expanded Nov 2025) with odds 7-14x and 12%+ EV edge. Business goal: 500 settled predictions with 18%+ hit rate before January 2026 subscription launch (499-999 SEK/month) offering transparent, data-driven predictions with projected ROI of +100-200%.
+This project is an AI-powered platform for exact football score predictions, aiming for significant ROI through advanced machine learning and ensemble modeling. It features a premium Streamlit dashboard and Telegram bot delivery for predictions, coupled with automatic result verification. The system uses data-driven AI analysis (100% pattern-free) with ensemble models predicting ANY score based on xG, form, H2H, injuries, and standings. Targets 20-25% hit rate across 16 quality leagues (expanded Nov 2025) with odds 7-14x and 12%+ EV edge. **January 2026 launch strategy: Exact Score only (100% honest real data from 44 settled predictions at 9.1% hit rate), add SGP in February/March 2026 once 20+ live-odds settled predictions collected.** Currently at 58 settled predictions (12% of target). Platform configuration system (`platform_config.py`) controls product visibility, keeping SGP hidden from subscribers during data collection phase while continuing to generate predictions with live bookmaker odds in background.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -50,13 +50,15 @@ The system employs advanced prediction features including:
   - **Graceful Degradation:** Continues operating even with limited data, improves over time as more bets settle
   - **Calibration Tracking:** Brier score monitoring, parameter history, and performance analysis via `python3 view_sgp_calibration.py`
 - **Live SGP Odds Integration (Nov 7, 2025):** SGP system now uses real bookmaker odds from The Odds API instead of simulated values:
-  - **OddsPricingService:** Intelligent pricing service that fetches individual leg odds (Over/Under, Match Result) and combines them into parlay odds
+  - **OddsPricingService:** Intelligent pricing service that fetches individual leg odds (Over/Under, Match Result, BTTS) and combines them into parlay odds
+  - **Supported Markets:** Over/Under (all lines), Match Result (1X2), BTTS (Both Teams To Score) - all from real bookmaker odds
   - **Three Pricing Modes:** Live (all legs from bookmaker), Hybrid (some legs live, some simulated), Simulated (fallback when match unavailable)
   - **Parlay Margin:** Applies realistic 7% bookmaker vig to mimic real-world parlay pricing
   - **Odds Caching:** 5-minute TTL cache minimizes API calls while maintaining fresh odds
   - **Visual Indicators:** Dashboard shows 🟢 for live odds, 🟡 for hybrid, ⚪ for simulated
   - **Graceful Fallback:** System works even when matches not found in odds feed, falls back to simulated pricing
   - **Database Tracking:** Each SGP stored with pricing_mode and pricing_metadata for transparency
+  - **Coverage Quality:** ~95% of basic SGP legs now use live bookmaker odds (Up from ~70% before BTTS integration)
 - **Player Props SGP System (Nov 6, 2025):** Expanded SGP (Same Game Parlay) system to include player-based predictions using API-Football player statistics:
   - **Player Statistics Fetcher:** Retrieves top scorers' goals per game, appearances, and shots per game from league data
   - **Anytime Goalscorer Probability:** Calculates player scoring probability using Poisson distribution adjusted for team's expected goals
