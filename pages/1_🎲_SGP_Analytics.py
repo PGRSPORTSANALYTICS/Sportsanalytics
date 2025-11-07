@@ -93,8 +93,8 @@ try:
         SELECT 
             COUNT(*) as total,
             COUNT(CASE WHEN result IS NOT NULL THEN 1 END) as settled,
-            COUNT(CASE WHEN outcome = 'win' THEN 1 END) as wins,
-            COUNT(CASE WHEN outcome = 'loss' THEN 1 END) as losses,
+            COUNT(CASE WHEN result = 'WIN' THEN 1 END) as wins,
+            COUNT(CASE WHEN result = 'LOSS' THEN 1 END) as losses,
             SUM(CASE WHEN result IS NOT NULL THEN profit_loss ELSE 0 END) as profit,
             AVG(bookmaker_odds) as avg_odds,
             AVG(ev_percentage) as avg_ev
@@ -215,8 +215,8 @@ try:
         SELECT 
             COUNT(*) as total,
             COUNT(CASE WHEN result IS NOT NULL THEN 1 END) as settled,
-            COUNT(CASE WHEN outcome = 'win' THEN 1 END) as wins,
-            COUNT(CASE WHEN outcome = 'loss' THEN 1 END) as losses,
+            COUNT(CASE WHEN result = 'WIN' THEN 1 END) as wins,
+            COUNT(CASE WHEN result = 'LOSS' THEN 1 END) as losses,
             SUM(CASE WHEN result IS NOT NULL THEN profit_loss ELSE 0 END) as total_profit,
             SUM(CASE WHEN result IS NOT NULL THEN stake ELSE 0 END) as total_staked,
             AVG(CASE WHEN result IS NOT NULL THEN bookmaker_odds END) as avg_odds,
@@ -341,7 +341,7 @@ try:
         SELECT 
             strftime('%Y-%m', match_date) as month,
             COUNT(*) as total,
-            SUM(CASE WHEN outcome = 'win' THEN 1 ELSE 0 END) as wins,
+            SUM(CASE WHEN result = 'WIN' THEN 1 ELSE 0 END) as wins,
             SUM(profit_loss) as profit
         FROM sgp_predictions
         WHERE result IS NOT NULL
