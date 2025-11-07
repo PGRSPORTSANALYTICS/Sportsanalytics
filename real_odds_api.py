@@ -76,9 +76,9 @@ class RealOddsAPI:
         """Get live odds for a specific sport"""
         
         if regions is None:
-            regions = ['eu', 'uk']  # European bookmakers for e-soccer
+            regions = ['eu', 'uk']  # European bookmakers
         if markets is None:
-            markets = ['h2h', 'totals']  # Head-to-head and totals (over/under)
+            markets = ['h2h', 'totals', 'btts']  # Match result, totals, and BTTS
             
         url = f"{self.base_url}/sports/{sport_key}/odds"
         
