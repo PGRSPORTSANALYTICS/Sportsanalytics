@@ -14,6 +14,8 @@ from scipy.stats import poisson
 from scipy.special import erf
 import os
 
+from sgp_self_learner import SGPSelfLearner
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -59,7 +61,8 @@ class SGPPredictor:
     def __init__(self):
         self.db_path = DB_PATH
         self._init_database()
-        logger.info("✅ SGP Predictor initialized")
+        self.self_learner = SGPSelfLearner()
+        logger.info("✅ SGP Predictor initialized with self-learning")
     
     def _init_database(self):
         """Create SGP predictions table"""
@@ -611,8 +614,13 @@ class SGPPredictor:
                 })
             
             # Price the parlay using copula
-            parlay_prob = self.price_parlay_copula(legs_with_probs)
+            raw_parlay_prob = self.price_parlay_copula(legs_with_probs)
+            
+            # Apply self-learning calibration to adjust probability
+            parlay_prob = self.self_learner.adjust_probability(raw_parlay_prob)
             fair_odds = 1.0 / max(parlay_prob, 1e-12)
+            
+            logger.info(f"   📊 Calibrated: {raw_parlay_prob:.3f} → {parlay_prob:.3f}")
             
             # Estimate bookmaker odds - sometimes we find value!
             # In real system, fetch from Odds API. For MVP, simulate finding +EV spots
@@ -652,9 +660,10 @@ class SGPPredictor:
             for leg in sgp['legs']
         ])
         
-        # Calculate Kelly stake
+        # Calculate Kelly stake with dynamic sizing from self-learner
+        kelly_multiplier = self.self_learner.get_dynamic_kelly()
         kelly_fraction = (sgp['parlay_probability'] * sgp['bookmaker_odds'] - 1.0) / (sgp['bookmaker_odds'] - 1.0)
-        kelly_stake = max(0, min(kelly_fraction * 0.5, 0.05)) * 1000  # 5% max, 1000 SEK bankroll
+        kelly_stake = max(0, min(kelly_fraction * kelly_multiplier, 0.05)) * 1000  # 5% max, 1000 SEK bankroll
         
         cursor.execute('''
             INSERT INTO sgp_predictions (

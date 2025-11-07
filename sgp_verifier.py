@@ -12,6 +12,7 @@ import re
 
 from results_scraper import ResultsScraper
 from telegram_sender import TelegramBroadcaster
+from sgp_self_learner import SGPSelfLearner
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -25,8 +26,9 @@ class SGPVerifier:
         self.db_path = DB_PATH
         self.results_scraper = ResultsScraper()
         self.telegram = TelegramBroadcaster()
+        self.self_learner = SGPSelfLearner()
         
-        logger.info("✅ SGP Verifier initialized")
+        logger.info("✅ SGP Verifier initialized with self-learning")
     
     def get_unverified_sgps(self) -> List[Dict[str, Any]]:
         """Get SGP predictions that need verification (95+ min after kickoff)"""
@@ -172,13 +174,14 @@ class SGPVerifier:
         return 'win' if all_legs_won else 'loss'
     
     def mark_sgp_result(self, sgp_id: int, outcome: str, actual_score: Optional[str] = None):
-        """Mark SGP as won or lost"""
+        """Mark SGP as won or lost and update self-learning"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        # Get stake and odds
-        cursor.execute('SELECT stake, bookmaker_odds FROM sgp_predictions WHERE id = ?', (sgp_id,))
-        stake, odds = cursor.fetchone()
+        # Get stake, odds, legs, and probability
+        cursor.execute('SELECT stake, bookmaker_odds, legs, parlay_probability FROM sgp_predictions WHERE id = ?', (sgp_id,))
+        row = cursor.fetchone()
+        stake, odds, legs_text, parlay_probability = row
         
         # Calculate profit/loss
         if outcome == 'win':
@@ -201,6 +204,30 @@ class SGPVerifier:
         
         conn.commit()
         conn.close()
+        
+        # Update self-learning system
+        try:
+            # Parse legs to extract individual outcomes
+            legs = self.parse_legs(legs_text)
+            parlay_won = (outcome == 'win')
+            
+            # Create legs_outcomes list for self-learner
+            legs_outcomes = [
+                (f"{leg['market_type']}:{leg['outcome']}", parlay_won)
+                for leg in legs
+            ]
+            
+            # Update self-learner
+            self.self_learner.update_from_settlement(
+                parlay_probability=parlay_probability,
+                legs_outcomes=legs_outcomes,
+                parlay_won=parlay_won
+            )
+            
+            logger.info(f"🧠 Self-learner updated with SGP result")
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Self-learning update failed: {e}")
         
         logger.info(f"✅ SGP {sgp_id} marked as {outcome} | P/L: {profit_loss:+.0f} SEK")
     
