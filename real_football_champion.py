@@ -2726,14 +2726,15 @@ class RealFootballChampion:
             home_clean_sheet_rate = home_form.get('clean_sheet_rate', 0)
             away_clean_sheet_rate = away_form.get('clean_sheet_rate', 0)
             
-            # TEMPORARY: Allow predictions without form data when API-Football is unavailable
-            # System will use odds-based xG estimation as fallback
+            # 🚨 DATA-DRIVEN ONLY: SKIP predictions without real form data
+            # NO more pattern-based fallbacks or estimated data!
             has_real_data = (home_goals_per_game > 0 or away_goals_per_game > 0 or 
                             home_conceded_per_game > 0 or away_conceded_per_game > 0)
             
             if not has_real_data:
-                print(f"   ℹ️ No form data available - using odds-based estimation")
-                # Don't skip - let the system use estimated xG from odds
+                print(f"   ⏭️ SKIPPED: No real form data available (100% data-driven requirement)")
+                print(f"   ❌ Refusing to generate pattern-based prediction")
+                continue  # SKIP this match entirely - NO FAKE DATA!
             
             # Calculate expected goals from REAL performance
             expected_home_goals = (home_goals_per_game + away_conceded_per_game) / 2
