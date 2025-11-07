@@ -6,6 +6,13 @@ import sqlite3
 from datetime import datetime, date
 from stats_master import get_all_time_stats, get_todays_exact_score_stats, get_exact_score_results, get_sgp_results
 
+# Platform configuration - controls public visibility
+try:
+    from platform_config import is_product_public
+    SGP_PUBLIC = is_product_public('sgp')
+except:
+    SGP_PUBLIC = False  # Default: hide SGP during data collection phase
+
 # Database path
 DB_PATH = 'data/real_football.db'
 
@@ -260,9 +267,16 @@ def load_todays_predictions():
 
 with st.sidebar:
     st.markdown("## 📋 Navigation")
+    
+    # Build navigation options based on what's public
+    nav_options = ["📊 Dashboard", "⚽ Exact Score Analytics"]
+    if SGP_PUBLIC:
+        nav_options.append("🎲 SGP Analytics")
+    nav_options.append("📜 Terms & Legal")
+    
     page = st.radio(
         "Choose Section:",
-        ["📊 Dashboard", "⚽ Exact Score Analytics", "🎲 SGP Analytics", "📜 Terms & Legal"],
+        nav_options,
         label_visibility="collapsed"
     )
     
