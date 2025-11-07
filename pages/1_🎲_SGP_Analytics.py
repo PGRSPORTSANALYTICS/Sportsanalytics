@@ -304,15 +304,14 @@ try:
             lambda x: x[:50] + '...' if len(x) > 50 else x
         )
         df_display['Odds'] = df_display['bookmaker_odds'].apply(lambda x: f"{x:.2f}x")
-        df_display['Result'] = df_display['result']
-        df_display['Outcome'] = df_display['outcome'].apply(
-            lambda x: '✅ WIN' if x == 'win' else '❌ LOSS'
+        df_display['Result'] = df_display['result'].apply(
+            lambda x: '✅ WIN' if x == 'WIN' else '❌ LOSS' if x == 'LOSS' else x
         )
         df_display['P/L'] = df_display['profit_loss'].apply(lambda x: f"{x:+.0f} SEK")
         
         # Display table
         st.dataframe(
-            df_display[['Match', 'Parlay', 'Odds', 'Result', 'Outcome', 'P/L']],
+            df_display[['Match', 'Parlay', 'Odds', 'Result', 'P/L']],
             hide_index=True,
             width='stretch'
         )
@@ -412,8 +411,7 @@ try:
                         'Date': date_str,
                         'Match': f"{row[0]} vs {row[1]}",
                         'Parlay': row[2][:50] + '...' if len(row[2]) > 50 else row[2],
-                        'Result': row[4],
-                        'Outcome': '✅ WIN' if row[5] == 'win' else '❌ LOSS',
+                        'Result': '✅ WIN' if row[4] == 'WIN' else '❌ LOSS' if row[4] == 'LOSS' else row[4],
                         'Odds': f"{row[3]:.2f}x",
                         'P/L': f"{row[6]:+.0f} SEK"
                     })
