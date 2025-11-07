@@ -1455,6 +1455,113 @@ except Exception as e:
 st.markdown("---")
 
 # ============================================================================
+# SGP HISTORICAL PREDICTIONS BY MONTH
+# ============================================================================
+
+st.markdown("## 🎲 SGP HISTORICAL PREDICTIONS BY MONTH")
+st.caption("SGP parlays organized by month for easy tracking")
+
+try:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    # Get all settled SGPs grouped by month
+    cursor.execute('''
+        SELECT 
+            strftime('%Y-%m', match_date) as month,
+            COUNT(*) as total,
+            SUM(CASE WHEN outcome = 'win' THEN 1 ELSE 0 END) as wins,
+            SUM(profit_loss) as profit
+        FROM sgp_predictions
+        WHERE result IS NOT NULL
+        GROUP BY strftime('%Y-%m', match_date)
+        ORDER BY month DESC
+    ''')
+    
+    sgp_months = {}
+    for row in cursor.fetchall():
+        month_key = row[0]
+        sgp_months[month_key] = {
+            'total': row[1],
+            'wins': row[2],
+            'profit': row[3]
+        }
+    
+    if sgp_months:
+        for month_key, month_data in sgp_months.items():
+            # Parse month name
+            try:
+                month_date = datetime.strptime(month_key, '%Y-%m')
+                month_name = month_date.strftime('%B %Y')  # "November 2025"
+            except:
+                month_name = month_key
+            
+            # Calculate month totals
+            month_total = month_data['total']
+            month_wins = month_data['wins']
+            month_profit = month_data['profit']
+            month_hit_rate = (month_wins / month_total * 100) if month_total > 0 else 0
+            
+            # Create expander for each month
+            with st.expander(f"📁 {month_name} - {month_total} SGP predictions ({month_hit_rate:.1f}% hit rate, {month_profit:+.0f} SEK)", expanded=False):
+                
+                # Month summary
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Total Settled", month_total)
+                with col2:
+                    st.metric("Win Rate", f"{month_hit_rate:.1f}%", delta=f"{month_wins}W / {month_total - month_wins}L")
+                with col3:
+                    st.metric("Profit/Loss", f"{month_profit:+.0f} SEK")
+                
+                st.markdown("---")
+                
+                # Get detailed SGP predictions for this month
+                cursor.execute('''
+                    SELECT 
+                        home_team, away_team, parlay_description,
+                        bookmaker_odds, result, outcome,
+                        profit_loss, match_date
+                    FROM sgp_predictions
+                    WHERE result IS NOT NULL
+                    AND strftime('%Y-%m', match_date) = ?
+                    ORDER BY match_date DESC
+                ''', (month_key,))
+                
+                sgp_results = []
+                for row in cursor.fetchall():
+                    try:
+                        match_dt = datetime.fromisoformat(str(row[7]).replace('Z', '+00:00'))
+                        date_str = match_dt.strftime('%b %d')
+                    except:
+                        date_str = "Unknown"
+                    
+                    sgp_results.append({
+                        'Date': date_str,
+                        'Match': f"{row[0]} vs {row[1]}",
+                        'Parlay': row[2][:50] + '...' if len(row[2]) > 50 else row[2],
+                        'Result': row[4],
+                        'Outcome': '✅ WIN' if row[5] == 'win' else '❌ LOSS',
+                        'Odds': f"{row[3]:.2f}x",
+                        'P/L': f"{row[6]:+.0f} SEK"
+                    })
+                
+                if sgp_results:
+                    df_sgp = pd.DataFrame(sgp_results)
+                    st.dataframe(df_sgp, width='stretch', hide_index=True)
+                else:
+                    st.info("No SGP predictions this month")
+    else:
+        st.info("No SGP historical predictions yet. Check back after matches settle!")
+    
+    conn.close()
+
+except Exception as e:
+    st.error(f"Error loading SGP monthly history: {e}")
+
+st.markdown("---")
+
+# ============================================================================
 # LEAGUE BREAKDOWN (Compact View)
 # ============================================================================
 
