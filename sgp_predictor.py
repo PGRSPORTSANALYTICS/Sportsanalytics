@@ -372,7 +372,7 @@ class SGPPredictor:
         return float(p_all)
     
     def generate_sgp_for_match(self, match_data: Dict[str, Any], lambda_home: float, lambda_away: float, 
-                              player_data: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+                              player_data: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """
         Generate SGP prediction for a single match
         
