@@ -656,9 +656,22 @@ class SGPPredictor:
                     'pricing_metadata': pricing_metadata
                 })
         
-        # Sort by EV and return top 3
-        all_sgps.sort(key=lambda x: x['ev_percentage'], reverse=True)
-        return all_sgps[:3]  # Return top 3 SGPs instead of just 1
+        # DEDUPLICATION: Remove duplicate SGP combinations
+        # Keep only the highest EV version of each unique description
+        unique_sgps = {}
+        for sgp in all_sgps:
+            desc = sgp['description']
+            if desc not in unique_sgps or sgp['ev_percentage'] > unique_sgps[desc]['ev_percentage']:
+                unique_sgps[desc] = sgp
+        
+        # Convert back to list and sort by EV
+        deduplicated_sgps = list(unique_sgps.values())
+        deduplicated_sgps.sort(key=lambda x: x['ev_percentage'], reverse=True)
+        
+        logger.info(f"   🎯 Generated {len(all_sgps)} SGPs, deduplicated to {len(deduplicated_sgps)} unique")
+        
+        # Return top 3 unique SGPs
+        return deduplicated_sgps[:3]
     
     def save_sgp_prediction(self, sgp: Dict[str, Any]):
         """Save SGP prediction to database"""
