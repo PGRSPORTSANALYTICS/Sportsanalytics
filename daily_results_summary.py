@@ -23,14 +23,11 @@ logger = logging.getLogger(__name__)
 
 DB_PATH = 'data/real_football.db'
 
-def get_todays_results():
-    """Get all exact score predictions that settled today"""
+def get_results_for_date(match_date: str):
+    """Get all exact score predictions that settled on a specific MATCH date"""
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        
-        # Get today's date
-        today = date.today().isoformat()
         
         cursor.execute('''
             SELECT 
@@ -45,9 +42,9 @@ def get_todays_results():
             FROM football_opportunities
             WHERE market = 'exact_score'
             AND result IS NOT NULL
-            AND date(settled_timestamp, 'unixepoch') = ?
+            AND date(match_date) = ?
             ORDER BY settled_timestamp DESC
-        ''', (today,))
+        ''', (match_date,))
         
         results = []
         for row in cursor.fetchall():
@@ -66,7 +63,7 @@ def get_todays_results():
         return results
         
     except Exception as e:
-        logger.error(f"❌ Error getting today's results: {e}")
+        logger.error(f"❌ Error getting results for {match_date}: {e}")
         return []
 
 def get_daily_stats(results):
@@ -85,14 +82,11 @@ def get_daily_stats(results):
         'profit': stats['profit']
     }
 
-def get_todays_sgp_results():
-    """Get all SGP predictions that settled today"""
+def get_sgp_results_for_date(match_date: str):
+    """Get all SGP predictions that settled on a specific MATCH date"""
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        
-        # Get today's date
-        today = date.today().isoformat()
         
         cursor.execute('''
             SELECT 
@@ -106,9 +100,9 @@ def get_todays_sgp_results():
                 league
             FROM sgp_predictions
             WHERE status = 'settled'
-            AND date(settled_timestamp, 'unixepoch') = ?
+            AND date(match_date) = ?
             ORDER BY settled_timestamp DESC
-        ''', (today,))
+        ''', (match_date,))
         
         results = []
         for row in cursor.fetchall():
@@ -127,30 +121,78 @@ def get_todays_sgp_results():
         return results
         
     except Exception as e:
-        logger.error(f"❌ Error getting today's SGP results: {e}")
+        logger.error(f"❌ Error getting SGP results for {match_date}: {e}")
         return []
 
-def send_results_summary():
-    """Send end-of-day results summary - EXACT SCORE + SGP CONSOLIDATED"""
-    logger.info("📊 Running daily results summary...")
+def get_stats_for_date(match_date: str, market_type: str):
+    """Get statistics for a specific match date"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        if market_type == 'exact_score':
+            cursor.execute('''
+                SELECT 
+                    COUNT(*) as total,
+                    SUM(CASE WHEN outcome = 'win' THEN 1 ELSE 0 END) as wins,
+                    SUM(profit_loss) as profit
+                FROM football_opportunities 
+                WHERE market = 'exact_score' 
+                AND result IS NOT NULL 
+                AND date(match_date) = ?
+            ''', (match_date,))
+        else:  # SGP
+            cursor.execute('''
+                SELECT 
+                    COUNT(*) as total,
+                    SUM(CASE WHEN outcome = 'win' THEN 1 ELSE 0 END) as wins,
+                    SUM(profit_loss) as profit
+                FROM sgp_predictions 
+                WHERE result IS NOT NULL 
+                AND date(match_date) = ?
+            ''', (match_date,))
+        
+        row = cursor.fetchone()
+        total, wins, profit = row if row else (0, 0, 0.0)
+        losses = total - (wins or 0)
+        hit_rate = (wins / total * 100) if total > 0 else 0.0
+        
+        conn.close()
+        
+        return {
+            'total': total or 0,
+            'wins': wins or 0,
+            'losses': losses or 0,
+            'hit_rate': round(hit_rate, 1),
+            'profit': round(profit or 0.0, 2)
+        }
+    except Exception as e:
+        logger.error(f"❌ Error getting stats for {match_date}: {e}")
+        return {'total': 0, 'wins': 0, 'losses': 0, 'hit_rate': 0.0, 'profit': 0.0}
+
+def send_results_summary_for_date(match_date: str):
+    """Send results summary for a specific match date - 10 min after last match"""
+    logger.info(f"📊 Sending results summary for {match_date}...")
     
-    # Get both exact score and SGP results
-    exact_results = get_todays_results()
-    sgp_results = get_todays_sgp_results()
+    # Get both exact score and SGP results for this specific date
+    exact_results = get_results_for_date(match_date)
+    sgp_results = get_sgp_results_for_date(match_date)
     
-    # If nothing settled today, don't send
+    # If nothing settled, don't send
     if not exact_results and not sgp_results:
-        logger.info("⏳ No results settled today")
+        logger.info(f"⏳ No results for {match_date}")
         return
     
-    # Get stats from bulletproof stats module
-    exact_stats = get_todays_exact_score_stats() if exact_results else None
-    sgp_stats = get_todays_sgp_stats() if sgp_results else None
+    # Get stats for this specific date
+    exact_stats = get_stats_for_date(match_date, 'exact_score') if exact_results else None
+    sgp_stats = get_stats_for_date(match_date, 'sgp') if sgp_results else None
     
     # Format consolidated message
-    today_str = date.today().strftime('%A, %B %d, %Y')
-    message = f"🌙 **END OF DAY RESULTS**\n"
-    message += f"📅 {today_str}\n\n"
+    date_obj = datetime.fromisoformat(match_date)
+    date_str = date_obj.strftime('%A, %B %d, %Y')
+    # Use simple formatting - NO markdown to avoid Telegram errors
+    message = f"🌙 END OF DAY RESULTS\n"
+    message += f"📅 {date_str}\n\n"
     
     # Calculate total profit
     total_profit = 0
@@ -171,7 +213,7 @@ def send_results_summary():
     
     # Overall daily stats
     profit_emoji = "📈" if total_profit >= 0 else "📉"
-    message += f"📊 **DAILY SUMMARY**\n"
+    message += f"📊 DAILY SUMMARY\n"
     message += f"⚽ Total Settled: {total_settled}\n"
     message += f"✅ Wins: {total_wins}\n"
     message += f"❌ Losses: {total_settled - total_wins}\n"
@@ -181,13 +223,13 @@ def send_results_summary():
     
     # EXACT SCORE SECTION
     if exact_results and exact_stats:
-        message += f"🎯 **EXACT SCORE** ({exact_stats['total']} bets, {exact_stats['hit_rate']:.1f}% hit rate)\n\n"
+        message += f"🎯 EXACT SCORE ({exact_stats['total']} bets, {exact_stats['hit_rate']:.1f}% hit rate)\n\n"
         
         for result in exact_results:
             status = "🟢 WIN" if result['outcome'] == 'win' else "🔴 LOSS"
             predicted = result['selection'].replace('Exact Score: ', '')
             
-            message += f"{status} **{result['home_team']} vs {result['away_team']}**\n"
+            message += f"{status} {result['home_team']} vs {result['away_team']}\n"
             message += f"   🎯 Predicted: {predicted} @{result['odds']:.2f}x\n"
             message += f"   ⚽ Result: {result['actual_score']}\n"
             message += f"   💰 P/L: {result['profit']:+.0f} SEK\n"
@@ -197,12 +239,12 @@ def send_results_summary():
     
     # SGP SECTION
     if sgp_results and sgp_stats:
-        message += f"🎲 **SGP PARLAYS** ({sgp_stats['total']} bets, {sgp_stats['hit_rate']:.1f}% hit rate)\n\n"
+        message += f"🎲 SGP PARLAYS ({sgp_stats['total']} bets, {sgp_stats['hit_rate']:.1f}% hit rate)\n\n"
         
         for result in sgp_results:
             status = "🟢 WIN" if result['outcome'] == 'win' else "🔴 LOSS"
             
-            message += f"{status} **{result['home_team']} vs {result['away_team']}**\n"
+            message += f"{status} {result['home_team']} vs {result['away_team']}\n"
             message += f"   🎲 Parlay: {result['description']}\n"
             message += f"   📊 Odds: @{result['odds']:.2f}x\n"
             message += f"   ⚽ Score: {result['actual_score']}\n"
@@ -213,13 +255,35 @@ def send_results_summary():
     
     # Closing message
     if total_hit_rate >= 20:
-        message += "🔥 **OUTSTANDING PERFORMANCE!**\n"
+        message += "🔥 OUTSTANDING PERFORMANCE!\n"
     elif total_profit > 0:
-        message += "💪 **Profitable day!**\n"
+        message += "💪 Profitable day!\n"
     else:
-        message += "📊 **Results logged. Tomorrow's another day!**\n"
+        message += "📊 Results logged. Tomorrow's another day!\n"
     
     message += "😴 Rest up for tomorrow's predictions!\n"
+    
+    # Telegram has 4096 char limit - split if needed
+    def split_message(msg, max_len=4000):
+        """Split message into chunks under Telegram's 4096 char limit"""
+        if len(msg) <= max_len:
+            return [msg]
+        
+        chunks = []
+        lines = msg.split('\n')
+        current_chunk = ""
+        
+        for line in lines:
+            if len(current_chunk) + len(line) + 1 > max_len:
+                chunks.append(current_chunk)
+                current_chunk = line + "\n"
+            else:
+                current_chunk += line + "\n"
+        
+        if current_chunk:
+            chunks.append(current_chunk)
+        
+        return chunks
     
     # Broadcast to subscribers
     try:
@@ -227,33 +291,44 @@ def send_results_summary():
         subscribers = broadcaster.get_subscribers()
         channel = broadcaster.get_channel()
         
+        # Split message if too long
+        message_chunks = split_message(message)
+        logger.info(f"📨 Message split into {len(message_chunks)} part(s)")
+        
         sent_count = 0
         
         # Send to channel
         if channel:
-            if broadcaster.send_message(channel, message):
-                sent_count += 1
-                logger.info(f"📢 Sent results to channel")
+            for i, chunk in enumerate(message_chunks, 1):
+                prefix = f"[Part {i}/{len(message_chunks)}]\n\n" if len(message_chunks) > 1 else ""
+                if broadcaster.send_message(channel, prefix + chunk):
+                    sent_count += 1
+            logger.info(f"📢 Sent results to channel")
         
         # Send to individual subscribers
         for chat_id in subscribers:
-            if broadcaster.send_message(chat_id, message):
-                sent_count += 1
+            for chunk in message_chunks:
+                if broadcaster.send_message(chat_id, chunk):
+                    sent_count += 1
         
-        logger.info(f"✅ Consolidated daily summary sent to {sent_count} targets ({total_settled} results)")
+        logger.info(f"✅ Consolidated daily summary sent ({total_settled} results)")
         
     except Exception as e:
         logger.error(f"❌ Error broadcasting results: {e}")
 
 def main():
-    """Manual trigger for testing"""
+    """Manual trigger for testing - defaults to yesterday's matches"""
     logger.info("================================================================================")
     logger.info("📊 DAILY RESULTS SUMMARY - TELEGRAM BROADCASTER")
     logger.info("================================================================================")
-    logger.info("📱 Sends end-of-day results for all settled exact score predictions")
+    logger.info("📱 Sends results 10 min after last match of the day settles")
     logger.info("================================================================================")
     
-    send_results_summary()
+    # Default to yesterday's matches for testing
+    from datetime import timedelta
+    yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+    logger.info(f"🔍 Testing with date: {yesterday}")
+    send_results_summary_for_date(yesterday)
 
 if __name__ == "__main__":
     main()
