@@ -243,9 +243,7 @@ class SGPVerifier:
         logger.info(f"✅ Verification Complete: {verified_count} verified ({wins} wins, {losses} losses)")
         logger.info("="*80)
         
-        # Send Telegram summary if any results
-        if verified_count > 0:
-            self._send_telegram_summary(wins, losses)
+        # Individual SGP notifications disabled - consolidated daily summary at 23:00 instead
     
     def _send_telegram_summary(self, wins: int, losses: int):
         """Send daily SGP results to Telegram"""

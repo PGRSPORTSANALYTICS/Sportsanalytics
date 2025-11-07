@@ -128,22 +128,7 @@ class SmartVerifier:
                         match_found = True
                         logger.info(f"✅ Settled: {home} vs {away} = {actual_score} (predicted: {predicted_score}) → {outcome.upper()} | P&L: {profit_loss:+.0f} SEK")
                         
-                        # Send Telegram notification
-                        try:
-                            result_data = {
-                                'home_team': home,
-                                'away_team': away,
-                                'predicted_score': predicted_score,
-                                'actual_score': actual_score,
-                                'outcome': outcome,
-                                'stake': stake,
-                                'odds': odds,
-                                'profit_loss': profit_loss
-                            }
-                            sent_count = self.telegram.broadcast_result(result_data)
-                            logger.info(f"📱 Result sent to {sent_count} Telegram subscribers")
-                        except Exception as e:
-                            logger.error(f"Failed to send Telegram notification: {e}")
+                        # Individual notifications disabled - consolidated daily summary at 23:00 instead
                         
                         break
                 

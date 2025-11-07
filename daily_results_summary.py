@@ -2,20 +2,21 @@
 """
 Daily Results Summary for Telegram
 ===================================
-Sends end-of-day results summary showing all settled exact score predictions.
+Sends end-of-day results summary showing all settled predictions (exact score + SGP).
 
 Features:
-- Runs after all matches verified
+- Runs once at 23:00
 - Shows wins (green) and losses (red)
 - Daily stats (hit rate, profit)
 - Broadcasts to all subscribers
+- CONSOLIDATED - only one message per day
 """
 
 import sqlite3
 import logging
 from datetime import date, datetime
 from telegram_sender import TelegramBroadcaster
-from stats_master import get_todays_exact_score_stats
+from stats_master import get_todays_exact_score_stats, get_todays_sgp_stats
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -84,61 +85,139 @@ def get_daily_stats(results):
         'profit': stats['profit']
     }
 
+def get_todays_sgp_results():
+    """Get all SGP predictions that settled today"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Get today's date
+        today = date.today().isoformat()
+        
+        cursor.execute('''
+            SELECT 
+                home_team,
+                away_team,
+                parlay_description,
+                bookmaker_odds,
+                result,
+                outcome,
+                profit_loss,
+                league
+            FROM sgp_predictions
+            WHERE status = 'settled'
+            AND date(settled_timestamp, 'unixepoch') = ?
+            ORDER BY settled_timestamp DESC
+        ''', (today,))
+        
+        results = []
+        for row in cursor.fetchall():
+            results.append({
+                'home_team': row[0],
+                'away_team': row[1],
+                'description': row[2],
+                'odds': row[3],
+                'actual_score': row[4],
+                'outcome': row[5],
+                'profit': row[6],
+                'league': row[7]
+            })
+        
+        conn.close()
+        return results
+        
+    except Exception as e:
+        logger.error(f"❌ Error getting today's SGP results: {e}")
+        return []
+
 def send_results_summary():
-    """Send end-of-day results summary"""
+    """Send end-of-day results summary - EXACT SCORE + SGP CONSOLIDATED"""
     logger.info("📊 Running daily results summary...")
     
-    results = get_todays_results()
+    # Get both exact score and SGP results
+    exact_results = get_todays_results()
+    sgp_results = get_todays_sgp_results()
     
-    if not results:
+    # If nothing settled today, don't send
+    if not exact_results and not sgp_results:
         logger.info("⏳ No results settled today")
         return
     
-    stats = get_daily_stats(results)
+    # Get stats from bulletproof stats module
+    exact_stats = get_todays_exact_score_stats() if exact_results else None
+    sgp_stats = get_todays_sgp_stats() if sgp_results else None
     
-    # Format message
+    # Format consolidated message
     today_str = date.today().strftime('%A, %B %d, %Y')
     message = f"🌙 **END OF DAY RESULTS**\n"
     message += f"📅 {today_str}\n\n"
     
-    # Overall stats
-    profit_emoji = "📈" if stats['profit'] >= 0 else "📉"
-    message += f"📊 **DAILY STATS**\n"
-    message += f"⚽ Predictions Settled: {stats['total']}\n"
-    message += f"✅ Wins: {stats['wins']}\n"
-    message += f"❌ Losses: {stats['losses']}\n"
-    message += f"🎯 Hit Rate: {stats['hit_rate']:.1f}%\n"
-    message += f"{profit_emoji} Profit: {stats['profit']:+.0f} SEK\n\n"
+    # Calculate total profit
+    total_profit = 0
+    total_settled = 0
+    total_wins = 0
+    
+    if exact_stats:
+        total_profit += exact_stats['profit']
+        total_settled += exact_stats['total']
+        total_wins += exact_stats['wins']
+    
+    if sgp_stats:
+        total_profit += sgp_stats['profit']
+        total_settled += sgp_stats['total']
+        total_wins += sgp_stats['wins']
+    
+    total_hit_rate = (total_wins / total_settled * 100) if total_settled > 0 else 0
+    
+    # Overall daily stats
+    profit_emoji = "📈" if total_profit >= 0 else "📉"
+    message += f"📊 **DAILY SUMMARY**\n"
+    message += f"⚽ Total Settled: {total_settled}\n"
+    message += f"✅ Wins: {total_wins}\n"
+    message += f"❌ Losses: {total_settled - total_wins}\n"
+    message += f"🎯 Hit Rate: {total_hit_rate:.1f}%\n"
+    message += f"{profit_emoji} Profit: {total_profit:+.0f} SEK\n\n"
     message += "=" * 40 + "\n\n"
     
-    # Individual results
-    message += f"📋 **ALL PREDICTIONS**\n\n"
-    
-    for i, result in enumerate(results, 1):
-        # Win/Loss indicator
-        if result['outcome'] == 'win':
-            status = "🟢 WIN"
-        else:
-            status = "🔴 LOSS"
+    # EXACT SCORE SECTION
+    if exact_results and exact_stats:
+        message += f"🎯 **EXACT SCORE** ({exact_stats['total']} bets, {exact_stats['hit_rate']:.1f}% hit rate)\n\n"
         
-        # Extract predicted score from selection
-        predicted = result['selection'].replace('Exact Score: ', '')
+        for result in exact_results:
+            status = "🟢 WIN" if result['outcome'] == 'win' else "🔴 LOSS"
+            predicted = result['selection'].replace('Exact Score: ', '')
+            
+            message += f"{status} **{result['home_team']} vs {result['away_team']}**\n"
+            message += f"   🎯 Predicted: {predicted} @{result['odds']:.2f}x\n"
+            message += f"   ⚽ Result: {result['actual_score']}\n"
+            message += f"   💰 P/L: {result['profit']:+.0f} SEK\n"
+            message += f"   🏆 {result['league']}\n\n"
         
-        message += f"{status} **{result['home_team']} vs {result['away_team']}**\n"
-        message += f"   🎯 Predicted: {predicted} @{result['odds']:.2f}x\n"
-        message += f"   ⚽ Result: {result['actual_score']}\n"
-        message += f"   💰 P/L: {result['profit']:+.0f} SEK\n"
-        message += f"   🏆 {result['league']}\n\n"
+        message += "=" * 40 + "\n\n"
     
-    message += "=" * 40 + "\n"
+    # SGP SECTION
+    if sgp_results and sgp_stats:
+        message += f"🎲 **SGP PARLAYS** ({sgp_stats['total']} bets, {sgp_stats['hit_rate']:.1f}% hit rate)\n\n"
+        
+        for result in sgp_results:
+            status = "🟢 WIN" if result['outcome'] == 'win' else "🔴 LOSS"
+            
+            message += f"{status} **{result['home_team']} vs {result['away_team']}**\n"
+            message += f"   🎲 Parlay: {result['description']}\n"
+            message += f"   📊 Odds: @{result['odds']:.2f}x\n"
+            message += f"   ⚽ Score: {result['actual_score']}\n"
+            message += f"   💰 P/L: {result['profit']:+.0f} SEK\n"
+            message += f"   🏆 {result['league']}\n\n"
+        
+        message += "=" * 40 + "\n\n"
     
     # Closing message
-    if stats['hit_rate'] >= 15:
-        message += "🔥 **Great performance today!**\n"
-    elif stats['profit'] > 0:
+    if total_hit_rate >= 20:
+        message += "🔥 **OUTSTANDING PERFORMANCE!**\n"
+    elif total_profit > 0:
         message += "💪 **Profitable day!**\n"
     else:
-        message += "📊 **Results logged. On to tomorrow!**\n"
+        message += "📊 **Results logged. Tomorrow's another day!**\n"
     
     message += "😴 Rest up for tomorrow's predictions!\n"
     
@@ -161,7 +240,7 @@ def send_results_summary():
             if broadcaster.send_message(chat_id, message):
                 sent_count += 1
         
-        logger.info(f"✅ Results summary sent to {sent_count} targets ({stats['total']} results)")
+        logger.info(f"✅ Consolidated daily summary sent to {sent_count} targets ({total_settled} results)")
         
     except Exception as e:
         logger.error(f"❌ Error broadcasting results: {e}")

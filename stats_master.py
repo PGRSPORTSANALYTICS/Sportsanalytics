@@ -112,6 +112,38 @@ def get_todays_exact_score_stats() -> Dict:
         'profit': round(profit or 0.0, 2)
     }
 
+def get_todays_sgp_stats() -> Dict:
+    """Get today's SGP statistics"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    today = date.today().isoformat()
+    
+    cursor.execute('''
+        SELECT 
+            COUNT(*) as total,
+            SUM(CASE WHEN outcome = 'win' THEN 1 ELSE 0 END) as wins,
+            SUM(profit_loss) as profit
+        FROM sgp_predictions 
+        WHERE result IS NOT NULL 
+        AND date(settled_timestamp, 'unixepoch') = ?
+    ''', (today,))
+    
+    row = cursor.fetchone()
+    total, wins, profit = row if row else (0, 0, 0.0)
+    losses = total - (wins or 0)
+    hit_rate = (wins / total * 100) if total > 0 else 0.0
+    
+    conn.close()
+    
+    return {
+        'total': total or 0,
+        'wins': wins or 0,
+        'losses': losses or 0,
+        'hit_rate': round(hit_rate, 1),
+        'profit': round(profit or 0.0, 2)
+    }
+
 def get_exact_score_results() -> List[Dict]:
     """Get all exact score settled predictions"""
     conn = sqlite3.connect(DB_PATH)
