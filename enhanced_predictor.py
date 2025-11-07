@@ -155,52 +155,65 @@ class EnhancedExactScorePredictor:
             away_team = match['away_team']
             league_id = match.get('league_id')
             
-            # 🔧 FIX: Use real team ID lookup instead of placeholder
+            # 🔧 Try to get team IDs from API-Football (optional for scraper fallback)
             home_id, away_id = self.get_team_ids(home_team, away_team, league_id)
             
-            if not home_id or not away_id:
-                logger.warning(f"⚠️ Could not find team IDs for {home_team} vs {away_team}, using defaults")
-                enriched['_real_data_available'] = False
-                return enriched
+            has_team_ids = bool(home_id and away_id)
             
-            enriched['_real_data_available'] = True
-            logger.info(f"✅ Found team IDs: {home_team}={home_id}, {away_team}={away_id}")
+            if has_team_ids:
+                enriched['_real_data_available'] = True
+                logger.info(f"✅ Found team IDs: {home_team}={home_id}, {away_team}={away_id}")
+            else:
+                logger.warning(f"⚠️ Could not find team IDs for {home_team} vs {away_team}, will use scraper fallbacks")
             
             # 1. TEAM FORM (last 5 matches)
             form_data_obtained = False
-            try:
-                logger.info(f"📊 Fetching team form from API-Football")
-                enriched['home_form'] = self.advanced_api.get_team_form(home_id, last_n=5)
-                enriched['away_form'] = self.advanced_api.get_team_form(away_id, last_n=5)
-                form_data_obtained = True
-                logger.info(f"✅ API-Football form data obtained")
-            except Exception as e:
-                logger.warning(f"⚠️ API-Football form data failed: {e}")
             
-            # Fallback to SofaScore scraper if API-Football failed
+            # Try API-Football first (only if we have team IDs)
+            if has_team_ids:
+                try:
+                    logger.info(f"📊 Fetching team form from API-Football")
+                    enriched['home_form'] = self.advanced_api.get_team_form(home_id, last_n=5)
+                    enriched['away_form'] = self.advanced_api.get_team_form(away_id, last_n=5)
+                    form_data_obtained = True
+                    enriched['_real_data_available'] = True
+                    logger.info(f"✅ API-Football form data obtained")
+                except Exception as e:
+                    logger.warning(f"⚠️ API-Football form data failed: {e}")
+            
+            # Fallback to SofaScore scraper if API-Football failed OR no team IDs
             if not form_data_obtained and self.sofascore_scraper:
-                logger.info(f"📊 Fetching team form from SofaScore scraper")
+                logger.info(f"📊 Fetching team form from SofaScore scraper (fallback)")
                 try:
                     league_name = match.get('league', 'Premier League')
                     enriched['home_form'] = self.sofascore_scraper.get_team_form(home_team, league_name, last_n=5)
                     enriched['away_form'] = self.sofascore_scraper.get_team_form(away_team, league_name, last_n=5)
+                    form_data_obtained = True
+                    enriched['_real_data_available'] = True
                     logger.info(f"✅ SofaScore form data obtained")
                 except Exception as e:
                     logger.warning(f"⚠️ SofaScore form scraper failed: {e}")
             
+            # If still no form data, mark as unavailable
+            if not form_data_obtained:
+                enriched['_real_data_available'] = False
+            
             # 2. HEAD-TO-HEAD HISTORY
             h2h_data_obtained = False
-            try:
-                logger.info(f"🔄 Fetching H2H from API-Football")
-                enriched['h2h'] = self.advanced_api.get_head_to_head(home_id, away_id, last_n=10)
-                h2h_data_obtained = True
-                logger.info(f"✅ API-Football H2H data obtained")
-            except Exception as e:
-                logger.warning(f"⚠️ API-Football H2H failed: {e}")
             
-            # Fallback to SofaScore scraper if API-Football failed
+            # Try API-Football first (only if we have team IDs)
+            if has_team_ids:
+                try:
+                    logger.info(f"🔄 Fetching H2H from API-Football")
+                    enriched['h2h'] = self.advanced_api.get_head_to_head(home_id, away_id, last_n=10)
+                    h2h_data_obtained = True
+                    logger.info(f"✅ API-Football H2H data obtained")
+                except Exception as e:
+                    logger.warning(f"⚠️ API-Football H2H failed: {e}")
+            
+            # Fallback to SofaScore scraper if API-Football failed OR no team IDs
             if not h2h_data_obtained and self.sofascore_scraper:
-                logger.info(f"🔄 Fetching H2H from SofaScore scraper")
+                logger.info(f"🔄 Fetching H2H from SofaScore scraper (fallback)")
                 try:
                     league_name = match.get('league', 'Premier League')
                     enriched['h2h'] = self.sofascore_scraper.get_h2h_data(home_team, away_team, league_name)
@@ -208,9 +221,11 @@ class EnhancedExactScorePredictor:
                 except Exception as e:
                     logger.warning(f"⚠️ SofaScore H2H scraper failed: {e}")
             
-            # 3. LEAGUE STANDINGS (if league info available)
+            # 3. LEAGUE STANDINGS
             standings_obtained = False
-            if 'league_id' in match and 'season' in match:
+            
+            # Try API-Football first (only if we have team IDs AND league info)
+            if has_team_ids and 'league_id' in match and 'season' in match:
                 try:
                     logger.info(f"📈 Fetching league standings from API-Football")
                     standings = self.advanced_api.get_league_standings(
@@ -224,9 +239,9 @@ class EnhancedExactScorePredictor:
                 except Exception as e:
                     logger.warning(f"⚠️ API-Football standings failed: {e}")
             
-            # Fallback to SofaScore scraper if API-Football failed
+            # Fallback to SofaScore scraper if API-Football failed OR no team IDs
             if not standings_obtained and self.sofascore_scraper:
-                logger.info(f"📈 Fetching league standings from SofaScore scraper")
+                logger.info(f"📈 Fetching league standings from SofaScore scraper (fallback)")
                 try:
                     league_name = match.get('league', 'Premier League')
                     standings_list = self.sofascore_scraper.get_league_standings(league_name)
