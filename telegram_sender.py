@@ -357,7 +357,7 @@ Target: 20-25% WR, +100-200% ROI
         return message
     
     def _format_sgp_legs_telegram(self, legs_str: str) -> str:
-        """Format SGP legs for Telegram (clean, easy to read)"""
+        """Format SGP legs for Telegram (Bet365 style - clean and hierarchical)"""
         if not legs_str or '|' not in legs_str:
             return legs_str
         
@@ -367,49 +367,62 @@ Target: 20-25% WR, +100-200% ROI
         for i, leg in enumerate(leg_parts, 1):
             leg = leg.strip()
             
-            # Simplify market names for mobile reading
+            # Bet365-style format: Main selection on top, market type below
             if 'OVER_UNDER_GOALS' in leg:
+                threshold = leg.split('(')[1].split(')')[0]
                 if 'OVER' in leg and 'UNDER' not in leg:
-                    formatted.append(f"{i}. Over {leg.split('(')[1].split(')')[0]} Goals")
+                    formatted.append(f"✓ Over {threshold} Goals\n    Match Goals Total")
                 else:
-                    formatted.append(f"{i}. Under {leg.split('(')[1].split(')')[0]} Goals")
+                    formatted.append(f"✓ Under {threshold} Goals\n    Match Goals Total")
+                    
             elif 'BTTS' in leg:
-                formatted.append(f"{i}. BTTS: {'Yes' if 'YES' in leg else 'No'}")
+                if 'YES' in leg:
+                    formatted.append("✓ Both Teams to Score - Yes\n    Both Teams to Score")
+                else:
+                    formatted.append("✓ Both Teams to Score - No\n    Both Teams to Score")
+                    
             elif 'HOME_TEAM_CORNERS' in leg:
-                val = leg.split('(')[1].split(')')[0]
-                dir = 'Over' if 'OVER' in leg else 'Under'
-                formatted.append(f"{i}. Home Team {dir} {val} Corners")
+                threshold = leg.split('(')[1].split(')')[0]
+                direction = 'Over' if 'OVER' in leg else 'Under'
+                formatted.append(f"✓ Home Team {direction} {threshold} Corners\n    Team 1 Corners")
+                
             elif 'AWAY_TEAM_CORNERS' in leg:
-                val = leg.split('(')[1].split(')')[0]
-                dir = 'Over' if 'OVER' in leg else 'Under'
-                formatted.append(f"{i}. Away Team {dir} {val} Corners")
+                threshold = leg.split('(')[1].split(')')[0]
+                direction = 'Over' if 'OVER' in leg else 'Under'
+                formatted.append(f"✓ Away Team {direction} {threshold} Corners\n    Team 2 Corners")
+                
             elif 'HOME_TEAM_SHOTS' in leg:
-                val = leg.split('(')[1].split(')')[0]
-                dir = 'Over' if 'OVER' in leg else 'Under'
-                formatted.append(f"{i}. Home Team {dir} {val} Shots")
+                threshold = leg.split('(')[1].split(')')[0]
+                direction = 'Over' if 'OVER' in leg else 'Under'
+                formatted.append(f"✓ Home Team {direction} {threshold} Shots\n    Team 1 Total Shots")
+                
             elif 'AWAY_TEAM_SHOTS' in leg:
-                val = leg.split('(')[1].split(')')[0]
-                dir = 'Over' if 'OVER' in leg else 'Under'
-                formatted.append(f"{i}. Away Team {dir} {val} Shots")
+                threshold = leg.split('(')[1].split(')')[0]
+                direction = 'Over' if 'OVER' in leg else 'Under'
+                formatted.append(f"✓ Away Team {direction} {threshold} Shots\n    Team 2 Total Shots")
+                
             elif 'CORNERS' in leg and 'TEAM' not in leg:
-                val = leg.split('(')[1].split(')')[0]
-                dir = 'Over' if 'OVER' in leg else 'Under'
-                formatted.append(f"{i}. {dir} {val} Corners")
+                threshold = leg.split('(')[1].split(')')[0]
+                direction = 'Over' if 'OVER' in leg else 'Under'
+                formatted.append(f"✓ {direction} {threshold} Match Corners\n    Total Match Corners")
+                
             elif 'MATCH_RESULT' in leg:
                 if 'HOME' in leg:
-                    formatted.append(f"{i}. Home Win")
+                    formatted.append("✓ Home Team to Win\n    Match Result")
                 elif 'AWAY' in leg:
-                    formatted.append(f"{i}. Away Win")
+                    formatted.append("✓ Away Team to Win\n    Match Result")
                 else:
-                    formatted.append(f"{i}. Draw")
+                    formatted.append("✓ Draw\n    Match Result")
+                    
             elif 'FIRST_HALF' in leg or '1H' in leg:
-                val = leg.split('(')[1].split(')')[0]
-                dir = 'Over' if 'OVER' in leg else 'Under'
-                formatted.append(f"{i}. 1H {dir} {val} Goals")
+                threshold = leg.split('(')[1].split(')')[0]
+                direction = 'Over' if 'OVER' in leg else 'Under'
+                formatted.append(f"✓ 1st Half {direction} {threshold} Goals\n    First Half Goals")
+                
             else:
-                formatted.append(f"{i}. {leg}")
+                formatted.append(f"✓ {leg}")
         
-        return '\n'.join(formatted)
+        return '\n\n'.join(formatted)
     
     def _format_sgp_prediction(self, prediction: Dict) -> str:
         """Format SGP prediction as Telegram message"""

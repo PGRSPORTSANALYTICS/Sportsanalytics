@@ -16,78 +16,88 @@ except:
 # Database path
 DB_PATH = 'data/real_football.db'
 
-# Helper function to format SGP legs for readability
+# Helper function to format SGP legs for readability (Bet365 style)
 def format_sgp_legs(legs_str):
-    """Convert technical leg format to clear, readable format"""
+    """Convert technical leg format to clear Bet365-style format
+    
+    Format: ✓ Main Selection
+               Market Type
+    """
     if not legs_str or '|' not in legs_str:
         return legs_str
     
     leg_parts = legs_str.split('|')
     formatted_legs = []
     
-    for leg in leg_parts:
+    for i, leg in enumerate(leg_parts, 1):
         leg = leg.strip()
         
-        # Format different market types
+        # Format different market types with Bet365-style hierarchy
         if 'OVER_UNDER_GOALS' in leg:
+            threshold = leg.split('(')[1].split(')')[0]
             if 'OVER' in leg and 'UNDER' not in leg:
-                formatted_legs.append(f"⚽ Over {leg.split('(')[1].split(')')[0]} Goals")
+                formatted_legs.append(f"✓ Over {threshold} Goals\n   Match Goals Total")
             else:
-                formatted_legs.append(f"⚽ Under {leg.split('(')[1].split(')')[0]} Goals")
+                formatted_legs.append(f"✓ Under {threshold} Goals\n   Match Goals Total")
+                
         elif 'BTTS' in leg:
             if 'YES' in leg:
-                formatted_legs.append("🎯 Both Teams to Score: YES")
+                formatted_legs.append("✓ Both Teams to Score - Yes\n   Both Teams to Score")
             else:
-                formatted_legs.append("🎯 Both Teams to Score: NO")
-        elif 'CORNERS' in leg and 'TEAM' not in leg:
-            if 'OVER' in leg:
-                formatted_legs.append(f"🚩 Over {leg.split('(')[1].split(')')[0]} Corners")
-            else:
-                formatted_legs.append(f"🚩 Under {leg.split('(')[1].split(')')[0]} Corners")
+                formatted_legs.append("✓ Both Teams to Score - No\n   Both Teams to Score")
+                
         elif 'HOME_TEAM_CORNERS' in leg:
-            if 'OVER' in leg:
-                formatted_legs.append(f"🏠 Home Team Over {leg.split('(')[1].split(')')[0]} Corners")
-            else:
-                formatted_legs.append(f"🏠 Home Team Under {leg.split('(')[1].split(')')[0]} Corners")
+            threshold = leg.split('(')[1].split(')')[0]
+            direction = 'Over' if 'OVER' in leg else 'Under'
+            formatted_legs.append(f"✓ Home Team {direction} {threshold} Corners\n   Team 1 Corners")
+            
         elif 'AWAY_TEAM_CORNERS' in leg:
-            if 'OVER' in leg:
-                formatted_legs.append(f"✈️ Away Team Over {leg.split('(')[1].split(')')[0]} Corners")
-            else:
-                formatted_legs.append(f"✈️ Away Team Under {leg.split('(')[1].split(')')[0]} Corners")
+            threshold = leg.split('(')[1].split(')')[0]
+            direction = 'Over' if 'OVER' in leg else 'Under'
+            formatted_legs.append(f"✓ Away Team {direction} {threshold} Corners\n   Team 2 Corners")
+            
         elif 'HOME_TEAM_SHOTS' in leg:
-            if 'OVER' in leg:
-                formatted_legs.append(f"🏠 Home Team Over {leg.split('(')[1].split(')')[0]} Shots")
-            else:
-                formatted_legs.append(f"🏠 Home Team Under {leg.split('(')[1].split(')')[0]} Shots")
+            threshold = leg.split('(')[1].split(')')[0]
+            direction = 'Over' if 'OVER' in leg else 'Under'
+            formatted_legs.append(f"✓ Home Team {direction} {threshold} Shots\n   Team 1 Total Shots")
+            
         elif 'AWAY_TEAM_SHOTS' in leg:
-            if 'OVER' in leg:
-                formatted_legs.append(f"✈️ Away Team Over {leg.split('(')[1].split(')')[0]} Shots")
-            else:
-                formatted_legs.append(f"✈️ Away Team Under {leg.split('(')[1].split(')')[0]} Shots")
+            threshold = leg.split('(')[1].split(')')[0]
+            direction = 'Over' if 'OVER' in leg else 'Under'
+            formatted_legs.append(f"✓ Away Team {direction} {threshold} Shots\n   Team 2 Total Shots")
+            
+        elif 'CORNERS' in leg and 'TEAM' not in leg:
+            threshold = leg.split('(')[1].split(')')[0]
+            direction = 'Over' if 'OVER' in leg else 'Under'
+            formatted_legs.append(f"✓ {direction} {threshold} Match Corners\n   Total Match Corners")
+            
         elif 'MATCH_RESULT' in leg:
             if 'HOME' in leg:
-                formatted_legs.append("🏆 Match Result: HOME WIN")
+                formatted_legs.append("✓ Home Team to Win\n   Match Result")
             elif 'AWAY' in leg:
-                formatted_legs.append("🏆 Match Result: AWAY WIN")
+                formatted_legs.append("✓ Away Team to Win\n   Match Result")
             else:
-                formatted_legs.append("🏆 Match Result: DRAW")
+                formatted_legs.append("✓ Draw\n   Match Result")
+                
         elif 'FIRST_HALF' in leg or '1H' in leg:
-            if 'OVER' in leg:
-                formatted_legs.append(f"⏱️ 1st Half Over {leg.split('(')[1].split(')')[0]} Goals")
-            else:
-                formatted_legs.append(f"⏱️ 1st Half Under {leg.split('(')[1].split(')')[0]} Goals")
+            threshold = leg.split('(')[1].split(')')[0]
+            direction = 'Over' if 'OVER' in leg else 'Under'
+            formatted_legs.append(f"✓ 1st Half {direction} {threshold} Goals\n   First Half Goals")
+            
         elif 'ANYTIME_GOALSCORER' in leg:
             player = leg.replace('ANYTIME_GOALSCORER:', '').strip()
-            formatted_legs.append(f"⭐ {player} to Score")
+            formatted_legs.append(f"✓ {player} to Score\n   Anytime Goalscorer")
+            
         elif 'PLAYER_SHOTS' in leg:
             parts = leg.split(':')
             player = parts[1].split('OVER')[0].strip() if len(parts) > 1 else 'Player'
             threshold = leg.split('(')[1].split(')')[0] if '(' in leg else '?'
-            formatted_legs.append(f"👟 {player} Over {threshold} Shots")
+            formatted_legs.append(f"✓ {player} Over {threshold} Shots\n   Player Shots on Target")
+            
         else:
-            formatted_legs.append(leg)
+            formatted_legs.append(f"✓ {leg}\n   Selection {i}")
     
-    return '\n'.join([f"{i+1}. {leg}" for i, leg in enumerate(formatted_legs)])
+    return '\n\n'.join(formatted_legs)
 
 # Page setup
 st.set_page_config(
