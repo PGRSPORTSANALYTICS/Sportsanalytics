@@ -22,15 +22,38 @@ class ConfidenceScorer:
     """
     
     def __init__(self):
-        # REAL DATA from 153 settled predictions (Oct 2025)
-        # FOCUS ON WINNERS: 2-0 (66.7%), 2-1 (15%), 11-13x odds (23.1%)
+        # LEARNING MODE (Nov 2025): Neutral scoring for ALL scores
+        # Let AI learn from diverse data - remove historical bias
+        # System will predict ANY score based on xG, odds, and probability
         self.SCORE_PATTERN_SCORES = {
-            '2-0': 50,  # 66.7% WR (2/3) - ONLY WINNER! PRIORITIZE THIS
-            '2-1': 25,  # 15% WR (3/20) - ACCEPTABLE
-            '1-1': -10,  # 10% WR (1/10) - SKIP
-            '1-0': -10,   # 8.7% WR (2/23) - SKIP
-            '0-1': -20,   # 4.5% WR (1/22) - NEVER BET
-            '0-0': -10,   # Low scoring risky
+            # Common low-scoring (neutral - let EV decide)
+            '0-0': 0,
+            '1-0': 0,
+            '0-1': 0,
+            '1-1': 0,
+            '2-0': 0,
+            '0-2': 0,
+            '2-1': 0,
+            '1-2': 0,
+            '2-2': 0,
+            # Medium-scoring (expanded coverage)
+            '3-0': 0,
+            '0-3': 0,
+            '3-1': 0,
+            '1-3': 0,
+            '3-2': 0,
+            '2-3': 0,
+            '3-3': 0,
+            # High-scoring (rare but possible)
+            '4-0': 0,
+            '0-4': 0,
+            '4-1': 0,
+            '1-4': 0,
+            '4-2': 0,
+            '2-4': 0,
+            '4-3': 0,
+            '3-4': 0,
+            '4-4': 0,
         }
         
         # REAL DATA: 12-14x = 4 wins (BEST), 10-12x = 2 wins

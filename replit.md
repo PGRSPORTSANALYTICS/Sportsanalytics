@@ -23,7 +23,7 @@ The system employs advanced prediction features including:
 - **Similar Matches Technology:** Analyzes historical matches with similar characteristics to adjust prediction confidence.
 - **Expected Value (EV) Filtering System:** Mathematical edge calculation replacing arbitrary confidence scores, betting only when model probability × odds provides genuine edge. **Learning Mode (Nov 8, 2025):** Temporarily lowered from 12% to 8% EV threshold to accelerate data collection toward 500-prediction launch goal. This increases daily exact score volume from ~12-15 to ~20-25 predictions while maintaining quality filter. Includes Kelly Criterion Bet Sizing.
 - **Multi-Source Data Resilience:** Triple-layer fallback system (API-Football, web scrapers, safe defaults) ensures continuous operation during API outages.
-- **Data-Driven Score Targeting:** Models predict ANY score based on ensemble analysis, with EV threshold lowered to 12%.
+- **Data-Driven Score Targeting:** Models predict ANY score based on ensemble analysis. **Expanded Score Diversity (Nov 8, 2025):** Removed hardcoded score biases and increased max_goals from 8 to 10, allowing predictions for all scores 0-0 through 9-9. System now predicts based purely on xG probability and EV, not historical patterns, to collect diverse training data including high-scoring games (3-2, 4-1, etc.).
 - **League Coverage Expansion:** Expanded from 11 to 16 quality leagues to achieve higher prediction volume.
 - **Telegram Broadcast Fix:** Ensures only predictions for matches playing today are broadcasted.
 - **SGP Self-Learning System:** Features adaptive learning capabilities for probability calibration, correlation learning, and dynamic Kelly sizing.

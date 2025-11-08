@@ -24,7 +24,7 @@ class PoissonScorePredictor:
                  Typical values: -0.10 to -0.15
         """
         self.rho = rho
-        self.max_goals = 8  # Maximum goals to calculate probabilities for
+        self.max_goals = 10  # Maximum goals to calculate probabilities for (expanded for diverse scores)
         
     def dixon_coles_correction(self, home_goals: int, away_goals: int, 
                                lambda_home: float, lambda_away: float) -> float:
