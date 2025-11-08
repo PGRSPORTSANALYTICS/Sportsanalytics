@@ -55,6 +55,19 @@ CORR_RULES = {
     ("HALF_TIME_BTTS:YES", "HALF_TIME_CORNERS:OVER"): 0.30,
     ("HALF_TIME_CORNERS:OVER", "HALF_TIME_GOALS:OVER"): 0.35,
     
+    # MonsterSGP - Team-Specific Markets correlations
+    ("HALF_TIME_GOALS:OVER", "HOME_TEAM_CORNERS:OVER"): 0.38,
+    ("HALF_TIME_GOALS:OVER", "HOME_TEAM_SHOTS:OVER"): 0.42,
+    ("HOME_TEAM_CORNERS:OVER", "HOME_TEAM_SHOTS:OVER"): 0.45,
+    ("HOME_TEAM_CORNERS:OVER", "AWAY_TEAM_CORNERS:UNDER"): 0.25,
+    ("HOME_TEAM_SHOTS:OVER", "AWAY_TEAM_SHOTS:UNDER"): 0.28,
+    ("HOME_TEAM_CORNERS:OVER", "CORNERS:OVER"): 0.50,
+    ("AWAY_TEAM_CORNERS:UNDER", "CORNERS:OVER"): -0.15,
+    ("MATCH_RESULT:HOME", "HOME_TEAM_CORNERS:OVER"): 0.35,
+    ("MATCH_RESULT:HOME", "HOME_TEAM_SHOTS:OVER"): 0.40,
+    ("MATCH_RESULT:HOME", "AWAY_TEAM_CORNERS:UNDER"): 0.30,
+    ("MATCH_RESULT:HOME", "AWAY_TEAM_SHOTS:UNDER"): 0.32,
+    
     # Negative correlations
     ("PLAYER_TO_SCORE:NO", "BTTS:NO"): 0.15,
     ("OVER_UNDER_GOALS:UNDER", "PLAYER_TO_SCORE:YES"): -0.15,
@@ -310,6 +323,99 @@ class SGPPredictor:
         
         return max(0.10, min(0.90, prob_result))
     
+    def calculate_team_corners_prob(self, team_xg: float, line: float = 8.5, over: bool = True) -> float:
+        """
+        Calculate team-specific corners Over/Under probability
+        
+        Args:
+            team_xg: Expected goals for this specific team
+            line: Corners line (e.g., 8.5, 3.5)
+            over: True for Over, False for Under
+        
+        Returns:
+            Probability of the outcome
+        """
+        # Team corners formula: team_corners = team_xG × 2.4 + 2.0
+        expected_team_corners = team_xg * 2.4 + 2.0
+        
+        # Use Poisson for corner count
+        max_corners = 20
+        prob_result = 0.0
+        
+        for c in range(max_corners + 1):
+            prob_count = poisson.pmf(c, expected_team_corners)
+            
+            if over and c > line:
+                prob_result += prob_count
+            elif not over and c < line:
+                prob_result += prob_count
+        
+        return prob_result
+    
+    def calculate_team_shots_prob(self, team_xg: float, line: float = 27.5, over: bool = True) -> float:
+        """
+        Calculate team-specific shots Over/Under probability
+        
+        Args:
+            team_xg: Expected goals for this specific team
+            line: Shots line (e.g., 27.5, 4.5)
+            over: True for Over, False for Under
+        
+        Returns:
+            Probability of the outcome
+        """
+        # Team shots formula: team_shots = team_xG × 6.5 + 5.0
+        expected_team_shots = team_xg * 6.5 + 5.0
+        
+        # Use Poisson for shot count
+        max_shots = 50
+        prob_result = 0.0
+        
+        for s in range(max_shots + 1):
+            prob_count = poisson.pmf(s, expected_team_shots)
+            
+            if over and s > line:
+                prob_result += prob_count
+            elif not over and s < line:
+                prob_result += prob_count
+        
+        return prob_result
+    
+    def calculate_match_result_prob(self, lambda_home: float, lambda_away: float, outcome: str) -> float:
+        """
+        Calculate match result (1x2) probability
+        
+        Args:
+            lambda_home: Expected goals for home team
+            lambda_away: Expected goals for away team
+            outcome: 'HOME', 'DRAW', or 'AWAY'
+        
+        Returns:
+            Probability of the outcome
+        """
+        max_goals = 6
+        prob_home = 0.0
+        prob_draw = 0.0
+        prob_away = 0.0
+        
+        for h in range(max_goals + 1):
+            for a in range(max_goals + 1):
+                prob_score = poisson.pmf(h, lambda_home) * poisson.pmf(a, lambda_away)
+                
+                if h > a:
+                    prob_home += prob_score
+                elif h == a:
+                    prob_draw += prob_score
+                else:
+                    prob_away += prob_score
+        
+        if outcome == 'HOME':
+            return prob_home
+        elif outcome == 'DRAW':
+            return prob_draw
+        else:  # AWAY
+            return prob_away
+    
     def calculate_second_half_goals_prob(self, lambda_home: float, lambda_away: float, line: float = 0.5, over: bool = True) -> float:
         """
         Calculate 2nd half goals Over/Under probability
@@ -548,66 +654,66 @@ class SGPPredictor:
                 'description': 'Over 1.5/2.5 + BTTS + 1H/2H + Corners 10.5 (6-Leg ULTRA)'
             },
             
-            # ========== MONSTERSGP - 1ST HALF ONLY (3-7 LEGS) ==========
+            # ========== MONSTERSGP - TEAM SPECIFIC MARKETS (3-7 LEGS) ==========
             
-            # 3-Leg MonsterSGP: 1H Goals + 1H BTTS + 1H Corners
+            # 3-Leg MonsterSGP: 1H Goals + Home Corners + Away Corners
             {
                 'legs': [
                     {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
-                    {'market_type': 'HALF_TIME_BTTS', 'outcome': 'YES'},
-                    {'market_type': 'HALF_TIME_CORNERS', 'outcome': 'OVER', 'line': 4.5}
+                    {'market_type': 'HOME_TEAM_CORNERS', 'outcome': 'OVER', 'line': 8.5, 'team': 'home'},
+                    {'market_type': 'AWAY_TEAM_CORNERS', 'outcome': 'UNDER', 'line': 3.5, 'team': 'away'}
                 ],
-                'description': '1H Over 0.5 + 1H BTTS + 1H Corners 4.5+ (MonsterSGP 3-Leg)'
+                'description': '1H Over 0.5 + Home Corners 8.5+ + Away Corners U3.5 (MonsterSGP 3-Leg)'
             },
             
-            # 4-Leg MonsterSGP: Double 1H Goals + 1H BTTS + 1H Corners
+            # 4-Leg MonsterSGP: 1H Goals + Home/Away Corners + Home Shots
             {
                 'legs': [
                     {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
-                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 1.5},
-                    {'market_type': 'HALF_TIME_BTTS', 'outcome': 'YES'},
-                    {'market_type': 'HALF_TIME_CORNERS', 'outcome': 'OVER', 'line': 4.5}
+                    {'market_type': 'HOME_TEAM_CORNERS', 'outcome': 'OVER', 'line': 8.5, 'team': 'home'},
+                    {'market_type': 'AWAY_TEAM_CORNERS', 'outcome': 'UNDER', 'line': 3.5, 'team': 'away'},
+                    {'market_type': 'HOME_TEAM_SHOTS', 'outcome': 'OVER', 'line': 27.5, 'team': 'home'}
                 ],
-                'description': '1H Over 0.5/1.5 + 1H BTTS + 1H Corners 4.5+ (MonsterSGP 4-Leg)'
+                'description': '1H Over 0.5 + Home Corners 8.5+ + Away Corners U3.5 + Home Shots 27.5+ (MonsterSGP 4-Leg)'
             },
             
-            # 5-Leg MonsterSGP: Double 1H Goals + 1H BTTS + Double 1H Corners
+            # 5-Leg MonsterSGP: 1H Goals + Team Corners + Team Shots (Full Package)
             {
                 'legs': [
                     {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
-                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 1.5},
-                    {'market_type': 'HALF_TIME_BTTS', 'outcome': 'YES'},
-                    {'market_type': 'HALF_TIME_CORNERS', 'outcome': 'OVER', 'line': 3.5},
-                    {'market_type': 'HALF_TIME_CORNERS', 'outcome': 'OVER', 'line': 4.5}
+                    {'market_type': 'HOME_TEAM_CORNERS', 'outcome': 'OVER', 'line': 8.5, 'team': 'home'},
+                    {'market_type': 'AWAY_TEAM_CORNERS', 'outcome': 'UNDER', 'line': 3.5, 'team': 'away'},
+                    {'market_type': 'HOME_TEAM_SHOTS', 'outcome': 'OVER', 'line': 27.5, 'team': 'home'},
+                    {'market_type': 'AWAY_TEAM_SHOTS', 'outcome': 'UNDER', 'line': 4.5, 'team': 'away'}
                 ],
-                'description': '1H Over 0.5/1.5 + 1H BTTS + 1H Corners 3.5/4.5 (MonsterSGP 5-Leg)'
+                'description': '1H Over 0.5 + Home Corners/Shots + Away Corners/Shots (MonsterSGP 5-Leg)'
             },
             
-            # 6-Leg MonsterSGP: Triple 1H Goals + 1H BTTS + Double 1H Corners
+            # 6-Leg MonsterSGP: 5-Leg + Full Match Corners
             {
                 'legs': [
                     {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
-                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 1.5},
-                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 2.5},
-                    {'market_type': 'HALF_TIME_BTTS', 'outcome': 'YES'},
-                    {'market_type': 'HALF_TIME_CORNERS', 'outcome': 'OVER', 'line': 3.5},
-                    {'market_type': 'HALF_TIME_CORNERS', 'outcome': 'OVER', 'line': 4.5}
+                    {'market_type': 'HOME_TEAM_CORNERS', 'outcome': 'OVER', 'line': 8.5, 'team': 'home'},
+                    {'market_type': 'AWAY_TEAM_CORNERS', 'outcome': 'UNDER', 'line': 3.5, 'team': 'away'},
+                    {'market_type': 'HOME_TEAM_SHOTS', 'outcome': 'OVER', 'line': 27.5, 'team': 'home'},
+                    {'market_type': 'AWAY_TEAM_SHOTS', 'outcome': 'UNDER', 'line': 4.5, 'team': 'away'},
+                    {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 10.5}
                 ],
-                'description': '1H Over 0.5/1.5/2.5 + 1H BTTS + 1H Corners 3.5/4.5 (MonsterSGP 6-Leg)'
+                'description': '1H + Team Corners/Shots + Full Match Corners 10.5+ (MonsterSGP 6-Leg)'
             },
             
-            # 7-Leg MonsterSGP BEAST: Triple 1H Goals + 1H BTTS + Triple 1H Corners
+            # 7-Leg MonsterSGP BEAST: Everything + 1x2
             {
                 'legs': [
                     {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
-                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 1.5},
-                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 2.5},
-                    {'market_type': 'HALF_TIME_BTTS', 'outcome': 'YES'},
-                    {'market_type': 'HALF_TIME_CORNERS', 'outcome': 'OVER', 'line': 3.5},
-                    {'market_type': 'HALF_TIME_CORNERS', 'outcome': 'OVER', 'line': 4.5},
-                    {'market_type': 'HALF_TIME_CORNERS', 'outcome': 'OVER', 'line': 5.5}
+                    {'market_type': 'HOME_TEAM_CORNERS', 'outcome': 'OVER', 'line': 8.5, 'team': 'home'},
+                    {'market_type': 'AWAY_TEAM_CORNERS', 'outcome': 'UNDER', 'line': 3.5, 'team': 'away'},
+                    {'market_type': 'HOME_TEAM_SHOTS', 'outcome': 'OVER', 'line': 27.5, 'team': 'home'},
+                    {'market_type': 'AWAY_TEAM_SHOTS', 'outcome': 'UNDER', 'line': 4.5, 'team': 'away'},
+                    {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 10.5},
+                    {'market_type': 'MATCH_RESULT', 'outcome': 'HOME'}
                 ],
-                'description': '1H Over 0.5/1.5/2.5 + 1H BTTS + 1H Corners 3.5/4.5/5.5 (MonsterSGP 7-LEG BEAST)'
+                'description': '1H + Team Corners/Shots + Full Corners + Home Win (MonsterSGP 7-LEG BEAST)'
             },
         ]
         
@@ -787,6 +893,41 @@ class SGPPredictor:
                         total_xg,
                         leg.get('line', 4.5),
                         leg['outcome'] == 'OVER'
+                    )
+                    
+                elif leg['market_type'] == 'HOME_TEAM_CORNERS':
+                    prob = self.calculate_team_corners_prob(
+                        lambda_home,
+                        leg.get('line', 8.5),
+                        leg['outcome'] == 'OVER'
+                    )
+                    
+                elif leg['market_type'] == 'AWAY_TEAM_CORNERS':
+                    prob = self.calculate_team_corners_prob(
+                        lambda_away,
+                        leg.get('line', 3.5),
+                        leg['outcome'] == 'OVER'
+                    )
+                    
+                elif leg['market_type'] == 'HOME_TEAM_SHOTS':
+                    prob = self.calculate_team_shots_prob(
+                        lambda_home,
+                        leg.get('line', 27.5),
+                        leg['outcome'] == 'OVER'
+                    )
+                    
+                elif leg['market_type'] == 'AWAY_TEAM_SHOTS':
+                    prob = self.calculate_team_shots_prob(
+                        lambda_away,
+                        leg.get('line', 4.5),
+                        leg['outcome'] == 'OVER'
+                    )
+                    
+                elif leg['market_type'] == 'MATCH_RESULT':
+                    prob = self.calculate_match_result_prob(
+                        lambda_home,
+                        lambda_away,
+                        leg['outcome']
                     )
                 else:
                     continue
