@@ -3266,6 +3266,13 @@ def main():
                 else:
                     print("📊 No pending exact scores to update")
                 last_results_check = current_time
+                
+                # Check 500 prediction milestone (learning mode complete)
+                try:
+                    from milestone_tracker import check_500_milestone
+                    check_500_milestone()
+                except Exception as e:
+                    print(f"⚠️ Milestone check failed: {e}")
             
             # Wait 60 minutes between cycles (reduced API usage)
             time.sleep(3600)

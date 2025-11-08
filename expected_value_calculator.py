@@ -153,15 +153,15 @@ class ExpectedValueCalculator:
         """
         try:
             # Get top score from each model
-            poisson_top = max(poisson_probs, key=poisson_probs.get) if poisson_probs else None
+            poisson_top = max(poisson_probs, key=lambda k: poisson_probs[k]) if poisson_probs else None
             
             if neural_probs:
-                neural_top = max(neural_probs, key=neural_probs.get)
+                neural_top = max(neural_probs, key=lambda k: neural_probs[k])
                 if neural_top != predicted_score:
                     return False
             
             if similar_matches_probs:
-                sm_top = max(similar_matches_probs, key=similar_matches_probs.get)
+                sm_top = max(similar_matches_probs, key=lambda k: similar_matches_probs[k])
                 if sm_top != predicted_score:
                     return False
             
