@@ -85,9 +85,8 @@ class OddsPricingService:
             return None
         
         try:
-            # Fetch odds from API
-            # The Odds API supports: h2h (match result), totals (over/under)
-            markets = ['h2h', 'totals']  # Match result and Over/Under (btts not supported)
+            # Fetch odds from API (h2h + totals)
+            markets = ['h2h', 'totals']  # Match result and Over/Under
             odds_data = self.odds_api.get_live_odds(sport_key, markets=markets)
             
             # Find this specific match
@@ -95,8 +94,19 @@ class OddsPricingService:
                 if (self._teams_match(match['home_team'], home_team) and 
                     self._teams_match(match['away_team'], away_team)):
                     
-                    # Parse bookmaker odds
+                    # Parse bookmaker odds (h2h + totals)
                     match_odds = self._parse_bookmaker_odds(match)
+                    
+                    # Fetch BTTS odds separately (event-specific endpoint)
+                    event_id = match.get('id')
+                    if event_id:
+                        btts_odds = self.odds_api.get_event_btts_odds(sport_key, event_id)
+                        if btts_odds:
+                            if btts_odds.get('yes'):
+                                match_odds['btts_yes'] = btts_odds['yes']
+                            if btts_odds.get('no'):
+                                match_odds['btts_no'] = btts_odds['no']
+                            logger.info(f"   🎯 BTTS odds: Yes {btts_odds.get('yes')}, No {btts_odds.get('no')}")
                     
                     # Cache the result
                     self.odds_cache[cache_key] = {

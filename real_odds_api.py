@@ -104,6 +104,55 @@ class RealOddsAPI:
             print(f"❌ ERROR FETCHING ODDS FOR {sport_key}: {e}")
             return []
     
+    def get_event_btts_odds(self, sport_key: str, event_id: str, regions: List[str] = None) -> Optional[Dict]:
+        """
+        Get BTTS (Both Teams To Score) odds for a specific event
+        
+        BTTS is an 'additional market' that requires event-specific endpoint
+        """
+        if regions is None:
+            regions = ['eu', 'uk']
+        
+        url = f"{self.base_url}/sports/{sport_key}/events/{event_id}/odds"
+        
+        params = {
+            'regions': ','.join(regions),
+            'markets': 'btts',  # BTTS market
+            'oddsFormat': 'decimal',
+            'dateFormat': 'iso'
+        }
+        
+        try:
+            response = self.session.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            
+            event_data = response.json()
+            
+            # Extract BTTS odds from bookmakers
+            btts_odds = {'yes': None, 'no': None}
+            
+            for bookmaker in event_data.get('bookmakers', []):
+                for market in bookmaker.get('markets', []):
+                    if market['key'] == 'btts':
+                        for outcome in market.get('outcomes', []):
+                            name = outcome['name'].lower()
+                            price = outcome['price']
+                            
+                            if 'yes' in name and btts_odds['yes'] is None:
+                                btts_odds['yes'] = price
+                            elif 'no' in name and btts_odds['no'] is None:
+                                btts_odds['no'] = price
+                        
+                        # Got BTTS odds, stop searching
+                        if btts_odds['yes'] and btts_odds['no']:
+                            return btts_odds
+            
+            return btts_odds if btts_odds['yes'] or btts_odds['no'] else None
+            
+        except Exception as e:
+            # Silently fail - BTTS not always available for all events
+            return None
+    
     def find_esoccer_opportunities(self, sport_key: str) -> List[Dict]:
         """Find betting opportunities in e-soccer matches"""
         
