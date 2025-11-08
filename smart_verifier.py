@@ -122,7 +122,7 @@ class SmartVerifier:
                                 settled_timestamp = ?,
                                 updated_at = datetime('now')
                             WHERE id = ?
-                        ''', (actual_score, outcome, actual_score, payout, profit_loss, roi_percentage, settled_ts, bet_id))
+                        ''', (actual_score, outcome, outcome, payout, profit_loss, roi_percentage, settled_ts, bet_id))
                         
                         verified_count += 1
                         match_found = True
