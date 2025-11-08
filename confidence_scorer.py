@@ -71,8 +71,8 @@ class ConfidenceScorer:
         
         # Initialize Expected Value Calculator (PROBABILITY-BASED FILTERING)
         try:
-            self.ev_calculator = ExpectedValueCalculator(min_edge=0.12)  # Require 12%+ edge (relaxed from 15%)
-            logger.info("✅ Expected Value Calculator initialized (12%+ edge required)")
+            self.ev_calculator = ExpectedValueCalculator(min_edge=0.08)  # Require 8%+ edge (learning mode for data collection)
+            logger.info("✅ Expected Value Calculator initialized (8%+ edge required for data collection)")
         except Exception as e:
             logger.warning(f"⚠️ Could not initialize EV Calculator: {e}")
             self.ev_calculator = None

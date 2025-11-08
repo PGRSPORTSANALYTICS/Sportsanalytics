@@ -21,7 +21,7 @@ The system employs advanced prediction features including:
 - **Neural Network Predictions:** A deep learning model for exact scores, trained on 50+ features.
 - **Ensemble Prediction System:** Combines Poisson distribution (xG-based), neural network probabilities, and H2H patterns with weighted averaging.
 - **Similar Matches Technology:** Analyzes historical matches with similar characteristics to adjust prediction confidence.
-- **Expected Value (EV) Filtering System:** Mathematical edge calculation replacing arbitrary confidence scores, betting only when model probability × odds provides genuine edge (EV > 12%). Includes Kelly Criterion Bet Sizing.
+- **Expected Value (EV) Filtering System:** Mathematical edge calculation replacing arbitrary confidence scores, betting only when model probability × odds provides genuine edge. **Learning Mode (Nov 8, 2025):** Temporarily lowered from 12% to 8% EV threshold to accelerate data collection toward 500-prediction launch goal. This increases daily exact score volume from ~12-15 to ~20-25 predictions while maintaining quality filter. Includes Kelly Criterion Bet Sizing.
 - **Multi-Source Data Resilience:** Triple-layer fallback system (API-Football, web scrapers, safe defaults) ensures continuous operation during API outages.
 - **Data-Driven Score Targeting:** Models predict ANY score based on ensemble analysis, with EV threshold lowered to 12%.
 - **League Coverage Expansion:** Expanded from 11 to 16 quality leagues to achieve higher prediction volume.
@@ -33,7 +33,7 @@ The system employs advanced prediction features including:
 - **Multi-Leg Parlay System:** Supports 3-7 leg parlays with a tiered EV filtering system (Jackpot Play, Premium Parlay, Value Parlay, Value Bet) balancing value and entertainment.
 - **Hybrid Bet Monitoring System:** Unified real-time tracking for Exact Score and SGP predictions via a central `BetStatusService`, a Live Bet Control Center (Dashboard), and extended Telegram bot commands.
 - **Dual Telegram Channels (Nov 8, 2025):** Separate broadcast channels for different prediction types with smart volume control:
-  - **Tips Channel (-1003269011722):** Dedicated to Exact Score predictions only (~12-15 per day)
+  - **Tips Channel (-1003269011722):** Dedicated to Exact Score predictions only (~20-25 per day during learning mode)
   - **SGP Channel (-1003233743568):** Dedicated to SGP/parlay predictions only
   - **Smart Volume Control:** System generates all possible SGPs (~300+) for analytics, but only broadcasts top 15 regular SGP + top 5 MonsterSGP (sorted by EV) to avoid channel spam
   - **Channel Routing:** `telegram_sender.py` routes predictions based on `prediction_type` parameter (exact_score/sgp) to appropriate channel
