@@ -137,9 +137,32 @@ class TelegramBroadcaster:
         
         if match_date_raw:
             try:
-                # Parse ISO format: 2025-11-01T13:00:45Z
+                # Parse multiple date formats with robust fallback
                 from datetime import datetime
-                dt = datetime.fromisoformat(match_date_raw.replace('Z', '+00:00'))
+                import re
+                
+                # Normalize the date string
+                date_str = str(match_date_raw).strip()
+                
+                # Try multiple parsing strategies
+                dt = None
+                
+                # Strategy 1: ISO format with Z (2025-11-01T13:00:45Z)
+                if 'Z' in date_str:
+                    dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                # Strategy 2: ISO format with timezone (2025-11-01T13:00:45+00:00)
+                elif '+' in date_str or date_str.count('-') > 2:
+                    dt = datetime.fromisoformat(date_str)
+                # Strategy 3: Naive ISO format (2025-11-01T13:00:45)
+                elif 'T' in date_str:
+                    dt = datetime.fromisoformat(date_str)
+                # Strategy 4: Date only (2025-11-01)
+                elif re.match(r'^\d{4}-\d{2}-\d{2}$', date_str):
+                    dt = datetime.fromisoformat(date_str)
+                else:
+                    # Last resort: try direct parse
+                    dt = datetime.fromisoformat(date_str)
+                
                 match_date = dt.date()
                 today = datetime.now().date()
                 
@@ -147,7 +170,8 @@ class TelegramBroadcaster:
                     logger.info(f"🔕 Skipping broadcast - Match plays on {match_date}, not today ({today})")
                     return 0
             except Exception as e:
-                logger.warning(f"⚠️ Could not parse match date '{match_date_raw}': {e}")
+                logger.error(f"❌ Failed to parse match date '{match_date_raw}': {e}")
+                logger.error(f"   Prediction will NOT be broadcast - fix date format!")
                 return 0
         else:
             logger.warning(f"⚠️ No match date found in prediction - skipping broadcast")
