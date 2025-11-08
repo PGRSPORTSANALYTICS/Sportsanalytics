@@ -22,7 +22,7 @@ def get_all_time_stats() -> Dict:
     cursor.execute('''
         SELECT 
             COUNT(*) as total,
-            SUM(CASE WHEN outcome = 'win' THEN 1 ELSE 0 END) as wins,
+            SUM(CASE WHEN outcome IN ('win', 'won') THEN 1 ELSE 0 END) as wins,
             SUM(profit_loss) as profit
         FROM football_opportunities 
         WHERE market = 'exact_score' AND result IS NOT NULL
@@ -36,7 +36,7 @@ def get_all_time_stats() -> Dict:
     cursor.execute('''
         SELECT 
             COUNT(*) as total,
-            SUM(CASE WHEN outcome = 'win' THEN 1 ELSE 0 END) as wins,
+            SUM(CASE WHEN outcome IN ('win', 'won') THEN 1 ELSE 0 END) as wins,
             SUM(profit_loss) as profit
         FROM sgp_predictions 
         WHERE result IS NOT NULL
@@ -89,7 +89,7 @@ def get_todays_exact_score_stats() -> Dict:
     cursor.execute('''
         SELECT 
             COUNT(*) as total,
-            SUM(CASE WHEN outcome = 'win' THEN 1 ELSE 0 END) as wins,
+            SUM(CASE WHEN outcome IN ('win', 'won') THEN 1 ELSE 0 END) as wins,
             SUM(profit_loss) as profit
         FROM football_opportunities 
         WHERE market = 'exact_score' 
@@ -122,7 +122,7 @@ def get_todays_sgp_stats() -> Dict:
     cursor.execute('''
         SELECT 
             COUNT(*) as total,
-            SUM(CASE WHEN outcome = 'win' THEN 1 ELSE 0 END) as wins,
+            SUM(CASE WHEN outcome IN ('win', 'won') THEN 1 ELSE 0 END) as wins,
             SUM(profit_loss) as profit
         FROM sgp_predictions 
         WHERE result IS NOT NULL 
