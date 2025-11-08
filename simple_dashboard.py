@@ -192,26 +192,24 @@ def load_performance_summary():
         return None
 
 def load_todays_predictions():
-    """Load predictions for today"""
+    """Load predictions for matches playing today (by match_date, not creation timestamp)"""
     try:
         conn = sqlite3.connect(DB_PATH)
-        
-        # Calculate today's timestamp range
-        from datetime import datetime, time
-        today_start = datetime.combine(date.today(), time.min).timestamp()
-        today_end = datetime.combine(date.today(), time.max).timestamp()
-        
-        # Today's exact scores
         cursor = conn.cursor()
+        
+        # Today's date string for matching
+        today_date = date.today().isoformat()
+        
+        # Today's exact scores (matches playing today)
         cursor.execute('''
             SELECT 
                 home_team, away_team, selection, odds, 
-                edge_percentage, league, timestamp
+                edge_percentage, league, match_date
             FROM football_opportunities
             WHERE market = 'exact_score'
-            AND timestamp BETWEEN ? AND ?
-            ORDER BY timestamp DESC
-        ''', (today_start, today_end))
+            AND date(match_date) = ?
+            ORDER BY match_date ASC
+        ''', (today_date,))
         
         exact_predictions = []
         for row in cursor.fetchall():
@@ -225,15 +223,15 @@ def load_todays_predictions():
                 'Time': match_time.strftime('%H:%M')
             })
         
-        # Today's SGPs
+        # Today's SGPs (matches playing today)
         cursor.execute('''
             SELECT 
                 home_team, away_team, parlay_description,
-                bookmaker_odds, ev_percentage, timestamp, pricing_mode
+                bookmaker_odds, ev_percentage, match_date, pricing_mode
             FROM sgp_predictions
-            WHERE timestamp BETWEEN ? AND ?
-            ORDER BY timestamp DESC
-        ''', (today_start, today_end))
+            WHERE date(match_date) = ?
+            ORDER BY match_date ASC
+        ''', (today_date,))
         
         sgp_predictions = []
         for row in cursor.fetchall():
