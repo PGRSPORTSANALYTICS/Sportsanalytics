@@ -328,6 +328,87 @@ class ResultsScraper:
             logger.error(f"❌ Error fetching API-Football results: {e}")
             return []
     
+    def get_odds_api_results(self, date_str):
+        """Get results from The Odds API scores endpoint for a specific date (YYYY-MM-DD)"""
+        try:
+            api_key = os.getenv('THE_ODDS_API_KEY')
+            if not api_key:
+                logger.warning("❌ No THE_ODDS_API_KEY found in environment")
+                return []
+            
+            logger.info(f"🎯 Fetching The Odds API scores for {date_str}")
+            
+            # The Odds API sports to check
+            sports = [
+                'soccer_epl', 'soccer_efl_champ', 'soccer_spain_la_liga',
+                'soccer_italy_serie_a', 'soccer_germany_bundesliga',
+                'soccer_france_ligue_one', 'soccer_netherlands_eredivisie',
+                'soccer_portugal_primeira_liga', 'soccer_belgium_first_div',
+                'soccer_uefa_champs_league', 'soccer_uefa_europa_league'
+            ]
+            
+            all_results = []
+            
+            for sport in sports:
+                try:
+                    url = f"https://api.the-odds-api.com/v4/sports/{sport}/scores/"
+                    params = {
+                        'apiKey': api_key,
+                        'daysFrom': 3,  # Check last 3 days
+                        'dateFormat': 'iso'
+                    }
+                    
+                    response = requests.get(url, params=params, timeout=10)
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        
+                        for event in data:
+                            # Only include completed events from the specific date
+                            if event.get('completed', False):
+                                commence_time = event.get('commence_time', '')
+                                event_date = commence_time.split('T')[0] if 'T' in commence_time else ''
+                                
+                                # Match the requested date
+                                if event_date == date_str:
+                                    scores = event.get('scores', [])
+                                    if len(scores) >= 2:
+                                        home_team = scores[0].get('name', '')
+                                        away_team = scores[1].get('name', '')
+                                        home_score = scores[0].get('score')
+                                        away_score = scores[1].get('score')
+                                        
+                                        if home_score is not None and away_score is not None:
+                                            all_results.append({
+                                                'home_team': home_team,
+                                                'away_team': away_team,
+                                                'home_score': int(home_score),
+                                                'away_score': int(away_score),
+                                                'score': f"{int(home_score)}-{int(away_score)}",
+                                                'total_goals': int(home_score) + int(away_score),
+                                                'result': 'home' if home_score > away_score else ('away' if away_score > home_score else 'draw'),
+                                                'source': 'odds-api'
+                                            })
+                except Exception as e:
+                    logger.debug(f"No scores from {sport}: {e}")
+                    continue
+            
+            # Remove duplicates
+            unique_results = []
+            seen = set()
+            for result in all_results:
+                key = (result['home_team'], result['away_team'], result['home_score'], result['away_score'])
+                if key not in seen:
+                    seen.add(key)
+                    unique_results.append(result)
+            
+            logger.info(f"🎯 Found {len(unique_results)} finished matches from The Odds API")
+            return unique_results
+            
+        except Exception as e:
+            logger.error(f"❌ Error fetching The Odds API scores: {e}")
+            return []
+    
     def get_results_for_date(self, date_str):
         """Get results from multiple sources for a date (API-Football priority)"""
         logger.info(f"🔍 Getting results for {date_str}")
@@ -343,7 +424,11 @@ class ResultsScraper:
         results = self.get_api_football_results(clean_date)
         
         if not results:
-            logger.info("📡 No results from API-Football, trying Sofascore...")
+            logger.info("📡 No results from API-Football, trying The Odds API...")
+            results = self.get_odds_api_results(clean_date)
+        
+        if not results:
+            logger.info("📡 No results from The Odds API, trying Sofascore...")
             results = self.get_sofascore_results(clean_date)
         
         if not results:
