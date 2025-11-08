@@ -156,6 +156,28 @@ class SGPChampion:
         
         return count < 20  # Max 20 SGPs per day
     
+    def _map_sport_key_to_league(self, sport_key: str) -> str:
+        """Map The Odds API sport_key to readable league name"""
+        mapping = {
+            'soccer_epl': 'Premier League',
+            'soccer_efl_champ': 'Championship',
+            'soccer_spain_la_liga': 'La Liga',
+            'soccer_italy_serie_a': 'Serie A',
+            'soccer_germany_bundesliga': 'Bundesliga',
+            'soccer_france_ligue_one': 'Ligue 1',
+            'soccer_netherlands_eredivisie': 'Eredivisie',
+            'soccer_portugal_primeira_liga': 'Primeira Liga',
+            'soccer_belgium_first_div': 'Belgian First Division',
+            'soccer_uefa_champs_league': 'Champions League',
+            'soccer_uefa_europa_league': 'Europa League',
+            'soccer_scotland_premiership': 'Scottish Premiership',
+            'soccer_turkey_super_league': 'Turkish Super League',
+            'soccer_sweden_allsvenskan': 'Allsvenskan',
+            'soccer_brazil_campeonato': 'Serie A Brazil',
+            'soccer_usa_mls': 'MLS'
+        }
+        return mapping.get(sport_key, 'Unknown')
+    
     def generate_daily_sgps(self):
         """Main function: Generate SGP predictions for today's matches"""
         logger.info("="*80)
@@ -185,7 +207,7 @@ class SGPChampion:
             
             home_team = match['home_team']
             away_team = match['away_team']
-            league = match.get('league', 'Unknown')
+            league = self._map_sport_key_to_league(match.get('sport_key', ''))
             
             # Get xG predictions
             logger.info(f"   📊 Analyzing {home_team} vs {away_team}...")

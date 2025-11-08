@@ -86,8 +86,8 @@ class OddsPricingService:
         
         try:
             # Fetch odds from API
-            # The Odds API supports: h2h (match result), totals (over/under), btts (both teams to score)
-            markets = ['h2h', 'totals', 'btts']  # Match result, Over/Under, BTTS
+            # The Odds API supports: h2h (match result), totals (over/under)
+            markets = ['h2h', 'totals']  # Match result and Over/Under (btts not supported)
             odds_data = self.odds_api.get_live_odds(sport_key, markets=markets)
             
             # Find this specific match

@@ -78,7 +78,7 @@ class RealOddsAPI:
         if regions is None:
             regions = ['eu', 'uk']  # European bookmakers
         if markets is None:
-            markets = ['h2h', 'totals', 'btts']  # Match result, totals, and BTTS
+            markets = ['h2h', 'totals']  # Match result and totals (btts not supported)
             
         url = f"{self.base_url}/sports/{sport_key}/odds"
         
