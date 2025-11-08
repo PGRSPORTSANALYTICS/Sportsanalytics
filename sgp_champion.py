@@ -198,13 +198,10 @@ class SGPChampion:
         logger.info(f"⚽ Analyzing {len(matches)} matches for SGP opportunities...")
         
         sgps_generated = 0
+        all_sgps = []
         
+        # PHASE 1: Generate and save ALL SGPs (don't broadcast yet)
         for match in matches:
-            # Check if we've hit limit
-            if not self.check_daily_limit():
-                logger.info("✅ Daily limit reached. Stopping generation.")
-                break
-            
             home_team = match['home_team']
             away_team = match['away_team']
             league = self._map_sport_key_to_league(match.get('sport_key', ''))
@@ -249,13 +246,11 @@ class SGPChampion:
             sgps = self.sgp_predictor.generate_sgp_for_match(match_data, lambda_home, lambda_away, player_data)
             
             if sgps:
-                # sgps is now a list of up to 3 predictions
+                # Save all SGPs and track them
                 for sgp in sgps:
                     self.sgp_predictor.save_sgp_prediction(sgp)
+                    all_sgps.append(sgp)
                     sgps_generated += 1
-                    
-                    # Send to Telegram
-                    self._send_telegram_notification(sgp)
                 
                 logger.info(f"   ✅ Generated {len(sgps)} SGPs for this match")
             else:
@@ -264,7 +259,61 @@ class SGPChampion:
             logger.info(f"   ✅ Analysis complete")
         
         logger.info("="*80)
-        logger.info(f"✅ SGP Generation Complete: {sgps_generated} predictions generated")
+        logger.info(f"✅ SGP Generation Complete: {sgps_generated} predictions saved to database")
+        logger.info("="*80)
+        
+        # PHASE 2: Smart Selection - Only broadcast the BEST predictions
+        self._select_and_broadcast_top_sgps(all_sgps)
+    
+    def _select_and_broadcast_top_sgps(self, all_sgps: List[Dict[str, Any]]):
+        """Smart selection: Only broadcast top 10-15 regular SGP + top 5 MonsterSGP"""
+        if not all_sgps:
+            logger.info("📭 No SGPs to broadcast")
+            return
+        
+        logger.info("="*80)
+        logger.info("🎯 SMART SELECTION - Filtering for broadcast")
+        logger.info("="*80)
+        
+        # Separate MonsterSGP from regular SGP
+        monster_sgps = []
+        regular_sgps = []
+        
+        for sgp in all_sgps:
+            desc = sgp.get('description', '')
+            if 'MonsterSGP' in desc:
+                monster_sgps.append(sgp)
+            else:
+                regular_sgps.append(sgp)
+        
+        logger.info(f"📊 Generated: {len(regular_sgps)} regular SGP, {len(monster_sgps)} MonsterSGP")
+        
+        # Sort by EV (highest first)
+        monster_sgps.sort(key=lambda x: x.get('ev_percentage', 0), reverse=True)
+        regular_sgps.sort(key=lambda x: x.get('ev_percentage', 0), reverse=True)
+        
+        # Select top predictions
+        top_regular = regular_sgps[:15]  # Top 10-15
+        top_monster = monster_sgps[:5]   # Top 5
+        
+        logger.info(f"✅ Selected for broadcast:")
+        logger.info(f"   • {len(top_regular)} regular SGP (best EV)")
+        logger.info(f"   • {len(top_monster)} MonsterSGP (best EV)")
+        
+        # Broadcast selected predictions
+        broadcast_count = 0
+        
+        for sgp in top_regular:
+            self._send_telegram_notification(sgp)
+            broadcast_count += 1
+        
+        for sgp in top_monster:
+            self._send_telegram_notification(sgp)
+            broadcast_count += 1
+        
+        logger.info("="*80)
+        logger.info(f"📱 Broadcasted {broadcast_count} SGP predictions to Telegram")
+        logger.info(f"💾 {len(all_sgps)} total predictions saved to database for analytics")
         logger.info("="*80)
     
     def _send_telegram_notification(self, sgp: Dict[str, Any]):
