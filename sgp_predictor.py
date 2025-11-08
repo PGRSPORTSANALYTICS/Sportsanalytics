@@ -385,143 +385,187 @@ class SGPPredictor:
         Returns:
             SGP prediction dict or None if no value found
         """
-        # Generate popular SGP combinations (goals-only)
+        # Generate SGP combinations (3-7 legs for BIG HITS)
         sgp_combinations = [
-            # Over 2.5 + BTTS
+            # ========== 3-LEG PARLAYS (Minimum) ==========
+            
+            # Over 2.5 + BTTS + 1H Over 0.5
             {
                 'legs': [
                     {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
-                    {'market_type': 'BTTS', 'outcome': 'YES'}
+                    {'market_type': 'BTTS', 'outcome': 'YES'},
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5}
                 ],
-                'description': 'Over 2.5 Goals + BTTS Yes'
+                'description': 'Over 2.5 + BTTS + 1H Over 0.5'
             },
-            # Under 2.5 + BTTS No
-            {
-                'legs': [
-                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'UNDER', 'line': 2.5},
-                    {'market_type': 'BTTS', 'outcome': 'NO'}
-                ],
-                'description': 'Under 2.5 Goals + BTTS No'
-            },
-            # Over 1.5 + BTTS
-            {
-                'legs': [
-                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 1.5},
-                    {'market_type': 'BTTS', 'outcome': 'YES'}
-                ],
-                'description': 'Over 1.5 Goals + BTTS Yes'
-            },
-            # Half-time/Second half combinations
-            {
-                'legs': [
-                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
-                    {'market_type': 'SECOND_HALF_GOALS', 'outcome': 'OVER', 'line': 0.5}
-                ],
-                'description': '1H Over 0.5 + 2H Over 0.5'
-            },
-            {
-                'legs': [
-                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
-                    {'market_type': 'BTTS', 'outcome': 'YES'}
-                ],
-                'description': '1H Over 0.5 + BTTS Yes'
-            },
-            {
-                'legs': [
-                    {'market_type': 'SECOND_HALF_GOALS', 'outcome': 'OVER', 'line': 1.5},
-                    {'market_type': 'BTTS', 'outcome': 'YES'}
-                ],
-                'description': '2H Over 1.5 + BTTS Yes'
-            },
-            # Corners combinations
+            
+            # Corners + Over 2.5 + BTTS
             {
                 'legs': [
                     {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 9.5},
-                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5}
+                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
+                    {'market_type': 'BTTS', 'outcome': 'YES'}
                 ],
-                'description': 'Corners Over 9.5 + Over 2.5 Goals'
+                'description': 'Corners 9.5+ + Over 2.5 + BTTS'
             },
+            
+            # 1H Over + 2H Over + BTTS
+            {
+                'legs': [
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
+                    {'market_type': 'SECOND_HALF_GOALS', 'outcome': 'OVER', 'line': 1.5},
+                    {'market_type': 'BTTS', 'outcome': 'YES'}
+                ],
+                'description': '1H Over 0.5 + 2H Over 1.5 + BTTS'
+            },
+            
+            # ========== 4-LEG PARLAYS (Power Plays) ==========
+            
+            # Over 2.5 + BTTS + 1H Over + 2H Over
+            {
+                'legs': [
+                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
+                    {'market_type': 'BTTS', 'outcome': 'YES'},
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
+                    {'market_type': 'SECOND_HALF_GOALS', 'outcome': 'OVER', 'line': 1.5}
+                ],
+                'description': 'Over 2.5 + BTTS + 1H Over + 2H Over 1.5 (4-Leg Power)'
+            },
+            
+            # Corners + Goals + Half-time + BTTS
+            {
+                'legs': [
+                    {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 9.5},
+                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
+                    {'market_type': 'BTTS', 'outcome': 'YES'}
+                ],
+                'description': 'Corners 9.5+ + Over 2.5 + 1H Over + BTTS (4-Leg)'
+            },
+            
+            # ========== 5-LEG PARLAYS (Monster Hits) ==========
+            
+            # Full Package: Corners + Goals + Both Halves + BTTS
             {
                 'legs': [
                     {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 10.5},
+                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
+                    {'market_type': 'SECOND_HALF_GOALS', 'outcome': 'OVER', 'line': 1.5},
                     {'market_type': 'BTTS', 'outcome': 'YES'}
                 ],
-                'description': 'Corners Over 10.5 + BTTS Yes'
+                'description': 'Corners 10.5+ + Over 2.5 + 1H/2H + BTTS (5-Leg Monster)'
             },
+            
+            # Over 1.5 + Over 2.5 + BTTS + 1H + Corners
             {
                 'legs': [
-                    {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 11.5},
+                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 1.5},
+                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
+                    {'market_type': 'BTTS', 'outcome': 'YES'},
                     {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
-                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5}
+                    {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 9.5}
                 ],
-                'description': 'Corners 11.5+ + 1H Over 0.5 + Over 2.5 (Premium)'
+                'description': 'Over 1.5/2.5 + BTTS + 1H + Corners (5-Leg)'
+            },
+            
+            # ========== 6-LEG PARLAYS (Insane Payouts) ==========
+            
+            # Ultra Premium: Everything
+            {
+                'legs': [
+                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 1.5},
+                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
+                    {'market_type': 'BTTS', 'outcome': 'YES'},
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
+                    {'market_type': 'SECOND_HALF_GOALS', 'outcome': 'OVER', 'line': 1.5},
+                    {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 10.5}
+                ],
+                'description': 'Over 1.5/2.5 + BTTS + 1H/2H + Corners 10.5 (6-Leg ULTRA)'
             },
         ]
         
-        # Add player prop combinations if player data available
+        # Add player prop combinations if player data available (4-7 legs with players)
         if player_data and (player_data.get('home_scorers') or player_data.get('away_scorers')):
             # Get top scorer from each team
             top_home = player_data.get('home_scorers', [{}])[0] if player_data.get('home_scorers') else {}
             top_away = player_data.get('away_scorers', [{}])[0] if player_data.get('away_scorers') else {}
             
-            # Player prop combinations (6 new types)
             if top_home.get('name') and top_home.get('scoring_rate', 0) > 0.15:  # Min threshold
                 home_player = top_home['name']
                 sgp_combinations.extend([
-                    # Player to Score + Over 2.5
+                    # 4-Leg: Player + Goals + BTTS + Half-time
                     {
                         'legs': [
                             {'market_type': 'PLAYER_TO_SCORE', 'outcome': 'YES', 'player': home_player, 'team': 'home'},
-                            {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5}
+                            {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
+                            {'market_type': 'BTTS', 'outcome': 'YES'},
+                            {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5}
                         ],
-                        'description': f'{home_player} to Score + Over 2.5'
+                        'description': f'{home_player} Score + Over 2.5 + BTTS + 1H (4-Leg)'
                     },
-                    # Player to Score + BTTS Yes
-                    {
-                        'legs': [
-                            {'market_type': 'PLAYER_TO_SCORE', 'outcome': 'YES', 'player': home_player, 'team': 'home'},
-                            {'market_type': 'BTTS', 'outcome': 'YES'}
-                        ],
-                        'description': f'{home_player} to Score + BTTS Yes'
-                    },
-                    # Player Shots 2+ + Over 2.5 + BTTS (3-leg premium)
+                    # 5-Leg: Player Shots + Goals + BTTS + Both Halves
                     {
                         'legs': [
                             {'market_type': 'PLAYER_SHOTS', 'outcome': 'OVER', 'threshold': 2, 'player': home_player, 'team': 'home'},
                             {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
-                            {'market_type': 'BTTS', 'outcome': 'YES'}
+                            {'market_type': 'BTTS', 'outcome': 'YES'},
+                            {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
+                            {'market_type': 'SECOND_HALF_GOALS', 'outcome': 'OVER', 'line': 1.5}
                         ],
-                        'description': f'{home_player} 2+ Shots + Over 2.5 + BTTS'
+                        'description': f'{home_player} 2+ Shots + Over 2.5 + BTTS + 1H/2H (5-Leg)'
+                    },
+                    # 7-Leg ULTRA: Player + Shots + Goals + BTTS + Halves + Corners
+                    {
+                        'legs': [
+                            {'market_type': 'PLAYER_TO_SCORE', 'outcome': 'YES', 'player': home_player, 'team': 'home'},
+                            {'market_type': 'PLAYER_SHOTS', 'outcome': 'OVER', 'threshold': 2, 'player': home_player, 'team': 'home'},
+                            {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
+                            {'market_type': 'BTTS', 'outcome': 'YES'},
+                            {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
+                            {'market_type': 'SECOND_HALF_GOALS', 'outcome': 'OVER', 'line': 1.5},
+                            {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 10.5}
+                        ],
+                        'description': f'{home_player} Score+Shots + Over 2.5 + BTTS + 1H/2H + Corners (7-LEG BEAST)'
                     }
                 ])
             
             if top_away.get('name') and top_away.get('scoring_rate', 0) > 0.15:
                 away_player = top_away['name']
                 sgp_combinations.extend([
-                    # Player to Score + Over 2.5
+                    # 4-Leg: Player + Goals + BTTS + Half-time
                     {
                         'legs': [
                             {'market_type': 'PLAYER_TO_SCORE', 'outcome': 'YES', 'player': away_player, 'team': 'away'},
-                            {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5}
+                            {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
+                            {'market_type': 'BTTS', 'outcome': 'YES'},
+                            {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5}
                         ],
-                        'description': f'{away_player} to Score + Over 2.5'
+                        'description': f'{away_player} Score + Over 2.5 + BTTS + 1H (4-Leg)'
                     },
-                    # Player to Score + BTTS Yes
-                    {
-                        'legs': [
-                            {'market_type': 'PLAYER_TO_SCORE', 'outcome': 'YES', 'player': away_player, 'team': 'away'},
-                            {'market_type': 'BTTS', 'outcome': 'YES'}
-                        ],
-                        'description': f'{away_player} to Score + BTTS Yes'
-                    },
-                    # Player Shots 2+ + Over 2.5 + BTTS (3-leg premium)
+                    # 5-Leg: Player Shots + Goals + BTTS + Both Halves
                     {
                         'legs': [
                             {'market_type': 'PLAYER_SHOTS', 'outcome': 'OVER', 'threshold': 2, 'player': away_player, 'team': 'away'},
                             {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
-                            {'market_type': 'BTTS', 'outcome': 'YES'}
+                            {'market_type': 'BTTS', 'outcome': 'YES'},
+                            {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
+                            {'market_type': 'SECOND_HALF_GOALS', 'outcome': 'OVER', 'line': 1.5}
                         ],
-                        'description': f'{away_player} 2+ Shots + Over 2.5 + BTTS'
+                        'description': f'{away_player} 2+ Shots + Over 2.5 + BTTS + 1H/2H (5-Leg)'
+                    },
+                    # 7-Leg ULTRA: Player + Shots + Goals + BTTS + Halves + Corners
+                    {
+                        'legs': [
+                            {'market_type': 'PLAYER_TO_SCORE', 'outcome': 'YES', 'player': away_player, 'team': 'away'},
+                            {'market_type': 'PLAYER_SHOTS', 'outcome': 'OVER', 'threshold': 2, 'player': away_player, 'team': 'away'},
+                            {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
+                            {'market_type': 'BTTS', 'outcome': 'YES'},
+                            {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
+                            {'market_type': 'SECOND_HALF_GOALS', 'outcome': 'OVER', 'line': 1.5},
+                            {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 10.5}
+                        ],
+                        'description': f'{away_player} Score+Shots + Over 2.5 + BTTS + 1H/2H + Corners (7-LEG BEAST)'
                     }
                 ])
         
@@ -642,16 +686,39 @@ class SGPPredictor:
             # Calculate EV
             ev_pct = (bookmaker_odds / fair_odds - 1.0) * 100.0
             
-            # Quality filter: Minimum EV AND minimum odds
-            # Reject low-odds parlays (< 2.5x) - not worth the risk
-            MIN_EV = 5.0
+            # TIERED FILTER SYSTEM: Balance value bets vs entertainment parlays
+            # Tier 1 (Value Bets): Positive EV, lower odds (2.5x-5x)
+            # Tier 2 (Premium Parlays): Moderate negative EV, mid odds (5x-8x)  
+            # Tier 3 (Jackpot Plays): Loose negative EV, monster odds (8x+)
+            
             MIN_ODDS = 2.5
             
-            if ev_pct > MIN_EV and bookmaker_odds >= MIN_ODDS:
+            # Tiered EV requirements based on odds
+            # Note: Calibration is conservative (predicts 8-12% but actual hit rate is 33.6%)
+            # Accept wider EV range for entertainment value on high-odds parlays
+            if bookmaker_odds >= 8.0:
+                # Jackpot Tier: Monster parlays for entertainment (accept over-conservative calibration)
+                min_ev_required = -50.0  # Widened from -30% due to conservative calibration
+                bet_tier = "Jackpot Play"
+            elif bookmaker_odds >= 5.0:
+                # Premium Tier: Balanced risk/reward
+                min_ev_required = -35.0  # Widened from -20% due to conservative calibration
+                bet_tier = "Premium Parlay"
+            elif bookmaker_odds >= 3.5:
+                # Value Tier: Slight edge or small negative
+                min_ev_required = -10.0
+                bet_tier = "Value Parlay"
+            else:
+                # Conservative: Require positive EV for lower odds
+                min_ev_required = 0.0
+                bet_tier = "Value Bet"
+            
+            if ev_pct > min_ev_required and bookmaker_odds >= MIN_ODDS:
                 all_sgps.append({
                     'legs': legs_with_probs,
                     'description': sgp['description'],
                     'parlay_probability': parlay_prob,
+                    'bet_tier': bet_tier,
                     'fair_odds': fair_odds,
                     'bookmaker_odds': bookmaker_odds,
                     'ev_percentage': ev_pct,
