@@ -356,6 +356,61 @@ Target: 20-25% WR, +100-200% ROI
 """
         return message
     
+    def _format_sgp_legs_telegram(self, legs_str: str) -> str:
+        """Format SGP legs for Telegram (clean, easy to read)"""
+        if not legs_str or '|' not in legs_str:
+            return legs_str
+        
+        leg_parts = legs_str.split('|')
+        formatted = []
+        
+        for i, leg in enumerate(leg_parts, 1):
+            leg = leg.strip()
+            
+            # Simplify market names for mobile reading
+            if 'OVER_UNDER_GOALS' in leg:
+                if 'OVER' in leg and 'UNDER' not in leg:
+                    formatted.append(f"{i}. Over {leg.split('(')[1].split(')')[0]} Goals")
+                else:
+                    formatted.append(f"{i}. Under {leg.split('(')[1].split(')')[0]} Goals")
+            elif 'BTTS' in leg:
+                formatted.append(f"{i}. BTTS: {'Yes' if 'YES' in leg else 'No'}")
+            elif 'HOME_TEAM_CORNERS' in leg:
+                val = leg.split('(')[1].split(')')[0]
+                dir = 'Over' if 'OVER' in leg else 'Under'
+                formatted.append(f"{i}. Home Team {dir} {val} Corners")
+            elif 'AWAY_TEAM_CORNERS' in leg:
+                val = leg.split('(')[1].split(')')[0]
+                dir = 'Over' if 'OVER' in leg else 'Under'
+                formatted.append(f"{i}. Away Team {dir} {val} Corners")
+            elif 'HOME_TEAM_SHOTS' in leg:
+                val = leg.split('(')[1].split(')')[0]
+                dir = 'Over' if 'OVER' in leg else 'Under'
+                formatted.append(f"{i}. Home Team {dir} {val} Shots")
+            elif 'AWAY_TEAM_SHOTS' in leg:
+                val = leg.split('(')[1].split(')')[0]
+                dir = 'Over' if 'OVER' in leg else 'Under'
+                formatted.append(f"{i}. Away Team {dir} {val} Shots")
+            elif 'CORNERS' in leg and 'TEAM' not in leg:
+                val = leg.split('(')[1].split(')')[0]
+                dir = 'Over' if 'OVER' in leg else 'Under'
+                formatted.append(f"{i}. {dir} {val} Corners")
+            elif 'MATCH_RESULT' in leg:
+                if 'HOME' in leg:
+                    formatted.append(f"{i}. Home Win")
+                elif 'AWAY' in leg:
+                    formatted.append(f"{i}. Away Win")
+                else:
+                    formatted.append(f"{i}. Draw")
+            elif 'FIRST_HALF' in leg or '1H' in leg:
+                val = leg.split('(')[1].split(')')[0]
+                dir = 'Over' if 'OVER' in leg else 'Under'
+                formatted.append(f"{i}. 1H {dir} {val} Goals")
+            else:
+                formatted.append(f"{i}. {leg}")
+        
+        return '\n'.join(formatted)
+    
     def _format_sgp_prediction(self, prediction: Dict) -> str:
         """Format SGP prediction as Telegram message"""
         from datetime import datetime
@@ -363,7 +418,14 @@ Target: 20-25% WR, +100-200% ROI
         
         home = prediction['home_team']
         away = prediction['away_team']
-        parlay_desc = prediction.get('parlay_description', 'SGP')
+        
+        # Use legs for clear formatting, fallback to description
+        legs = prediction.get('legs', '')
+        if legs:
+            parlay_text = self._format_sgp_legs_telegram(legs)
+        else:
+            parlay_text = prediction.get('parlay_description', 'SGP')
+        
         odds = prediction.get('bookmaker_odds', prediction.get('odds', 0))
         ev = prediction.get('ev_percentage', 0)
         stake = prediction.get('stake', 160)
@@ -386,7 +448,9 @@ Target: 20-25% WR, +100-200% ROI
         message = f"""🎲 NEW SGP PREDICTION
 
 {home} vs {away}
-{parlay_desc}
+
+📋 PARLAY:
+{parlay_text}
 
 💰 Odds: {odds:.1f}x
 📈 Expected Value: {ev:+.1f}%

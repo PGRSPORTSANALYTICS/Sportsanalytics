@@ -16,6 +16,79 @@ except:
 # Database path
 DB_PATH = 'data/real_football.db'
 
+# Helper function to format SGP legs for readability
+def format_sgp_legs(legs_str):
+    """Convert technical leg format to clear, readable format"""
+    if not legs_str or '|' not in legs_str:
+        return legs_str
+    
+    leg_parts = legs_str.split('|')
+    formatted_legs = []
+    
+    for leg in leg_parts:
+        leg = leg.strip()
+        
+        # Format different market types
+        if 'OVER_UNDER_GOALS' in leg:
+            if 'OVER' in leg and 'UNDER' not in leg:
+                formatted_legs.append(f"⚽ Over {leg.split('(')[1].split(')')[0]} Goals")
+            else:
+                formatted_legs.append(f"⚽ Under {leg.split('(')[1].split(')')[0]} Goals")
+        elif 'BTTS' in leg:
+            if 'YES' in leg:
+                formatted_legs.append("🎯 Both Teams to Score: YES")
+            else:
+                formatted_legs.append("🎯 Both Teams to Score: NO")
+        elif 'CORNERS' in leg and 'TEAM' not in leg:
+            if 'OVER' in leg:
+                formatted_legs.append(f"🚩 Over {leg.split('(')[1].split(')')[0]} Corners")
+            else:
+                formatted_legs.append(f"🚩 Under {leg.split('(')[1].split(')')[0]} Corners")
+        elif 'HOME_TEAM_CORNERS' in leg:
+            if 'OVER' in leg:
+                formatted_legs.append(f"🏠 Home Team Over {leg.split('(')[1].split(')')[0]} Corners")
+            else:
+                formatted_legs.append(f"🏠 Home Team Under {leg.split('(')[1].split(')')[0]} Corners")
+        elif 'AWAY_TEAM_CORNERS' in leg:
+            if 'OVER' in leg:
+                formatted_legs.append(f"✈️ Away Team Over {leg.split('(')[1].split(')')[0]} Corners")
+            else:
+                formatted_legs.append(f"✈️ Away Team Under {leg.split('(')[1].split(')')[0]} Corners")
+        elif 'HOME_TEAM_SHOTS' in leg:
+            if 'OVER' in leg:
+                formatted_legs.append(f"🏠 Home Team Over {leg.split('(')[1].split(')')[0]} Shots")
+            else:
+                formatted_legs.append(f"🏠 Home Team Under {leg.split('(')[1].split(')')[0]} Shots")
+        elif 'AWAY_TEAM_SHOTS' in leg:
+            if 'OVER' in leg:
+                formatted_legs.append(f"✈️ Away Team Over {leg.split('(')[1].split(')')[0]} Shots")
+            else:
+                formatted_legs.append(f"✈️ Away Team Under {leg.split('(')[1].split(')')[0]} Shots")
+        elif 'MATCH_RESULT' in leg:
+            if 'HOME' in leg:
+                formatted_legs.append("🏆 Match Result: HOME WIN")
+            elif 'AWAY' in leg:
+                formatted_legs.append("🏆 Match Result: AWAY WIN")
+            else:
+                formatted_legs.append("🏆 Match Result: DRAW")
+        elif 'FIRST_HALF' in leg or '1H' in leg:
+            if 'OVER' in leg:
+                formatted_legs.append(f"⏱️ 1st Half Over {leg.split('(')[1].split(')')[0]} Goals")
+            else:
+                formatted_legs.append(f"⏱️ 1st Half Under {leg.split('(')[1].split(')')[0]} Goals")
+        elif 'ANYTIME_GOALSCORER' in leg:
+            player = leg.replace('ANYTIME_GOALSCORER:', '').strip()
+            formatted_legs.append(f"⭐ {player} to Score")
+        elif 'PLAYER_SHOTS' in leg:
+            parts = leg.split(':')
+            player = parts[1].split('OVER')[0].strip() if len(parts) > 1 else 'Player'
+            threshold = leg.split('(')[1].split(')')[0] if '(' in leg else '?'
+            formatted_legs.append(f"👟 {player} Over {threshold} Shots")
+        else:
+            formatted_legs.append(leg)
+    
+    return '\n'.join([f"{i+1}. {leg}" for i, leg in enumerate(formatted_legs)])
+
 # Page setup
 st.set_page_config(
     page_title="🎯 Exact Score Predictions | Premium AI Platform",
@@ -226,7 +299,7 @@ def load_todays_predictions():
         # Today's SGPs (matches playing today)
         cursor.execute('''
             SELECT 
-                home_team, away_team, parlay_description,
+                home_team, away_team, parlay_description, legs,
                 bookmaker_odds, ev_percentage, match_date, pricing_mode
             FROM sgp_predictions
             WHERE date(match_date) = ?
@@ -235,22 +308,25 @@ def load_todays_predictions():
         
         sgp_predictions = []
         for row in cursor.fetchall():
-            match_time = datetime.fromtimestamp(row[5]) if isinstance(row[5], (int, float)) else datetime.fromisoformat(row[5])
-            pricing_mode = row[6] if row[6] else 'simulated'
+            match_time = datetime.fromtimestamp(row[6]) if isinstance(row[6], (int, float)) else datetime.fromisoformat(row[6])
+            pricing_mode = row[7] if row[7] else 'simulated'
             
             # Add icon based on pricing mode
             if pricing_mode == 'live':
-                odds_display = f"🟢 {row[3]:.2f}x"
+                odds_display = f"🟢 {row[4]:.2f}x"
             elif pricing_mode == 'hybrid':
-                odds_display = f"🟡 {row[3]:.2f}x"
+                odds_display = f"🟡 {row[4]:.2f}x"
             else:
-                odds_display = f"⚪ {row[3]:.2f}x"
+                odds_display = f"⚪ {row[4]:.2f}x"
+            
+            # Format legs for readability
+            formatted_legs = format_sgp_legs(row[3]) if row[3] else row[2]
             
             sgp_predictions.append({
                 'Match': f"{row[0]} vs {row[1]}",
-                'Parlay': row[2],
+                'Predictions': formatted_legs,
                 'Odds': odds_display,
-                'Edge': f"{row[4]:.1f}%",
+                'Edge': f"{row[5]:.1f}%",
                 'Time': match_time.strftime('%H:%M')
             })
         
@@ -1233,7 +1309,7 @@ try:
     # Get all pending SGPs
     cursor.execute('''
         SELECT 
-            home_team, away_team, parlay_description,
+            home_team, away_team, parlay_description, legs,
             bookmaker_odds, ev_percentage, match_date, stake
         FROM sgp_predictions
         WHERE status = 'pending'
@@ -1245,10 +1321,10 @@ try:
     for row in cursor.fetchall():
         # Parse match_date
         try:
-            if 'T' in str(row[5]):
-                match_dt = datetime.fromisoformat(str(row[5]).replace('Z', '+00:00'))
+            if 'T' in str(row[6]):
+                match_dt = datetime.fromisoformat(str(row[6]).replace('Z', '+00:00'))
             else:
-                match_dt = datetime.fromisoformat(str(row[5]))
+                match_dt = datetime.fromisoformat(str(row[6]))
             
             date_str = match_dt.strftime('%a, %b %d')  # "Sat, Nov 08"
             time_str = match_dt.strftime('%H:%M')       # "20:00"
@@ -1256,14 +1332,17 @@ try:
             date_str = "TBD"
             time_str = "TBD"
         
+        # Format legs for clarity
+        formatted_legs = format_sgp_legs(row[3]) if row[3] else row[2]
+        
         all_sgp.append({
             'Match': f"{row[0]} vs {row[1]}",
-            'Parlay': row[2][:50] + '...' if len(row[2]) > 50 else row[2],
-            'Odds': f"{row[3]:.2f}x",
-            'Edge': f"{row[4]:.1f}%",
+            'Predictions': formatted_legs,
+            'Odds': f"{row[4]:.2f}x",
+            'Edge': f"{row[5]:.1f}%",
             'Match Date': date_str,
             'Kickoff': time_str,
-            'Stake': f"{row[6]:.0f} SEK"
+            'Stake': f"{row[7]:.0f} SEK"
         })
     
     conn.close()
@@ -1542,7 +1621,7 @@ try:
                 # Get detailed SGP predictions for this month
                 cursor.execute('''
                     SELECT 
-                        home_team, away_team, parlay_description,
+                        home_team, away_team, parlay_description, legs,
                         bookmaker_odds, result, outcome,
                         profit_loss, match_date
                     FROM sgp_predictions
@@ -1554,19 +1633,22 @@ try:
                 sgp_results = []
                 for row in cursor.fetchall():
                     try:
-                        match_dt = datetime.fromisoformat(str(row[7]).replace('Z', '+00:00'))
+                        match_dt = datetime.fromisoformat(str(row[8]).replace('Z', '+00:00'))
                         date_str = match_dt.strftime('%b %d')
                     except:
                         date_str = "Unknown"
                     
+                    # Format legs for clarity
+                    formatted_legs = format_sgp_legs(row[3]) if row[3] else row[2]
+                    
                     sgp_results.append({
                         'Date': date_str,
                         'Match': f"{row[0]} vs {row[1]}",
-                        'Parlay': row[2][:50] + '...' if len(row[2]) > 50 else row[2],
-                        'Result': row[4],
-                        'Outcome': '✅ WIN' if row[5] == 'win' else '❌ LOSS',
-                        'Odds': f"{row[3]:.2f}x",
-                        'P/L': f"{row[6]:+.0f} SEK"
+                        'Predictions': formatted_legs,
+                        'Result': row[5],
+                        'Outcome': '✅ WIN' if row[6] == 'win' else '❌ LOSS',
+                        'Odds': f"{row[4]:.2f}x",
+                        'P/L': f"{row[7]:+.0f} SEK"
                     })
                 
                 if sgp_results:
