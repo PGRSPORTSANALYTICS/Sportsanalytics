@@ -642,8 +642,12 @@ class SGPPredictor:
             # Calculate EV
             ev_pct = (bookmaker_odds / fair_odds - 1.0) * 100.0
             
-            # Only keep if EV > 5% (lower threshold than exact scores)
-            if ev_pct > 5.0:
+            # Quality filter: Minimum EV AND minimum odds
+            # Reject low-odds parlays (< 2.5x) - not worth the risk
+            MIN_EV = 5.0
+            MIN_ODDS = 2.5
+            
+            if ev_pct > MIN_EV and bookmaker_odds >= MIN_ODDS:
                 all_sgps.append({
                     'legs': legs_with_probs,
                     'description': sgp['description'],
