@@ -977,8 +977,15 @@ class RealFootballChampion:
         
         return all_fixtures
     
-    def get_team_last_5_games(self, team_name: str, team_id: int) -> List[Dict]:
-        """Get last 5 games for a team using API-Football"""
+    def get_team_last_5_games(self, team_name: str, team_id: int, venue: str = 'all') -> List[Dict]:
+        """
+        Get last 5 games for a team using API-Football
+        
+        Args:
+            team_name: Name of the team
+            team_id: Team ID
+            venue: 'home', 'away', or 'all' - filters games by venue
+        """
         if not self.api_football_key:
             # Return mock data if no API key
             return [
@@ -994,11 +1001,11 @@ class RealFootballChampion:
         }
         
         try:
-            # Get last 5 fixtures for the team
+            # Get last 15 fixtures for the team (to ensure we have 5 of desired venue)
             url = f"{self.api_football_base_url}/fixtures"
             params = {
                 'team': team_id,
-                'last': 5,
+                'last': 15,  # Fetch more to filter by venue
                 'status': 'FT'  # Only finished games
             }
             
@@ -1016,6 +1023,12 @@ class RealFootballChampion:
                     
                     # Determine if team was home or away
                     is_home = teams.get('home', {}).get('id') == team_id
+                    
+                    # Filter by venue if specified
+                    if venue == 'home' and not is_home:
+                        continue  # Skip away games
+                    elif venue == 'away' and is_home:
+                        continue  # Skip home games
                     
                     if is_home:
                         goals_for = goals.get('home', 0)
@@ -1044,6 +1057,10 @@ class RealFootballChampion:
                         'xg_against': xg_against,
                         'result': result
                     })
+                    
+                    # Stop after 5 games of the desired venue
+                    if len(games) >= 5:
+                        break
                 
                 return games
             else:
@@ -1054,9 +1071,16 @@ class RealFootballChampion:
             print(f"❌ Error fetching team data: {e}")
             return []
     
-    def analyze_team_form(self, team_name: str, team_id: int) -> Optional[TeamForm]:
-        """Analyze team's recent form and xG data"""
-        last_5 = self.get_team_last_5_games(team_name, team_id)
+    def analyze_team_form(self, team_name: str, team_id: int, venue: str = 'all') -> Optional[TeamForm]:
+        """
+        Analyze team's recent form and xG data
+        
+        Args:
+            team_name: Name of the team
+            team_id: Team ID
+            venue: 'home', 'away', or 'all' - filters games by venue
+        """
+        last_5 = self.get_team_last_5_games(team_name, team_id, venue=venue)
         
         if not last_5:
             return None
@@ -2515,10 +2539,11 @@ class RealFootballChampion:
                 away_id = self.get_team_id_by_name(away_team) or 2
                 
                 print(f"   📊 Analyzing {home_team} vs {away_team}...")
-                home_form = self.analyze_team_form(home_team, home_id)
-                away_form = self.analyze_team_form(away_team, away_id)
+                # 🏠 Use venue-specific form: HOME games for home team, AWAY games for away team
+                home_form = self.analyze_team_form(home_team, home_id, venue='home')
+                away_form = self.analyze_team_form(away_team, away_id, venue='away')
                 h2h = self.get_head_to_head(home_team, away_team)
-                print(f"   ✅ Analysis complete")
+                print(f"   ✅ Analysis complete (venue-specific form)")
                 
                 # 📊 REAL xG DATA: Try to get actual statistics from API-Football
                 real_xg_data = None
