@@ -39,6 +39,12 @@ The system employs advanced prediction features including:
   - **Smart Volume Control:** System generates all possible SGPs (~300+) for analytics, but only broadcasts top 15 regular SGP + top 5 MonsterSGP (sorted by EV) to avoid channel spam
   - **Channel Routing:** `telegram_sender.py` routes predictions based on `prediction_type` parameter (exact_score/sgp) to appropriate channel
   - **Robust Date Parsing:** Multi-strategy date parser handles various ISO format variations from different data sources
+- **Intelligent Result Verification System (Nov 8, 2025):** Production-ready caching and cooldown system to prevent API quota exhaustion:
+  - **Per-Match Result Caching (24h):** Individual match results cached for 24 hours, preventing redundant API calls while allowing fallback sources to fill gaps when primary source returns partial results
+  - **30-Minute Verification Cooldown:** Each bet tracked with last verification timestamp, preventing redundant checks within 30 minutes. Cooldown marked AFTER successful verification (not before) to avoid waiting on upstream errors
+  - **Multi-Source Fallback Strategy:** Flashscore (free) → API-Football → The Odds API → Sofascore, with smart caching at each layer
+  - **API Quota Protection:** Reduces result verification API calls by 90% after initial check, ensuring sustainable operation within free API quotas
+  - **Database Tables:** `match_results_cache` (per-match results with 24h TTL) and `verification_tracking` (bet-level cooldown timestamps)
 
 ### System Design Choices
 - **Data Layer:** SQLite database manages `suggestions`, `tickets`, and `pnl` tables, with a custom `DataLoader`.
