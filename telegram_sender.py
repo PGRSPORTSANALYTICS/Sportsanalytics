@@ -50,7 +50,8 @@ class TelegramBroadcaster:
                     chat_id TEXT PRIMARY KEY,
                     username TEXT,
                     subscribed_at INTEGER,
-                    is_channel INTEGER DEFAULT 0
+                    is_channel INTEGER DEFAULT 0,
+                    channel_type TEXT
                 )
             ''')
             
@@ -63,13 +64,17 @@ class TelegramBroadcaster:
             logger.error(f"❌ Failed to get subscribers: {e}")
             return []
     
-    def get_channel(self) -> Optional[str]:
-        """Get configured channel ID (if any)"""
+    def get_channel(self, channel_type: str = 'exact_score') -> Optional[str]:
+        """Get configured channel ID for specific type (exact_score or sgp)"""
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
-            cursor.execute('SELECT chat_id FROM telegram_subscribers WHERE is_channel = 1 LIMIT 1')
+            cursor.execute('''
+                SELECT chat_id FROM telegram_subscribers 
+                WHERE is_channel = 1 AND channel_type = ? 
+                LIMIT 1
+            ''', (channel_type,))
             result = cursor.fetchone()
             conn.close()
             
@@ -78,24 +83,24 @@ class TelegramBroadcaster:
             logger.error(f"❌ Failed to get channel: {e}")
             return None
     
-    def set_channel(self, channel_id: str, channel_name: str = "Channel") -> bool:
-        """Set the broadcast channel"""
+    def set_channel(self, channel_id: str, channel_name: str = "Channel", channel_type: str = 'exact_score') -> bool:
+        """Set the broadcast channel for specific type (exact_score or sgp)"""
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
-            # Remove old channel if exists
-            cursor.execute('DELETE FROM telegram_subscribers WHERE is_channel = 1')
+            # Remove old channel of this type if exists
+            cursor.execute('DELETE FROM telegram_subscribers WHERE is_channel = 1 AND channel_type = ?', (channel_type,))
             
             # Add new channel
             cursor.execute('''
-                INSERT INTO telegram_subscribers (chat_id, username, subscribed_at, is_channel)
-                VALUES (?, ?, ?, 1)
-            ''', (channel_id, channel_name, int(datetime.now().timestamp())))
+                INSERT INTO telegram_subscribers (chat_id, username, subscribed_at, is_channel, channel_type)
+                VALUES (?, ?, ?, 1, ?)
+            ''', (channel_id, channel_name, int(datetime.now().timestamp()), channel_type))
             
             conn.commit()
             conn.close()
-            logger.info(f"✅ Channel set: {channel_name} ({channel_id})")
+            logger.info(f"✅ {channel_type.upper()} channel set: {channel_name} ({channel_id})")
             return True
         except Exception as e:
             logger.error(f"❌ Failed to set channel: {e}")
@@ -120,8 +125,13 @@ class TelegramBroadcaster:
             logger.error(f"❌ Failed to add subscriber: {e}")
             return False
     
-    def broadcast_prediction(self, prediction: Dict) -> int:
-        """Broadcast a prediction to all subscribers AND channel (ONLY TODAY'S MATCHES)"""
+    def broadcast_prediction(self, prediction: Dict, prediction_type: str = 'exact_score') -> int:
+        """Broadcast a prediction to appropriate channel based on type (ONLY TODAY'S MATCHES)
+        
+        Args:
+            prediction: Prediction dict
+            prediction_type: 'exact_score' or 'sgp'
+        """
         # Filter: Only broadcast if match is playing TODAY
         match_date_raw = prediction.get('match_date') or prediction.get('datetime') or prediction.get('kickoff_time')
         
@@ -143,19 +153,26 @@ class TelegramBroadcaster:
             logger.warning(f"⚠️ No match date found in prediction - skipping broadcast")
             return 0
         
-        message = self._format_prediction(prediction)
+        # Format message based on prediction type
+        if prediction_type == 'sgp':
+            message = self._format_sgp_prediction(prediction)
+        else:
+            message = self._format_prediction(prediction)
+        
         subscribers = self.get_subscribers()
-        channel_id = self.get_channel()
+        channel_id = self.get_channel(channel_type=prediction_type)
         
         success_count = 0
         
-        # Send to channel first (public visibility)
+        # Send to appropriate channel first (public visibility)
         if channel_id:
             if self.send_message(channel_id, message):
-                logger.info(f"📢 Posted to channel: {channel_id}")
+                logger.info(f"📢 Posted {prediction_type.upper()} to channel: {channel_id}")
                 success_count += 1
             else:
                 logger.warning(f"⚠️ Failed to post to channel: {channel_id}")
+        else:
+            logger.warning(f"⚠️ No {prediction_type.upper()} channel configured")
         
         # Send to individual subscribers
         if not subscribers:
@@ -166,7 +183,7 @@ class TelegramBroadcaster:
                     success_count += 1
         
         total_targets = (1 if channel_id else 0) + len(subscribers)
-        logger.info(f"📤 Broadcasted to {success_count}/{total_targets} targets")
+        logger.info(f"📤 Broadcasted {prediction_type.upper()} to {success_count}/{total_targets} targets")
         return success_count
     
     def _get_live_stats(self) -> Dict:
@@ -315,6 +332,52 @@ Target: 20-25% WR, +100-200% ROI
 """
         return message
     
+    def _format_sgp_prediction(self, prediction: Dict) -> str:
+        """Format SGP prediction as Telegram message"""
+        from datetime import datetime
+        import pytz
+        
+        home = prediction['home_team']
+        away = prediction['away_team']
+        parlay_desc = prediction.get('parlay_description', 'SGP')
+        odds = prediction.get('bookmaker_odds', prediction.get('odds', 0))
+        ev = prediction.get('ev_percentage', 0)
+        stake = prediction.get('stake', 160)
+        
+        league = prediction.get('league', 'N/A')
+        
+        # Parse kickoff time
+        match_date_raw = prediction.get('match_date') or prediction.get('datetime') or prediction.get('kickoff_time')
+        if match_date_raw:
+            try:
+                dt = datetime.fromisoformat(match_date_raw.replace('Z', '+00:00'))
+                stockholm_tz = pytz.timezone('Europe/Stockholm')
+                dt_stockholm = dt.astimezone(stockholm_tz)
+                match_time = dt_stockholm.strftime('%a %b %d, %H:%M')
+            except:
+                match_time = match_date_raw
+        else:
+            match_time = 'TBA'
+        
+        message = f"""🎲 NEW SGP PREDICTION
+
+{home} vs {away}
+{parlay_desc}
+
+💰 Odds: {odds:.1f}x
+📈 Expected Value: {ev:+.1f}%
+💵 Recommended Stake: {stake} SEK
+
+Potential Return: {int(stake * odds)} SEK
+Profit: {int(stake * (odds - 1))} SEK
+
+⏰ KICKOFF: {match_time}
+🏆 League: {league}
+
+🎯 Smart parlay combining correlated markets for maximum value!
+"""
+        return message
+    
     def _format_result(self, result: Dict) -> str:
         """Format settled result as Telegram message"""
         home = result['home_team']
@@ -356,18 +419,23 @@ Total Profit: {stats['profit']:.0f} SEK ({stats['roi']:.1f}% ROI)
 """
         return message
     
-    def broadcast_result(self, result: Dict) -> int:
-        """Broadcast a settled result to all subscribers AND channel"""
+    def broadcast_result(self, result: Dict, result_type: str = 'exact_score') -> int:
+        """Broadcast a settled result to appropriate channel based on type
+        
+        Args:
+            result: Result dict
+            result_type: 'exact_score' or 'sgp'
+        """
         message = self._format_result(result)
         subscribers = self.get_subscribers()
-        channel_id = self.get_channel()
+        channel_id = self.get_channel(channel_type=result_type)
         
         success_count = 0
         
-        # Send to channel first (public visibility)
+        # Send to appropriate channel first (public visibility)
         if channel_id:
             if self.send_message(channel_id, message):
-                logger.info(f"📢 Posted result to channel: {channel_id}")
+                logger.info(f"📢 Posted {result_type.upper()} result to channel: {channel_id}")
                 success_count += 1
             else:
                 logger.warning(f"⚠️ Failed to post result to channel: {channel_id}")
@@ -381,7 +449,7 @@ Total Profit: {stats['profit']:.0f} SEK ({stats['roi']:.1f}% ROI)
                     success_count += 1
         
         total_targets = (1 if channel_id else 0) + len(subscribers)
-        logger.info(f"📤 Broadcasted result to {success_count}/{total_targets} targets")
+        logger.info(f"📤 Broadcasted {result_type.upper()} result to {success_count}/{total_targets} targets")
         return success_count
     
     def get_todays_predictions(self) -> List[Dict]:
