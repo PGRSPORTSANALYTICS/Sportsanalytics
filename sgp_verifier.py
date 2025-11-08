@@ -191,6 +191,11 @@ class SGPVerifier:
             profit_loss = -stake
             payout = 0
         
+        # CRITICAL: Always set both outcome AND result consistently
+        # outcome = 'win'/'loss' (lowercase, used for stats calculations)  
+        # result = 'WIN'/'LOSS' (uppercase, used for dashboard display)
+        result_display = outcome.upper()  # Convert 'win' to 'WIN', 'loss' to 'LOSS'
+        
         cursor.execute('''
             UPDATE sgp_predictions
             SET status = 'settled',
@@ -200,7 +205,7 @@ class SGPVerifier:
                 payout = ?,
                 settled_timestamp = ?
             WHERE id = ?
-        ''', (outcome, actual_score, profit_loss, payout, int(datetime.now().timestamp()), sgp_id))
+        ''', (outcome, result_display, profit_loss, payout, int(datetime.now().timestamp()), sgp_id))
         
         conn.commit()
         conn.close()
