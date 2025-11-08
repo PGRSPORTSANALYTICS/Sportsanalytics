@@ -29,19 +29,23 @@ class ResultsScraper:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
-            # Cache for fetched results (avoid redundant API calls)
+            # Per-match cache to avoid partial result blocking
             cursor.execute('''
-                CREATE TABLE IF NOT EXISTS results_cache (
-                    date TEXT PRIMARY KEY,
-                    results_json TEXT NOT NULL,
+                CREATE TABLE IF NOT EXISTS match_results_cache (
+                    home_team TEXT,
+                    away_team TEXT,
+                    match_date TEXT,
+                    home_score INTEGER,
+                    away_score INTEGER,
                     cached_at TEXT NOT NULL,
-                    source TEXT
+                    source TEXT,
+                    PRIMARY KEY (home_team, away_team, match_date)
                 )
             ''')
             
             conn.commit()
             conn.close()
-            logger.info("✅ Results cache initialized")
+            logger.info("✅ Match results cache initialized")
         except Exception as e:
             logger.error(f"Error initializing cache: {e}")
     
@@ -65,55 +69,74 @@ class ResultsScraper:
         except Exception as e:
             logger.error(f"Error initializing verification tracking: {e}")
     
-    def _get_cached_results(self, date_str):
-        """Get cached results if available and fresh (within 24h)"""
+    def _get_cached_match_result(self, home_team, away_team, date_str):
+        """Get cached result for a specific match if available and fresh"""
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
+            # Normalize team names for cache lookup
+            home_norm = self._normalize_team_for_cache(home_team)
+            away_norm = self._normalize_team_for_cache(away_team)
+            
             cursor.execute('''
-                SELECT results_json, cached_at, source
-                FROM results_cache
-                WHERE date = ?
-            ''', (date_str,))
+                SELECT home_score, away_score, source, cached_at
+                FROM match_results_cache
+                WHERE home_team = ? AND away_team = ? AND match_date = ?
+            ''', (home_norm, away_norm, date_str))
             
             row = cursor.fetchone()
             conn.close()
             
             if row:
-                results_json, cached_at, source = row
+                home_score, away_score, source, cached_at = row
                 cached_time = datetime.fromisoformat(cached_at)
                 age_hours = (datetime.now() - cached_time).total_seconds() / 3600
                 
                 # Cache is valid for 24 hours
                 if age_hours < 24:
-                    results = json.loads(results_json)
-                    logger.info(f"💾 Using cached results for {date_str} ({len(results)} matches, {age_hours:.1f}h old, source: {source})")
-                    return results
-                else:
-                    logger.info(f"🗑️ Cache expired for {date_str} ({age_hours:.1f}h old)")
+                    return {
+                        'home_team': home_team,
+                        'away_team': away_team,
+                        'home_score': home_score,
+                        'away_score': away_score,
+                        'score': f"{home_score}-{away_score}",
+                        'total_goals': home_score + away_score,
+                        'result': 'home' if home_score > away_score else ('away' if away_score > home_score else 'draw'),
+                        'source': f'{source}-cached'
+                    }
             
             return None
         except Exception as e:
-            logger.error(f"Error reading cache: {e}")
+            logger.error(f"Error reading match cache: {e}")
             return None
     
-    def _save_cached_results(self, date_str, results, source):
-        """Save results to cache"""
+    def _save_match_result(self, match_result, date_str, source):
+        """Save individual match result to cache"""
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
+            home_norm = self._normalize_team_for_cache(match_result['home_team'])
+            away_norm = self._normalize_team_for_cache(match_result['away_team'])
+            
             cursor.execute('''
-                INSERT OR REPLACE INTO results_cache (date, results_json, cached_at, source)
-                VALUES (?, ?, ?, ?)
-            ''', (date_str, json.dumps(results), datetime.now().isoformat(), source))
+                INSERT OR REPLACE INTO match_results_cache 
+                (home_team, away_team, match_date, home_score, away_score, cached_at, source)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (home_norm, away_norm, date_str, 
+                  match_result['home_score'], match_result['away_score'],
+                  datetime.now().isoformat(), source))
             
             conn.commit()
             conn.close()
-            logger.info(f"💾 Cached {len(results)} results for {date_str} (source: {source})")
         except Exception as e:
-            logger.error(f"Error saving cache: {e}")
+            logger.error(f"Error saving match cache: {e}")
+    
+    def _normalize_team_for_cache(self, team_name):
+        """Normalize team name for cache key consistency"""
+        # Simple normalization for caching
+        return team_name.lower().strip()
     
     def _should_check_bet(self, bet_id):
         """Check if enough time has passed since last verification (30 min cooldown)"""
@@ -547,7 +570,7 @@ class ResultsScraper:
             return []
     
     def get_results_for_date(self, date_str):
-        """Get results from multiple sources for a date with caching"""
+        """Get results from multiple sources for a date (no per-date caching, uses per-match cache instead)"""
         logger.info(f"🔍 Getting results for {date_str}")
         
         # Extract just the date part if timestamp is included
@@ -556,34 +579,20 @@ class ResultsScraper:
         else:
             clean_date = date_str
         
-        # Check cache first (saves API calls!)
-        cached_results = self._get_cached_results(clean_date)
-        if cached_results:
-            return cached_results
-        
-        # Cache miss - fetch from sources
         # Try Flashscore first (free, unlimited)
         results = self.get_flashscore_results(clean_date)
-        source = 'flashscore'
         
         if not results:
             logger.info("📡 No results from Flashscore, trying API-Football...")
             results = self.get_api_football_results(clean_date)
-            source = 'api-football'
         
         if not results:
             logger.info("📡 No results from API-Football, trying The Odds API...")
             results = self.get_odds_api_results(clean_date)
-            source = 'odds-api'
         
         if not results:
             logger.info("📡 No results from The Odds API, trying Sofascore...")
             results = self.get_sofascore_results(clean_date)
-            source = 'sofascore'
-        
-        # Cache the results if we found any
-        if results:
-            self._save_cached_results(clean_date, results, source)
         
         logger.info(f"📊 Found {len(results)} total results for {clean_date}")
         return results
@@ -619,7 +628,6 @@ class ResultsScraper:
                 bet_id = bet[0]
                 if self._should_check_bet(bet_id):
                     bets_to_check.append(bet)
-                    self._mark_bet_checked(bet_id)
                 else:
                     skipped_count += 1
             
@@ -631,21 +639,50 @@ class ResultsScraper:
                 conn.close()
                 return 0
             
-            # Process unique dates to avoid redundant API calls
-            unique_dates = {}
+            logger.info(f"🔍 Checking {len(bets_to_check)} bets")
+            
+            # Process bets with per-match caching and smart fallback
+            cache_hits = 0
+            bets_needing_fetch = {}  # Group by date for efficient fetching
+            
             for bet in bets_to_check:
                 bet_id, home_team, away_team, selection, match_date, odds, stake = bet
-                if match_date not in unique_dates:
-                    unique_dates[match_date] = []
-                unique_dates[match_date].append(bet)
+                clean_date = match_date.split('T')[0] if 'T' in match_date else match_date
+                
+                # Check per-match cache first
+                cached_result = self._get_cached_match_result(home_team, away_team, clean_date)
+                
+                if cached_result:
+                    # Cache hit - update immediately
+                    cache_hits += 1
+                    outcome = self.determine_bet_outcome(selection, cached_result)
+                    profit_loss = self.calculate_profit_loss(outcome, odds, stake)
+                    payout = self.calculate_payout(outcome, odds, stake)
+                    
+                    cursor.execute('''
+                        UPDATE football_opportunities 
+                        SET outcome = ?, profit_loss = ?, payout = ?, updated_at = ?
+                        WHERE id = ?
+                    ''', (outcome, profit_loss, payout, datetime.now().isoformat(), bet_id))
+                    
+                    updated_count += 1
+                    self._mark_bet_checked(bet_id)  # Mark cooldown after success
+                    logger.info(f"✅ Updated bet {bet_id} from cache: {home_team} vs {away_team} | {selection} = {outcome}")
+                else:
+                    # Cache miss - need to fetch
+                    if clean_date not in bets_needing_fetch:
+                        bets_needing_fetch[clean_date] = []
+                    bets_needing_fetch[clean_date].append(bet)
             
-            logger.info(f"🔍 Checking {len(bets_to_check)} bets across {len(unique_dates)} dates")
+            if cache_hits > 0:
+                logger.info(f"💾 {cache_hits} bets resolved from cache (saved API calls)")
             
-            for match_date, date_bets in unique_dates.items():
-                # Get results once per date (uses cache if available!)
+            # Fetch results only for cache misses
+            for match_date, date_bets in bets_needing_fetch.items():
+                logger.info(f"🌐 Fetching results for {match_date} ({len(date_bets)} bets)")
                 results = self.get_results_for_date(match_date)
                 
-                # Process all bets for this date
+                # Process each bet
                 for bet in date_bets:
                     bet_id, home_team, away_team, selection, match_date, odds, stake = bet
                     
@@ -658,11 +695,13 @@ class ResultsScraper:
                             break
                     
                     if match_result:
+                        # Cache this result for future use
+                        self._save_match_result(match_result, match_date.split('T')[0], match_result.get('source', 'unknown'))
+                        
                         outcome = self.determine_bet_outcome(selection, match_result)
                         profit_loss = self.calculate_profit_loss(outcome, odds, stake)
                         payout = self.calculate_payout(outcome, odds, stake)
                         
-                        # Update bet outcome
                         cursor.execute('''
                             UPDATE football_opportunities 
                             SET outcome = ?, profit_loss = ?, payout = ?, updated_at = ?
@@ -670,7 +709,12 @@ class ResultsScraper:
                         ''', (outcome, profit_loss, payout, datetime.now().isoformat(), bet_id))
                         
                         updated_count += 1
+                        self._mark_bet_checked(bet_id)  # Mark cooldown only after success
                         logger.info(f"✅ Updated bet {bet_id}: {home_team} vs {away_team} | {selection} = {outcome}")
+                    else:
+                        # No result found - mark checked to avoid immediate retry
+                        self._mark_bet_checked(bet_id)
+                        logger.debug(f"⏭️ No result yet for bet {bet_id}: {home_team} vs {away_team}")
             
             conn.commit()
             conn.close()
