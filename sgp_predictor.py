@@ -49,6 +49,12 @@ CORR_RULES = {
     ("CORNERS:OVER", "HALF_TIME_GOALS:OVER"): 0.30,
     ("CORNERS:OVER", "SECOND_HALF_GOALS:OVER"): 0.32,
     
+    # MonsterSGP - 1st Half Only correlations
+    ("HALF_TIME_GOALS:OVER", "HALF_TIME_BTTS:YES"): 0.40,
+    ("HALF_TIME_GOALS:OVER", "HALF_TIME_CORNERS:OVER"): 0.35,
+    ("HALF_TIME_BTTS:YES", "HALF_TIME_CORNERS:OVER"): 0.30,
+    ("HALF_TIME_CORNERS:OVER", "HALF_TIME_GOALS:OVER"): 0.35,
+    
     # Negative correlations
     ("PLAYER_TO_SCORE:NO", "BTTS:NO"): 0.15,
     ("OVER_UNDER_GOALS:UNDER", "PLAYER_TO_SCORE:YES"): -0.15,
@@ -245,6 +251,64 @@ class SGPPredictor:
                     prob_result += prob_score
         
         return prob_result
+    
+    def calculate_half_time_btts_prob(self, lambda_home: float, lambda_away: float, btts: bool = True) -> float:
+        """
+        Calculate 1st half BTTS probability
+        
+        Args:
+            lambda_home: Expected goals for home team (full match)
+            lambda_away: Expected goals for away team (full match)
+            btts: True for BTTS Yes, False for BTTS No
+        
+        Returns:
+            Probability of 1st half BTTS outcome
+        """
+        # 1st half typically sees ~45% of total goals
+        lambda_home_1h = lambda_home * 0.45
+        lambda_away_1h = lambda_away * 0.45
+        
+        max_goals = 6
+        prob_btts_yes = 0.0
+        
+        for h in range(max_goals + 1):
+            for a in range(max_goals + 1):
+                prob_score = poisson.pmf(h, lambda_home_1h) * poisson.pmf(a, lambda_away_1h)
+                
+                if h > 0 and a > 0:
+                    prob_btts_yes += prob_score
+        
+        return prob_btts_yes if btts else (1.0 - prob_btts_yes)
+    
+    def calculate_half_time_corners_prob(self, total_xg: float, line: float = 4.5, over: bool = True) -> float:
+        """
+        Calculate 1st half corners Over/Under probability
+        
+        Args:
+            total_xg: Total expected goals (home + away)
+            line: Corners line (e.g., 4.5, 5.5)
+            over: True for Over, False for Under
+        
+        Returns:
+            Probability of the outcome
+        """
+        # 1st half typically sees ~43% of total corners
+        # Calibrated formula: half_corners = total_xg × 1.3 + 1.0
+        expected_1h_corners = total_xg * 1.3 + 1.0
+        
+        # Use Poisson for corner count
+        max_corners = 15
+        prob_result = 0.0
+        
+        for c in range(max_corners + 1):
+            prob_count = poisson.pmf(c, expected_1h_corners)
+            
+            if over and c > line:
+                prob_result += prob_count
+            elif not over and c < line:
+                prob_result += prob_count
+        
+        return max(0.10, min(0.90, prob_result))
     
     def calculate_second_half_goals_prob(self, lambda_home: float, lambda_away: float, line: float = 0.5, over: bool = True) -> float:
         """
@@ -483,6 +547,68 @@ class SGPPredictor:
                 ],
                 'description': 'Over 1.5/2.5 + BTTS + 1H/2H + Corners 10.5 (6-Leg ULTRA)'
             },
+            
+            # ========== MONSTERSGP - 1ST HALF ONLY (3-7 LEGS) ==========
+            
+            # 3-Leg MonsterSGP: 1H Goals + 1H BTTS + 1H Corners
+            {
+                'legs': [
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
+                    {'market_type': 'HALF_TIME_BTTS', 'outcome': 'YES'},
+                    {'market_type': 'HALF_TIME_CORNERS', 'outcome': 'OVER', 'line': 4.5}
+                ],
+                'description': '1H Over 0.5 + 1H BTTS + 1H Corners 4.5+ (MonsterSGP 3-Leg)'
+            },
+            
+            # 4-Leg MonsterSGP: Double 1H Goals + 1H BTTS + 1H Corners
+            {
+                'legs': [
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 1.5},
+                    {'market_type': 'HALF_TIME_BTTS', 'outcome': 'YES'},
+                    {'market_type': 'HALF_TIME_CORNERS', 'outcome': 'OVER', 'line': 4.5}
+                ],
+                'description': '1H Over 0.5/1.5 + 1H BTTS + 1H Corners 4.5+ (MonsterSGP 4-Leg)'
+            },
+            
+            # 5-Leg MonsterSGP: Double 1H Goals + 1H BTTS + Double 1H Corners
+            {
+                'legs': [
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 1.5},
+                    {'market_type': 'HALF_TIME_BTTS', 'outcome': 'YES'},
+                    {'market_type': 'HALF_TIME_CORNERS', 'outcome': 'OVER', 'line': 3.5},
+                    {'market_type': 'HALF_TIME_CORNERS', 'outcome': 'OVER', 'line': 4.5}
+                ],
+                'description': '1H Over 0.5/1.5 + 1H BTTS + 1H Corners 3.5/4.5 (MonsterSGP 5-Leg)'
+            },
+            
+            # 6-Leg MonsterSGP: Triple 1H Goals + 1H BTTS + Double 1H Corners
+            {
+                'legs': [
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 1.5},
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 2.5},
+                    {'market_type': 'HALF_TIME_BTTS', 'outcome': 'YES'},
+                    {'market_type': 'HALF_TIME_CORNERS', 'outcome': 'OVER', 'line': 3.5},
+                    {'market_type': 'HALF_TIME_CORNERS', 'outcome': 'OVER', 'line': 4.5}
+                ],
+                'description': '1H Over 0.5/1.5/2.5 + 1H BTTS + 1H Corners 3.5/4.5 (MonsterSGP 6-Leg)'
+            },
+            
+            # 7-Leg MonsterSGP BEAST: Triple 1H Goals + 1H BTTS + Triple 1H Corners
+            {
+                'legs': [
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 1.5},
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 2.5},
+                    {'market_type': 'HALF_TIME_BTTS', 'outcome': 'YES'},
+                    {'market_type': 'HALF_TIME_CORNERS', 'outcome': 'OVER', 'line': 3.5},
+                    {'market_type': 'HALF_TIME_CORNERS', 'outcome': 'OVER', 'line': 4.5},
+                    {'market_type': 'HALF_TIME_CORNERS', 'outcome': 'OVER', 'line': 5.5}
+                ],
+                'description': '1H Over 0.5/1.5/2.5 + 1H BTTS + 1H Corners 3.5/4.5/5.5 (MonsterSGP 7-LEG BEAST)'
+            },
         ]
         
         # Add player prop combinations if player data available (4-7 legs with players)
@@ -646,6 +772,20 @@ class SGPPredictor:
                     prob = self.calculate_corners_prob(
                         lambda_home, lambda_away,
                         leg.get('line', 9.5),
+                        leg['outcome'] == 'OVER'
+                    )
+                    
+                elif leg['market_type'] == 'HALF_TIME_BTTS':
+                    prob = self.calculate_half_time_btts_prob(
+                        lambda_home, lambda_away,
+                        leg['outcome'] == 'YES'
+                    )
+                    
+                elif leg['market_type'] == 'HALF_TIME_CORNERS':
+                    total_xg = lambda_home + lambda_away
+                    prob = self.calculate_half_time_corners_prob(
+                        total_xg,
+                        leg.get('line', 4.5),
                         leg['outcome'] == 'OVER'
                     )
                 else:
