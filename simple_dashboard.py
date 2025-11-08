@@ -559,7 +559,7 @@ if page == "⚽ Exact Score Analytics":
                     height=400
                 )
                 
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
             
             st.markdown("---")
             
@@ -846,7 +846,7 @@ if page == "🎲 SGP Analytics":
                     height=400
                 )
                 
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
             
             st.markdown("---")
             
@@ -966,7 +966,7 @@ if page == "🎲 SGP Analytics":
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
     try:
-        st.image("assets/logo.png", use_container_width=True)
+        st.image("assets/logo.png", width='stretch')
     except:
         st.markdown("# 🎯 AI PREDICTIONS PLATFORM")
 
