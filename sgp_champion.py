@@ -272,30 +272,23 @@ class SGPChampion:
         try:
             match_data = sgp['match_data']
             
-            message = f"""
-🎰 **SGP PREDICTION**
-
-⚽ **{match_data['home_team']} vs {match_data['away_team']}**
-🏆 {match_data.get('league', 'Unknown')}
-📅 {match_data.get('match_date', 'TBD')}
-
-🎯 **Parlay:** {sgp['description']}
-
-📊 **Analysis:**
-• Probability: {sgp['parlay_probability']*100:.2f}%
-• Fair Odds: {sgp['fair_odds']:.2f}
-• Bookmaker Odds: {sgp['bookmaker_odds']:.2f}
-• Edge (EV): +{sgp['ev_percentage']:.1f}%
-
-💰 Recommended Stake: 160 SEK
-🎲 Potential Return: {160 * sgp['bookmaker_odds']:.0f} SEK
-
----
-🤖 AI-Powered SGP | Copula Simulation (200k runs)
-            """.strip()
+            # Format prediction for Telegram broadcaster
+            prediction = {
+                'home_team': match_data['home_team'],
+                'away_team': match_data['away_team'],
+                'league': match_data.get('league', 'Unknown'),
+                'match_date': match_data.get('match_date'),
+                'kickoff_time': match_data.get('kickoff_time'),
+                'parlay_description': sgp['description'],
+                'bookmaker_odds': sgp['bookmaker_odds'],
+                'odds': sgp['bookmaker_odds'],
+                'ev_percentage': sgp['ev_percentage'],
+                'stake': 160
+            }
             
-            self.telegram.send_message(message, parse_mode='Markdown')
-            logger.info("📱 SGP sent to Telegram")
+            # Use broadcast_prediction with SGP type
+            self.telegram.broadcast_prediction(prediction, prediction_type='sgp')
+            logger.info("📱 SGP sent to Telegram (SGP Channel)")
             
         except Exception as e:
             logger.error(f"❌ Telegram send failed: {e}")
