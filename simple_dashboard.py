@@ -356,6 +356,7 @@ with st.sidebar:
     nav_options = ["📊 Dashboard", "⚽ Exact Score Analytics"]
     if SGP_PUBLIC:
         nav_options.append("🎲 SGP Analytics")
+        nav_options.append("🎯 MonsterSGP")
     nav_options.append("📜 Terms & Legal")
     
     page = st.radio(
@@ -1039,6 +1040,119 @@ if page == "🎲 SGP Analytics":
         
     except Exception as e:
         st.error(f"Error loading analytics: {str(e)}")
+    
+    st.stop()
+
+# ============================================================================
+# PAGE: MONSTERSGP (Dedicated MonsterSGP Dashboard)
+# ============================================================================
+
+if page == "🎯 MonsterSGP":
+    st.markdown("# 🔥 MONSTERSGP PREDICTIONS")
+    st.markdown('<p class="subtitle">7-Leg Parlays | High Odds Entertainment</p>', unsafe_allow_html=True)
+    
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # MonsterSGP Stats (5+ legs only)
+        cursor.execute('''
+            SELECT 
+                COUNT(*) as total,
+                SUM(CASE WHEN outcome = 'win' THEN 1 ELSE 0 END) as wins,
+                SUM(stake) as total_staked,
+                SUM(profit_loss) as net_profit,
+                AVG(bookmaker_odds) as avg_odds
+            FROM sgp_predictions
+            WHERE status = 'settled'
+            AND legs LIKE '%|%|%|%|%'
+        ''')
+        stats = cursor.fetchone()
+        
+        if stats and stats[0] > 0:
+            total, wins, staked, profit, avg_odds = stats
+            losses = total - (wins or 0)
+            hit_rate = (wins / total * 100) if total > 0 else 0
+            
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Total MonsterSGPs", total)
+            with col2:
+                st.metric("Avg Odds", f"{avg_odds:.2f}x")
+            with col3:
+                st.metric("Settled", "Pending", help="1st half only")
+            with col4:
+                st.metric("P/L Today", "+0 SEK")
+        
+        st.markdown("---")
+        
+        # Active MonsterSGP Predictions
+        st.markdown("## 🔥 ACTIVE MONSTERSGP PREDICTIONS")
+        
+        cursor.execute('''
+            SELECT 
+                home_team, away_team, parlay_description, legs,
+                bookmaker_odds, ev_percentage, match_date, stake
+            FROM sgp_predictions
+            WHERE status = 'pending'
+            AND legs LIKE '%|%|%|%|%'
+            ORDER BY bookmaker_odds DESC
+            LIMIT 50
+        ''')
+        
+        active_monsters = []
+        for row in cursor.fetchall():
+            # Parse match_date
+            try:
+                if 'T' in str(row[6]):
+                    match_dt = datetime.fromisoformat(str(row[6]).replace('Z', '+00:00'))
+                else:
+                    match_dt = datetime.fromisoformat(str(row[6]))
+                
+                date_str = match_dt.strftime('%a, %b %d')
+                time_str = match_dt.strftime('%H:%M')
+            except:
+                date_str = "TBD"
+                time_str = "TBD"
+            
+            # Format legs using Bet365 style
+            formatted_legs = format_sgp_legs(row[3]) if row[3] else row[2]
+            leg_count = formatted_legs.count('✓')
+            
+            active_monsters.append({
+                'match': f"{row[0]} vs {row[1]}",
+                'legs': formatted_legs,
+                'leg_count': leg_count,
+                'odds': row[4],
+                'ev': row[5],
+                'date': date_str,
+                'time': time_str,
+                'stake': row[7]
+            })
+        
+        if active_monsters:
+            st.caption(f"{len(active_monsters)} active MonsterSGP predictions")
+            
+            # Display each MonsterSGP as expandable card
+            for monster in active_monsters:
+                with st.expander(
+                    f"🔥 MonsterSGP {monster['leg_count']}-Leg | {monster['match']} | {monster['odds']:.2f}x | {monster['ev']:.1f}% EV | {monster['date']} {monster['time']}", 
+                    expanded=False
+                ):
+                    st.markdown("**📋 PARLAY LEGS:**")
+                    st.text(monster['legs'])
+                    st.markdown(f"**💰 Odds:** {monster['odds']:.2f}x | **📈 Edge:** {monster['ev']:.1f}% | **💵 Stake:** {monster['stake']:.0f} SEK")
+                    
+                    potential_return = monster['stake'] * monster['odds']
+                    potential_profit = potential_return - monster['stake']
+                    st.markdown(f"**🎯 Potential Return:** {potential_return:.0f} SEK | **💸 Potential Profit:** {potential_profit:.0f} SEK")
+        else:
+            st.info("No active MonsterSGP predictions at the moment")
+        
+        conn.close()
+        
+    except Exception as e:
+        st.error(f"Error loading MonsterSGP data: {str(e)}")
     
     st.stop()
 
