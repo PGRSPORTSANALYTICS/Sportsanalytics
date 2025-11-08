@@ -1257,8 +1257,23 @@ if exact_today or sgp_today:
         if sgp_today:
             st.markdown(f"**{len(sgp_today)} SGP predictions today**")
             st.caption("🟢 Live bookmaker odds | 🟡 Hybrid pricing | ⚪ Simulated odds")
-            df_sgp = pd.DataFrame(sgp_today)
-            st.dataframe(df_sgp, width='stretch', hide_index=True)
+            
+            # Display each SGP with expandable legs for clarity
+            for i, sgp in enumerate(sgp_today, 1):
+                match = sgp['Match']
+                predictions = sgp['Predictions']
+                odds = sgp['Odds']
+                edge = sgp['Edge']
+                time = sgp['Time']
+                
+                # Count legs for MonsterSGP detection
+                leg_count = predictions.count('✓')
+                sgp_type = f"🔥 MonsterSGP {leg_count}-Leg" if leg_count >= 5 else f"🎲 SGP {leg_count}-Leg"
+                
+                with st.expander(f"{sgp_type} | {match} | {odds} | {edge} EV | ⏰ {time}", expanded=False):
+                    st.markdown("**📋 PARLAY LEGS:**")
+                    st.text(predictions)
+                    st.markdown(f"**💰 Odds:** {odds} | **📈 Edge:** {edge} | **⏰ Kickoff:** {time}")
         else:
             st.info("No SGP predictions today")
 
@@ -1372,11 +1387,27 @@ try:
         
         with tab2:
             if all_sgp:
-                df_all_sgp = pd.DataFrame(all_sgp)
-                st.dataframe(df_all_sgp, width='stretch', hide_index=True)
-                
                 total_stake = sum([float(p['Stake'].replace(' SEK', '')) for p in all_sgp])
                 st.caption(f"💰 Total Active Stake: {total_stake:,.0f} SEK across {len(all_sgp)} predictions")
+                
+                # Display each SGP with expandable legs
+                for sgp in all_sgp:
+                    match = sgp['Match']
+                    predictions = sgp['Predictions']
+                    odds = sgp['Odds']
+                    edge = sgp['Edge']
+                    match_date = sgp['Match Date']
+                    kickoff = sgp['Kickoff']
+                    stake = sgp['Stake']
+                    
+                    # Count legs for MonsterSGP detection
+                    leg_count = predictions.count('✓')
+                    sgp_type = f"🔥 MonsterSGP {leg_count}-Leg" if leg_count >= 5 else f"🎲 SGP {leg_count}-Leg"
+                    
+                    with st.expander(f"{sgp_type} | {match} | {odds} | {edge} EV | {match_date} {kickoff}", expanded=False):
+                        st.markdown("**📋 PARLAY LEGS:**")
+                        st.text(predictions)
+                        st.markdown(f"**💰 Odds:** {odds} | **📈 Edge:** {edge} | **💵 Stake:** {stake}")
             else:
                 st.info("No active SGP predictions")
     else:
@@ -1552,8 +1583,24 @@ try:
                     
                     with tab2:
                         if sgp_results:
-                            df_sgp = pd.DataFrame(sgp_results)
-                            st.dataframe(df_sgp, width='stretch', hide_index=True)
+                            # Display each SGP with expandable legs
+                            for sgp in sgp_results:
+                                date = sgp['Date']
+                                match = sgp['Match']
+                                predictions = sgp['Predictions']
+                                result = sgp['Result']
+                                outcome = sgp['Outcome']
+                                odds = sgp['Odds']
+                                pl = sgp['P/L']
+                                
+                                # Count legs for MonsterSGP detection
+                                leg_count = predictions.count('✓')
+                                sgp_type = f"🔥 MonsterSGP {leg_count}-Leg" if leg_count >= 5 else f"🎲 SGP {leg_count}-Leg"
+                                
+                                with st.expander(f"{outcome} | {sgp_type} | {match} | {odds} | {pl}", expanded=False):
+                                    st.markdown("**📋 PARLAY LEGS:**")
+                                    st.text(predictions)
+                                    st.markdown(f"**📅 Date:** {date} | **🎯 Result:** {result} | **💰 Odds:** {odds} | **💵 P/L:** {pl}")
                         else:
                             st.info("No SGP predictions this month")
     else:
