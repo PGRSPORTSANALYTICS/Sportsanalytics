@@ -52,6 +52,14 @@ The system employs advanced prediction features including:
   - `recommended_date`: When prediction was generated (for tracking/analytics)
   - `match_date`: When the actual match is played (PRIMARY field for all queries)
   - **Critical Rule:** ALL date-based queries (dashboard display, daily summaries, "today's predictions", result verification) MUST use `match_date`, not `recommended_date`. This prevents confusion when predictions are generated days before the match.
+- **Persistent API Caching (Nov 9, 2025):** CRITICAL FIX - Migrated from in-memory caching to PostgreSQL-based persistent caching to prevent API quota exhaustion:
+  - **Problem:** Each of 10 concurrent workflows had separate in-memory caches that reset on restart, causing redundant API calls (10x multiplier)
+  - **Solution:** `APICacheManager` class stores all API responses in PostgreSQL tables (`api_football_cache`, `odds_api_cache`) shared across ALL workflows
+  - **Shared Quota Counter:** `api_request_counter` table tracks daily API usage across all workflows, preventing quota exhaustion
+  - **Cache TTLs:** Team IDs (7 days), Fixtures (24h), Injuries (2h), Lineups (7 days), Live Odds (5min)
+  - **Quota Limits:** API-Football (7000/day), The Odds API (450/day)
+  - **Impact:** Reduces API calls by 90%+ by eliminating redundant calls across workflows
+  - **Files:** `api_cache_manager.py`, `api_football_client.py`, `real_odds_api.py`
 - **Data Processing:** Pandas DataFrames are used for all data manipulation, with timestamp-based organization and financial calculations (Kelly criterion, edge calculation).
 - **Legal Framework:** Comprehensive legal documentation (ToS, Risk Disclaimer, Privacy Policy) in Swedish and English, compliant with GDPR and Swedish law.
 
