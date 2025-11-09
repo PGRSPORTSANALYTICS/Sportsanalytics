@@ -314,13 +314,16 @@ class APIFootballClient:
                 lineups = data.get('response', [])
                 
                 if not lineups:
-                    return {
+                    result = {
                         'confirmed': False,
                         'home_formation': None,
                         'away_formation': None,
                         'home_starters': 0,
                         'away_starters': 0
                     }
+                    self.cache_manager.cache_response(cache_key, 'lineups', result, ttl_hours=1)
+                    logger.info(f"⏳ Lineups not yet available for fixture {fixture_id} (will recheck in 1h)")
+                    return result
                 
                 result = {
                     'confirmed': True,
@@ -341,19 +344,21 @@ class APIFootballClient:
                         result['away_formation'] = formation
                         result['away_starters'] = len(start_xi)
                 
-                logger.info(f"✅ Lineups confirmed for fixture {fixture_id}")
+                logger.info(f"✅ Lineups CONFIRMED for fixture {fixture_id} (cached for 7 days)")
                 
                 self.cache_manager.cache_response(cache_key, 'lineups', result, ttl_hours=168)
                 return result
             else:
-                logger.info(f"⏳ Lineups not yet available for fixture {fixture_id}")
-                return {
+                result = {
                     'confirmed': False,
                     'home_formation': None,
                     'away_formation': None,
                     'home_starters': 0,
                     'away_starters': 0
                 }
+                self.cache_manager.cache_response(cache_key, 'lineups', result, ttl_hours=1)
+                logger.info(f"⏳ Lineups not yet available for fixture {fixture_id} (will recheck in 1h)")
+                return result
                 
         except Exception as e:
             logger.error(f"❌ Error fetching lineups: {e}")
