@@ -9,9 +9,14 @@ import json
 import time
 from typing import Dict, List, Optional
 from datetime import datetime
+from api_cache_manager import APICacheManager
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class RealOddsAPI:
-    """🚀 REAL odds fetcher using The Odds API"""
+    """🚀 REAL odds fetcher using The Odds API with PERSISTENT caching"""
     
     def __init__(self):
         self.api_key = os.getenv('THE_ODDS_API_KEY')
@@ -22,20 +27,37 @@ class RealOddsAPI:
         self.session = requests.Session()
         self.session.params['apiKey'] = self.api_key
         
-        print("🚀 REAL ODDS API INITIALIZED")
-        print(f"✅ API Key loaded: {self.api_key[:8]}...")
+        self.cache_manager = APICacheManager('odds_api', quota_limit=450)
+        
+        logger.info("🚀 REAL ODDS API INITIALIZED with PERSISTENT caching (shared across all workflows)")
+        logger.info(f"✅ API Key loaded: {self.api_key[:8]}...")
         
     def get_available_sports(self) -> List[Dict]:
-        """Get all available sports from The Odds API"""
+        """Get all available sports from The Odds API (PERSISTENT cache, 24h TTL)"""
+        
+        cache_key = "available_sports"
+        
+        cached = self.cache_manager.get_cached_response(cache_key, 'sports')
+        if cached is not None:
+            return cached
+        
+        if not self.cache_manager.check_quota_available():
+            stats = self.cache_manager.get_quota_stats()
+            logger.warning(f"⚠️ Odds API quota exhausted: {stats['request_count']}/{stats['quota_limit']}")
+            return []
         
         url = f"{self.base_url}/sports"
         
         try:
-            print("🔍 FETCHING AVAILABLE SPORTS FROM THE ODDS API...")
+            logger.info("🔍 FETCHING AVAILABLE SPORTS FROM THE ODDS API...")
             response = self.session.get(url)
             response.raise_for_status()
             
+            self.cache_manager.increment_request_count()
+            
             sports = response.json()
+            
+            self.cache_manager.cache_response(cache_key, 'sports', sports, ttl_hours=24)
             
             print(f"✅ FOUND {len(sports)} AVAILABLE SPORTS")
             
@@ -73,12 +95,23 @@ class RealOddsAPI:
     
     def get_live_odds(self, sport_key: str, regions: List[str] = None, 
                      markets: List[str] = None) -> List[Dict]:
-        """Get live odds for a specific sport"""
+        """Get live odds for a specific sport (PERSISTENT cache, 5min TTL for live odds)"""
         
         if regions is None:
-            regions = ['eu', 'uk']  # European bookmakers
+            regions = ['eu', 'uk']
         if markets is None:
-            markets = ['h2h', 'totals']  # Match result and totals (btts not supported)
+            markets = ['h2h', 'totals']
+        
+        cache_key = f"live_odds_{sport_key}_{','.join(regions)}_{','.join(markets)}"
+        
+        cached = self.cache_manager.get_cached_response(cache_key, f'odds/{sport_key}')
+        if cached is not None:
+            return cached
+        
+        if not self.cache_manager.check_quota_available():
+            stats = self.cache_manager.get_quota_stats()
+            logger.warning(f"⚠️ Odds API quota exhausted: {stats['request_count']}/{stats['quota_limit']}")
+            return []
             
         url = f"{self.base_url}/sports/{sport_key}/odds"
         
@@ -90,34 +123,47 @@ class RealOddsAPI:
         }
         
         try:
-            print(f"🔍 FETCHING LIVE ODDS FOR {sport_key}...")
+            logger.info(f"🔍 FETCHING LIVE ODDS FOR {sport_key}...")
             response = self.session.get(url, params=params)
             response.raise_for_status()
             
+            self.cache_manager.increment_request_count()
+            
             odds_data = response.json()
             
-            print(f"✅ FOUND {len(odds_data)} LIVE MATCHES WITH ODDS")
+            self.cache_manager.cache_response(cache_key, f'odds/{sport_key}', odds_data, ttl_hours=0.0833)
+            
+            logger.info(f"✅ FOUND {len(odds_data)} LIVE MATCHES WITH ODDS")
             
             return odds_data
             
         except Exception as e:
-            print(f"❌ ERROR FETCHING ODDS FOR {sport_key}: {e}")
+            logger.error(f"❌ ERROR FETCHING ODDS FOR {sport_key}: {e}")
             return []
     
     def get_event_btts_odds(self, sport_key: str, event_id: str, regions: List[str] = None) -> Optional[Dict]:
         """
-        Get BTTS (Both Teams To Score) odds for a specific event
+        Get BTTS (Both Teams To Score) odds for a specific event (PERSISTENT cache, 10min TTL)
         
         BTTS is an 'additional market' that requires event-specific endpoint
         """
         if regions is None:
             regions = ['eu', 'uk']
         
+        cache_key = f"btts_odds_{sport_key}_{event_id}_{','.join(regions)}"
+        
+        cached = self.cache_manager.get_cached_response(cache_key, f'btts/{sport_key}')
+        if cached is not None:
+            return cached
+        
+        if not self.cache_manager.check_quota_available():
+            return None
+        
         url = f"{self.base_url}/sports/{sport_key}/events/{event_id}/odds"
         
         params = {
             'regions': ','.join(regions),
-            'markets': 'btts',  # BTTS market
+            'markets': 'btts',
             'oddsFormat': 'decimal',
             'dateFormat': 'iso'
         }
@@ -125,6 +171,8 @@ class RealOddsAPI:
         try:
             response = self.session.get(url, params=params, timeout=10)
             response.raise_for_status()
+            
+            self.cache_manager.increment_request_count()
             
             event_data = response.json()
             
@@ -143,14 +191,16 @@ class RealOddsAPI:
                             elif 'no' in name and btts_odds['no'] is None:
                                 btts_odds['no'] = price
                         
-                        # Got BTTS odds, stop searching
                         if btts_odds['yes'] and btts_odds['no']:
+                            self.cache_manager.cache_response(cache_key, f'btts/{sport_key}', btts_odds, ttl_hours=0.1667)
                             return btts_odds
             
-            return btts_odds if btts_odds['yes'] or btts_odds['no'] else None
+            result = btts_odds if btts_odds['yes'] or btts_odds['no'] else None
+            if result:
+                self.cache_manager.cache_response(cache_key, f'btts/{sport_key}', result, ttl_hours=0.1667)
+            return result
             
         except Exception as e:
-            # Silently fail - BTTS not always available for all events
             return None
     
     def find_esoccer_opportunities(self, sport_key: str) -> List[Dict]:
