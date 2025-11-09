@@ -128,6 +128,19 @@ class SmartVerifier:
                         match_found = True
                         logger.info(f"✅ Settled: {home} vs {away} = {actual_score} (predicted: {predicted_score}) → {outcome.upper()} | P&L: {profit_loss:+.0f} SEK")
                         
+                        # Commit immediately after each update to prevent data loss from database locks
+                        try:
+                            self.conn.commit()
+                        except Exception as commit_error:
+                            logger.error(f"❌ Commit error for {home} vs {away}: {commit_error}")
+                            # Rollback and try again
+                            self.conn.rollback()
+                            time.sleep(0.5)
+                            try:
+                                self.conn.commit()
+                            except:
+                                pass
+                        
                         # Individual notifications disabled - consolidated daily summary at 23:00 instead
                         
                         break
@@ -137,8 +150,6 @@ class SmartVerifier:
                 
             except Exception as e:
                 logger.error(f"Error verifying {home} vs {away}: {e}")
-        
-        self.conn.commit()
         logger.info(f"🎯 Verified {verified_count}/{len(pending)} exact score matches")
         logger.info(f"💾 Saved ~{len(pending) * 3} API calls with smart caching")
         
