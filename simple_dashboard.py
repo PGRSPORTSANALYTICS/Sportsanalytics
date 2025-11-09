@@ -1351,7 +1351,8 @@ if exact_today or sgp_today:
                     if 'Prediction' in pick:
                         st.markdown(f"🎯 {pick['Prediction']} @ {pick['Odds']}")
                     else:
-                        st.markdown(f"🎲 {pick['Parlay'][:30]}... @ {pick['Odds']}")
+                        pred_text = pick.get('Predictions', '')[:50]
+                        st.markdown(f"🎲 {pred_text}... @ {pick['Odds']}")
                     st.markdown(f"<div class='premium-badge'>+{pick['Edge']} EDGE</div>", unsafe_allow_html=True)
             st.markdown("")
 
