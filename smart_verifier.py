@@ -2,7 +2,6 @@
 SMART Result Verifier
 Runs ONCE per day, uses 90% less API calls
 """
-import sqlite3
 import schedule
 import time
 from datetime import datetime, timedelta
@@ -10,6 +9,7 @@ from results_scraper import ResultsScraper
 from telegram_sender import TelegramBroadcaster
 from sgp_verifier import SGPVerifier
 from daily_results_summary import send_results_summary_for_date
+from db_helper import db_helper
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -25,133 +25,34 @@ class SmartVerifier:
     """
     
     def __init__(self):
-        self.conn = sqlite3.connect('data/real_football.db')
         self.scraper = ResultsScraper()
         self.telegram = TelegramBroadcaster()
         self.sgp_verifier = SGPVerifier()
     
     def verify_recent_matches(self):
-        """Verify matches that kicked off 95+ minutes ago"""
+        """Verify matches that kicked off 95+ minutes ago - uses PostgreSQL-enabled ResultsScraper"""
         logger.info("🔍 SMART VERIFICATION - Checking matches 95+ min after kickoff")
         
-        cursor = self.conn.cursor()
+        # Get pending bet count for logging
+        pending_count = db_helper.execute('''
+            SELECT COUNT(*) FROM football_opportunities
+            WHERE (outcome IS NULL OR outcome = '')
+            AND match_date IS NOT NULL AND match_date != ''
+            AND DATE(match_date) <= CURRENT_DATE
+        ''', fetch='one')[0]
         
-        # Get bets for matches that kicked off 95+ minutes ago (match should be finished)
-        from datetime import datetime, timedelta
-        cutoff_time = (datetime.now() - timedelta(minutes=95)).isoformat()
+        logger.info(f"📊 Found {pending_count} recent unverified matches")
         
-        cursor.execute('''
-            SELECT id, home_team, away_team, match_date, selection, odds, stake
-            FROM football_opportunities
-            WHERE status != 'settled'
-            AND match_date <= ?
-            ORDER BY match_date ASC
-            LIMIT 200
-        ''', (cutoff_time,))
-        
-        pending = cursor.fetchall()
-        logger.info(f"📊 Found {len(pending)} recent unverified matches")
-        
-        if len(pending) == 0:
+        if pending_count == 0:
             logger.info("✅ No pending matches to verify")
             return
         
-        # Batch verify
-        verified_count = 0
-        for bet_id, home, away, date, selection, odds, stake in pending:
-            try:
-                # Extract date for API call
-                if 'T' in date:
-                    date_obj = datetime.fromisoformat(date.replace('Z', '+00:00'))
-                else:
-                    date_obj = datetime.fromtimestamp(int(date)) if date.isdigit() else datetime.fromisoformat(date)
-                
-                date_str = date_obj.strftime('%Y-%m-%d')
-                
-                # Get all results for that day (uses caching!)
-                all_results = self.scraper.get_results_for_date(date_str)
-                
-                # Find matching result (with fuzzy team name matching)
-                match_found = False
-                for result in all_results:
-                    # Normalize team names for comparison
-                    result_home = result['home_team'].lower().replace('&', 'and')
-                    result_away = result['away_team'].lower().replace('&', 'and')
-                    pred_home = home.lower().replace('&', 'and')
-                    pred_away = away.lower().replace('&', 'and')
-                    
-                    # Check for exact or partial match
-                    home_match = (result_home == pred_home or 
-                                 result_home in pred_home or 
-                                 pred_home in result_home)
-                    away_match = (result_away == pred_away or 
-                                 result_away in pred_away or 
-                                 pred_away in result_away)
-                    
-                    if home_match and away_match:
-                        actual_score = result['score']
-                        predicted_score = selection.split(':')[-1].strip()
-                        
-                        # Determine outcome
-                        if actual_score == predicted_score:
-                            outcome = 'win'
-                            payout = stake * odds
-                            profit_loss = payout - stake
-                        else:
-                            outcome = 'loss'
-                            payout = 0
-                            profit_loss = -stake
-                        
-                        # Calculate ROI
-                        roi_percentage = (profit_loss / stake) * 100 if stake > 0 else 0
-                        
-                        # Get current timestamp for settlement
-                        settled_ts = int(time.time())
-                        
-                        # COMPLETE UPDATE - all fields properly set (including actual_score for dashboard)
-                        cursor.execute('''
-                            UPDATE football_opportunities
-                            SET 
-                                actual_score = ?,
-                                outcome = ?,
-                                result = ?,
-                                status = 'settled',
-                                payout = ?,
-                                profit_loss = ?,
-                                roi_percentage = ?,
-                                settled_timestamp = ?,
-                                updated_at = datetime('now')
-                            WHERE id = ?
-                        ''', (actual_score, outcome, outcome, payout, profit_loss, roi_percentage, settled_ts, bet_id))
-                        
-                        verified_count += 1
-                        match_found = True
-                        logger.info(f"✅ Settled: {home} vs {away} = {actual_score} (predicted: {predicted_score}) → {outcome.upper()} | P&L: {profit_loss:+.0f} SEK")
-                        
-                        # Commit immediately after each update to prevent data loss from database locks
-                        try:
-                            self.conn.commit()
-                        except Exception as commit_error:
-                            logger.error(f"❌ Commit error for {home} vs {away}: {commit_error}")
-                            # Rollback and try again
-                            self.conn.rollback()
-                            time.sleep(0.5)
-                            try:
-                                self.conn.commit()
-                            except:
-                                pass
-                        
-                        # Individual notifications disabled - consolidated daily summary at 23:00 instead
-                        
-                        break
-                
-                if not match_found:
-                    logger.debug(f"⏳ No result yet for {home} vs {away}")
-                
-            except Exception as e:
-                logger.error(f"Error verifying {home} vs {away}: {e}")
-        logger.info(f"🎯 Verified {verified_count}/{len(pending)} exact score matches")
-        logger.info(f"💾 Saved ~{len(pending) * 3} API calls with smart caching")
+        # Use ResultsScraper's PostgreSQL-enabled update_bet_outcomes()
+        # This handles all the verification logic with proper concurrent access
+        verified_count = self.scraper.update_bet_outcomes()
+        
+        logger.info(f"🎯 Verified {verified_count}/{pending_count} exact score matches")
+        logger.info(f"💾 Saved ~{pending_count * 3} API calls with smart caching")
         
         # Also verify SGP predictions
         logger.info("\n" + "="*80)
@@ -170,80 +71,68 @@ class SmartVerifier:
         Check if all matches from any day are finished and send summary 10 min after last match.
         Tracks which dates have already been sent to avoid duplicates.
         """
-        cursor = self.conn.cursor()
-        
         # Get list of dates that have settled matches but haven't been summarized yet
-        cursor.execute('''
-            SELECT DISTINCT date(match_date) as match_day
+        settled_dates = db_helper.execute('''
+            SELECT DISTINCT DATE(match_date) as match_day
             FROM football_opportunities
-            WHERE market = 'exact_score'
-            AND status = 'settled'
+            WHERE market = %s
+            AND status = %s
             AND result IS NOT NULL
-        ''')
+        ''', ('exact_score', 'settled'), fetch='all')
         
-        settled_dates = [row[0] for row in cursor.fetchall()]
+        if not settled_dates:
+            return
+        
+        settled_dates = [row[0] for row in settled_dates]
         
         for match_date in settled_dates:
-            # Check if we've already sent summary for this date
-            cursor.execute('''
-                SELECT sent_summary FROM daily_summaries WHERE match_date = ?
-            ''', (match_date,))
-            
-            result = cursor.fetchone()
-            if result and result[0] == 1:
-                continue  # Already sent
-            
-            # Check if all matches from this date are settled
-            cursor.execute('''
-                SELECT COUNT(*) as total,
-                       SUM(CASE WHEN status = 'settled' THEN 1 ELSE 0 END) as settled,
-                       MAX(settled_timestamp) as last_settled
-                FROM football_opportunities
-                WHERE date(match_date) = ?
-                AND market = 'exact_score'
-            ''', (match_date,))
-            
-            row = cursor.fetchone()
-            total, settled, last_settled = row if row else (0, 0, None)
-            
-            # All matches settled?
-            if total > 0 and settled == total and last_settled:
-                # Check if 10 minutes have passed since last settlement
-                import time
-                time_since_last = int(time.time()) - last_settled
+            try:
+                # Check if we've already sent summary for this date
+                already_sent = db_helper.execute('''
+                    SELECT sent_summary FROM daily_summaries WHERE match_date = %s
+                ''', (match_date,), fetch='one')
                 
-                if time_since_last >= 600:  # 10 minutes = 600 seconds
-                    logger.info(f"📊 All matches for {match_date} are settled! Sending summary...")
+                if already_sent and already_sent[0] == 1:
+                    continue  # Already sent
+                
+                # Check if all matches from this date are settled
+                row = db_helper.execute('''
+                    SELECT COUNT(*) as total,
+                           SUM(CASE WHEN status = %s THEN 1 ELSE 0 END) as settled,
+                           MAX(settled_timestamp) as last_settled
+                    FROM football_opportunities
+                    WHERE DATE(match_date) = %s
+                    AND market = %s
+                ''', ('settled', match_date, 'exact_score'), fetch='one')
+                
+                total, settled, last_settled = row if row else (0, 0, None)
+                
+                # All matches settled?
+                if total > 0 and settled == total and last_settled:
+                    # Check if 10 minutes have passed since last settlement
+                    time_since_last = int(time.time()) - last_settled
                     
-                    # Send summary for this specific date
-                    send_results_summary_for_date(match_date)
-                    
-                    # Mark as sent
-                    cursor.execute('''
-                        INSERT OR REPLACE INTO daily_summaries (match_date, sent_summary, sent_at)
-                        VALUES (?, 1, ?)
-                    ''', (match_date, int(time.time())))
-                    
-                    self.conn.commit()
-                    logger.info(f"✅ Summary sent for {match_date}")
-                else:
-                    minutes_left = (600 - time_since_last) // 60
-                    logger.info(f"⏳ Waiting {minutes_left} more minutes before sending summary for {match_date}")
+                    if time_since_last >= 600:  # 10 minutes = 600 seconds
+                        logger.info(f"📊 All matches for {match_date} are settled! Sending summary...")
+                        send_results_summary_for_date(match_date)
+                        
+                        # Mark as sent to prevent duplicates
+                        db_helper.execute('''
+                            INSERT INTO daily_summaries (match_date, sent_summary, sent_at)
+                            VALUES (%s, 1, %s)
+                            ON CONFLICT (match_date) DO UPDATE SET sent_summary = 1, sent_at = EXCLUDED.sent_at
+                        ''', (match_date, int(time.time())))
+                        
+                        logger.info(f"✅ Summary sent for {match_date}")
+                    else:
+                        minutes_left = (600 - time_since_last) // 60
+                        logger.info(f"⏳ Waiting {minutes_left} more minutes before sending summary for {match_date}")
+            except Exception as e:
+                logger.error(f"Error processing summary for {match_date}: {e}")
     
     def run_continuous(self):
         """Run verification continuously every 10 minutes"""
         logger.info("📅 Smart Verifier running every 10 minutes")
-        
-        # Ensure daily_summaries table exists
-        cursor = self.conn.cursor()
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS daily_summaries (
-                match_date TEXT PRIMARY KEY,
-                sent_summary INTEGER DEFAULT 0,
-                sent_at INTEGER
-            )
-        ''')
-        self.conn.commit()
         
         # Schedule verification every 10 minutes
         schedule.every(10).minutes.do(self.verify_recent_matches)

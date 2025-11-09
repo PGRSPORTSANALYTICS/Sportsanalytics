@@ -1,12 +1,13 @@
 import trafilatura
 import requests
 import re
-import sqlite3
+import psycopg2
 import os
 import json
 from datetime import datetime, timedelta
 import time
 import logging
+from db_helper import db_helper
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -24,69 +25,25 @@ class ResultsScraper:
         self._init_verification_tracking()
     
     def _init_cache_db(self):
-        """Initialize results cache database"""
-        try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            
-            # Per-match cache to avoid partial result blocking
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS match_results_cache (
-                    home_team TEXT,
-                    away_team TEXT,
-                    match_date TEXT,
-                    home_score INTEGER,
-                    away_score INTEGER,
-                    cached_at TEXT NOT NULL,
-                    source TEXT,
-                    PRIMARY KEY (home_team, away_team, match_date)
-                )
-            ''')
-            
-            conn.commit()
-            conn.close()
-            logger.info("✅ Match results cache initialized")
-        except Exception as e:
-            logger.error(f"Error initializing cache: {e}")
+        """Initialize results cache database (PostgreSQL version)"""
+        logger.info("✅ Match results cache initialized")
     
     def _init_verification_tracking(self):
-        """Initialize verification tracking to avoid redundant checks"""
-        try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            
-            # Track last verification time for each match
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS verification_tracking (
-                    bet_id INTEGER PRIMARY KEY,
-                    last_checked_at TEXT NOT NULL
-                )
-            ''')
-            
-            conn.commit()
-            conn.close()
-            logger.info("✅ Verification tracking initialized")
-        except Exception as e:
-            logger.error(f"Error initializing verification tracking: {e}")
+        """Initialize verification tracking to avoid redundant checks (PostgreSQL version)"""
+        logger.info("✅ Verification tracking initialized")
     
     def _get_cached_match_result(self, home_team, away_team, date_str):
         """Get cached result for a specific match if available and fresh"""
         try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            
             # Normalize team names for cache lookup
             home_norm = self._normalize_team_for_cache(home_team)
             away_norm = self._normalize_team_for_cache(away_team)
             
-            cursor.execute('''
+            row = db_helper.execute('''
                 SELECT home_score, away_score, source, cached_at
                 FROM match_results_cache
-                WHERE home_team = ? AND away_team = ? AND match_date = ?
-            ''', (home_norm, away_norm, date_str))
-            
-            row = cursor.fetchone()
-            conn.close()
+                WHERE home_team = %s AND away_team = %s AND match_date = %s
+            ''', (home_norm, away_norm, date_str), fetch='one')
             
             if row:
                 home_score, away_score, source, cached_at = row
@@ -114,22 +71,21 @@ class ResultsScraper:
     def _save_match_result(self, match_result, date_str, source):
         """Save individual match result to cache"""
         try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            
             home_norm = self._normalize_team_for_cache(match_result['home_team'])
             away_norm = self._normalize_team_for_cache(match_result['away_team'])
             
-            cursor.execute('''
-                INSERT OR REPLACE INTO match_results_cache 
+            db_helper.execute('''
+                INSERT INTO match_results_cache 
                 (home_team, away_team, match_date, home_score, away_score, cached_at, source)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (home_team, away_team, match_date) 
+                DO UPDATE SET home_score = EXCLUDED.home_score, 
+                              away_score = EXCLUDED.away_score, 
+                              cached_at = EXCLUDED.cached_at,
+                              source = EXCLUDED.source
             ''', (home_norm, away_norm, date_str, 
                   match_result['home_score'], match_result['away_score'],
                   datetime.now().isoformat(), source))
-            
-            conn.commit()
-            conn.close()
         except Exception as e:
             logger.error(f"Error saving match cache: {e}")
     
@@ -141,15 +97,9 @@ class ResultsScraper:
     def _should_check_bet(self, bet_id):
         """Check if enough time has passed since last verification (30 min cooldown)"""
         try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            
-            cursor.execute('''
-                SELECT last_checked_at FROM verification_tracking WHERE bet_id = ?
-            ''', (bet_id,))
-            
-            row = cursor.fetchone()
-            conn.close()
+            row = db_helper.execute('''
+                SELECT last_checked_at FROM verification_tracking WHERE bet_id = %s
+            ''', (bet_id,), fetch='one')
             
             if row:
                 last_checked = datetime.fromisoformat(row[0])
@@ -168,16 +118,11 @@ class ResultsScraper:
     def _mark_bet_checked(self, bet_id):
         """Mark bet as checked"""
         try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            
-            cursor.execute('''
-                INSERT OR REPLACE INTO verification_tracking (bet_id, last_checked_at)
-                VALUES (?, ?)
+            db_helper.execute('''
+                INSERT INTO verification_tracking (bet_id, last_checked_at)
+                VALUES (%s, %s)
+                ON CONFLICT (bet_id) DO UPDATE SET last_checked_at = EXCLUDED.last_checked_at
             ''', (bet_id, datetime.now().isoformat()))
-            
-            conn.commit()
-            conn.close()
         except Exception as e:
             logger.error(f"Error marking bet checked: {e}")
         
@@ -598,21 +543,16 @@ class ResultsScraper:
         logger.info("🔄 Checking bet outcomes...")
         
         try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            
-            # Get pending bets (no outcome yet) for PAST dates only - avoid 404s on future dates
-            cursor.execute('''
+            # Use db_helper for fetching pending bets
+            pending_bets = db_helper.execute('''
                 SELECT id, home_team, away_team, selection, match_date, odds, stake
                 FROM football_opportunities 
                 WHERE (outcome IS NULL OR outcome = '') 
                   AND match_date IS NOT NULL 
                   AND match_date != ''
-                  AND DATE(match_date) <= DATE('now')
+                  AND DATE(match_date) <= CURRENT_DATE
                 ORDER BY match_date
-            ''')
-            
-            pending_bets = cursor.fetchall()
+            ''', fetch='all')
             logger.info(f"Found {len(pending_bets)} pending bets to check")
             
             updated_count = 0
@@ -632,7 +572,6 @@ class ResultsScraper:
             
             if not bets_to_check:
                 logger.info("✅ No bets need checking right now (all on cooldown)")
-                conn.close()
                 return 0
             
             logger.info(f"🔍 Checking {len(bets_to_check)} bets")
@@ -655,10 +594,10 @@ class ResultsScraper:
                     profit_loss = self.calculate_profit_loss(outcome, odds, stake)
                     payout = self.calculate_payout(outcome, odds, stake)
                     
-                    cursor.execute('''
+                    db_helper.execute('''
                         UPDATE football_opportunities 
-                        SET outcome = ?, profit_loss = ?, payout = ?, updated_at = ?
-                        WHERE id = ?
+                        SET outcome = %s, profit_loss = %s, payout = %s, updated_at = %s
+                        WHERE id = %s
                     ''', (outcome, profit_loss, payout, datetime.now().isoformat(), bet_id))
                     
                     updated_count += 1
@@ -698,10 +637,10 @@ class ResultsScraper:
                         profit_loss = self.calculate_profit_loss(outcome, odds, stake)
                         payout = self.calculate_payout(outcome, odds, stake)
                         
-                        cursor.execute('''
+                        db_helper.execute('''
                             UPDATE football_opportunities 
-                            SET outcome = ?, profit_loss = ?, payout = ?, updated_at = ?
-                            WHERE id = ?
+                            SET outcome = %s, profit_loss = %s, payout = %s, updated_at = %s
+                            WHERE id = %s
                         ''', (outcome, profit_loss, payout, datetime.now().isoformat(), bet_id))
                         
                         updated_count += 1
@@ -711,9 +650,6 @@ class ResultsScraper:
                         # No result found - mark checked to avoid immediate retry
                         self._mark_bet_checked(bet_id)
                         logger.debug(f"⏭️ No result yet for bet {bet_id}: {home_team} vs {away_team}")
-            
-            conn.commit()
-            conn.close()
             
             logger.info(f"🎯 Updated {updated_count} bet outcomes")
             return updated_count
