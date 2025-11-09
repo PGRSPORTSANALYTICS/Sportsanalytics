@@ -7,41 +7,34 @@ Always pulls from BOTH tables (exact score + SGP).
 100% bulletproof, no discrepancies possible.
 """
 
-import sqlite3
 from typing import Dict, List
 from datetime import date
-
-DB_PATH = 'data/real_football.db'
+from db_helper import db_helper
 
 def get_all_time_stats() -> Dict:
     """Get combined all-time statistics from both tables"""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
     # Exact Score stats
-    cursor.execute('''
+    exact_row = db_helper.execute('''
         SELECT 
             COUNT(*) as total,
-            SUM(CASE WHEN outcome IN ('win', 'won') THEN 1 ELSE 0 END) as wins,
+            SUM(CASE WHEN outcome IN (%s, %s) THEN 1 ELSE 0 END) as wins,
             SUM(profit_loss) as profit
         FROM football_opportunities 
-        WHERE market = 'exact_score' AND result IS NOT NULL
-    ''')
-    exact_row = cursor.fetchone()
+        WHERE market = %s AND result IS NOT NULL
+    ''', ('win', 'won', 'exact_score'), fetch='one')
     exact_total, exact_wins, exact_profit = exact_row if exact_row else (0, 0, 0.0)
     exact_losses = exact_total - (exact_wins or 0)
     exact_hit_rate = (exact_wins / exact_total * 100) if exact_total > 0 else 0.0
     
     # SGP stats  
-    cursor.execute('''
+    sgp_row = db_helper.execute('''
         SELECT 
             COUNT(*) as total,
-            SUM(CASE WHEN outcome IN ('win', 'won') THEN 1 ELSE 0 END) as wins,
+            SUM(CASE WHEN outcome IN (%s, %s) THEN 1 ELSE 0 END) as wins,
             SUM(profit_loss) as profit
         FROM sgp_predictions 
         WHERE result IS NOT NULL
-    ''')
-    sgp_row = cursor.fetchone()
+    ''', ('win', 'won'), fetch='one')
     sgp_total, sgp_wins, sgp_profit = sgp_row if sgp_row else (0, 0, 0.0)
     sgp_losses = sgp_total - (sgp_wins or 0)
     sgp_hit_rate = (sgp_wins / sgp_total * 100) if sgp_total > 0 else 0.0
@@ -52,8 +45,6 @@ def get_all_time_stats() -> Dict:
     combined_losses = (exact_losses or 0) + (sgp_losses or 0)
     combined_profit = (exact_profit or 0.0) + (sgp_profit or 0.0)
     combined_hit_rate = (combined_wins / combined_total * 100) if combined_total > 0 else 0.0
-    
-    conn.close()
     
     return {
         'exact_score': {
@@ -81,28 +72,22 @@ def get_all_time_stats() -> Dict:
 
 def get_todays_exact_score_stats() -> Dict:
     """Get today's exact score statistics"""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
     today = date.today().isoformat()
     
-    cursor.execute('''
+    row = db_helper.execute('''
         SELECT 
             COUNT(*) as total,
-            SUM(CASE WHEN outcome IN ('win', 'won') THEN 1 ELSE 0 END) as wins,
+            SUM(CASE WHEN outcome IN (%s, %s) THEN 1 ELSE 0 END) as wins,
             SUM(profit_loss) as profit
         FROM football_opportunities 
-        WHERE market = 'exact_score' 
+        WHERE market = %s 
         AND result IS NOT NULL 
-        AND date(settled_timestamp, 'unixepoch') = ?
-    ''', (today,))
+        AND DATE(TO_TIMESTAMP(settled_timestamp)) = %s
+    ''', ('win', 'won', 'exact_score', today), fetch='one')
     
-    row = cursor.fetchone()
     total, wins, profit = row if row else (0, 0, 0.0)
     losses = total - (wins or 0)
     hit_rate = (wins / total * 100) if total > 0 else 0.0
-    
-    conn.close()
     
     return {
         'total': total or 0,
@@ -114,27 +99,21 @@ def get_todays_exact_score_stats() -> Dict:
 
 def get_todays_sgp_stats() -> Dict:
     """Get today's SGP statistics"""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
     today = date.today().isoformat()
     
-    cursor.execute('''
+    row = db_helper.execute('''
         SELECT 
             COUNT(*) as total,
-            SUM(CASE WHEN outcome IN ('win', 'won') THEN 1 ELSE 0 END) as wins,
+            SUM(CASE WHEN outcome IN (%s, %s) THEN 1 ELSE 0 END) as wins,
             SUM(profit_loss) as profit
         FROM sgp_predictions 
         WHERE result IS NOT NULL 
-        AND date(settled_timestamp, 'unixepoch') = ?
-    ''', (today,))
+        AND DATE(TO_TIMESTAMP(settled_timestamp)) = %s
+    ''', ('win', 'won', today), fetch='one')
     
-    row = cursor.fetchone()
     total, wins, profit = row if row else (0, 0, 0.0)
     losses = total - (wins or 0)
     hit_rate = (wins / total * 100) if total > 0 else 0.0
-    
-    conn.close()
     
     return {
         'total': total or 0,
@@ -146,43 +125,37 @@ def get_todays_sgp_stats() -> Dict:
 
 def get_exact_score_results() -> List[Dict]:
     """Get all exact score settled predictions"""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
-    cursor.execute('''
+    rows = db_helper.execute('''
         SELECT 
             home_team, away_team, selection, odds, 
             actual_score, outcome, stake, profit_loss,
             league, settled_timestamp
         FROM football_opportunities 
-        WHERE market = 'exact_score' AND result IS NOT NULL
+        WHERE market = %s AND result IS NOT NULL
         ORDER BY settled_timestamp DESC
-    ''')
+    ''', ('exact_score',), fetch='all')
     
     results = []
-    for row in cursor.fetchall():
-        results.append({
-            'home_team': row[0],
-            'away_team': row[1],
-            'selection': row[2],
-            'odds': row[3],
-            'actual_score': row[4],
-            'outcome': row[5],
-            'stake': row[6],
-            'profit': row[7],
-            'league': row[8],
-            'timestamp': row[9]
-        })
+    if rows:
+        for row in rows:
+            results.append({
+                'home_team': row[0],
+                'away_team': row[1],
+                'selection': row[2],
+                'odds': row[3],
+                'actual_score': row[4],
+                'outcome': row[5],
+                'stake': row[6],
+                'profit': row[7],
+                'league': row[8],
+                'timestamp': row[9]
+            })
     
-    conn.close()
     return results
 
 def get_sgp_results() -> List[Dict]:
     """Get all SGP settled predictions"""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
-    cursor.execute('''
+    rows = db_helper.execute('''
         SELECT 
             home_team, away_team, parlay_description, bookmaker_odds,
             result, outcome, stake, profit_loss,
@@ -190,24 +163,24 @@ def get_sgp_results() -> List[Dict]:
         FROM sgp_predictions 
         WHERE result IS NOT NULL
         ORDER BY settled_timestamp DESC
-    ''')
+    ''', fetch='all')
     
     results = []
-    for row in cursor.fetchall():
-        results.append({
-            'home_team': row[0],
-            'away_team': row[1],
-            'selection': row[2],
-            'odds': row[3],
-            'result': row[4],
-            'outcome': row[5],
-            'stake': row[6],
-            'profit': row[7],
-            'league': row[8],
-            'timestamp': row[9]
-        })
+    if rows:
+        for row in rows:
+            results.append({
+                'home_team': row[0],
+                'away_team': row[1],
+                'selection': row[2],
+                'odds': row[3],
+                'result': row[4],
+                'outcome': row[5],
+                'stake': row[6],
+                'profit': row[7],
+                'league': row[8],
+                'timestamp': row[9]
+            })
     
-    conn.close()
     return results
 
 def print_bulletproof_report():

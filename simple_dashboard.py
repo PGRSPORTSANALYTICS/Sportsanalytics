@@ -2,9 +2,10 @@
 
 import streamlit as st
 import pandas as pd
-import sqlite3
 from datetime import datetime, date
 from stats_master import get_all_time_stats, get_todays_exact_score_stats, get_exact_score_results, get_sgp_results
+from db_helper import db_helper
+import pg_compat as sqlite3  # PostgreSQL compatibility layer
 
 # Platform configuration - controls public visibility
 try:
@@ -13,7 +14,7 @@ try:
 except:
     SGP_PUBLIC = False  # Default: hide SGP during data collection phase
 
-# Database path
+# Database path (ignored - using PostgreSQL)
 DB_PATH = 'data/real_football.db'
 
 # Helper function to format SGP legs for readability (Bet365 style)
