@@ -2,15 +2,12 @@
 Automatic Bet Categorization System
 Runs daily to organize bets into: today, future, historical
 """
-import sqlite3
 from datetime import datetime, timedelta
 import pytz
+from db_helper import db_helper
 
 def categorize_all_bets():
     """Categorize all bets based on their match dates"""
-    conn = sqlite3.connect('data/real_football.db')
-    cursor = conn.cursor()
-    
     # Get Stockholm timezone
     stockholm_tz = pytz.timezone('Europe/Stockholm')
     now = datetime.now(stockholm_tz)
@@ -20,13 +17,11 @@ def categorize_all_bets():
     print("="*60)
     
     # Get all unsettled bets
-    cursor.execute('''
+    bets = db_helper.execute('''
         SELECT id, match_date, home_team, away_team, status
         FROM football_opportunities
-        WHERE status != 'settled'
-    ''')
-    
-    bets = cursor.fetchall()
+        WHERE status != %s
+    ''', ('settled',), fetch='all')
     print(f"📊 Found {len(bets)} unsettled bets to categorize\n")
     
     today_count = 0
@@ -55,29 +50,27 @@ def categorize_all_bets():
                 future_count += 1
             
             # Update category
-            cursor.execute('''
+            db_helper.execute('''
                 UPDATE football_opportunities
-                SET bet_category = ?
-                WHERE id = ?
+                SET bet_category = %s
+                WHERE id = %s
             ''', (category, bet_id))
             
         except Exception as e:
             print(f"⚠️ Error processing {home} vs {away}: {e}")
             # Default to 'future' on error
-            cursor.execute('''
+            db_helper.execute('''
                 UPDATE football_opportunities
-                SET bet_category = 'future'
-                WHERE id = ?
-            ''', (bet_id,))
+                SET bet_category = %s
+                WHERE id = %s
+            ''', ('future', bet_id))
     
     # Also categorize settled bets as historical
-    cursor.execute('''
+    db_helper.execute('''
         UPDATE football_opportunities
-        SET bet_category = 'historical'
-        WHERE status = 'settled'
-    ''')
-    
-    conn.commit()
+        SET bet_category = %s
+        WHERE status = %s
+    ''', ('historical', 'settled'))
     
     print(f"✅ Categorization complete:")
     print(f"   📅 Today's bets: {today_count}")
@@ -85,7 +78,6 @@ def categorize_all_bets():
     print(f"   📜 Historical bets: {historical_count}")
     print(f"   ✅ Settled bets moved to historical")
     
-    conn.close()
     return today_count, future_count, historical_count
 
 if __name__ == '__main__':

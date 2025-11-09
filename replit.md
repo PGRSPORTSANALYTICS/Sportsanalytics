@@ -47,9 +47,12 @@ The system employs advanced prediction features including:
   - **Database Tables:** `match_results_cache` (per-match results with 24h TTL) and `verification_tracking` (bet-level cooldown timestamps)
 
 ### System Design Choices
-- **Data Layer:** SQLite database manages `suggestions`, `tickets`, and `pnl` tables, with a custom `DataLoader`.
+- **Data Layer (Nov 9, 2025):** Migrated from SQLite to PostgreSQL (Replit's built-in Neon database) to eliminate database locking issues during concurrent workflow access. Uses connection pooling (5-20 connections) for 10+ simultaneous workflows. Created `db_helper.py` SQL compatibility layer and `pg_compat.py` for seamless migration of existing SQLite code.
+- **Date Field Standardization (Nov 9, 2025):** System uses two date fields:
+  - `recommended_date`: When prediction was generated (for tracking/analytics)
+  - `match_date`: When the actual match is played (PRIMARY field for all queries)
+  - **Critical Rule:** ALL date-based queries (dashboard display, daily summaries, "today's predictions", result verification) MUST use `match_date`, not `recommended_date`. This prevents confusion when predictions are generated days before the match.
 - **Data Processing:** Pandas DataFrames are used for all data manipulation, with timestamp-based organization and financial calculations (Kelly criterion, edge calculation).
-- **Database Design:** A single-file SQLite database with auto-creation of tables and timestamp indexing.
 - **Legal Framework:** Comprehensive legal documentation (ToS, Risk Disclaimer, Privacy Policy) in Swedish and English, compliant with GDPR and Swedish law.
 
 ## External Dependencies
