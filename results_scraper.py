@@ -579,12 +579,8 @@ class ResultsScraper:
         else:
             clean_date = date_str
         
-        # Try Flashscore first (free, unlimited)
-        results = self.get_flashscore_results(clean_date)
-        
-        if not results:
-            logger.info("📡 No results from Flashscore, trying API-Football...")
-            results = self.get_api_football_results(clean_date)
+        # Skip Flashscore (too slow with Selenium) - go straight to API-Football
+        results = self.get_api_football_results(clean_date)
         
         if not results:
             logger.info("📡 No results from API-Football, trying The Odds API...")
