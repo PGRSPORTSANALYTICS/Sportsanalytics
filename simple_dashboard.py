@@ -242,16 +242,17 @@ def load_performance_summary():
         stats = get_all_time_stats()
         
         # Calculate avg odds manually from database for backwards compatibility
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
+        exact_avg_odds = db_helper.execute(
+            "SELECT AVG(odds) FROM football_opportunities WHERE market = %s AND result IS NOT NULL",
+            ('exact_score',),
+            fetch='one'
+        )[0] or 0
         
-        cursor.execute('SELECT AVG(odds) FROM football_opportunities WHERE market = "exact_score" AND result IS NOT NULL')
-        exact_avg_odds = cursor.fetchone()[0] or 0
-        
-        cursor.execute('SELECT AVG(bookmaker_odds) FROM sgp_predictions WHERE result IS NOT NULL')
-        sgp_avg_odds = cursor.fetchone()[0] or 0
-        
-        conn.close()
+        sgp_avg_odds = db_helper.execute(
+            "SELECT AVG(bookmaker_odds) FROM sgp_predictions WHERE result IS NOT NULL",
+            fetch='one'
+        )
+        sgp_avg_odds = sgp_avg_odds[0] if sgp_avg_odds else 0
         
         return {
             'exact': {
@@ -1209,29 +1210,24 @@ if stats:
     
     # Calculate 30-day performance
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute('''
+        exact_30d = db_helper.execute('''
             SELECT 
-                SUM(CASE WHEN outcome IN ('won', 'win', 'lost', 'loss') THEN stake ELSE 0 END) as staked,
-                SUM(CASE WHEN outcome IN ('won', 'win') THEN stake * (odds - 1) 
-                         WHEN outcome IN ('lost', 'loss') THEN -stake 
+                SUM(CASE WHEN outcome IN (%s, %s, %s, %s) THEN stake ELSE 0 END) as staked,
+                SUM(CASE WHEN outcome IN (%s, %s) THEN stake * (odds - 1) 
+                         WHEN outcome IN (%s, %s) THEN -stake 
                          ELSE 0 END) as profit
             FROM football_opportunities
-            WHERE market = 'exact_score'
-            AND timestamp >= datetime('now', '-30 days')
-        ''')
-        exact_30d = cursor.fetchone()
+            WHERE market = %s
+            AND timestamp >= NOW() - INTERVAL '30 days'
+        ''', ('won', 'win', 'lost', 'loss', 'won', 'win', 'lost', 'loss', 'exact_score'), fetch='one')
         
-        cursor.execute('''
+        sgp_30d = db_helper.execute('''
             SELECT 
-                SUM(CASE WHEN status = 'settled' THEN stake ELSE 0 END) as staked,
+                SUM(CASE WHEN status = %s THEN stake ELSE 0 END) as staked,
                 SUM(profit_loss) as profit
             FROM sgp_predictions
-            WHERE timestamp >= datetime('now', '-30 days')
-        ''')
-        sgp_30d = cursor.fetchone()
-        conn.close()
+            WHERE timestamp >= NOW() - INTERVAL '30 days'
+        ''', ('settled',), fetch='one')
         
         total_30d_staked = (exact_30d[0] or 0) + (sgp_30d[0] or 0)
         total_30d_profit = (exact_30d[1] or 0) + (sgp_30d[1] or 0)
@@ -1247,17 +1243,20 @@ if stats:
     
     # Get active predictions count
     try:
-        conn_active = sqlite3.connect(DB_PATH)
-        cursor_active = conn_active.cursor()
+        active_exact = db_helper.execute(
+            'SELECT COUNT(*) FROM football_opportunities WHERE market = %s AND result IS NULL',
+            ('exact_score',),
+            fetch='one'
+        )[0] or 0
         
-        cursor_active.execute('SELECT COUNT(*) FROM football_opportunities WHERE market = "exact_score" AND result IS NULL')
-        active_exact = cursor_active.fetchone()[0] or 0
-        
-        cursor_active.execute('SELECT COUNT(*) FROM sgp_predictions WHERE status = "pending"')
-        active_sgp = cursor_active.fetchone()[0] or 0
+        active_sgp = db_helper.execute(
+            'SELECT COUNT(*) FROM sgp_predictions WHERE status = %s',
+            ('pending',),
+            fetch='one'
+        )
+        active_sgp = active_sgp[0] if active_sgp else 0
         
         total_active = active_exact + active_sgp
-        conn_active.close()
     except:
         total_active = 0
     
@@ -1312,7 +1311,10 @@ if stats:
         with m3:
             st.metric("ROI", f"{sgp_roi:+.0f}%")
         
-        st.caption(f"💰 Profit: {sgp['profit']:,.0f} SEK | Avg Odds: {sgp['avg_odds']:.1f}x")
+        # Add null checks for sgp values
+        sgp_profit = sgp.get('profit', 0) or 0
+        sgp_avg_odds = sgp.get('avg_odds', 0) or 0
+        st.caption(f"💰 Profit: {sgp_profit:,.0f} SEK | Avg Odds: {sgp_avg_odds:.1f}x")
     
     # 30-day performance badge
     if roi_30d is not None and roi_30d != 0:
