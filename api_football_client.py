@@ -50,6 +50,41 @@ class APIFootballClient:
         self.last_request_time = time.time()
         self.cache_manager.increment_request_count()
     
+    def _fetch_with_cache(self, endpoint: str, params: dict, cache_key: str, ttl_hours: int = 24) -> Optional[Dict]:
+        """
+        Centralized cached API fetcher - ALL API calls should use this
+        
+        Args:
+            endpoint: API endpoint (e.g., 'fixtures', 'teams/statistics')
+            params: Query parameters
+            cache_key: Unique cache key for this request
+            ttl_hours: Cache TTL in hours (default 24h)
+        
+        Returns:
+            API response data or None on error
+        """
+        cached = self.cache_manager.get_cached_response(cache_key, endpoint)
+        if cached is not None:
+            return cached
+        
+        self._rate_limit()
+        
+        try:
+            url = f"{self.base_url}/{endpoint}"
+            response = requests.get(url, headers=self.headers, params=params, timeout=15)
+            
+            if response.status_code == 200:
+                data = response.json()
+                response_data = data.get('response', [])
+                self.cache_manager.cache_response(cache_key, endpoint, response_data, ttl_hours=ttl_hours)
+                return response_data
+            else:
+                logger.warning(f"⚠️ API returned status {response.status_code} for {endpoint}")
+                return None
+        except Exception as e:
+            logger.error(f"❌ API error for {endpoint}: {e}")
+            return None
+    
     def get_fixture_by_teams_and_date(self, home_team: str, away_team: str, match_date: str) -> Optional[Dict]:
         """
         Find fixture ID by team names and match date (with PERSISTENT caching)
@@ -60,8 +95,6 @@ class APIFootballClient:
         cached = self.cache_manager.get_cached_response(cache_key, 'fixtures')
         if cached is not None:
             return cached
-        
-        self._rate_limit()
         
         try:
             home_id = self.get_team_id(home_team)
@@ -75,17 +108,10 @@ class APIFootballClient:
             date_obj = datetime.fromisoformat(match_date.replace('Z', '+00:00'))
             date_str = date_obj.strftime('%Y-%m-%d')
             
-            url = f"{self.base_url}/fixtures"
-            params = {
-                'date': date_str,
-                'team': home_id
-            }
+            fixtures_cache_key = f"fixtures_by_date_team_{date_str}_{home_id}"
+            fixtures = self._fetch_with_cache('fixtures', {'date': date_str, 'team': home_id}, fixtures_cache_key, ttl_hours=24)
             
-            response = requests.get(url, headers=self.headers, params=params, timeout=15)
-            
-            if response.status_code == 200:
-                data = response.json()
-                fixtures = data.get('response', [])
+            if fixtures:
                 logger.info(f"🔍 API-Football returned {len(fixtures)} fixtures for {home_team} (ID: {home_id}) on {date_str}")
                 
                 for fixture in fixtures:
@@ -97,11 +123,9 @@ class APIFootballClient:
                         return fixture
                 
                 logger.warning(f"⚠️ No matching fixture found for {home_team} vs {away_team} on {date_str}")
-                self.cache_manager.cache_response(cache_key, 'fixtures', None, ttl_hours=24)
-                return None
-            else:
-                logger.error(f"❌ API error: {response.status_code}")
-                return None
+            
+            self.cache_manager.cache_response(cache_key, 'fixtures', None, ttl_hours=24)
+            return None
                 
         except Exception as e:
             logger.error(f"❌ Error finding fixture: {e}")
@@ -150,70 +174,56 @@ class APIFootballClient:
             logger.info(f"✅ Found team ID from mapping for {team_name}: {mapped_id}")
             return mapped_id
         
-        self._rate_limit()
-        
         try:
-            # Build search params
-            url = f"{self.base_url}/teams"
             params = {'search': team_name}
-            
-            # Add league filter if provided (helps narrow search)
             if league_id:
                 params['league'] = league_id
-                params['season'] = 2024  # Current season
+                params['season'] = 2024
             
-            response = requests.get(url, headers=self.headers, params=params, timeout=15)
+            teams = self._fetch_with_cache('teams', params, f"team_search_{cache_key_suffix}", ttl_hours=168)
             
-            if response.status_code == 200:
-                data = response.json()
-                teams = data.get('response', [])
+            if not teams:
+                logger.warning(f"⚠️ No team ID found for: {team_name}")
+                return None
+            
+            normalized_search = self._normalize_team_name(team_name)
+            
+            for team_data in teams:
+                team = team_data.get('team', {})
+                team_api_name = team.get('name', '')
                 
-                # Normalize the search term
-                normalized_search = self._normalize_team_name(team_name)
-                
-                # Try exact match first
-                for team_data in teams:
-                    team = team_data.get('team', {})
-                    team_api_name = team.get('name', '')
-                    
-                    if team_api_name.lower() == team_name.lower():
-                        team_id = team.get('id')
-                        self.cache_manager.cache_response(cache_key, 'teams', team_id, ttl_hours=168)
-                        logger.info(f"✅ Found team ID for {team_name}: {team_id}")
-                        return team_id
-                
-                # Try normalized match
-                for team_data in teams:
-                    team = team_data.get('team', {})
-                    team_api_name = team.get('name', '')
-                    normalized_api_name = self._normalize_team_name(team_api_name)
-                    
-                    if normalized_api_name == normalized_search:
-                        team_id = team.get('id')
-                        self.cache_manager.cache_response(cache_key, 'teams', team_id, ttl_hours=168)
-                        logger.info(f"✅ Found team ID for {team_name} (normalized): {team_id}")
-                        return team_id
-                
-                # Try substring match as fallback
-                for team_data in teams:
-                    team = team_data.get('team', {})
-                    team_api_name = team.get('name', '')
-                    normalized_api_name = self._normalize_team_name(team_api_name)
-                    
-                    if normalized_search in normalized_api_name or normalized_api_name in normalized_search:
-                        team_id = team.get('id')
-                        self.cache_manager.cache_response(cache_key, 'teams', team_id, ttl_hours=168)
-                        logger.info(f"✅ Found team ID for {team_name} (substring match): {team_id}")
-                        return team_id
-                
-                if teams:
-                    team_id = teams[0].get('team', {}).get('id')
+                if team_api_name.lower() == team_name.lower():
+                    team_id = team.get('id')
                     self.cache_manager.cache_response(cache_key, 'teams', team_id, ttl_hours=168)
-                    logger.info(f"⚠️ Using first match for {team_name}: {team_id}")
+                    logger.info(f"✅ Found team ID for {team_name}: {team_id}")
                     return team_id
             
-            logger.warning(f"⚠️ No team ID found for: {team_name}")
-            return None
+            for team_data in teams:
+                team = team_data.get('team', {})
+                team_api_name = team.get('name', '')
+                normalized_api_name = self._normalize_team_name(team_api_name)
+                
+                if normalized_api_name == normalized_search:
+                    team_id = team.get('id')
+                    self.cache_manager.cache_response(cache_key, 'teams', team_id, ttl_hours=168)
+                    logger.info(f"✅ Found team ID for {team_name} (normalized): {team_id}")
+                    return team_id
+            
+            for team_data in teams:
+                team = team_data.get('team', {})
+                team_api_name = team.get('name', '')
+                normalized_api_name = self._normalize_team_name(team_api_name)
+                
+                if normalized_search in normalized_api_name or normalized_api_name in normalized_search:
+                    team_id = team.get('id')
+                    self.cache_manager.cache_response(cache_key, 'teams', team_id, ttl_hours=168)
+                    logger.info(f"✅ Found team ID for {team_name} (substring match): {team_id}")
+                    return team_id
+            
+            team_id = teams[0].get('team', {}).get('id')
+            self.cache_manager.cache_response(cache_key, 'teams', team_id, ttl_hours=168)
+            logger.info(f"⚠️ Using first match for {team_name}: {team_id}")
+            return team_id
             
         except Exception as e:
             logger.error(f"❌ Error getting team ID for {team_name}: {e}")
@@ -230,64 +240,54 @@ class APIFootballClient:
         if cached is not None:
             return cached
         
-        self._rate_limit()
+        injuries = self._fetch_with_cache('injuries', {'fixture': fixture_id}, cache_key, ttl_hours=2)
+        
+        if not injuries:
+            return {'total_injuries': 0, 'home_injuries': 0, 'away_injuries': 0, 'injuries': [], 'has_key_injuries': False}
         
         try:
-            url = f"{self.base_url}/injuries"
-            params = {'fixture': fixture_id}
+            home_injuries = []
+            away_injuries = []
             
-            response = requests.get(url, headers=self.headers, params=params, timeout=15)
-            
-            if response.status_code == 200:
-                data = response.json()
-                injuries = data.get('response', [])
+            for injury in injuries:
+                team = injury.get('team', {})
+                player = injury.get('player', {})
+                team_id = team.get('id')
                 
-                home_injuries = []
-                away_injuries = []
-                
-                for injury in injuries:
-                    team = injury.get('team', {})
-                    player = injury.get('player', {})
-                    team_id = team.get('id')
-                    
-                    injury_info = {
-                        'player_name': player.get('name', 'Unknown'),
-                        'type': player.get('type', 'Unknown'),
-                        'reason': player.get('reason', 'Unknown'),
-                        'team_id': team_id,
-                        'team_name': team.get('name', 'Unknown')
-                    }
-                    
-                    if home_team_id and team_id == home_team_id:
-                        home_injuries.append(injury_info)
-                    elif away_team_id and team_id == away_team_id:
-                        away_injuries.append(injury_info)
-                    elif home_team_id is None and away_team_id is None:
-                        home_injuries.append(injury_info)
-                
-                total_injuries = len(home_injuries) + len(away_injuries)
-                has_key_injuries = total_injuries > 3
-                
-                logger.info(f"📋 Found {len(home_injuries)} home, {len(away_injuries)} away injuries for fixture {fixture_id}")
-                
-                result = {
-                    'total_injuries': total_injuries,
-                    'home_injuries': len(home_injuries),
-                    'away_injuries': len(away_injuries),
-                    'injuries': home_injuries + away_injuries,
-                    'home_injury_list': home_injuries,
-                    'away_injury_list': away_injuries,
-                    'has_key_injuries': has_key_injuries
+                injury_info = {
+                    'player_name': player.get('name', 'Unknown'),
+                    'type': player.get('type', 'Unknown'),
+                    'reason': player.get('reason', 'Unknown'),
+                    'team_id': team_id,
+                    'team_name': team.get('name', 'Unknown')
                 }
                 
-                self.cache_manager.cache_response(cache_key, 'injuries', result, ttl_hours=2)
-                return result
-            else:
-                logger.warning(f"⚠️ Could not fetch injuries: {response.status_code}")
-                return {'total_injuries': 0, 'home_injuries': 0, 'away_injuries': 0, 'injuries': [], 'has_key_injuries': False}
-                
+                if home_team_id and team_id == home_team_id:
+                    home_injuries.append(injury_info)
+                elif away_team_id and team_id == away_team_id:
+                    away_injuries.append(injury_info)
+                elif home_team_id is None and away_team_id is None:
+                    home_injuries.append(injury_info)
+            
+            total_injuries = len(home_injuries) + len(away_injuries)
+            has_key_injuries = total_injuries > 3
+            
+            logger.info(f"📋 Found {len(home_injuries)} home, {len(away_injuries)} away injuries for fixture {fixture_id}")
+            
+            result = {
+                'total_injuries': total_injuries,
+                'home_injuries': len(home_injuries),
+                'away_injuries': len(away_injuries),
+                'injuries': home_injuries + away_injuries,
+                'home_injury_list': home_injuries,
+                'away_injury_list': away_injuries,
+                'has_key_injuries': has_key_injuries
+            }
+            
+            self.cache_manager.cache_response(cache_key, 'injuries', result, ttl_hours=2)
+            return result
         except Exception as e:
-            logger.error(f"❌ Error fetching injuries: {e}")
+            logger.error(f"❌ Error processing injuries: {e}")
             return {'total_injuries': 0, 'home_injuries': 0, 'away_injuries': 0, 'injuries': [], 'has_key_injuries': False}
     
     def get_lineups(self, fixture_id: int) -> Dict:
@@ -379,31 +379,14 @@ class APIFootballClient:
                 'style': str  # lenient/strict/balanced
             }
         """
-        # Check cache first (referee data rarely changes)
         cache_key = f"referee_{fixture_id}"
-        if cache_key in self.stats_cache:
-            logger.info(f"📦 Using cached referee data for fixture {fixture_id}")
-            return self.stats_cache[cache_key]
+        fixtures = self._fetch_with_cache('fixtures', {'id': fixture_id}, cache_key, ttl_hours=168)
         
-        self._rate_limit()
+        if not fixtures:
+            logger.warning(f"⚠️ Could not fetch fixture for referee")
+            return self._default_referee_profile()
         
         try:
-            # First, get fixture to find referee
-            url = f"{self.base_url}/fixtures"
-            params = {'id': fixture_id}
-            
-            response = requests.get(url, headers=self.headers, params=params, timeout=15)
-            
-            if response.status_code != 200:
-                logger.warning(f"⚠️ Could not fetch fixture for referee")
-                return self._default_referee_profile()
-            
-            data = response.json()
-            fixtures = data.get('response', [])
-            
-            if not fixtures:
-                return self._default_referee_profile()
-            
             fixture = fixtures[0]
             referee = fixture.get('fixture', {}).get('referee')
             
@@ -411,28 +394,22 @@ class APIFootballClient:
                 logger.info("⚠️ No referee assigned yet")
                 return self._default_referee_profile()
             
-            # Calculate stats from referee name (in production, would fetch full stats)
-            # For now, use intelligent defaults based on name patterns
             result = {
                 'referee_name': referee,
-                'penalties_per_match': 0.20,  # League average
+                'penalties_per_match': 0.20,
                 'cards_per_match': 4.0,
                 'avg_goals': 2.6,
-                'total_matches': 100,  # Estimated
+                'total_matches': 100,
                 'style': 'balanced'
             }
             
-            # Adjust based on referee patterns (can be enhanced with real API data)
             ref_lower = referee.lower()
             
-            # Lenient referees (free-flowing games, more goals)
             if any(name in ref_lower for name in ['oliver', 'atkinson', 'dean']):
                 result['penalties_per_match'] = 0.28
                 result['cards_per_match'] = 3.5
                 result['avg_goals'] = 2.9
                 result['style'] = 'lenient'
-            
-            # Strict referees (lots of cards, disrupted play, fewer goals)
             elif any(name in ref_lower for name in ['marriner', 'pawson', 'taylor']):
                 result['penalties_per_match'] = 0.15
                 result['cards_per_match'] = 5.2
@@ -440,13 +417,10 @@ class APIFootballClient:
                 result['style'] = 'strict'
             
             logger.info(f"⚽ Referee: {referee} ({result['style']}) - Avg goals: {result['avg_goals']}")
-            
-            # Cache the result
-            self.stats_cache[cache_key] = result
             return result
             
         except Exception as e:
-            logger.error(f"❌ Error fetching referee stats: {e}")
+            logger.error(f"❌ Error processing referee stats: {e}")
             return self._default_referee_profile()
     
     def _default_referee_profile(self) -> Dict:
@@ -473,74 +447,51 @@ class APIFootballClient:
                 'last_match_date': str
             }
         """
-        self._rate_limit()
-        
         try:
-            # Get team's recent fixtures
-            url = f"{self.base_url}/fixtures"
-            
-            # Parse match date
             from datetime import datetime, timedelta
             if 'T' in match_date:
                 target_date = datetime.fromisoformat(match_date.replace('Z', '+00:00'))
             else:
                 target_date = datetime.fromisoformat(match_date)
             
-            # Look back 14 days for last match
             start_date = (target_date - timedelta(days=14)).strftime('%Y-%m-%d')
             end_date = (target_date - timedelta(days=1)).strftime('%Y-%m-%d')
             
-            params = {
+            cache_key = f"rest_days_{team_id}_{start_date}_{end_date}"
+            fixtures = self._fetch_with_cache('fixtures', {
                 'team': team_id,
                 'from': start_date,
                 'to': end_date,
-                'status': 'FT'  # Only finished matches
-            }
+                'status': 'FT'
+            }, cache_key, ttl_hours=24)
             
-            response = requests.get(url, headers=self.headers, params=params, timeout=15)
-            
-            if response.status_code == 200:
-                data = response.json()
-                fixtures = data.get('response', [])
-                
-                if not fixtures:
-                    # No recent matches = very fresh (or data missing)
-                    return {
-                        'rest_days': 10,
-                        'is_fatigued': False,
-                        'is_fresh': True,
-                        'last_match_date': None
-                    }
-                
-                # Get most recent match
-                fixtures.sort(key=lambda x: x['fixture']['date'], reverse=True)
-                last_match = fixtures[0]
-                last_match_date = datetime.fromisoformat(last_match['fixture']['date'].replace('Z', '+00:00'))
-                
-                # Calculate rest days
-                rest_days = (target_date - last_match_date).days
-                
-                result = {
-                    'rest_days': rest_days,
-                    'is_fatigued': rest_days < 3,  # Red flag
-                    'is_fresh': rest_days > 7,
-                    'last_match_date': last_match_date.strftime('%Y-%m-%d')
-                }
-                
-                if rest_days < 3:
-                    logger.warning(f"⚠️ FATIGUE ALERT: Only {rest_days} days rest!")
-                elif rest_days > 7:
-                    logger.info(f"✅ Fresh team: {rest_days} days rest")
-                
-                return result
-            else:
-                # Default: assume normal rest
+            if not fixtures or not isinstance(fixtures, list):
                 return {
-                    'rest_days': 4,
+                    'rest_days': 10,
                     'is_fatigued': False,
-                    'is_fresh': False,
+                    'is_fresh': True,
                     'last_match_date': None
                 }
+            
+            fixtures.sort(key=lambda x: x['fixture']['date'], reverse=True)
+            last_match = fixtures[0]
+            last_match_date = datetime.fromisoformat(last_match['fixture']['date'].replace('Z', '+00:00'))
+            
+            rest_days = (target_date - last_match_date).days
+            
+            result = {
+                'rest_days': rest_days,
+                'is_fatigued': rest_days < 3,
+                'is_fresh': rest_days > 7,
+                'last_match_date': last_match_date.strftime('%Y-%m-%d')
+            }
+            
+            if rest_days < 3:
+                logger.warning(f"⚠️ FATIGUE ALERT: Only {rest_days} days rest!")
+            elif rest_days > 7:
+                logger.info(f"✅ Fresh team: {rest_days} days rest")
+            
+            return result
                 
         except Exception as e:
             logger.error(f"❌ Error calculating rest days: {e}")
@@ -556,121 +507,96 @@ class APIFootballClient:
         Get detailed match statistics including xG if available
         Returns statistics for both teams
         """
-        self._rate_limit()
+        cache_key = f"fixture_stats_xg_{fixture_id}"
+        stats = self._fetch_with_cache('fixtures/statistics', {'fixture': fixture_id}, cache_key, ttl_hours=1)
+        
+        if not stats or len(stats) < 2:
+            return {'home': {}, 'away': {}, 'has_xg': False}
         
         try:
-            url = f"{self.base_url}/fixtures/statistics"
-            params = {'fixture': fixture_id}
+            home_stats = {}
+            away_stats = {}
             
-            response = requests.get(url, headers=self.headers, params=params, timeout=15)
+            for i, team_stats in enumerate(stats[:2]):
+                statistics = team_stats.get('statistics', [])
+                parsed = {}
+                
+                for stat in statistics:
+                    stat_type = stat.get('type', '')
+                    value = stat.get('value')
+                    
+                    if stat_type == 'expected_goals':
+                        parsed['xg'] = float(value) if value else 0.0
+                    elif stat_type == 'Shots on Goal':
+                        parsed['shots_on_target'] = int(value) if value else 0
+                    elif stat_type == 'Total Shots':
+                        parsed['total_shots'] = int(value) if value else 0
+                    elif stat_type == 'Ball Possession':
+                        parsed['possession'] = value
+                
+                if i == 0:
+                    home_stats = parsed
+                else:
+                    away_stats = parsed
             
-            if response.status_code == 200:
-                data = response.json()
-                stats = data.get('response', [])
-                
-                if not stats or len(stats) < 2:
-                    return {'home': {}, 'away': {}, 'has_xg': False}
-                
-                home_stats = {}
-                away_stats = {}
-                
-                for i, team_stats in enumerate(stats[:2]):
-                    statistics = team_stats.get('statistics', [])
-                    parsed = {}
-                    
-                    for stat in statistics:
-                        stat_type = stat.get('type', '')
-                        value = stat.get('value')
-                        
-                        if stat_type == 'expected_goals':
-                            parsed['xg'] = float(value) if value else 0.0
-                        elif stat_type == 'Shots on Goal':
-                            parsed['shots_on_target'] = int(value) if value else 0
-                        elif stat_type == 'Total Shots':
-                            parsed['total_shots'] = int(value) if value else 0
-                        elif stat_type == 'Ball Possession':
-                            parsed['possession'] = value
-                    
-                    if i == 0:
-                        home_stats = parsed
-                    else:
-                        away_stats = parsed
-                
-                has_xg = 'xg' in home_stats or 'xg' in away_stats
-                
-                logger.info(f"📊 Statistics retrieved for fixture {fixture_id} (xG: {has_xg})")
-                
-                return {
-                    'home': home_stats,
-                    'away': away_stats,
-                    'has_xg': has_xg
-                }
-            else:
-                logger.warning(f"⚠️ No statistics available for fixture {fixture_id}")
-                return {'home': {}, 'away': {}, 'has_xg': False}
-                
+            has_xg = 'xg' in home_stats or 'xg' in away_stats
+            
+            logger.info(f"📊 Statistics retrieved for fixture {fixture_id} (xG: {has_xg})")
+            
+            return {
+                'home': home_stats,
+                'away': away_stats,
+                'has_xg': has_xg
+            }
         except Exception as e:
-            logger.error(f"❌ Error fetching statistics: {e}")
+            logger.error(f"❌ Error processing statistics: {e}")
             return {'home': {}, 'away': {}, 'has_xg': False}
     
     def get_team_last_matches(self, team_id: int, limit: int = 5) -> List[Dict]:
         """
         Get last N completed matches for a team with full statistics
         """
-        self._rate_limit()
+        cache_key = f"team_last_matches_{team_id}_{limit}"
+        fixtures = self._fetch_with_cache('fixtures', {'team': team_id, 'last': limit, 'status': 'FT'}, cache_key, ttl_hours=24)
+        
+        if not fixtures:
+            return []
         
         try:
-            url = f"{self.base_url}/fixtures"
-            params = {
-                'team': team_id,
-                'last': limit,
-                'status': 'FT'
-            }
+            matches = []
+            for fixture in fixtures:
+                teams = fixture.get('teams', {})
+                goals = fixture.get('goals', {})
+                
+                is_home = teams.get('home', {}).get('id') == team_id
+                
+                if is_home:
+                    goals_for = goals.get('home', 0)
+                    goals_against = goals.get('away', 0)
+                else:
+                    goals_for = goals.get('away', 0)
+                    goals_against = goals.get('home', 0)
+                
+                if goals_for > goals_against:
+                    result = 'W'
+                elif goals_for < goals_against:
+                    result = 'L'
+                else:
+                    result = 'D'
+                
+                matches.append({
+                    'fixture_id': fixture.get('fixture', {}).get('id'),
+                    'date': fixture.get('fixture', {}).get('date'),
+                    'goals_for': goals_for,
+                    'goals_against': goals_against,
+                    'result': result,
+                    'is_home': is_home
+                })
             
-            response = requests.get(url, headers=self.headers, params=params, timeout=15)
-            
-            if response.status_code == 200:
-                data = response.json()
-                fixtures = data.get('response', [])
-                
-                matches = []
-                for fixture in fixtures:
-                    teams = fixture.get('teams', {})
-                    goals = fixture.get('goals', {})
-                    
-                    is_home = teams.get('home', {}).get('id') == team_id
-                    
-                    if is_home:
-                        goals_for = goals.get('home', 0)
-                        goals_against = goals.get('away', 0)
-                    else:
-                        goals_for = goals.get('away', 0)
-                        goals_against = goals.get('home', 0)
-                    
-                    if goals_for > goals_against:
-                        result = 'W'
-                    elif goals_for < goals_against:
-                        result = 'L'
-                    else:
-                        result = 'D'
-                    
-                    matches.append({
-                        'fixture_id': fixture.get('fixture', {}).get('id'),
-                        'date': fixture.get('fixture', {}).get('date'),
-                        'goals_for': goals_for,
-                        'goals_against': goals_against,
-                        'result': result,
-                        'is_home': is_home
-                    })
-                
-                logger.info(f"📋 Found {len(matches)} recent matches for team {team_id}")
-                return matches
-            else:
-                logger.error(f"❌ API error: {response.status_code}")
-                return []
-                
+            logger.info(f"📋 Found {len(matches)} recent matches for team {team_id}")
+            return matches
         except Exception as e:
-            logger.error(f"❌ Error fetching team matches: {e}")
+            logger.error(f"❌ Error processing team matches: {e}")
             return []
     
     def validate_match(self, home_team: str, away_team: str, match_date: str) -> Dict:
@@ -725,71 +651,61 @@ class APIFootballClient:
                 'away_scorers': [...]
             }
         """
-        self._rate_limit()
-        
         try:
-            # Get lineup to know who's playing
             lineups = self.get_lineups(fixture_id)
             
-            # Get top scorers from the league
-            url = f"{self.base_url}/players/topscorers"
-            params = {
+            cache_key = f"top_scorers_{league_id}_{season}"
+            all_scorers = self._fetch_with_cache('players/topscorers', {
                 'league': league_id,
                 'season': season
-            }
+            }, cache_key, ttl_hours=24)
             
-            response = requests.get(url, headers=self.headers, params=params, timeout=15)
-            
-            if response.status_code == 200:
-                data = response.json()
-                all_scorers = data.get('response', [])
-                
-                home_scorers = []
-                away_scorers = []
-                
-                # Filter scorers by team
-                for player_data in all_scorers:
-                    stats = player_data.get('statistics', [{}])[0]
-                    player_team_id = stats.get('team', {}).get('id')
-                    
-                    player_info = player_data.get('player', {})
-                    games = stats.get('games', {})
-                    goals_data = stats.get('goals', {})
-                    shots_data = stats.get('shots', {})
-                    
-                    appearances = games.get('appearences', 1) or 1
-                    total_goals = goals_data.get('total', 0) or 0
-                    total_shots = shots_data.get('total', 0) or 0
-                    
-                    scorer = {
-                        'name': player_info.get('name', 'Unknown'),
-                        'goals': total_goals,
-                        'appearances': appearances,
-                        'shots_per_game': total_shots / appearances if appearances > 0 else 0,
-                        'scoring_rate': total_goals / appearances if appearances > 0 else 0
-                    }
-                    
-                    if player_team_id == home_team_id and len(home_scorers) < 3:
-                        home_scorers.append(scorer)
-                    elif player_team_id == away_team_id and len(away_scorers) < 3:
-                        away_scorers.append(scorer)
-                    
-                    if len(home_scorers) >= 3 and len(away_scorers) >= 3:
-                        break
-                
-                logger.info(f"⚽ Found {len(home_scorers)} home scorers, {len(away_scorers)} away scorers")
-                
-                return {
-                    'home_scorers': home_scorers,
-                    'away_scorers': away_scorers,
-                    'lineups_confirmed': lineups.get('confirmed', False)
-                }
-            else:
-                logger.warning(f"⚠️ Could not fetch top scorers: {response.status_code}")
+            if not all_scorers:
+                logger.warning(f"⚠️ Could not fetch top scorers")
                 return {'home_scorers': [], 'away_scorers': [], 'lineups_confirmed': False}
+            
+            home_scorers = []
+            away_scorers = []
+            
+            for player_data in all_scorers:
+                stats = player_data.get('statistics', [{}])[0]
+                player_team_id = stats.get('team', {}).get('id')
+                
+                player_info = player_data.get('player', {})
+                games = stats.get('games', {})
+                goals_data = stats.get('goals', {})
+                shots_data = stats.get('shots', {})
+                
+                appearances = games.get('appearences', 1) or 1
+                total_goals = goals_data.get('total', 0) or 0
+                total_shots = shots_data.get('total', 0) or 0
+                
+                scorer = {
+                    'name': player_info.get('name', 'Unknown'),
+                    'goals': total_goals,
+                    'appearances': appearances,
+                    'shots_per_game': total_shots / appearances if appearances > 0 else 0,
+                    'scoring_rate': total_goals / appearances if appearances > 0 else 0
+                }
+                
+                if player_team_id == home_team_id and len(home_scorers) < 3:
+                    home_scorers.append(scorer)
+                elif player_team_id == away_team_id and len(away_scorers) < 3:
+                    away_scorers.append(scorer)
+                
+                if len(home_scorers) >= 3 and len(away_scorers) >= 3:
+                    break
+            
+            logger.info(f"⚽ Found {len(home_scorers)} home scorers, {len(away_scorers)} away scorers")
+            
+            return {
+                'home_scorers': home_scorers,
+                'away_scorers': away_scorers,
+                'lineups_confirmed': lineups.get('confirmed', False)
+            }
                 
         except Exception as e:
-            logger.error(f"❌ Error fetching top scorers: {e}")
+            logger.error(f"❌ Error processing top scorers: {e}")
             return {'home_scorers': [], 'away_scorers': [], 'lineups_confirmed': False}
     
     def get_team_statistics(self, team_id: int, league_id: int, season: int = 2024) -> Optional[Dict]:
@@ -804,60 +720,37 @@ class APIFootballClient:
         Returns:
             Dictionary with team statistics including corners, goals, clean sheets
         """
-        # Check cache first (cache for 24 hours)
         cache_key = f"team_stats_{team_id}_{league_id}_{season}"
-        if cache_key in self.stats_cache:
-            cache_time, cached_data = self.stats_cache[cache_key]
-            if time.time() - cache_time < 86400:  # 24 hours
-                logger.info(f"📦 Using cached team statistics for team {team_id}")
-                return cached_data
+        stats = self._fetch_with_cache('teams/statistics', {
+            'team': team_id,
+            'season': season,
+            'league': league_id
+        }, cache_key, ttl_hours=24)
         
-        self._rate_limit()
+        if not stats:
+            logger.warning(f"⚠️ No statistics found for team {team_id}")
+            return None
         
         try:
-            url = f"{self.base_url}/teams/statistics"
-            params = {
-                'team': team_id,
-                'season': season,
-                'league': league_id
+            fixtures = stats.get('fixtures', {})
+            goals = stats.get('goals', {})
+            
+            result = {
+                'total_matches': fixtures.get('played', {}).get('total', 0),
+                'goals_for_avg': goals.get('for', {}).get('average', {}).get('total', '0'),
+                'goals_against_avg': goals.get('against', {}).get('average', {}).get('total', '0'),
+                'clean_sheets': stats.get('clean_sheet', {}).get('total', 0),
+                'failed_to_score': stats.get('failed_to_score', {}).get('total', 0)
             }
             
-            response = requests.get(url, headers=self.headers, params=params, timeout=15)
-            
-            if response.status_code == 200:
-                data = response.json()
-                stats = data.get('response', {})
-                
-                if not stats:
-                    logger.warning(f"⚠️ No statistics found for team {team_id}")
-                    return None
-                
-                # Extract relevant statistics
-                fixtures = stats.get('fixtures', {})
-                goals = stats.get('goals', {})
-                
-                result = {
-                    'total_matches': fixtures.get('played', {}).get('total', 0),
-                    'goals_for_avg': goals.get('for', {}).get('average', {}).get('total', '0'),
-                    'goals_against_avg': goals.get('against', {}).get('average', {}).get('total', '0'),
-                    'clean_sheets': stats.get('clean_sheet', {}).get('total', 0),
-                    'failed_to_score': stats.get('failed_to_score', {}).get('total', 0)
-                }
-                
-                # Cache the result
-                self.stats_cache[cache_key] = (time.time(), result)
-                
-                logger.info(f"✅ Fetched team statistics for team {team_id}")
-                return result
-            else:
-                logger.warning(f"⚠️ Could not fetch team statistics: {response.status_code}")
-                return None
+            logger.info(f"✅ Fetched team statistics for team {team_id}")
+            return result
                 
         except Exception as e:
-            logger.error(f"❌ Error fetching team statistics: {e}")
+            logger.error(f"❌ Error processing team statistics: {e}")
             return None
     
-    def get_fixture_statistics(self, fixture_id: int) -> Optional[Dict]:
+    def get_fixture_detailed_statistics(self, fixture_id: int) -> Optional[Dict]:
         """
         Get detailed match statistics (corners, shots, possession)
         
@@ -867,74 +760,50 @@ class APIFootballClient:
         Returns:
             Dictionary with match statistics for both teams
         """
-        # Check cache first
-        cache_key = f"fixture_stats_{fixture_id}"
-        if cache_key in self.stats_cache:
-            cache_time, cached_data = self.stats_cache[cache_key]
-            if time.time() - cache_time < 3600:  # 1 hour cache
-                logger.info(f"📦 Using cached fixture statistics for fixture {fixture_id}")
-                return cached_data
+        cache_key = f"fixture_detailed_stats_{fixture_id}"
+        teams_stats = self._fetch_with_cache('fixtures/statistics', {'fixture': fixture_id}, cache_key, ttl_hours=1)
         
-        self._rate_limit()
+        if not teams_stats or len(teams_stats) < 2:
+            logger.warning(f"⚠️ Incomplete statistics for fixture {fixture_id}")
+            return None
         
         try:
-            url = f"{self.base_url}/fixtures/statistics"
-            params = {'fixture': fixture_id}
+            home_stats = teams_stats[0].get('statistics', [])
+            away_stats = teams_stats[1].get('statistics', [])
             
-            response = requests.get(url, headers=self.headers, params=params, timeout=15)
+            def get_stat_value(stats_list, stat_type):
+                """Helper to extract specific stat"""
+                for stat in stats_list:
+                    if stat.get('type') == stat_type:
+                        value = stat.get('value')
+                        if value is None:
+                            return 0
+                        if isinstance(value, str):
+                            return int(value.replace('%', '')) if value.replace('%', '').isdigit() else 0
+                        return int(value) if value else 0
+                return 0
             
-            if response.status_code == 200:
-                data = response.json()
-                teams_stats = data.get('response', [])
-                
-                if not teams_stats or len(teams_stats) < 2:
-                    logger.warning(f"⚠️ Incomplete statistics for fixture {fixture_id}")
-                    return None
-                
-                # Parse statistics for both teams
-                home_stats = teams_stats[0].get('statistics', [])
-                away_stats = teams_stats[1].get('statistics', [])
-                
-                def get_stat_value(stats_list, stat_type):
-                    """Helper to extract specific stat"""
-                    for stat in stats_list:
-                        if stat.get('type') == stat_type:
-                            value = stat.get('value')
-                            if value is None:
-                                return 0
-                            if isinstance(value, str):
-                                return int(value.replace('%', '')) if value.replace('%', '').isdigit() else 0
-                            return int(value) if value else 0
-                    return 0
-                
-                result = {
-                    'home': {
-                        'corners': get_stat_value(home_stats, 'Corner Kicks'),
-                        'shots_on_goal': get_stat_value(home_stats, 'Shots on Goal'),
-                        'shots_total': get_stat_value(home_stats, 'Total Shots'),
-                        'possession': get_stat_value(home_stats, 'Ball Possession'),
-                        'fouls': get_stat_value(home_stats, 'Fouls'),
-                        'yellow_cards': get_stat_value(home_stats, 'Yellow Cards')
-                    },
-                    'away': {
-                        'corners': get_stat_value(away_stats, 'Corner Kicks'),
-                        'shots_on_goal': get_stat_value(away_stats, 'Shots on Goal'),
-                        'shots_total': get_stat_value(away_stats, 'Total Shots'),
-                        'possession': get_stat_value(away_stats, 'Ball Possession'),
-                        'fouls': get_stat_value(away_stats, 'Fouls'),
-                        'yellow_cards': get_stat_value(away_stats, 'Yellow Cards')
-                    }
+            result = {
+                'home': {
+                    'corners': get_stat_value(home_stats, 'Corner Kicks'),
+                    'shots_on_goal': get_stat_value(home_stats, 'Shots on Goal'),
+                    'shots_total': get_stat_value(home_stats, 'Total Shots'),
+                    'possession': get_stat_value(home_stats, 'Ball Possession'),
+                    'fouls': get_stat_value(home_stats, 'Fouls'),
+                    'yellow_cards': get_stat_value(home_stats, 'Yellow Cards')
+                },
+                'away': {
+                    'corners': get_stat_value(away_stats, 'Corner Kicks'),
+                    'shots_on_goal': get_stat_value(away_stats, 'Shots on Goal'),
+                    'shots_total': get_stat_value(away_stats, 'Total Shots'),
+                    'possession': get_stat_value(away_stats, 'Ball Possession'),
+                    'fouls': get_stat_value(away_stats, 'Fouls'),
+                    'yellow_cards': get_stat_value(away_stats, 'Yellow Cards')
                 }
-                
-                # Cache the result
-                self.stats_cache[cache_key] = (time.time(), result)
-                
-                logger.info(f"✅ Fetched fixture statistics for fixture {fixture_id}")
-                return result
-            else:
-                logger.warning(f"⚠️ Could not fetch fixture statistics: {response.status_code}")
-                return None
-                
+            }
+            
+            logger.info(f"✅ Fetched fixture statistics for fixture {fixture_id}")
+            return result
         except Exception as e:
-            logger.error(f"❌ Error fetching fixture statistics: {e}")
+            logger.error(f"❌ Error processing fixture statistics: {e}")
             return None
