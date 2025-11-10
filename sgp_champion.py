@@ -266,7 +266,7 @@ class SGPChampion:
         self._select_and_broadcast_top_sgps(all_sgps)
     
     def _select_and_broadcast_top_sgps(self, all_sgps: List[Dict[str, Any]]):
-        """Smart selection: Only broadcast top 10-15 regular SGP + top 5 MonsterSGP"""
+        """Smart selection: Only broadcast top 15 regular SGP + top 10 MonsterSGP"""
         if not all_sgps:
             logger.info("📭 No SGPs to broadcast")
             return
@@ -293,8 +293,8 @@ class SGPChampion:
         regular_sgps.sort(key=lambda x: x.get('ev_percentage', 0), reverse=True)
         
         # Select top predictions
-        top_regular = regular_sgps[:15]  # Top 10-15
-        top_monster = monster_sgps[:5]   # Top 5
+        top_regular = regular_sgps[:15]  # Top 15 regular SGP
+        top_monster = monster_sgps[:10]  # Top 10 MonsterSGP (entertainment)
         
         logger.info(f"✅ Selected for broadcast:")
         logger.info(f"   • {len(top_regular)} regular SGP (best EV)")

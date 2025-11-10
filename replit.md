@@ -36,7 +36,8 @@ The system employs advanced prediction features including:
 - **Dual Telegram Channels (Nov 8, 2025):** Separate broadcast channels for different prediction types with smart volume control:
   - **Tips Channel (-1003269011722):** Dedicated to Exact Score predictions only (~20-25 per day during learning mode)
   - **SGP Channel (-1003233743568):** Dedicated to SGP/parlay predictions only
-  - **Smart Volume Control:** System generates all possible SGPs (~300+) for analytics, but only broadcasts top 15 regular SGP + top 5 MonsterSGP (sorted by EV) to avoid channel spam
+  - **Smart Volume Control:** System generates all possible SGPs (~300+) for analytics, but only broadcasts top 15 regular SGP + top 10 MonsterSGP (sorted by EV) to avoid channel spam
+  - **MonsterSGP Separation (Nov 10, 2025):** MonsterSGP is **entertainment-only** with extreme odds (30-200x) and excluded from official SGP performance statistics. Dashboard shows only regular SGP stats (158 predictions, 33.5% hit rate, +2,497 SEK profit).
   - **Channel Routing:** `telegram_sender.py` routes predictions based on `prediction_type` parameter (exact_score/sgp) to appropriate channel
   - **Robust Date Parsing:** Multi-strategy date parser handles various ISO format variations from different data sources
 - **Intelligent Result Verification System (Nov 8, 2025):** Production-ready caching and cooldown system to prevent API quota exhaustion:
