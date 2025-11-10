@@ -5,6 +5,16 @@ MASTER STATS MODULE
 Single source of truth for ALL performance statistics.
 Always pulls from BOTH tables (exact score + SGP).
 100% bulletproof, no discrepancies possible.
+
+CRITICAL STATISTICS POLICY:
+---------------------------
+1. MonsterSGP is ENTERTAINMENT ONLY - ALWAYS excluded from official statistics
+2. MonsterSGP has extreme odds (30-200x) and skews average odds calculations
+3. All SGP queries MUST filter: parlay_description NOT LIKE '%Monster%' AND NOT LIKE '%BEAST%'
+4. Regular SGP statistics represent the actual subscription product performance
+5. Average odds for regular SGP: ~3.4x (MonsterSGP would inflate to 11.5x - WRONG!)
+
+This ensures subscribers see accurate, reliable performance metrics.
 """
 
 from typing import Dict, List
