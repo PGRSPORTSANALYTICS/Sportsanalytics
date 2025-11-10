@@ -26,7 +26,7 @@ def get_all_time_stats() -> Dict:
     exact_losses = exact_total - (exact_wins or 0)
     exact_hit_rate = (exact_wins / exact_total * 100) if exact_total > 0 else 0.0
     
-    # SGP stats - only count settled predictions with valid outcome
+    # SGP stats - only count settled predictions with valid outcome (EXCLUDE MonsterSGP - entertainment only)
     sgp_row = db_helper.execute('''
         SELECT 
             COUNT(*) as total,
@@ -34,7 +34,9 @@ def get_all_time_stats() -> Dict:
             SUM(profit_loss) as profit
         FROM sgp_predictions 
         WHERE outcome IN (%s, %s)
-    ''', ('win', 'win', 'loss'), fetch='one')
+          AND parlay_description NOT LIKE %s
+          AND parlay_description NOT LIKE %s
+    ''', ('win', 'win', 'loss', '%Monster%', '%BEAST%'), fetch='one')
     sgp_total, sgp_wins, sgp_profit = sgp_row if sgp_row else (0, 0, 0.0)
     sgp_losses = sgp_total - (sgp_wins or 0)
     sgp_hit_rate = (sgp_wins / sgp_total * 100) if sgp_total > 0 else 0.0
@@ -98,7 +100,7 @@ def get_todays_exact_score_stats() -> Dict:
     }
 
 def get_todays_sgp_stats() -> Dict:
-    """Get today's SGP statistics"""
+    """Get today's SGP statistics (EXCLUDE MonsterSGP - entertainment only)"""
     today = date.today().isoformat()
     
     row = db_helper.execute('''
@@ -109,7 +111,9 @@ def get_todays_sgp_stats() -> Dict:
         FROM sgp_predictions 
         WHERE result IS NOT NULL 
         AND DATE(TO_TIMESTAMP(settled_timestamp)) = %s
-    ''', ('win', 'won', today), fetch='one')
+        AND parlay_description NOT LIKE %s
+        AND parlay_description NOT LIKE %s
+    ''', ('win', 'won', today, '%Monster%', '%BEAST%'), fetch='one')
     
     total, wins, profit = row if row else (0, 0, 0.0)
     losses = total - (wins or 0)
@@ -154,7 +158,7 @@ def get_exact_score_results() -> List[Dict]:
     return results
 
 def get_sgp_results() -> List[Dict]:
-    """Get all SGP settled predictions"""
+    """Get all SGP settled predictions (EXCLUDE MonsterSGP - entertainment only)"""
     rows = db_helper.execute('''
         SELECT 
             home_team, away_team, parlay_description, bookmaker_odds,
@@ -162,8 +166,10 @@ def get_sgp_results() -> List[Dict]:
             league, settled_timestamp
         FROM sgp_predictions 
         WHERE result IS NOT NULL
+        AND parlay_description NOT LIKE %s
+        AND parlay_description NOT LIKE %s
         ORDER BY settled_timestamp DESC
-    ''', fetch='all')
+    ''', ('%Monster%', '%BEAST%'), fetch='all')
     
     results = []
     if rows:
