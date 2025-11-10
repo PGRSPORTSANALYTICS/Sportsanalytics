@@ -279,71 +279,70 @@ def load_performance_summary():
 
 def load_todays_predictions():
     """Load predictions for matches playing today (by match_date, not creation timestamp)"""
+    from db_connection import DatabaseConnection
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
         # Today's date string for matching
         today_date = date.today().isoformat()
         
         # Today's exact scores (matches playing today)
-        cursor.execute('''
-            SELECT 
-                home_team, away_team, selection, odds, 
-                edge_percentage, league, match_date
-            FROM football_opportunities
-            WHERE market = 'exact_score'
-            AND date(match_date) = ?
-            ORDER BY match_date ASC
-        ''', (today_date,))
-        
-        exact_predictions = []
-        for row in cursor.fetchall():
-            match_time = datetime.fromtimestamp(row[6]) if isinstance(row[6], (int, float)) else datetime.fromisoformat(row[6])
-            exact_predictions.append({
-                'Match': f"{row[0]} vs {row[1]}",
-                'Prediction': row[2],
-                'Odds': f"{row[3]:.2f}x",
-                'Edge': f"{row[4]:.1f}%",
-                'League': row[5],
-                'Time': match_time.strftime('%H:%M')
-            })
+        with DatabaseConnection.get_cursor() as cursor:
+            cursor.execute('''
+                SELECT 
+                    home_team, away_team, selection, odds, 
+                    edge_percentage, league, match_date
+                FROM football_opportunities
+                WHERE market = 'exact_score'
+                AND (match_date::date) = %s
+                ORDER BY match_date ASC
+            ''', (today_date,))
+            
+            exact_predictions = []
+            for row in cursor.fetchall():
+                match_time = datetime.fromtimestamp(row[6]) if isinstance(row[6], (int, float)) else datetime.fromisoformat(row[6])
+                exact_predictions.append({
+                    'Match': f"{row[0]} vs {row[1]}",
+                    'Prediction': row[2],
+                    'Odds': f"{row[3]:.2f}x",
+                    'Edge': f"{row[4]:.1f}%",
+                    'League': row[5],
+                    'Time': match_time.strftime('%H:%M')
+                })
         
         # Today's SGPs (matches playing today)
-        cursor.execute('''
-            SELECT 
-                home_team, away_team, parlay_description, legs,
-                bookmaker_odds, ev_percentage, match_date, pricing_mode
-            FROM sgp_predictions
-            WHERE date(match_date) = ?
-            ORDER BY match_date ASC
-        ''', (today_date,))
+        with DatabaseConnection.get_cursor() as cursor:
+            cursor.execute('''
+                SELECT 
+                    home_team, away_team, parlay_description, legs,
+                    bookmaker_odds, ev_percentage, match_date, pricing_mode
+                FROM sgp_predictions
+                WHERE (match_date::date) = %s
+                ORDER BY match_date ASC
+            ''', (today_date,))
+            
+            sgp_predictions = []
+            for row in cursor.fetchall():
+                match_time = datetime.fromtimestamp(row[6]) if isinstance(row[6], (int, float)) else datetime.fromisoformat(row[6])
+                pricing_mode = row[7] if row[7] else 'simulated'
+                
+                # Add icon based on pricing mode
+                if pricing_mode == 'live':
+                    odds_display = f"🟢 {row[4]:.2f}x"
+                elif pricing_mode == 'hybrid':
+                    odds_display = f"🟡 {row[4]:.2f}x"
+                else:
+                    odds_display = f"⚪ {row[4]:.2f}x"
+                
+                # Format legs for readability
+                formatted_legs = format_sgp_legs(row[3]) if row[3] else row[2]
+                
+                sgp_predictions.append({
+                    'Match': f"{row[0]} vs {row[1]}",
+                    'Predictions': formatted_legs,
+                    'Odds': odds_display,
+                    'Edge': f"{row[5]:.1f}%",
+                    'Time': match_time.strftime('%H:%M')
+                })
         
-        sgp_predictions = []
-        for row in cursor.fetchall():
-            match_time = datetime.fromtimestamp(row[6]) if isinstance(row[6], (int, float)) else datetime.fromisoformat(row[6])
-            pricing_mode = row[7] if row[7] else 'simulated'
-            
-            # Add icon based on pricing mode
-            if pricing_mode == 'live':
-                odds_display = f"🟢 {row[4]:.2f}x"
-            elif pricing_mode == 'hybrid':
-                odds_display = f"🟡 {row[4]:.2f}x"
-            else:
-                odds_display = f"⚪ {row[4]:.2f}x"
-            
-            # Format legs for readability
-            formatted_legs = format_sgp_legs(row[3]) if row[3] else row[2]
-            
-            sgp_predictions.append({
-                'Match': f"{row[0]} vs {row[1]}",
-                'Predictions': formatted_legs,
-                'Odds': odds_display,
-                'Edge': f"{row[5]:.1f}%",
-                'Time': match_time.strftime('%H:%M')
-            })
-        
-        conn.close()
         return exact_predictions, sgp_predictions
     except Exception as e:
         return [], []
@@ -374,39 +373,37 @@ with st.sidebar:
     st.markdown("### 📊 HISTORICAL RESULTS")
     st.caption("Click sections above to view detailed analytics")
     
+    from db_connection import DatabaseConnection
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
         # Exact Score History
-        cursor.execute('''
-            SELECT 
-                COUNT(*) as settled,
-                SUM(CASE WHEN payout > 0 THEN 1 ELSE 0 END) as wins,
-                SUM(stake) as total_staked,
-                SUM(CASE WHEN payout > 0 THEN payout - stake 
-                         ELSE -stake END) as net_profit
-            FROM football_opportunities
-            WHERE market = 'exact_score'
-            AND result IS NOT NULL
-        ''')
-        exact_hist = cursor.fetchone()
+        with DatabaseConnection.get_cursor() as cursor:
+            cursor.execute('''
+                SELECT 
+                    COUNT(*) as settled,
+                    SUM(CASE WHEN payout > 0 THEN 1 ELSE 0 END) as wins,
+                    SUM(stake) as total_staked,
+                    SUM(CASE WHEN payout > 0 THEN payout - stake 
+                             ELSE -stake END) as net_profit
+                FROM football_opportunities
+                WHERE market = 'exact_score'
+                AND result IS NOT NULL
+            ''')
+            exact_hist = cursor.fetchone()
         
         # SGP History (EXCLUDE MonsterSGP - entertainment only)
-        cursor.execute('''
-            SELECT 
-                COUNT(*) as settled,
-                SUM(CASE WHEN outcome = 'win' THEN 1 ELSE 0 END) as wins,
-                SUM(stake) as total_staked,
-                SUM(profit_loss) as net_profit
-            FROM sgp_predictions
-            WHERE status = 'settled'
-            AND (parlay_description IS NULL OR parlay_description NOT LIKE '%Monster%')
-            AND (parlay_description IS NULL OR parlay_description NOT LIKE '%BEAST%')
-        ''')
-        sgp_hist = cursor.fetchone()
-        
-        conn.close()
+        with DatabaseConnection.get_cursor() as cursor:
+            cursor.execute('''
+                SELECT 
+                    COUNT(*) as settled,
+                    SUM(CASE WHEN outcome = 'win' THEN 1 ELSE 0 END) as wins,
+                    SUM(stake) as total_staked,
+                    SUM(profit_loss) as net_profit
+                FROM sgp_predictions
+                WHERE status = 'settled'
+                AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
+                AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
+            ''', ('%Monster%', '%BEAST%'))
+            sgp_hist = cursor.fetchone()
         
         # Display Exact Score Results
         st.markdown("**⚽ Exact Score**")
@@ -539,29 +536,28 @@ if page == "⚽ Exact Score Analytics":
     st.markdown("# ⚽ EXACT SCORE ANALYTICS")
     st.markdown('<p class="subtitle">Detailed Performance Analysis | ROI Tracking</p>', unsafe_allow_html=True)
     
+    from db_connection import DatabaseConnection
     try:
         import plotly.graph_objects as go
         import plotly.express as px
         
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
         # Overall Stats
-        cursor.execute('''
-            SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN payout > 0 THEN 1 ELSE 0 END) as wins,
-                SUM(CASE WHEN payout = 0 THEN 1 ELSE 0 END) as losses,
-                SUM(stake) as total_staked,
-                SUM(CASE WHEN payout > 0 THEN payout - stake 
-                         ELSE -stake END) as net_profit,
-                AVG(odds) as avg_odds,
-                AVG(edge_percentage) as avg_edge
-            FROM football_opportunities
-            WHERE market = 'exact_score'
-            AND result IS NOT NULL
-        ''')
-        stats = cursor.fetchone()
+        with DatabaseConnection.get_cursor() as cursor:
+            cursor.execute('''
+                SELECT 
+                    COUNT(*) as total,
+                    SUM(CASE WHEN payout > 0 THEN 1 ELSE 0 END) as wins,
+                    SUM(CASE WHEN payout = 0 THEN 1 ELSE 0 END) as losses,
+                    SUM(stake) as total_staked,
+                    SUM(CASE WHEN payout > 0 THEN payout - stake 
+                             ELSE -stake END) as net_profit,
+                    AVG(odds) as avg_odds,
+                    AVG(edge_percentage) as avg_edge
+                FROM football_opportunities
+                WHERE market = 'exact_score'
+                AND result IS NOT NULL
+            ''')
+            stats = cursor.fetchone()
         
         if stats and stats[0] > 0:
             total = stats[0]
@@ -593,37 +589,38 @@ if page == "⚽ Exact Score Analytics":
             # ROI Over Time Chart
             st.markdown("### 📈 ROI OVER TIME")
             
-            cursor.execute('''
-                SELECT 
-                    timestamp,
-                    stake,
-                    CASE WHEN payout > 0 THEN payout - stake 
-                         ELSE -stake END as profit
-                FROM football_opportunities
-                WHERE market = 'exact_score'
-                AND result IS NOT NULL
-                ORDER BY timestamp ASC
-            ''')
-            
-            cumulative_profit = 0
-            cumulative_stake = 0
-            roi_data = []
-            
-            for row in cursor.fetchall():
-                ts = row[0]
-                stake = row[1]
-                profit = row[2]
+            with DatabaseConnection.get_cursor() as cursor:
+                cursor.execute('''
+                    SELECT 
+                        timestamp,
+                        stake,
+                        CASE WHEN payout > 0 THEN payout - stake 
+                             ELSE -stake END as profit
+                    FROM football_opportunities
+                    WHERE market = 'exact_score'
+                    AND result IS NOT NULL
+                    ORDER BY timestamp ASC
+                ''')
                 
-                cumulative_profit += profit
-                cumulative_stake += stake
-                roi_pct = (cumulative_profit / cumulative_stake * 100) if cumulative_stake > 0 else 0
+                cumulative_profit = 0
+                cumulative_stake = 0
+                roi_data = []
                 
-                dt = datetime.fromtimestamp(ts)
-                roi_data.append({
-                    'Date': dt.strftime('%Y-%m-%d'),
-                    'Cumulative Profit': cumulative_profit,
-                    'ROI %': roi_pct
-                })
+                for row in cursor.fetchall():
+                    ts = row[0]
+                    stake = row[1]
+                    profit = row[2]
+                    
+                    cumulative_profit += profit
+                    cumulative_stake += stake
+                    roi_pct = (cumulative_profit / cumulative_stake * 100) if cumulative_stake > 0 else 0
+                    
+                    dt = datetime.fromtimestamp(ts)
+                    roi_data.append({
+                        'Date': dt.strftime('%Y-%m-%d'),
+                        'Cumulative Profit': cumulative_profit,
+                        'ROI %': roi_pct
+                    })
             
             if roi_data:
                 df_roi = pd.DataFrame(roi_data)
@@ -815,8 +812,6 @@ if page == "⚽ Exact Score Analytics":
         else:
             st.info("No settled predictions yet. Check back after matches complete!")
         
-        conn.close()
-        
     except Exception as e:
         st.error(f"Error loading analytics: {str(e)}")
     
@@ -830,29 +825,28 @@ if page == "🎲 SGP Analytics":
     st.markdown("# 🎲 SGP ANALYTICS")
     st.markdown('<p class="subtitle">Same Game Parlay Performance | ROI Tracking</p>', unsafe_allow_html=True)
     
+    from db_connection import DatabaseConnection
     try:
         import plotly.graph_objects as go
         import plotly.express as px
         
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
         # Overall Stats (EXCLUDE MonsterSGP - entertainment only)
-        cursor.execute('''
-            SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN outcome = 'win' THEN 1 ELSE 0 END) as wins,
-                SUM(CASE WHEN outcome = 'loss' THEN 1 ELSE 0 END) as losses,
-                SUM(stake) as total_staked,
-                SUM(profit_loss) as net_profit,
-                AVG(bookmaker_odds) as avg_odds,
-                AVG(ev_percentage) as avg_edge
-            FROM sgp_predictions
-            WHERE status = 'settled'
-            AND (parlay_description IS NULL OR parlay_description NOT LIKE '%Monster%')
-            AND (parlay_description IS NULL OR parlay_description NOT LIKE '%BEAST%')
-        ''')
-        stats = cursor.fetchone()
+        with DatabaseConnection.get_cursor() as cursor:
+            cursor.execute('''
+                SELECT 
+                    COUNT(*) as total,
+                    SUM(CASE WHEN outcome = 'win' THEN 1 ELSE 0 END) as wins,
+                    SUM(CASE WHEN outcome = 'loss' THEN 1 ELSE 0 END) as losses,
+                    SUM(stake) as total_staked,
+                    SUM(profit_loss) as net_profit,
+                    AVG(bookmaker_odds) as avg_odds,
+                    AVG(ev_percentage) as avg_edge
+                FROM sgp_predictions
+                WHERE status = 'settled'
+                AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
+                AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
+            ''', ('%Monster%', '%BEAST%'))
+            stats = cursor.fetchone()
         
         if stats and stats[0] > 0:
             total = stats[0]
@@ -1045,8 +1039,6 @@ if page == "🎲 SGP Analytics":
         else:
             st.info("No settled SGP predictions yet. Check back after matches complete!")
         
-        conn.close()
-        
     except Exception as e:
         st.error(f"Error loading analytics: {str(e)}")
     
@@ -1060,23 +1052,22 @@ if page == "🎯 MonsterSGP":
     st.markdown("# 🔥 MONSTERSGP PREDICTIONS")
     st.markdown('<p class="subtitle">7-Leg Parlays | High Odds Entertainment</p>', unsafe_allow_html=True)
     
+    from db_connection import DatabaseConnection
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
         # MonsterSGP Stats (5+ legs only)
-        cursor.execute('''
-            SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN outcome = 'win' THEN 1 ELSE 0 END) as wins,
-                SUM(stake) as total_staked,
-                SUM(profit_loss) as net_profit,
-                AVG(bookmaker_odds) as avg_odds
-            FROM sgp_predictions
-            WHERE status = 'settled'
-            AND legs LIKE '%|%|%|%|%'
-        ''')
-        stats = cursor.fetchone()
+        with DatabaseConnection.get_cursor() as cursor:
+            cursor.execute('''
+                SELECT 
+                    COUNT(*) as total,
+                    SUM(CASE WHEN outcome = 'win' THEN 1 ELSE 0 END) as wins,
+                    SUM(stake) as total_staked,
+                    SUM(profit_loss) as net_profit,
+                    AVG(bookmaker_odds) as avg_odds
+                FROM sgp_predictions
+                WHERE status = 'settled'
+                AND legs LIKE %s
+            ''', ('%|%|%|%|%',))
+            stats = cursor.fetchone()
         
         if stats and stats[0] > 0:
             total, wins, staked, profit, avg_odds = stats
@@ -1416,88 +1407,86 @@ st.markdown("---")
 
 st.markdown("## 📋 ALL ACTIVE PREDICTIONS")
 
+from db_connection import DatabaseConnection
 try:
-    conn = sqlite3.connect(DB_PATH)
-    
     # Get all pending exact scores
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT 
-            home_team, away_team, selection, odds, 
-            edge_percentage, league, match_date, stake
-        FROM football_opportunities
-        WHERE market = 'exact_score'
-        AND result IS NULL
-        ORDER BY match_date ASC
-        LIMIT 50
-    ''')
-    
-    all_exact = []
-    for row in cursor.fetchall():
-        # Parse match_date
-        try:
-            if 'T' in str(row[6]):
-                match_dt = datetime.fromisoformat(str(row[6]).replace('Z', '+00:00'))
-            else:
-                match_dt = datetime.fromisoformat(str(row[6]))
-            
-            date_str = match_dt.strftime('%a, %b %d')  # "Sat, Nov 08"
-            time_str = match_dt.strftime('%H:%M')       # "20:00"
-        except:
-            date_str = "TBD"
-            time_str = "TBD"
+    with DatabaseConnection.get_cursor() as cursor:
+        cursor.execute('''
+            SELECT 
+                home_team, away_team, selection, odds, 
+                edge_percentage, league, match_date, stake
+            FROM football_opportunities
+            WHERE market = 'exact_score'
+            AND result IS NULL
+            ORDER BY match_date ASC
+            LIMIT 50
+        ''')
         
-        all_exact.append({
-            'Match': f"{row[0]} vs {row[1]}",
-            'Prediction': row[2],
-            'Odds': f"{row[3]:.2f}x",
-            'Edge': f"{row[4]:.1f}%",
-            'League': row[5],
-            'Match Date': date_str,
-            'Kickoff': time_str,
-            'Stake': f"{row[7]:.0f} SEK"
-        })
+        all_exact = []
+        for row in cursor.fetchall():
+            # Parse match_date
+            try:
+                if 'T' in str(row[6]):
+                    match_dt = datetime.fromisoformat(str(row[6]).replace('Z', '+00:00'))
+                else:
+                    match_dt = datetime.fromisoformat(str(row[6]))
+                
+                date_str = match_dt.strftime('%a, %b %d')  # "Sat, Nov 08"
+                time_str = match_dt.strftime('%H:%M')       # "20:00"
+            except:
+                date_str = "TBD"
+                time_str = "TBD"
+            
+            all_exact.append({
+                'Match': f"{row[0]} vs {row[1]}",
+                'Prediction': row[2],
+                'Odds': f"{row[3]:.2f}x",
+                'Edge': f"{row[4]:.1f}%",
+                'League': row[5],
+                'Match Date': date_str,
+                'Kickoff': time_str,
+                'Stake': f"{row[7]:.0f} SEK"
+            })
     
     # Get all pending SGPs
-    cursor.execute('''
-        SELECT 
-            home_team, away_team, parlay_description, legs,
-            bookmaker_odds, ev_percentage, match_date, stake
-        FROM sgp_predictions
-        WHERE status = 'pending'
-        ORDER BY match_date ASC
-        LIMIT 50
-    ''')
+    with DatabaseConnection.get_cursor() as cursor:
+        cursor.execute('''
+            SELECT 
+                home_team, away_team, parlay_description, legs,
+                bookmaker_odds, ev_percentage, match_date, stake
+            FROM sgp_predictions
+            WHERE status = 'pending'
+            ORDER BY match_date ASC
+            LIMIT 50
+        ''')
     
-    all_sgp = []
-    for row in cursor.fetchall():
-        # Parse match_date
-        try:
-            if 'T' in str(row[6]):
-                match_dt = datetime.fromisoformat(str(row[6]).replace('Z', '+00:00'))
-            else:
-                match_dt = datetime.fromisoformat(str(row[6]))
+        all_sgp = []
+        for row in cursor.fetchall():
+            # Parse match_date
+            try:
+                if 'T' in str(row[6]):
+                    match_dt = datetime.fromisoformat(str(row[6]).replace('Z', '+00:00'))
+                else:
+                    match_dt = datetime.fromisoformat(str(row[6]))
+                
+                date_str = match_dt.strftime('%a, %b %d')  # "Sat, Nov 08"
+                time_str = match_dt.strftime('%H:%M')       # "20:00"
+            except:
+                date_str = "TBD"
+                time_str = "TBD"
             
-            date_str = match_dt.strftime('%a, %b %d')  # "Sat, Nov 08"
-            time_str = match_dt.strftime('%H:%M')       # "20:00"
-        except:
-            date_str = "TBD"
-            time_str = "TBD"
-        
-        # Format legs for clarity
-        formatted_legs = format_sgp_legs(row[3]) if row[3] else row[2]
-        
-        all_sgp.append({
-            'Match': f"{row[0]} vs {row[1]}",
-            'Predictions': formatted_legs,
-            'Odds': f"{row[4]:.2f}x",
-            'Edge': f"{row[5]:.1f}%",
-            'Match Date': date_str,
-            'Kickoff': time_str,
-            'Stake': f"{row[7]:.0f} SEK"
-        })
-    
-    conn.close()
+            # Format legs for clarity
+            formatted_legs = format_sgp_legs(row[3]) if row[3] else row[2]
+            
+            all_sgp.append({
+                'Match': f"{row[0]} vs {row[1]}",
+                'Predictions': formatted_legs,
+                'Odds': f"{row[4]:.2f}x",
+                'Edge': f"{row[5]:.1f}%",
+                'Match Date': date_str,
+                'Kickoff': time_str,
+                'Stake': f"{row[7]:.0f} SEK"
+            })
     
     if all_exact or all_sgp:
         tab1, tab2 = st.tabs([f"⚽ Exact Score ({len(all_exact)})", f"🎲 SGP ({len(all_sgp)})"])
@@ -1552,28 +1541,27 @@ st.markdown("---")
 st.markdown("## 📅 HISTORICAL PREDICTIONS BY MONTH")
 st.caption("Settled predictions organized by month for easy tracking")
 
+from db_connection import DatabaseConnection
 try:
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
     # Get all settled exact scores grouped by month
-    cursor.execute('''
-        SELECT 
-            to_char((match_date::timestamp), 'YYYY-MM') as month,
-            COUNT(*) as total,
-            SUM(CASE WHEN outcome = 'win' THEN 1 ELSE 0 END) as wins,
-            SUM(profit_loss) as profit
-        FROM football_opportunities
-        WHERE market = 'exact_score'
-        AND result IS NOT NULL
-        GROUP BY to_char((match_date::timestamp), 'YYYY-MM')
-        ORDER BY month DESC
-    ''')
-    
-    exact_months = {}
-    for row in cursor.fetchall():
-        month_key = row[0]  # "2025-11"
-        exact_months[month_key] = {
+    with DatabaseConnection.get_cursor() as cursor:
+        cursor.execute('''
+            SELECT 
+                to_char((match_date::timestamp), 'YYYY-MM') as month,
+                COUNT(*) as total,
+                SUM(CASE WHEN outcome = 'win' THEN 1 ELSE 0 END) as wins,
+                SUM(profit_loss) as profit
+            FROM football_opportunities
+            WHERE market = 'exact_score'
+            AND result IS NOT NULL
+            GROUP BY to_char((match_date::timestamp), 'YYYY-MM')
+            ORDER BY month DESC
+        ''')
+        
+        exact_months = {}
+        for row in cursor.fetchall():
+            month_key = row[0]  # "2025-11"
+            exact_months[month_key] = {
             'total': row[1],
             'wins': row[2],
             'profit': row[3]
@@ -1734,8 +1722,6 @@ try:
                             st.info("No SGP predictions this month")
     else:
         st.info("No historical predictions yet. Check back after matches settle!")
-    
-    conn.close()
 
 except Exception as e:
     st.error(f"Error loading monthly history: {e}")
@@ -1749,29 +1735,28 @@ st.markdown("---")
 st.markdown("## 🎲 SGP HISTORICAL PREDICTIONS BY MONTH")
 st.caption("SGP parlays organized by month for easy tracking")
 
+from db_connection import DatabaseConnection
 try:
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
     # Get all settled SGPs grouped by month (EXCLUDE MonsterSGP - entertainment only)
-    cursor.execute('''
-        SELECT 
-            to_char((match_date::timestamp), 'YYYY-MM') as month,
-            COUNT(*) as total,
-            SUM(CASE WHEN outcome = 'win' THEN 1 ELSE 0 END) as wins,
-            SUM(profit_loss) as profit
-        FROM sgp_predictions
-        WHERE result IS NOT NULL
-        AND (parlay_description IS NULL OR parlay_description NOT LIKE '%Monster%')
-        AND (parlay_description IS NULL OR parlay_description NOT LIKE '%BEAST%')
-        GROUP BY to_char((match_date::timestamp), 'YYYY-MM')
-        ORDER BY month DESC
-    ''')
-    
-    sgp_months = {}
-    for row in cursor.fetchall():
-        month_key = row[0]
-        sgp_months[month_key] = {
+    with DatabaseConnection.get_cursor() as cursor:
+        cursor.execute('''
+            SELECT 
+                to_char((match_date::timestamp), 'YYYY-MM') as month,
+                COUNT(*) as total,
+                SUM(CASE WHEN outcome = 'win' THEN 1 ELSE 0 END) as wins,
+                SUM(profit_loss) as profit
+            FROM sgp_predictions
+            WHERE result IS NOT NULL
+            AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
+            AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
+            GROUP BY to_char((match_date::timestamp), 'YYYY-MM')
+            ORDER BY month DESC
+        ''', ('%Monster%', '%BEAST%'))
+        
+        sgp_months = {}
+        for row in cursor.fetchall():
+            month_key = row[0]
+            sgp_months[month_key] = {
             'total': row[1],
             'wins': row[2],
             'profit': row[3]
@@ -1846,8 +1831,6 @@ try:
                     st.info("No SGP predictions this month")
     else:
         st.info("No SGP historical predictions yet. Check back after matches settle!")
-    
-    conn.close()
 
 except Exception as e:
     st.error(f"Error loading SGP monthly history: {e}")
@@ -1860,56 +1843,53 @@ st.markdown("---")
 
 st.markdown("## 🌍 LEAGUE BREAKDOWN")
 
+from db_connection import DatabaseConnection
 try:
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        SELECT 
-            league,
-            COUNT(*) as total,
-            SUM(CASE WHEN outcome IN ('won', 'win') THEN 1 ELSE 0 END) as wins,
-            SUM(CASE WHEN outcome IN ('lost', 'loss') THEN 1 ELSE 0 END) as losses,
-            SUM(CASE WHEN outcome IN ('won', 'win', 'lost', 'loss') THEN stake ELSE 0 END) as staked,
-            SUM(CASE WHEN outcome IN ('won', 'win') THEN stake * (odds - 1) 
-                     WHEN outcome IN ('lost', 'loss') THEN -stake 
-                     ELSE 0 END) as profit
-        FROM football_opportunities
-        WHERE market = 'exact_score'
-        GROUP BY league
-        HAVING COUNT(*) >= 5
-        ORDER BY total DESC
-        LIMIT 10
-    ''')
-    
-    league_data = []
-    for row in cursor.fetchall():
-        settled = row[2] + row[3]
-        hit_rate = (row[2] / settled * 100) if settled > 0 else 0
-        roi = (row[5] / row[4] * 100) if row[4] > 0 else 0
+    with DatabaseConnection.get_cursor() as cursor:
+        cursor.execute('''
+            SELECT 
+                league,
+                COUNT(*) as total,
+                SUM(CASE WHEN outcome IN ('won', 'win') THEN 1 ELSE 0 END) as wins,
+                SUM(CASE WHEN outcome IN ('lost', 'loss') THEN 1 ELSE 0 END) as losses,
+                SUM(CASE WHEN outcome IN ('won', 'win', 'lost', 'loss') THEN stake ELSE 0 END) as staked,
+                SUM(CASE WHEN outcome IN ('won', 'win') THEN stake * (odds - 1) 
+                         WHEN outcome IN ('lost', 'loss') THEN -stake 
+                         ELSE 0 END) as profit
+            FROM football_opportunities
+            WHERE market = 'exact_score'
+            GROUP BY league
+            HAVING COUNT(*) >= 5
+            ORDER BY total DESC
+            LIMIT 10
+        ''')
         
-        # Status emoji
-        if settled >= 10:
-            if hit_rate >= 20:
-                status = "🟢"
-            elif hit_rate >= 15:
-                status = "🟡"
+        league_data = []
+        for row in cursor.fetchall():
+            settled = row[2] + row[3]
+            hit_rate = (row[2] / settled * 100) if settled > 0 else 0
+            roi = (row[5] / row[4] * 100) if row[4] > 0 else 0
+            
+            # Status emoji
+            if settled >= 10:
+                if hit_rate >= 20:
+                    status = "🟢"
+                elif hit_rate >= 15:
+                    status = "🟡"
+                else:
+                    status = "🔴"
             else:
-                status = "🔴"
-        else:
-            status = "⚪"
-        
-        league_data.append({
-            'S': status,
-            'League': row[0],
-            'Total': row[1],
-            'Settled': settled,
-            'Hit Rate': f"{hit_rate:.1f}%",
-            'ROI': f"{roi:+.0f}%",
-            'Profit': f"{row[5]:.0f} SEK"
-        })
-    
-    conn.close()
+                status = "⚪"
+            
+            league_data.append({
+                'S': status,
+                'League': row[0],
+                'Total': row[1],
+                'Settled': settled,
+                'Hit Rate': f"{hit_rate:.1f}%",
+                'ROI': f"{roi:+.0f}%",
+                'Profit': f"{row[5]:.0f} SEK"
+            })
     
     if league_data:
         df_leagues = pd.DataFrame(league_data)
