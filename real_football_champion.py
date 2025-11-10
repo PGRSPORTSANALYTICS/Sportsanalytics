@@ -439,7 +439,7 @@ class RealFootballChampion:
                 COALESCE(tier, 'legacy') as tier_name,
                 COUNT(*) as count
             FROM football_opportunities 
-            WHERE recommended_date = ? 
+            WHERE match_date = ? 
             GROUP BY tier_name
         ''', (today,))
         
@@ -2221,7 +2221,7 @@ class RealFootballChampion:
         cursor = self.conn.cursor()
         cursor.execute('''
             SELECT COUNT(*) FROM football_opportunities 
-            WHERE recommended_date = ? AND status = 'pending'
+            WHERE match_date = ? AND status = 'pending'
         ''', (today_date,))
         return cursor.fetchone()[0]
     
@@ -2457,7 +2457,7 @@ class RealFootballChampion:
         cursor = self.conn.cursor()
         cursor.execute('''
             SELECT COUNT(*) FROM football_opportunities 
-            WHERE recommended_date = ? AND market = 'exact_score'
+            WHERE match_date = ? AND market = 'exact_score'
         ''', (today_date,))
         existing_count = cursor.fetchone()[0]
         
