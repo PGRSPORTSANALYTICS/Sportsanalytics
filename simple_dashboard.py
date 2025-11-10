@@ -1559,14 +1559,14 @@ try:
     # Get all settled exact scores grouped by month
     cursor.execute('''
         SELECT 
-            strftime('%Y-%m', match_date) as month,
+            to_char(TO_TIMESTAMP(match_date), 'YYYY-MM') as month,
             COUNT(*) as total,
             SUM(CASE WHEN outcome = 'win' THEN 1 ELSE 0 END) as wins,
             SUM(profit_loss) as profit
         FROM football_opportunities
         WHERE market = 'exact_score'
         AND result IS NOT NULL
-        GROUP BY strftime('%Y-%m', match_date)
+        GROUP BY to_char(TO_TIMESTAMP(match_date), 'YYYY-MM')
         ORDER BY month DESC
     ''')
     
@@ -1582,7 +1582,7 @@ try:
     # Get all settled SGPs grouped by month (EXCLUDE MonsterSGP - entertainment only)
     cursor.execute('''
         SELECT 
-            strftime('%Y-%m', match_date) as month,
+            to_char(TO_TIMESTAMP(match_date), 'YYYY-MM') as month,
             COUNT(*) as total,
             SUM(CASE WHEN outcome = 'win' THEN 1 ELSE 0 END) as wins,
             SUM(profit_loss) as profit
@@ -1590,7 +1590,7 @@ try:
         WHERE result IS NOT NULL
         AND (parlay_description IS NULL OR parlay_description NOT LIKE '%Monster%')
         AND (parlay_description IS NULL OR parlay_description NOT LIKE '%BEAST%')
-        GROUP BY strftime('%Y-%m', match_date)
+        GROUP BY to_char(TO_TIMESTAMP(match_date), 'YYYY-MM')
         ORDER BY month DESC
     ''')
     
@@ -1647,7 +1647,7 @@ try:
                     FROM football_opportunities
                     WHERE market = 'exact_score'
                     AND result IS NOT NULL
-                    AND strftime('%Y-%m', match_date) = ?
+                    AND to_char(TO_TIMESTAMP(match_date), 'YYYY-MM') = ?
                     ORDER BY match_date DESC
                 ''', (month_key,))
                 
@@ -1677,7 +1677,7 @@ try:
                         profit_loss, match_date
                     FROM sgp_predictions
                     WHERE result IS NOT NULL
-                    AND strftime('%Y-%m', match_date) = ?
+                    AND to_char(TO_TIMESTAMP(match_date), 'YYYY-MM') = ?
                     ORDER BY match_date DESC
                 ''', (month_key,))
                 
@@ -1756,7 +1756,7 @@ try:
     # Get all settled SGPs grouped by month (EXCLUDE MonsterSGP - entertainment only)
     cursor.execute('''
         SELECT 
-            strftime('%Y-%m', match_date) as month,
+            to_char(TO_TIMESTAMP(match_date), 'YYYY-MM') as month,
             COUNT(*) as total,
             SUM(CASE WHEN outcome = 'win' THEN 1 ELSE 0 END) as wins,
             SUM(profit_loss) as profit
@@ -1764,7 +1764,7 @@ try:
         WHERE result IS NOT NULL
         AND (parlay_description IS NULL OR parlay_description NOT LIKE '%Monster%')
         AND (parlay_description IS NULL OR parlay_description NOT LIKE '%BEAST%')
-        GROUP BY strftime('%Y-%m', match_date)
+        GROUP BY to_char(TO_TIMESTAMP(match_date), 'YYYY-MM')
         ORDER BY month DESC
     ''')
     
@@ -1814,7 +1814,7 @@ try:
                         profit_loss, match_date
                     FROM sgp_predictions
                     WHERE result IS NOT NULL
-                    AND strftime('%Y-%m', match_date) = ?
+                    AND to_char(TO_TIMESTAMP(match_date), 'YYYY-MM') = ?
                     ORDER BY match_date DESC
                 ''', (month_key,))
                 
