@@ -558,102 +558,103 @@ class SGPPredictor:
             SGP prediction dict or None if no value found
         """
         # Generate SGP combinations (3-7 legs for BIG HITS)
+        # TARGET MINIMUM ODDS: 4x for regular SGP (not MonsterSGP)
         sgp_combinations = [
-            # ========== 3-LEG PARLAYS (Minimum) ==========
+            # ========== 3-LEG PARLAYS (Minimum 4x odds) ==========
             
-            # Over 2.5 + BTTS + 1H Over 0.5
+            # Over 3.5 + BTTS + 1H Over 1.5 (~5-6x)
             {
                 'legs': [
-                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
+                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 3.5},
                     {'market_type': 'BTTS', 'outcome': 'YES'},
-                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5}
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 1.5}
                 ],
-                'description': 'Over 2.5 + BTTS + 1H Over 0.5'
+                'description': 'Over 3.5 + BTTS + 1H Over 1.5'
             },
             
-            # Corners + Over 2.5 + BTTS
-            {
-                'legs': [
-                    {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 9.5},
-                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
-                    {'market_type': 'BTTS', 'outcome': 'YES'}
-                ],
-                'description': 'Corners 9.5+ + Over 2.5 + BTTS'
-            },
-            
-            # 1H Over + 2H Over + BTTS
-            {
-                'legs': [
-                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
-                    {'market_type': 'SECOND_HALF_GOALS', 'outcome': 'OVER', 'line': 1.5},
-                    {'market_type': 'BTTS', 'outcome': 'YES'}
-                ],
-                'description': '1H Over 0.5 + 2H Over 1.5 + BTTS'
-            },
-            
-            # ========== 4-LEG PARLAYS (Power Plays) ==========
-            
-            # Over 2.5 + BTTS + 1H Over + 2H Over
-            {
-                'legs': [
-                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
-                    {'market_type': 'BTTS', 'outcome': 'YES'},
-                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
-                    {'market_type': 'SECOND_HALF_GOALS', 'outcome': 'OVER', 'line': 1.5}
-                ],
-                'description': 'Over 2.5 + BTTS + 1H Over + 2H Over 1.5 (4-Leg Power)'
-            },
-            
-            # Corners + Goals + Half-time + BTTS
-            {
-                'legs': [
-                    {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 9.5},
-                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
-                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
-                    {'market_type': 'BTTS', 'outcome': 'YES'}
-                ],
-                'description': 'Corners 9.5+ + Over 2.5 + 1H Over + BTTS (4-Leg)'
-            },
-            
-            # ========== 5-LEG PARLAYS (Monster Hits) ==========
-            
-            # Full Package: Corners + Goals + Both Halves + BTTS
+            # Corners + Over 3.5 + BTTS (~5-7x)
             {
                 'legs': [
                     {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 10.5},
-                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
-                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
-                    {'market_type': 'SECOND_HALF_GOALS', 'outcome': 'OVER', 'line': 1.5},
+                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 3.5},
                     {'market_type': 'BTTS', 'outcome': 'YES'}
                 ],
-                'description': 'Corners 10.5+ + Over 2.5 + 1H/2H + BTTS (5-Leg Monster)'
+                'description': 'Corners 10.5+ + Over 3.5 + BTTS'
             },
             
-            # Over 1.5 + Over 2.5 + BTTS + 1H + Corners
+            # 1H Over 1.5 + 2H Over 2.5 + BTTS (~6-8x)
             {
                 'legs': [
-                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 1.5},
-                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
-                    {'market_type': 'BTTS', 'outcome': 'YES'},
-                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
-                    {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 9.5}
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 1.5},
+                    {'market_type': 'SECOND_HALF_GOALS', 'outcome': 'OVER', 'line': 2.5},
+                    {'market_type': 'BTTS', 'outcome': 'YES'}
                 ],
-                'description': 'Over 1.5/2.5 + BTTS + 1H + Corners (5-Leg)'
+                'description': '1H Over 1.5 + 2H Over 2.5 + BTTS'
             },
             
-            # ========== 6-LEG PARLAYS (Insane Payouts) ==========
+            # ========== 4-LEG PARLAYS (Power Plays 8-15x) ==========
             
-            # Ultra Premium: Everything
+            # Over 3.5 + BTTS + 1H Over 1.5 + 2H Over 2.5 (~10-12x)
             {
                 'legs': [
-                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 1.5},
-                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
+                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 3.5},
                     {'market_type': 'BTTS', 'outcome': 'YES'},
-                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
-                    {'market_type': 'SECOND_HALF_GOALS', 'outcome': 'OVER', 'line': 1.5},
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 1.5},
+                    {'market_type': 'SECOND_HALF_GOALS', 'outcome': 'OVER', 'line': 2.5}
+                ],
+                'description': 'Over 3.5 + BTTS + 1H Over 1.5 + 2H Over 2.5 (4-Leg Power)'
+            },
+            
+            # Corners + Goals + Half-time + BTTS (~12-15x)
+            {
+                'legs': [
+                    {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 10.5},
+                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 3.5},
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 1.5},
+                    {'market_type': 'BTTS', 'outcome': 'YES'}
+                ],
+                'description': 'Corners 10.5+ + Over 3.5 + 1H Over 1.5 + BTTS (4-Leg)'
+            },
+            
+            # ========== 5-LEG PARLAYS (Monster Hits 15-30x) ==========
+            
+            # Full Package: Corners + Goals + Both Halves + BTTS (~20-25x)
+            {
+                'legs': [
+                    {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 11.5},
+                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 3.5},
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 1.5},
+                    {'market_type': 'SECOND_HALF_GOALS', 'outcome': 'OVER', 'line': 2.5},
+                    {'market_type': 'BTTS', 'outcome': 'YES'}
+                ],
+                'description': 'Corners 11.5+ + Over 3.5 + 1H Over 1.5 + 2H Over 2.5 + BTTS (5-Leg Monster)'
+            },
+            
+            # Over 2.5 + Over 3.5 + BTTS + 1H Over 1.5 + Corners (~18-22x)
+            {
+                'legs': [
+                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
+                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 3.5},
+                    {'market_type': 'BTTS', 'outcome': 'YES'},
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 1.5},
                     {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 10.5}
                 ],
-                'description': 'Over 1.5/2.5 + BTTS + 1H/2H + Corners 10.5 (6-Leg ULTRA)'
+                'description': 'Over 2.5/3.5 + BTTS + 1H Over 1.5 + Corners 10.5+ (5-Leg)'
+            },
+            
+            # ========== 6-LEG PARLAYS (Insane Payouts 30-40x) ==========
+            
+            # Ultra Premium: Everything (~35-40x)
+            {
+                'legs': [
+                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
+                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 3.5},
+                    {'market_type': 'BTTS', 'outcome': 'YES'},
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 1.5},
+                    {'market_type': 'SECOND_HALF_GOALS', 'outcome': 'OVER', 'line': 2.5},
+                    {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 11.5}
+                ],
+                'description': 'Over 2.5/3.5 + BTTS + 1H Over 1.5 + 2H Over 2.5 + Corners 11.5+ (6-Leg ULTRA)'
             },
             
             # ========== MONSTERSGP - TEAM SPECIFIC MARKETS (3-7 LEGS) ==========
