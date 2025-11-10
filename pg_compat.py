@@ -19,7 +19,8 @@ class PostgreSQLCursor:
         pg_query = re.sub(r'\?', '%s', query)
         
         # Translate SQLite date functions
-        pg_query = re.sub(r"strftime\('%Y-%m',\s*match_date\)", "TO_CHAR(match_date, 'YYYY-MM')", pg_query)
+        # match_date is stored as TEXT (ISO format), need to cast to timestamp for TO_CHAR
+        pg_query = re.sub(r"strftime\('%Y-%m',\s*match_date\)", "TO_CHAR(CAST(match_date AS TIMESTAMP), 'YYYY-MM')", pg_query)
         pg_query = re.sub(r"date\(settled_timestamp,\s*'unixepoch'\)", "TO_TIMESTAMP(settled_timestamp)::DATE", pg_query, flags=re.IGNORECASE)
         pg_query = re.sub(r"datetime\('now'\)", "NOW()", pg_query, flags=re.IGNORECASE)
         
