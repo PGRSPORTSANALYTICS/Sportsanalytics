@@ -76,7 +76,7 @@ class DailyTipSender:
                        quality_score, edge_percentage, confidence, 
                        recommended_tier, daily_rank
                 FROM football_opportunities 
-                WHERE recommended_date = ? 
+                WHERE match_date = ? 
                 AND recommended_tier IS NOT NULL
                 ORDER BY daily_rank ASC
             """, (today,))

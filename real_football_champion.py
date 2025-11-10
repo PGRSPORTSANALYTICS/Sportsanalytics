@@ -1787,8 +1787,8 @@ class RealFootballChampion:
                         INSERT INTO football_opportunities 
                         (timestamp, match_id, home_team, away_team, league, market, selection, 
                          odds, edge_percentage, confidence, analysis, stake, match_date, kickoff_time,
-                         quality_score, recommended_date, recommended_tier, daily_rank)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         quality_score, recommended_tier, daily_rank)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ''', (
                         int(time.time()),
                         f"{prediction['home_team']}_vs_{prediction['away_team']}_exact_score_{i+1}",
@@ -1813,7 +1813,6 @@ class RealFootballChampion:
                         today_date,
                         '20:00',
                         confidence_score,  # Use confidence as quality
-                        today_date,
                         'premium',
                         i
                     ))
@@ -2357,7 +2356,7 @@ class RealFootballChampion:
         # Get all today's opportunities ordered by quality score
         cursor.execute('''
             SELECT id, quality_score, tier FROM football_opportunities 
-            WHERE recommended_date = ? AND daily_rank = 999
+            WHERE match_date = ? AND daily_rank = 999
             ORDER BY quality_score DESC
         ''', (today_date,))
         

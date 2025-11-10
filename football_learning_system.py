@@ -320,7 +320,7 @@ class FootballLearningSystem:
             query = """
                 SELECT match_id, home_team, away_team, league, market, selection, 
                        odds, edge_percentage, confidence, quality_score, analysis,
-                       outcome, match_date, recommended_date
+                       outcome, match_date
                 FROM football_opportunities 
                 WHERE outcome IS NOT NULL 
                 AND recommended_tier IS NOT NULL
