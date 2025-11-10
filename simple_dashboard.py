@@ -249,7 +249,7 @@ def load_performance_summary():
         )[0] or 0
         
         sgp_avg_odds = db_helper.execute(
-            "SELECT AVG(bookmaker_odds) FROM sgp_predictions WHERE outcome IN (%s, %s) AND parlay_description NOT LIKE %s AND parlay_description NOT LIKE %s",
+            "SELECT AVG(bookmaker_odds) FROM sgp_predictions WHERE outcome IN (%s, %s) AND (parlay_description IS NULL OR parlay_description NOT LIKE %s) AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)",
             ('win', 'loss', '%Monster%', '%BEAST%'),
             fetch='one'
         )
@@ -401,8 +401,8 @@ with st.sidebar:
                 SUM(profit_loss) as net_profit
             FROM sgp_predictions
             WHERE status = 'settled'
-            AND (parlay_description NOT LIKE '%Monster%' OR parlay_description IS NULL)
-            AND (parlay_description NOT LIKE '%BEAST%' OR parlay_description IS NULL)
+            AND (parlay_description IS NULL OR parlay_description NOT LIKE '%Monster%')
+            AND (parlay_description IS NULL OR parlay_description NOT LIKE '%BEAST%')
         ''')
         sgp_hist = cursor.fetchone()
         
@@ -849,8 +849,8 @@ if page == "🎲 SGP Analytics":
                 AVG(ev_percentage) as avg_edge
             FROM sgp_predictions
             WHERE status = 'settled'
-            AND (parlay_description NOT LIKE '%Monster%' OR parlay_description IS NULL)
-            AND (parlay_description NOT LIKE '%BEAST%' OR parlay_description IS NULL)
+            AND (parlay_description IS NULL OR parlay_description NOT LIKE '%Monster%')
+            AND (parlay_description IS NULL OR parlay_description NOT LIKE '%BEAST%')
         ''')
         stats = cursor.fetchone()
         
@@ -1234,8 +1234,8 @@ if stats:
                 SUM(profit_loss) as profit
             FROM sgp_predictions
             WHERE to_timestamp(timestamp / 1000.0) >= NOW() - INTERVAL '30 days'
-            AND (parlay_description NOT LIKE %s OR parlay_description IS NULL)
-            AND (parlay_description NOT LIKE %s OR parlay_description IS NULL)
+            AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
+            AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
         ''', ('settled', '%Monster%', '%BEAST%'), fetch='one')
         
         total_30d_staked = (exact_30d[0] or 0) + (sgp_30d[0] or 0)
@@ -1588,8 +1588,8 @@ try:
             SUM(profit_loss) as profit
         FROM sgp_predictions
         WHERE result IS NOT NULL
-        AND (parlay_description NOT LIKE '%Monster%' OR parlay_description IS NULL)
-        AND (parlay_description NOT LIKE '%BEAST%' OR parlay_description IS NULL)
+        AND (parlay_description IS NULL OR parlay_description NOT LIKE '%Monster%')
+        AND (parlay_description IS NULL OR parlay_description NOT LIKE '%BEAST%')
         GROUP BY strftime('%Y-%m', match_date)
         ORDER BY month DESC
     ''')
@@ -1762,8 +1762,8 @@ try:
             SUM(profit_loss) as profit
         FROM sgp_predictions
         WHERE result IS NOT NULL
-        AND (parlay_description NOT LIKE '%Monster%' OR parlay_description IS NULL)
-        AND (parlay_description NOT LIKE '%BEAST%' OR parlay_description IS NULL)
+        AND (parlay_description IS NULL OR parlay_description NOT LIKE '%Monster%')
+        AND (parlay_description IS NULL OR parlay_description NOT LIKE '%BEAST%')
         GROUP BY strftime('%Y-%m', match_date)
         ORDER BY month DESC
     ''')

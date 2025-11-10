@@ -44,8 +44,8 @@ def get_all_time_stats() -> Dict:
             SUM(profit_loss) as profit
         FROM sgp_predictions 
         WHERE outcome IN (%s, %s)
-          AND parlay_description NOT LIKE %s
-          AND parlay_description NOT LIKE %s
+          AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
+          AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
     ''', ('win', 'win', 'loss', '%Monster%', '%BEAST%'), fetch='one')
     sgp_total, sgp_wins, sgp_profit = sgp_row if sgp_row else (0, 0, 0.0)
     sgp_losses = sgp_total - (sgp_wins or 0)
@@ -121,8 +121,8 @@ def get_todays_sgp_stats() -> Dict:
         FROM sgp_predictions 
         WHERE result IS NOT NULL 
         AND DATE(TO_TIMESTAMP(settled_timestamp)) = %s
-        AND parlay_description NOT LIKE %s
-        AND parlay_description NOT LIKE %s
+        AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
+        AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
     ''', ('win', 'won', today, '%Monster%', '%BEAST%'), fetch='one')
     
     total, wins, profit = row if row else (0, 0, 0.0)
@@ -176,8 +176,8 @@ def get_sgp_results() -> List[Dict]:
             league, settled_timestamp
         FROM sgp_predictions 
         WHERE result IS NOT NULL
-        AND parlay_description NOT LIKE %s
-        AND parlay_description NOT LIKE %s
+        AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
+        AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
         ORDER BY settled_timestamp DESC
     ''', ('%Monster%', '%BEAST%'), fetch='all')
     
