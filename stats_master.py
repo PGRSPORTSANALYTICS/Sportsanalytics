@@ -13,28 +13,28 @@ from db_helper import db_helper
 
 def get_all_time_stats() -> Dict:
     """Get combined all-time statistics from both tables"""
-    # Exact Score stats
+    # Exact Score stats - only count settled predictions with valid outcome
     exact_row = db_helper.execute('''
         SELECT 
             COUNT(*) as total,
-            SUM(CASE WHEN outcome IN (%s, %s) THEN 1 ELSE 0 END) as wins,
+            SUM(CASE WHEN outcome = %s THEN 1 ELSE 0 END) as wins,
             SUM(profit_loss) as profit
         FROM football_opportunities 
-        WHERE market = %s AND result IS NOT NULL
-    ''', ('win', 'won', 'exact_score'), fetch='one')
+        WHERE market = %s AND outcome IN (%s, %s)
+    ''', ('win', 'exact_score', 'win', 'loss'), fetch='one')
     exact_total, exact_wins, exact_profit = exact_row if exact_row else (0, 0, 0.0)
     exact_losses = exact_total - (exact_wins or 0)
     exact_hit_rate = (exact_wins / exact_total * 100) if exact_total > 0 else 0.0
     
-    # SGP stats  
+    # SGP stats - only count settled predictions with valid outcome
     sgp_row = db_helper.execute('''
         SELECT 
             COUNT(*) as total,
-            SUM(CASE WHEN outcome IN (%s, %s) THEN 1 ELSE 0 END) as wins,
+            SUM(CASE WHEN outcome = %s THEN 1 ELSE 0 END) as wins,
             SUM(profit_loss) as profit
         FROM sgp_predictions 
-        WHERE result IS NOT NULL
-    ''', ('win', 'won'), fetch='one')
+        WHERE outcome IN (%s, %s)
+    ''', ('win', 'win', 'loss'), fetch='one')
     sgp_total, sgp_wins, sgp_profit = sgp_row if sgp_row else (0, 0, 0.0)
     sgp_losses = sgp_total - (sgp_wins or 0)
     sgp_hit_rate = (sgp_wins / sgp_total * 100) if sgp_total > 0 else 0.0
