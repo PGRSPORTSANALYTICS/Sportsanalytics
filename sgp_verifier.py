@@ -5,7 +5,7 @@ Verifies each leg of the parlay and determines win/loss
 """
 
 import logging
-import sqlite3
+import pg_compat as sqlite3  # PostgreSQL compatibility layer
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 import re
@@ -13,11 +13,12 @@ import re
 from results_scraper import ResultsScraper
 from telegram_sender import TelegramBroadcaster
 from sgp_self_learner import SGPSelfLearner
+from team_name_mapper import TeamNameMapper
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-DB_PATH = 'data/real_football.db'
+DB_PATH = 'data/real_football.db'  # Ignored - using PostgreSQL via pg_compat
 
 class SGPVerifier:
     """Verifies SGP parlay results"""
@@ -27,8 +28,9 @@ class SGPVerifier:
         self.results_scraper = ResultsScraper()
         self.telegram = TelegramBroadcaster()
         self.self_learner = SGPSelfLearner()
+        self.team_mapper = TeamNameMapper()
         
-        logger.info("✅ SGP Verifier initialized with self-learning")
+        logger.info("✅ SGP Verifier initialized with self-learning and team name mapping")
     
     def get_unverified_sgps(self) -> List[Dict[str, Any]]:
         """Get SGP predictions that need verification (95+ min after kickoff)"""
@@ -143,17 +145,22 @@ class SGPVerifier:
         
         results = self.results_scraper.get_results_for_date(match_date)
         
-        # Find this specific match
+        # Find this specific match using centralized team name normalization
         actual_score = None
         for result in results:
-            # Fuzzy team name matching
-            home_match = (sgp['home_team'].lower() in result['home_team'].lower() or 
-                         result['home_team'].lower() in sgp['home_team'].lower())
-            away_match = (sgp['away_team'].lower() in result['away_team'].lower() or 
-                         result['away_team'].lower() in sgp['away_team'].lower())
+            # Normalize team names from both database and Sofascore
+            sgp_home_normalized = self.team_mapper.standardize(sgp['home_team'])
+            sgp_away_normalized = self.team_mapper.standardize(sgp['away_team'])
+            result_home_normalized = self.team_mapper.standardize(result['home_team'])
+            result_away_normalized = self.team_mapper.standardize(result['away_team'])
+            
+            # Exact match after normalization (prevents mis-settlement)
+            home_match = (sgp_home_normalized == result_home_normalized)
+            away_match = (sgp_away_normalized == result_away_normalized)
             
             if home_match and away_match:
                 actual_score = result.get('score', f"{result['home_score']}-{result['away_score']}")
+                logger.info(f"✅ Matched: {sgp['home_team']} vs {sgp['away_team']} → {result['home_team']} vs {result['away_team']}")
                 break
         
         if not actual_score:

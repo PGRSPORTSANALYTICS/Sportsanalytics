@@ -16,6 +16,7 @@ class TeamNameMapper:
     
     def __init__(self):
         # Mapping: Odds API name -> Standard name
+        # NOTE: Keep canonical names simple to avoid breaking Understat/FBref integrations
         self.standardized_names = {
             # Premier League
             'Manchester City': 'Manchester City',
@@ -28,20 +29,55 @@ class TeamNameMapper:
             'Man United': 'Manchester United',
             'Tottenham': 'Tottenham',
             'Tottenham Hotspur': 'Tottenham',
+            'Spurs': 'Tottenham',
             'Newcastle': 'Newcastle United',
             'Newcastle United': 'Newcastle United',
+            'West Ham': 'West Ham United',
+            'West Ham United': 'West Ham United',
+            'Wolverhampton': 'Wolverhampton',
+            'Wolverhampton Wanderers': 'Wolverhampton',
+            'Wolves': 'Wolverhampton',
+            'Brighton': 'Brighton',
+            'Brighton and Hove Albion': 'Brighton',
+            'Brighton & Hove Albion': 'Brighton',
+            'Nottingham Forest': 'Nottingham Forest',
+            'Forest': 'Nottingham Forest',
+            'Leicester': 'Leicester City',
+            'Leicester City': 'Leicester City',
+            'Crystal Palace': 'Crystal Palace',
+            'Everton': 'Everton',
+            'Brentford': 'Brentford',
+            'Fulham': 'Fulham',
+            'Bournemouth': 'Bournemouth',
+            'AFC Bournemouth': 'Bournemouth',
             
-            # La Liga
+            # La Liga - CRITICAL FIXES for 226 pending SGPs
             'Real Madrid': 'Real Madrid',
             'Barcelona': 'Barcelona',
             'Atletico Madrid': 'Atletico Madrid',
             'Atlético Madrid': 'Atletico Madrid',
+            'Athletic Bilbao': 'Athletic Club',
+            'Athletic Club': 'Athletic Club',
+            'Athletic de Bilbao': 'Athletic Club',
+            'Real Betis': 'Real Betis',
+            'Betis': 'Real Betis',
+            'Valencia': 'Valencia',
+            'Mallorca': 'Mallorca',
+            'Getafe': 'Getafe',
+            'Alaves': 'Alaves',
+            'Deportivo Alaves': 'Alaves',
+            'Oviedo': 'Real Oviedo',
+            'Real Oviedo': 'Real Oviedo',
             
             # Bundesliga
             'Bayern Munich': 'Bayern Munich',
             'Bayern München': 'Bayern Munich',
+            'Bayern': 'Bayern Munich',
             'Borussia Dortmund': 'Dortmund',
             'Dortmund': 'Dortmund',
+            'VfB Stuttgart': 'VfB Stuttgart',
+            'Stuttgart': 'VfB Stuttgart',
+            'Augsburg': 'Augsburg',
             
             # Serie A
             'Inter': 'Inter',
@@ -49,6 +85,11 @@ class TeamNameMapper:
             'AC Milan': 'Milan',
             'Milan': 'Milan',
             'Juventus': 'Juventus',
+            'AS Roma': 'AS Roma',
+            'Roma': 'AS Roma',
+            'Napoli': 'Napoli',
+            'Bologna': 'Bologna',
+            'Udinese': 'Udinese',
             
             # Ligue 1
             'Paris Saint Germain': 'Paris S-G',
@@ -56,6 +97,27 @@ class TeamNameMapper:
             'Paris Saint-Germain': 'Paris S-G',
             'Marseille': 'Marseille',
             'Lyon': 'Lyon',
+            
+            # Eredivisie - CRITICAL FIX for case sensitivity
+            'Ajax': 'Ajax',
+            'Ajax Amsterdam': 'Ajax',
+            'PSV': 'PSV Eindhoven',
+            'PSV Eindhoven': 'PSV Eindhoven',
+            'Feyenoord': 'Feyenoord',
+            'Feyenoord Rotterdam': 'Feyenoord',
+            'GO Ahead Eagles': 'Go Ahead Eagles',
+            'Go Ahead Eagles': 'Go Ahead Eagles',
+            
+            # Primeira Liga
+            'Benfica': 'Benfica',
+            'Porto': 'Porto',
+            'FC Porto': 'Porto',
+            'Sporting': 'Sporting CP',
+            'Sporting CP': 'Sporting CP',
+            'Sporting Lisbon': 'Sporting CP',
+            'Braga': 'Braga',
+            'Moreirense': 'Moreirense FC',
+            'Moreirense FC': 'Moreirense FC',
         }
         
         # FBref specific variations

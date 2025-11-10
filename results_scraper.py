@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 import time
 import logging
 from db_helper import db_helper
+from team_name_mapper import TeamNameMapper
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 class ResultsScraper:
     def __init__(self, db_path='data/real_football.db'):
         self.db_path = db_path
+        self.team_mapper = TeamNameMapper()
         self._init_cache_db()
         self._init_verification_tracking()
     
@@ -90,9 +92,8 @@ class ResultsScraper:
             logger.error(f"Error saving match cache: {e}")
     
     def _normalize_team_for_cache(self, team_name):
-        """Normalize team name for cache key consistency"""
-        # Simple normalization for caching
-        return team_name.lower().strip()
+        """Normalize team name for cache key consistency using centralized mapper"""
+        return self.team_mapper.standardize(team_name)
     
     def _should_check_bet(self, bet_id):
         """Check if enough time has passed since last verification (30 min cooldown)"""
