@@ -596,9 +596,9 @@ class ResultsScraper:
                     
                     db_helper.execute('''
                         UPDATE football_opportunities 
-                        SET outcome = %s, profit_loss = %s, payout = %s, updated_at = %s
+                        SET outcome = %s, result = %s, profit_loss = %s, payout = %s, updated_at = %s
                         WHERE id = %s
-                    ''', (outcome, profit_loss, payout, datetime.now().isoformat(), bet_id))
+                    ''', (outcome, outcome, profit_loss, payout, datetime.now().isoformat(), bet_id))
                     
                     updated_count += 1
                     self._mark_bet_checked(bet_id)  # Mark cooldown after success
@@ -639,9 +639,9 @@ class ResultsScraper:
                         
                         db_helper.execute('''
                             UPDATE football_opportunities 
-                            SET outcome = %s, profit_loss = %s, payout = %s, updated_at = %s
+                            SET outcome = %s, result = %s, profit_loss = %s, payout = %s, updated_at = %s
                             WHERE id = %s
-                        ''', (outcome, profit_loss, payout, datetime.now().isoformat(), bet_id))
+                        ''', (outcome, outcome, profit_loss, payout, datetime.now().isoformat(), bet_id))
                         
                         updated_count += 1
                         self._mark_bet_checked(bet_id)  # Mark cooldown only after success
