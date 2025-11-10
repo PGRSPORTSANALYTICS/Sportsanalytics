@@ -254,29 +254,55 @@ class ResultsScraper:
             return []
     
     def get_sofascore_results(self, date_str):
-        """Get results from Sofascore for a specific date (YYYY-MM-DD)"""
+        """Get results from Sofascore JSON API for a specific date (YYYY-MM-DD)"""
         try:
-            # Convert date format for Sofascore
-            date_obj = datetime.strptime(date_str, '%Y-%m-%d')
-            sofascore_date = date_obj.strftime('%Y-%m-%d')
-            
-            url = f"https://www.sofascore.com/football//{sofascore_date}"
             logger.info(f"Scraping Sofascore results for {date_str}")
             
-            downloaded = trafilatura.fetch_url(url)
-            if not downloaded:
-                logger.error(f"Failed to fetch Sofascore page for {date_str}")
-                return []
-                
-            text = trafilatura.extract(downloaded)
-            if not text:
-                logger.error(f"Failed to extract text from Sofascore page for {date_str}")
+            url = f"https://api.sofascore.com/api/v1/sport/football/scheduled-events/{date_str}"
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'application/json',
+                'Origin': 'https://www.sofascore.com',
+                'Referer': 'https://www.sofascore.com/'
+            }
+            
+            response = requests.get(url, headers=headers, timeout=10)
+            
+            if response.status_code != 200:
+                logger.error(f"Sofascore API returned status {response.status_code}")
                 return []
             
-            return self.parse_sofascore_results(text)
+            data = response.json()
+            events = data.get('events', [])
+            
+            results = []
+            for event in events:
+                # Only process finished matches
+                if event.get('status', {}).get('type') != 'finished':
+                    continue
+                
+                home_team = event.get('homeTeam', {}).get('name', '')
+                away_team = event.get('awayTeam', {}).get('name', '')
+                home_score = event.get('homeScore', {}).get('current')
+                away_score = event.get('awayScore', {}).get('current')
+                
+                if home_score is not None and away_score is not None:
+                    results.append({
+                        'home_team': home_team,
+                        'away_team': away_team,
+                        'home_score': home_score,
+                        'away_score': away_score,
+                        'score': f"{home_score}-{away_score}",
+                        'total_goals': home_score + away_score,
+                        'result': 'home' if home_score > away_score else ('away' if away_score > home_score else 'draw'),
+                        'source': 'sofascore'
+                    })
+            
+            logger.info(f"📊 Found {len(results)} finished matches from Sofascore")
+            return results
             
         except Exception as e:
-            logger.error(f"Error scraping Sofascore: {e}")
+            logger.error(f"Error fetching Sofascore results: {e}")
             return []
     
     def parse_flashscore_results(self, text):
