@@ -241,7 +241,7 @@ def load_performance_summary():
         # Use stats_master for 100% accuracy
         stats = get_all_time_stats()
         
-        # Calculate avg odds manually from database for backwards compatibility
+        # Calculate avg odds manually from database - EXCLUDE MonsterSGP (entertainment only)
         exact_avg_odds = db_helper.execute(
             "SELECT AVG(odds) FROM football_opportunities WHERE market = %s AND result IS NOT NULL",
             ('exact_score',),
@@ -249,7 +249,8 @@ def load_performance_summary():
         )[0] or 0
         
         sgp_avg_odds = db_helper.execute(
-            "SELECT AVG(bookmaker_odds) FROM sgp_predictions WHERE result IS NOT NULL",
+            "SELECT AVG(bookmaker_odds) FROM sgp_predictions WHERE outcome IN (%s, %s) AND parlay_description NOT LIKE %s AND parlay_description NOT LIKE %s",
+            ('win', 'loss', '%Monster%', '%BEAST%'),
             fetch='one'
         )
         sgp_avg_odds = sgp_avg_odds[0] if sgp_avg_odds else 0
@@ -391,7 +392,7 @@ with st.sidebar:
         ''')
         exact_hist = cursor.fetchone()
         
-        # SGP History
+        # SGP History (EXCLUDE MonsterSGP - entertainment only)
         cursor.execute('''
             SELECT 
                 COUNT(*) as settled,
@@ -400,6 +401,8 @@ with st.sidebar:
                 SUM(profit_loss) as net_profit
             FROM sgp_predictions
             WHERE status = 'settled'
+            AND (parlay_description NOT LIKE '%Monster%' OR parlay_description IS NULL)
+            AND (parlay_description NOT LIKE '%BEAST%' OR parlay_description IS NULL)
         ''')
         sgp_hist = cursor.fetchone()
         
@@ -834,7 +837,7 @@ if page == "🎲 SGP Analytics":
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
-        # Overall Stats
+        # Overall Stats (EXCLUDE MonsterSGP - entertainment only)
         cursor.execute('''
             SELECT 
                 COUNT(*) as total,
@@ -846,6 +849,8 @@ if page == "🎲 SGP Analytics":
                 AVG(ev_percentage) as avg_edge
             FROM sgp_predictions
             WHERE status = 'settled'
+            AND (parlay_description NOT LIKE '%Monster%' OR parlay_description IS NULL)
+            AND (parlay_description NOT LIKE '%BEAST%' OR parlay_description IS NULL)
         ''')
         stats = cursor.fetchone()
         
@@ -886,6 +891,8 @@ if page == "🎲 SGP Analytics":
                     profit_loss
                 FROM sgp_predictions
                 WHERE status = 'settled'
+                AND (parlay_description NOT LIKE '%Monster%' OR parlay_description IS NULL)
+                AND (parlay_description NOT LIKE '%BEAST%' OR parlay_description IS NULL)
                 ORDER BY timestamp ASC
             ''')
             
@@ -1570,7 +1577,7 @@ try:
             'profit': row[3]
         }
     
-    # Get all settled SGPs grouped by month
+    # Get all settled SGPs grouped by month (EXCLUDE MonsterSGP - entertainment only)
     cursor.execute('''
         SELECT 
             strftime('%Y-%m', match_date) as month,
@@ -1579,6 +1586,8 @@ try:
             SUM(profit_loss) as profit
         FROM sgp_predictions
         WHERE result IS NOT NULL
+        AND (parlay_description NOT LIKE '%Monster%' OR parlay_description IS NULL)
+        AND (parlay_description NOT LIKE '%BEAST%' OR parlay_description IS NULL)
         GROUP BY strftime('%Y-%m', match_date)
         ORDER BY month DESC
     ''')
@@ -1742,7 +1751,7 @@ try:
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    # Get all settled SGPs grouped by month
+    # Get all settled SGPs grouped by month (EXCLUDE MonsterSGP - entertainment only)
     cursor.execute('''
         SELECT 
             strftime('%Y-%m', match_date) as month,
@@ -1751,6 +1760,8 @@ try:
             SUM(profit_loss) as profit
         FROM sgp_predictions
         WHERE result IS NOT NULL
+        AND (parlay_description NOT LIKE '%Monster%' OR parlay_description IS NULL)
+        AND (parlay_description NOT LIKE '%BEAST%' OR parlay_description IS NULL)
         GROUP BY strftime('%Y-%m', match_date)
         ORDER BY month DESC
     ''')
