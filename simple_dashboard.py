@@ -1218,7 +1218,7 @@ if stats:
                          ELSE 0 END) as profit
             FROM football_opportunities
             WHERE market = %s
-            AND timestamp >= NOW() - INTERVAL '30 days'
+            AND to_timestamp(timestamp / 1000.0) >= NOW() - INTERVAL '30 days'
         ''', ('won', 'win', 'lost', 'loss', 'won', 'win', 'lost', 'loss', 'exact_score'), fetch='one')
         
         sgp_30d = db_helper.execute('''
@@ -1226,7 +1226,7 @@ if stats:
                 SUM(CASE WHEN status = %s THEN stake ELSE 0 END) as staked,
                 SUM(profit_loss) as profit
             FROM sgp_predictions
-            WHERE timestamp >= NOW() - INTERVAL '30 days'
+            WHERE to_timestamp(timestamp / 1000.0) >= NOW() - INTERVAL '30 days'
         ''', ('settled',), fetch='one')
         
         total_30d_staked = (exact_30d[0] or 0) + (sgp_30d[0] or 0)
