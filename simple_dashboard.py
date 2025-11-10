@@ -1234,7 +1234,9 @@ if stats:
                 SUM(profit_loss) as profit
             FROM sgp_predictions
             WHERE to_timestamp(timestamp / 1000.0) >= NOW() - INTERVAL '30 days'
-        ''', ('settled',), fetch='one')
+            AND (parlay_description NOT LIKE %s OR parlay_description IS NULL)
+            AND (parlay_description NOT LIKE %s OR parlay_description IS NULL)
+        ''', ('settled', '%Monster%', '%BEAST%'), fetch='one')
         
         total_30d_staked = (exact_30d[0] or 0) + (sgp_30d[0] or 0)
         total_30d_profit = (exact_30d[1] or 0) + (sgp_30d[1] or 0)
