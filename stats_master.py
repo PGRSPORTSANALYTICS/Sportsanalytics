@@ -17,11 +17,11 @@ def get_all_time_stats() -> Dict:
     exact_row = db_helper.execute('''
         SELECT 
             COUNT(*) as total,
-            SUM(CASE WHEN outcome IN (%s, %s) THEN 1 ELSE 0 END) as wins,
+            SUM(CASE WHEN outcome = %s THEN 1 ELSE 0 END) as wins,
             SUM(profit_loss) as profit
         FROM football_opportunities 
-        WHERE market = %s AND outcome IN (%s, %s, %s, %s)
-    ''', ('win', 'won', 'exact_score', 'win', 'won', 'loss', 'lost'), fetch='one')
+        WHERE market = %s AND outcome IN (%s, %s)
+    ''', ('win', 'exact_score', 'win', 'loss'), fetch='one')
     exact_total, exact_wins, exact_profit = exact_row if exact_row else (0, 0, 0.0)
     exact_losses = exact_total - (exact_wins or 0)
     exact_hit_rate = (exact_wins / exact_total * 100) if exact_total > 0 else 0.0
