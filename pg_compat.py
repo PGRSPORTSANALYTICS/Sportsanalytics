@@ -15,24 +15,31 @@ class PostgreSQLCursor:
         
     def execute(self, query, params=()):
         """Execute query with parameter translation"""
-        # Translate SQLite placeholders to PostgreSQL
-        pg_query = re.sub(r'\?', '%s', query)
-        
-        # Translate SQLite date functions
-        # match_date is stored as TEXT (ISO format), need to cast to timestamp for TO_CHAR
-        pg_query = re.sub(r"strftime\('%Y-%m',\s*match_date\)", "TO_CHAR(CAST(match_date AS TIMESTAMP), 'YYYY-MM')", pg_query)
-        pg_query = re.sub(r"date\(settled_timestamp,\s*'unixepoch'\)", "TO_TIMESTAMP(settled_timestamp)::DATE", pg_query, flags=re.IGNORECASE)
-        pg_query = re.sub(r"datetime\('now'\)", "NOW()", pg_query, flags=re.IGNORECASE)
-        
-        # Execute using connection pool properly
-        with DatabaseConnection.get_cursor() as cursor:
-            cursor.execute(pg_query, params)
-            try:
-                self._results = cursor.fetchall()
-            except:
-                self._results = []
-        
-        self._result_index = 0
+        try:
+            # Translate SQLite placeholders to PostgreSQL
+            pg_query = re.sub(r'\?', '%s', query)
+            
+            # Translate SQLite date functions
+            # match_date is stored as TEXT (ISO format), need to cast to timestamp for TO_CHAR
+            pg_query = re.sub(r"strftime\('%Y-%m',\s*match_date\)", "TO_CHAR((match_date::timestamp), 'YYYY-MM')", pg_query)
+            pg_query = re.sub(r"date\(settled_timestamp,\s*'unixepoch'\)", "TO_TIMESTAMP(settled_timestamp)::DATE", pg_query, flags=re.IGNORECASE)
+            pg_query = re.sub(r"datetime\('now'\)", "NOW()", pg_query, flags=re.IGNORECASE)
+            pg_query = re.sub(r"DATE\(match_date\)", "(match_date::date)", pg_query)
+            
+            # Execute using connection pool properly
+            with DatabaseConnection.get_cursor() as cursor:
+                cursor.execute(pg_query, params)
+                try:
+                    self._results = cursor.fetchall()
+                except:
+                    self._results = []
+            
+            self._result_index = 0
+        except Exception as e:
+            # Silent failure - Streamlit will handle display
+            print(f"Database error: {e}")
+            self._results = []
+            self._result_index = 0
         
     def fetchone(self):
         """Fetch one row from results"""
