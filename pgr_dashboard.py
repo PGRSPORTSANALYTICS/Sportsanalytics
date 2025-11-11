@@ -312,7 +312,7 @@ def get_upcoming_bets(limit=3):
         FROM football_opportunities
         WHERE market = %s
           AND outcome IS NULL
-          AND match_date >= CURRENT_DATE
+          AND match_date >= CURRENT_DATE::text
         ORDER BY match_date ASC, edge_percentage DESC
         LIMIT %s
     """
