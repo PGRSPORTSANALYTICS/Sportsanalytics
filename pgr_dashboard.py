@@ -573,7 +573,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown('<div class="pgr-logo-wrapper">', unsafe_allow_html=True)
-st.image("assets/pgr_logo.png", use_column_width=True)
+st.image("assets/pgr_logo.png", use_container_width=True)
 st.markdown('</div>', unsafe_allow_html=True)
 
 # Segmented Control for Product Selection
