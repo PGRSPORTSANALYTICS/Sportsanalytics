@@ -400,25 +400,25 @@ def get_upcoming_bets(limit=3, product='all'):
         
     elif product == 'sgp':
         query = """
-            SELECT home_team, away_team, parlay_description, bookmaker_odds, edge_percentage, match_date
+            SELECT home_team, away_team, parlay_description, bookmaker_odds, ev_percentage, match_date
             FROM sgp_predictions
             WHERE outcome IS NULL
               AND match_date >= CURRENT_DATE::text
               AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
               AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
-            ORDER BY match_date ASC, edge_percentage DESC
+            ORDER BY match_date ASC, ev_percentage DESC
             LIMIT %s
         """
         rows = db_helper.execute(query, ('%Monster%', '%BEAST%', limit), fetch='all')
         
     elif product == 'monstersgp':
         query = """
-            SELECT home_team, away_team, parlay_description, bookmaker_odds, edge_percentage, match_date
+            SELECT home_team, away_team, parlay_description, bookmaker_odds, ev_percentage, match_date
             FROM sgp_predictions
             WHERE outcome IS NULL
               AND match_date >= CURRENT_DATE::text
               AND (parlay_description LIKE %s OR parlay_description LIKE %s)
-            ORDER BY match_date ASC, edge_percentage DESC
+            ORDER BY match_date ASC, ev_percentage DESC
             LIMIT %s
         """
         rows = db_helper.execute(query, ('%Monster%', '%BEAST%', limit), fetch='all')
