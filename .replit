@@ -34,15 +34,7 @@ args = "Telegram Tips Bot"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Real Football Champion"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
 args = "Performance Updates"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Smart Verifier"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
@@ -51,10 +43,6 @@ args = "Daily Categorizer"
 [[workflows.workflow.tasks]]
 task = "workflow.run"
 args = "Daily Games Reminder"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "SGP Champion"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
@@ -103,34 +91,12 @@ task = "shell.exec"
 args = "echo \"📱 Telegram broadcaster integrated into Real Football Champion. Predictions auto-send when generated. Run 'python3 add_telegram_subscriber.py' to subscribe.\" && sleep infinity"
 
 [[workflows.workflow]]
-name = "Real Football Champion"
-author = "agent"
-
-[workflows.workflow.metadata]
-outputType = "console"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "ENABLE_REAL_BETS=1 USE_API_FOOTBALL=true python real_football_champion.py"
-
-[[workflows.workflow]]
 name = "Performance Updates"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python3 schedule_performance_updates.py"
-
-[workflows.workflow.metadata]
-outputType = "console"
-
-[[workflows.workflow]]
-name = "Smart Verifier"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python3 smart_verifier.py"
 
 [workflows.workflow.metadata]
 outputType = "console"
@@ -153,17 +119,6 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python3 daily_games_reminder.py"
-
-[workflows.workflow.metadata]
-outputType = "console"
-
-[[workflows.workflow]]
-name = "SGP Champion"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python3 sgp_champion.py"
 
 [workflows.workflow.metadata]
 outputType = "console"
