@@ -181,7 +181,7 @@ class SGPVerifier:
         Verify a single SGP prediction
         
         Returns:
-            'win', 'loss', or None if match not finished
+            'win', 'loss', or None if match not finished or data incomplete
         """
         # Get match result
         match_date = sgp['match_date'].split('T')[0]  # Extract date
@@ -189,7 +189,7 @@ class SGPVerifier:
         results = self.results_scraper.get_results_for_date(match_date)
         
         # Find this specific match using centralized team name normalization
-        actual_score = None
+        match_stats = None
         for result in results:
             # Normalize team names from both database and Sofascore
             sgp_home_normalized = self.team_mapper.standardize(sgp['home_team'])
@@ -202,11 +202,18 @@ class SGPVerifier:
             away_match = (sgp_away_normalized == result_away_normalized)
             
             if home_match and away_match:
-                actual_score = result.get('score', f"{result['home_score']}-{result['away_score']}")
+                # Build match_stats dictionary with all available data
+                match_stats = {
+                    'score': result.get('score', f"{result['home_score']}-{result['away_score']}"),
+                    'actual_score': result.get('score', f"{result['home_score']}-{result['away_score']}"),
+                    'corners': result.get('corners'),  # Will be None if not available
+                    'half_time_goals': result.get('half_time_goals'),  # Will be None if not available
+                    'second_half_goals': result.get('second_half_goals')  # Will be None if not available
+                }
                 logger.info(f"✅ Matched: {sgp['home_team']} vs {sgp['away_team']} → {result['home_team']} vs {result['away_team']}")
                 break
         
-        if not actual_score:
+        if not match_stats:
             # Match not finished yet
             return None
         
@@ -215,11 +222,25 @@ class SGPVerifier:
         
         # Check all legs
         all_legs_won = True
+        has_unsupported_market = False
+        
         for leg in legs:
-            leg_won = self.check_leg_result(leg, actual_score)
-            if not leg_won:
+            leg_result = self.check_leg_result(leg, match_stats)
+            
+            if leg_result is None:
+                # Unsupported market or missing data - keep bet pending
+                has_unsupported_market = True
+                logger.warning(f"⚠️ Cannot verify {leg['market_type']} - keeping SGP pending")
+                break
+            elif leg_result is False:
+                # Leg lost
                 all_legs_won = False
                 break
+            # leg_result is True - leg won, continue checking
+        
+        # If any leg has unsupported market, keep entire parlay pending
+        if has_unsupported_market:
+            return None
         
         return 'win' if all_legs_won else 'loss'
     
