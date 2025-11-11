@@ -160,8 +160,9 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+@st.cache_data(ttl=300)
 def get_rolling_roi_data(days=30):
-    """Get daily ROI data for the rolling chart"""
+    """Get daily ROI data for the rolling chart - includes MonsterSGP"""
     # Get all settled bets from last 30 days
     query = """
         SELECT 
@@ -181,12 +182,19 @@ def get_rolling_roi_data(days=30):
             WHERE outcome IN (%s, %s) AND settled_timestamp IS NOT NULL
               AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
               AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
+            
+            UNION ALL
+            
+            SELECT settled_timestamp, 'monstersgp' as market, profit_loss, stake
+            FROM sgp_predictions
+            WHERE outcome IN (%s, %s) AND settled_timestamp IS NOT NULL
+              AND (parlay_description LIKE %s OR parlay_description LIKE %s)
         ) combined
         WHERE TO_TIMESTAMP(settled_timestamp) >= NOW() - INTERVAL '%s days'
         ORDER BY bet_date DESC
     """
     
-    rows = db_helper.execute(query, ('win', 'loss', 'win', 'loss', '%Monster%', '%BEAST%', days), fetch='all')
+    rows = db_helper.execute(query, ('win', 'loss', 'win', 'loss', '%Monster%', '%BEAST%', 'win', 'loss', '%Monster%', '%BEAST%', days), fetch='all')
     
     if not rows:
         return None
@@ -209,6 +217,12 @@ def get_rolling_roi_data(days=30):
     df_sgp['cumulative_stake'] = df_sgp['stake'].cumsum()
     df_sgp['roi'] = (df_sgp['cumulative_profit'] / df_sgp['cumulative_stake'] * 100).fillna(0)
     
+    # MonsterSGP only
+    df_monster = df_sorted[df_sorted['market'] == 'monstersgp'].copy()
+    df_monster['cumulative_profit'] = df_monster['profit_loss'].cumsum()
+    df_monster['cumulative_stake'] = df_monster['stake'].cumsum()
+    df_monster['roi'] = (df_monster['cumulative_profit'] / df_monster['cumulative_stake'] * 100).fillna(0)
+    
     # Combined
     df_combined = df_sorted.copy()
     df_combined['cumulative_profit'] = df_combined['profit_loss'].cumsum()
@@ -218,32 +232,66 @@ def get_rolling_roi_data(days=30):
     return {
         'es': df_es[['bet_date', 'roi']],
         'sgp': df_sgp[['bet_date', 'roi']],
+        'monstersgp': df_monster[['bet_date', 'roi']],
         'combined': df_combined[['bet_date', 'roi']]
     }
 
-def get_last_n_hit_rate(n=200):
-    """Get hit rate for last N bets (ES + SGP combined)"""
-    query = """
-        SELECT outcome
-        FROM (
-            SELECT outcome, settled_timestamp
+def get_last_n_hit_rate(n=200, product='all'):
+    """Get hit rate for last N bets - product-specific"""
+    if product == 'exact_score':
+        query = """
+            SELECT outcome
             FROM football_opportunities
             WHERE outcome IN (%s, %s)
-            
-            UNION ALL
-            
-            SELECT outcome, settled_timestamp
+            ORDER BY settled_timestamp DESC
+            LIMIT %s
+        """
+        rows = db_helper.execute(query, ('win', 'loss', n), fetch='all')
+        
+    elif product == 'sgp':
+        query = """
+            SELECT outcome
             FROM sgp_predictions
             WHERE outcome IN (%s, %s)
               AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
               AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
-        ) combined
-        WHERE settled_timestamp IS NOT NULL
-        ORDER BY settled_timestamp DESC
-        LIMIT %s
-    """
-    
-    rows = db_helper.execute(query, ('win', 'loss', 'win', 'loss', '%Monster%', '%BEAST%', n), fetch='all')
+            ORDER BY settled_timestamp DESC
+            LIMIT %s
+        """
+        rows = db_helper.execute(query, ('win', 'loss', '%Monster%', '%BEAST%', n), fetch='all')
+        
+    elif product == 'monstersgp':
+        query = """
+            SELECT outcome
+            FROM sgp_predictions
+            WHERE outcome IN (%s, %s)
+              AND (parlay_description LIKE %s OR parlay_description LIKE %s)
+            ORDER BY settled_timestamp DESC
+            LIMIT %s
+        """
+        rows = db_helper.execute(query, ('win', 'loss', '%Monster%', '%BEAST%', n), fetch='all')
+        
+    else:  # 'all' - combined
+        query = """
+            SELECT outcome
+            FROM (
+                SELECT outcome, settled_timestamp
+                FROM football_opportunities
+                WHERE outcome IN (%s, %s)
+                
+                UNION ALL
+                
+                SELECT outcome, settled_timestamp
+                FROM sgp_predictions
+                WHERE outcome IN (%s, %s)
+                  AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
+                  AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
+            ) combined
+            WHERE settled_timestamp IS NOT NULL
+            ORDER BY settled_timestamp DESC
+            LIMIT %s
+        """
+        rows = db_helper.execute(query, ('win', 'loss', 'win', 'loss', '%Monster%', '%BEAST%', n), fetch='all')
     
     if not rows:
         return 0.0
@@ -251,26 +299,54 @@ def get_last_n_hit_rate(n=200):
     wins = sum(1 for row in rows if row[0] == 'win')
     return (wins / len(rows) * 100) if rows else 0.0
 
-def get_avg_odds():
-    """Get average odds for ES + SGP (excluding MonsterSGP)"""
-    query = """
-        SELECT AVG(odds) as avg_odds
-        FROM (
-            SELECT odds
+def get_avg_odds(product='all'):
+    """Get average odds - product-specific"""
+    if product == 'exact_score':
+        query = """
+            SELECT AVG(odds) as avg_odds
             FROM football_opportunities
             WHERE market = 'exact_score' AND outcome IN ('win', 'loss')
-            
-            UNION ALL
-            
-            SELECT bookmaker_odds as odds
+        """
+        row = db_helper.execute(query, fetch='one')
+        
+    elif product == 'sgp':
+        query = """
+            SELECT AVG(bookmaker_odds) as avg_odds
             FROM sgp_predictions
             WHERE outcome IN ('win', 'loss')
               AND (parlay_description IS NULL OR parlay_description NOT LIKE '%%Monster%%')
               AND (parlay_description IS NULL OR parlay_description NOT LIKE '%%BEAST%%')
-        ) combined
-    """
+        """
+        row = db_helper.execute(query, fetch='one')
+        
+    elif product == 'monstersgp':
+        query = """
+            SELECT AVG(bookmaker_odds) as avg_odds
+            FROM sgp_predictions
+            WHERE outcome IN ('win', 'loss')
+              AND (parlay_description LIKE '%%Monster%%' OR parlay_description LIKE '%%BEAST%%')
+        """
+        row = db_helper.execute(query, fetch='one')
+        
+    else:  # 'all' - combined
+        query = """
+            SELECT AVG(odds) as avg_odds
+            FROM (
+                SELECT odds
+                FROM football_opportunities
+                WHERE market = 'exact_score' AND outcome IN ('win', 'loss')
+                
+                UNION ALL
+                
+                SELECT bookmaker_odds as odds
+                FROM sgp_predictions
+                WHERE outcome IN ('win', 'loss')
+                  AND (parlay_description IS NULL OR parlay_description NOT LIKE '%%Monster%%')
+                  AND (parlay_description IS NULL OR parlay_description NOT LIKE '%%BEAST%%')
+            ) combined
+        """
+        row = db_helper.execute(query, fetch='one')
     
-    row = db_helper.execute(query, fetch='one')
     return row[0] if row and row[0] else 0.0
 
 def get_last_50_roi():
@@ -307,19 +383,57 @@ def get_last_50_roi():
         return (row[0] / row[1] * 100)
     return 0.0
 
-def get_upcoming_bets(limit=3):
-    """Get upcoming bets that haven't been played yet"""
-    query = """
-        SELECT home_team, away_team, selection, odds, edge_percentage, match_date
-        FROM football_opportunities
-        WHERE market = %s
-          AND outcome IS NULL
-          AND match_date >= CURRENT_DATE::text
-        ORDER BY match_date ASC, edge_percentage DESC
-        LIMIT %s
-    """
-    
-    rows = db_helper.execute(query, ('exact_score', limit), fetch='all')
+@st.cache_data(ttl=60)
+def get_upcoming_bets(limit=3, product='all'):
+    """Get upcoming bets filtered by product type"""
+    if product == 'exact_score':
+        query = """
+            SELECT home_team, away_team, selection, odds, edge_percentage, match_date
+            FROM football_opportunities
+            WHERE market = %s
+              AND outcome IS NULL
+              AND match_date >= CURRENT_DATE::text
+            ORDER BY match_date ASC, edge_percentage DESC
+            LIMIT %s
+        """
+        rows = db_helper.execute(query, ('exact_score', limit), fetch='all')
+        
+    elif product == 'sgp':
+        query = """
+            SELECT home_team, away_team, parlay_description, bookmaker_odds, edge_percentage, match_date
+            FROM sgp_predictions
+            WHERE outcome IS NULL
+              AND match_date >= CURRENT_DATE::text
+              AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
+              AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
+            ORDER BY match_date ASC, edge_percentage DESC
+            LIMIT %s
+        """
+        rows = db_helper.execute(query, ('%Monster%', '%BEAST%', limit), fetch='all')
+        
+    elif product == 'monstersgp':
+        query = """
+            SELECT home_team, away_team, parlay_description, bookmaker_odds, edge_percentage, match_date
+            FROM sgp_predictions
+            WHERE outcome IS NULL
+              AND match_date >= CURRENT_DATE::text
+              AND (parlay_description LIKE %s OR parlay_description LIKE %s)
+            ORDER BY match_date ASC, edge_percentage DESC
+            LIMIT %s
+        """
+        rows = db_helper.execute(query, ('%Monster%', '%BEAST%', limit), fetch='all')
+        
+    else:  # 'all' - combined
+        query = """
+            SELECT home_team, away_team, selection, odds, edge_percentage, match_date
+            FROM football_opportunities
+            WHERE market = %s
+              AND outcome IS NULL
+              AND match_date >= CURRENT_DATE::text
+            ORDER BY match_date ASC, edge_percentage DESC
+            LIMIT %s
+        """
+        rows = db_helper.execute(query, ('exact_score', limit), fetch='all')
     
     if not rows:
         return []
@@ -335,34 +449,86 @@ def get_upcoming_bets(limit=3):
     
     return bets
 
-def get_last_settled(limit=3):
-    """Get last settled bets"""
-    query = """
-        SELECT 
-            home_team, away_team, selection, odds, outcome, profit_loss, market
-        FROM (
+@st.cache_data(ttl=60)
+def get_last_settled(limit=3, product='all'):
+    """Get last settled bets filtered by product type"""
+    if product == 'exact_score':
+        query = """
+            SELECT home_team, away_team, selection, odds, outcome, profit_loss, market
+            FROM (
+                SELECT 
+                    home_team, away_team, selection, odds, outcome, profit_loss, 
+                    %s as market, settled_timestamp
+                FROM football_opportunities
+                WHERE outcome IN (%s, %s)
+            ) combined
+            WHERE settled_timestamp IS NOT NULL
+            ORDER BY settled_timestamp DESC
+            LIMIT %s
+        """
+        rows = db_helper.execute(query, ('Exact Score', 'win', 'loss', limit), fetch='all')
+        
+    elif product == 'sgp':
+        query = """
+            SELECT home_team, away_team, parlay_description, bookmaker_odds, outcome, profit_loss, market
+            FROM (
+                SELECT 
+                    home_team, away_team, parlay_description, bookmaker_odds, 
+                    outcome, profit_loss, %s as market, settled_timestamp
+                FROM sgp_predictions
+                WHERE outcome IN (%s, %s)
+                  AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
+                  AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
+            ) combined
+            WHERE settled_timestamp IS NOT NULL
+            ORDER BY settled_timestamp DESC
+            LIMIT %s
+        """
+        rows = db_helper.execute(query, ('SGP', 'win', 'loss', '%Monster%', '%BEAST%', limit), fetch='all')
+        
+    elif product == 'monstersgp':
+        query = """
+            SELECT home_team, away_team, parlay_description, bookmaker_odds, outcome, profit_loss, market
+            FROM (
+                SELECT 
+                    home_team, away_team, parlay_description, bookmaker_odds, 
+                    outcome, profit_loss, %s as market, settled_timestamp
+                FROM sgp_predictions
+                WHERE outcome IN (%s, %s)
+                  AND (parlay_description LIKE %s OR parlay_description LIKE %s)
+            ) combined
+            WHERE settled_timestamp IS NOT NULL
+            ORDER BY settled_timestamp DESC
+            LIMIT %s
+        """
+        rows = db_helper.execute(query, ('MonsterSGP', 'win', 'loss', '%Monster%', '%BEAST%', limit), fetch='all')
+        
+    else:  # 'all' - combined
+        query = """
             SELECT 
-                home_team, away_team, selection, odds, outcome, profit_loss, 
-                %s as market, settled_timestamp
-            FROM football_opportunities
-            WHERE outcome IN (%s, %s)
-            
-            UNION ALL
-            
-            SELECT 
-                home_team, away_team, parlay_description, bookmaker_odds, 
-                outcome, profit_loss, %s, settled_timestamp
-            FROM sgp_predictions
-            WHERE outcome IN (%s, %s)
-              AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
-              AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
-        ) combined
-        WHERE settled_timestamp IS NOT NULL
-        ORDER BY settled_timestamp DESC
-        LIMIT %s
-    """
-    
-    rows = db_helper.execute(query, ('Exact Score', 'win', 'loss', 'SGP', 'win', 'loss', '%Monster%', '%BEAST%', limit), fetch='all')
+                home_team, away_team, selection, odds, outcome, profit_loss, market
+            FROM (
+                SELECT 
+                    home_team, away_team, selection, odds, outcome, profit_loss, 
+                    %s as market, settled_timestamp
+                FROM football_opportunities
+                WHERE outcome IN (%s, %s)
+                
+                UNION ALL
+                
+                SELECT 
+                    home_team, away_team, parlay_description, bookmaker_odds, 
+                    outcome, profit_loss, %s, settled_timestamp
+                FROM sgp_predictions
+                WHERE outcome IN (%s, %s)
+                  AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
+                  AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
+            ) combined
+            WHERE settled_timestamp IS NOT NULL
+            ORDER BY settled_timestamp DESC
+            LIMIT %s
+        """
+        rows = db_helper.execute(query, ('Exact Score', 'win', 'loss', 'SGP', 'win', 'loss', '%Monster%', '%BEAST%', limit), fetch='all')
     
     if not rows:
         return []
@@ -474,12 +640,11 @@ if selected == 'exact_score':
 elif selected == 'sgp':
     product_stats = stats['sgp']
 else:  # monstersgp
-    # For now, use SGP stats - will add MonsterSGP-specific query later
-    product_stats = stats['sgp']
+    product_stats = stats['monstersgp']
 
 total_roi = (product_stats['profit'] / (product_stats['total'] * 100)) * 100 if product_stats['total'] > 0 else 0
-hit_rate_200 = get_last_n_hit_rate(200)  # TODO: Make product-specific
-avg_odds = get_avg_odds()  # TODO: Make product-specific
+hit_rate_200 = get_last_n_hit_rate(200, product=selected)
+avg_odds = get_avg_odds(product=selected)
 
 # Hero Metrics
 col1, col2, col3 = st.columns(3)
@@ -501,10 +666,11 @@ with col2:
     """, unsafe_allow_html=True)
 
 with col3:
+    product_name = product_labels[st.session_state.selected_product]
     st.markdown(f"""
     <div class="hero-metric">
         <div class="hero-value">{avg_odds:.1f}x</div>
-        <div class="hero-label">Exact Score + SGP</div>
+        <div class="hero-label">{product_name}<br>Avg Odds</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -516,35 +682,34 @@ roi_data = get_rolling_roi_data(30)
 if roi_data:
     fig = go.Figure()
     
-    # ES line (green)
-    if not roi_data['es'].empty:
-        fig.add_trace(go.Scatter(
-            x=roi_data['es']['bet_date'],
-            y=roi_data['es']['roi'],
-            name='Exact Score',
-            line=dict(color='#3FB68B', width=3),
-            mode='lines'
-        ))
-    
-    # SGP line (blue)
-    if not roi_data['sgp'].empty:
-        fig.add_trace(go.Scatter(
-            x=roi_data['sgp']['bet_date'],
-            y=roi_data['sgp']['roi'],
-            name='SGP',
-            line=dict(color='#58A6FF', width=3),
-            mode='lines'
-        ))
-    
-    # Combined line (orange)
-    if not roi_data['combined'].empty:
-        fig.add_trace(go.Scatter(
-            x=roi_data['combined']['bet_date'],
-            y=roi_data['combined']['roi'],
-            name='Combined',
-            line=dict(color='#D29922', width=3),
-            mode='lines'
-        ))
+    # Show only the selected product's line
+    if st.session_state.selected_product == 'exact_score':
+        if not roi_data['es'].empty:
+            fig.add_trace(go.Scatter(
+                x=roi_data['es']['bet_date'],
+                y=roi_data['es']['roi'],
+                name='Exact Score',
+                line=dict(color='#3FB68B', width=3),
+                mode='lines'
+            ))
+    elif st.session_state.selected_product == 'sgp':
+        if not roi_data['sgp'].empty:
+            fig.add_trace(go.Scatter(
+                x=roi_data['sgp']['bet_date'],
+                y=roi_data['sgp']['roi'],
+                name='SGP',
+                line=dict(color='#58A6FF', width=3),
+                mode='lines'
+            ))
+    else:  # monstersgp - use MonsterSGP-specific data
+        if not roi_data['monstersgp'].empty:
+            fig.add_trace(go.Scatter(
+                x=roi_data['monstersgp']['bet_date'],
+                y=roi_data['monstersgp']['roi'],
+                name='MonsterSGP',
+                line=dict(color='#D29922', width=3),
+                mode='lines'
+            ))
     
     fig.update_layout(
         plot_bgcolor='#0D1117',
@@ -622,7 +787,7 @@ col1, col2 = st.columns(2)
 
 with col1:
     st.markdown('<div class="section-header">UPCOMING BETS</div>', unsafe_allow_html=True)
-    upcoming = get_upcoming_bets(3)
+    upcoming = get_upcoming_bets(3, product=st.session_state.selected_product)
     
     if upcoming:
         for bet in upcoming:
@@ -642,7 +807,7 @@ with col1:
 
 with col2:
     st.markdown('<div class="section-header">LAST SETTLED</div>', unsafe_allow_html=True)
-    settled = get_last_settled(3)
+    settled = get_last_settled(3, product=st.session_state.selected_product)
     
     if settled:
         for bet in settled:

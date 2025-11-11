@@ -51,7 +51,21 @@ def get_all_time_stats() -> Dict:
     sgp_losses = sgp_total - (sgp_wins or 0)
     sgp_hit_rate = (sgp_wins / sgp_total * 100) if sgp_total > 0 else 0.0
     
-    # Combined stats
+    # MonsterSGP stats - entertainment only (tracked separately)
+    monster_row = db_helper.execute('''
+        SELECT 
+            COUNT(*) as total,
+            SUM(CASE WHEN outcome = %s THEN 1 ELSE 0 END) as wins,
+            SUM(profit_loss) as profit
+        FROM sgp_predictions 
+        WHERE outcome IN (%s, %s)
+          AND (parlay_description LIKE %s OR parlay_description LIKE %s)
+    ''', ('win', 'win', 'loss', '%Monster%', '%BEAST%'), fetch='one')
+    monster_total, monster_wins, monster_profit = monster_row if monster_row else (0, 0, 0.0)
+    monster_losses = monster_total - (monster_wins or 0)
+    monster_hit_rate = (monster_wins / monster_total * 100) if monster_total > 0 else 0.0
+    
+    # Combined stats (ES + regular SGP only, no Monster)
     combined_total = (exact_total or 0) + (sgp_total or 0)
     combined_wins = (exact_wins or 0) + (sgp_wins or 0)
     combined_losses = (exact_losses or 0) + (sgp_losses or 0)
@@ -72,6 +86,13 @@ def get_all_time_stats() -> Dict:
             'losses': sgp_losses or 0,
             'hit_rate': round(sgp_hit_rate, 1),
             'profit': round(sgp_profit or 0.0, 2)
+        },
+        'monstersgp': {
+            'total': monster_total or 0,
+            'wins': monster_wins or 0,
+            'losses': monster_losses or 0,
+            'hit_rate': round(monster_hit_rate, 1),
+            'profit': round(monster_profit or 0.0, 2)
         },
         'combined': {
             'total': combined_total,
