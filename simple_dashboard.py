@@ -1746,10 +1746,10 @@ try:
         for row in cursor.fetchall():
             month_key = row[0]
             sgp_months[month_key] = {
-            'total': row[1],
-            'wins': row[2],
-            'profit': row[3]
-        }
+                'total': row[1],
+                'wins': row[2],
+                'profit': row[3]
+            }
     
     if sgp_months:
         for month_key, month_data in sgp_months.items():
@@ -1781,37 +1781,40 @@ try:
                 st.markdown("---")
                 
                 # Get detailed SGP predictions for this month
-                cursor.execute('''
-                    SELECT 
-                        home_team, away_team, parlay_description, legs,
-                        bookmaker_odds, result, outcome,
-                        profit_loss, match_date
-                    FROM sgp_predictions
-                    WHERE result IS NOT NULL
-                    AND to_char((match_date::timestamp), 'YYYY-MM') = ?
-                    ORDER BY match_date DESC
-                ''', (month_key,))
-                
-                sgp_results = []
-                for row in cursor.fetchall():
-                    try:
-                        match_dt = datetime.fromisoformat(str(row[8]).replace('Z', '+00:00'))
-                        date_str = match_dt.strftime('%b %d')
-                    except:
-                        date_str = "Unknown"
+                with DatabaseConnection.get_cursor() as cursor:
+                    cursor.execute('''
+                        SELECT 
+                            home_team, away_team, parlay_description, legs,
+                            bookmaker_odds, result, outcome,
+                            profit_loss, match_date
+                        FROM sgp_predictions
+                        WHERE result IS NOT NULL
+                        AND to_char((match_date::timestamp), 'YYYY-MM') = %s
+                        AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
+                        AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
+                        ORDER BY match_date DESC
+                    ''', (month_key, '%Monster%', '%BEAST%'))
                     
-                    # Format legs for clarity
-                    formatted_legs = format_sgp_legs(row[3]) if row[3] else row[2]
-                    
-                    sgp_results.append({
-                        'Date': date_str,
-                        'Match': f"{row[0]} vs {row[1]}",
-                        'Predictions': formatted_legs,
-                        'Result': row[5],
-                        'Outcome': '✅ WIN' if row[6] == 'win' else '❌ LOSS',
-                        'Odds': f"{row[4]:.2f}x",
-                        'P/L': f"{row[7]:+.0f} SEK"
-                    })
+                    sgp_results = []
+                    for row in cursor.fetchall():
+                        try:
+                            match_dt = datetime.fromisoformat(str(row[8]).replace('Z', '+00:00'))
+                            date_str = match_dt.strftime('%b %d')
+                        except:
+                            date_str = "Unknown"
+                        
+                        # Format legs for clarity
+                        formatted_legs = format_sgp_legs(row[3]) if row[3] else row[2]
+                        
+                        sgp_results.append({
+                            'Date': date_str,
+                            'Match': f"{row[0]} vs {row[1]}",
+                            'Predictions': formatted_legs,
+                            'Result': row[5],
+                            'Outcome': '✅ WIN' if row[6] == 'win' else '❌ LOSS',
+                            'Odds': f"{row[4]:.2f}x",
+                            'P/L': f"{row[7]:+.0f} SEK"
+                        })
                 
                 if sgp_results:
                     df_sgp = pd.DataFrame(sgp_results)
