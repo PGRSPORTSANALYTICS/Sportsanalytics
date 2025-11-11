@@ -14,6 +14,7 @@ from results_scraper import ResultsScraper
 from telegram_sender import TelegramBroadcaster
 from sgp_self_learner import SGPSelfLearner
 from team_name_mapper import TeamNameMapper
+from match_stats_service import get_match_stats_service
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -29,8 +30,9 @@ class SGPVerifier:
         self.telegram = TelegramBroadcaster()
         self.self_learner = SGPSelfLearner()
         self.team_mapper = TeamNameMapper()
+        self.stats_service = get_match_stats_service()  # Centralized stats service
         
-        logger.info("✅ SGP Verifier initialized with self-learning and team name mapping")
+        logger.info("✅ SGP Verifier initialized with MatchStatsService integration")
     
     def get_unverified_sgps(self) -> List[Dict[str, Any]]:
         """Get SGP predictions that need verification (95+ min after kickoff)"""
@@ -178,44 +180,24 @@ class SGPVerifier:
     
     def verify_sgp(self, sgp: Dict[str, Any]) -> Optional[str]:
         """
-        Verify a single SGP prediction
+        Verify a single SGP prediction using enriched match statistics
         
         Returns:
             'win', 'loss', or None if match not finished or data incomplete
         """
-        # Get match result
-        match_date = sgp['match_date'].split('T')[0]  # Extract date
-        
-        results = self.results_scraper.get_results_for_date(match_date)
-        
-        # Find this specific match using centralized team name normalization
-        match_stats = None
-        for result in results:
-            # Normalize team names from both database and Sofascore
-            sgp_home_normalized = self.team_mapper.standardize(sgp['home_team'])
-            sgp_away_normalized = self.team_mapper.standardize(sgp['away_team'])
-            result_home_normalized = self.team_mapper.standardize(result['home_team'])
-            result_away_normalized = self.team_mapper.standardize(result['away_team'])
-            
-            # Exact match after normalization (prevents mis-settlement)
-            home_match = (sgp_home_normalized == result_home_normalized)
-            away_match = (sgp_away_normalized == result_away_normalized)
-            
-            if home_match and away_match:
-                # Build match_stats dictionary with all available data
-                match_stats = {
-                    'score': result.get('score', f"{result['home_score']}-{result['away_score']}"),
-                    'actual_score': result.get('score', f"{result['home_score']}-{result['away_score']}"),
-                    'corners': result.get('corners'),  # Will be None if not available
-                    'half_time_goals': result.get('half_time_goals'),  # Will be None if not available
-                    'second_half_goals': result.get('second_half_goals')  # Will be None if not available
-                }
-                logger.info(f"✅ Matched: {sgp['home_team']} vs {sgp['away_team']} → {result['home_team']} vs {result['away_team']}")
-                break
+        # Get enriched match statistics from centralized service
+        match_stats = self.stats_service.get_match_stats(
+            home_team=sgp['home_team'],
+            away_team=sgp['away_team'],
+            match_date=sgp['match_date'],
+            fixture_id=sgp.get('fixture_id')  # Use stored fixture_id if available
+        )
         
         if not match_stats:
-            # Match not finished yet
+            # Match not finished yet or data unavailable
             return None
+        
+        logger.info(f"✅ Verifying: {sgp['home_team']} vs {sgp['away_team']} | {match_stats['score']}")
         
         # Parse legs
         legs = self.parse_legs(sgp['legs'])
@@ -235,10 +217,13 @@ class SGPVerifier:
             elif leg_result is False:
                 # Leg lost
                 all_legs_won = False
+                logger.info(f"❌ Leg LOST: {leg['market_type']} {leg['outcome']}")
                 break
-            # leg_result is True - leg won, continue checking
+            else:
+                # Leg won
+                logger.info(f"✅ Leg WON: {leg['market_type']} {leg['outcome']}")
         
-        # If any leg has unsupported market, keep entire parlay pending
+        # If any leg has unsupported market or missing data, keep entire parlay pending
         if has_unsupported_market:
             return None
         
