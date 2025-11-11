@@ -125,21 +125,43 @@ class MatchStatsService:
         }
     
     def _find_fixture_id(self, home_team: str, away_team: str, date_str: str) -> Optional[int]:
-        """Find API-Football fixture ID for a match"""
+        """Find API-Football fixture ID for a match by searching by date and teams"""
         try:
-            # Try to get from database first (if we stored it during prediction)
-            row = db_helper.execute('''
-                SELECT fixture_id FROM sgp_predictions
-                WHERE home_team = %s AND away_team = %s AND DATE(match_date) = %s
-                LIMIT 1
-            ''', (home_team, away_team, date_str), fetch='one')
+            # Search API-Football for fixtures on this date
+            logger.info(f"🔍 Searching for fixture: {home_team} vs {away_team} on {date_str}")
             
-            if row and row[0]:
-                return row[0]
+            fixtures = self.api_client._fetch_with_cache(
+                'fixtures', 
+                {'date': date_str}, 
+                f"fixtures_date_{date_str}",
+                ttl_hours=24
+            )
             
-            # If not found, would need to search API-Football by date
-            # For now, return None (fixture_id should be stored during prediction)
-            logger.warning(f"⚠️ No fixture_id found in database for {home_team} vs {away_team}")
+            if not fixtures:
+                logger.warning(f"⚠️ No fixtures found for date {date_str}")
+                return None
+            
+            # Normalize team names for matching
+            home_norm = self.team_mapper.standardize(home_team)
+            away_norm = self.team_mapper.standardize(away_team)
+            
+            # Search through fixtures for team match
+            for fixture in fixtures:
+                teams_data = fixture.get('teams', {})
+                home_fixture = teams_data.get('home', {}).get('name', '')
+                away_fixture = teams_data.get('away', {}).get('name', '')
+                
+                # Normalize fixture team names
+                home_fixture_norm = self.team_mapper.standardize(home_fixture)
+                away_fixture_norm = self.team_mapper.standardize(away_fixture)
+                
+                # Check for match
+                if home_norm == home_fixture_norm and away_norm == away_fixture_norm:
+                    fixture_id = fixture.get('fixture', {}).get('id')
+                    logger.info(f"✅ Found fixture ID {fixture_id} for {home_team} vs {away_team}")
+                    return fixture_id
+            
+            logger.warning(f"⚠️ No matching fixture found for {home_team} vs {away_team} on {date_str}")
             return None
             
         except Exception as e:
