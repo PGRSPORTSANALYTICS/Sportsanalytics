@@ -37,18 +37,32 @@ class DatabaseConnection:
             cls.initialize_pool()
         
         conn = cls._connection_pool.getconn()
+        cursor = None
         try:
             cursor_factory = RealDictCursor if dict_cursor else None
             cursor = conn.cursor(cursor_factory=cursor_factory)
             yield cursor
             conn.commit()
         except Exception as e:
-            conn.rollback()
+            if conn and not conn.closed:
+                conn.rollback()
             logger.error(f"Database error: {e}")
             raise
         finally:
-            cursor.close()
-            cls._connection_pool.putconn(conn)
+            if cursor:
+                try:
+                    cursor.close()
+                except Exception:
+                    pass  # Cursor already closed
+            
+            # Try to return connection to pool, handle errors gracefully
+            try:
+                if conn and not conn.closed:
+                    cls._connection_pool.putconn(conn)
+            except Exception as e:
+                # Connection can't be returned - log and continue
+                logger.warning(f"⚠️ Could not return connection to pool: {e}")
+                # Don't raise - this prevents dashboard crashes
     
     @classmethod
     @contextmanager
@@ -62,11 +76,19 @@ class DatabaseConnection:
             yield conn
             conn.commit()
         except Exception as e:
-            conn.rollback()
+            if conn and not conn.closed:
+                conn.rollback()
             logger.error(f"Database error: {e}")
             raise
         finally:
-            cls._connection_pool.putconn(conn)
+            # Try to return connection to pool, handle errors gracefully
+            try:
+                if conn and not conn.closed:
+                    cls._connection_pool.putconn(conn)
+            except Exception as e:
+                # Connection can't be returned - log and continue
+                logger.warning(f"⚠️ Could not return connection to pool: {e}")
+                # Don't raise - this prevents dashboard crashes
     
     @classmethod
     def close_pool(cls):
