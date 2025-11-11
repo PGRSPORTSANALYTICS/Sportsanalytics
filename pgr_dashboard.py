@@ -384,6 +384,10 @@ def get_last_settled(limit=3):
 # MAIN DASHBOARD
 # ============================================================================
 
+# Initialize session state for product selection
+if 'selected_product' not in st.session_state:
+    st.session_state.selected_product = 'exact_score'
+
 # Header
 st.markdown("""
 <div class="pgr-header">
@@ -392,11 +396,90 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Get all-time stats
+# Segmented Control for Product Selection
+st.markdown("""
+<style>
+    .product-selector {
+        display: flex;
+        justify-content: center;
+        gap: 0;
+        margin: 2rem 0;
+        background: #161B22;
+        padding: 4px;
+        border-radius: 8px;
+        width: fit-content;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    
+    .product-btn {
+        padding: 12px 32px;
+        background: transparent;
+        border: none;
+        color: #8B949E;
+        font-weight: 600;
+        cursor: pointer;
+        border-radius: 6px;
+        transition: all 0.2s;
+        font-size: 0.95rem;
+        letter-spacing: 0.5px;
+    }
+    
+    .product-btn:hover {
+        color: #C9D1D9;
+    }
+    
+    .product-btn-active {
+        background: #3FB68B !important;
+        color: #FFFFFF !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+col1, col2, col3 = st.columns([1, 1, 1])
+
+with col1:
+    if st.button("⚽ EXACT SCORE", key="btn_exact", use_container_width=True):
+        st.session_state.selected_product = 'exact_score'
+        st.rerun()
+        
+with col2:
+    if st.button("🎯 SGP", key="btn_sgp", use_container_width=True):
+        st.session_state.selected_product = 'sgp'
+        st.rerun()
+        
+with col3:
+    if st.button("🔥 MONSTERSGP", key="btn_monster", use_container_width=True):
+        st.session_state.selected_product = 'monstersgp'
+        st.rerun()
+
+# Show active selection
+product_labels = {
+    'exact_score': 'Exact Score',
+    'sgp': 'SGP',
+    'monstersgp': 'MonsterSGP'
+}
+st.markdown(f"""
+<div style="text-align: center; color: #3FB68B; font-size: 0.9rem; margin-top: -1rem; margin-bottom: 2rem;">
+    Viewing: <strong>{product_labels[st.session_state.selected_product]}</strong>
+</div>
+""", unsafe_allow_html=True)
+
+# Get product-specific stats (for now, using combined - will implement filters next)
 stats = get_all_time_stats()
-total_roi = (stats['combined']['profit'] / (stats['combined']['total'] * 100)) * 100 if stats['combined']['total'] > 0 else 0
-hit_rate_200 = get_last_n_hit_rate(200)
-avg_odds = get_avg_odds()
+selected = st.session_state.selected_product
+
+if selected == 'exact_score':
+    product_stats = stats['exact_score']
+elif selected == 'sgp':
+    product_stats = stats['sgp']
+else:  # monstersgp
+    # For now, use SGP stats - will add MonsterSGP-specific query later
+    product_stats = stats['sgp']
+
+total_roi = (product_stats['profit'] / (product_stats['total'] * 100)) * 100 if product_stats['total'] > 0 else 0
+hit_rate_200 = get_last_n_hit_rate(200)  # TODO: Make product-specific
+avg_odds = get_avg_odds()  # TODO: Make product-specific
 
 # Hero Metrics
 col1, col2, col3 = st.columns(3)
