@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 import statistics
 import logging
+from api_cache_manager import APICacheManager
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
 class AdvancedFeaturesAPI:
     """Advanced features for better predictions using API-Football"""
     
-    def __init__(self):
+    def __init__(self, cache_manager: Optional[APICacheManager] = None):
         self.api_key = os.getenv('API_FOOTBALL_KEY')
         if not self.api_key:
             raise ValueError("❌ API_FOOTBALL_KEY required for advanced features")
@@ -28,20 +29,38 @@ class AdvancedFeaturesAPI:
         self.headers = {
             'x-apisports-key': self.api_key
         }
-        self.cache = {}
-        self.cache_duration = 3600  # 1 hour cache
         
-        logger.info("🚀 Advanced Features API initialized")
+        # Use persistent cache if provided, fallback to in-memory
+        self.cache_manager = cache_manager
+        self.cache = {}  # Always provide for backward compatibility
+        self.cache_duration = 3600
+        
+        if cache_manager:
+            logger.info("🚀 Advanced Features API initialized with PERSISTENT cache")
+        else:
+            logger.info("🚀 Advanced Features API initialized with in-memory cache (FALLBACK)")
     
     def _make_request(self, endpoint: str, params: Dict) -> Optional[Dict]:
         """Make API request with caching and rate limiting"""
         cache_key = f"{endpoint}_{json.dumps(params, sort_keys=True)}"
         
-        # Check cache
-        if cache_key in self.cache:
-            cached_data, timestamp = self.cache[cache_key]
-            if time.time() - timestamp < self.cache_duration:
-                return cached_data
+        # Use persistent cache if available
+        if self.cache_manager:
+            # Check persistent cache first
+            cached_response = self.cache_manager.get_cached_response(cache_key, endpoint)
+            if cached_response:
+                return cached_response
+            
+            # Check quota before making request
+            if not self.cache_manager.check_quota_available():
+                logger.warning(f"⚠️ API quota exhausted for {self.cache_manager.api_name}")
+                return None
+        else:
+            # Fallback: Check in-memory cache
+            if cache_key in self.cache:
+                cached_data, timestamp = self.cache[cache_key]
+                if time.time() - timestamp < self.cache_duration:
+                    return cached_data
         
         # Make request
         try:
@@ -50,7 +69,17 @@ class AdvancedFeaturesAPI:
             
             if response.status_code == 200:
                 data = response.json()
-                self.cache[cache_key] = (data, time.time())
+                
+                # Cache response
+                if self.cache_manager:
+                    # Determine TTL based on endpoint
+                    ttl_hours = self._get_ttl_for_endpoint(endpoint)
+                    self.cache_manager.cache_response(cache_key, endpoint, data, ttl_hours)
+                    self.cache_manager.increment_request_count()
+                else:
+                    # Fallback: in-memory cache
+                    self.cache[cache_key] = (data, time.time())
+                
                 time.sleep(0.5)  # Rate limiting
                 return data
             else:
@@ -59,6 +88,17 @@ class AdvancedFeaturesAPI:
         except Exception as e:
             logger.error(f"❌ Request error: {e}")
             return None
+    
+    def _get_ttl_for_endpoint(self, endpoint: str) -> int:
+        """Get cache TTL (hours) based on endpoint type"""
+        if 'fixtures' in endpoint or 'standings' in endpoint:
+            return 24  # Fixtures and standings: 24 hours
+        elif 'injuries' in endpoint:
+            return 2  # Injuries: 2 hours (changes frequently)
+        elif 'players' in endpoint or 'statistics' in endpoint:
+            return 12  # Player stats: 12 hours
+        else:
+            return 24  # Default: 24 hours
     
     def get_team_form(self, team_id: int, last_n: int = 5) -> Dict:
         """

@@ -9,6 +9,7 @@ import time
 import logging
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime
+from api_cache_manager import APICacheManager
 
 logger = logging.getLogger(__name__)
 
@@ -54,9 +55,16 @@ class EnhancedExactScorePredictor:
         self.injury_scraper = None
         self.sofascore_scraper = None
         
+        # Initialize persistent cache for API-Football
+        try:
+            self.cache_manager = APICacheManager('api_football', quota_limit=7000)
+        except Exception as e:
+            logger.warning(f"⚠️ Could not initialize cache manager: {e}")
+            self.cache_manager = None
+        
         if ADVANCED_FEATURES_AVAILABLE:
             try:
-                self.advanced_api = AdvancedFeaturesAPI()
+                self.advanced_api = AdvancedFeaturesAPI(cache_manager=self.cache_manager)
                 self.odds_tracker = OddsMovementTracker(db_path)
                 self.neural_predictor = NeuralScorePredictor()
                 self.neural_predictor.load_model()  # Try to load pre-trained model
