@@ -1,0 +1,77 @@
+TASK: Run an offline analysis on historical bets to improve Exact Score (ES) and SGP models. Use only completed matches with valid odds and model probabilities.
+
+DATA ASSUMPTIONS:
+- Each bet row has: ts, league, match_id, system (ES/SGP), market, odds_placed, model_p (prob), result (win/loss), xg_home, xg_away, xga_home, xga_away, home_flag (1/0), kickoff.
+- If available: lineup completeness flags, injury counts, odds_close.
+
+OUTPUT FORMAT:
+- Print 5 sections with ASCII tables + a final concise bullet-list of insights.
+- Also export CSVs for each section: analysis1.csv … analysis5.csv
+
+------------------------------------------------------------
+ANALYSIS 1 — xG DIFFERENTIAL vs OUTCOMES
+Goal: understand how xG gap drives score outcomes and win rates.
+Steps:
+1) Compute adjusted xG:
+   xg_home_adj = xg_home - xga_away (rolling mean if stored)
+   xg_away_adj = xg_away - xga_home
+   xg_diff = xg_home_adj - xg_away_adj
+2) Bin xg_diff: [-inf,-1.0), [-1.0,-0.5), [-0.5,0), [0,0.5), [0.5,1.0), [1.0,inf)
+3) For each bin:
+   - n_bets, ES hit rate, SGP hit rate
+   - Top 5 most frequent exact scores (with frequency)
+   - Home win %, Draw %, Away win %
+Print table + save CSV (analysis1.csv). Provide 2–3 bullets: how bins relate to ES picks (e.g., when |xg_diff|<0.4, draws/1–1 more common).
+
+------------------------------------------------------------
+ANALYSIS 2 — EV THRESHOLDS vs REALIZED PERFORMANCE
+Goal: validate 8% vs 12% cutoffs and potential exploration range.
+Steps:
+1) Compute EV = model_p*(odds_placed-1) - (1-model_p)
+2) Buckets by EV: [0–5), [5–8), [8–10), [10–12), [12–15), [15–20), [20+]
+3) For ES and SGP separately, per bucket:
+   - n_bets, hit rate, ROI, avg odds, avg model_p, Brier score if label available (use win=1/0)
+4) Highlight bucket where ROI and stability (n_bets) are best.
+Print table + save CSV (analysis2.csv). Add 2 bullets: recommended PRO cutoff and EXP exploration band.
+
+------------------------------------------------------------
+ANALYSIS 3 — MATCH TEMPO & GOAL MINUTES (by league)
+Goal: inform SGP legs (BTTS/Over and late goals risk).
+Steps:
+1) For leagues with goal-minute data:
+   - mean time of first goal
+   - % of matches with a goal in 80–90’ and 90+’
+   - BTTS rate and Over 2.5 rate
+2) Rank leagues by late-goal frequency and BTTS rate.
+Print table + save CSV (analysis3.csv). Add 2 bullets: which leagues suit BTTS/Over legs.
+
+------------------------------------------------------------
+ANALYSIS 4 — HOME vs AWAY BIAS
+Goal: detect model bias toward home teams.
+Steps:
+1) Split bets by home_flag for the primary selection (e.g., ES score favoring home).
+2) For ES and SGP separately:
+   - n_bets, hit rate, ROI for Home-favored vs Away-favored
+3) Compute delta(ROI) = ROI_home - ROI_away
+Print table + save CSV (analysis4.csv). Add 1–2 bullets: whether to nudge away-side probabilities.
+
+------------------------------------------------------------
+ANALYSIS 5 — LEAGUE ROI & STABILITY
+Goal: find your best/worst “pockets”.
+Steps:
+1) For each league with n_bets ≥ 30:
+   - n_bets, hit rate, ROI, avg odds
+2) Sort by ROI and by n_bets; mark leagues with consistent +ROI.
+3) (Optional) Show ES vs SGP split per league.
+Print table + save CSV (analysis5.csv). Add 2 bullets: which leagues to upweight/downweight.
+
+------------------------------------------------------------
+QUALITY CHECKS
+- Drop rows with missing odds or model_p.
+- Deduplicate on (match_id, market, odds_placed).
+- For Brier: use y∈{0,1}, p=model_p; Brier = mean((p-y)^2).
+
+FINAL DELIVERABLES
+- Print all five tables.
+- Export CSVs: analysis1.csv … analysis5.csv to the working directory.
+- End with a concise summary (≤10 bullets) with actionable tuning suggestions (cutoffs, leagues to prioritize, home/away bias fix, and any EV bucket changes).
