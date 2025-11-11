@@ -554,13 +554,27 @@ def get_last_settled(limit=3, product='all'):
 if 'selected_product' not in st.session_state:
     st.session_state.selected_product = 'exact_score'
 
-# Header
+# Header with Logo
 st.markdown("""
-<div class="pgr-header">
-    <div class="pgr-logo">PGR</div>
-    <div class="pgr-subtitle">SPORTS ANALYTICS</div>
-</div>
+<style>
+    .pgr-logo-wrapper {
+        max-width: 480px;
+        margin: 2rem auto;
+        text-align: center;
+    }
+    
+    @media (max-width: 768px) {
+        .pgr-logo-wrapper {
+            max-width: 320px;
+            margin: 1rem auto;
+        }
+    }
+</style>
 """, unsafe_allow_html=True)
+
+st.markdown('<div class="pgr-logo-wrapper">', unsafe_allow_html=True)
+st.image("assets/pgr_logo.png", use_column_width=True)
+st.markdown('</div>', unsafe_allow_html=True)
 
 # Segmented Control for Product Selection
 st.markdown("""
