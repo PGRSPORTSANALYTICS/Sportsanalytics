@@ -349,35 +349,45 @@ def get_avg_odds(product='all'):
     
     return row[0] if row and row[0] else 0.0
 
-def get_last_50_roi():
-    """Get ROI for last 50 bets"""
-    query = """
-        WITH last_bets AS (
-            SELECT profit_loss, stake, settled_timestamp
+def get_last_50_roi(product='exact_score'):
+    """Get ROI for last 50 bets by product type"""
+    if product == 'exact_score':
+        query = """
+            SELECT 
+                SUM(profit_loss) as profit,
+                SUM(stake) as staked
             FROM (
                 SELECT profit_loss, stake, settled_timestamp
                 FROM football_opportunities
                 WHERE outcome IN (%s, %s)
-                
-                UNION ALL
-                
+                  AND market = %s
+                ORDER BY settled_timestamp DESC
+                LIMIT 50
+            ) last_bets
+            WHERE settled_timestamp IS NOT NULL
+        """
+        row = db_helper.execute(query, ('win', 'loss', 'exact_score'), fetch='one')
+        
+    elif product == 'sgp':
+        query = """
+            SELECT 
+                SUM(profit_loss) as profit,
+                SUM(stake) as staked
+            FROM (
                 SELECT profit_loss, stake, settled_timestamp
                 FROM sgp_predictions
                 WHERE outcome IN (%s, %s)
-                  AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
-                  AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
-            ) all_bets
+                  AND (parlay_description NOT LIKE %s)
+                  AND (parlay_description NOT LIKE %s)
+                ORDER BY settled_timestamp DESC
+                LIMIT 50
+            ) last_bets
             WHERE settled_timestamp IS NOT NULL
-            ORDER BY settled_timestamp DESC
-            LIMIT 50
-        )
-        SELECT 
-            SUM(profit_loss) as profit,
-            SUM(stake) as staked
-        FROM last_bets
-    """
+        """
+        row = db_helper.execute(query, ('win', 'loss', '%Monster%', '%BEAST%'), fetch='one')
     
-    row = db_helper.execute(query, ('win', 'loss', 'win', 'loss', '%Monster%', '%BEAST%'), fetch='one')
+    else:  # MonsterSGP - no ROI tracking
+        return 0.0
     
     if row and row[0] is not None and row[1] and row[1] > 0:
         return (row[0] / row[1] * 100)
@@ -767,13 +777,25 @@ with col1:
     </div>
     """, unsafe_allow_html=True)
     
-    last_50_roi = get_last_50_roi()
-    st.markdown(f"""
-    <div class="status-item">
-        <div class="status-label">🟢 LAST 50 ROI</div>
-        <div class="status-value">{last_50_roi:+.1f}%</div>
-    </div>
-    """, unsafe_allow_html=True)
+    # Product-specific Last 50 ROI (MonsterSGP excluded)
+    if selected == 'monstersgp':
+        # MonsterSGP: Show win/loss count only (no ROI)
+        monster_stats = stats.get('monstersgp', {})
+        st.markdown(f"""
+        <div class="status-item">
+            <div class="status-label">🎰 MONSTER W/L</div>
+            <div class="status-value">{monster_stats.get('wins', 0)}W / {monster_stats.get('total', 0) - monster_stats.get('wins', 0)}L</div>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        # Exact Score & SGP: Show Last 50 ROI
+        last_50_roi = get_last_50_roi(product=selected)
+        st.markdown(f"""
+        <div class="status-item">
+            <div class="status-label">🟢 LAST 50 ROI</div>
+            <div class="status-value">{last_50_roi:+.1f}%</div>
+        </div>
+        """, unsafe_allow_html=True)
 
 with col2:
     confidence_score = min(5, int((stats['combined']['total'] / 100) + 1)) if stats['combined']['total'] > 0 else 1
