@@ -142,9 +142,11 @@ st.markdown("""
         font-weight: 700;
     }
     
-    /* Hide Streamlit branding */
+    /* Hide Streamlit branding and sidebar */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
+    [data-testid="stSidebar"] {display: none;}
+    section[data-testid="stSidebar"] {display: none;}
     
     /* Metric cards */
     [data-testid="stMetricValue"] {
