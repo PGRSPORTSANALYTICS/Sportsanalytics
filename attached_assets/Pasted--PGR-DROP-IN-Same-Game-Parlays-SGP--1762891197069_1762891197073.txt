@@ -1,0 +1,286 @@
+# =======================================================
+# PGR DROP-IN | Same Game Parlays (SGP) – auto data hookup
+# Kör:
+#   from pgr_sgp_dropin import run_pgr_sgp_dropin
+#   run_pgr_sgp_dropin()
+# =======================================================
+import os, csv, json, math
+from datetime import datetime, timezone, timedelta
+from collections import defaultdict
+
+# ----------------- Utils -----------------
+def _now(): return datetime.now(timezone.utc)
+
+def _ensure_dir(d): os.makedirs(d, exist_ok=True)
+
+def _days_between(ts_now: datetime, ts_then):
+    if isinstance(ts_then, str):
+        try:
+            ts_then = datetime.fromisoformat(ts_then.replace("Z","")).replace(tzinfo=timezone.utc)
+        except Exception:
+            ts_then = _now() - timedelta(days=1)
+    if ts_then.tzinfo is None: ts_then = ts_then.replace(tzinfo=timezone.utc)
+    if ts_now.tzinfo is None:  ts_now  = ts_now.replace(tzinfo=timezone.utc)
+    return max(0, (ts_now - ts_then).days)
+
+def _to_float(x, default=0.0):
+    try: return float(x)
+    except Exception: return default
+
+def _print_header(t):
+    print("\n" + "="*8 + " " + t + " " + "="*8)
+
+def _csv_or_json(path):
+    if not os.path.exists(path): return None
+    if path.endswith(".csv"):
+        rows=[]
+        with open(path, newline="", encoding="utf-8") as f:
+            for r in csv.DictReader(f): rows.append(r)
+        return rows
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+# ----------------- Auto-load dina data -----------------
+def _try_call(func_names):
+    g = globals()
+    for name in func_names:
+        if name in g and callable(g[name]):
+            try: return g[name]()
+            except Exception: pass
+    for mod in ["data", "db", "store", "repo", "pgr_data"]:
+        try:
+            m = __import__(mod)
+            for name in func_names:
+                if hasattr(m, name) and callable(getattr(m, name)):
+                    return getattr(m, name)()
+        except Exception:
+            continue
+    return None
+
+def _load_settled_sgp():
+    # Försök dina egna hooks
+    out = _try_call(["fetch_settled_sgp","get_settled_sgp","db_get_settled_sgp","load_settled_sgp"])
+    if out: return out
+    # Filsökning
+    for p in ["settled_sgp.csv","data/settled_sgp.csv","logs/settled_sgp.csv",
+              "settled_sgp.json","data/settled_sgp.json","logs/settled_sgp.json"]:
+        rows = _csv_or_json(p)
+        if rows: return rows
+    return []
+
+def _load_upcoming_sgp():
+    out = _try_call(["fetch_upcoming_sgp","get_upcoming_sgp","db_get_upcoming_sgp","load_upcoming_sgp"])
+    if out: return out
+    for p in ["upcoming_sgp.csv","data/upcoming_sgp.csv",
+              "upcoming_sgp.json","data/upcoming_sgp.json"]:
+        rows = _csv_or_json(p)
+        if rows: return rows
+    return []
+
+# ----------------- Normalisering -----------------
+def _norm_combo(s):
+    if not s: return "Unknown"
+    parts = [p.strip() for p in str(s).split("+")]
+    parts = [p for p in parts if p]
+    parts.sort()
+    return " + ".join(parts) if parts else "Unknown"
+
+def _norm_settled_row_sgp(r):
+    lg   = r.get("league") or r.get("liga") or r.get("competition") or "Unknown"
+    cmb  = _norm_combo(r.get("combo") or r.get("sgp") or r.get("market_combo"))
+    stake= _to_float(r.get("stake", 1.0), 1.0)
+    odds = _to_float(r.get("odds", 0.0), 0.0)
+    res  = str(r.get("result","")).upper()
+    profit = r.get("profit")
+    if profit is None:
+        if res in ["WIN","W","1"]: profit = stake*(odds-1.0)
+        elif res in ["PUSH","VOID","V","0"]: profit = 0.0
+        else: profit = -stake
+    ts   = r.get("settled_ts") or r.get("settled_at") or r.get("date") or r.get("settled")
+    ts   = datetime.fromisoformat(str(ts).replace("Z","")).replace(tzinfo=timezone.utc) if ts else _now()-timedelta(days=1)
+    return {"league":str(lg),"combo":cmb,"stake":stake,"odds":odds,"profit":_to_float(profit), "settled_ts":ts}
+
+def _norm_upcoming_row_sgp(r):
+    lg   = r.get("league") or r.get("liga") or r.get("competition") or "Unknown"
+    # Förväntar oss dict { "combo string": odds } antingen i field 'odds_sgp' eller platt kolumner
+    odds_sgp = r.get("odds_sgp")
+    if not isinstance(odds_sgp, dict):
+        odds_sgp={}
+        for k,v in r.items():
+            if str(k).lower().startswith("odds_"):
+                combo = _norm_combo(str(k)[5:].replace("_","+").replace("-","+"))
+                try: odds_sgp[combo] = float(v)
+                except Exception: pass
+    # Alternativ representation: r.get("combos") som lista av {combo,odds}
+    if not odds_sgp and isinstance(r.get("combos"), list):
+        for item in r["combos"]:
+            odds_sgp[_norm_combo(item.get("combo"))] = _to_float(item.get("odds"),0.0)
+    return {"league":str(lg), "odds_sgp": odds_sgp}
+
+# ----------------- League Bias (återanvänd princip) -----------------
+def _league_bias_from_settled(settled_rows):
+    now = _now()
+    lam = 0.97; k_shrink = 80; min_n = 40
+    agg = defaultdict(lambda: {"units":0.0,"staked":0.0,"N":0})
+    for r in settled_rows:
+        d = _days_between(now, r["settled_ts"]); w = lam**d
+        agg[r["league"]]["units"]  += w * r["profit"]
+        agg[r["league"]]["staked"] += w * r["stake"]
+        agg[r["league"]]["N"]      += 1
+    out={}
+    for lg,s in agg.items():
+        if s["staked"]<=0: continue
+        roi_hat = s["units"]/s["staked"]; N=s["N"]; shrink = N/(N+k_shrink)
+        roi_shrunk = shrink*roi_hat
+        if N<min_n: weight=1.0
+        elif roi_hat<=-0.20: weight=0.0
+        elif roi_hat>=0.10:  weight=min(1.5, 1.0+roi_shrunk)
+        else:
+            base=1.0+roi_shrunk
+            weight=max(0.7, min(1.2, base))
+        out[lg]={"N":N,"roi_hat":roi_hat,"roi_shrunk":roi_shrunk,"weight":weight}
+    return out
+
+# ----------------- Combo Efficiency (lärdom från historik) -----------------
+def _combo_efficiency(settled_rows, min_n=20):
+    # returnerar:
+    # combo_stats[combo] = {"N":int,"hit":float%,"roi":float,"p_hat":float}
+    by = defaultdict(lambda: {"wins":0,"games":0,"units":0.0,"staked":0.0})
+    for r in settled_rows:
+        by[r["combo"]]["games"] += 1
+        by[r["combo"]]["staked"]+= r["stake"]
+        by[r["combo"]]["units"] += r["profit"]
+        if r["profit"]>0: by[r["combo"]]["wins"] += 1
+    out={}
+    for combo, s in by.items():
+        if s["staked"]<=0: continue
+        N=s["games"]; hit = s["wins"]/N if N>0 else 0.0
+        roi = s["units"]/s["staked"]
+        if N >= min_n:
+            # p_hat från historik
+            out[combo] = {"N":N,"hit":hit,"roi":roi,"p_hat":max(1e-4, min(0.9, hit))}
+        else:
+            out[combo] = {"N":N,"hit":hit,"roi":roi,"p_hat":None}  # för liten sample
+    return out
+
+def _blend_prob(combo, league, odds, combo_stats, league_stats, global_baseline=0.08):
+    """
+    Beräkna sannolikhet för combo:
+    - om ligaspecifik historik finns: shrinkad mot global
+    - annars combospecifik global
+    - annars fallback ~ 1/odds * margin-buff
+    """
+    # ligavikt
+    lg_w = league_stats.get(league, {}).get("weight", 1.0)
+    # combospecifika data (globalt)
+    cs = combo_stats.get(combo)
+    if cs and cs["p_hat"] is not None:
+        # shrink mot global_baseline beroende på N
+        N = cs["N"]; K=60
+        p = (N/(N+K))*cs["p_hat"] + (K/(N+K))*global_baseline
+    else:
+        # fallback: utgå från odds (marknadens bas) men anta liten edge
+        p_market = max(1e-4, min(0.9, 1.0/float(odds)))
+        p = 0.5*p_market + 0.5*global_baseline
+    # ligavikt påverkar inte sannolikhet direkt, men vi kan mildra/höja lite:
+    p = max(1e-4, min(0.9, p * (0.9 + 0.2*(lg_w-1.0))))  # 0.8..1.1x skala
+    return p
+
+def _expected_value(p, odds):
+    return p*(odds-1.0) - (1.0-p)
+
+# ----------------- Huvudkörning -----------------
+def run_pgr_sgp_dropin(output_dir="pgr_out_sgp",
+                       ev_train_cut=0.08,   # TRAIN-logg
+                       ev_pro_cut=0.15,     # PRO-tips
+                       max_sgp_per_match=12,
+                       max_monster_per_match=5,
+                       monster_threshold_odds=40.0):
+    _print_header("Laddar SGP-historik")
+    raw_hist = _load_settled_sgp()
+    settled = [_norm_settled_row_sgp(r) for r in raw_hist]
+    print(f"Loaded settled SGP rows: {len(settled)}")
+
+    _print_header("League bias (SGP)")
+    lg_info = _league_bias_from_settled(settled) if settled else {}
+    for lg,inf in lg_info.items():
+        print(f"{lg}: N={inf['N']} ROI={inf['roi_hat']:.3f} W={inf['weight']:.2f}")
+
+    _print_header("Combo-effektivitet (global)")
+    combo_stats = _combo_efficiency(settled, min_n=20) if settled else {}
+    top_combos = sorted(combo_stats.items(), key=lambda kv: (kv[1]['roi'], kv[1]['N']), reverse=True)[:10]
+    for c,(N) in [(k, v['N']) for k,v in top_combos]:
+        pass  # tyst, vi loggar sammanfattning nedan
+
+    _print_header("Laddar kommande SGP-marknader")
+    raw_upcoming = _load_upcoming_sgp()
+    upcoming = [_norm_upcoming_row_sgp(r) for r in raw_upcoming]
+    print(f"Loaded upcoming SGP matches: {len(upcoming)}")
+
+    all_train, all_public = [], []
+
+    for m in upcoming:
+        lg = m["league"]; odds_map = m["odds_sgp"] or {}
+        if not odds_map: continue
+
+        ranked=[]
+        for combo, odds in odds_map.items():
+            if not odds or odds<=1.0: continue
+            p = _blend_prob(combo, lg, odds, combo_stats, lg_info, global_baseline=0.08)
+            ev = _expected_value(p, float(odds))
+            cand = {
+                "league": lg,
+                "combo": combo,
+                "odds": float(odds),
+                "p": p,
+                "ev": ev,
+                "is_monster": float(odds) >= monster_threshold_odds,
+                "league_weight": lg_info.get(lg,{}).get("weight",1.0),
+                "confidence": (ev - 0.5*0.10) * lg_info.get(lg,{}).get("weight",1.0)  # enkel osäkerhetsmodell
+            }
+            ranked.append(cand)
+
+        ranked.sort(key=lambda z: z["confidence"], reverse=True)
+
+        # TRAIN-logg
+        train = [r for r in ranked if r["ev"] >= ev_train_cut]
+        # PRO: cap totalt + separata monster-caps
+        normal = [r for r in ranked if (r["ev"] >= ev_pro_cut and not r["is_monster"])]
+        monster= [r for r in ranked if (r["ev"] >= ev_pro_cut and r["is_monster"])]
+
+        normal = normal[:max(0, max_sgp_per_match - min(len(monster), max_monster_per_match))]
+        monster= monster[:max_monster_per_match]
+        public = normal + monster
+
+        all_train.extend(train)
+        all_public.extend(public)
+
+        print(f"[TRAIN] {lg}: {len(train)} kandidater ≥ {int(ev_train_cut*100)}% EV "
+              f"(PRO normals={len(normal)}, monsters={len(monster)})")
+
+    _print_header("PRO – SGP (publiceringskandidater)")
+    for p in all_public[:50]:
+        tag = "MONSTER" if p["is_monster"] else "SGP"
+        print(f"{p['league']} | {tag} | {p['combo']} @ {p['odds']} | EV={p['ev']:.2f} | Conf={p['confidence']:.2f} | W={p['league_weight']:.2f}")
+
+    # Spara
+    _ensure_dir(output_dir)
+    with open(os.path.join(output_dir,"sgp_league_weights.json"),"w",encoding="utf-8") as f:
+        json.dump(lg_info, f, ensure_ascii=False, indent=2)
+    with open(os.path.join(output_dir,"sgp_combo_stats.json"),"w",encoding="utf-8") as f:
+        json.dump(combo_stats, f, ensure_ascii=False, indent=2)
+
+    def _csv(path, rows, fields):
+        with open(path,"w",newline="",encoding="utf-8") as f:
+            w=csv.DictWriter(f, fieldnames=fields); w.writeheader()
+            for r in rows: w.writerow({k:r.get(k) for k in fields})
+
+    _csv(os.path.join(output_dir,"sgp_train_log.csv"), all_train,
+         ["league","combo","odds","p","ev","league_weight","is_monster"])
+    _csv(os.path.join(output_dir,"sgp_public.csv"), all_public,
+         ["league","combo","odds","p","ev","league_weight","is_monster"])
+    print(f"\n✔ Klart. Filer sparade i: {output_dir}/")
+
+# Auto-run
+if __name__ == "__main__":
+    run_pgr_sgp_dropin()
