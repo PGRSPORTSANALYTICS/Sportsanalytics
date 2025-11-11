@@ -60,13 +60,13 @@ args = "uv add plotly"
 name = "Real Football Dashboard"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "streamlit run simple_dashboard.py --server.port 5000"
-waitForPort = 5000
-
 [workflows.workflow.metadata]
 outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "streamlit run pgr_dashboard.py --server.port 5000"
+waitForPort = 5000
 
 [[workflows.workflow]]
 name = "Auto Bet Logger"
