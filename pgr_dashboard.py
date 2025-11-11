@@ -170,21 +170,21 @@ def get_rolling_roi_data(days=30):
         FROM (
             SELECT settled_timestamp, 'exact_score' as market, profit_loss, stake
             FROM football_opportunities
-            WHERE outcome IN ('win', 'loss') AND settled_timestamp IS NOT NULL
+            WHERE outcome IN (%s, %s) AND settled_timestamp IS NOT NULL
             
             UNION ALL
             
             SELECT settled_timestamp, 'sgp' as market, profit_loss, stake
             FROM sgp_predictions
-            WHERE outcome IN ('win', 'loss') AND settled_timestamp IS NOT NULL
-              AND (parlay_description IS NULL OR parlay_description NOT LIKE '%%Monster%%')
-              AND (parlay_description IS NULL OR parlay_description NOT LIKE '%%BEAST%%')
+            WHERE outcome IN (%s, %s) AND settled_timestamp IS NOT NULL
+              AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
+              AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
         ) combined
         WHERE TO_TIMESTAMP(settled_timestamp) >= NOW() - INTERVAL '%s days'
         ORDER BY bet_date DESC
-    """ % days
+    """
     
-    rows = db_helper.execute(query, fetch='all')
+    rows = db_helper.execute(query, ('win', 'loss', 'win', 'loss', '%Monster%', '%BEAST%', days), fetch='all')
     
     if not rows:
         return None
@@ -226,22 +226,22 @@ def get_last_n_hit_rate(n=200):
         FROM (
             SELECT outcome, settled_timestamp
             FROM football_opportunities
-            WHERE outcome IN ('win', 'loss')
+            WHERE outcome IN (%s, %s)
             
             UNION ALL
             
             SELECT outcome, settled_timestamp
             FROM sgp_predictions
-            WHERE outcome IN ('win', 'loss')
-              AND (parlay_description IS NULL OR parlay_description NOT LIKE '%%Monster%%')
-              AND (parlay_description IS NULL OR parlay_description NOT LIKE '%%BEAST%%')
+            WHERE outcome IN (%s, %s)
+              AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
+              AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
         ) combined
         WHERE settled_timestamp IS NOT NULL
         ORDER BY settled_timestamp DESC
         LIMIT %s
-    """ % n
+    """
     
-    rows = db_helper.execute(query, fetch='all')
+    rows = db_helper.execute(query, ('win', 'loss', 'win', 'loss', '%Monster%', '%BEAST%', n), fetch='all')
     
     if not rows:
         return 0.0
@@ -274,30 +274,34 @@ def get_avg_odds():
 def get_last_50_roi():
     """Get ROI for last 50 bets"""
     query = """
+        WITH last_bets AS (
+            SELECT profit_loss, stake, settled_timestamp
+            FROM (
+                SELECT profit_loss, stake, settled_timestamp
+                FROM football_opportunities
+                WHERE outcome IN (%s, %s)
+                
+                UNION ALL
+                
+                SELECT profit_loss, stake, settled_timestamp
+                FROM sgp_predictions
+                WHERE outcome IN (%s, %s)
+                  AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
+                  AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
+            ) all_bets
+            WHERE settled_timestamp IS NOT NULL
+            ORDER BY settled_timestamp DESC
+            LIMIT 50
+        )
         SELECT 
             SUM(profit_loss) as profit,
             SUM(stake) as staked
-        FROM (
-            SELECT profit_loss, stake, settled_timestamp
-            FROM football_opportunities
-            WHERE outcome IN ('win', 'loss')
-            
-            UNION ALL
-            
-            SELECT profit_loss, stake, settled_timestamp
-            FROM sgp_predictions
-            WHERE outcome IN ('win', 'loss')
-              AND (parlay_description IS NULL OR parlay_description NOT LIKE '%%Monster%%')
-              AND (parlay_description IS NULL OR parlay_description NOT LIKE '%%BEAST%%')
-        ) combined
-        WHERE settled_timestamp IS NOT NULL
-        ORDER BY settled_timestamp DESC
-        LIMIT 50
+        FROM last_bets
     """
     
-    row = db_helper.execute(query, fetch='one')
+    row = db_helper.execute(query, ('win', 'loss', 'win', 'loss', '%Monster%', '%BEAST%'), fetch='one')
     
-    if row and row[0] is not None and row[1] and row[1] > 0:
+    if row and row[0] is not NULL and row[1] and row[1] > 0:
         return (row[0] / row[1] * 100)
     return 0.0
 
@@ -306,14 +310,14 @@ def get_upcoming_bets(limit=3):
     query = """
         SELECT home_team, away_team, selection, odds, expected_value, match_date
         FROM football_opportunities
-        WHERE market = 'exact_score'
+        WHERE market = %s
           AND outcome IS NULL
           AND match_date >= CURRENT_DATE
         ORDER BY match_date ASC, expected_value DESC
         LIMIT %s
-    """ % limit
+    """
     
-    rows = db_helper.execute(query, fetch='all')
+    rows = db_helper.execute(query, ('exact_score', limit), fetch='all')
     
     if not rows:
         return []
@@ -337,26 +341,26 @@ def get_last_settled(limit=3):
         FROM (
             SELECT 
                 home_team, away_team, selection, odds, outcome, profit_loss, 
-                'Exact Score' as market, settled_timestamp
+                %s as market, settled_timestamp
             FROM football_opportunities
-            WHERE outcome IN ('win', 'loss')
+            WHERE outcome IN (%s, %s)
             
             UNION ALL
             
             SELECT 
                 home_team, away_team, parlay_description, bookmaker_odds, 
-                outcome, profit_loss, 'SGP', settled_timestamp
+                outcome, profit_loss, %s, settled_timestamp
             FROM sgp_predictions
-            WHERE outcome IN ('win', 'loss')
-              AND (parlay_description IS NULL OR parlay_description NOT LIKE '%%Monster%%')
-              AND (parlay_description IS NULL OR parlay_description NOT LIKE '%%BEAST%%')
+            WHERE outcome IN (%s, %s)
+              AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
+              AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
         ) combined
         WHERE settled_timestamp IS NOT NULL
         ORDER BY settled_timestamp DESC
         LIMIT %s
-    """ % limit
+    """
     
-    rows = db_helper.execute(query, fetch='all')
+    rows = db_helper.execute(query, ('Exact Score', 'win', 'loss', 'SGP', 'win', 'loss', '%Monster%', '%BEAST%', limit), fetch='all')
     
     if not rows:
         return []
