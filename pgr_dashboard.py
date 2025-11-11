@@ -301,7 +301,7 @@ def get_last_50_roi():
     
     row = db_helper.execute(query, ('win', 'loss', 'win', 'loss', '%Monster%', '%BEAST%'), fetch='one')
     
-    if row and row[0] is not NULL and row[1] and row[1] > 0:
+    if row and row[0] is not None and row[1] and row[1] > 0:
         return (row[0] / row[1] * 100)
     return 0.0
 
