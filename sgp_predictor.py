@@ -557,6 +557,12 @@ class SGPPredictor:
         Returns:
             SGP prediction dict or None if no value found
         """
+        # Skip Premier League - negative ROI (-88.7%) based on offline analysis
+        league = match_data.get('league', '')
+        if 'Premier League' in league:
+            logger.info(f"⏭️  Skipping SGP for {match_data.get('home_team')} vs {match_data.get('away_team')} (Premier League - unprofitable)")
+            return []
+        
         # Generate SGP combinations (3-7 legs for BIG HITS)
         # TARGET MINIMUM ODDS: 4x for regular SGP (not MonsterSGP)
         sgp_combinations = [
