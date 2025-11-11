@@ -94,19 +94,24 @@ class SGPVerifier:
         
         return legs
     
-    def check_leg_result(self, leg: Dict[str, Any], actual_score: str) -> bool:
+    def check_leg_result(self, leg: Dict[str, Any], match_stats: Dict[str, Any]) -> Optional[bool]:
         """
         Check if a single SGP leg won
         
         Args:
             leg: Leg definition with market_type, outcome, line
-            actual_score: Actual match score (e.g., "2-1")
+            match_stats: Dictionary with score, corners, half_time stats, etc.
         
         Returns:
-            True if leg won, False if lost
+            True if leg won, False if lost, None if market unsupported (leave pending)
         """
         try:
             # Parse actual score
+            actual_score = match_stats.get('score', match_stats.get('actual_score'))
+            if not actual_score:
+                logger.warning(f"⚠️ No score in match_stats: {match_stats}")
+                return None
+            
             home_goals, away_goals = map(int, actual_score.split('-'))
             total_goals = home_goals + away_goals
             
@@ -126,12 +131,50 @@ class SGPVerifier:
                 elif leg['outcome'] == 'NO':
                     return not btts_yes
             
-            # Unknown market type - default to loss
-            return False
+            elif leg['market_type'] == 'CORNERS':
+                corners = match_stats.get('corners')
+                if corners is None:
+                    logger.warning(f"⚠️ CORNERS market requires corners data (not available)")
+                    return None  # Keep pending until we have corners data
+                
+                line = leg.get('line', 9.5)
+                if leg['outcome'] == 'OVER':
+                    return corners > line
+                elif leg['outcome'] == 'UNDER':
+                    return corners < line
+            
+            elif leg['market_type'] == 'HALF_TIME_GOALS':
+                ht_goals = match_stats.get('half_time_goals')
+                if ht_goals is None:
+                    logger.warning(f"⚠️ HALF_TIME_GOALS market requires half-time data (not available)")
+                    return None  # Keep pending until we have HT data
+                
+                line = leg.get('line', 0.5)
+                if leg['outcome'] == 'OVER':
+                    return ht_goals > line
+                elif leg['outcome'] == 'UNDER':
+                    return ht_goals < line
+            
+            elif leg['market_type'] == 'SECOND_HALF_GOALS':
+                sh_goals = match_stats.get('second_half_goals')
+                if sh_goals is None:
+                    logger.warning(f"⚠️ SECOND_HALF_GOALS market requires second-half data (not available)")
+                    return None  # Keep pending until we have 2H data
+                
+                line = leg.get('line', 1.5)
+                if leg['outcome'] == 'OVER':
+                    return sh_goals > line
+                elif leg['outcome'] == 'UNDER':
+                    return sh_goals < line
+            
+            else:
+                # Unknown market type - return None to keep pending instead of auto-loss
+                logger.warning(f"⚠️ Unsupported market type: {leg['market_type']} - keeping bet PENDING")
+                return None
             
         except Exception as e:
             logger.error(f"❌ Error checking leg result: {e}")
-            return False
+            return None  # Return None instead of False to avoid false losses
     
     def verify_sgp(self, sgp: Dict[str, Any]) -> Optional[str]:
         """
