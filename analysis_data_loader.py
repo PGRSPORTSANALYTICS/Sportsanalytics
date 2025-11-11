@@ -30,26 +30,25 @@ class AnalysisDataLoader:
         
         query = '''
             SELECT 
-                timestamp as ts,
+                timestamp,
                 league,
                 match_id,
-                'ES' as system,
                 market,
-                odds as odds_placed,
-                probability as model_p,
-                outcome as result,
+                odds,
+                outcome,
                 home_team,
                 away_team,
-                match_date as kickoff,
+                match_date,
                 actual_score,
-                recommended_score,
-                stake
+                selection,
+                stake,
+                edge_percentage,
+                confidence
             FROM football_opportunities
             WHERE market = 'exact_score'
             AND result IS NOT NULL
             AND outcome IN ('win', 'loss', 'won', 'lost')
             AND odds IS NOT NULL
-            AND probability IS NOT NULL
         '''
         
         rows = db_helper.execute(query, fetch='all')
@@ -60,16 +59,25 @@ class AnalysisDataLoader:
         
         # Convert to DataFrame
         df = pd.DataFrame(rows, columns=[
-            'ts', 'league', 'match_id', 'system', 'market', 
-            'odds_placed', 'model_p', 'result', 'home_team', 
-            'away_team', 'kickoff', 'actual_score', 'recommended_score', 'stake'
+            'ts', 'league', 'match_id', 'market', 
+            'odds_placed', 'result', 'home_team', 
+            'away_team', 'kickoff', 'actual_score', 'recommended_score', 'stake',
+            'edge_percentage', 'confidence'
         ])
+        
+        # Add system column
+        df['system'] = 'ES'
+        
+        # Calculate model probability from odds (implied probability with edge)
+        # model_p = 1 / odds + (edge / 100)
+        df['model_p'] = (1.0 / df['odds_placed']) + (df['edge_percentage'].fillna(0) / 100.0)
+        df['model_p'] = df['model_p'].clip(upper=1.0)  # Cap at 100%
         
         # Standardize result to win/loss
         df['result'] = df['result'].map({'win': 'win', 'won': 'win', 'loss': 'loss', 'lost': 'loss'})
         
-        # Convert timestamp to datetime
-        df['kickoff'] = pd.to_datetime(df['kickoff'])
+        # Convert timestamp to datetime (handle ISO8601 format)
+        df['kickoff'] = pd.to_datetime(df['kickoff'], format='ISO8601', errors='coerce')
         
         # Convert to binary for Brier score
         df['result_binary'] = (df['result'] == 'win').astype(int)
@@ -89,18 +97,17 @@ class AnalysisDataLoader:
         
         query = '''
             SELECT 
-                timestamp as ts,
+                timestamp,
                 league,
                 match_id,
-                'SGP' as system,
-                parlay_description as market,
-                bookmaker_odds as odds_placed,
-                parlay_probability as model_p,
-                outcome as result,
+                parlay_description,
+                bookmaker_odds,
+                parlay_probability,
+                outcome,
                 home_team,
                 away_team,
-                match_date as kickoff,
-                result as actual_score,
+                match_date,
+                result,
                 legs,
                 stake
             FROM sgp_predictions
@@ -108,8 +115,6 @@ class AnalysisDataLoader:
             AND outcome IN ('win', 'loss')
             AND bookmaker_odds IS NOT NULL
             AND parlay_probability IS NOT NULL
-            AND (parlay_description IS NULL OR 
-                 (parlay_description NOT LIKE '%Monster%' AND parlay_description NOT LIKE '%BEAST%'))
         '''
         
         rows = db_helper.execute(query, fetch='all')
@@ -118,15 +123,29 @@ class AnalysisDataLoader:
             logger.warning("⚠️ No SGP data found")
             return pd.DataFrame()
         
-        # Convert to DataFrame
+        # Convert to DataFrame - MATCH query column order exactly
         df = pd.DataFrame(rows, columns=[
-            'ts', 'league', 'match_id', 'system', 'market', 
-            'odds_placed', 'model_p', 'result', 'home_team', 
+            'ts', 'league', 'match_id', 'parlay_description',
+            'odds_placed', 'model_p', 'result', 'home_team',
             'away_team', 'kickoff', 'actual_score', 'legs', 'stake'
         ])
         
-        # Convert timestamp to datetime
-        df['kickoff'] = pd.to_datetime(df['kickoff'])
+        # Add system column
+        df['system'] = 'SGP'
+        
+        # Create market column from parlay_description
+        df['market'] = df['parlay_description']
+        
+        # Filter out MonsterSGP (do this in pandas, not SQL, to avoid db_helper translation issues)
+        monster_mask = df['parlay_description'].fillna('').str.contains('Monster|BEAST', case=False, na=False)
+        initial_count = len(df)
+        df = df[~monster_mask]
+        filtered_count = initial_count - len(df)
+        if filtered_count > 0:
+            logger.info(f"   - Filtered out {filtered_count} MonsterSGP predictions")
+        
+        # Convert timestamp to datetime (handle ISO8601 format)
+        df['kickoff'] = pd.to_datetime(df['kickoff'], format='ISO8601', errors='coerce')
         
         # Convert to binary for Brier score
         df['result_binary'] = (df['result'] == 'win').astype(int)
