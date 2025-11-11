@@ -308,12 +308,12 @@ def get_last_50_roi():
 def get_upcoming_bets(limit=3):
     """Get upcoming bets that haven't been played yet"""
     query = """
-        SELECT home_team, away_team, selection, odds, expected_value, match_date
+        SELECT home_team, away_team, selection, odds, edge_percentage, match_date
         FROM football_opportunities
         WHERE market = %s
           AND outcome IS NULL
           AND match_date >= CURRENT_DATE
-        ORDER BY match_date ASC, expected_value DESC
+        ORDER BY match_date ASC, edge_percentage DESC
         LIMIT %s
     """
     
@@ -328,7 +328,7 @@ def get_upcoming_bets(limit=3):
             'match': f"{row[0]} – {row[1]}",
             'selection': row[2],
             'odds': row[3],
-            'ev': row[4] * 100 if row[4] else 0
+            'ev': row[4] if row[4] else 0
         })
     
     return bets
