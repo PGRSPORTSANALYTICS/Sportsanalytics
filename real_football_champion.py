@@ -742,14 +742,24 @@ class RealFootballChampion:
     
     def get_upcoming_fixtures(self) -> List[Dict]:
         """Get upcoming fixtures for the next few days using CACHED API client"""
-        if not self.api_football_client:
-            print("⚠️ No API-Football client available for fixtures")
-            return []
+        fixtures = []
         
-        league_ids = list(self.league_id_to_name.keys())
+        # Try API-Football first
+        if self.api_football_client:
+            league_ids = list(self.league_id_to_name.keys())
+            print(f"🔍 Fetching fixtures from {len(league_ids)} leagues (using PERSISTENT cache)...")
+            fixtures = self.api_football_client.get_upcoming_fixtures_cached(league_ids, days_ahead=7)
         
-        print(f"🔍 Fetching fixtures from {len(league_ids)} leagues (using PERSISTENT cache)...")
-        return self.api_football_client.get_upcoming_fixtures_cached(league_ids, days_ahead=7)
+        # 🚨 EMERGENCY FALLBACK: Use SofaScore scraper if no fixtures found
+        if not fixtures and self.sofascore_scraper:
+            print("🚨 EMERGENCY FALLBACK: Using SofaScore scraper (no fixtures from APIs)")
+            try:
+                fixtures = self.sofascore_scraper.get_upcoming_fixtures(days_ahead=7)
+                print(f"✅ Emergency scraping successful: {len(fixtures)} fixtures retrieved")
+            except Exception as e:
+                print(f"❌ Emergency scraping failed: {e}")
+        
+        return fixtures
     
     def get_team_last_5_games(self, team_name: str, team_id: int, venue: str = 'all') -> List[Dict]:
         """
