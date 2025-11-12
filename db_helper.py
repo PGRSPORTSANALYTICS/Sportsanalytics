@@ -24,27 +24,46 @@ class DatabaseHelper:
         return query
     
     @staticmethod
-    def execute(query, params=None, fetch=None):
-        """Execute a query using connection pool with automatic SQL translation
+    def execute(query, params=None, fetch=None, max_retries=3):
+        """Execute a query using connection pool with automatic SQL translation and retry logic
         
         Args:
             query: SQL query (SQLite or PostgreSQL syntax)
             params: Query parameters (tuple or list)
             fetch: 'one', 'all', or None for execute only
+            max_retries: Maximum retry attempts on connection errors
         
         Returns:
             Query result if fetch is specified, None otherwise
         """
+        import psycopg2
+        import time
+        
         translated_query = DatabaseHelper.translate_sql(query)
         
-        with DatabaseConnection.get_cursor() as cursor:
-            cursor.execute(translated_query, params or ())
-            
-            if fetch == 'one':
-                return cursor.fetchone()
-            elif fetch == 'all':
-                return cursor.fetchall()
-            return None
+        for attempt in range(max_retries):
+            try:
+                with DatabaseConnection.get_cursor() as cursor:
+                    cursor.execute(translated_query, params or ())
+                    
+                    if fetch == 'one':
+                        return cursor.fetchone()
+                    elif fetch == 'all':
+                        return cursor.fetchall()
+                    return None
+                    
+            except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
+                # Connection dropped - retry (get_cursor will discard the bad connection)
+                if attempt < max_retries - 1:
+                    logger.warning(f"Database connection error (attempt {attempt + 1}/{max_retries}): {e}")
+                    time.sleep(0.5 * (attempt + 1))  # Exponential backoff
+                    continue
+                else:
+                    logger.error(f"Database connection failed after {max_retries} attempts: {e}")
+                    raise
+            except Exception as e:
+                logger.error(f"Database error: {e}")
+                raise
     
     @staticmethod
     def execute_many(query, params_list):
