@@ -7,7 +7,6 @@ import os
 import requests
 import time
 import json
-import sqlite3
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 import statistics
@@ -24,6 +23,7 @@ from poisson_predictor import PoissonScorePredictor
 from xg_predictor import ExpectedGoalsPredictor
 from referee_analyzer import RefereeAnalyzer
 from team_name_mapper import TeamNameMapper
+from db_helper import db_helper
 
 # League configuration
 from league_config import get_odds_api_keys, get_league_by_odds_key, LEAGUE_REGISTRY
@@ -362,8 +362,7 @@ class RealFootballChampion:
         self.max_stake = 1050.0  # SEK
         self.base_stake = 260.0  # SEK
         
-        # Initialize database
-        self.init_database()
+        # PostgreSQL database already initialized via db_helper (no need to init_database)
         
         # Initialize results scraper for bet outcome tracking
         self.results_scraper = ResultsScraper()
@@ -439,23 +438,22 @@ class RealFootballChampion:
         from datetime import date
         today = date.today().isoformat()
         
-        cursor = self.conn.cursor()
-        cursor.execute('''
+        results = db_helper.execute('''
             SELECT 
                 COALESCE(tier, 'legacy') as tier_name,
                 COUNT(*) as count
             FROM football_opportunities 
-            WHERE match_date = ? 
+            WHERE match_date = %s 
             GROUP BY tier_name
-        ''', (today,))
+        ''', (today,), fetch='all')
         
-        results = cursor.fetchall()
         counts = {'premium': 0, 'standard': 0, 'value': 0, 'backup': 0, 'total': 0}
         
-        for tier_name, count in results:
-            if tier_name in counts:
-                counts[tier_name] = count
-            counts['total'] += count
+        if results:
+            for tier_name, count in results:
+                if tier_name in counts:
+                    counts[tier_name] = count
+                counts['total'] += count
             
         return counts
     
@@ -570,102 +568,6 @@ class RealFootballChampion:
                 print(f"   🚨 COMMERCIAL CRISIS: Only {final_total} tips even after relaxation!")
                 return False
     
-    def init_database(self):
-        """Initialize SQLite database for football data"""
-        self.conn = sqlite3.connect('data/real_football.db')
-        cursor = self.conn.cursor()
-        
-        # Create tables
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS football_opportunities (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp INTEGER,
-                match_id TEXT,
-                home_team TEXT,
-                away_team TEXT,
-                league TEXT,
-                market TEXT,
-                selection TEXT,
-                odds REAL,
-                edge_percentage REAL,
-                confidence INTEGER,
-                analysis TEXT,
-                stake REAL,
-                status TEXT DEFAULT 'pending',
-                result TEXT,
-                payout REAL DEFAULT 0,
-                settled_timestamp INTEGER,
-                roi_percentage REAL DEFAULT 0,
-                match_date TEXT,
-                kickoff_time TEXT
-            )
-        ''')
-        
-        # Add tier column for tiered system (BUSINESS VIABILITY FIX)
-        try:
-            cursor.execute('ALTER TABLE football_opportunities ADD COLUMN tier TEXT DEFAULT "legacy"')
-            print("✅ Added tier column for tiered betting system")
-        except sqlite3.OperationalError:
-            pass  # Column already exists
-        
-        try:
-            cursor.execute('ALTER TABLE football_opportunities ADD COLUMN quality_score REAL DEFAULT 0')
-            print("✅ Added quality_score column for tiered ranking")
-        except sqlite3.OperationalError:
-            pass  # Column already exists
-        
-        # Add new columns to existing table if they don't exist
-        try:
-            cursor.execute('ALTER TABLE football_opportunities ADD COLUMN result TEXT')
-        except:
-            pass
-        try:
-            cursor.execute('ALTER TABLE football_opportunities ADD COLUMN payout REAL DEFAULT 0')
-        except:
-            pass
-        try:
-            cursor.execute('ALTER TABLE football_opportunities ADD COLUMN settled_timestamp INTEGER')
-        except:
-            pass
-        try:
-            cursor.execute('ALTER TABLE football_opportunities ADD COLUMN roi_percentage REAL DEFAULT 0')
-        except:
-            pass
-        try:
-            cursor.execute('ALTER TABLE football_opportunities ADD COLUMN outcome TEXT')
-        except:
-            pass
-        try:
-            cursor.execute('ALTER TABLE football_opportunities ADD COLUMN profit_loss REAL DEFAULT 0')
-        except:
-            pass
-        try:
-            cursor.execute('ALTER TABLE football_opportunities ADD COLUMN updated_at TEXT')
-        except:
-            pass
-        try:
-            cursor.execute('ALTER TABLE football_opportunities ADD COLUMN match_date TEXT')
-        except:
-            pass
-        try:
-            cursor.execute('ALTER TABLE football_opportunities ADD COLUMN kickoff_time TEXT')
-        except:
-            pass
-        
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS team_analytics (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                team_name TEXT,
-                league TEXT,
-                timestamp INTEGER,
-                form_data TEXT,
-                xg_data TEXT,
-                h2h_data TEXT
-            )
-        ''')
-        
-        self.conn.commit()
-        print("📊 Database initialized for football analytics")
     
     def get_football_odds(self) -> List[Dict]:
         """Get pre-match and upcoming football odds from The Odds API - AUTO-GENERATED FROM LEAGUE REGISTRY"""
@@ -1612,7 +1514,6 @@ class RealFootballChampion:
     def save_exact_score_predictions(self, predictions: List[Dict]):
         """Save exact score predictions to database"""
         
-        cursor = self.conn.cursor()
         today_date = datetime.now().strftime('%Y-%m-%d')
         
         saved_count = 0
@@ -1620,14 +1521,14 @@ class RealFootballChampion:
         
         for prediction in predictions:
             # 🎯 Check if this match already has a prediction (prevent duplicates)
-            cursor.execute('''
+            result = db_helper.execute('''
                 SELECT COUNT(*) FROM football_opportunities
-                WHERE home_team = ? AND away_team = ? 
+                WHERE home_team = %s AND away_team = %s 
                 AND market = 'Exact Score'
                 AND (outcome IS NULL OR outcome = '' OR outcome = 'unknown')
-            ''', (prediction['home_team'], prediction['away_team']))
+            ''', (prediction['home_team'], prediction['away_team']), fetch='one')
             
-            if cursor.fetchone()[0] > 0:
+            if result and result[0] > 0:
                 print(f"   🔄 DUPLICATE BLOCKED: {prediction['home_team']} vs {prediction['away_team']} already has prediction")
                 continue
             
@@ -1713,12 +1614,12 @@ class RealFootballChampion:
                     confidence_score = best_prediction['confidence_score']
                     i = best_prediction['rank']
                     
-                    cursor.execute('''
+                    db_helper.execute('''
                         INSERT INTO football_opportunities 
                         (timestamp, match_id, home_team, away_team, league, market, selection, 
                          odds, edge_percentage, confidence, analysis, stake, match_date, kickoff_time,
                          quality_score, recommended_tier, daily_rank)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ''', (
                         int(time.time()),
                         f"{prediction['home_team']}_vs_{prediction['away_team']}_exact_score_{i+1}",
@@ -1756,8 +1657,6 @@ class RealFootballChampion:
         print(f"\n📊 POISSON + VALUE BETTING RESULTS:")
         print(f"   ✅ Saved: {saved_count} predictions (7%+ Poisson probability, 15%+ edge)")
         print(f"   ⚠️ Filtered: {filtered_count} matches (low probability or value)")
-        
-        self.conn.commit()
     
     def generate_estimated_odds(self, xg_analysis: Dict) -> Dict:
         """Generate realistic varied odds based on xG analysis with market-like variation"""
@@ -2383,12 +2282,11 @@ class RealFootballChampion:
         # Check how many exact score predictions we have today
         DAILY_CAP = 30
         today_date = datetime.now().strftime('%Y-%m-%d')
-        cursor = self.conn.cursor()
-        cursor.execute('''
+        result = db_helper.execute('''
             SELECT COUNT(*) FROM football_opportunities 
-            WHERE match_date = ? AND market = 'exact_score'
-        ''', (today_date,))
-        existing_count = cursor.fetchone()[0]
+            WHERE match_date = %s AND market = 'exact_score'
+        ''', (today_date,), fetch='one')
+        existing_count = result[0] if result else 0
         
         print(f"📊 Current exact score predictions today: {existing_count}/{DAILY_CAP}")
         
@@ -3089,18 +2987,16 @@ class RealFootballChampion:
     def save_exact_score_opportunity(self, opportunity: FootballOpportunity):
         """Save exact score opportunity to database (separate from daily limit)"""
         
-        cursor = self.conn.cursor()
-        
         # Check if this match already has ANY prediction (regardless of score)
         # This prevents duplicate predictions with different scores for the same match
-        cursor.execute('''
+        result = db_helper.execute('''
             SELECT COUNT(*) FROM football_opportunities 
-            WHERE home_team = ? AND away_team = ? AND market = 'exact_score'
-            AND match_date = ?
+            WHERE home_team = %s AND away_team = %s AND market = 'exact_score'
+            AND match_date = %s
             AND status = 'pending'
-        ''', (opportunity.home_team, opportunity.away_team, opportunity.match_date))
+        ''', (opportunity.home_team, opportunity.away_team, opportunity.match_date), fetch='one')
         
-        duplicate_count = cursor.fetchone()[0]
+        duplicate_count = result[0] if result else 0
         if duplicate_count > 0:
             print(f"🔄 DUPLICATE BLOCKED: {opportunity.home_team} vs {opportunity.away_team} on {opportunity.match_date} already has an active prediction")
             return False
@@ -3110,12 +3006,13 @@ class RealFootballChampion:
         today_date = datetime.now().strftime('%Y-%m-%d')
         
         try:
-            cursor.execute('''
+            db_helper.execute('''
                 INSERT INTO football_opportunities 
                 (timestamp, match_id, home_team, away_team, league, market, selection, 
                  odds, edge_percentage, confidence, analysis, stake, match_date, kickoff_time,
                  quality_score, recommended_date, recommended_tier, daily_rank)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
             ''', (
                 int(time.time()),
                 opportunity.match_id,
@@ -3135,11 +3032,10 @@ class RealFootballChampion:
                 today_date,
                 'exact_score',  # Special tier for exact scores
                 0  # Not part of daily ranking
-            ))
-            self.conn.commit()
+            ), fetch='one')
             
             # Get the actual prediction ID from the database
-            prediction_id = cursor.lastrowid
+            prediction_id = result[0] if result else None
             
             print(f"✅ EXACT SCORE SAVED: {opportunity.home_team} vs {opportunity.away_team} (ID: {prediction_id})")
             
