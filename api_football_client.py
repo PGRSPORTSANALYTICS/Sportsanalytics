@@ -879,3 +879,26 @@ class APIFootballClient:
                 all_fixtures.append(formatted_fixture)
         
         return all_fixtures
+    
+    def get_leagues(self, **params) -> List[Dict]:
+        """
+        Get leagues from API-Football with caching
+        
+        Args:
+            **params: Query parameters (e.g., current=True, country='England')
+            
+        Returns:
+            List of league data dictionaries
+        """
+        sorted_params = sorted(params.items())
+        cache_key_suffix = "_".join(f"{k}_{v}" for k, v in sorted_params)
+        cache_key = f"leagues_{cache_key_suffix}" if cache_key_suffix else "leagues_all"
+        
+        leagues = self._fetch_with_cache('leagues', params, cache_key, ttl_hours=24)
+        
+        if not leagues:
+            logger.warning("⚠️ No leagues data received from API")
+            return []
+        
+        logger.info(f"✅ Retrieved {len(leagues)} leagues from API-Football (cached)")
+        return leagues

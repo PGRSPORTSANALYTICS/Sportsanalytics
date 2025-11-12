@@ -89,7 +89,7 @@ class BetStatusService:
                 END as payout,
                 profit_loss
             FROM women_match_winner_predictions
-                WHERE status = 'pending'
+                WHERE status IN ('pending', 'live')
                 ORDER BY match_date, kickoff_time
             ''', conn)
             

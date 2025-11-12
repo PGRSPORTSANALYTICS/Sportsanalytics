@@ -32,15 +32,15 @@ class WomenLeagueDetector:
         
         try:
             # Fetch all current leagues (cached)
-            all_leagues = self.api_client.get_leagues(current=True)
+            all_leagues = self.api_client.get_leagues(current='true')
             
-            if not all_leagues or 'response' not in all_leagues:
+            if not all_leagues:
                 logger.warning("⚠️ No leagues data received")
                 return []
             
             women_leagues = []
             
-            for league_data in all_leagues['response']:
+            for league_data in all_leagues:
                 league = league_data.get('league', {})
                 league_name = (league.get('name') or '').lower()
                 

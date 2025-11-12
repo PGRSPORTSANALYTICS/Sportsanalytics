@@ -74,13 +74,13 @@ class Women1X2Predictor:
         for league in women_leagues:
             try:
                 # Fetch fixtures using cache (24h TTL)
-                fixtures = self.api_client.get_fixtures(
-                    league_id=league['league_id'],
-                    next=10  # Next 10 matches
+                fixtures = self.api_client.get_upcoming_fixtures_cached(
+                    league_ids=[league['league_id']],
+                    days_ahead=7
                 )
                 
-                if fixtures and 'response' in fixtures:
-                    for fx in fixtures['response']:
+                if fixtures:
+                    for fx in fixtures:
                         fx['is_women'] = True
                         fx['league_config'] = league
                         all_fixtures.append(fx)

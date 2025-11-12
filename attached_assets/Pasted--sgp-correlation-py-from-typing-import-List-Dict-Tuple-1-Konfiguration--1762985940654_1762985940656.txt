@@ -1,0 +1,183 @@
+# sgp_correlation.py
+from typing import List, Dict, Tuple
+
+# ---- 1) Konfiguration -------------------------------------------------------
+
+# Hur strikt vi ska vara. Sänk max_score för hårdare spärr.
+BASE_MAX_SCORE = 3.0
+
+# Automatiskt skärpning/lättnad utifrån senaste resultaten per produkt/liganivå
+def dynamic_max_score(product: str, rolling_roi: float) -> float:
+    """
+    ROI i decimal (t.ex. +0.12 = +12%, -0.08 = -8%).
+    Stramar åt om det går sämre än målet.
+    """
+    target = 0.10 if product == "SGP" else 0.18  # SGP typiskt lägre mål än ES
+    if rolling_roi < 0:
+        return max(1.5, BASE_MAX_SCORE - 1.0)   # bli mycket strikt om rött
+    if rolling_roi < target:
+        return max(2.0, BASE_MAX_SCORE - 0.5)   # lite striktare om under mål
+    return BASE_MAX_SCORE                        # normalt läge
+
+# “Regler” som är binärt oförenliga (blockeras direkt)
+# Normalisera market keys med canonical_market() nedan
+HARD_BLOCKS = {
+    # Målrelaterat
+    ("BTTS:YES", "CLEAN_SHEET:YES"),            # motsägelse
+    ("BTTS:NO",  "OVER_TOTAL:2.5+"),            # BTTS=NO krockar med över 2.5
+    ("BTTS:NO",  "OVER_TOTAL:3.5+"),
+    ("UNDER_TOTAL:1.5-", "ANY_SCORER:YES"),     # under 1.5 men målskytt ja
+    ("UNDER_TEAM_A:0.5-", "TEAM_A_SCORER:YES"),
+    ("UNDER_TEAM_B:0.5-", "TEAM_B_SCORER:YES"),
+    # Redundans/överlapp
+    ("1X2:*", "DOUBLE_CHANCE:*"),
+    ("1X2:*", "DRAW_NO_BET:*"),
+    ("DOUBLE_CHANCE:*", "DRAW_NO_BET:*"),
+}
+
+# “Mjuka” korrelationer: poäng som summeras – block om över max_score
+# poäng = hur starkt de samvarierar (högre = mer korrelerade)
+SOFT_CORR = {
+    ("OVER_TOTAL:*", "BTTS:YES"): 1.0,
+    ("OVER_TOTAL:*", "ANY_SCORER:YES"): 1.0,
+    ("TEAM_A_WIN",   "TEAM_A_SCORER:YES"): 1.0,
+    ("TEAM_B_WIN",   "TEAM_B_SCORER:YES"): 1.0,
+    ("TEAM_A_OVER:*","TEAM_A_SCORER:YES"): 0.8,
+    ("TEAM_B_OVER:*","TEAM_B_SCORER:YES"): 0.8,
+    ("UNDER_TOTAL:*","ANY_SCORER:YES"): 1.0,
+    ("UNDER_TOTAL:*","TEAM_A_SCORER:YES"): 1.0,
+    ("UNDER_TOTAL:*","TEAM_B_SCORER:YES"): 1.0,
+    # Shots ↔ goals (medelkorrelation)
+    ("ANY_SCORER:YES","PLAYER_SOT_OVER:*"): 0.7,
+    # Kort & hörnor (svag korrelation, normalt OK)
+    ("CARDS_OVER:*", "CORNERS_OVER:*"): 0.3,
+}
+
+# Max ett av följande per kombo (minskar överlapp i samma “familj”)
+FAMILIES_SINGLE_PICK = [
+    {"OVER_TOTAL:*", "UNDER_TOTAL:*", "EXACT_GOALS:*"},
+    {"DOUBLE_CHANCE:*", "DRAW_NO_BET:*", "1X2:*"},
+    {"ANY_SCORER:YES", "TEAM_A_SCORER:YES", "TEAM_B_SCORER:YES"},
+]
+
+# ---- 2) Normalisering & tagging --------------------------------------------
+
+def canonical_market(leg: Dict) -> str:
+    """
+    Tar ett leg och skapar en standardiserad nyckel.
+    Förväntar sig t.ex.:
+      leg["market"] in {"1X2","DOUBLE_CHANCE","BTTS","OVER_TOTAL","UNDER_TOTAL",
+                        "TEAM_A_OVER","TEAM_B_OVER","DRAW_NO_BET",
+                        "ANY_SCORER","TEAM_A_SCORER","TEAM_B_SCORER",
+                        "PLAYER_SOT_OVER","CARDS_OVER","CORNERS_OVER",
+                        "CLEAN_SHEET"}
+      leg["selection"] t.ex. "HOME","AWAY","DRAW","YES","NO","1.5","2.5","3.5"
+    Anpassa vid behov efter ditt schema.
+    """
+    mkt = str(leg.get("market","")).upper()
+    sel = str(leg.get("selection","")).upper()
+
+    if mkt in {"OVER_TOTAL","UNDER_TOTAL","TEAM_A_OVER","TEAM_B_OVER",
+               "PLAYER_SOT_OVER","CARDS_OVER","CORNERS_OVER"}:
+        # Lägg på tröskel med suffix (* om okänt)
+        thr = str(leg.get("threshold", sel)).upper()
+        return f"{mkt}:{thr}" if thr else f"{mkt}:*"
+
+    if mkt in {"BTTS","ANY_SCORER","TEAM_A_SCORER","TEAM_B_SCORER",
+               "CLEAN_SHEET"}:
+        return f"{mkt}:{sel if sel else '*'}"
+
+    if mkt == "1X2":
+        if sel == "HOME": return "TEAM_A_WIN"
+        if sel == "AWAY": return "TEAM_B_WIN"
+        if sel == "DRAW": return "DRAW"
+        return "1X2:*"
+
+    if mkt in {"DOUBLE_CHANCE","DRAW_NO_BET"}:
+        return f"{mkt}:{sel if sel else '*'}"
+
+    # fallback
+    return f"{mkt}:{sel if sel else '*'}"
+
+def family_match(canon_key: str, family_item: str) -> bool:
+    """
+    Stöd för wildcard i families (t.ex. OVER_TOTAL:*).
+    """
+    fam_mkt, fam_sel = family_item.split(":")
+    key_mkt, key_sel = canon_key.split(":")
+    return (fam_mkt == key_mkt) and (fam_sel == "*" or fam_sel == key_sel)
+
+def pattern_match(key: str, pattern: str) -> bool:
+    """Wildcard-matchning för HARD_BLOCKS/SOFT_CORR"""
+    pm, ps = pattern.split(":")
+    km, ks = key.split(":")
+    return (pm == km) and (ps == "*" or ps == ks or ps in key)
+
+# ---- 3) Korrelationskontroll ------------------------------------------------
+
+def passes_sgp_correlation(legs: List[Dict], product: str,
+                           rolling_roi: float) -> Tuple[bool, str]:
+    """
+    Returnerar (ok, reason). ok=False om spärren stoppar.
+    legs: lista av leg-dict
+    product: t.ex. "SGP"
+    rolling_roi: senaste 50–100 bets ROI (decimal)
+    """
+    canon = [canonical_market(l) for l in legs]
+
+    # 3.1 Familjespärr: max ett från varje familj
+    for fam in FAMILIES_SINGLE_PICK:
+        hits = sum(any(family_match(k, fitem) for fitem in fam) for k in canon)
+        if hits > 1:
+            return (False, f"Too many picks from same family: {fam}")
+
+    # 3.2 Hårda block: direkta krockar
+    for a in range(len(canon)):
+        for b in range(a+1, len(canon)):
+            k1, k2 = canon[a], canon[b]
+            for p1, p2 in HARD_BLOCKS:
+                if pattern_match(k1, p1) and pattern_match(k2, p2):
+                    return (False, f"Hard conflict: {k1} x {k2}")
+                if pattern_match(k2, p1) and pattern_match(k1, p2):
+                    return (False, f"Hard conflict: {k2} x {k1}")
+
+    # 3.3 Mjuka korrelationer: summerad score
+    max_score = dynamic_max_score(product, rolling_roi)
+    score = 0.0
+    for a in range(len(canon)):
+        for b in range(a+1, len(canon)):
+            k1, k2 = canon[a], canon[b]
+            for (p1, p2), pts in SOFT_CORR.items():
+                if pattern_match(k1, p1) and pattern_match(k2, p2):
+                    score += pts
+                elif pattern_match(k2, p1) and pattern_match(k1, p2):
+                    score += pts
+                if score > max_score:
+                    return (False, f"Too correlated (score {score:.1f} > {max_score:.1f})")
+
+    return (True, f"OK (corr score {score:.1f} ≤ {max_score:.1f})")
+
+# ---- 4) Hjälp: EV-policy för damfotboll (om du vill återanvända) ------------
+
+def womens_policy_allow(market_key: str, ev: float, odds: float) -> bool:
+    """
+    Exempelpolicy:
+      - Tillåt 1X2 & Double Chance om EV >= 0.10
+        (Double Chance kräver odds ≥ 1.75)
+      - BTTS/Clean Sheet förbjuds (ofta skeva databias)
+      - Totals tillåts försiktigt: Over2.5 om EV ≥ 0.12
+      - Scorers kräver EV ≥ 0.15
+    """
+    mkt, sel = market_key.split(":")
+    if mkt in {"CLEAN_SHEET", "BTTS"}:
+        return False
+    if mkt in {"DOUBLE_CHANCE"}:
+        return (ev >= 0.10 and odds >= 1.75)
+    if mkt in {"1X2"} or mkt in {"TEAM_A_WIN","TEAM_B_WIN","DRAW"}:
+        return ev >= 0.10
+    if mkt in {"OVER_TOTAL"}:
+        # kräv minst over 2.5/2.75 i praktiken – lämna tröskelkontroll åt upstream
+        return ev >= 0.12
+    if "SCORER" in mkt or mkt == "ANY_SCORER":
+        return ev >= 0.15
+    return ev >= 0.12
