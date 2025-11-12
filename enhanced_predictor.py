@@ -435,16 +435,27 @@ class EnhancedExactScorePredictor:
         
         return np.array([features])
     
-    def _extract_h2h_patterns(self, h2h_data: Dict) -> Optional[Dict[str, float]]:
+    def _extract_h2h_patterns(self, h2h_data) -> Optional[Dict[str, float]]:
         """
         Extract common score patterns from H2H history
         """
-        if not h2h_data or h2h_data.get('total_matches', 0) == 0:
+        # Handle both list (from SofaScore) and dict (from API-Football) formats
+        if isinstance(h2h_data, list):
+            if not h2h_data:
+                return None
+            # Convert list to aggregated dict
+            total_home = sum(m.get('home_score', 0) for m in h2h_data)
+            total_away = sum(m.get('away_score', 0) for m in h2h_data)
+            total_matches = len(h2h_data)
+            avg_goals_1 = total_home / total_matches if total_matches > 0 else 1.5
+            avg_goals_2 = total_away / total_matches if total_matches > 0 else 1.5
+        elif isinstance(h2h_data, dict):
+            if h2h_data.get('total_matches', 0) == 0:
+                return None
+            avg_goals_1 = h2h_data.get('avg_team1_goals', 1.5)
+            avg_goals_2 = h2h_data.get('avg_team2_goals', 1.5)
+        else:
             return None
-        
-        # Simplified H2H pattern extraction
-        avg_goals_1 = h2h_data.get('avg_team1_goals', 1.5)
-        avg_goals_2 = h2h_data.get('avg_team2_goals', 1.5)
         
         # Create rough distribution based on H2H averages
         from scipy.stats import poisson
