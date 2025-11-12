@@ -26,6 +26,13 @@ The system employs advanced prediction features including:
 - **Data-Driven Score Targeting:** Models predict ANY score based on ensemble analysis. **Expanded Score Diversity (Nov 8, 2025):** Removed hardcoded score biases and increased max_goals from 8 to 10, allowing predictions for all scores 0-0 through 9-9. System now predicts based purely on xG probability and EV, not historical patterns, to collect diverse training data including high-scoring games (3-2, 4-1, etc.).
 - **Venue-Specific Form Analysis (Nov 8, 2025):** Fixed critical xG calculation bias by implementing venue-specific form filtering. Home teams now use only their last 5 HOME games for xG calculation, and away teams use only their last 5 AWAY games. This accurately captures teams that are strong at home but weak away (or vice versa), replacing the previous system that incorrectly averaged all games together. For example, a team with 2.5 xG at home and 1.2 xG away now correctly uses 2.5 when playing home, instead of the misleading 1.85 average.
 - **League Coverage Expansion:** Expanded from 11 to 16 quality leagues to achieve higher prediction volume.
+- **Winter Leagues Integration (Nov 12, 2025):** Full integration of year-round coverage with Brazil Serie A and Japan J1 League:
+  - **Unified League Registry:** Created `league_config.py` as single source of truth mapping The Odds API keys to API-Football IDs for all 23 active leagues
+  - **Dynamic League Loading:** Updated `real_football_champion.py` to auto-generate league lists from registry instead of hardcoded lists
+  - **Auto-Verification Script:** `winter_leagues.py` validates API IDs and seasons using API-Football search (Brazil ID 71, Season 2025; Japan ID 98, Season 2025)
+  - **Team Mappings:** Added 22 Brazilian teams (Flamengo, Palmeiras, Santos, etc.) and 20 Japanese teams (Kawasaki Frontale, Urawa Reds, Vissel Kobe, etc.) to `team_id_mappings.py`
+  - **24/7 Coverage:** System now queries 7 winter leagues (Brazil, Argentina, Japan, Korea, Australia, USA, Mexico) ensuring continuous prediction generation during European off-season
+  - **Files:** `league_config.py`, `winter_leagues.py`
 - **Telegram Broadcast Fix:** Ensures only predictions for matches playing today are broadcasted.
 - **SGP Self-Learning System:** Features adaptive learning capabilities for probability calibration, correlation learning, and dynamic Kelly sizing.
 - **Live SGP Odds Integration:** Uses real bookmaker odds from The Odds API for SGP, with three pricing modes (Live, Hybrid, Simulated) and graceful fallback.
