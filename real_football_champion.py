@@ -25,6 +25,9 @@ from xg_predictor import ExpectedGoalsPredictor
 from referee_analyzer import RefereeAnalyzer
 from team_name_mapper import TeamNameMapper
 
+# League configuration
+from league_config import get_odds_api_keys, get_league_by_odds_key, LEAGUE_REGISTRY
+
 @dataclass
 class TeamForm:
     """Team recent form analysis"""
@@ -169,8 +172,11 @@ class RealFootballChampion:
         self.odds_base_url = "https://api.the-odds-api.com/v4"
         self.api_football_base_url = "https://v3.football.api-sports.io"
         
-        # Sport key to league name mapping - GLOBAL COVERAGE
-        self.sport_to_league = {
+        # Sport key to league name mapping - AUTO-GENERATED FROM LEAGUE REGISTRY
+        self.sport_to_league = {league.odds_api_key: league.name for league in LEAGUE_REGISTRY if league.active}
+        
+        # Fallback mapping for backward compatibility
+        self.sport_to_league_legacy = {
             # Major European Leagues
             'soccer_epl': 'Premier League',
             'soccer_efl_champ': 'English Championship',
@@ -662,79 +668,12 @@ class RealFootballChampion:
         print("📊 Database initialized for football analytics")
     
     def get_football_odds(self) -> List[Dict]:
-        """Get pre-match and upcoming football odds from The Odds API"""
-        football_sports = [
-            # Major European Leagues (Prime Time EU)
-            'soccer_epl',                    # English Premier League
-            'soccer_efl_champ',             # English Championship
-            'soccer_spain_la_liga',         # Spanish La Liga
-            'soccer_italy_serie_a',         # Italian Serie A
-            'soccer_germany_bundesliga',    # German Bundesliga
-            'soccer_france_ligue_one',      # French Ligue 1
-            'soccer_netherlands_eredivisie', # Dutch Eredivisie
-            'soccer_portugal_primeira_liga', # Portuguese Primeira Liga
-            'soccer_belgium_first_div',     # Belgian First Division
-            'soccer_scotland_premiership',  # Scottish Premiership
-            
-            # European Cups (High Value)
-            'soccer_uefa_champs_league',    # Champions League
-            'soccer_uefa_europa_league',    # Europa League
-            'soccer_uefa_conference_league',# Conference League
-            
-            # Nordic/Eastern Europe (Different Schedules)
-            'soccer_sweden_allsvenskan',    # Swedish Allsvenskan
-            'soccer_norway_eliteserien',    # Norwegian Eliteserien
-            'soccer_denmark_superliga',     # Danish Superliga
-            'soccer_poland_ekstraklasa',    # Polish Ekstraklasa
-            'soccer_czech_1_liga',          # Czech First League
-            'soccer_turkey_super_league',   # Turkish Super League
-            'soccer_russia_premier_league', # Russian Premier League
-            
-            # South America (Different Time Zone - More Coverage)
-            'soccer_brazil_serie_a',        # Brazilian Serie A
-            'soccer_argentina_primera_division', # Argentinian Primera
-            'soccer_chile_primera_division', # Chilean Primera
-            'soccer_colombia_primera_a',    # Colombian Primera A
-            'soccer_uruguay_primera_division', # Uruguayan Primera
-            'soccer_conmebol_libertadores',  # Copa Libertadores
-            'soccer_conmebol_sudamericana',  # Copa Sudamericana
-            
-            # North America (Evening Coverage)
-            'soccer_usa_mls',               # Major League Soccer
-            'soccer_mexico_liga_mx',        # Liga MX (Mexico)
-            'soccer_canada_cpl',            # Canadian Premier League
-            
-            # Asia-Pacific (Early Coverage)
-            'soccer_japan_j_league',        # Japanese J1 League
-            'soccer_south_korea_k_league_1', # Korean K League 1
-            'soccer_china_super_league',    # Chinese Super League
-            'soccer_australia_a_league',    # Australian A-League
-            'soccer_india_super_league',    # Indian Super League
-            
-            # Africa (Afternoon Coverage)  
-            'soccer_south_africa_premier_division', # South African Premier
-            'soccer_egypt_premier_league',  # Egyptian Premier League
-            
-            # Lower English Leagues (More Matches)
-            'soccer_efl_league_one',        # English League One
-            'soccer_efl_league_two',        # English League Two
-            
-            # International Competitions
-            'soccer_uefa_nations_league',   # UEFA Nations League
-            'soccer_fifa_world_cup',        # FIFA World Cup
-            'soccer_uefa_euros',            # European Championship
-            'soccer_conmebol_copa_america', # Copa America
-            'soccer_fifa_world_cup_qualifier_uefa',     # UEFA World Cup Qualifiers
-            'soccer_fifa_world_cup_qualifier_conmebol', # CONMEBOL Qualifiers
-            'soccer_fifa_world_cup_qualifier_caf',      # CAF World Cup Qualifiers
-            'soccer_fifa_world_cup_qualifier_afc',      # AFC World Cup Qualifiers
-            'soccer_fifa_world_cup_qualifier_concacaf', # CONCACAF Qualifiers
-            'soccer_fifa_world_cup_qualifier_ofc',      # OFC World Cup Qualifiers
-            'soccer_caf_african_cup_of_nations',        # Africa Cup of Nations
-            'soccer_afc_asian_cup',                     # AFC Asian Cup
-            'soccer_concacaf_gold_cup',                 # CONCACAF Gold Cup
-            'soccer_international_friendlies',          # International Friendlies
-        ]
+        """Get pre-match and upcoming football odds from The Odds API - AUTO-GENERATED FROM LEAGUE REGISTRY"""
+        # Get all active league odds API keys from unified registry
+        # This automatically includes winter leagues (Brazil, Japan, etc.)
+        football_sports = get_odds_api_keys()
+        
+        print(f"📊 Querying {len(football_sports)} active leagues for matches...")
         
         all_matches = []
         
