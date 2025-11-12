@@ -140,6 +140,56 @@ CHAMPIONS_LEAGUE_TEAMS = {
     'Shakhtar Donetsk': 553,
 }
 
+# Brazilian Serie A team IDs
+BRAZIL_SERIE_A_TEAMS = {
+    'Atletico Mineiro': 129,
+    'Atletico-MG': 129,
+    'Athletico Paranaense': 130,
+    'Athletico-PR': 130,
+    'Bahia': 134,
+    'Botafogo': 125,
+    'Corinthians': 131,
+    'Cruzeiro': 132,
+    'Cuiaba': 1207,
+    'Flamengo': 127,
+    'Fluminense': 124,
+    'Fortaleza': 128,
+    'Gremio': 136,
+    'Internacional': 135,
+    'Juventude': 1195,
+    'Palmeiras': 126,
+    'Red Bull Bragantino': 1217,
+    'Bragantino': 1217,
+    'Santos': 123,
+    'Sao Paulo': 137,
+    'Vasco da Gama': 139,
+    'Vasco': 139,
+}
+
+# Japanese J1 League team IDs
+JAPAN_J1_TEAMS = {
+    'Avispa Fukuoka': 2803,
+    'Cerezo Osaka': 280,
+    'Consadole Sapporo': 283,
+    'FC Tokyo': 281,
+    'Gamba Osaka': 285,
+    'Jubilo Iwata': 291,
+    'Kashima Antlers': 292,
+    'Kashiwa Reysol': 293,
+    'Kawasaki Frontale': 294,
+    'Kyoto Sanga': 6130,
+    'Nagoya Grampus': 289,
+    'Sanfrecce Hiroshima': 295,
+    'Sapporo': 283,
+    'Shonan Bellmare': 6128,
+    'Tokyo Verdy': 6131,
+    'Urawa Red Diamonds': 286,
+    'Urawa Reds': 286,
+    'Vissel Kobe': 290,
+    'Yokohama F. Marinos': 284,
+    'Yokohama FM': 284,
+}
+
 # Combine all mappings
 ALL_TEAM_MAPPINGS = {}
 ALL_TEAM_MAPPINGS.update(PREMIER_LEAGUE_TEAMS)
@@ -148,6 +198,8 @@ ALL_TEAM_MAPPINGS.update(SERIE_A_TEAMS)
 ALL_TEAM_MAPPINGS.update(BUNDESLIGA_TEAMS)
 ALL_TEAM_MAPPINGS.update(LIGUE_1_TEAMS)
 ALL_TEAM_MAPPINGS.update(CHAMPIONS_LEAGUE_TEAMS)
+ALL_TEAM_MAPPINGS.update(BRAZIL_SERIE_A_TEAMS)
+ALL_TEAM_MAPPINGS.update(JAPAN_J1_TEAMS)
 
 
 def get_team_id_from_mapping(team_name: str) -> int:
