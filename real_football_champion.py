@@ -128,6 +128,15 @@ class RealFootballChampion:
             self.api_football_client = None
             print("⚙️  API-Football DISABLED - using Odds API + statistical models only")
         
+        # 🌐 Initialize SofaScore scraper for emergency fallback
+        try:
+            from sofascore_scraper import SofaScoreScraper
+            self.sofascore_scraper = SofaScoreScraper()
+            print("🌐 SofaScore scraper initialized for emergency fallback")
+        except Exception as e:
+            print(f"⚠️ SofaScore scraper initialization failed: {e}")
+            self.sofascore_scraper = None
+        
         # 🎯 Initialize confidence scorer for selective betting
         self.confidence_scorer = ConfidenceScorer()
         print("🎯 Confidence scorer initialized for selective betting")
@@ -684,6 +693,16 @@ class RealFootballChampion:
             print("🔍 No near-time odds available, checking for upcoming fixtures...")
             all_matches = self.get_upcoming_fixtures()
             near_time_matches = self.filter_near_time_matches(all_matches)
+        
+        # 🚨 EMERGENCY FALLBACK: Use SofaScore scraper if APIs failed
+        if not near_time_matches and self.sofascore_scraper:
+            print("🚨 EMERGENCY FALLBACK: Using SofaScore scraper (APIs exhausted)")
+            try:
+                scraped_fixtures = self.sofascore_scraper.get_upcoming_fixtures(days_ahead=7)
+                near_time_matches = self.filter_near_time_matches(scraped_fixtures)
+                print(f"✅ Emergency scraping successful: {len(near_time_matches)} fixtures retrieved")
+            except Exception as e:
+                print(f"❌ Emergency scraping failed: {e}")
         
         print(f"📅 Filtered to {len(near_time_matches)} upcoming matches (next 7 days)")
         return near_time_matches

@@ -402,6 +402,67 @@ class SofaScoreScraper:
         
         logger.info(f"🗑️ Cleared {h2h_deleted} old H2H records and {form_deleted} old form records")
         return h2h_deleted + form_deleted
+    
+    def get_upcoming_fixtures(self, days_ahead: int = 7) -> List[Dict]:
+        """
+        Emergency fallback: Scrape upcoming fixtures from SofaScore
+        Used when API quotas are exhausted
+        """
+        all_fixtures = []
+        today = datetime.now()
+        
+        logger.info(f"🌐 EMERGENCY FALLBACK: Scraping fixtures from SofaScore (next {days_ahead} days)")
+        
+        for league_name, league_id in self.LEAGUE_IDS.items():
+            try:
+                endpoint = f"unique-tournament/{league_id}/season/current/events/next/0"
+                data = self._make_request(endpoint)
+                
+                if not data or 'events' not in data:
+                    continue
+                
+                for event in data['events']:
+                    try:
+                        start_timestamp = event.get('startTimestamp', 0)
+                        match_time = datetime.fromtimestamp(start_timestamp)
+                        
+                        if match_time > today + timedelta(days=days_ahead):
+                            continue
+                        
+                        home_team = event.get('homeTeam', {}).get('name', '')
+                        away_team = event.get('awayTeam', {}).get('name', '')
+                        
+                        if not home_team or not away_team:
+                            continue
+                        
+                        fixture = {
+                            'id': event.get('id'),
+                            'sport_key': f'sofascore_{league_id}',
+                            'sport_title': league_name,
+                            'league_name': league_name,
+                            'commence_time': match_time.isoformat(),
+                            'home_team': home_team,
+                            'away_team': away_team,
+                            'bookmakers': [],
+                            'formatted_date': match_time.strftime('%Y-%m-%d'),
+                            'formatted_time': match_time.strftime('%H:%M'),
+                            'source': 'sofascore_scraper'
+                        }
+                        
+                        all_fixtures.append(fixture)
+                        
+                    except Exception as e:
+                        logger.debug(f"⚠️ Error parsing event: {e}")
+                        continue
+                
+                logger.info(f"✅ Scraped {len([f for f in all_fixtures if f['league_name'] == league_name])} fixtures from {league_name}")
+                
+            except Exception as e:
+                logger.warning(f"⚠️ Error scraping {league_name}: {e}")
+                continue
+        
+        logger.info(f"🌐 EMERGENCY SCRAPING COMPLETE: {len(all_fixtures)} total fixtures")
+        return all_fixtures
 
 
 if __name__ == "__main__":

@@ -149,6 +149,11 @@ class APICacheManager:
             response_data: Response to cache (will be JSON serialized)
             ttl_hours: Time to live in hours (default 24)
         """
+        # ⚠️ VALIDATION: Don't cache empty or None responses
+        if response_data is None or (isinstance(response_data, (list, dict)) and len(response_data) == 0):
+            logger.warning(f"⚠️ SKIPPED CACHING: Empty response for {endpoint} ({cache_key[:30]}...)")
+            return
+        
         expires_at = datetime.now() + timedelta(hours=ttl_hours)
         
         db_helper.execute(f'''
