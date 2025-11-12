@@ -40,7 +40,9 @@ The system employs advanced prediction features including:
 - **Data Layer:** Migrated from SQLite to PostgreSQL (Replit's built-in Neon database) to eliminate database locking issues during concurrent workflow access, using connection pooling.
 - **Database Connection Resilience:** Implemented TCP keepalives and intelligent retry logic to prevent SSL connection drops.
 - **Date Field Standardization:** System uses `recommended_date` (when prediction generated) and `match_date` (when match played), with `match_date` being the primary field for all queries.
-- **Persistent API Caching:** Migrated from in-memory caching to PostgreSQL-based persistent caching using an `APICacheManager` class to store API responses and track daily usage across all workflows, significantly reducing API calls.
+- **Persistent API Caching:** PostgreSQL-based persistent caching using `APICacheManager` class to store API responses and track daily usage across all workflows. Cache tables created: `api_football_cache`, `odds_api_cache`, `api_request_counter`. Fixture fetching now uses `_fetch_with_cache()` method with 24h TTL and stable cache keys (league_id + date).
+- **Cache Validation System:** Implemented smart cache validation that prevents storing empty/null responses, preventing quota exhaustion from caching error states (Nov 12, 2025 fix).
+- **Emergency Fixture Fallback:** Added SofaScore web scraper as third-layer fallback when both The Odds API and API-Football quotas are exhausted, ensuring continuous operation.
 - **Data Processing:** Pandas DataFrames are used for all data manipulation, with timestamp-based organization and financial calculations (Kelly criterion, edge calculation).
 - **Legal Framework:** Comprehensive legal documentation (ToS, Risk Disclaimer, Privacy Policy) in Swedish and English, compliant with GDPR and Swedish law.
 
