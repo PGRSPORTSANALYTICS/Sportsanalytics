@@ -807,3 +807,75 @@ class APIFootballClient:
         except Exception as e:
             logger.error(f"❌ Error processing fixture statistics: {e}")
             return None
+    
+    def get_upcoming_fixtures_cached(self, league_ids: List[int], days_ahead: int = 7) -> List[Dict]:
+        """
+        Get upcoming fixtures for multiple leagues with PERSISTENT caching
+        
+        Args:
+            league_ids: List of league IDs to fetch
+            days_ahead: Number of days to look ahead (default 7)
+            
+        Returns:
+            List of formatted fixtures compatible with prediction generator
+        """
+        today = datetime.now()
+        end_date = today + timedelta(days=days_ahead)
+        
+        current_year = today.year
+        current_season = current_year if today.month >= 7 else current_year - 1
+        
+        all_fixtures = []
+        
+        for league_id in league_ids:
+            cache_key = f"fixtures_league_{league_id}_{today.strftime('%Y%m%d')}_{days_ahead}d"
+            
+            params = {
+                'league': league_id,
+                'season': current_season,
+                'from': today.strftime('%Y-%m-%d'),
+                'to': end_date.strftime('%Y-%m-%d'),
+                'status': 'NS'
+            }
+            
+            fixtures = self._fetch_with_cache('fixtures', params, cache_key, ttl_hours=24)
+            
+            if not fixtures:
+                logger.info(f"📅 Found 0 upcoming fixtures in league {league_id}")
+                continue
+            
+            logger.info(f"📅 Found {len(fixtures)} upcoming fixtures in league {league_id} (cached)")
+            
+            for fixture in fixtures:
+                teams = fixture.get('teams', {})
+                fixture_info = fixture.get('fixture', {})
+                league_info = fixture.get('league', {})
+                
+                match_date = fixture_info.get('date', '')
+                formatted_date = ""
+                formatted_time = ""
+                if match_date:
+                    try:
+                        dt = datetime.fromisoformat(match_date.replace('Z', '+00:00'))
+                        formatted_date = dt.strftime("%Y-%m-%d")
+                        formatted_time = dt.strftime("%H:%M")
+                    except:
+                        formatted_date = match_date[:10] if len(match_date) > 10 else ""
+                        formatted_time = match_date[11:16] if len(match_date) > 16 else ""
+                
+                formatted_fixture = {
+                    'id': fixture_info.get('id'),
+                    'sport_key': f"league_{league_id}",
+                    'sport_title': league_info.get('name', f'League {league_id}'),
+                    'league_name': league_info.get('name', f'League {league_id}'),
+                    'commence_time': fixture_info.get('date'),
+                    'home_team': teams.get('home', {}).get('name', 'Unknown'),
+                    'away_team': teams.get('away', {}).get('name', 'Unknown'),
+                    'bookmakers': [],
+                    'formatted_date': formatted_date,
+                    'formatted_time': formatted_time
+                }
+                
+                all_fixtures.append(formatted_fixture)
+        
+        return all_fixtures
