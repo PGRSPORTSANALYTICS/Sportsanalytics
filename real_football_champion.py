@@ -1151,22 +1151,18 @@ class RealFootballChampion:
         print("\n🔍 CHECKING LINEUPS FOR UPCOMING MATCHES")
         print("=" * 50)
         
-        cursor = self.conn.cursor()
-        
         # Get exact score predictions for matches in the next 1-3 hours
         current_time = datetime.now()
         one_hour_from_now = (current_time + timedelta(hours=1)).isoformat()
         three_hours_from_now = (current_time + timedelta(hours=3)).isoformat()
         
-        cursor.execute('''
+        upcoming_matches = db_helper.execute('''
             SELECT id, home_team, away_team, kickoff_time 
             FROM football_opportunities
             WHERE market = 'exact_score' 
             AND outcome IS NULL
-            AND kickoff_time BETWEEN ? AND ?
-        ''', (one_hour_from_now, three_hours_from_now))
-        
-        upcoming_matches = cursor.fetchall()
+            AND kickoff_time BETWEEN %s AND %s
+        ''', (one_hour_from_now, three_hours_from_now), fetch='all')
         
         if not upcoming_matches:
             print("📭 No matches found in lineup confirmation window (1-3 hours)")
@@ -1196,11 +1192,10 @@ class RealFootballChampion:
                     print(f"      Away: {lineups['away_formation']} ({lineups['away_starters']} starters)")
                     
                     # Update analysis JSON with lineup info
-                    cursor.execute('''
-                        SELECT analysis FROM football_opportunities WHERE id = ?
-                    ''', (match_id,))
+                    result = db_helper.execute('''
+                        SELECT analysis FROM football_opportunities WHERE id = %s
+                    ''', (match_id,), fetch='one')
                     
-                    result = cursor.fetchone()
                     if result and result[0]:
                         import json
                         analysis = json.loads(result[0]) if isinstance(result[0], str) else result[0]
@@ -1208,13 +1203,11 @@ class RealFootballChampion:
                         analysis['home_formation'] = lineups['home_formation']
                         analysis['away_formation'] = lineups['away_formation']
                         
-                        cursor.execute('''
+                        db_helper.execute('''
                             UPDATE football_opportunities 
-                            SET analysis = ?
-                            WHERE id = ?
+                            SET analysis = %s
+                            WHERE id = %s
                         ''', (json.dumps(analysis), match_id))
-                        
-                        self.conn.commit()
                 else:
                     print(f"   ⏳ Lineups not yet available (normal for 2+ hours before kickoff)")
                     
@@ -2046,24 +2039,14 @@ class RealFootballChampion:
     def get_todays_count(self):
         """Get count of today's pending opportunities"""
         today_date = datetime.now().strftime('%Y-%m-%d')
-        cursor = self.conn.cursor()
-        cursor.execute('''
+        result = db_helper.execute('''
             SELECT COUNT(*) FROM football_opportunities 
-            WHERE match_date = ? AND status = 'pending'
-        ''', (today_date,))
-        return cursor.fetchone()[0]
+            WHERE match_date = %s AND status = 'pending'
+        ''', (today_date,), fetch='one')
+        return result[0] if result else 0
     
     def save_opportunity(self, opportunity: FootballOpportunity):
         """Save opportunity to database (with duplicate prevention and daily limit)"""
-        
-        # 🛑 EMERGENCY KILL-SWITCH - PREVENT REAL MONEY BETTING
-        import os
-        enable_real_bets = os.getenv('ENABLE_REAL_BETS', '0')
-        if enable_real_bets != '1':
-            print("🛑 EMERGENCY KILL-SWITCH ACTIVE - FOOTBALL BETTING DISABLED")
-            print("💡 Set ENABLE_REAL_BETS=1 environment variable to enable real betting")
-            print(f"🎯 WOULD SAVE OPPORTUNITY (BLOCKED): {opportunity.home_team} vs {opportunity.away_team} - {opportunity.selection} @ {opportunity.odds} - Stake: ${opportunity.stake}")
-            return False
         
         # Defense-in-depth: Check daily limit before saving - STRICT SELECTIVITY
         DAILY_LIMIT = 15  # 🔧 CRITICAL: High-quality predictions, balanced quantity
@@ -2072,17 +2055,15 @@ class RealFootballChampion:
             print(f"⚠️ DAILY LIMIT REACHED: {current_count}/{DAILY_LIMIT} bets already generated today")
             return False
         
-        cursor = self.conn.cursor()
-        
         # Check if this exact opportunity already exists TODAY
         today_start = int(time.time()) - (24 * 60 * 60)  # 24 hours ago
-        cursor.execute('''
+        result = db_helper.execute('''
             SELECT COUNT(*) FROM football_opportunities 
-            WHERE home_team = ? AND away_team = ? AND selection = ? 
-            AND status = 'pending' AND timestamp > ?
-        ''', (opportunity.home_team, opportunity.away_team, opportunity.selection, today_start))
+            WHERE home_team = %s AND away_team = %s AND selection = %s 
+            AND status = 'pending' AND timestamp > %s
+        ''', (opportunity.home_team, opportunity.away_team, opportunity.selection, today_start), fetch='one')
         
-        duplicate_count = cursor.fetchone()[0]
+        duplicate_count = result[0] if result else 0
         if duplicate_count > 0:
             # Duplicate found, skip saving
             print(f"🔄 SKIPPED DUPLICATE: {opportunity.home_team} vs {opportunity.away_team} - {opportunity.selection}")
@@ -2132,13 +2113,13 @@ class RealFootballChampion:
             bet_category = 'today'  # Default to today on parsing errors
         
         try:
-            cursor.execute('''
+            db_helper.execute('''
                 INSERT INTO football_opportunities 
                 (timestamp, match_id, home_team, away_team, league, market, selection, 
                  odds, edge_percentage, confidence, analysis, stake, match_date, kickoff_time,
                  quality_score, recommended_date, recommended_tier, daily_rank,
                  model_version, model_prob, calibrated_prob, kelly_stake, tier, bet_category)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ''', (
                 int(time.time()),
                 opportunity.match_id,
@@ -2165,7 +2146,6 @@ class RealFootballChampion:
                 tier,  # 💰 TIERED SYSTEM: Save tier for commercial viability
                 bet_category  # 📅 Categorize for dashboard/Telegram organization
             ))
-            self.conn.commit()
             print(f"✅ SAVED: {opportunity.home_team} vs {opportunity.away_team} - Quality: {quality_score:.1f}, Date: {today_date}, Rank: 999")
             return True
         except Exception as e:
@@ -2180,16 +2160,16 @@ class RealFootballChampion:
     def rank_and_tier_opportunities(self):
         """Rank today's opportunities by quality score (tiers already assigned)"""
         today_date = datetime.now().strftime('%Y-%m-%d')
-        cursor = self.conn.cursor()
         
         # Get all today's opportunities ordered by quality score
-        cursor.execute('''
+        opportunities = db_helper.execute('''
             SELECT id, quality_score, tier FROM football_opportunities 
-            WHERE match_date = ? AND daily_rank = 999
+            WHERE match_date = %s AND daily_rank = 999
             ORDER BY quality_score DESC
-        ''', (today_date,))
+        ''', (today_date,), fetch='all')
         
-        opportunities = cursor.fetchall()
+        if not opportunities:
+            return
         
         # Count opportunities by tier
         tier_counts = {'premium': 0, 'standard': 0, 'value': 0, 'backup': 0}
@@ -2197,16 +2177,15 @@ class RealFootballChampion:
         for rank, (opp_id, quality_score, tier) in enumerate(opportunities, 1):
             # Keep the tier that was assigned during analysis
             # Just update the daily rank for ordering
-            cursor.execute('''
+            db_helper.execute('''
                 UPDATE football_opportunities 
-                SET daily_rank = ?
-                WHERE id = ?
+                SET daily_rank = %s
+                WHERE id = %s
             ''', (rank, opp_id))
             
             if tier in tier_counts:
                 tier_counts[tier] += 1
         
-        self.conn.commit()
         print(f"🏆 Ranked {len(opportunities)} opportunities: {tier_counts['premium']} premium, {tier_counts['standard']} standard, {tier_counts['value']} value, {tier_counts['backup']} backup")
     
     def run_analysis_cycle(self):
@@ -2485,14 +2464,13 @@ class RealFootballChampion:
             import random
             
             # Get current score distribution for diversity bonus
-            cursor = self.conn.cursor()
-            cursor.execute('''
+            results = db_helper.execute('''
                 SELECT selection, COUNT(*) as count 
                 FROM football_opportunities 
                 WHERE market = 'exact_score' AND (outcome IS NULL OR outcome = '')
                 GROUP BY selection
-            ''')
-            current_scores = {row[0].replace('Exact Score: ', ''): row[1] for row in cursor.fetchall()}
+            ''', fetch='all')
+            current_scores = {row[0].replace('Exact Score: ', ''): row[1] for row in (results or [])}
             total_current = sum(current_scores.values()) or 1
             
             # 💰 DATA-DRIVEN SCORE SELECTION: Let data determine best scores!
