@@ -6,7 +6,6 @@ Generates SGP predictions using real AI probabilities
 """
 
 import logging
-import sqlite3
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
 import os
@@ -16,17 +15,15 @@ import sys
 from sgp_predictor import SGPPredictor
 from telegram_sender import TelegramBroadcaster
 from api_football_client import APIFootballClient
+from db_helper import db_helper
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-
-DB_PATH = 'data/real_football.db'
 
 class SGPChampion:
     """Automated SGP prediction system running 24/7"""
     
     def __init__(self):
-        self.db_path = DB_PATH
         self.sgp_predictor = SGPPredictor()
         self.telegram = TelegramBroadcaster()
         
@@ -140,19 +137,15 @@ class SGPChampion:
     
     def check_daily_limit(self) -> bool:
         """Check if we've hit daily SGP limit (max 20 per day)"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
         today = datetime.now().date().isoformat()
         
-        cursor.execute('''
+        result = db_helper.execute('''
             SELECT COUNT(*) FROM sgp_predictions 
-            WHERE DATE(match_date) = ?
+            WHERE DATE(match_date) = %s
             AND status = 'pending'
-        ''', (today,))
+        ''', (today,), fetch='one')
         
-        count = cursor.fetchone()[0]
-        conn.close()
+        count = result[0] if result else 0
         
         return count < 20  # Max 20 SGPs per day
     

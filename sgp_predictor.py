@@ -5,7 +5,6 @@ Generates automated SGP predictions using REAL AI probabilities from Poisson/Neu
 Runs daily in parallel with exact score predictions
 """
 
-import sqlite3
 import numpy as np
 import logging
 from datetime import datetime, timedelta
@@ -16,11 +15,10 @@ import os
 
 from sgp_self_learner import SGPSelfLearner
 from sgp_odds_pricing import OddsPricingService
+from db_helper import db_helper
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-
-DB_PATH = 'data/real_football.db'
 
 # Correlation heuristics between SGP legs
 CORR_RULES = {
@@ -79,7 +77,6 @@ class SGPPredictor:
     """Generates Same Game Parlay predictions using real AI probabilities"""
     
     def __init__(self):
-        self.db_path = DB_PATH
         self._init_database()
         self.self_learner = SGPSelfLearner()
         self.odds_pricing = OddsPricingService(parlay_margin=0.07)
@@ -87,13 +84,10 @@ class SGPPredictor:
     
     def _init_database(self):
         """Create SGP predictions table"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
+        db_helper.execute('''
             CREATE TABLE IF NOT EXISTS sgp_predictions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp INTEGER,
+                id SERIAL PRIMARY KEY,
+                timestamp BIGINT,
                 match_id TEXT,
                 home_team TEXT,
                 away_team TEXT,
@@ -121,7 +115,7 @@ class SGPPredictor:
                 result TEXT,
                 payout REAL,
                 profit_loss REAL,
-                settled_timestamp INTEGER,
+                settled_timestamp BIGINT,
                 
                 -- Model metadata
                 model_version TEXT,
@@ -134,8 +128,6 @@ class SGPPredictor:
             )
         ''')
         
-        conn.commit()
-        conn.close()
         logger.info("✅ SGP database schema ready")
     
     def calculate_over_under_prob(self, lambda_home: float, lambda_away: float, line: float = 2.5, over: bool = True) -> float:
@@ -1044,9 +1036,6 @@ class SGPPredictor:
     
     def save_sgp_prediction(self, sgp: Dict[str, Any]):
         """Save SGP prediction to database"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
         match_data = sgp['match_data']
         
         # Format legs as text
@@ -1065,13 +1054,13 @@ class SGPPredictor:
         import json
         pricing_metadata_str = json.dumps(sgp.get('pricing_metadata', {}))
         
-        cursor.execute('''
+        db_helper.execute('''
             INSERT INTO sgp_predictions (
                 timestamp, match_id, home_team, away_team, league, match_date, kickoff_time,
                 legs, parlay_description, parlay_probability, fair_odds, bookmaker_odds, ev_percentage,
                 stake, kelly_stake, model_version, simulations, correlation_method,
                 pricing_mode, pricing_metadata
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ''', (
             int(datetime.now().timestamp()),
             match_data.get('match_id', ''),
@@ -1094,9 +1083,6 @@ class SGPPredictor:
             sgp.get('pricing_mode', 'simulated'),
             pricing_metadata_str
         ))
-        
-        conn.commit()
-        conn.close()
         
         logger.info(f"✅ SGP saved: {match_data['home_team']} vs {match_data['away_team']} | {sgp['description']} | EV: {sgp['ev_percentage']:.1f}%")
 
