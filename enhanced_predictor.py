@@ -194,8 +194,13 @@ class EnhancedExactScorePredictor:
                 logger.info(f"📊 Fetching team form from SofaScore scraper (fallback)")
                 try:
                     league_name = match.get('league', 'Premier League')
-                    enriched['home_form'] = self.sofascore_scraper.get_team_form(home_team, league_name, last_n=5)
-                    enriched['away_form'] = self.sofascore_scraper.get_team_form(away_team, league_name, last_n=5)
+                    home_form_list = self.sofascore_scraper.get_team_form(home_team, league_name, last_n=5)
+                    away_form_list = self.sofascore_scraper.get_team_form(away_team, league_name, last_n=5)
+                    
+                    # Convert list format to dict format
+                    enriched['home_form'] = self._convert_form_list_to_dict(home_form_list)
+                    enriched['away_form'] = self._convert_form_list_to_dict(away_form_list)
+                    
                     form_data_obtained = True
                     enriched['_real_data_available'] = True
                     logger.info(f"✅ SofaScore form data obtained")
@@ -224,7 +229,11 @@ class EnhancedExactScorePredictor:
                 logger.info(f"🔄 Fetching H2H from SofaScore scraper (fallback)")
                 try:
                     league_name = match.get('league', 'Premier League')
-                    enriched['h2h'] = self.sofascore_scraper.get_h2h_data(home_team, away_team, league_name)
+                    h2h_list = self.sofascore_scraper.get_h2h_data(home_team, away_team, league_name)
+                    
+                    # Convert list format to dict format
+                    enriched['h2h'] = self._convert_h2h_list_to_dict(h2h_list, home_team, away_team)
+                    
                     logger.info(f"✅ SofaScore H2H data obtained")
                 except Exception as e:
                     logger.warning(f"⚠️ SofaScore H2H scraper failed: {e}")
@@ -508,3 +517,106 @@ class EnhancedExactScorePredictor:
         quality -= min(injuries * 3, 15)
         
         return min(100, max(30, quality))
+    
+    def _convert_form_list_to_dict(self, form_list: List[Dict]) -> Dict:
+        """
+        Convert SofaScore form list format to API-Football dict format
+        
+        SofaScore returns: [{'date': '2025-11-01', 'home_away': 'H', 'score': '2-1', 'result': 'W'}, ...]
+        Expected dict format: {'win_rate': 0.6, 'goals_per_game': 2.0, ...}
+        """
+        if not form_list or not isinstance(form_list, list):
+            return {
+                'win_rate': 0.4, 'goals_per_game': 1.2, 'conceded_per_game': 1.2,
+                'clean_sheet_rate': 0.2, 'matches_played': 0
+            }
+        
+        wins = 0
+        goals_scored = 0
+        goals_conceded = 0
+        clean_sheets = 0
+        total = len(form_list)
+        
+        for match in form_list:
+            result = match.get('result', 'L')
+            if result == 'W':
+                wins += 1
+            
+            score = match.get('score', '0-0')
+            try:
+                if match.get('home_away') == 'H':
+                    home_score, away_score = map(int, score.split('-'))
+                    goals_scored += home_score
+                    goals_conceded += away_score
+                else:
+                    away_score, home_score = map(int, score.split('-'))
+                    goals_scored += away_score
+                    goals_conceded += home_score
+                
+                if goals_conceded == 0:
+                    clean_sheets += 1
+            except:
+                pass
+        
+        return {
+            'win_rate': wins / total if total > 0 else 0.4,
+            'goals_per_game': goals_scored / total if total > 0 else 1.2,
+            'conceded_per_game': goals_conceded / total if total > 0 else 1.2,
+            'clean_sheet_rate': clean_sheets / total if total > 0 else 0.2,
+            'matches_played': total
+        }
+    
+    def _convert_h2h_list_to_dict(self, h2h_list: List[Dict], home_team: str, away_team: str) -> Dict:
+        """
+        Convert SofaScore H2H list format to API-Football dict format
+        
+        SofaScore returns: [{'date': '2025-11-01', 'home_team': 'A', 'away_team': 'B', 'home_score': 2, 'away_score': 1}, ...]
+        Expected dict format: {'team1_win_rate': 0.5, 'avg_total_goals': 2.5, ...}
+        """
+        if not h2h_list or not isinstance(h2h_list, list):
+            return {
+                'team1_win_rate': 0.33, 'avg_total_goals': 2.5,
+                'over_2_5_rate': 0.5, 'btts_rate': 0.6, 'total_matches': 0,
+                'avg_team1_goals': 1.5, 'avg_team2_goals': 1.5
+            }
+        
+        team1_wins = 0
+        total_goals = 0
+        over_2_5 = 0
+        btts = 0
+        team1_goals = 0
+        team2_goals = 0
+        total = len(h2h_list)
+        
+        for match in h2h_list:
+            home_score = match.get('home_score', 0)
+            away_score = match.get('away_score', 0)
+            match_home = match.get('home_team', '')
+            
+            # Determine which team is "team1" (home team in current match)
+            if match_home == home_team:
+                if home_score > away_score:
+                    team1_wins += 1
+                team1_goals += home_score
+                team2_goals += away_score
+            else:
+                if away_score > home_score:
+                    team1_wins += 1
+                team1_goals += away_score
+                team2_goals += home_score
+            
+            total_goals += home_score + away_score
+            if home_score + away_score > 2.5:
+                over_2_5 += 1
+            if home_score > 0 and away_score > 0:
+                btts += 1
+        
+        return {
+            'team1_win_rate': team1_wins / total if total > 0 else 0.33,
+            'avg_total_goals': total_goals / total if total > 0 else 2.5,
+            'over_2_5_rate': over_2_5 / total if total > 0 else 0.5,
+            'btts_rate': btts / total if total > 0 else 0.6,
+            'total_matches': total,
+            'avg_team1_goals': team1_goals / total if total > 0 else 1.5,
+            'avg_team2_goals': team2_goals / total if total > 0 else 1.5
+        }
