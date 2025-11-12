@@ -114,8 +114,8 @@ class RealFootballChampion:
             self.telegram = None
         
         # 🏥 Initialize API-Football client for injuries and lineups
-        # TEMPORARY: Disabled due to API-Football having no November 2025+ fixture data
-        use_api_football = os.getenv('USE_API_FOOTBALL', 'false').lower() == 'true'
+        # ENABLED: Fallback when Odds API quota exceeded
+        use_api_football = os.getenv('USE_API_FOOTBALL', 'true').lower() == 'true'
         if use_api_football:
             try:
                 self.api_football_client = APIFootballClient()

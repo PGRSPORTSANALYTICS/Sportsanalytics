@@ -48,6 +48,10 @@ args = "Daily Games Reminder"
 task = "workflow.run"
 args = "SGP Verifier"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Prediction Generator"
+
 [[workflows.workflow]]
 name = "install_dependencies"
 author = "agent"
@@ -130,6 +134,17 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "echo \"SGP Verifier runs at midnight via Smart Verifier integration\" && sleep infinity"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow]]
+name = "Prediction Generator"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python3 real_football_champion.py"
 
 [workflows.workflow.metadata]
 outputType = "console"
