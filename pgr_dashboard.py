@@ -626,7 +626,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-col1, col2, col3 = st.columns([1, 1, 1])
+col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
 
 with col1:
     if st.button("⚽ EXACT SCORE", key="btn_exact", use_container_width=True):
@@ -643,11 +643,17 @@ with col3:
         st.session_state.selected_product = 'monstersgp'
         st.rerun()
 
+with col4:
+    if st.button("👩⚽ WOMEN 1X2", key="btn_women", use_container_width=True):
+        st.session_state.selected_product = 'women_1x2'
+        st.rerun()
+
 # Show active selection
 product_labels = {
     'exact_score': 'Exact Score',
     'sgp': 'SGP',
-    'monstersgp': 'MonsterSGP'
+    'monstersgp': 'MonsterSGP',
+    'women_1x2': "Women's 1X2"
 }
 st.markdown(f"""
 <div style="text-align: center; color: #3FB68B; font-size: 0.9rem; margin-top: -1rem; margin-bottom: 2rem;">
@@ -663,12 +669,46 @@ if selected == 'exact_score':
     product_stats = stats['exact_score']
 elif selected == 'sgp':
     product_stats = stats['sgp']
+elif selected == 'women_1x2':
+    # Get women's 1X2 stats from BetStatusService
+    try:
+        from bet_status_service import BetStatusService
+        bet_service = BetStatusService()
+        women_stats = bet_service.get_women_1x2_performance()
+        
+        # Defensive handling for empty data
+        product_stats = {
+            'total': women_stats.get('total_bets', 0),
+            'wins': women_stats.get('wins', 0),
+            'losses': women_stats.get('losses', 0),
+            'profit': women_stats.get('total_profit', 0.0)
+        }
+        
+        total_roi = women_stats.get('roi', 0.0)
+        hit_rate_200 = women_stats.get('hit_rate', 0.0)
+        
+        # Safe odds calculation
+        total_staked = women_stats.get('total_staked', 0.0)
+        total_profit = women_stats.get('total_profit', 0.0)
+        
+        if total_staked > 0 and (total_staked + total_profit) > 0:
+            avg_odds = (total_staked + total_profit) / total_staked
+        else:
+            avg_odds = 0.0
+            
+    except Exception as e:
+        logger.error(f"Error loading women's 1X2 stats: {e}")
+        product_stats = {'total': 0, 'wins': 0, 'losses': 0, 'profit': 0.0}
+        total_roi = 0.0
+        hit_rate_200 = 0.0
+        avg_odds = 0.0
 else:  # monstersgp
     product_stats = stats['monstersgp']
 
-total_roi = (product_stats['profit'] / (product_stats['total'] * 100)) * 100 if product_stats['total'] > 0 else 0
-hit_rate_200 = get_last_n_hit_rate(200, product=selected)
-avg_odds = get_avg_odds(product=selected)
+if selected != 'women_1x2':
+    total_roi = (product_stats['profit'] / (product_stats['total'] * 100)) * 100 if product_stats['total'] > 0 else 0
+    hit_rate_200 = get_last_n_hit_rate(200, product=selected)
+    avg_odds = get_avg_odds(product=selected)
 
 # Hero Metrics
 col1, col2, col3 = st.columns(3)
