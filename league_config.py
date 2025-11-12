@@ -124,7 +124,7 @@ LEAGUE_REGISTRY: List[LeagueConfig] = [
     ),
     LeagueConfig(
         name="Conference League",
-        odds_api_key="soccer_uefa_europa_conference_league",
+        odds_api_key="soccer_uefa_conference_league",
         api_football_id=848,
         country="Europe",
         tier=2,
