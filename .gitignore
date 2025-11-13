@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Data and exports
+railway_export/
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+/tmp/
+logs/
+
+# Environment
+.env
+.env.local
+*.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Replit specific
+.replit
+replit.nix
+.config/
+.upm/
+.pythonlibs/
+
+# Models and large files
+data/models/
+*.h5
+*.pkl
+*.joblib
+
+# Temporary files
+*.tmp
+*.bak
+analysis*.csv
