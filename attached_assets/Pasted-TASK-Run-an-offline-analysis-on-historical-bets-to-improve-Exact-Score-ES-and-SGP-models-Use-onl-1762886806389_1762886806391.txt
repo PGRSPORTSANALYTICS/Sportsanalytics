@@ -1,4 +1,4 @@
-TASK: Run an offline analysis on historical bets to improve Exact Score (ES) and SGP models. Use only completed matches with valid odds and model probabilities.
+TASK: Run an offline analysis on historical bets to improve Final Score (ES) and SGP models. Use only completed matches with valid odds and model probabilities.
 
 DATA ASSUMPTIONS:
 - Each bet row has: ts, league, match_id, system (ES/SGP), market, odds_placed, model_p (prob), result (win/loss), xg_home, xg_away, xga_home, xga_away, home_flag (1/0), kickoff.
@@ -19,7 +19,7 @@ Steps:
 2) Bin xg_diff: [-inf,-1.0), [-1.0,-0.5), [-0.5,0), [0,0.5), [0.5,1.0), [1.0,inf)
 3) For each bin:
    - n_bets, ES hit rate, SGP hit rate
-   - Top 5 most frequent exact scores (with frequency)
+   - Top 5 most frequent final scores (with frequency)
    - Home win %, Draw %, Away win %
 Print table + save CSV (analysis1.csv). Provide 2–3 bullets: how bins relate to ES picks (e.g., when |xg_diff|<0.4, draws/1–1 more common).
 
