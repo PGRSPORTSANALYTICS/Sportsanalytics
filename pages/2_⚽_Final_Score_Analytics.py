@@ -98,7 +98,7 @@ try:
             AVG(odds) as avg_odds,
             AVG(edge_percentage) as avg_ev
         FROM football_opportunities
-        WHERE market = 'exact_score'
+        WHERE market = 'final_score'
         AND DATE(match_date) = DATE('now')
     ''')
     
@@ -162,7 +162,7 @@ try:
             league,
             match_date
         FROM football_opportunities
-        WHERE market = 'exact_score'
+        WHERE market = 'final_score'
         AND result IS NULL
         AND DATE(match_date) >= DATE('now')
         ORDER BY match_date ASC
@@ -395,7 +395,7 @@ try:
                         actual_score, outcome, profit_loss,
                         league, match_date
                     FROM football_opportunities
-                    WHERE market = 'exact_score'
+                    WHERE market = 'final_score'
                     AND result IS NOT NULL
                     AND strftime('%Y-%m', match_date) = ?
                     ORDER BY match_date DESC
@@ -424,14 +424,14 @@ try:
                     df_exact = pd.DataFrame(exact_results)
                     st.dataframe(df_exact, width='stretch', hide_index=True)
                 else:
-                    st.info("No exact score predictions this month")
+                    st.info("No final score predictions this month")
     else:
-        st.info("No exact score historical predictions yet. Check back after matches settle!")
+        st.info("No final score historical predictions yet. Check back after matches settle!")
     
     conn.close()
 
 except Exception as e:
-    st.error(f"Error loading exact score monthly history: {e}")
+    st.error(f"Error loading final score monthly history: {e}")
 
 st.markdown("---")
 
@@ -457,7 +457,7 @@ try:
                      WHEN outcome = 'loss' THEN -stake 
                      ELSE 0 END) as profit
         FROM football_opportunities
-        WHERE market = 'exact_score'
+        WHERE market = 'final_score'
         AND result IS NOT NULL
         GROUP BY league
         HAVING COUNT(*) >= 5
