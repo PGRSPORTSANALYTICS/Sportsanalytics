@@ -1,5 +1,5 @@
 # es_core.py
-# Exact Score-pipeline: xG -> Poisson -> Dixon-Coles, draw-trigger, kalibrering & EV.
+# Final score-pipeline: xG -> Poisson -> Dixon-Coles, draw-trigger, kalibrering & EV.
 # Ingen extern dependency. Plug-and-play.
 
 import math
