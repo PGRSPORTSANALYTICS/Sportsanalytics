@@ -1,5 +1,5 @@
 """
-🚀 ENHANCED FINAL SCORE PREDICTOR
+🚀 ENHANCED EXACT SCORE PREDICTOR
 Combines all advanced features for maximum accuracy
 """
 
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 # Import our new modules
 try:
     from advanced_features import AdvancedFeaturesAPI, OddsMovementTracker
-    from neural_score_predictor import NeuralScorePredictor, ensemble_final_score_prediction
+    from neural_score_predictor import NeuralScorePredictor, ensemble_exact_score_prediction
     ADVANCED_FEATURES_AVAILABLE = True
 except ImportError as e:
     logger.warning(f"⚠️ Advanced features not available: {e}")
@@ -39,7 +39,7 @@ except ImportError as e:
     SOFASCORE_SCRAPER_AVAILABLE = False
 
 
-class EnhancedfinalScorePredictor:
+class EnhancedexactScorePredictor:
     """
     🧠 ENHANCED PREDICTOR
     Combines multiple prediction methods for better accuracy
@@ -339,7 +339,7 @@ class EnhancedfinalScorePredictor:
             if self.odds_tracker and 'odds' in match:
                 self.odds_tracker.record_odds(
                     match_id=match_id,
-                    market='final_score',
+                    market='exact_score',
                     selection=f"{match['home_team']} vs {match['away_team']}",
                     odds=match.get('odds', 10.0)
                 )
@@ -348,7 +348,7 @@ class EnhancedfinalScorePredictor:
             if self.odds_tracker:
                 enriched['odds_movement'] = self.odds_tracker.get_odds_movement(
                     match_id=match_id,
-                    market='final_score',
+                    market='exact_score',
                     selection=f"{match['home_team']} vs {match['away_team']}"
                 )
             
@@ -382,7 +382,7 @@ class EnhancedfinalScorePredictor:
         h2h_probs = self._extract_h2h_patterns(enriched_data.get('h2h', {}))
         
         # Use ensemble method
-        ensemble_probs = ensemble_final_score_prediction(
+        ensemble_probs = ensemble_exact_score_prediction(
             xg_home=xg_home,
             xg_away=xg_away,
             neural_probs=neural_probs,
