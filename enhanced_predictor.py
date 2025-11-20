@@ -39,7 +39,7 @@ except ImportError as e:
     SOFASCORE_SCRAPER_AVAILABLE = False
 
 
-class EnhancedexactScorePredictor:
+class EnhancedExactScorePredictor:
     """
     🧠 ENHANCED PREDICTOR
     Combines multiple prediction methods for better accuracy
