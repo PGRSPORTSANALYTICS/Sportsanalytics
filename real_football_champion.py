@@ -2812,6 +2812,14 @@ class RealFootballChampion:
                 
                 if passes_league and passes_quality and passes_odds and passes_confidence and passes_elite_value:
                     # Save exact score opportunity (bypass daily limit)
+                        # 🔧 FIX: Konvertera numpy-typer till vanliga Python-float innan sparning
+    if 'elite_value' in opportunity:
+        opportunity['elite_value'] = float(opportunity['elite_value'])
+    if 'probability' in opportunity:
+        opportunity['probability'] = float(opportunity['probability'])
+    if 'final_odds' in opportunity:
+        opportunity['final_odds'] = float(opportunity['final_odds'])
+
                     saved = self.save_exact_score_opportunity(opportunity)
                     if saved:
                         total_exact_scores += 1
