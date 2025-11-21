@@ -2828,6 +2828,10 @@ class RealFootballChampion:
                         'final_odds': float(final_odds),
                         'quality_score': float(quality_score),
                     })
+                 # --- SANITIZE NUMPY TYPES ---
+                   for key in ["elite_value", "probability", "final_odds"]:
+                       if key in opportunity:
+                           opportunity[key] = float(opportunity[key])
 
                     saved = self.save_exact_score_opportunity(opportunity)
                     if saved:
