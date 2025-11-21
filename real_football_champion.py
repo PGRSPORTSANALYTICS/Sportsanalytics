@@ -2822,19 +2822,30 @@ class RealFootballChampion:
             if saved:
                 total_exact_scores += 1
                 print("✅ ELITE PREDICTION SAVED")
-        else:
-            # Skip low-quality predictions (för debugg/logg)
-                        skip_reasons.append(f"quality={quality_score:.0f}")
-                    if not passes_odds:
-                        skip_reasons.append(f"odds={final_odds:.1f}")
-                    if not passes_confidence:
-                        skip_reasons.append(f"confidence={confidence}")
-                    if not passes_elite_value:
-                        skip_reasons.append(f"value={selected['elite_value']:.2f}")
-                    print(f"   ⏭️ SKIPPED (data-driven filter: {', '.join(skip_reasons)})")
-        
-        print(f"\n🎯 EXACT SCORE ANALYSIS COMPLETE: {total_exact_scores} predictions generated")
-        return total_exact_scores
+    else:
+        # Skip low-quality predictions (för debug/logg)
+        skip_reasons = []
+
+        if not passes_league:
+            skip_reasons.append(f"league={league}")
+
+        if not passes_quality:
+            skip_reasons.append(f"quality={quality_score:.0f}")
+
+        if not passes_odds:
+            skip_reasons.append(f"odds={final_odds:.1f}")
+
+        if not passes_confidence:
+            skip_reasons.append(f"confidence={confidence}")
+
+        if not passes_elite_value:
+            skip_reasons.append(f"value={selected['elite_value']:.2f}")
+
+        print(f"⏭️ SKIPPED (data-driven filter: {', '.join(skip_reasons)})")
+
+    print(f"\n🎯 EXACT SCORE ANALYSIS COMPLETE: {total_exact_scores} predictions generated")
+    return total_exact_scores
+
     
     def _extract_features_for_logging(self, analysis: Dict) -> Dict:
         """Extract all features from enriched analysis for logging"""
