@@ -2810,7 +2810,8 @@ class RealFootballChampion:
                 passes_elite_value = selected['elite_value'] >= 0.5  # 🔥 12%+ EV edge (relaxed from 15% to get predictions!)
                 # 🆕 NO PATTERN FILTER - Let models predict ANY score based on data analysis
                 
-                if passes_league and passes_quality and passes_odds and passes_confidence and passes_elite_value:
+if 'elite_value' in opportunity:
+    elite_val = opportunity['elite_value']
                     # Save exact score opportunity (bypass daily limit)
                         # 🔧 FIX: Konvertera numpy-typer till vanliga Python-float innan sparning
     if 'elite_value' in opportunity:
