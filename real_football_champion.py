@@ -2802,8 +2802,6 @@ class RealFootballChampion:
                 ]
                 is_quality_league = any(qual in league for qual in QUALITY_LEAGUES)
                 
-                              is_quality_league = any(qual in league for qual in QUALITY_LEAGUES)
-                
                 # 💰 DATA-DRIVEN GATES: Let the data determine best scores!
                 passes_league = is_quality_league          # Quality leagues with good data
                 passes_quality = quality_score >= 20       # Balanced quality (matches system output)
