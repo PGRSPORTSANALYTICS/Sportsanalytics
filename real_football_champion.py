@@ -2800,51 +2800,64 @@ class RealFootballChampion:
                     'Brazilian Serie A',      # 🇧🇷 24/7 coverage, different timezone
                     'Major League Soccer'     # 🇺🇸 Evening coverage, growing data quality
                 ]
+                                # 💰 DATA-DRIVEN GATES: Let the data determine best scores!
                 is_quality_league = any(qual in league for qual in QUALITY_LEAGUES)
-                
-                # 💰 DATA-DRIVEN GATES: Let the data determine best scores!
-                passes_league = is_quality_league  # Quality leagues with good data
-                passes_quality = quality_score >= 20  # Balanced quality (matches system output)
-                passes_odds = 7 <= final_odds <= 20  # Target 11-13x sweet spot (allow 7-20 range)
-                passes_confidence = confidence >= 50  # Good confidence threshold
-                passes_elite_value = selected['elite_value'] >= 0.5  # 🔥 12%+ EV edge (relaxed from 15% to get predictions!)
-                # 🆕 NO PATTERN FILTER - Let models predict ANY score based on data analysis
-        # ================================
-        #  EXACT SCORE SAVE LOGIC
-        # ================================
-                # --- SANITIZE NUMPY TYPES (robust for dict OR FootballOpportunity object) ---
-        if isinstance(opportunity, dict):
-            for key in ["elite_value", "probability", "final_odds"]:
-                if key in opportunity:
-                    opportunity[key] = float(opportunity[key])
-        else:
-            if hasattr(opportunity, "elite_value"):
-                opportunity.elite_value = float(opportunity.elite_value)
-            if hasattr(opportunity, "probability"):
-                opportunity.probability = float(opportunity.probability)
-            if hasattr(opportunity, "final_odds"):
-                opportunity.final_odds = float(opportunity.final_odds)
 
-        # SAVE EXACT SCORE OPPORTUNITY
-        saved = self.save_exact_score_opportunity(opportunity)
-        if saved:
-            total_exact_scores += 1
-            print("🟩 ELITE PREDICTION SAVED")
-        else:
-            # Skip low-quality predictions (for debug/logging)
-            skip_reasons = []
-            if not passes_league:
-                skip_reasons.append(f"league={league}")
-            if not passes_quality:
-                skip_reasons.append(f"quality={quality_score:.0f}")
-            if not passes_odds:
-                skip_reasons.append(f"odds={final_odds:.1f}")
-            if not passes_confidence:
-                skip_reasons.append(f"confidence={confidence}")
-            if not passes_elite_value:
-                skip_reasons.append(f"value={selected['elite_value']:.2f}")
+                passes_league = is_quality_league
+                passes_quality = quality_score >= 20        # relaxed for more volume
+                passes_odds = 7 <= final_odds <= 20         # allow wider range
+                passes_confidence = confidence >= 50        # relaxed confidence
+                passes_elite_value = selected.get("elite_value", 0) >= 0.5
 
-            print(f"🟦 SKIPPED (data-driven filter: {', '.join(skip_reasons)})")
+                if passes_league and passes_quality and passes_odds and passes_confidence and passes_elite_value:
+
+                    # --- SANITIZE NUMPY TYPES BEFORE SAVING (fix "schema np") ---
+                    # 1) meta in analysis
+                    try:
+                        meta = opportunity.analysis.get("exact_score_meta", {})
+                        for k in ["elite_value", "probability", "final_odds", "quality_score"]:
+                            if k in meta:
+                                meta[k] = float(meta[k])
+                        opportunity.analysis["exact_score_meta"] = meta
+                    except Exception:
+                        pass
+
+                    # 2) top-level fields on FootballOpportunity object
+                    for attr in ["odds", "edge_percentage", "confidence", "stake"]:
+                        if hasattr(opportunity, attr):
+                            try:
+                                setattr(opportunity, attr, float(getattr(opportunity, attr)))
+                            except Exception:
+                                pass
+
+                    # also if these exist as attributes
+                    for attr in ["elite_value", "probability", "final_odds"]:
+                        if hasattr(opportunity, attr):
+                            try:
+                                setattr(opportunity, attr, float(getattr(opportunity, attr)))
+                            except Exception:
+                                pass
+
+                    saved = self.save_exact_score_opportunity(opportunity)
+                    if saved:
+                        total_exact_scores += 1
+                        print("✅ ELITE PREDICTION SAVED")
+
+                else:
+                    # Skip low-quality predictions (för debug/logg)
+                    skip_reasons = []
+                    if not passes_league:
+                        skip_reasons.append(f"league={league}")
+                    if not passes_quality:
+                        skip_reasons.append(f"quality={quality_score:.0f}")
+                    if not passes_odds:
+                        skip_reasons.append(f"odds={final_odds:.1f}")
+                    if not passes_confidence:
+                        skip_reasons.append(f"confidence={confidence}")
+                    if not passes_elite_value:
+                        skip_reasons.append(f"value={selected.get('elite_value', 0):.2f}")
+
+                    print(f"⏭️ SKIPPED (data-driven filter: {', '.join(skip_reasons)})")
 
         print(f"\n📘 EXACT SCORE ANALYSIS COMPLETE: {total_exact_scores} predictions generated")
         return total_exact_scores
