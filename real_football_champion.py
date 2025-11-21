@@ -2801,55 +2801,40 @@ class RealFootballChampion:
                     'Major League Soccer'     # 🇺🇸 Evening coverage, growing data quality
                 ]
                 is_quality_league = any(qual in league for qual in QUALITY_LEAGUES)
-
+                
                 # 💰 DATA-DRIVEN GATES: Let the data determine best scores!
                 passes_league = is_quality_league  # Quality leagues with good data
-                passes_quality = quality_score >= 20  # Balanced quality
-                passes_odds = 7 <= final_odds <= 20  # Allow wider odds band
-                passes_confidence = confidence >= 50  # Confidence threshold
-                passes_elite_value = float(selected.get("elite_value", 0)) >= 0.5  # 🔥 12%+ EV edge
-
+                passes_quality = quality_score >= 20  # Balanced quality (matches system output)
+                passes_odds = 7 <= final_odds <= 20  # Target 11-13x sweet spot (allow 7-20 range)
+                passes_confidence = confidence >= 50  # Good confidence threshold
+                passes_elite_value = selected['elite_value'] >= 0.5  # 🔥 12%+ EV edge (relaxed from 15% to get predictions!)
                 # 🆕 NO PATTERN FILTER - Let models predict ANY score based on data analysis
+        # ================================
+        #  EXACT SCORE SAVE LOGIC
+        # ================================
+        if passes_league and passes_quality and passes_odds and passes_confidence and passes_elite_value:
+            # Konvertera numpy-typer till vanliga float innan vi sparar
+            for key in ["elite_value", "probability", "final_odds"]:
+                if key in opportunity:
+                    opportunity[key] = float(opportunity[key])
 
-                if passes_league and passes_quality and passes_odds and passes_confidence and passes_elite_value:
-                    # --- SANITIZE NUMPY TYPES (robust for dict OR FootballOpportunity object) ---
-                    if isinstance(opportunity, dict):
-                        for key in ("elite_value", "probability", "final_odds"):
-                            if key in opportunity and opportunity[key] is not None:
-                                opportunity[key] = float(opportunity[key])
-                    else:
-                        if hasattr(opportunity, "elite_value") and opportunity.elite_value is not None:
-                            opportunity.elite_value = float(opportunity.elite_value)
-                        if hasattr(opportunity, "probability") and opportunity.probability is not None:
-                            opportunity.probability = float(opportunity.probability)
-                        if hasattr(opportunity, "final_odds") and opportunity.final_odds is not None:
-                            opportunity.final_odds = float(opportunity.final_odds)
-
-                    saved = self.save_exact_score_opportunity(opportunity)
-                    if saved:
-                        total_exact_scores += 1
-                        print("✅ ELITE PREDICTION SAVED")
-
-                else:
-                    # Skip low-quality predictions (för debug/logg)
-                    skip_reasons = []
-                    if not passes_league:
-                        skip_reasons.append(f"league={league}")
-                    if not passes_quality:
+            saved = self.save_exact_score_opportunity(opportunity)
+            if saved:
+                total_exact_scores += 1
+                print("✅ ELITE PREDICTION SAVED")
+        else:
+            # Skip low-quality predictions (för debugg/logg)
                         skip_reasons.append(f"quality={quality_score:.0f}")
                     if not passes_odds:
                         skip_reasons.append(f"odds={final_odds:.1f}")
                     if not passes_confidence:
                         skip_reasons.append(f"confidence={confidence}")
                     if not passes_elite_value:
-                        skip_reasons.append(f"value={float(selected.get('elite_value', 0)):.2f}")
+                        skip_reasons.append(f"value={selected['elite_value']:.2f}")
                     print(f"   ⏭️ SKIPPED (data-driven filter: {', '.join(skip_reasons)})")
-
-
         
         print(f"\n🎯 EXACT SCORE ANALYSIS COMPLETE: {total_exact_scores} predictions generated")
         return total_exact_scores
- 
     
     def _extract_features_for_logging(self, analysis: Dict) -> Dict:
         """Extract all features from enriched analysis for logging"""
