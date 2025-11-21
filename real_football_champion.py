@@ -2809,9 +2809,7 @@ class RealFootballChampion:
                 passes_confidence = confidence >= 50  # Good confidence threshold
                 passes_elite_value = selected['elite_value'] >= 0.5  # 🔥 12%+ EV edge (relaxed from 15% to get predictions!)
                 # 🆕 NO PATTERN FILTER - Let models predict ANY score based on data analysis
-        # ================================
-        #  EXACT SCORE SAVE LOGIC
-        # ================================
+        
         if passes_league and passes_quality and passes_odds and passes_confidence and passes_elite_value:
             # Konvertera numpy-typer till vanliga float innan vi sparar
             for key in ["elite_value", "probability", "final_odds"]:
