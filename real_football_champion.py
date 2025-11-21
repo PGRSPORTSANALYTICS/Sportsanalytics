@@ -2823,38 +2823,41 @@ class RealFootballChampion:
                     and passes_confidence
                     and passes_elite_value
                 ):
-               # --- SANITIZE NUMPY TYPES (robust for dict OR FootballOpportunity object) ---
-               if isinstance(opportunity, dict):
-                for key in ["elite_value", "probability", "final_odds"]:
-                     if key in opportunity:
-                         opportunity[key] = float(opportunity[key])
-               else:
-                   if hasattr(opportunity, "elite_value"):
-                       opportunity.elite_value = float(opportunity.elite_value)
-                   if hasattr(opportunity, "probability"):
-                       opportunity.probability = float(opportunity.probability)
-                   if hasattr(opportunity, "final_odds"):
-                       opportunity.final_odds = float(opportunity.final_odds)
+        # --- SANITIZE NUMPY TYPES (robust för dict ELLER Football10Opportunity objekt) ---
+        if isinstance(opportunity, dict):
+            for key in ["elite_value", "probability", "final_odds"]:
+                if key in opportunity:
+                    opportunity[key] = float(opportunity[key])
+        else:
+            # Objekt med attribut
+            if hasattr(opportunity, "elite_value"):
+                opportunity.elite_value = float(opportunity.elite_value)
+            if hasattr(opportunity, "probability"):
+                opportunity.probability = float(opportunity.probability)
+            if hasattr(opportunity, "final_odds"):
+                opportunity.final_odds = float(opportunity.final_odds)
 
+        # --- SPARA OPPORTUNITY ---
+        saved = self.save_exact_score_opportunity(opportunity)
+        if saved:
+            total_exact_scores += 1
+            print("✅ ELITE PREDICTION SAVED")
+        else:
+            # Skip low-quality predictions (för debug/logg)
+            skip_reasons = []
+            if not passes_league:
+                skip_reasons.append(f"league={league}")
+            if not passes_quality:
+                skip_reasons.append(f"quality={quality_score:.0f}")
+            if not passes_odds:
+                skip_reasons.append(f"odds={final_odds:.1f}")
+            if not passes_confidence:
+                skip_reasons.append(f"confidence={confidence}")
+            if not passes_elite_value:
+                skip_reasons.append(f"value={selected['elite_value']:.2f}")
 
-                    saved = self.save_exact_score_opportunity(opportunity)
-                    if saved:
-                        total_exact_scores += 1
-                        print("✅ ELITE PREDICTION SAVED")
-                else:
-                    # Skip low-quality predictions (för debug/logg)
-                    skip_reasons = []
-                    if not passes_league:
-                        skip_reasons.append(f"league={league}")
-                    if not passes_quality:
-                        skip_reasons.append(f"quality={quality_score:.0f}")
-                    if not passes_odds:
-                        skip_reasons.append(f"odds={final_odds:.1f}")
-                    if not passes_confidence:
-                        skip_reasons.append(f"confidence={confidence}")
-                    if not passes_elite_value:
-                        skip_reasons.append(f"value={selected['elite_value']:.2f}")
-                    print(f"   ⏭️ SKIPPED (data-driven filter: {', '.join(skip_reasons)})")
+            print(f"⏭️ SKIPPED (data-driven filter: {', '.join(skip_reasons)})")
+
 
         
         print(f"\n🎯 EXACT SCORE ANALYSIS COMPLETE: {total_exact_scores} predictions generated")
