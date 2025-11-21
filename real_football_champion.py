@@ -2823,10 +2823,19 @@ class RealFootballChampion:
                     and passes_confidence
                     and passes_elite_value
                 ):
-                    # --- SANITIZE NUMPY TYPES BEFORE SAVING ---
-                    for key in ["elite_value", "probability", "final_odds"]:
-                        if key in opportunity:
-                            opportunity[key] = float(opportunity[key])
+               # --- SANITIZE NUMPY TYPES (robust for dict OR FootballOpportunity object) ---
+               if isinstance(opportunity, dict):
+                for key in ["elite_value", "probability", "final_odds"]:
+                     if key in opportunity:
+                         opportunity[key] = float(opportunity[key])
+               else:
+                   if hasattr(opportunity, "elite_value"):
+                       opportunity.elite_value = float(opportunity.elite_value)
+                   if hasattr(opportunity, "probability"):
+                       opportunity.probability = float(opportunity.probability)
+                   if hasattr(opportunity, "final_odds"):
+                       opportunity.final_odds = float(opportunity.final_odds)
+
 
                     saved = self.save_exact_score_opportunity(opportunity)
                     if saved:
