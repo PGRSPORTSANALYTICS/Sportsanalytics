@@ -2816,12 +2816,12 @@ class RealFootballChampion:
                 # ================================
                 #  EXACT SCORE SAVE LOGIC
                 # ================================
-                if (
-                    passes_league
-                    and passes_quality
-                    and passes_odds
-                    and passes_confidence
-                    and passes_elite_value
+        if (
+          passes_league
+           and passes_quality
+            and passes_odds
+             and passes_confidence
+              and passes_elite_value
                 ):
         # --- SANITIZE NUMPY TYPES (robust för dict ELLER Football10Opportunity objekt) ---
         if isinstance(opportunity, dict):
