@@ -2802,13 +2802,16 @@ class RealFootballChampion:
                 ]
                 is_quality_league = any(qual in league for qual in QUALITY_LEAGUES)
                 
+                                is_quality_league = any(qual in league for qual in QUALITY_LEAGUES)
+                
                 # 💰 DATA-DRIVEN GATES: Let the data determine best scores!
-                passes_league = is_quality_league          # Quality leagues with good data
-                passes_quality = quality_score >= 20       # Balanced quality (matches system output)
-                passes_odds = 7 <= final_odds <= 20        # Target 11–13x sweet spot (allow 7–20 range)
-                passes_confidence = confidence >= 50       # Good confidence threshold
-                passes_elite_value = selected['elite_value'] >= 0.5  # ~12%+ EV edge (relaxed från 15%)
-                # 🆕 NO PATTERN FILTER – låt modellerna välja valfri slutresultat när datan är bra
+                passes_league = is_quality_league  # Quality leagues with good data
+                passes_quality = quality_score >= 20  # Balanced quality (matches system output)
+                passes_odds = 7 <= final_odds <= 20  # Target 11-13x sweet spot (allow 7-20 range)
+                passes_confidence = confidence >= 50  # Good confidence threshold
+                passes_elite_value = selected['elite_value'] >= 0.5  # 🔥 ~12%+ EV edge
+
+                # 🆕 NO PATTERN FILTER - Let models predict ANY score based on data analysis
 
                 # ================================
                 #  EXACT SCORE SAVE LOGIC
@@ -2820,18 +2823,10 @@ class RealFootballChampion:
                     and passes_confidence
                     and passes_elite_value
                 ):
-                    # (valfritt) logga några nyckeltal i analysen om du vill använda i dashboard senare
-                    opportunity.analysis.setdefault('exact_score_meta', {})
-                    opportunity.analysis['exact_score_meta'].update({
-                        'elite_value': float(selected['elite_value']),
-                        'probability': float(best_probability),
-                        'final_odds': float(final_odds),
-                        'quality_score': float(quality_score),
-                    })
-                 # --- SANITIZE NUMPY TYPES ---
-                   for key in ["elite_value", "probability", "final_odds"]:
-                       if key in opportunity:
-                           opportunity[key] = float(opportunity[key])
+                    # --- SANITIZE NUMPY TYPES BEFORE SAVING ---
+                    for key in ["elite_value", "probability", "final_odds"]:
+                        if key in opportunity:
+                            opportunity[key] = float(opportunity[key])
 
                     saved = self.save_exact_score_opportunity(opportunity)
                     if saved:
@@ -2851,6 +2846,7 @@ class RealFootballChampion:
                     if not passes_elite_value:
                         skip_reasons.append(f"value={selected['elite_value']:.2f}")
                     print(f"   ⏭️ SKIPPED (data-driven filter: {', '.join(skip_reasons)})")
+
         
         print(f"\n🎯 EXACT SCORE ANALYSIS COMPLETE: {total_exact_scores} predictions generated")
         return total_exact_scores
