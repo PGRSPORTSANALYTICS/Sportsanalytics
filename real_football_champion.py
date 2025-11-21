@@ -2809,28 +2809,21 @@ class RealFootballChampion:
                 passes_confidence = confidence >= 50  # Good confidence threshold
                 passes_elite_value = selected['elite_value'] >= 0.5  # 🔥 12%+ EV edge (relaxed from 15% to get predictions!)
                 # 🆕 NO PATTERN FILTER - Let models predict ANY score based on data analysis
-                
-if 'elite_value' in opportunity:
-    elite_val = opportunity['elite_value']
-                    # Save exact score opportunity (bypass daily limit)
-                        # 🔧 FIX: Konvertera numpy-typer till vanliga Python-float innan sparning
-    if 'elite_value' in opportunity:
-        opportunity['elite_value'] = float(opportunity['elite_value'])
-    if 'probability' in opportunity:
-        opportunity['probability'] = float(opportunity['probability'])
-    if 'final_odds' in opportunity:
-        opportunity['final_odds'] = float(opportunity['final_odds'])
+        # ================================
+        #  EXACT SCORE SAVE LOGIC
+        # ================================
+        if passes_league and passes_quality and passes_odds and passes_confidence and passes_elite_value:
+            # Konvertera numpy-typer till vanliga float innan vi sparar
+            for key in ["elite_value", "probability", "final_odds"]:
+                if key in opportunity:
+                    opportunity[key] = float(opportunity[key])
 
-                    saved = self.save_exact_score_opportunity(opportunity)
-                    if saved:
-                        total_exact_scores += 1
-                        print(f"   ✅ ELITE PREDICTION SAVED")
-                else:
-                    # Skip low-quality predictions
-                    skip_reasons = []
-                    if not passes_league:
-                        skip_reasons.append(f"league={league}")
-                    if not passes_quality:
+            saved = self.save_exact_score_opportunity(opportunity)
+            if saved:
+                total_exact_scores += 1
+                print("✅ ELITE PREDICTION SAVED")
+        else:
+            # Skip low-quality predictions (för debugg/logg)
                         skip_reasons.append(f"quality={quality_score:.0f}")
                     if not passes_odds:
                         skip_reasons.append(f"odds={final_odds:.1f}")
