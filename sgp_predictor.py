@@ -655,76 +655,7 @@ class SGPPredictor:
                 'description': 'Over 2.5/3.5 + BTTS + 1H Over 1.5 + 2H Over 2.5 + Corners 11.5+ (6-Leg ULTRA)'
             },
             
-            # ========== MONSTERSGP - TEAM SPECIFIC MARKETS (3-7 LEGS) ==========
         ]
-        
-        # Only add MonsterSGP combinations when home team is significantly stronger
-        # This ensures team-specific markets make sense (dominant home team)
-        # TARGET ODDS: 40-150x (entertainment betting, not statistical value)
-        if lambda_home / max(lambda_away, 0.3) >= 1.5:
-            sgp_combinations.extend([
-            # 3-Leg MonsterSGP: 1H Goals + Home Corners + Away Corners (~40x)
-            {
-                'legs': [
-                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
-                    {'market_type': 'HOME_TEAM_CORNERS', 'outcome': 'OVER', 'line': 6.5, 'team': 'home'},
-                    {'market_type': 'AWAY_TEAM_CORNERS', 'outcome': 'UNDER', 'line': 7.5, 'team': 'away'}
-                ],
-                'description': '1H Over 0.5 + Home Corners 6.5+ + Away Corners U7.5 (MonsterSGP 3-Leg)'
-            },
-            
-            # 4-Leg MonsterSGP: 1H Goals + Home/Away Corners + Home Shots (~60x)
-            {
-                'legs': [
-                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
-                    {'market_type': 'HOME_TEAM_CORNERS', 'outcome': 'OVER', 'line': 6.5, 'team': 'home'},
-                    {'market_type': 'AWAY_TEAM_CORNERS', 'outcome': 'UNDER', 'line': 7.5, 'team': 'away'},
-                    {'market_type': 'HOME_TEAM_SHOTS', 'outcome': 'OVER', 'line': 18.5, 'team': 'home'}
-                ],
-                'description': '1H Over 0.5 + Home Corners 6.5+ + Away Corners U7.5 + Home Shots 18.5+ (MonsterSGP 4-Leg)'
-            },
-            
-            # 5-Leg MonsterSGP: 1H Goals + Team Corners + Team Shots (~90x)
-            {
-                'legs': [
-                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
-                    {'market_type': 'HOME_TEAM_CORNERS', 'outcome': 'OVER', 'line': 6.5, 'team': 'home'},
-                    {'market_type': 'AWAY_TEAM_CORNERS', 'outcome': 'UNDER', 'line': 7.5, 'team': 'away'},
-                    {'market_type': 'HOME_TEAM_SHOTS', 'outcome': 'OVER', 'line': 18.5, 'team': 'home'},
-                    {'market_type': 'AWAY_TEAM_SHOTS', 'outcome': 'UNDER', 'line': 18.5, 'team': 'away'}
-                ],
-                'description': '1H Over 0.5 + Home Corners/Shots + Away Corners/Shots (MonsterSGP 5-Leg)'
-            },
-            
-            # 6-Leg MonsterSGP: 5-Leg + Full Match Corners (~120x)
-            {
-                'legs': [
-                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
-                    {'market_type': 'HOME_TEAM_CORNERS', 'outcome': 'OVER', 'line': 6.5, 'team': 'home'},
-                    {'market_type': 'AWAY_TEAM_CORNERS', 'outcome': 'UNDER', 'line': 7.5, 'team': 'away'},
-                    {'market_type': 'HOME_TEAM_SHOTS', 'outcome': 'OVER', 'line': 18.5, 'team': 'home'},
-                    {'market_type': 'AWAY_TEAM_SHOTS', 'outcome': 'UNDER', 'line': 18.5, 'team': 'away'},
-                    {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 9.5}
-                ],
-                'description': '1H + Team Corners/Shots + Full Match Corners 9.5+ (MonsterSGP 6-Leg)'
-            },
-            
-            # 7-Leg MonsterSGP BEAST: Everything + 1x2 (~150x)
-            {
-                'legs': [
-                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
-                    {'market_type': 'HOME_TEAM_CORNERS', 'outcome': 'OVER', 'line': 6.5, 'team': 'home'},
-                    {'market_type': 'AWAY_TEAM_CORNERS', 'outcome': 'UNDER', 'line': 7.5, 'team': 'away'},
-                    {'market_type': 'HOME_TEAM_SHOTS', 'outcome': 'OVER', 'line': 18.5, 'team': 'home'},
-                    {'market_type': 'AWAY_TEAM_SHOTS', 'outcome': 'UNDER', 'line': 18.5, 'team': 'away'},
-                    {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 9.5},
-                    {'market_type': 'MATCH_RESULT', 'outcome': 'HOME'}
-                ],
-                'description': '1H + Team Corners/Shots + Full Corners + Home Win (MonsterSGP 7-LEG BEAST)'
-            },
-            ])
-        else:
-            logger.info(f"   ⏭️  Skipping MonsterSGP (home not dominant enough: {lambda_home:.2f} vs {lambda_away:.2f})")
         
         # Add player prop combinations if player data available (4-7 legs with players)
         if player_data and (player_data.get('home_scorers') or player_data.get('away_scorers')):

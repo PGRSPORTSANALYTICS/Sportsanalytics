@@ -162,7 +162,7 @@ st.markdown("""
 
 @st.cache_data(ttl=300)
 def get_rolling_roi_data(days=30):
-    """Get daily ROI data for the rolling chart - includes MonsterSGP"""
+    """Get daily ROI data for the rolling chart"""
     # Get all settled bets from last 30 days
     query = """
         SELECT 
@@ -182,19 +182,12 @@ def get_rolling_roi_data(days=30):
             WHERE outcome IN (%s, %s) AND settled_timestamp IS NOT NULL
               AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
               AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
-            
-            UNION ALL
-            
-            SELECT settled_timestamp, 'monstersgp' as market, profit_loss, stake
-            FROM sgp_predictions
-            WHERE outcome IN (%s, %s) AND settled_timestamp IS NOT NULL
-              AND (parlay_description LIKE %s OR parlay_description LIKE %s)
         ) combined
         WHERE TO_TIMESTAMP(settled_timestamp) >= NOW() - INTERVAL '%s days'
         ORDER BY bet_date DESC
     """
     
-    rows = db_helper.execute(query, ('win', 'loss', 'win', 'loss', '%Monster%', '%BEAST%', 'win', 'loss', '%Monster%', '%BEAST%', days), fetch='all')
+    rows = db_helper.execute(query, ('win', 'loss', 'win', 'loss', '%Monster%', '%BEAST%', days), fetch='all')
     
     if not rows:
         return None
@@ -217,12 +210,6 @@ def get_rolling_roi_data(days=30):
     df_sgp['cumulative_stake'] = df_sgp['stake'].cumsum()
     df_sgp['roi'] = (df_sgp['cumulative_profit'] / df_sgp['cumulative_stake'] * 100).fillna(0)
     
-    # MonsterSGP only
-    df_monster = df_sorted[df_sorted['market'] == 'monstersgp'].copy()
-    df_monster['cumulative_profit'] = df_monster['profit_loss'].cumsum()
-    df_monster['cumulative_stake'] = df_monster['stake'].cumsum()
-    df_monster['roi'] = (df_monster['cumulative_profit'] / df_monster['cumulative_stake'] * 100).fillna(0)
-    
     # Combined
     df_combined = df_sorted.copy()
     df_combined['cumulative_profit'] = df_combined['profit_loss'].cumsum()
@@ -232,7 +219,6 @@ def get_rolling_roi_data(days=30):
     return {
         'es': df_es[['bet_date', 'roi']],
         'sgp': df_sgp[['bet_date', 'roi']],
-        'monstersgp': df_monster[['bet_date', 'roi']],
         'combined': df_combined[['bet_date', 'roi']]
     }
 
@@ -255,17 +241,6 @@ def get_last_n_hit_rate(n=200, product='all'):
             WHERE outcome IN (%s, %s)
               AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
               AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
-            ORDER BY settled_timestamp DESC
-            LIMIT %s
-        """
-        rows = db_helper.execute(query, ('win', 'loss', '%Monster%', '%BEAST%', n), fetch='all')
-        
-    elif product == 'monstersgp':
-        query = """
-            SELECT outcome
-            FROM sgp_predictions
-            WHERE outcome IN (%s, %s)
-              AND (parlay_description LIKE %s OR parlay_description LIKE %s)
             ORDER BY settled_timestamp DESC
             LIMIT %s
         """
@@ -316,15 +291,6 @@ def get_avg_odds(product='all'):
             WHERE outcome IN ('win', 'loss')
               AND (parlay_description IS NULL OR parlay_description NOT LIKE '%%Monster%%')
               AND (parlay_description IS NULL OR parlay_description NOT LIKE '%%BEAST%%')
-        """
-        row = db_helper.execute(query, fetch='one')
-        
-    elif product == 'monstersgp':
-        query = """
-            SELECT AVG(bookmaker_odds) as avg_odds
-            FROM sgp_predictions
-            WHERE outcome IN ('win', 'loss')
-              AND (parlay_description LIKE '%%Monster%%' OR parlay_description LIKE '%%BEAST%%')
         """
         row = db_helper.execute(query, fetch='one')
         
@@ -626,7 +592,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
+col1, col2, col3 = st.columns([1, 1, 1])
 
 with col1:
     if st.button("⚽ EXACT SCORE", key="btn_exact", use_container_width=True):
@@ -637,13 +603,8 @@ with col2:
     if st.button("🎯 SGP", key="btn_sgp", use_container_width=True):
         st.session_state.selected_product = 'sgp'
         st.rerun()
-        
-with col3:
-    if st.button("🔥 MONSTERSGP", key="btn_monster", use_container_width=True):
-        st.session_state.selected_product = 'monstersgp'
-        st.rerun()
 
-with col4:
+with col3:
     if st.button("👩⚽ WOMEN 1X2", key="btn_women", use_container_width=True):
         st.session_state.selected_product = 'women_1x2'
         st.rerun()
@@ -652,7 +613,6 @@ with col4:
 product_labels = {
     'exact_score': 'Exact Score',
     'sgp': 'SGP',
-    'monstersgp': 'MonsterSGP',
     'women_1x2': "Women's 1X2"
 }
 st.markdown(f"""
@@ -702,8 +662,6 @@ elif selected == 'women_1x2':
         total_roi = 0.0
         hit_rate_200 = 0.0
         avg_odds = 0.0
-else:  # monstersgp
-    product_stats = stats['monstersgp']
 
 if selected != 'women_1x2':
     total_roi = (product_stats['profit'] / (product_stats['total'] * 100)) * 100 if product_stats['total'] > 0 else 0
