@@ -246,6 +246,17 @@ def get_last_n_hit_rate(n=200, product='all'):
         """
         rows = db_helper.execute(query, ('win', 'loss', '%Monster%', '%BEAST%', n), fetch='all')
         
+    elif product == 'value_singles':
+        query = """
+            SELECT outcome
+            FROM football_opportunities
+            WHERE outcome IN (%s, %s)
+              AND market = %s
+            ORDER BY settled_timestamp DESC
+            LIMIT %s
+        """
+        rows = db_helper.execute(query, ('win', 'loss', 'Value Single', n), fetch='all')
+        
     else:  # 'all' - combined
         query = """
             SELECT outcome
@@ -291,6 +302,14 @@ def get_avg_odds(product='all'):
             WHERE outcome IN ('win', 'loss')
               AND (parlay_description IS NULL OR parlay_description NOT LIKE '%%Monster%%')
               AND (parlay_description IS NULL OR parlay_description NOT LIKE '%%BEAST%%')
+        """
+        row = db_helper.execute(query, fetch='one')
+        
+    elif product == 'value_singles':
+        query = """
+            SELECT AVG(odds) as avg_odds
+            FROM football_opportunities
+            WHERE market = 'Value Single' AND outcome IN ('win', 'loss')
         """
         row = db_helper.execute(query, fetch='one')
         
@@ -399,6 +418,18 @@ def get_upcoming_bets(limit=3, product='all'):
         """
         rows = db_helper.execute(query, ('%Monster%', '%BEAST%', limit), fetch='all')
         
+    elif product == 'value_singles':
+        query = """
+            SELECT home_team, away_team, selection, odds, edge_percentage, match_date
+            FROM football_opportunities
+            WHERE market = %s
+              AND outcome IS NULL
+              AND match_date >= CURRENT_DATE::text
+            ORDER BY match_date ASC, edge_percentage DESC
+            LIMIT %s
+        """
+        rows = db_helper.execute(query, ('Value Single', limit), fetch='all')
+        
     else:  # 'all' - combined
         query = """
             SELECT home_team, away_team, selection, odds, edge_percentage, match_date
@@ -478,6 +509,23 @@ def get_last_settled(limit=3, product='all'):
             LIMIT %s
         """
         rows = db_helper.execute(query, ('MonsterSGP', 'win', 'loss', '%Monster%', '%BEAST%', limit), fetch='all')
+        
+    elif product == 'value_singles':
+        query = """
+            SELECT home_team, away_team, selection, odds, outcome, profit_loss, market
+            FROM (
+                SELECT 
+                    home_team, away_team, selection, odds, outcome, profit_loss, 
+                    market, settled_timestamp
+                FROM football_opportunities
+                WHERE outcome IN (%s, %s)
+                  AND market = %s
+            ) combined
+            WHERE settled_timestamp IS NOT NULL
+            ORDER BY settled_timestamp DESC
+            LIMIT %s
+        """
+        rows = db_helper.execute(query, ('win', 'loss', 'Value Single', limit), fetch='all')
         
     else:  # 'all' - combined
         query = """
@@ -592,7 +640,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-col1, col2, col3 = st.columns([1, 1, 1])
+col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
 
 with col1:
     if st.button("⚽ FINAL SCORE", key="btn_exact", use_container_width=True):
@@ -605,6 +653,11 @@ with col2:
         st.rerun()
 
 with col3:
+    if st.button("💎 VALUE SINGLES", key="btn_value_singles", use_container_width=True):
+        st.session_state.selected_product = 'value_singles'
+        st.rerun()
+
+with col4:
     if st.button("👩⚽ WOMEN 1X2", key="btn_women", use_container_width=True):
         st.session_state.selected_product = 'women_1x2'
         st.rerun()
@@ -613,6 +666,7 @@ with col3:
 product_labels = {
     'exact_score': 'Final Score',
     'sgp': 'SGP',
+    'value_singles': 'Value Singles',
     'women_1x2': "Women's 1X2"
 }
 st.markdown(f"""
@@ -629,6 +683,8 @@ if selected == 'exact_score':
     product_stats = stats['exact_score']
 elif selected == 'sgp':
     product_stats = stats['sgp']
+elif selected == 'value_singles':
+    product_stats = stats['value_singles']
 elif selected == 'women_1x2':
     # Get women's 1X2 stats from BetStatusService
     try:

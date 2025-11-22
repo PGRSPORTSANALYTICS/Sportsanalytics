@@ -49,6 +49,19 @@ def get_all_time_stats() -> Dict:
     sgp_losses = sgp_total - (sgp_wins or 0)
     sgp_hit_rate = (sgp_wins / sgp_total * 100) if sgp_total > 0 else 0.0
     
+    # Value Singles stats - only count settled predictions with valid outcome
+    vs_row = db_helper.execute('''
+        SELECT 
+            COUNT(*) as total,
+            SUM(CASE WHEN outcome = %s THEN 1 ELSE 0 END) as wins,
+            SUM(profit_loss) as profit
+        FROM football_opportunities 
+        WHERE market = %s AND outcome IN (%s, %s)
+    ''', ('win', 'Value Single', 'win', 'loss'), fetch='one')
+    vs_total, vs_wins, vs_profit = vs_row if vs_row else (0, 0, 0.0)
+    vs_losses = vs_total - (vs_wins or 0)
+    vs_hit_rate = (vs_wins / vs_total * 100) if vs_total > 0 else 0.0
+    
     # Combined stats (ES + regular SGP only)
     combined_total = (exact_total or 0) + (sgp_total or 0)
     combined_wins = (exact_wins or 0) + (sgp_wins or 0)
@@ -70,6 +83,13 @@ def get_all_time_stats() -> Dict:
             'losses': sgp_losses or 0,
             'hit_rate': round(sgp_hit_rate, 1),
             'profit': round(sgp_profit or 0.0, 2)
+        },
+        'value_singles': {
+            'total': vs_total or 0,
+            'wins': vs_wins or 0,
+            'losses': vs_losses or 0,
+            'hit_rate': round(vs_hit_rate, 1),
+            'profit': round(vs_profit or 0.0, 2)
         },
         'combined': {
             'total': combined_total,
