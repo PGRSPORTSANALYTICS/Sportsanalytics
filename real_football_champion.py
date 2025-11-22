@@ -2944,14 +2944,14 @@ class RealFootballChampion:
                 opportunity.league,
                 opportunity.market,  # 'exact_score'
                 opportunity.selection,
-                opportunity.odds,
-                opportunity.edge_percentage,
-                opportunity.confidence,
+                float(opportunity.odds),
+                float(opportunity.edge_percentage),
+                int(opportunity.confidence),
                 json.dumps(opportunity.analysis),
-                opportunity.stake,
+                float(opportunity.stake),
                 opportunity.match_date,
                 opportunity.kickoff_time,
-                quality_score,
+                float(quality_score),
                 today_date,
                 'exact_score',  # Special tier for exact scores
                 0  # Not part of daily ranking
