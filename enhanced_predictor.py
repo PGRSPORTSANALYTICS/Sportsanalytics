@@ -234,8 +234,9 @@ class EnhancedExactScorePredictor:
                     league_name = match.get('league', 'Premier League')
                     h2h_list = self.sofascore_scraper.get_h2h_data(home_team, away_team, league_name)
                     
-                    # Convert list format to dict format
+                    # Store BOTH raw matches (for H2HIntelligence) AND summary (for other features)
                     enriched['h2h'] = self._convert_h2h_list_to_dict(h2h_list, home_team, away_team)
+                    enriched['h2h']['matches'] = h2h_list  # 🧠 ADD RAW MATCHES for adaptive weighting
                     
                     logger.info(f"✅ SofaScore H2H data obtained")
                 except Exception as e:

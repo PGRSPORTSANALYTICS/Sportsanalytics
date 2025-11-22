@@ -326,43 +326,45 @@ def ensemble_exact_score_prediction(xg_home: float, xg_away: float,
     total = sum(poisson_probs.values())
     poisson_probs = {k: v/total for k, v in poisson_probs.items()}
     
-    # Method 2: Neural network (if available)
+    # Method 2: Combine Poisson + Neural (if available) - Base ensemble
     if neural_probs:
-        weight_poisson = 0.4
-        weight_neural = 0.6
-        
-        ensemble = {}
+        # Combine Poisson and Neural with fixed internal weights
+        base_ensemble = {}
         for score in poisson_probs:
-            ensemble[score] = (
-                weight_poisson * poisson_probs.get(score, 0) +
-                weight_neural * neural_probs.get(score, 0)
+            base_ensemble[score] = (
+                0.4 * poisson_probs.get(score, 0) +
+                0.6 * neural_probs.get(score, 0)
             )
     else:
-        ensemble = poisson_probs
+        base_ensemble = poisson_probs
     
-    # Method 3: Adjust with H2H using ADAPTIVE weighting
+    # Method 3: ADAPTIVE H2H BLENDING - Properly normalized weights
     if historical_h2h:
         # 🧠 USE ADAPTIVE WEIGHTS based on H2H analysis
         if h2h_analysis and 'recommended_weight' in h2h_analysis:
             weight_h2h = h2h_analysis['recommended_weight']
-            weight_ensemble = 1.0 - weight_h2h
+            weight_base = 1.0 - weight_h2h  # Ensures weights sum to 1.0
             
             print(f"\n🧠 ADAPTIVE H2H WEIGHTING:")
             print(f"   Dominance Level: {h2h_analysis.get('dominance_level', 'unknown').upper()}")
-            print(f"   H2H Weight: {weight_h2h*100:.0f}% (Ensemble: {weight_ensemble*100:.0f}%)")
+            print(f"   H2H Weight: {weight_h2h*100:.0f}%")
+            print(f"   Base (xG+Neural) Weight: {weight_base*100:.0f}%")
             print(f"   Pattern Confidence: {h2h_analysis.get('pattern_confidence', 0)}%")
         else:
             # Fallback to old static weights if no analysis available
-            weight_ensemble = 0.8
+            weight_base = 0.8
             weight_h2h = 0.2
         
-        final = {}
-        for score in ensemble:
-            final[score] = (
-                weight_ensemble * ensemble.get(score, 0) +
+        # Properly normalize: base_weight + h2h_weight = 1.0
+        ensemble = {}
+        all_scores = set(base_ensemble.keys()) | set(historical_h2h.keys())
+        for score in all_scores:
+            ensemble[score] = (
+                weight_base * base_ensemble.get(score, 0) +
                 weight_h2h * historical_h2h.get(score, 0)
             )
-        ensemble = final
+    else:
+        ensemble = base_ensemble
     
     # Sort by probability
     ensemble = dict(sorted(ensemble.items(), key=lambda x: x[1], reverse=True))
