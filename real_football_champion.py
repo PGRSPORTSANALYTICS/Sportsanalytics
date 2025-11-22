@@ -3027,7 +3027,7 @@ def main():
             # VALUE SINGLES - New market expansion
             try:
                 print("\n💰 VALUE SINGLES ENGINE - Analyzing markets...")
-                value_engine = ValueSinglesEngine(champion, ev_threshold=0.08, min_confidence=55)
+                value_engine = ValueSinglesEngine(champion, ev_threshold=0.05, min_confidence=55)
                 value_singles = value_engine.generate_value_singles(max_picks=6)
                 if value_singles:
                     saved = value_engine.save_value_singles(value_singles)

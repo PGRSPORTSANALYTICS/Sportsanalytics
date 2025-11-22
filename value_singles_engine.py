@@ -74,9 +74,9 @@ class ValueSinglesEngine:
     If some are missing, the engine will skip gracefully.
     """
 
-    def __init__(self, champion, ev_threshold: float = 0.08, min_confidence: int = 55):
+    def __init__(self, champion, ev_threshold: float = 0.05, min_confidence: int = 55):
         self.champion = champion
-        self.ev_threshold = ev_threshold      # e.g. 0.08 = 8% EV
+        self.ev_threshold = ev_threshold      # e.g. 0.05 = 5% EV
         self.min_confidence = min_confidence  # confidence gate
 
     def _calc_ev(self, p_model: float, odds: float) -> float:
