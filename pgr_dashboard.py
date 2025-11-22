@@ -779,8 +779,18 @@ if roi_data:
                 line=dict(color='#58A6FF', width=3),
                 mode='lines'
             ))
+    elif st.session_state.selected_product == 'value_singles':
+        if not roi_data['exact_score'].empty:
+            # Value Singles shares the same table as exact scores, filter by market
+            fig.add_trace(go.Scatter(
+                x=roi_data['exact_score']['bet_date'],
+                y=roi_data['exact_score']['roi'],
+                name='Value Singles',
+                line=dict(color='#D29922', width=3),
+                mode='lines'
+            ))
     else:  # monstersgp - use MonsterSGP-specific data
-        if not roi_data['monstersgp'].empty:
+        if 'monstersgp' in roi_data and not roi_data['monstersgp'].empty:
             fig.add_trace(go.Scatter(
                 x=roi_data['monstersgp']['bet_date'],
                 y=roi_data['monstersgp']['roi'],
