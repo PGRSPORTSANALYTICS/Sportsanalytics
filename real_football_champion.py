@@ -2198,12 +2198,12 @@ class RealFootballChampion:
         return total_opportunities
     
     def run_exact_score_analysis(self):
-        """Run exact score analysis - MAX 30 per day to control volume"""
+        """Run exact score analysis - MAX 75 per day for optimal learning"""
         print("\n🎯 EXACT SCORE ANALYSIS - INTELLIGENT VOLUME CONTROL")
         print("=" * 50)
         
         # Check how many exact score predictions we have today
-        DAILY_CAP = 30
+        DAILY_CAP = 75
         today_date = datetime.now().strftime('%Y-%m-%d')
         result = db_helper.execute('''
             SELECT COUNT(*) FROM football_opportunities 
@@ -2427,7 +2427,7 @@ class RealFootballChampion:
             for score_key, score_data in exact_scores.items():
                 
                 prob = score_data['probability']
-                if prob < 0.02:  # Skip unlikely scores
+                if prob < 0.015:  # Skip very unlikely scores (lowered from 0.02 for more options)
                     continue
                 
                 # Calculate implied odds
