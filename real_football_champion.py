@@ -2492,7 +2492,7 @@ class RealFootballChampion:
             home_form = enriched_analysis.get('home_form', {})
             away_form = enriched_analysis.get('away_form', {})
             
-            # Extract actual performance metrics
+            # Extract actual performance metrics (use xG as fallback if no form data)
             home_goals_per_game = home_form.get('goals_per_game', 0)
             away_goals_per_game = away_form.get('goals_per_game', 0)
             home_conceded_per_game = home_form.get('conceded_per_game', 0)
@@ -2500,13 +2500,14 @@ class RealFootballChampion:
             home_clean_sheet_rate = home_form.get('clean_sheet_rate', 0)
             away_clean_sheet_rate = away_form.get('clean_sheet_rate', 0)
             
-            # ✅ Verify we have real team data (from API-Football OR scrapers)
-            has_real_data = (home_goals_per_game > 0 or away_goals_per_game > 0 or 
-                            home_conceded_per_game > 0 or away_conceded_per_game > 0)
-            
-            if not has_real_data:
-                print(f"   ⏭️ SKIPPED: No team form data available from any source")
-                continue  # Skip if no data from API-Football OR scrapers
+            # 📊 FALLBACK: If no form data, estimate from xG predictions (less strict requirement)
+            if home_goals_per_game == 0 and away_goals_per_game == 0:
+                # Use xG as estimates for goals per game
+                home_goals_per_game = xg_data.get('home_xg', 1.5)
+                away_goals_per_game = xg_data.get('away_xg', 1.2)
+                home_conceded_per_game = away_goals_per_game  # Estimate
+                away_conceded_per_game = home_goals_per_game  # Estimate
+                print(f"   📊 Using xG estimates: Home {home_goals_per_game:.1f} gpg, Away {away_goals_per_game:.1f} gpg")
             
             # Calculate expected goals from REAL performance
             expected_home_goals = (home_goals_per_game + away_conceded_per_game) / 2
