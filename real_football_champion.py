@@ -2987,6 +2987,58 @@ class RealFootballChampion:
         
         return features
     
+    def save_opportunity(self, opp_dict: Dict) -> bool:
+        """Save Value Singles prediction (dict format) to database"""
+        try:
+            # Check for duplicates
+            result = db_helper.execute('''
+                SELECT COUNT(*) FROM football_opportunities 
+                WHERE home_team = %s AND away_team = %s AND market = %s
+                AND match_date = %s
+                AND status = 'pending'
+            ''', (opp_dict.get('home_team'), opp_dict.get('away_team'), 
+                  opp_dict.get('market'), opp_dict.get('match_date')), fetch='one')
+            
+            if result and result[0] > 0:
+                return False  # Duplicate found
+            
+            # Calculate quality score
+            quality_score = (opp_dict.get('edge_percentage', 0) * 0.6) + (opp_dict.get('confidence', 0) * 0.4)
+            today_date = datetime.now().strftime('%Y-%m-%d')
+            
+            # Insert prediction
+            db_helper.execute('''
+                INSERT INTO football_opportunities 
+                (timestamp, match_id, home_team, away_team, league, market, selection, 
+                 odds, edge_percentage, confidence, analysis, stake, match_date, kickoff_time,
+                 quality_score, recommended_date, recommended_tier, daily_rank)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ''', (
+                opp_dict.get('timestamp', int(time.time())),
+                opp_dict.get('match_id'),
+                opp_dict.get('home_team'),
+                opp_dict.get('away_team'),
+                opp_dict.get('league'),
+                opp_dict.get('market'),
+                opp_dict.get('selection'),
+                float(opp_dict.get('odds', 0)),
+                float(opp_dict.get('edge_percentage', 0)),
+                int(opp_dict.get('confidence', 0)),
+                opp_dict.get('analysis', '{}'),
+                float(opp_dict.get('stake', 100)),
+                opp_dict.get('match_date'),
+                opp_dict.get('kickoff_time'),
+                float(quality_score),
+                today_date,
+                opp_dict.get('recommended_tier', 'SINGLE'),
+                opp_dict.get('daily_rank', 999)
+            ))
+            
+            return True
+        except Exception as e:
+            print(f"❌ Save opportunity error: {e}")
+            return False
+    
     def save_exact_score_opportunity(self, opportunity: FootballOpportunity):
         """Save exact score opportunity to database (separate from daily limit)"""
         

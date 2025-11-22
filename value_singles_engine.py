@@ -210,6 +210,15 @@ class ValueSinglesEngine:
 
                 picks.append(opportunity)
 
+        # Debug: Show top candidates
+        if picks:
+            picks.sort(key=lambda x: x["edge_percentage"], reverse=True)
+            top = picks[:3]
+            for c in top:
+                ev_show = c.get("edge_percentage", 0)
+                p_model = json.loads(c.get("analysis", "{}")).get("p_model", 0)
+                print(f"   TOP CAND: {c.get('market')} {c.get('selection')} | odds={c.get('odds', 0):.2f} p={p_model:.2%} EV={ev_show:.2f}%")
+
         # 5) Sort by EV and enforce unique matches
         picks.sort(key=lambda x: x["edge_percentage"], reverse=True)
 
