@@ -113,6 +113,10 @@ class ValueSinglesEngine:
         avoid_match_ids = avoid_match_ids or set()
         picks: List[Dict[str, Any]] = []
 
+        print("🔥 VALUE SINGLES START")
+        print("   min_ev =", getattr(self, "min_ev", getattr(self, "ev_threshold", None)))
+        print("   min_conf =", getattr(self, "min_confidence", None))
+
         # 1) Get fixtures
         if not hasattr(self.champion, "get_todays_fixtures"):
             print("⚠️ ValueSinglesEngine: champion.get_todays_fixtures() missing")
