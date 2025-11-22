@@ -442,7 +442,7 @@ def get_last_settled(limit=3, product='all'):
             ORDER BY settled_timestamp DESC
             LIMIT %s
         """
-        rows = db_helper.execute(query, ('Exact Score', 'win', 'loss', limit), fetch='all')
+        rows = db_helper.execute(query, ('Final Score', 'win', 'loss', limit), fetch='all')
         
     elif product == 'sgp':
         query = """
@@ -504,7 +504,7 @@ def get_last_settled(limit=3, product='all'):
             ORDER BY settled_timestamp DESC
             LIMIT %s
         """
-        rows = db_helper.execute(query, ('Exact Score', 'win', 'loss', 'SGP', 'win', 'loss', '%Monster%', '%BEAST%', limit), fetch='all')
+        rows = db_helper.execute(query, ('Final Score', 'win', 'loss', 'SGP', 'win', 'loss', '%Monster%', '%BEAST%', limit), fetch='all')
     
     if not rows:
         return []
@@ -595,7 +595,7 @@ st.markdown("""
 col1, col2, col3 = st.columns([1, 1, 1])
 
 with col1:
-    if st.button("⚽ EXACT SCORE", key="btn_exact", use_container_width=True):
+    if st.button("⚽ FINAL SCORE", key="btn_exact", use_container_width=True):
         st.session_state.selected_product = 'exact_score'
         st.rerun()
         
@@ -611,7 +611,7 @@ with col3:
 
 # Show active selection
 product_labels = {
-    'exact_score': 'Exact Score',
+    'exact_score': 'Final Score',
     'sgp': 'SGP',
     'women_1x2': "Women's 1X2"
 }
@@ -710,7 +710,7 @@ if roi_data:
             fig.add_trace(go.Scatter(
                 x=roi_data['es']['bet_date'],
                 y=roi_data['es']['roi'],
-                name='Exact Score',
+                name='Final Score',
                 line=dict(color='#3FB68B', width=3),
                 mode='lines'
             ))
@@ -809,7 +809,7 @@ with col2:
     st.markdown(f"""
     <div class="status-item">
         <div class="status-label">🟢 EV THRESHOLD</div>
-        <div class="status-value">{es_threshold['ev_min']:.2f} (Exact Score)</div>
+        <div class="status-value">{es_threshold['ev_min']:.2f} (Final Score)</div>
         <div style="color: #58A6FF; margin-top: 0.3rem; font-size: 1.1rem; font-weight: 600;">{sgp_threshold['ev_min']:.2f} (SGP)</div>
     </div>
     """, unsafe_allow_html=True)

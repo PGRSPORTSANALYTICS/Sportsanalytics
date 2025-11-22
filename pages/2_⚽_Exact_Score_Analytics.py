@@ -10,7 +10,7 @@ DB_PATH = 'data/real_football.db'
 
 # Page setup
 st.set_page_config(
-    page_title="⚽ Exact Score Analytics | Premium AI Platform",
+    page_title="⚽ Final Score Analytics | Premium AI Platform",
     page_icon="⚽",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -72,16 +72,16 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Header
-st.markdown("# ⚽ EXACT SCORE ANALYTICS")
-st.caption("AI-powered exact score predictions targeting 27-33% hit rate with 7-14x odds")
+st.markdown("# ⚽ FINAL SCORE ANALYTICS")
+st.caption("AI-powered final score predictions targeting 27-33% hit rate with 7-14x odds")
 
 st.markdown("---")
 
 # ============================================================================
-# TODAY'S EXACT SCORE STATS
+# TODAY'S FINAL SCORE STATS
 # ============================================================================
 
-st.markdown("## 📊 TODAY'S EXACT SCORE PREDICTIONS")
+st.markdown("## 📊 TODAY'S FINAL SCORE PREDICTIONS")
 
 try:
     conn = sqlite3.connect(DB_PATH)
@@ -141,11 +141,11 @@ except Exception as e:
 st.markdown("---")
 
 # ============================================================================
-# ACTIVE EXACT SCORE PREDICTIONS
+# ACTIVE FINAL SCORE PREDICTIONS
 # ============================================================================
 
-st.markdown("## 🎯 ACTIVE EXACT SCORE PREDICTIONS")
-st.caption("Live exact score predictions waiting for results")
+st.markdown("## 🎯 ACTIVE FINAL SCORE PREDICTIONS")
+st.caption("Live final score predictions waiting for results")
 
 try:
     conn = sqlite3.connect(DB_PATH)
@@ -170,7 +170,7 @@ try:
     ''', conn)
     
     if not df_active.empty:
-        st.success(f"✅ {len(df_active)} active exact score predictions")
+        st.success(f"✅ {len(df_active)} active final score predictions")
         
         # Format dataframe
         df_display = df_active.copy()
@@ -188,7 +188,7 @@ try:
             width='stretch'
         )
     else:
-        st.info("📭 No active exact score predictions. Next generation cycle starts soon!")
+        st.info("📭 No active final score predictions. Next generation cycle starts soon!")
     
     conn.close()
     
@@ -198,10 +198,10 @@ except Exception as e:
 st.markdown("---")
 
 # ============================================================================
-# ALL-TIME EXACT SCORE STATISTICS
+# ALL-TIME FINAL SCORE STATISTICS
 # ============================================================================
 
-st.markdown("## 🏆 ALL-TIME EXACT SCORE STATISTICS")
+st.markdown("## 🏆 ALL-TIME FINAL SCORE STATISTICS")
 
 try:
     conn = sqlite3.connect(DB_PATH)
@@ -268,11 +268,11 @@ except Exception as e:
 st.markdown("---")
 
 # ============================================================================
-# RECENT EXACT SCORE RESULTS
+# RECENT FINAL SCORE RESULTS
 # ============================================================================
 
-st.markdown("## 📜 RECENT EXACT SCORE RESULTS")
-st.caption("Last 20 settled exact score predictions")
+st.markdown("## 📜 RECENT FINAL SCORE RESULTS")
+st.caption("Last 20 settled final score predictions")
 
 try:
     conn = sqlite3.connect(DB_PATH)
@@ -316,7 +316,7 @@ try:
             width='stretch'
         )
     else:
-        st.info("📭 No settled exact score predictions yet. Check back after matches finish!")
+        st.info("📭 No settled final score predictions yet. Check back after matches finish!")
     
     conn.close()
     
@@ -326,11 +326,11 @@ except Exception as e:
 st.markdown("---")
 
 # ============================================================================
-# EXACT SCORE MONTHLY HISTORY
+# FINAL SCORE MONTHLY HISTORY
 # ============================================================================
 
-st.markdown("## 📁 EXACT SCORE MONTHLY HISTORY")
-st.caption("Exact score predictions organized by month")
+st.markdown("## 📁 FINAL SCORE MONTHLY HISTORY")
+st.caption("Final score predictions organized by month")
 
 try:
     conn = sqlite3.connect(DB_PATH)
@@ -495,4 +495,4 @@ except Exception as e:
 st.markdown("---")
 
 # Footer
-st.caption("⚽ Exact Score Analytics | AI-Powered Predictions")
+st.caption("⚽ Final Score Analytics | AI-Powered Predictions")
