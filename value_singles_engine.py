@@ -184,6 +184,23 @@ class ValueSinglesEngine:
                     "AWAY_WIN": "Away Win",
                 }.get(market_key, market_key)
 
+                # Extract match_date and kickoff_time from commence_time if not present
+                commence_time = match.get('commence_time', '')
+                match_date = match.get('formatted_date') or match.get('match_date')
+                kickoff_time = match.get('formatted_time') or match.get('kickoff_time')
+                
+                # Parse from commence_time if date not available
+                if not match_date and commence_time:
+                    from datetime import datetime
+                    try:
+                        dt = datetime.fromisoformat(commence_time.replace('Z', '+00:00'))
+                        match_date = dt.strftime("%Y-%m-%d")
+                        kickoff_time = dt.strftime("%H:%M")
+                    except:
+                        # Fallback: extract from string
+                        match_date = commence_time[:10] if len(commence_time) > 10 else ""
+                        kickoff_time = commence_time[11:16] if len(commence_time) > 16 else ""
+                
                 opportunity = {
                     "timestamp": int(time.time()),
                     "match_id": match_id,
@@ -203,8 +220,8 @@ class ValueSinglesEngine:
                         "expected_away_goals": float(la)
                     }),
                     "stake": match.get("stake", 100),
-                    "match_date": match.get("match_date"),
-                    "kickoff_time": match.get("kickoff_time"),
+                    "match_date": match_date,
+                    "kickoff_time": kickoff_time,
                     "quality_score": float(match.get("quality_score", 50)),
                     "recommended_tier": "SINGLE",
                     "daily_rank": 999
