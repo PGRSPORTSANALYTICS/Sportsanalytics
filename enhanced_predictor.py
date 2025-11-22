@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 try:
     from advanced_features import AdvancedFeaturesAPI, OddsMovementTracker
     from neural_score_predictor import NeuralScorePredictor, ensemble_exact_score_prediction
+    from h2h_intelligence import H2HIntelligence, format_h2h_insights
     ADVANCED_FEATURES_AVAILABLE = True
 except ImportError as e:
     logger.warning(f"⚠️ Advanced features not available: {e}")
@@ -54,6 +55,7 @@ class EnhancedExactScorePredictor:
         self.neural_predictor = None
         self.injury_scraper = None
         self.sofascore_scraper = None
+        self.h2h_intelligence = None
         
         # Initialize persistent cache for API-Football
         try:
@@ -68,7 +70,8 @@ class EnhancedExactScorePredictor:
                 self.odds_tracker = OddsMovementTracker(db_path)
                 self.neural_predictor = NeuralScorePredictor()
                 self.neural_predictor.load_model()  # Try to load pre-trained model
-                logger.info("✅ Enhanced predictor initialized with all features")
+                self.h2h_intelligence = H2HIntelligence()  # 🧠 NEW: Adaptive H2H analysis
+                logger.info("✅ Enhanced predictor initialized with all features including H2H intelligence")
             except Exception as e:
                 logger.warning(f"⚠️ Could not initialize all features: {e}")
         
@@ -362,8 +365,8 @@ class EnhancedExactScorePredictor:
     def predict_with_ensemble(self, xg_home: float, xg_away: float, 
                             enriched_data: Dict) -> Dict[str, float]:
         """
-        🎯 ENSEMBLE PREDICTION
-        Combines multiple prediction methods
+        🎯 ENSEMBLE PREDICTION WITH ADAPTIVE H2H INTELLIGENCE
+        Combines multiple prediction methods with smart H2H weighting
         """
         # Get neural network predictions if available
         neural_probs = None
@@ -381,12 +384,32 @@ class EnhancedExactScorePredictor:
         # Get H2H-based historical patterns
         h2h_probs = self._extract_h2h_patterns(enriched_data.get('h2h', {}))
         
-        # Use ensemble method
+        # 🧠 ADAPTIVE H2H INTELLIGENCE: Analyze H2H pattern strength
+        h2h_analysis = None
+        if self.h2h_intelligence and enriched_data.get('h2h'):
+            try:
+                h2h_matches = enriched_data['h2h']
+                # Convert to format expected by H2HIntelligence
+                h2h_list = []
+                if isinstance(h2h_matches, list):
+                    h2h_list = h2h_matches
+                elif isinstance(h2h_matches, dict) and 'matches' in h2h_matches:
+                    h2h_list = h2h_matches['matches']
+                
+                if h2h_list and len(h2h_list) >= 3:
+                    h2h_analysis = self.h2h_intelligence.analyze_h2h_pattern(h2h_list)
+                    # Log the insights
+                    print(format_h2h_insights(h2h_analysis))
+            except Exception as e:
+                logger.warning(f"⚠️ H2H intelligence analysis failed: {e}")
+        
+        # Use ensemble method with adaptive H2H weighting
         ensemble_probs = ensemble_exact_score_prediction(
             xg_home=xg_home,
             xg_away=xg_away,
             neural_probs=neural_probs,
-            historical_h2h=h2h_probs
+            historical_h2h=h2h_probs,
+            h2h_analysis=h2h_analysis  # 🧠 Pass H2H intelligence
         )
         
         return ensemble_probs
