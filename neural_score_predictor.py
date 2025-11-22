@@ -294,13 +294,18 @@ class NeuralScorePredictor:
 
 def ensemble_exact_score_prediction(xg_home: float, xg_away: float, 
                                     neural_probs: Dict[str, float] = None,
-                                    historical_h2h: Dict[str, float] = None) -> Dict[str, float]:
+                                    historical_h2h: Dict[str, float] = None,
+                                    h2h_analysis: Dict = None) -> Dict[str, float]:
     """
-    🎯 ENSEMBLE EXACT SCORE PREDICTION
+    🎯 ENSEMBLE EXACT SCORE PREDICTION WITH ADAPTIVE H2H WEIGHTING
     Combines multiple methods for better accuracy:
     1. Poisson distribution based on xG
     2. Neural network probabilities
-    3. Historical H2H scores
+    3. Historical H2H scores (with ADAPTIVE weighting)
+    
+    Args:
+        h2h_analysis: Optional H2H intelligence analysis from H2HIntelligence class
+                     Provides adaptive weighting based on dominance patterns
     
     Returns:
         Dict of {score: probability} with ensemble predictions
@@ -335,10 +340,21 @@ def ensemble_exact_score_prediction(xg_home: float, xg_away: float,
     else:
         ensemble = poisson_probs
     
-    # Method 3: Adjust with H2H if available
+    # Method 3: Adjust with H2H using ADAPTIVE weighting
     if historical_h2h:
-        weight_ensemble = 0.8
-        weight_h2h = 0.2
+        # 🧠 USE ADAPTIVE WEIGHTS based on H2H analysis
+        if h2h_analysis and 'recommended_weight' in h2h_analysis:
+            weight_h2h = h2h_analysis['recommended_weight']
+            weight_ensemble = 1.0 - weight_h2h
+            
+            print(f"\n🧠 ADAPTIVE H2H WEIGHTING:")
+            print(f"   Dominance Level: {h2h_analysis.get('dominance_level', 'unknown').upper()}")
+            print(f"   H2H Weight: {weight_h2h*100:.0f}% (Ensemble: {weight_ensemble*100:.0f}%)")
+            print(f"   Pattern Confidence: {h2h_analysis.get('pattern_confidence', 0)}%")
+        else:
+            # Fallback to old static weights if no analysis available
+            weight_ensemble = 0.8
+            weight_h2h = 0.2
         
         final = {}
         for score in ensemble:
