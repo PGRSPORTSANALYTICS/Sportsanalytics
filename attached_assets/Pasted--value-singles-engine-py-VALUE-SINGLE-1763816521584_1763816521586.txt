@@ -1,0 +1,478 @@
+# value_singles_engine.py
+# ---------------------------------------------------------
+# VALUE SINGLES ENGINE (v2)
+# - lower EV threshold
+# - more single markets
+# - diversification (1 pick per match per cycle)
+# - avoids matches already used recently
+# ---------------------------------------------------------
+
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple, Any
+import math
+import time
+
+from db_helper import db_helper
+from real_football_champion import FootballOpportunity  # uses same dataclass
+
+
+@dataclass
+class ValueSinglePick:
+    match_id: str
+    league: str
+    home: str
+    away: str
+    market: str
+    selection: str
+    odds: float
+    fair_odds: float
+    probability: float
+    ev_pct: float
+    confidence: float
+    reason: str
+
+
+class ValueSinglesEngine:
+    def __init__(self, champion):
+        self.champion = champion
+
+        # ---- TUNABLE SETTINGS ----
+        self.MIN_EV_PCT = 4.0          # was 8%, now more forgiving
+        self.MIN_CONFIDENCE = 55.0     # keep some quality bar
+        self.MIN_ODDS = 1.60
+        self.MAX_ODDS = 4.50
+        self.MAX_PICKS_PER_CYCLE = 10
+        self.MAX_PICKS_PER_MATCH = 1  # IMPORTANT: diversify
+
+        # how far back to look to avoid same match
+        self.RECENT_MATCH_WINDOW_HOURS = 24
+
+        # Poisson truncation
+        self.MAX_GOALS = 6
+
+
+    # -----------------------------
+    # Public entrypoint
+    # -----------------------------
+    def run_value_singles_cycle(self) -> int:
+        fixtures = self.champion.get_todays_fixtures()
+        if not fixtures:
+            print("📉 No fixtures available for Value Singles")
+            return 0
+
+        picks: List[ValueSinglePick] = []
+        match_pick_count: Dict[str, int] = {}
+
+        for match in fixtures:
+            try:
+                match_id, league, home, away = self._get_basic_match_info(match)
+
+                # skip if we already used this match recently
+                if self._match_used_recently(match_id, home, away):
+                    continue
+
+                # estimate expected goals
+                xg_home, xg_away = self._estimate_xg(match)
+
+                # compute core probabilities
+                probs = self._poisson_probs(xg_home, xg_away)
+
+                # extract best odds from Odds API payload
+                odds_pack = self._extract_odds(match)
+
+                # generate candidate markets
+                candidates = self._build_candidates(
+                    match_id, league, home, away, probs, odds_pack
+                )
+
+                # filter + sort by EV
+                qualified = [
+                    c for c in candidates
+                    if c.ev_pct >= self.MIN_EV_PCT
+                    and c.confidence >= self.MIN_CONFIDENCE
+                    and self.MIN_ODDS <= c.odds <= self.MAX_ODDS
+                ]
+                qualified.sort(key=lambda x: x.ev_pct, reverse=True)
+
+                # keep max one per match
+                if qualified:
+                    if match_pick_count.get(match_id, 0) < self.MAX_PICKS_PER_MATCH:
+                        picks.append(qualified[0])
+                        match_pick_count[match_id] = match_pick_count.get(match_id, 0) + 1
+
+                if len(picks) >= self.MAX_PICKS_PER_CYCLE:
+                    break
+
+            except Exception as e:
+                print(f"⚠️ ValueSinglesEngine error on match: {e}")
+                continue
+
+        # Save to DB
+        saved = 0
+        for pick in picks:
+            if self._save_pick(pick):
+                saved += 1
+
+        if saved > 0:
+            print(f"✅ Saved {saved} VALUE SINGLES predictions")
+        else:
+            print("📉 No value singles found this cycle")
+
+        return saved
+
+
+    # -----------------------------
+    # Helpers
+    # -----------------------------
+    def _get_basic_match_info(self, match: Dict) -> Tuple[str, str, str, str]:
+        # Odds API snapshot usually has these keys:
+        match_id = str(match.get("id") or match.get("match_id") or f"{match.get('home_team','')}_{match.get('away_team','')}_{match.get('commence_time','')}")
+        league = match.get("sport_title") or match.get("league") or "Unknown League"
+        home = match.get("home_team") or match.get("home") or match.get("team_home") or "Home"
+        away = match.get("away_team") or match.get("away") or match.get("team_away") or "Away"
+        return match_id, league, home, away
+
+
+    def _match_used_recently(self, match_id: str, home: str, away: str) -> bool:
+        """
+        Avoid repeating same match across systems.
+        Checks football_opportunities for last 24h by match_id OR teams.
+        """
+        try:
+            query = """
+            SELECT 1
+            FROM football_opportunities
+            WHERE (
+                match_id = %s
+                OR (home_team = %s AND away_team = %s)
+                OR (home_team = %s AND away_team = %s)
+            )
+            AND created_at >= NOW() - INTERVAL %s
+            LIMIT 1
+            """
+            window = f"{self.RECENT_MATCH_WINDOW_HOURS} hours"
+            rows = db_helper.fetch_all(query, (match_id, home, away, away, home, window))
+            return bool(rows)
+        except Exception:
+            # if DB unavailable, don't block
+            return False
+
+
+    def _estimate_xg(self, match: Dict) -> Tuple[float, float]:
+        """
+        Try to reuse enhanced_predictor info if present.
+        Fallback to mild league-average values.
+        """
+        xg_home = None
+        xg_away = None
+
+        try:
+            # if match already enriched by champion earlier
+            analysis = match.get("analysis") or match.get("enriched_analysis")
+            if analysis:
+                xg_home = analysis.get("expected_home_goals") or analysis.get("xg_home")
+                xg_away = analysis.get("expected_away_goals") or analysis.get("xg_away")
+        except Exception:
+            pass
+
+        # if not present, run a lightweight enrichment via enhanced_predictor
+        if xg_home is None or xg_away is None:
+            try:
+                # predict_with_ensemble returns (scores, meta)
+                scores, meta = self.champion.enhanced_predictor.predict_with_ensemble(match)
+                if meta:
+                    xg_home = meta.get("expected_home_goals") or meta.get("xg_home")
+                    xg_away = meta.get("expected_away_goals") or meta.get("xg_away")
+            except Exception:
+                pass
+
+        # final fallback
+        if xg_home is None: xg_home = 1.35
+        if xg_away is None: xg_away = 1.20
+
+        return float(xg_home), float(xg_away)
+
+
+    def _poisson_probs(self, lam_h: float, lam_a: float) -> Dict[str, float]:
+        # compute prob matrix up to MAX_GOALS
+        def pois(k, lam):
+            return math.exp(-lam) * (lam ** k) / math.factorial(k)
+
+        p_home = p_draw = p_away = 0.0
+        p_over25 = p_over35 = 0.0
+        p_btts_yes = 0.0
+
+        for i in range(self.MAX_GOALS + 1):
+            pi = pois(i, lam_h)
+            for j in range(self.MAX_GOALS + 1):
+                pj = pois(j, lam_a)
+                p = pi * pj
+
+                if i > j: p_home += p
+                elif i == j: p_draw += p
+                else: p_away += p
+
+                if i + j >= 3: p_over25 += p
+                if i + j >= 4: p_over35 += p
+                if i >= 1 and j >= 1: p_btts_yes += p
+
+        p_btts_no = 1.0 - p_btts_yes
+
+        # 1H over 0.5 approx
+        lam_1h = 0.45 * (lam_h + lam_a)
+        p_1h_over05 = 1.0 - math.exp(-lam_1h)
+
+        return {
+            "home_win": p_home,
+            "draw": p_draw,
+            "away_win": p_away,
+            "over_2_5": p_over25,
+            "under_2_5": 1.0 - p_over25,
+            "over_3_5": p_over35,
+            "under_3_5": 1.0 - p_over35,
+            "btts_yes": p_btts_yes,
+            "btts_no": p_btts_no,
+            "1h_over_0_5": p_1h_over05,
+            "1h_under_0_5": 1.0 - p_1h_over05
+        }
+
+
+    def _extract_odds(self, match: Dict) -> Dict[str, Any]:
+        """
+        Extract best odds per market from Odds API payload.
+        Returns dict:
+        {
+          "h2h": {"home": 1.95, "draw": 3.5, "away": 3.9},
+          "totals_2_5": {"over": 1.85, "under": 2.0},
+          "totals_3_5": {...},
+          "btts": {"yes": 1.9, "no": 1.95},
+          "1h_totals_0_5": {"over": 1.35, "under": 3.2},
+          "double_chance": {"1x":1.35, "x2":1.45, "12":1.25},
+          "dnb": {"home":1.6, "away":2.2}
+        }
+        """
+        best = {}
+
+        bookmakers = match.get("bookmakers", []) or []
+        for bm in bookmakers:
+            for market in bm.get("markets", []):
+                key = market.get("key")
+                outcomes = market.get("outcomes", [])
+
+                # H2H 1X2
+                if key == "h2h":
+                    pack = best.setdefault("h2h", {})
+                    for o in outcomes:
+                        name = o.get("name")
+                        price = o.get("price")
+                        if not price: continue
+                        if name == match.get("home_team"):
+                            pack["home"] = max(pack.get("home", 0), price)
+                        elif name == match.get("away_team"):
+                            pack["away"] = max(pack.get("away", 0), price)
+                        elif name in ("Draw", "X"):
+                            pack["draw"] = max(pack.get("draw", 0), price)
+
+                # Totals (full time)
+                if key == "totals":
+                    for o in outcomes:
+                        point = o.get("point")
+                        side = o.get("name")  # Over/Under
+                        price = o.get("price")
+                        if price is None or point is None: 
+                            continue
+                        if float(point) == 2.5:
+                            pack = best.setdefault("totals_2_5", {})
+                            if side.lower() == "over":
+                                pack["over"] = max(pack.get("over", 0), price)
+                            elif side.lower() == "under":
+                                pack["under"] = max(pack.get("under", 0), price)
+                        if float(point) == 3.5:
+                            pack = best.setdefault("totals_3_5", {})
+                            if side.lower() == "over":
+                                pack["over"] = max(pack.get("over", 0), price)
+                            elif side.lower() == "under":
+                                pack["under"] = max(pack.get("under", 0), price)
+
+                # 1H totals
+                if key in ("totals_1h", "1st_half_totals"):
+                    for o in outcomes:
+                        point = o.get("point")
+                        side = o.get("name")
+                        price = o.get("price")
+                        if price is None or point is None:
+                            continue
+                        if float(point) == 0.5:
+                            pack = best.setdefault("1h_totals_0_5", {})
+                            if side.lower() == "over":
+                                pack["over"] = max(pack.get("over", 0), price)
+                            elif side.lower() == "under":
+                                pack["under"] = max(pack.get("under", 0), price)
+
+                # BTTS
+                if key in ("btts", "both_teams_to_score"):
+                    pack = best.setdefault("btts", {})
+                    for o in outcomes:
+                        name = (o.get("name") or "").lower()
+                        price = o.get("price")
+                        if not price: continue
+                        if "yes" in name:
+                            pack["yes"] = max(pack.get("yes", 0), price)
+                        elif "no" in name:
+                            pack["no"] = max(pack.get("no", 0), price)
+
+                # Double chance
+                if key in ("double_chance", "doublechance"):
+                    pack = best.setdefault("double_chance", {})
+                    for o in outcomes:
+                        name = (o.get("name") or "").lower()
+                        price = o.get("price")
+                        if not price: continue
+                        if "home or draw" in name or "1x" in name:
+                            pack["1x"] = max(pack.get("1x", 0), price)
+                        elif "away or draw" in name or "x2" in name:
+                            pack["x2"] = max(pack.get("x2", 0), price)
+                        elif "home or away" in name or "12" in name:
+                            pack["12"] = max(pack.get("12", 0), price)
+
+                # Draw no bet (DNB)
+                if key in ("draw_no_bet", "dnb"):
+                    pack = best.setdefault("dnb", {})
+                    for o in outcomes:
+                        name = o.get("name")
+                        price = o.get("price")
+                        if not price: continue
+                        if name == match.get("home_team"):
+                            pack["home"] = max(pack.get("home", 0), price)
+                        elif name == match.get("away_team"):
+                            pack["away"] = max(pack.get("away", 0), price)
+
+        return best
+
+
+    def _build_candidates(
+        self,
+        match_id: str,
+        league: str,
+        home: str,
+        away: str,
+        probs: Dict[str, float],
+        odds_pack: Dict[str, Any]
+    ) -> List[ValueSinglePick]:
+
+        out: List[ValueSinglePick] = []
+
+        def add(market, selection, odds, p, reason):
+            if odds is None or odds <= 1.01:
+                return
+            fair = 1.0 / max(p, 1e-9)
+            ev = (p * odds - 1.0) * 100.0
+            conf = min(100.0, max(0.0, ev + p * 100.0))  # simple confidence proxy
+            out.append(ValueSinglePick(
+                match_id=match_id, league=league, home=home, away=away,
+                market=market, selection=selection,
+                odds=float(odds), fair_odds=float(fair),
+                probability=float(p), ev_pct=float(ev),
+                confidence=float(conf),
+                reason=reason
+            ))
+
+        # 1X2
+        h2h = odds_pack.get("h2h", {})
+        add("1X2", "HOME", h2h.get("home"), probs["home_win"], "Poisson home win")
+        add("1X2", "DRAW", h2h.get("draw"), probs["draw"], "Poisson draw")
+        add("1X2", "AWAY", h2h.get("away"), probs["away_win"], "Poisson away win")
+
+        # O/U 2.5
+        t25 = odds_pack.get("totals_2_5", {})
+        add("O/U 2.5", "OVER 2.5", t25.get("over"), probs["over_2_5"], "Poisson totals")
+        add("O/U 2.5", "UNDER 2.5", t25.get("under"), probs["under_2_5"], "Poisson totals")
+
+        # O/U 3.5
+        t35 = odds_pack.get("totals_3_5", {})
+        add("O/U 3.5", "OVER 3.5", t35.get("over"), probs["over_3_5"], "Poisson totals")
+        add("O/U 3.5", "UNDER 3.5", t35.get("under"), probs["under_3_5"], "Poisson totals")
+
+        # BTTS
+        btts = odds_pack.get("btts", {})
+        add("BTTS", "YES", btts.get("yes"), probs["btts_yes"], "Poisson BTTS")
+        add("BTTS", "NO", btts.get("no"), probs["btts_no"], "Poisson BTTS")
+
+        # 1H over 0.5
+        h05 = odds_pack.get("1h_totals_0_5", {})
+        add("1H O/U 0.5", "OVER 0.5 1H", h05.get("over"), probs["1h_over_0_5"], "1H approx")
+        add("1H O/U 0.5", "UNDER 0.5 1H", h05.get("under"), probs["1h_under_0_5"], "1H approx")
+
+        # Double chance + DNB if present
+        dc = odds_pack.get("double_chance", {})
+        if dc:
+            p_1x = probs["home_win"] + probs["draw"]
+            p_x2 = probs["away_win"] + probs["draw"]
+            p_12 = probs["home_win"] + probs["away_win"]
+            add("Double Chance", "1X", dc.get("1x"), p_1x, "Derived")
+            add("Double Chance", "X2", dc.get("x2"), p_x2, "Derived")
+            add("Double Chance", "12", dc.get("12"), p_12, "Derived")
+
+        dnb = odds_pack.get("dnb", {})
+        if dnb:
+            # DNB removes draw, renormalize
+            p_no_draw = 1.0 - probs["draw"]
+            if p_no_draw > 0:
+                p_home_dnb = probs["home_win"] / p_no_draw
+                p_away_dnb = probs["away_win"] / p_no_draw
+                add("DNB", "HOME DNB", dnb.get("home"), p_home_dnb, "Renormalized")
+                add("DNB", "AWAY DNB", dnb.get("away"), p_away_dnb, "Renormalized")
+
+        return out
+
+
+    def _save_pick(self, pick: ValueSinglePick) -> bool:
+        """
+        Save as FootballOpportunity -> football_opportunities table.
+        """
+        try:
+            opp = FootballOpportunity(
+                match_id=pick.match_id,
+                league=pick.league,
+                home_team=pick.home,
+                away_team=pick.away,
+                market_type="value_single",
+                prediction=pick.selection,
+                odds=pick.odds,
+                probability=pick.probability,
+                expected_value=pick.ev_pct,
+                confidence=pick.confidence,
+                recommended_tier="value_singles",
+                daily_rank=None,
+                analysis={
+                    "market": pick.market,
+                    "selection": pick.selection,
+                    "odds": pick.odds,
+                    "fair_odds": pick.fair_odds,
+                    "probability": pick.probability,
+                    "ev_pct": pick.ev_pct,
+                    "confidence": pick.confidence,
+                    "reason": pick.reason,
+                }
+            )
+
+            query = """
+            INSERT INTO football_opportunities (
+                match_id, league, home_team, away_team, market_type,
+                prediction, odds, probability, expected_value, confidence,
+                recommended_tier, daily_rank, analysis
+            )
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            ON CONFLICT DO NOTHING
+            RETURNING id
+            """
+            res = db_helper.fetch_one(query, (
+                opp.match_id, opp.league, opp.home_team, opp.away_team, opp.market_type,
+                opp.prediction, opp.odds, opp.probability, opp.expected_value, opp.confidence,
+                opp.recommended_tier, opp.daily_rank, opp.analysis
+            ))
+            return bool(res)
+
+        except Exception as e:
+            print(f"❌ Value single save error: {e}")
+            return False
