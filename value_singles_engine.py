@@ -138,6 +138,8 @@ class ValueSinglesEngine:
             odds_dict = self.champion.get_odds_for_match(match) or {}
             if not odds_dict:
                 continue
+            
+            print("🧾 Odds keys found:", list(odds_dict.keys()))
 
             # 3) Expected goals
             if hasattr(self.champion, "get_expected_goals"):
