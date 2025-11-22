@@ -750,6 +750,19 @@ class RealFootballChampion:
         Extract and normalize odds from The Odds API match structure.
         Returns odds dict compatible with Value Singles Engine.
         """
+        # Standardized key mapping for consistent naming
+        KEY_MAP = {
+            "over_2_5": "over_2.5",
+            "under_2_5": "under_2.5",
+            "over_3_5": "over_3.5",
+            "under_3_5": "under_3.5",
+            "btts_yes": "btts_yes",
+            "home_win": "1X2_home",
+            "draw": "1X2_draw",
+            "away_win": "1X2_away",
+            "1h_over_0_5": "1h_over_0.5",
+        }
+        
         odds_map = {}
         
         try:
@@ -772,11 +785,14 @@ class RealFootballChampion:
                         price = outcome.get('price', 0)
                         
                         if name == match.get('home_team'):
-                            odds_map['HOME_WIN'] = float(price)
+                            k = KEY_MAP.get('home_win', 'HOME_WIN')
+                            odds_map[k] = float(price)
                         elif name == match.get('away_team'):
-                            odds_map['AWAY_WIN'] = float(price)
+                            k = KEY_MAP.get('away_win', 'AWAY_WIN')
+                            odds_map[k] = float(price)
                         elif name == 'Draw':
-                            odds_map['DRAW'] = float(price)
+                            k = KEY_MAP.get('draw', 'DRAW')
+                            odds_map[k] = float(price)
                 
                 # Totals (Over/Under) market
                 elif market_key == 'totals' and outcomes:
@@ -789,11 +805,21 @@ class RealFootballChampion:
                             if point == 1.5:
                                 odds_map['FT_OVER_1_5'] = float(price)
                             elif point == 2.5:
-                                odds_map['FT_OVER_2_5'] = float(price)
+                                k = KEY_MAP.get('over_2_5', 'FT_OVER_2_5')
+                                odds_map[k] = float(price)
                             elif point == 3.5:
-                                odds_map['FT_OVER_3_5'] = float(price)
+                                k = KEY_MAP.get('over_3_5', 'FT_OVER_3_5')
+                                odds_map[k] = float(price)
                             elif point == 0.5:
-                                odds_map['1H_OVER_0_5'] = float(price)
+                                k = KEY_MAP.get('1h_over_0_5', '1H_OVER_0_5')
+                                odds_map[k] = float(price)
+                        elif name == 'Under':
+                            if point == 2.5:
+                                k = KEY_MAP.get('under_2_5', 'FT_UNDER_2_5')
+                                odds_map[k] = float(price)
+                            elif point == 3.5:
+                                k = KEY_MAP.get('under_3_5', 'FT_UNDER_3_5')
+                                odds_map[k] = float(price)
         
         except Exception as e:
             # Return empty dict on error - engine will skip this match
