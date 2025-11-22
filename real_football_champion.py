@@ -741,6 +741,10 @@ class RealFootballChampion:
         
         return near_time_matches
     
+    def get_todays_fixtures(self) -> List[Dict]:
+        """Wrapper for Value Singles Engine - returns upcoming matches"""
+        return self.get_football_odds()
+    
     def get_upcoming_fixtures(self) -> List[Dict]:
         """Get upcoming fixtures for the next few days using CACHED API client"""
         fixtures = []

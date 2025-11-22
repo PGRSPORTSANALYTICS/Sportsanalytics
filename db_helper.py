@@ -52,8 +52,14 @@ class DatabaseHelper:
                         return cursor.fetchall()
                     return None
                     
-            except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
+            except (psycopg2.OperationalError, psycopg2.InterfaceError, psycopg2.DatabaseError) as e:
                 # Connection dropped - retry (get_cursor will discard the bad connection)
+                error_msg = str(e).lower()
+                if 'ssl' in error_msg or 'closed' in error_msg or 'terminated' in error_msg:
+                    # SSL/connection issue - reset pool
+                    logger.warning(f"Connection dropped (SSL/termination), resetting pool: {e}")
+                    DatabaseConnection.reset_pool()
+                
                 if attempt < max_retries - 1:
                     logger.warning(f"Database connection error (attempt {attempt + 1}/{max_retries}): {e}")
                     time.sleep(0.5 * (attempt + 1))  # Exponential backoff
