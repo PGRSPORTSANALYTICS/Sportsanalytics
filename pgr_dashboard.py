@@ -171,7 +171,7 @@ def get_rolling_roi_data(days=30):
             profit_loss,
             stake
         FROM (
-            SELECT settled_timestamp, 'exact_score' as market, profit_loss, stake
+            SELECT settled_timestamp, market, profit_loss, stake
             FROM football_opportunities
             WHERE outcome IN (%s, %s) AND settled_timestamp IS NOT NULL
             
@@ -198,11 +198,17 @@ def get_rolling_roi_data(days=30):
     # Calculate cumulative ROI for each product
     df_sorted = df.sort_values('bet_date')
     
-    # ES only
+    # ES only (exact_score market)
     df_es = df_sorted[df_sorted['market'] == 'exact_score'].copy()
     df_es['cumulative_profit'] = df_es['profit_loss'].cumsum()
     df_es['cumulative_stake'] = df_es['stake'].cumsum()
     df_es['roi'] = (df_es['cumulative_profit'] / df_es['cumulative_stake'] * 100).fillna(0)
+    
+    # Value Singles only
+    df_vs = df_sorted[df_sorted['market'] == 'Value Single'].copy()
+    df_vs['cumulative_profit'] = df_vs['profit_loss'].cumsum()
+    df_vs['cumulative_stake'] = df_vs['stake'].cumsum()
+    df_vs['roi'] = (df_vs['cumulative_profit'] / df_vs['cumulative_stake'] * 100).fillna(0)
     
     # SGP only
     df_sgp = df_sorted[df_sorted['market'] == 'sgp'].copy()
@@ -218,6 +224,7 @@ def get_rolling_roi_data(days=30):
     
     return {
         'es': df_es[['bet_date', 'roi']],
+        'value_singles': df_vs[['bet_date', 'roi']],
         'sgp': df_sgp[['bet_date', 'roi']],
         'combined': df_combined[['bet_date', 'roi']]
     }
@@ -780,11 +787,10 @@ if roi_data:
                 mode='lines'
             ))
     elif st.session_state.selected_product == 'value_singles':
-        if not roi_data['exact_score'].empty:
-            # Value Singles shares the same table as exact scores, filter by market
+        if not roi_data['value_singles'].empty:
             fig.add_trace(go.Scatter(
-                x=roi_data['exact_score']['bet_date'],
-                y=roi_data['exact_score']['roi'],
+                x=roi_data['value_singles']['bet_date'],
+                y=roi_data['value_singles']['roi'],
                 name='Value Singles',
                 line=dict(color='#D29922', width=3),
                 mode='lines'
