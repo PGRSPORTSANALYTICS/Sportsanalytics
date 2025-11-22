@@ -493,7 +493,7 @@ class RealFootballChampion:
                 opportunities = self.find_balanced_opportunities(match)
                 for opp in opportunities[:1]:  # Just take best opportunity per match
                     if self.get_todays_count() < self.max_daily_tips:
-                        saved = self.save_opportunity(opp)
+                        saved = self.save_exact_score_opportunity(opp)
                         if saved:
                             additional_tips += 1
                             print(f"      ✅ STANDARD TIP: {opp.home_team} vs {opp.away_team} - {opp.selection}")
@@ -513,7 +513,7 @@ class RealFootballChampion:
                     opportunities = self.find_balanced_opportunities(match)
                     for opp in opportunities[:1]:
                         if self.get_todays_count() < self.max_daily_tips:
-                            saved = self.save_opportunity(opp)
+                            saved = self.save_exact_score_opportunity(opp)
                             if saved:
                                 additional_tips += 1
                                 print(f"      ✅ VALUE PICK: {opp.home_team} vs {opp.away_team} - {opp.selection}")
@@ -533,7 +533,7 @@ class RealFootballChampion:
                     opportunities = self.find_balanced_opportunities(match)
                     for opp in opportunities[:1]:
                         if self.get_todays_count() < self.min_daily_tips:
-                            saved = self.save_opportunity(opp)
+                            saved = self.save_exact_score_opportunity(opp)
                             if saved:
                                 additional_tips += 1
                                 print(f"      ✅ BACKUP TIP: {opp.home_team} vs {opp.away_team} - {opp.selection}")
@@ -2095,118 +2095,6 @@ class RealFootballChampion:
         ''', (today_date,), fetch='one')
         return result[0] if result else 0
     
-    def save_opportunity(self, opportunity: FootballOpportunity):
-        """Save opportunity to database (with duplicate prevention and daily limit)"""
-        
-        # Defense-in-depth: Check daily limit before saving - STRICT SELECTIVITY
-        DAILY_LIMIT = 15  # 🔧 CRITICAL: High-quality predictions, balanced quantity
-        current_count = self.get_todays_count()
-        if current_count >= DAILY_LIMIT:
-            print(f"⚠️ DAILY LIMIT REACHED: {current_count}/{DAILY_LIMIT} bets already generated today")
-            return False
-        
-        # Check if this exact opportunity already exists TODAY
-        today_start = int(time.time()) - (24 * 60 * 60)  # 24 hours ago
-        result = db_helper.execute('''
-            SELECT COUNT(*) FROM football_opportunities 
-            WHERE home_team = %s AND away_team = %s AND selection = %s 
-            AND status = 'pending' AND timestamp > %s
-        ''', (opportunity.home_team, opportunity.away_team, opportunity.selection, today_start), fetch='one')
-        
-        duplicate_count = result[0] if result else 0
-        if duplicate_count > 0:
-            # Duplicate found, skip saving
-            print(f"🔄 SKIPPED DUPLICATE: {opportunity.home_team} vs {opportunity.away_team} - {opportunity.selection}")
-            return
-        else:
-            print(f"🆕 NEW OPPORTUNITY: {opportunity.home_team} vs {opportunity.away_team} - {opportunity.selection}")
-            
-        # 💰 TIERED SYSTEM: Classify opportunity tier for commercial viability
-        tier = self.determine_opportunity_tier(opportunity)
-        quality_score = (opportunity.edge_percentage * 0.7) + (opportunity.confidence * 0.3)
-        today_date = datetime.now().strftime('%Y-%m-%d')
-        
-        # Check tier-specific daily limits for business balance
-        daily_counts = self.get_daily_tier_counts()
-        
-        # Enforce tier-specific limits
-        if tier == 'premium' and daily_counts['premium'] >= self.premium_max_daily:
-            print(f"⚠️ PREMIUM TIER LIMIT REACHED: {daily_counts['premium']}/{self.premium_max_daily}")
-            return False
-        elif tier == 'standard' and daily_counts['standard'] >= self.standard_max_daily:
-            print(f"⚠️ STANDARD TIER LIMIT REACHED: {daily_counts['standard']}/{self.standard_max_daily}")
-            return False
-        elif tier == 'backup' and daily_counts['backup'] >= self.backup_max_daily:
-            print(f"⚠️ BACKUP TIER LIMIT REACHED: {daily_counts['backup']}/{self.backup_max_daily}")
-            return False
-        elif tier == 'rejected':
-            print(f"❌ OPPORTUNITY REJECTED: {opportunity.home_team} vs {opportunity.away_team} - Below all tier thresholds")
-            return False
-        
-        # Extract ML predictions from analysis
-        ml_predictions = opportunity.analysis.get('ml_predictions', {})
-        model_version = ml_predictions.get('model_version', None)
-        model_prob = ml_predictions.get('model_prob', None)
-        calibrated_prob = ml_predictions.get('calibrated_prob', None)
-        kelly_stake = ml_predictions.get('kelly_fraction', None)
-        
-        # Determine bet category (today vs future)
-        try:
-            if 'T' in opportunity.match_date:
-                match_dt = datetime.fromisoformat(opportunity.match_date.replace('Z', '+00:00'))
-            else:
-                match_dt = datetime.fromtimestamp(int(opportunity.match_date)) if opportunity.match_date.isdigit() else datetime.fromisoformat(opportunity.match_date)
-            match_date_only = match_dt.date()
-            today_only = datetime.now().date()
-            bet_category = 'today' if match_date_only == today_only else 'future'
-        except:
-            bet_category = 'today'  # Default to today on parsing errors
-        
-        try:
-            db_helper.execute('''
-                INSERT INTO football_opportunities 
-                (timestamp, match_id, home_team, away_team, league, market, selection, 
-                 odds, edge_percentage, confidence, analysis, stake, match_date, kickoff_time,
-                 quality_score, recommended_date, recommended_tier, daily_rank,
-                 model_version, model_prob, calibrated_prob, kelly_stake, tier, bet_category)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ''', (
-                int(time.time()),
-                opportunity.match_id,
-                opportunity.home_team,
-                opportunity.away_team,
-                opportunity.league,
-                opportunity.market,
-                opportunity.selection,
-                opportunity.odds,
-                opportunity.edge_percentage,
-                opportunity.confidence,
-                json.dumps(opportunity.analysis),
-                opportunity.stake,
-                opportunity.match_date,
-                opportunity.kickoff_time,
-                quality_score,
-                today_date,
-                'standard',  # Will be updated in batch ranking
-                999,  # Temporary rank, will be updated in batch
-                model_version,
-                model_prob,
-                calibrated_prob,
-                kelly_stake,
-                tier,  # 💰 TIERED SYSTEM: Save tier for commercial viability
-                bet_category  # 📅 Categorize for dashboard/Telegram organization
-            ))
-            print(f"✅ SAVED: {opportunity.home_team} vs {opportunity.away_team} - Quality: {quality_score:.1f}, Date: {today_date}, Rank: 999")
-            return True
-        except Exception as e:
-            print(f"❌ SAVE ERROR: {e}")
-            print(f"   🎯 Opportunity: {opportunity.home_team} vs {opportunity.away_team}")
-            print(f"   📊 Quality Score: {quality_score}")
-            print(f"   📅 Date: {today_date}")
-            raise e
-        
-        return False
-    
     def rank_and_tier_opportunities(self):
         """Rank today's opportunities by quality score (tiers already assigned)"""
         today_date = datetime.now().strftime('%Y-%m-%d')
@@ -2282,7 +2170,7 @@ class RealFootballChampion:
                 print(f"   💰 Stake: ${opp.stake:.2f}")
                 print(f"   🧠 xG Analysis: Home {opp.analysis['xg_prediction']['home_xg']:.1f}, Away {opp.analysis['xg_prediction']['away_xg']:.1f}")
                 
-                saved = self.save_opportunity(opp)
+                saved = self.save_exact_score_opportunity(opp)
                 if saved:
                     total_opportunities += 1
             

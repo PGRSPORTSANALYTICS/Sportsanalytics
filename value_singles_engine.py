@@ -149,6 +149,8 @@ class ValueSinglesEngine:
                 la = match.get("expected_away_goals")
             if lh is None or la is None:
                 continue
+            
+            print(f"⚽ xG used: home={lh:.2f} away={la:.2f}")
 
             probs = self._build_single_markets(lh, la)
 
