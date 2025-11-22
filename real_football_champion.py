@@ -24,6 +24,7 @@ from xg_predictor import ExpectedGoalsPredictor
 from referee_analyzer import RefereeAnalyzer
 from team_name_mapper import TeamNameMapper
 from db_helper import db_helper
+from value_singles_engine import ValueSinglesEngine
 
 # League configuration
 from league_config import get_odds_api_keys, get_league_by_odds_key, LEAGUE_REGISTRY
@@ -3017,6 +3018,19 @@ def main():
             
             # Run exact score analysis (proven +200% ROI)
             exact_scores = champion.run_exact_score_analysis()
+            
+            # VALUE SINGLES - New market expansion
+            try:
+                print("\n💰 VALUE SINGLES ENGINE - Analyzing markets...")
+                value_engine = ValueSinglesEngine(champion, ev_threshold=0.08, min_confidence=55)
+                value_singles = value_engine.generate_value_singles(max_picks=6)
+                if value_singles:
+                    saved = value_engine.save_value_singles(value_singles)
+                    print(f"✅ Saved {saved} VALUE SINGLES predictions")
+                else:
+                    print("📊 No value singles found this cycle")
+            except Exception as e:
+                print(f"⚠️ Value Singles generation failed: {e}")
             
             # Check if it's time for results update (every 5 minutes)
             current_time = time.time()
