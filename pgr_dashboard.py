@@ -661,7 +661,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-col1, col2, col3, col4, col5 = st.columns([1, 1, 1, 1, 1])
+col1, col2, col3, col4, col5, col6 = st.columns([1, 1, 1, 1, 1, 0.8])
 
 with col1:
     if st.button("⚽ FINAL SCORE", key="btn_exact", use_container_width=True):
@@ -688,13 +688,19 @@ with col5:
         st.session_state.selected_product = 'college_basketball'
         st.rerun()
 
+with col6:
+    if st.button("📊 ALL", key="btn_all", use_container_width=True):
+        st.session_state.selected_product = 'all'
+        st.rerun()
+
 # Show active selection
 product_labels = {
     'exact_score': 'Final Score',
     'sgp': 'SGP',
     'value_singles': 'Value Singles',
     'women_1x2': "Women's 1X2",
-    'college_basketball': 'College Basketball'
+    'college_basketball': 'College Basketball',
+    'all': 'All Products'
 }
 st.markdown(f"""
 <div style="text-align: center; color: #3FB68B; font-size: 0.9rem; margin-top: -1rem; margin-bottom: 2rem;">
@@ -706,7 +712,10 @@ st.markdown(f"""
 stats = get_all_time_stats()
 selected = st.session_state.selected_product
 
-if selected == 'exact_score':
+if selected == 'all':
+    # Combined stats across all products
+    product_stats = stats['combined']
+elif selected == 'exact_score':
     product_stats = stats['exact_score']
 elif selected == 'sgp':
     product_stats = stats['sgp']
