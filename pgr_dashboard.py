@@ -953,6 +953,70 @@ else:
 
 st.markdown('<div style="text-align: center; color: #8B949E; font-size: 0.85rem; margin-top: -1rem;">AI adjusts parameters daily – more bets, more precision.</div>', unsafe_allow_html=True)
 
+# College Basketball Picks Display
+if selected == 'college_basketball':
+    st.markdown('<div class="section-header">🏀 COLLEGE BASKETBALL PICKS</div>', unsafe_allow_html=True)
+    
+    try:
+        with DatabaseConnection.get_connection() as conn:
+            query = """
+                SELECT match, selection, odds, ev_percentage, is_parlay
+                FROM basketball_predictions
+                WHERE status = 'pending'
+                ORDER BY is_parlay ASC, ev_percentage DESC
+            """
+            picks_df = pd.read_sql(query, conn)
+        
+        if not picks_df.empty:
+            # Singles section
+            singles = picks_df[picks_df['is_parlay'] == False]
+            if not singles.empty:
+                st.markdown("### ⭐ SINGLE BETS")
+                for idx, row in singles.iterrows():
+                    st.markdown(f"""
+                    <div style="background: #161B22; padding: 1rem; margin-bottom: 0.8rem; border-radius: 8px; border-left: 3px solid #3FB68B;">
+                        <div style="font-weight: 600; font-size: 1rem; margin-bottom: 0.3rem;">{row['match']}</div>
+                        <div style="color: #58A6FF; font-size: 0.95rem; margin-bottom: 0.5rem;">📍 {row['selection']}</div>
+                        <div style="display: flex; gap: 2rem;">
+                            <div><span style="color: #8B949E;">Odds:</span> <span style="color: #3FB68B; font-weight: 600;">{row['odds']:.2f}x</span></div>
+                            <div><span style="color: #8B949E;">EV:</span> <span style="color: #D29922; font-weight: 600;">+{row['ev_percentage']:.1f}%</span></div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+            
+            # Parlays section
+            parlays = picks_df[picks_df['is_parlay'] == True]
+            if not parlays.empty:
+                st.markdown("### 🎯 PARLAY BETS")
+                for idx, row in parlays.iterrows():
+                    # Parse parlay legs
+                    teams = row['match'].replace('PARLAY: ', '').split(' + ')
+                    selections = row['selection'].split(' | ')
+                    
+                    st.markdown(f"""
+                    <div style="background: #161B22; padding: 1rem; margin-bottom: 0.8rem; border-radius: 8px; border-left: 3px solid #58A6FF;">
+                        <div style="font-weight: 600; font-size: 1rem; margin-bottom: 0.5rem; color: #58A6FF;">
+                            {len(teams)}-Leg Parlay • {row['odds']:.2f}x • +{row['ev_percentage']:.1f}% EV
+                        </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Display each leg
+                    for i, (team, selection) in enumerate(zip(teams, selections), 1):
+                        st.markdown(f"""
+                        <div style="padding: 0.5rem; margin-left: 1rem; border-left: 2px solid #30363D;">
+                            <div style="color: #C9D1D9; font-size: 0.9rem;">Leg {i}: <strong>{team}</strong></div>
+                            <div style="color: #8B949E; font-size: 0.85rem; margin-left: 1rem;">→ {selection}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    st.markdown("</div>", unsafe_allow_html=True)
+        else:
+            st.info("No pending College Basketball picks. Next cycle generates picks every 2 hours.")
+    
+    except Exception as e:
+        print(f"Error displaying College Basketball picks: {e}")
+        st.error("Error loading picks")
+
 # System Status
 st.markdown('<div class="section-header">SYSTEM STATUS</div>', unsafe_allow_html=True)
 
