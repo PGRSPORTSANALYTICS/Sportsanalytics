@@ -170,72 +170,69 @@ class BetStatusService:
     def get_settled_today(self) -> pd.DataFrame:
         """Get all bets settled today (for daily recap)"""
         with DatabaseConnection.get_connection() as conn:
-        
-        today = datetime.now(self.stockholm_tz).strftime('%Y-%m-%d')
-        
-        # Exact Score settled today
-        exact_scores = pd.read_sql(f'''
-            SELECT 
-                'Exact Score' as type,
-                id,
-                home_team || ' vs ' || away_team as match,
-                league,
-                REPLACE(selection, 'Exact Score: ', '') as prediction,
-                odds,
-                stake,
-                result,
-                payout,
-                profit_loss
-            FROM football_opportunities
-            WHERE status = 'settled'
-            AND DATE(TO_TIMESTAMP(settled_timestamp)) = '{today}'
-            ORDER BY settled_timestamp DESC
-        ''', conn)
-        
-        # SGP settled today
-        sgps = pd.read_sql(f'''
-            SELECT 
-                'SGP' as type,
-                id,
-                home_team || ' vs ' || away_team as match,
-                league,
-                parlay_description as prediction,
-                bookmaker_odds as odds,
-                stake,
-                outcome as result,
-                payout,
-                profit_loss
-            FROM sgp_predictions
-            WHERE status = 'settled'
-            AND DATE(TO_TIMESTAMP(settled_timestamp)) = '{today}'
-            ORDER BY settled_timestamp DESC
-        ''', conn)
-        
-        # Women's 1X2 settled today
-        women_1x2 = pd.read_sql(f'''
-            SELECT 
-                'Women 1X2' as type,
-                id,
-                home_team || ' vs ' || away_team as match,
-                league,
-                selection as prediction,
-                odds,
-                stake,
-                outcome as result,
-                CASE 
-                    WHEN outcome = 'win' THEN (odds - 1) * stake
-                    ELSE 0
-                END as payout,
-                profit_loss
-            FROM women_match_winner_predictions
-            WHERE status = 'settled'
-            AND DATE(TO_TIMESTAMP(settled_timestamp)) = '{today}'
-            ORDER BY settled_timestamp DESC
-        ''', conn)
-        
-        conn.close()
-        
-        return pd.concat([exact_scores, sgps, women_1x2], ignore_index=True)
+            today = datetime.now(self.stockholm_tz).strftime('%Y-%m-%d')
+            
+            # Exact Score settled today
+            exact_scores = pd.read_sql(f'''
+                SELECT 
+                    'Exact Score' as type,
+                    id,
+                    home_team || ' vs ' || away_team as match,
+                    league,
+                    REPLACE(selection, 'Exact Score: ', '') as prediction,
+                    odds,
+                    stake,
+                    result,
+                    payout,
+                    profit_loss
+                FROM football_opportunities
+                WHERE status = 'settled'
+                AND DATE(TO_TIMESTAMP(settled_timestamp)) = '{today}'
+                ORDER BY settled_timestamp DESC
+            ''', conn)
+            
+            # SGP settled today
+            sgps = pd.read_sql(f'''
+                SELECT 
+                    'SGP' as type,
+                    id,
+                    home_team || ' vs ' || away_team as match,
+                    league,
+                    parlay_description as prediction,
+                    bookmaker_odds as odds,
+                    stake,
+                    outcome as result,
+                    payout,
+                    profit_loss
+                FROM sgp_predictions
+                WHERE status = 'settled'
+                AND DATE(TO_TIMESTAMP(settled_timestamp)) = '{today}'
+                ORDER BY settled_timestamp DESC
+            ''', conn)
+            
+            # Women's 1X2 settled today
+            women_1x2 = pd.read_sql(f'''
+                SELECT 
+                    'Women 1X2' as type,
+                    id,
+                    home_team || ' vs ' || away_team as match,
+                    league,
+                    selection as prediction,
+                    odds,
+                    stake,
+                    outcome as result,
+                    CASE 
+                        WHEN outcome = 'win' THEN (odds - 1) * stake
+                        ELSE 0
+                    END as payout,
+                    profit_loss
+                FROM women_match_winner_predictions
+                WHERE status = 'settled'
+                AND DATE(TO_TIMESTAMP(settled_timestamp)) = '{today}'
+                ORDER BY settled_timestamp DESC
+            ''', conn)
+            
+            return pd.concat([exact_scores, sgps, women_1x2], ignore_index=True)
     
     def _calculate_live_status(self, row) -> str:
         """Calculate if match is LIVE, UPCOMING, or FINISHED"""

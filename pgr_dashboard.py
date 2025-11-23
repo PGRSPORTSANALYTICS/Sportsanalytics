@@ -720,7 +720,7 @@ elif selected == 'women_1x2':
             avg_odds = 0.0
             
     except Exception as e:
-        logger.error(f"Error loading women's 1X2 stats: {e}")
+        print(f"Error loading women's 1X2 stats: {e}")
         product_stats = {'total': 0, 'wins': 0, 'losses': 0, 'profit': 0.0}
         total_roi = 0.0
         hit_rate_200 = 0.0
