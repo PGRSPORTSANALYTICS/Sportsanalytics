@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 
 # EV thresholds per mode
 EV_THRESHOLDS = {
-    'TRAIN': 0.08,  # 8% EV during data collection
-    'PROD': 0.12    # 12% EV in production
+    'TRAIN': 0.03,  # 3% EV during data collection (women's markets are softer)
+    'PROD': 0.05    # 5% EV in production
 }
 
 # Current operating mode

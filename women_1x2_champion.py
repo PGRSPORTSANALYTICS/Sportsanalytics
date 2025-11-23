@@ -47,7 +47,7 @@ def run_prediction_cycle():
 def main():
     """Main loop for women's 1X2 predictions"""
     logger.info("🚀 Women's 1X2 Champion Starting...")
-    logger.info("📅 Mode: TRAIN (8% EV threshold)")
+    logger.info("📅 Mode: TRAIN (3% EV threshold)")
     logger.info("🔄 Prediction cycle: Every 1 hour")
     logger.info("="*60)
     
