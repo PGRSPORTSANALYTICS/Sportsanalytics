@@ -1024,10 +1024,11 @@ if selected in ['sgp', 'monstersgp']:
     try:
         if selected == 'sgp':
             query = """
-                SELECT home_team, away_team, parlay_description, bookmaker_odds, ev_percentage, match_date
+                SELECT home_team, away_team, parlay_description, bookmaker_odds, ev_percentage
                 FROM sgp_predictions
                 WHERE outcome IS NULL
                   AND match_date >= CURRENT_DATE::text
+                  AND ev_percentage > 0
                   AND (parlay_description IS NULL OR parlay_description NOT LIKE '%Monster%')
                   AND (parlay_description IS NULL OR parlay_description NOT LIKE '%BEAST%')
                 ORDER BY ev_percentage DESC
@@ -1035,10 +1036,11 @@ if selected in ['sgp', 'monstersgp']:
             """
         else:  # monstersgp
             query = """
-                SELECT home_team, away_team, parlay_description, bookmaker_odds, ev_percentage, match_date
+                SELECT home_team, away_team, parlay_description, bookmaker_odds, ev_percentage
                 FROM sgp_predictions
                 WHERE outcome IS NULL
                   AND match_date >= CURRENT_DATE::text
+                  AND ev_percentage > 0
                   AND (parlay_description LIKE '%Monster%' OR parlay_description LIKE '%BEAST%')
                 ORDER BY ev_percentage DESC
                 LIMIT 50
@@ -1046,58 +1048,58 @@ if selected in ['sgp', 'monstersgp']:
         
         sgp_rows = db_helper.execute(query, (), fetch='all')
         
-        if sgp_rows:
+        if sgp_rows and len(sgp_rows) > 0:
             for row in sgp_rows:
-                # Skip if row doesn't have all required fields
-                if not row or len(row) < 5:
-                    continue
+                try:
+                    home_team = row[0] or ''
+                    away_team = row[1] or ''
+                    parlay_desc = row[2] or ''
+                    odds = float(row[3]) if row[3] else 0
+                    ev = float(row[4]) if row[4] else 0
                     
-                home_team = row[0] or ''
-                away_team = row[1] or ''
-                parlay_desc = row[2] or ''
-                odds = row[3] or 0
-                ev = row[4] or 0
-                
-                # Skip if missing critical data
-                if not parlay_desc:
-                    continue
-                
-                # Parse parlay legs
-                legs = parlay_desc.split(' + ')
-                num_legs = len(legs)
-                
-                # Determine if it's a Monster parlay
-                is_monster = 'Monster' in parlay_desc or 'BEAST' in parlay_desc
-                border_color = '#D29922' if is_monster else '#58A6FF'
-                
-                st.markdown(f"""
-                <div style="background: #161B22; padding: 1rem; margin-bottom: 0.8rem; border-radius: 8px; border-left: 3px solid {border_color};">
-                    <div style="font-weight: 600; font-size: 1.1rem; margin-bottom: 0.5rem; color: #C9D1D9;">
-                        {home_team} vs {away_team}
-                    </div>
-                    <div style="font-weight: 600; font-size: 0.95rem; margin-bottom: 0.7rem; color: {border_color};">
-                        {num_legs}-Leg {'Monster ' if is_monster else ''}Parlay • {odds:.2f}x • +{ev:.1f}% EV
-                    </div>
-                """, unsafe_allow_html=True)
-                
-                # Display each leg
-                for i, leg in enumerate(legs, 1):
-                    # Clean up leg text
-                    clean_leg = leg.replace('(5-Leg Monster)', '').replace('(5-Leg)', '').replace('(4-Leg)', '').replace('(3-Leg)', '').strip()
+                    if not parlay_desc:
+                        continue
+                    
+                    # Parse parlay legs
+                    legs = parlay_desc.split(' + ')
+                    num_legs = len(legs)
+                    
+                    # Determine if it's a Monster parlay
+                    is_monster = 'Monster' in parlay_desc or 'BEAST' in parlay_desc
+                    border_color = '#D29922' if is_monster else '#58A6FF'
                     
                     st.markdown(f"""
-                    <div style="padding: 0.5rem; margin-left: 1rem; border-left: 2px solid #30363D;">
-                        <div style="color: #C9D1D9; font-size: 0.9rem;">✓ Leg {i}: <strong>{clean_leg}</strong></div>
-                    </div>
+                    <div style="background: #161B22; padding: 1rem; margin-bottom: 0.8rem; border-radius: 8px; border-left: 3px solid {border_color};">
+                        <div style="font-weight: 600; font-size: 1.1rem; margin-bottom: 0.5rem; color: #C9D1D9;">
+                            {home_team} vs {away_team}
+                        </div>
+                        <div style="font-weight: 600; font-size: 0.95rem; margin-bottom: 0.7rem; color: {border_color};">
+                            {num_legs}-Leg {'Monster ' if is_monster else ''}Parlay • {odds:.2f}x • +{ev:.1f}% EV
+                        </div>
                     """, unsafe_allow_html=True)
-                
-                st.markdown("</div>", unsafe_allow_html=True)
+                    
+                    # Display each leg
+                    for i, leg in enumerate(legs, 1):
+                        clean_leg = leg.replace('(5-Leg Monster)', '').replace('(5-Leg)', '').replace('(4-Leg)', '').replace('(3-Leg)', '').strip()
+                        
+                        st.markdown(f"""
+                        <div style="padding: 0.5rem; margin-left: 1rem; border-left: 2px solid #30363D;">
+                            <div style="color: #C9D1D9; font-size: 0.9rem;">✓ Leg {i}: <strong>{clean_leg}</strong></div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    st.markdown("</div>", unsafe_allow_html=True)
+                except Exception as row_error:
+                    print(f"Error processing SGP row: {row_error}")
+                    continue
         else:
-            st.info("No pending SGP picks. System generates picks when value opportunities are detected.")
+            st.info("No pending SGP picks with positive EV. System generates picks when value opportunities are detected.")
     
     except Exception as e:
+        import traceback
         print(f"Error displaying SGP picks: {e}")
-        st.error("Error loading SGP picks")
+        print(f"Traceback: {traceback.format_exc()}")
+        st.info("No pending SGP picks with positive EV. System generates picks when value opportunities are detected.")
 
 # System Status
 st.markdown('<div class="section-header">SYSTEM STATUS</div>', unsafe_allow_html=True)
