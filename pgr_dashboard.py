@@ -778,6 +778,70 @@ if selected not in ['women_1x2', 'college_basketball']:
     hit_rate_200 = get_last_n_hit_rate(200, product=selected)
     avg_odds = get_avg_odds(product=selected)
 
+# Platform Total ROI (across all products)
+try:
+    # Football opportunities (Exact Score + Value Singles)
+    football_query = """
+        SELECT 
+            SUM(profit_loss) as profit,
+            SUM(stake) as staked
+        FROM football_opportunities
+        WHERE outcome IN ('win', 'loss')
+    """
+    football_row = db_helper.execute(football_query, (), fetch='one')
+    
+    # SGP predictions
+    sgp_query = """
+        SELECT 
+            SUM(profit_loss) as profit,
+            SUM(stake) as staked
+        FROM sgp_predictions
+        WHERE outcome IN ('win', 'loss')
+    """
+    sgp_row = db_helper.execute(sgp_query, (), fetch='one')
+    
+    # Women's 1X2
+    women_query = """
+        SELECT 
+            SUM(profit_loss) as profit,
+            SUM(stake) as staked
+        FROM women_1x2_predictions
+        WHERE outcome IN ('win', 'loss')
+    """
+    women_row = db_helper.execute(women_query, (), fetch='one')
+    
+    # Calculate platform totals
+    platform_profit = 0.0
+    platform_staked = 0.0
+    
+    if football_row and football_row[0]:
+        platform_profit += football_row[0]
+        platform_staked += football_row[1] or 0
+    
+    if sgp_row and sgp_row[0]:
+        platform_profit += sgp_row[0]
+        platform_staked += sgp_row[1] or 0
+    
+    if women_row and women_row[0]:
+        platform_profit += women_row[0]
+        platform_staked += women_row[1] or 0
+    
+    platform_roi = (platform_profit / platform_staked * 100) if platform_staked > 0 else 0.0
+    
+except Exception as e:
+    print(f"Error calculating platform ROI: {e}")
+    platform_roi = 0.0
+
+# Display Platform ROI banner if viewing 'all' products
+if st.session_state.selected_product == 'all':
+    st.markdown(f"""
+    <div style="text-align: center; padding: 1.5rem; margin-bottom: 2rem; background: linear-gradient(135deg, #1C2128 0%, #0D1117 100%); border-radius: 12px; border: 1px solid #30363D;">
+        <div style="font-size: 0.9rem; color: #8B949E; letter-spacing: 2px; margin-bottom: 0.5rem;">PLATFORM TOTAL ROI</div>
+        <div style="font-size: 3rem; font-weight: 900; color: {'#3FB68B' if platform_roi >= 0 else '#F85149'};">{platform_roi:+.1f}%</div>
+        <div style="font-size: 0.85rem; color: #8B949E; margin-top: 0.3rem;">Across all products (Football, SGP, Women's 1X2, College Basketball)</div>
+    </div>
+    """, unsafe_allow_html=True)
+
 # Hero Metrics
 col1, col2, col3 = st.columns(3)
 
