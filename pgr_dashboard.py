@@ -11,6 +11,7 @@ from datetime import datetime, date, timedelta
 from stats_master import get_all_time_stats
 from db_helper import db_helper
 from launch_ramp import get_thresholds
+from db_connection import DatabaseConnection
 
 # Page configuration
 st.set_page_config(
