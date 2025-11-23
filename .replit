@@ -22,27 +22,11 @@ args = "Real Football Dashboard"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Performance Updates"
+args = "Combined Sports Engine"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Daily Categorizer"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Daily Games Reminder"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Prediction Generator"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Women 1X2 Champion"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "SGP Champion"
+args = "College Basketball Dashboard"
 
 [[workflows.workflow]]
 name = "Real Football Dashboard"
@@ -57,67 +41,24 @@ args = "streamlit run pgr_dashboard.py --server.port 5000"
 waitForPort = 5000
 
 [[workflows.workflow]]
-name = "Performance Updates"
+name = "Combined Sports Engine"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "python3 schedule_performance_updates.py"
+args = "python3 combined_sports_runner.py"
 
 [workflows.workflow.metadata]
 outputType = "console"
 
 [[workflows.workflow]]
-name = "Daily Categorizer"
+name = "College Basketball Dashboard"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "python3 daily_bet_categorizer.py"
-
-[workflows.workflow.metadata]
-outputType = "console"
-
-[[workflows.workflow]]
-name = "Daily Games Reminder"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python3 daily_games_reminder.py"
-
-[workflows.workflow.metadata]
-outputType = "console"
-
-[[workflows.workflow]]
-name = "Prediction Generator"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python3 real_football_champion.py"
-
-[workflows.workflow.metadata]
-outputType = "console"
-
-[[workflows.workflow]]
-name = "Women 1X2 Champion"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python3 women_1x2_champion.py"
-
-[workflows.workflow.metadata]
-outputType = "console"
-
-[[workflows.workflow]]
-name = "SGP Champion"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python3 sgp_champion.py"
+args = "streamlit run college_basket_dashboard.py --server.port 6000"
+waitForPort = 6000
 
 [workflows.workflow.metadata]
 outputType = "console"
