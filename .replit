@@ -18,19 +18,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "install_dependencies"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
 args = "Real Football Dashboard"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Auto Bet Logger"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Telegram Tips Bot"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
@@ -57,14 +45,6 @@ task = "workflow.run"
 args = "SGP Champion"
 
 [[workflows.workflow]]
-name = "install_dependencies"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "uv add plotly"
-
-[[workflows.workflow]]
 name = "Real Football Dashboard"
 author = "agent"
 
@@ -75,28 +55,6 @@ outputType = "webview"
 task = "shell.exec"
 args = "streamlit run pgr_dashboard.py --server.port 5000"
 waitForPort = 5000
-
-[[workflows.workflow]]
-name = "Auto Bet Logger"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python auto_bet_logger.py"
-
-[workflows.workflow.metadata]
-outputType = "console"
-
-[[workflows.workflow]]
-name = "Telegram Tips Bot"
-author = "agent"
-
-[workflows.workflow.metadata]
-outputType = "console"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "echo \"📱 Telegram broadcaster integrated into Real Football Champion. Predictions auto-send when generated. Run 'python3 add_telegram_subscriber.py' to subscribe.\" && sleep infinity"
 
 [[workflows.workflow]]
 name = "Performance Updates"
