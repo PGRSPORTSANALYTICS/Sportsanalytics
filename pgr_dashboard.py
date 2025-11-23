@@ -436,6 +436,19 @@ def get_upcoming_bets(limit=50, product='all'):
             LIMIT %s
         """
         rows = db_helper.execute(query, ('Value Single', limit), fetch='all')
+    
+    elif product == 'college_basketball':
+        with DatabaseConnection.get_connection() as conn:
+            query = """
+                SELECT match, match, selection, odds, ev_percentage, CURRENT_DATE
+                FROM basketball_predictions
+                WHERE status = 'pending'
+                ORDER BY ev_percentage DESC
+                LIMIT %s
+            """
+            cursor = conn.cursor()
+            cursor.execute(query, (limit,))
+            rows = cursor.fetchall()
         
     else:  # 'all' - combined
         query = """
@@ -647,7 +660,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
+col1, col2, col3, col4, col5 = st.columns([1, 1, 1, 1, 1])
 
 with col1:
     if st.button("⚽ FINAL SCORE", key="btn_exact", use_container_width=True):
@@ -669,12 +682,18 @@ with col4:
         st.session_state.selected_product = 'women_1x2'
         st.rerun()
 
+with col5:
+    if st.button("🏀 COLLEGE BASKETBALL", key="btn_ncaab", use_container_width=True):
+        st.session_state.selected_product = 'college_basketball'
+        st.rerun()
+
 # Show active selection
 product_labels = {
     'exact_score': 'Final Score',
     'sgp': 'SGP',
     'value_singles': 'Value Singles',
-    'women_1x2': "Women's 1X2"
+    'women_1x2': "Women's 1X2",
+    'college_basketball': 'College Basketball'
 }
 st.markdown(f"""
 <div style="text-align: center; color: #3FB68B; font-size: 0.9rem; margin-top: -1rem; margin-bottom: 2rem;">
@@ -726,7 +745,34 @@ elif selected == 'women_1x2':
         hit_rate_200 = 0.0
         avg_odds = 0.0
 
-if selected != 'women_1x2':
+elif selected == 'college_basketball':
+    # Get College Basketball stats
+    try:
+        with DatabaseConnection.get_connection() as conn:
+            ncaab_query = """
+                SELECT 
+                    COUNT(*) as total_picks,
+                    AVG(ev_percentage) as avg_ev,
+                    AVG(odds) as avg_odds,
+                    COUNT(CASE WHEN is_parlay THEN 1 END) as parlay_count
+                FROM basketball_predictions
+                WHERE status = 'pending'
+            """
+            result = pd.read_sql(ncaab_query, conn)
+            
+            product_stats = {'total': int(result['total_picks'].iloc[0] if not result.empty else 0), 'wins': 0, 'losses': 0, 'profit': 0.0}
+            total_roi = result['avg_ev'].iloc[0] if not result.empty else 0.0
+            hit_rate_200 = 0.0
+            avg_odds = result['avg_odds'].iloc[0] if not result.empty else 0.0
+            
+    except Exception as e:
+        print(f"Error loading College Basketball stats: {e}")
+        product_stats = {'total': 0, 'wins': 0, 'losses': 0, 'profit': 0.0}
+        total_roi = 0.0
+        hit_rate_200 = 0.0
+        avg_odds = 0.0
+
+if selected not in ['women_1x2', 'college_basketball']:
     total_roi = (product_stats['profit'] / (product_stats['total'] * 100)) * 100 if product_stats['total'] > 0 else 0
     hit_rate_200 = get_last_n_hit_rate(200, product=selected)
     avg_odds = get_avg_odds(product=selected)

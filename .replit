@@ -57,7 +57,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "streamlit run college_basket_dashboard.py --server.port 6000"
+args = "streamlit run college_basket_dashboard.py --server.port=6000 --server.address=0.0.0.0 --server.headless=true"
 waitForPort = 6000
 
 [workflows.workflow.metadata]
