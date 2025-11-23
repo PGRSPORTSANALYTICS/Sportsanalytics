@@ -2341,6 +2341,14 @@ class RealFootballChampion:
             except Exception as e:
                 print(f"⚠️ Error analyzing {match.get('home_team', 'Unknown')} vs {match.get('away_team', 'Unknown')}: {e}")
                 continue
+            
+            # 🕒 CHECK TIMEOUT AFTER EACH MATCH - Ensure Value Singles runs even if analysis is slow
+            elapsed_time = time_module.time() - analysis_start_time
+            if elapsed_time > MAX_ANALYSIS_TIME:
+                print(f"\n⏱️ TIMEOUT REACHED: {elapsed_time/60:.1f} minutes elapsed")
+                print(f"📊 Analyzed {matches_analyzed}/{len(matches)} matches")
+                print(f"✅ Proceeding to Value Singles generation...")
+                break
         
         # 🏆 ELITE MATCH PRIORITIZATION
         # Prioritize major leagues and high-quality matches
