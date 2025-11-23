@@ -386,7 +386,7 @@ def get_last_50_roi(product='exact_score'):
     return 0.0
 
 @st.cache_data(ttl=60)
-def get_upcoming_bets(limit=3, product='all'):
+def get_upcoming_bets(limit=50, product='all'):
     """Get upcoming bets filtered by product type"""
     if product == 'exact_score':
         query = """
