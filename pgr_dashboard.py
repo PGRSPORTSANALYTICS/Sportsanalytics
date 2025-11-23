@@ -814,7 +814,7 @@ try:
         SELECT 
             SUM(profit_loss) as profit,
             SUM(stake) as staked
-        FROM women_1x2_predictions
+        FROM women_match_winner_predictions
         WHERE outcome IN ('win', 'loss')
     """
     women_row = db_helper.execute(women_query, (), fetch='one')
@@ -1048,11 +1048,11 @@ if selected in ['sgp', 'monstersgp']:
         
         if sgp_rows:
             for row in sgp_rows:
-                home_team = row[0]
-                away_team = row[1]
-                parlay_desc = row[2]
-                odds = row[3]
-                ev = row[4]
+                home_team = row[0] if len(row) > 0 else ''
+                away_team = row[1] if len(row) > 1 else ''
+                parlay_desc = row[2] if len(row) > 2 else ''
+                odds = row[3] if len(row) > 3 else 0
+                ev = row[4] if len(row) > 4 else 0
                 
                 # Parse parlay legs
                 legs = parlay_desc.split(' + ')
