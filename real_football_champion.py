@@ -2223,27 +2223,46 @@ class RealFootballChampion:
         
         # Get matches (live or upcoming)
         matches = self.get_football_odds()
-        print(f"⚽ Analyzing {len(matches)} matches for exact scores...")
+        print(f"⚽ Found {len(matches)} total matches")
         
         if not matches:
             print("❌ No matches found for exact score analysis")
             return 0
         
-        # Top leagues for API-Football data (to save API quota)
-        TOP_LEAGUES_FOR_API = {
-            'soccer_epl',  # Premier League
-            'soccer_spain_la_liga',  # La Liga
-            'soccer_italy_serie_a',  # Serie A
-            'soccer_germany_bundesliga',  # Bundesliga
-            'soccer_france_ligue_one',  # Ligue 1
-            'soccer_uefa_champs_league'  # Champions League
+        # 🚀 SPEED OPTIMIZATION: Pre-filter to top 30 matches BEFORE expensive analysis
+        # Prioritize: Major leagues + balanced odds (7-14x range is most profitable)
+        MAJOR_LEAGUES = {
+            'soccer_epl', 'soccer_spain_la_liga', 'soccer_italy_serie_a',
+            'soccer_germany_bundesliga', 'soccer_france_ligue_one',
+            'soccer_uefa_champs_league', 'soccer_uefa_europa_league',
+            'soccer_netherlands_eredivisie', 'soccer_portugal_primeira_liga'
         }
         
-        # Analyze ALL available matches (no limit)
-        # Priority: Higher total xG (more entertainment value)
+        # Score each match for prioritization (no API calls, just odds analysis)
+        for match in matches:
+            league = match.get('sport_key', '')
+            # Major league bonus
+            match['_priority'] = 100 if league in MAJOR_LEAGUES else 50
+            
+            # Prefer odds in 7-14x range (our sweet spot)
+            best_odds = max([v for k, v in match.items() if k.startswith('exact_') and isinstance(v, (int, float))], default=0)
+            if 7 <= best_odds <= 14:
+                match['_priority'] += 50  # Perfect range
+            elif 5 <= best_odds <= 20:
+                match['_priority'] += 25  # Good range
+        
+        # Sort by priority and take top 30
+        matches.sort(key=lambda x: x.get('_priority', 0), reverse=True)
+        matches = matches[:30]  # Only analyze top 30 matches
+        print(f"🎯 Pre-filtered to top 30 matches (major leagues + optimal odds)")
+        
+        # Top leagues for API-Football data (to save API quota)
+        TOP_LEAGUES_FOR_API = MAJOR_LEAGUES
+        
+        # Analyze top 30 matches only
         match_scores = []
         matches_analyzed = 0
-        for match in matches:  # Check ALL available matches
+        for match in matches:
             # 🕒 CHECK TIMEOUT - Break early to ensure Value Singles runs
             elapsed_time = time_module.time() - analysis_start_time
             if elapsed_time > MAX_ANALYSIS_TIME:
