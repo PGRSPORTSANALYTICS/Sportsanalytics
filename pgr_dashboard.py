@@ -1048,11 +1048,19 @@ if selected in ['sgp', 'monstersgp']:
         
         if sgp_rows:
             for row in sgp_rows:
-                home_team = row[0] if len(row) > 0 else ''
-                away_team = row[1] if len(row) > 1 else ''
-                parlay_desc = row[2] if len(row) > 2 else ''
-                odds = row[3] if len(row) > 3 else 0
-                ev = row[4] if len(row) > 4 else 0
+                # Skip if row doesn't have all required fields
+                if not row or len(row) < 5:
+                    continue
+                    
+                home_team = row[0] or ''
+                away_team = row[1] or ''
+                parlay_desc = row[2] or ''
+                odds = row[3] or 0
+                ev = row[4] or 0
+                
+                # Skip if missing critical data
+                if not parlay_desc:
+                    continue
                 
                 # Parse parlay legs
                 legs = parlay_desc.split(' + ')
