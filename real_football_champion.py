@@ -2196,6 +2196,11 @@ class RealFootballChampion:
         print("\n🎯 EXACT SCORE ANALYSIS - INTELLIGENT VOLUME CONTROL")
         print("=" * 50)
         
+        # 🕒 START TIMER - Maximum 15 minutes for analysis to ensure Value Singles can run
+        import time as time_module
+        analysis_start_time = time_module.time()
+        MAX_ANALYSIS_TIME = 900  # 15 minutes (900 seconds)
+        
         # Check how many exact score predictions we have today
         DAILY_CAP = 75
         today_date = datetime.now().strftime('%Y-%m-%d')
@@ -2214,6 +2219,7 @@ class RealFootballChampion:
         
         remaining_slots = DAILY_CAP - existing_count
         print(f"🚀 Generating up to {remaining_slots} more predictions...")
+        print(f"⏱️ Max analysis time: {MAX_ANALYSIS_TIME//60} minutes (to ensure Value Singles runs)")
         
         # Get matches (live or upcoming)
         matches = self.get_football_odds()
@@ -2236,7 +2242,16 @@ class RealFootballChampion:
         # Analyze ALL available matches (no limit)
         # Priority: Higher total xG (more entertainment value)
         match_scores = []
+        matches_analyzed = 0
         for match in matches:  # Check ALL available matches
+            # 🕒 CHECK TIMEOUT - Break early to ensure Value Singles runs
+            elapsed_time = time_module.time() - analysis_start_time
+            if elapsed_time > MAX_ANALYSIS_TIME:
+                print(f"\n⏱️ TIMEOUT REACHED: {elapsed_time/60:.1f} minutes elapsed")
+                print(f"📊 Analyzed {matches_analyzed}/{len(matches)} matches")
+                print(f"✅ Proceeding to Value Singles generation...")
+                break
+            matches_analyzed += 1
             try:
                 home_team = match['home_team']
                 away_team = match['away_team']
