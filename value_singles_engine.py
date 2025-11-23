@@ -222,39 +222,35 @@ class ValueSinglesEngine:
             print("🧾 Odds keys found:", list(odds_dict.keys()))
 
             # 3) Real team form analysis pipeline (same as exact score system)
+            lh = 1.5  # Default xG values
+            la = 1.3
+            
             try:
-                # Get team IDs
+                # Get team IDs (may be None for OddsAPI team names)
                 home_id = self.champion.get_team_id_by_name(home_team) if hasattr(self.champion, "get_team_id_by_name") else None
                 away_id = self.champion.get_team_id_by_name(away_team) if hasattr(self.champion, "get_team_id_by_name") else None
                 
-                # Analyze team form (venue-specific)
+                # Analyze team form (venue-specific) - even without IDs, try scraper fallback
                 if hasattr(self.champion, "analyze_team_form"):
-                    home_form = self.champion.analyze_team_form(home_team, home_id) if home_id else None
-                    away_form = self.champion.analyze_team_form(away_team, away_id) if away_id else None
+                    home_form = self.champion.analyze_team_form(home_team, home_id)
+                    away_form = self.champion.analyze_team_form(away_team, away_id)
+                    
+                    # Get H2H data
+                    h2h = self.champion.get_head_to_head(home_team, away_team) if hasattr(self.champion, "get_head_to_head") else None
+                    
+                    # Calculate xG using champion's method
+                    if home_form and away_form and hasattr(self.champion, "calculate_xg_edge"):
+                        xg = self.champion.calculate_xg_edge(home_form, away_form, h2h)
+                        lh = float(xg.get("home_xg", 1.5))
+                        la = float(xg.get("away_xg", 1.3))
+                        print(f"⚽ Real xG: {home_team} {lh:.2f} vs {away_team} {la:.2f}")
+                    else:
+                        print(f"⚠️ Using default xG for {home_team} vs {away_team} (form data incomplete)")
                 else:
-                    home_form = away_form = None
-                
-                if not home_form or not away_form:
-                    continue
-                
-                # Get H2H data
-                h2h = self.champion.get_head_to_head(home_team, away_team) if hasattr(self.champion, "get_head_to_head") else None
-                
-                # Calculate xG using champion's method
-                if hasattr(self.champion, "calculate_xg_edge"):
-                    xg = self.champion.calculate_xg_edge(home_form, away_form, h2h)
-                    lh = float(xg.get("home_xg", 1.5))
-                    la = float(xg.get("away_xg", 1.3))
-                else:
-                    # Fallback to placeholder
-                    lh = 1.5
-                    la = 1.3
-                
-                print(f"⚽ Real xG: {home_team} {lh:.2f} vs {away_team} {la:.2f}")
+                    print(f"⚠️ Using default xG for {home_team} vs {away_team} (no form analysis available)")
                 
             except Exception as e:
-                print(f"⚠️ Team analysis failed for {home_team} vs {away_team}: {e}")
-                continue
+                print(f"⚠️ Team analysis error for {home_team} vs {away_team}: {e}, using default xG")
 
             probs = self._build_single_markets(lh, la)
 
@@ -264,9 +260,9 @@ class ValueSinglesEngine:
                 if odds is None:
                     continue
 
-                # Special rule: moneyline only in 1.75–1.90 sweet spot
-                if market_key in ("HOME_WIN", "AWAY_WIN"):
-                    if not (1.75 <= odds <= 1.90):
+                # Relaxed moneyline filter: avoid extreme favorites/underdogs
+                if market_key in ("HOME_WIN", "AWAY_WIN", "DRAW"):
+                    if odds < 1.40 or odds > 4.00:  # More relaxed range
                         continue
 
                 ev = self._calc_ev(p_model, odds)
