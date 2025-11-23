@@ -750,17 +750,17 @@ class RealFootballChampion:
         Extract and normalize odds from The Odds API match structure.
         Returns odds dict compatible with Value Singles Engine.
         """
-        # Standardized key mapping for consistent naming
+        # Standardized key mapping for Value Singles Engine compatibility
         KEY_MAP = {
-            "over_2_5": "over_2.5",
-            "under_2_5": "under_2.5",
-            "over_3_5": "over_3.5",
-            "under_3_5": "under_3.5",
-            "btts_yes": "btts_yes",
-            "home_win": "1X2_home",
-            "draw": "1X2_draw",
-            "away_win": "1X2_away",
-            "1h_over_0_5": "1h_over_0.5",
+            "over_2_5": "FT_OVER_2_5",
+            "under_2_5": "FT_UNDER_2_5",
+            "over_3_5": "FT_OVER_3_5",
+            "under_3_5": "FT_UNDER_3_5",
+            "btts_yes": "BTTS_YES",
+            "home_win": "HOME_WIN",
+            "draw": "DRAW",
+            "away_win": "AWAY_WIN",
+            "1h_over_0_5": "1H_OVER_0_5",
         }
         
         odds_map = {}
