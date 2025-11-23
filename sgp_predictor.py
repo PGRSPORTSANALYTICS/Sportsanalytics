@@ -555,12 +555,12 @@ class SGPPredictor:
             logger.info(f"⏭️  Skipping SGP for {match_data.get('home_team')} vs {match_data.get('away_team')} (Premier League - unprofitable)")
             return []
         
-        # Generate simple SGP combinations (1-2 legs max - no complex parlays)
-        # Focus on single correlated markets with real value
+        # Generate SGP combinations (max 4 legs, target 10x max odds)
+        # Focus on naturally correlated markets
         sgp_combinations = [
-            # ========== SINGLE-LEG SGPs (Pure Value) ==========
+            # ========== SINGLE-LEG SGPs ==========
             
-            # Over 2.5 Goals (Most reliable single bet)
+            # Over 2.5 Goals (~1.8x)
             {
                 'legs': [
                     {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5}
@@ -568,7 +568,7 @@ class SGPPredictor:
                 'description': 'Over 2.5 Goals'
             },
             
-            # Over 3.5 Goals (Higher odds, high-scoring games)
+            # Over 3.5 Goals (~2.5x)
             {
                 'legs': [
                     {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 3.5}
@@ -576,7 +576,7 @@ class SGPPredictor:
                 'description': 'Over 3.5 Goals'
             },
             
-            # BTTS Yes (Both teams to score)
+            # BTTS Yes (~1.9x)
             {
                 'legs': [
                     {'market_type': 'BTTS', 'outcome': 'YES'}
@@ -584,9 +584,9 @@ class SGPPredictor:
                 'description': 'BTTS Yes'
             },
             
-            # ========== SIMPLE 2-LEG COMBOS (Natural Correlation) ==========
+            # ========== 2-LEG COMBOS (~3-5x) ==========
             
-            # Over 2.5 + BTTS (Classic combo ~3-4x)
+            # Over 2.5 + BTTS (~3.5x)
             {
                 'legs': [
                     {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
@@ -595,13 +595,59 @@ class SGPPredictor:
                 'description': 'Over 2.5 + BTTS'
             },
             
-            # Over 3.5 + BTTS (High-scoring games ~5-6x)
+            # Over 3.5 + BTTS (~5x)
             {
                 'legs': [
                     {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 3.5},
                     {'market_type': 'BTTS', 'outcome': 'YES'}
                 ],
                 'description': 'Over 3.5 + BTTS'
+            },
+            
+            # ========== 3-LEG COMBOS (~5-7x) ==========
+            
+            # Over 2.5 + BTTS + Corners (~6x)
+            {
+                'legs': [
+                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
+                    {'market_type': 'BTTS', 'outcome': 'YES'},
+                    {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 10.5}
+                ],
+                'description': 'Over 2.5 + BTTS + Corners 10.5+'
+            },
+            
+            # Over 3.5 + BTTS + 1H Over 0.5 (~7x)
+            {
+                'legs': [
+                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 3.5},
+                    {'market_type': 'BTTS', 'outcome': 'YES'},
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5}
+                ],
+                'description': 'Over 3.5 + BTTS + 1H Over 0.5'
+            },
+            
+            # ========== 4-LEG COMBOS (MAX ~10x) ==========
+            
+            # Over 2.5 + BTTS + Corners + 1H Over 0.5 (~8x)
+            {
+                'legs': [
+                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
+                    {'market_type': 'BTTS', 'outcome': 'YES'},
+                    {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 10.5},
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5}
+                ],
+                'description': 'Over 2.5 + BTTS + Corners + 1H'
+            },
+            
+            # Over 3.5 + BTTS + Corners + 1H Over 0.5 (~10x max)
+            {
+                'legs': [
+                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 3.5},
+                    {'market_type': 'BTTS', 'outcome': 'YES'},
+                    {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 9.5},
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5}
+                ],
+                'description': 'Over 3.5 + BTTS + Corners + 1H'
             },
             
         ]
@@ -775,9 +821,10 @@ class SGPPredictor:
             # TIERED FILTER SYSTEM: Balance value bets vs entertainment parlays
             # Tier 1 (Value Bets): Positive EV, lower odds (2.5x-5x)
             # Tier 2 (Premium Parlays): Moderate negative EV, mid odds (5x-8x)  
-            # Tier 3 (Jackpot Plays): Loose negative EV, monster odds (8x+)
+            # Tier 3 (Jackpot Plays): Loose negative EV, mid-high odds (8x-10x)
             
             MIN_ODDS = 2.5
+            MAX_ODDS = 10.0  # Hard cap at 10x odds
             
             # Tiered EV requirements based on odds
             # Note: Calibration is conservative (predicts 8-12% but actual hit rate is 33.6%)
@@ -799,7 +846,8 @@ class SGPPredictor:
                 min_ev_required = 0.0
                 bet_tier = "Value Bet"
             
-            if ev_pct > min_ev_required and bookmaker_odds >= MIN_ODDS:
+            # Apply filters: EV threshold, min odds, and MAX 10x cap
+            if ev_pct > min_ev_required and MIN_ODDS <= bookmaker_odds <= MAX_ODDS:
                 all_sgps.append({
                     'legs': legs_with_probs,
                     'description': sgp['description'],
