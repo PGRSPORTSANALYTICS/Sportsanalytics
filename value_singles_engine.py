@@ -85,24 +85,99 @@ class ValueSinglesEngine:
 
     def _build_single_markets(self, lh: float, la: float) -> Dict[str, float]:
         """
-        Returns model probabilities per market.
+        Returns model probabilities for ALL single-bet markets.
         """
-        p_over05_1h = prob_total_over(lh * 0.45, la * 0.45, 0.5)  # rough 1H scaling
+        # Over/Under Goals (0.5 - 4.5)
+        p_over05 = prob_total_over(lh, la, 0.5)
+        p_under05 = 1 - p_over05
         p_over15 = prob_total_over(lh, la, 1.5)
+        p_under15 = 1 - p_over15
         p_over25 = prob_total_over(lh, la, 2.5)
+        p_under25 = 1 - p_over25
         p_over35 = prob_total_over(lh, la, 3.5)
-        p_btts = prob_btts(lh, la)
+        p_under35 = 1 - p_over35
+        p_over45 = prob_total_over(lh, la, 4.5)
+        p_under45 = 1 - p_over45
+        
+        # 1H Over/Under
+        p_over05_1h = prob_total_over(lh * 0.45, la * 0.45, 0.5)
+        
+        # BTTS
+        p_btts_yes = prob_btts(lh, la)
+        p_btts_no = 1 - p_btts_yes
+        
+        # 1X2 Moneyline
         p_hw, p_d, p_aw = prob_1x2(lh, la)
+        
+        # Double Chance
+        p_home_or_draw = p_hw + p_d
+        p_home_or_away = p_hw + p_aw
+        p_draw_or_away = p_d + p_aw
+        
+        # Draw No Bet (exclude draw, normalize)
+        total_no_draw = p_hw + p_aw
+        p_dnb_home = p_hw / total_no_draw if total_no_draw > 0 else 0.5
+        p_dnb_away = p_aw / total_no_draw if total_no_draw > 0 else 0.5
+        
+        # Corners (simple model: ~10-11 corners average, variance by match intensity)
+        total_xg = lh + la
+        corners_lambda = 10.5 + (total_xg - 2.8) * 0.5  # Higher scoring = more corners
+        p_corners_over85 = prob_total_over(corners_lambda / 2, corners_lambda / 2, 8.5)
+        p_corners_over95 = prob_total_over(corners_lambda / 2, corners_lambda / 2, 9.5)
+        p_corners_over105 = prob_total_over(corners_lambda / 2, corners_lambda / 2, 10.5)
+        p_corners_over115 = prob_total_over(corners_lambda / 2, corners_lambda / 2, 11.5)
+        
+        # Team Totals (individual team over/under)
+        p_home_over05 = prob_total_over(lh, 0, 0.5)
+        p_home_over15 = prob_total_over(lh, 0, 1.5)
+        p_away_over05 = prob_total_over(0, la, 0.5)
+        p_away_over15 = prob_total_over(0, la, 1.5)
 
         return {
-            "1H_OVER_0_5": p_over05_1h,
+            # Over/Under Goals
+            "FT_OVER_0_5": p_over05,
+            "FT_UNDER_0_5": p_under05,
             "FT_OVER_1_5": p_over15,
+            "FT_UNDER_1_5": p_under15,
             "FT_OVER_2_5": p_over25,
+            "FT_UNDER_2_5": p_under25,
             "FT_OVER_3_5": p_over35,
-            "BTTS_YES": p_btts,
+            "FT_UNDER_3_5": p_under35,
+            "FT_OVER_4_5": p_over45,
+            "FT_UNDER_4_5": p_under45,
+            
+            # 1H Goals
+            "1H_OVER_0_5": p_over05_1h,
+            
+            # BTTS
+            "BTTS_YES": p_btts_yes,
+            "BTTS_NO": p_btts_no,
+            
+            # 1X2 Moneyline
             "HOME_WIN": p_hw,
             "DRAW": p_d,
             "AWAY_WIN": p_aw,
+            
+            # Double Chance
+            "DC_HOME_DRAW": p_home_or_draw,
+            "DC_HOME_AWAY": p_home_or_away,
+            "DC_DRAW_AWAY": p_draw_or_away,
+            
+            # Draw No Bet
+            "DNB_HOME": p_dnb_home,
+            "DNB_AWAY": p_dnb_away,
+            
+            # Corners
+            "CORNERS_OVER_8_5": p_corners_over85,
+            "CORNERS_OVER_9_5": p_corners_over95,
+            "CORNERS_OVER_10_5": p_corners_over105,
+            "CORNERS_OVER_11_5": p_corners_over115,
+            
+            # Team Totals
+            "HOME_OVER_0_5": p_home_over05,
+            "HOME_OVER_1_5": p_home_over15,
+            "AWAY_OVER_0_5": p_away_over05,
+            "AWAY_OVER_1_5": p_away_over15,
         }
 
     def generate_value_singles(
@@ -203,14 +278,43 @@ class ValueSinglesEngine:
                     continue
 
                 selection_text = {
-                    "1H_OVER_0_5": "1H Over 0.5 Goals",
+                    # Over/Under Goals
+                    "FT_OVER_0_5": "Over 0.5 Goals",
+                    "FT_UNDER_0_5": "Under 0.5 Goals",
                     "FT_OVER_1_5": "Over 1.5 Goals",
+                    "FT_UNDER_1_5": "Under 1.5 Goals",
                     "FT_OVER_2_5": "Over 2.5 Goals",
+                    "FT_UNDER_2_5": "Under 2.5 Goals",
                     "FT_OVER_3_5": "Over 3.5 Goals",
+                    "FT_UNDER_3_5": "Under 3.5 Goals",
+                    "FT_OVER_4_5": "Over 4.5 Goals",
+                    "FT_UNDER_4_5": "Under 4.5 Goals",
+                    # 1H Goals
+                    "1H_OVER_0_5": "1H Over 0.5 Goals",
+                    # BTTS
                     "BTTS_YES": "BTTS Yes",
+                    "BTTS_NO": "BTTS No",
+                    # 1X2
                     "HOME_WIN": "Home Win",
                     "DRAW": "Draw",
                     "AWAY_WIN": "Away Win",
+                    # Double Chance
+                    "DC_HOME_DRAW": "Home or Draw",
+                    "DC_HOME_AWAY": "Home or Away",
+                    "DC_DRAW_AWAY": "Draw or Away",
+                    # Draw No Bet
+                    "DNB_HOME": "Draw No Bet - Home",
+                    "DNB_AWAY": "Draw No Bet - Away",
+                    # Corners
+                    "CORNERS_OVER_8_5": "Corners Over 8.5",
+                    "CORNERS_OVER_9_5": "Corners Over 9.5",
+                    "CORNERS_OVER_10_5": "Corners Over 10.5",
+                    "CORNERS_OVER_11_5": "Corners Over 11.5",
+                    # Team Totals
+                    "HOME_OVER_0_5": f"{home_team} Over 0.5 Goals",
+                    "HOME_OVER_1_5": f"{home_team} Over 1.5 Goals",
+                    "AWAY_OVER_0_5": f"{away_team} Over 0.5 Goals",
+                    "AWAY_OVER_1_5": f"{away_team} Over 1.5 Goals",
                 }.get(market_key, market_key)
 
                 # Extract match_date and kickoff_time from commence_time if not present
