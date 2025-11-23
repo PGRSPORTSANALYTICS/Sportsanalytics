@@ -583,7 +583,7 @@ def get_last_settled(limit=3, product='all'):
 
 # Initialize session state for product selection
 if 'selected_product' not in st.session_state:
-    st.session_state.selected_product = 'value_singles'
+    st.session_state.selected_product = 'exact_score'
 
 # Header with Logo
 st.markdown("""
@@ -647,19 +647,24 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-col1, col2, col3 = st.columns([1, 1, 1])
+col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
 
 with col1:
     if st.button("⚽ FINAL SCORE", key="btn_exact", use_container_width=True):
         st.session_state.selected_product = 'exact_score'
         st.rerun()
-
+        
 with col2:
+    if st.button("🎯 SGP", key="btn_sgp", use_container_width=True):
+        st.session_state.selected_product = 'sgp'
+        st.rerun()
+
+with col3:
     if st.button("💎 VALUE SINGLES", key="btn_value_singles", use_container_width=True):
         st.session_state.selected_product = 'value_singles'
         st.rerun()
 
-with col3:
+with col4:
     if st.button("👩⚽ WOMEN 1X2", key="btn_women", use_container_width=True):
         st.session_state.selected_product = 'women_1x2'
         st.rerun()
@@ -667,6 +672,7 @@ with col3:
 # Show active selection
 product_labels = {
     'exact_score': 'Final Score',
+    'sgp': 'SGP',
     'value_singles': 'Value Singles',
     'women_1x2': "Women's 1X2"
 }
@@ -682,6 +688,8 @@ selected = st.session_state.selected_product
 
 if selected == 'exact_score':
     product_stats = stats['exact_score']
+elif selected == 'sgp':
+    product_stats = stats['sgp']
 elif selected == 'value_singles':
     product_stats = stats['value_singles']
 elif selected == 'women_1x2':
