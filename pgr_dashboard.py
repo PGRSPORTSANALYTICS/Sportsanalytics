@@ -762,8 +762,8 @@ elif selected == 'college_basketball':
             result = pd.read_sql(ncaab_query, conn)
             
             product_stats = {'total': int(result['total_picks'].iloc[0] if not result.empty else 0), 'wins': 0, 'losses': 0, 'profit': 0.0}
-            total_roi = result['avg_ev'].iloc[0] if not result.empty else 0.0
-            hit_rate_200 = 0.0
+            total_roi = 0.0  # No settled bets yet, so ROI is 0%
+            hit_rate_200 = 0.0  # No settled bets yet
             avg_odds = result['avg_odds'].iloc[0] if not result.empty else 0.0
             
     except Exception as e:
