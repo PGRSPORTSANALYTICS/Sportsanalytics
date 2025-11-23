@@ -50,10 +50,6 @@ args = "Prediction Generator"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "SGP Champion"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
 args = "Women 1X2 Champion"
 
 [[workflows.workflow]]
@@ -138,17 +134,6 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python3 real_football_champion.py"
-
-[workflows.workflow.metadata]
-outputType = "console"
-
-[[workflows.workflow]]
-name = "SGP Champion"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python3 sgp_champion.py"
 
 [workflows.workflow.metadata]
 outputType = "console"
