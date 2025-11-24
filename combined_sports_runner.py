@@ -57,6 +57,18 @@ def run_college_basketball():
         logger.error(f"❌ College Basketball prediction error: {e}")
 
 
+def verify_basketball_results():
+    """Verify College Basketball results"""
+    try:
+        from college_basket_result_verifier import CollegeBasketballResultVerifier
+        logger.info("✅ Verifying College Basketball results...")
+        verifier = CollegeBasketballResultVerifier()
+        results = verifier.verify_pending_picks()
+        logger.info(f"✅ Basketball verification: {results['verified']} verified, {results['failed']} failed")
+    except Exception as e:
+        logger.error(f"❌ Basketball verification error: {e}")
+
+
 def run_performance_updates():
     """Run performance updates"""
     try:
@@ -96,6 +108,7 @@ def main():
     logger.info("🎲 SGP Predictions - Every 2 hours")
     logger.info("👩⚽ Women's 1X2 - Every 1 hour")
     logger.info("🏀 College Basketball - Every 2 hours")
+    logger.info("✅ Basketball Results - Every 30 minutes")
     logger.info("📊 Performance Updates - Every 6 hours")
     logger.info("📂 Bet Categorizer - Daily at 23:00")
     logger.info("📅 Games Reminder - Daily at 08:00")
@@ -118,6 +131,7 @@ def main():
     schedule.every(2).hours.do(run_sgp_predictions)
     schedule.every(1).hours.do(run_women_1x2_predictions)
     schedule.every(2).hours.do(run_college_basketball)
+    schedule.every(30).minutes.do(verify_basketball_results)
     schedule.every(6).hours.do(run_performance_updates)
     
     schedule.every().day.at("23:00").do(run_daily_categorizer)
