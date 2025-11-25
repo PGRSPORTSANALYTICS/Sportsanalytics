@@ -659,10 +659,14 @@ def render_sgp_parlays_tab():
         st.info("No parlays in the database yet.")
         return
 
-    # Split active vs settled
-    active_mask = df["result"].isin(["PENDING", "OPEN", None, ""]) | df["result"].isna()
-    active_bets = df[active_mask].copy()
-    settled_bets = df[~active_mask].copy()
+    # Split active vs settled - check BOTH result and outcome columns
+    # Settled = has result (WON/LOSS) OR has outcome (won/loss)
+    outcome_settled = df["outcome"].isin(["won", "loss", "WON", "LOSS"])
+    result_settled = df["result"].isin(["WON", "WIN", "LOSS", "LOST"])
+    settled_mask = outcome_settled | result_settled
+    
+    active_bets = df[~settled_mask].copy()
+    settled_bets = df[settled_mask].copy()
 
     # ROI / PROFIT / HIT RATE for settled
     if not settled_bets.empty:
@@ -671,12 +675,14 @@ def render_sgp_parlays_tab():
         if "payout" in settled_bets.columns:
             total_return = settled_bets["payout"].fillna(0).sum()
         else:
-            won_mask = settled_bets["result"].isin(["WON", "WIN"])
+            # Check both result and outcome for wins
+            won_mask = settled_bets["result"].isin(["WON", "WIN"]) | settled_bets["outcome"].isin(["won", "WON"])
             total_return = (settled_bets["stake"] * settled_bets["odds"] * won_mask.astype(float)).sum()
 
         profit = total_return - total_staked
         roi = (profit / total_staked * 100) if total_staked > 0 else 0.0
-        hit_rate = settled_bets["result"].isin(["WON", "WIN"]).mean() * 100
+        won_count = (settled_bets["result"].isin(["WON", "WIN"]) | settled_bets["outcome"].isin(["won", "WON"])).sum()
+        hit_rate = (won_count / len(settled_bets) * 100) if len(settled_bets) > 0 else 0.0
 
         col1, col2, col3 = st.columns(3)
         with col1:
