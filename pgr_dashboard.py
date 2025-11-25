@@ -624,6 +624,84 @@ def render_product_tab(
         )
 
 
+def render_basketball_tab(df: pd.DataFrame):
+    """Render College Basketball tab with separate sections for singles and parlays."""
+    st.markdown(
+        "#### College Basketball <span class='pgr-badge'>live</span>",
+        unsafe_allow_html=True,
+    )
+    st.markdown('<div class="pgr-subtitle">NCAAB value singles and parlays from your basketball engine.</div>', unsafe_allow_html=True)
+
+    singles = product_filter(df, ["BASKET_SINGLE"])
+    parlays = product_filter(df, ["BASKET_PARLAY"])
+    all_data = product_filter(df, ["BASKET_SINGLE", "BASKET_PARLAY"])
+
+    if all_data.empty:
+        st.info("No basketball bets yet. Once your engine starts saving picks here, this tab will update automatically.")
+        return
+
+    for c in ["odds", "stake", "payout", "profit"]:
+        if c in all_data.columns:
+            all_data[c] = pd.to_numeric(all_data[c], errors="coerce")
+        if c in singles.columns:
+            singles[c] = pd.to_numeric(singles[c], errors="coerce")
+        if c in parlays.columns:
+            parlays[c] = pd.to_numeric(parlays[c], errors="coerce")
+
+    summary = compute_roi(all_data)
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        metric_card("ROI", format_pct(summary["roi"]), f"On {format_money(summary['stake'])} staked")
+    with c2:
+        metric_card("Profit", format_money(summary["profit"]), "All settled bets")
+    with c3:
+        metric_card("Hit Rate", format_pct(summary["hit_rate"]), f"{summary['bets']} settled")
+
+    st.markdown("---")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("##### 🎯 Singles")
+        if singles.empty:
+            st.caption("No singles yet.")
+        else:
+            singles_settled = singles[singles["profit"].notna()].copy()
+            singles_active = singles[singles["profit"].isna()].copy()
+            
+            if not singles_settled.empty:
+                s_summary = compute_roi(singles)
+                st.markdown(f"**{len(singles_settled)} settled** | ROI: {s_summary['roi']:.1f}% | Profit: {s_summary['profit']:.0f} kr")
+            
+            if not singles_active.empty:
+                st.caption(f"🔴 {len(singles_active)} active")
+            
+            singles_settled["fixture"] = singles_settled.apply(as_fixture, axis=1)
+            cols = [c for c in ["fixture", "odds", "result", "profit"] if c in singles_settled.columns]
+            if cols and not singles_settled.empty:
+                st.dataframe(singles_settled[cols].head(10), use_container_width=True, hide_index=True)
+
+    with col2:
+        st.markdown("##### 🎲 Parlays")
+        if parlays.empty:
+            st.caption("No parlays yet.")
+        else:
+            parlays_settled = parlays[parlays["profit"].notna()].copy()
+            parlays_active = parlays[parlays["profit"].isna()].copy()
+            
+            if not parlays_settled.empty:
+                p_summary = compute_roi(parlays)
+                st.markdown(f"**{len(parlays_settled)} settled** | ROI: {p_summary['roi']:.1f}% | Profit: {p_summary['profit']:.0f} kr")
+            
+            if not parlays_active.empty:
+                st.caption(f"🔴 {len(parlays_active)} active")
+            
+            parlays_settled["fixture"] = parlays_settled.apply(as_fixture, axis=1)
+            cols = [c for c in ["fixture", "odds", "result", "profit"] if c in parlays_settled.columns]
+            if cols and not parlays_settled.empty:
+                st.dataframe(parlays_settled[cols].head(10), use_container_width=True, hide_index=True)
+
+
 def render_sgp_parlays_tab():
     """Specialized SGP Parlays tab with beautiful card layout."""
     st.markdown("## Same Game Parlays")
@@ -888,12 +966,7 @@ def main():
         )
 
     with basket_tab:
-        render_product_tab(
-            df,
-            product_codes=["BASKET_SINGLE", "BASKET_PARLAY"],
-            title="College Basketball",
-            description="NCAAB value singles and small parlays from your basketball engine.",
-        )
+        render_basketball_tab(df)
 
 
 if __name__ == "__main__":
