@@ -20,7 +20,7 @@ from datetime import date
 from db_helper import db_helper
 
 def get_all_time_stats() -> Dict:
-    """Get combined all-time statistics from unified results_roi table"""
+    """Get combined all-time statistics from unified results_roi table + pending counts"""
     
     def get_product_stats(product_type: str):
         """Get stats for a specific product from results_roi"""
@@ -40,10 +40,24 @@ def get_all_time_stats() -> Dict:
         staked = staked or 0.0
         losses = total - wins
         hit_rate = (wins / total * 100) if total > 0 else 0.0
+        
+        # Get pending count from source tables
+        pending = 0
+        if product_type == 'football_single':
+            prow = db_helper.execute("SELECT COUNT(*) FROM football_opportunities WHERE market = 'exact_score' AND outcome IS NULL", (), fetch='one')
+            pending = prow[0] if prow else 0
+        elif product_type == 'sgp':
+            prow = db_helper.execute("SELECT COUNT(*) FROM sgp_predictions WHERE outcome IS NULL AND (parlay_description IS NULL OR parlay_description NOT LIKE '%%Monster%%')", (), fetch='one')
+            pending = prow[0] if prow else 0
+        elif product_type == 'value_single':
+            prow = db_helper.execute("SELECT COUNT(*) FROM football_opportunities WHERE market = 'Value Single' AND outcome IS NULL", (), fetch='one')
+            pending = prow[0] if prow else 0
+        
         return {
             'total': total,
             'wins': wins,
             'losses': losses,
+            'pending': pending,
             'hit_rate': round(hit_rate, 1),
             'profit': round(profit, 2),
             'staked': round(staked, 2)
@@ -70,6 +84,7 @@ def get_all_time_stats() -> Dict:
     c_staked = c_staked or 0.0
     c_losses = c_total - c_wins
     c_hit_rate = (c_wins / c_total * 100) if c_total > 0 else 0.0
+    c_pending = exact_stats.get('pending', 0) + sgp_stats.get('pending', 0) + vs_stats.get('pending', 0)
     
     return {
         'exact_score': exact_stats,
@@ -79,6 +94,7 @@ def get_all_time_stats() -> Dict:
             'total': c_total,
             'wins': c_wins,
             'losses': c_losses,
+            'pending': c_pending,
             'hit_rate': round(c_hit_rate, 1),
             'profit': round(c_profit, 2),
             'staked': round(c_staked, 2)
