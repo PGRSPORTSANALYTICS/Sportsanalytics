@@ -2967,8 +2967,8 @@ class RealFootballChampion:
                 INSERT INTO football_opportunities 
                 (timestamp, match_id, home_team, away_team, league, market, selection, 
                  odds, edge_percentage, confidence, analysis, stake, match_date, kickoff_time,
-                 quality_score, recommended_date, recommended_tier, daily_rank)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 quality_score, recommended_date, recommended_tier, daily_rank, mode)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ''', (
                 opp_dict.get('timestamp', int(time.time())),
                 opp_dict.get('match_id'),
@@ -2987,7 +2987,8 @@ class RealFootballChampion:
                 float(quality_score),
                 today_date,
                 opp_dict.get('recommended_tier', 'SINGLE'),
-                opp_dict.get('daily_rank', 999)
+                opp_dict.get('daily_rank', 999),
+                'PROD'  # Production mode
             ))
             
             return True
@@ -3017,12 +3018,12 @@ class RealFootballChampion:
         today_date = datetime.now().strftime('%Y-%m-%d')
         
         try:
-            db_helper.execute('''
+            result = db_helper.execute('''
                 INSERT INTO football_opportunities 
                 (timestamp, match_id, home_team, away_team, league, market, selection, 
                  odds, edge_percentage, confidence, analysis, stake, match_date, kickoff_time,
-                 quality_score, recommended_date, recommended_tier, daily_rank)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 quality_score, recommended_date, recommended_tier, daily_rank, mode)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
             ''', (
                 int(time.time()),
@@ -3042,7 +3043,8 @@ class RealFootballChampion:
                 float(quality_score),
                 today_date,
                 'exact_score',  # Special tier for exact scores
-                0  # Not part of daily ranking
+                0,  # Not part of daily ranking
+                'PROD'  # Production mode
             ), fetch='one')
             
             # Get the actual prediction ID from the database

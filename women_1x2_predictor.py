@@ -295,7 +295,8 @@ class Women1X2Predictor:
                         pred.ev_percentage,
                         pred.stake,
                         self.mode,
-                        psycopg2.extras.Json(pred.notes)
+                        psycopg2.extras.Json(pred.notes),
+                        'PROD'  # Production mode for ROI tracking
                     ))
                 
                 # Batch insert with ON CONFLICT DO NOTHING
@@ -305,7 +306,7 @@ class Women1X2Predictor:
                     INSERT INTO women_match_winner_predictions 
                     (match_id, league, league_id, home_team, away_team, match_date, 
                      kickoff_time, selection, implied_prob, model_prob, odds, 
-                     ev_percentage, stake, source_mode, notes)
+                     ev_percentage, stake, source_mode, notes, mode)
                     VALUES %s
                     ON CONFLICT (match_id) DO NOTHING
                     """,

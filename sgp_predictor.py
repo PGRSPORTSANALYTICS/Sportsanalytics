@@ -955,8 +955,8 @@ class SGPPredictor:
                 timestamp, match_id, home_team, away_team, league, match_date, kickoff_time,
                 legs, parlay_description, parlay_probability, fair_odds, bookmaker_odds, ev_percentage,
                 stake, kelly_stake, model_version, simulations, correlation_method,
-                pricing_mode, pricing_metadata
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                pricing_mode, pricing_metadata, mode
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ''', (
             int(datetime.now().timestamp()),
             match_data.get('match_id', ''),
@@ -977,7 +977,8 @@ class SGPPredictor:
             200000,
             'copula',
             sgp.get('pricing_mode', 'simulated'),
-            pricing_metadata_str
+            pricing_metadata_str,
+            'PROD'  # Production mode
         ))
         
         logger.info(f"✅ SGP saved: {match_data['home_team']} vs {match_data['away_team']} | {sgp['description']} | EV: {sgp['ev_percentage']:.1f}%")

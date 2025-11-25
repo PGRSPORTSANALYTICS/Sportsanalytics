@@ -489,8 +489,8 @@ class CollegeBasketValueEngine:
                         """
                         INSERT INTO basketball_predictions
                         (match, league, market, selection, odds, probability, ev_percentage, 
-                         confidence, commence_time, bookmaker, is_parlay, parlay_legs)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                         confidence, commence_time, bookmaker, is_parlay, parlay_legs, mode)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         ON CONFLICT (match, market, selection, created_at) DO NOTHING
                         """,
                         (
@@ -505,7 +505,8 @@ class CollegeBasketValueEngine:
                             commence_time,
                             bookmaker,
                             is_parlay,
-                            parlay_legs
+                            parlay_legs,
+                            'PROD'  # Production mode
                         )
                     )
                     saved += 1
