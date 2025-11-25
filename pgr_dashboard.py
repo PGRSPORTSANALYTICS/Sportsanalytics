@@ -172,19 +172,21 @@ if df_all.empty:
     st.warning("Inga bets hittades för nuvarande filter.")
     st.stop()
 
-PRODUCT_TABS = {
-    "Overview": None,
-    "Final Score": ["EXACT_SCORE", "FINAL_SCORE"],
-    "Value Singles": ["VALUE_SINGLE", "SINGLE_VALUE", "VALUE_SINGLE_FOOTBALL"],
-    "SGP": ["SGP", "SAME_GAME_PARLAY"],
-    "Basket (NCAAB)": ["BASKET_NCAAB", "NCAAB"],
-    "Women 1X2": ["WOMEN_1X2", "WOMEN_3WAY"],
-}
+def calculate_roi(df: pd.DataFrame):
+    """Calculate ROI, stake, profit, count for a dataframe."""
+    if df.empty:
+        return 0.0, 0.0, 0.0, 0
+    stake = df["stake"].sum()
+    profit = df["profit"].sum()
+    roi = (profit / stake) * 100 if stake > 0 else 0.0
+    count = len(df)
+    return roi, stake, profit, count
 
-known_codes = {code for codes in PRODUCT_TABS.values() if codes for code in codes}
-other_codes = sorted(set(df_all["product"].unique()) - known_codes)
-if other_codes:
-    PRODUCT_TABS["Other"] = other_codes
+
+football_df = df_all[df_all["product"].isin(["EXACT_SCORE", "VALUE_SINGLE"])].copy()
+sgp_df = df_all[df_all["product"] == "SGP"].copy()
+women_df = df_all[df_all["product"] == "WOMEN_1X2"].copy()
+basket_df = df_all[df_all["product"].isin(["BASKET_SINGLE", "BASKET_PARLAY"])].copy()
 
 st.markdown(
     """
@@ -197,7 +199,7 @@ st.markdown(
             Performance & ROI Dashboard
         </span>
         <span style="font-size:0.85rem;color:#9BA0B5;">
-            Live ROI, profit and hit-rate across all engines · mode-filter & produkt-tabs.
+            Live ROI, profit and hit-rate across all engines
         </span>
     </div>
     """,
@@ -206,140 +208,40 @@ st.markdown(
 
 st.markdown("")
 
-tab_labels = list(PRODUCT_TABS.keys())
-tabs = st.tabs(tab_labels)
+tab1, tab2, tab3, tab4 = st.tabs(["Football", "SGP", "Women's 1X2", "College Basket"])
 
-with tabs[0]:
-    section_title("Overview – Platform", icon="📊")
+with tab1:
+    st.subheader("Football – Single Bets & Exact Score")
+    roi, stake, profit, count = calculate_roi(football_df)
+    col1, col2, col3 = st.columns(3)
+    col1.metric("ROI", f"{roi:,.1f}%")
+    col2.metric("Total stake", f"{stake:,.0f}")
+    col3.metric("Net profit", f"{profit:,.0f}")
+    st.dataframe(football_df, use_container_width=True, hide_index=True)
 
-    m = compute_metrics(df_all)
+with tab2:
+    st.subheader("Same Game Parlays (SGP)")
+    roi, stake, profit, count = calculate_roi(sgp_df)
+    col1, col2, col3 = st.columns(3)
+    col1.metric("ROI", f"{roi:,.1f}%")
+    col2.metric("Total stake", f"{stake:,.0f}")
+    col3.metric("Net profit", f"{profit:,.0f}")
+    st.dataframe(sgp_df, use_container_width=True, hide_index=True)
 
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        metric_card(
-            "Platform ROI",
-            f"{m['roi']:+.1f}%",
-            kicker=f"Stake: {m['stake']:.0f} kr · Bets: {m['bets']}",
-            variant="good" if m["roi"] >= 0 else "bad",
-        )
-    with c2:
-        metric_card(
-            "Total Profit",
-            f"{m['profit']:.0f} kr",
-            kicker="Payout − Stake",
-            variant="good" if m["profit"] >= 0 else "bad",
-        )
-    with c3:
-        metric_card(
-            "Hit Rate",
-            f"{m['hit_rate']:.1f}%",
-            kicker="WON / (WON + LOST + VOID)",
-        )
-    with c4:
-        metric_card(
-            "Mode",
-            mode_choice,
-            kicker="Data mode filter i sidebar.",
-        )
+with tab3:
+    st.subheader("Women's Football 1X2")
+    roi, stake, profit, count = calculate_roi(women_df)
+    col1, col2, col3 = st.columns(3)
+    col1.metric("ROI", f"{roi:,.1f}%")
+    col2.metric("Total stake", f"{stake:,.0f}")
+    col3.metric("Net profit", f"{profit:,.0f}")
+    st.dataframe(women_df, use_container_width=True, hide_index=True)
 
-    section_title("ROI per produkt", icon="📦")
-
-    rows = []
-    for prod_code, group in df_all.groupby("product"):
-        mm = compute_metrics(group)
-        rows.append(
-            {
-                "Product code": prod_code,
-                "Bets": mm["bets"],
-                "Stake": mm["stake"],
-                "Profit": mm["profit"],
-                "ROI %": mm["roi"],
-                "Hit rate %": mm["hit_rate"],
-            }
-        )
-    df_products = pd.DataFrame(rows).sort_values("ROI %", ascending=False)
-
-    st.dataframe(
-        df_products.style.format(
-            {
-                "Stake": "{:,.0f} kr",
-                "Profit": "{:,.0f} kr",
-                "ROI %": "{:,.1f} %",
-                "Hit rate %": "{:,.1f} %",
-            }
-        ),
-        use_container_width=True,
-        hide_index=True,
-    )
-
-    cum_df = build_cumulative_roi_df(df_all)
-    if not cum_df.empty:
-        roi_chart(
-            cum_df.rename(columns={"created_at": "bet_index"}),
-            x_col="bet_index",
-            y_col="roi",
-            title="Cumulative ROI – All products",
-        )
-
-    picks_table(df_all.sort_values("created_at", ascending=False), title="Latest bets – All products")
-
-for idx, (tab_name, codes) in enumerate(PRODUCT_TABS.items()):
-    if tab_name == "Overview":
-        continue
-
-    tab_index = tab_labels.index(tab_name)
-    with tabs[tab_index]:
-        if codes is None:
-            df_sub = df_all.copy()
-        else:
-            df_sub = df_all[df_all["product"].isin(codes)].copy()
-
-        section_title(tab_name, icon="🎯")
-
-        if df_sub.empty:
-            st.info(f"Inga bets hittades för {tab_name} med nuvarande filter.")
-            continue
-
-        mp = compute_metrics(df_sub)
-
-        c1, c2, c3, c4 = st.columns(4)
-        with c1:
-            metric_card(
-                f"{tab_name} ROI",
-                f"{mp['roi']:+.1f}%",
-                kicker=roi_delta_tag(mp["roi"]),
-                variant="good" if mp["roi"] >= 0 else "bad",
-            )
-        with c2:
-            metric_card(
-                "Profit",
-                f"{mp['profit']:.0f} kr",
-                kicker=f"Stake: {mp['stake']:.0f} kr",
-                variant="good" if mp["profit"] >= 0 else "bad",
-            )
-        with c3:
-            metric_card(
-                "Hit Rate",
-                f"{mp['hit_rate']:.1f}%",
-                kicker=f"Bets: {mp['bets']}",
-            )
-        with c4:
-            metric_card(
-                "Share of platform stake",
-                f"{(mp['stake'] / df_all['stake'].sum())*100:,.1f}%" if df_all["stake"].sum() > 0 else "0.0%",
-                kicker="Av total stake i filtret.",
-            )
-
-        cum_prod_df = build_cumulative_roi_df(df_sub)
-        if not cum_prod_df.empty:
-            roi_chart(
-                cum_prod_df.rename(columns={"created_at": "bet_index"}),
-                x_col="bet_index",
-                y_col="roi",
-                title=f"Cumulative ROI – {tab_name}",
-            )
-
-        picks_table(
-            df_sub.sort_values("created_at", ascending=False),
-            title=f"Latest bets – {tab_name}",
-        )
+with tab4:
+    st.subheader("College Basketball – Singles & Parlays")
+    roi, stake, profit, count = calculate_roi(basket_df)
+    col1, col2, col3 = st.columns(3)
+    col1.metric("ROI", f"{roi:,.1f}%")
+    col2.metric("Total stake", f"{stake:,.0f}")
+    col3.metric("Net profit", f"{profit:,.0f}")
+    st.dataframe(basket_df, use_container_width=True, hide_index=True)
