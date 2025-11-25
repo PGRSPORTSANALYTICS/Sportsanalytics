@@ -4,6 +4,7 @@ Automatically verifies College Basketball picks using The Odds API
 """
 
 import os
+import re
 import requests
 import logging
 from typing import Dict, List, Optional, Tuple
@@ -203,11 +204,14 @@ class CollegeBasketballResultVerifier:
                     logger.warning(f"⚠️ No result found for parlay leg: {team}")
                     return False
                 
+                # Detect market type from selection string
+                leg_market = self._detect_market_from_selection(selection)
+                
                 # Create a single pick object for this leg
                 leg_pick = {
                     'match': team,
                     'selection': selection,
-                    'market': pick['market']
+                    'market': leg_market
                 }
                 
                 # Check if this leg won
@@ -233,6 +237,21 @@ class CollegeBasketballResultVerifier:
         except Exception as e:
             logger.error(f"❌ Error verifying parlay: {e}")
             return False
+    
+    def _detect_market_from_selection(self, selection: str) -> str:
+        """Detect market type from selection string"""
+        selection_lower = selection.lower()
+        
+        # Check for totals (over/under)
+        if 'over' in selection_lower or 'under' in selection_lower:
+            return 'Totals'
+        
+        # Check for spread (contains +/- with a number)
+        if re.search(r'[+-]\d+\.?\d*', selection):
+            return 'Spread'
+        
+        # Default to moneyline
+        return '1X2 Moneyline'
     
     def _find_matching_game(self, match_string: str, games: List[Dict]) -> Optional[Dict]:
         """Find matching game from completed games list"""

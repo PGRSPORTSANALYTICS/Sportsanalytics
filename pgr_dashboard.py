@@ -958,6 +958,58 @@ if selected == 'college_basketball':
     st.markdown('<div class="section-header">🏀 COLLEGE BASKETBALL PICKS</div>', unsafe_allow_html=True)
     
     try:
+        # Get performance stats first
+        stats_query = """
+            SELECT 
+                COUNT(*) FILTER (WHERE status IN ('won', 'lost')) as total_settled,
+                COUNT(*) FILTER (WHERE status = 'won') as wins,
+                COUNT(*) FILTER (WHERE status = 'lost') as losses,
+                COUNT(*) FILTER (WHERE status = 'won' AND is_parlay = false) as singles_won,
+                COUNT(*) FILTER (WHERE status = 'lost' AND is_parlay = false) as singles_lost,
+                COUNT(*) FILTER (WHERE status = 'won' AND is_parlay = true) as parlays_won,
+                COUNT(*) FILTER (WHERE status = 'lost' AND is_parlay = true) as parlays_lost,
+                COALESCE(SUM(CASE WHEN status = 'won' THEN (odds - 1) * 100 ELSE -100 END) 
+                    FILTER (WHERE status IN ('won', 'lost')), 0) as profit_loss
+            FROM basketball_predictions
+        """
+        stats_row = db_helper.execute(stats_query, (), fetch='one')
+        
+        if stats_row and stats_row[0] > 0:
+            total_settled = int(stats_row[0])
+            wins = int(stats_row[1])
+            losses = int(stats_row[2])
+            singles_won = int(stats_row[3])
+            singles_lost = int(stats_row[4])
+            parlays_won = int(stats_row[5])
+            parlays_lost = int(stats_row[6])
+            profit_loss = float(stats_row[7])
+            
+            win_rate = (wins / total_settled * 100) if total_settled > 0 else 0
+            roi = (profit_loss / (total_settled * 100) * 100) if total_settled > 0 else 0
+            singles_total = singles_won + singles_lost
+            singles_rate = (singles_won / singles_total * 100) if singles_total > 0 else 0
+            
+            st.markdown(f"""
+            <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
+                <div style="background: #161B22; padding: 1rem; border-radius: 8px; flex: 1; min-width: 140px; text-align: center;">
+                    <div style="font-size: 1.5rem; font-weight: 700; color: {'#3FB68B' if roi >= 0 else '#F85149'};">{roi:+.1f}%</div>
+                    <div style="color: #8B949E; font-size: 0.85rem;">ROI</div>
+                </div>
+                <div style="background: #161B22; padding: 1rem; border-radius: 8px; flex: 1; min-width: 140px; text-align: center;">
+                    <div style="font-size: 1.5rem; font-weight: 700; color: #C9D1D9;">{wins}W / {losses}L</div>
+                    <div style="color: #8B949E; font-size: 0.85rem;">Overall ({win_rate:.0f}%)</div>
+                </div>
+                <div style="background: #161B22; padding: 1rem; border-radius: 8px; flex: 1; min-width: 140px; text-align: center;">
+                    <div style="font-size: 1.5rem; font-weight: 700; color: #3FB68B;">{singles_won}W / {singles_lost}L</div>
+                    <div style="color: #8B949E; font-size: 0.85rem;">Singles ({singles_rate:.0f}%)</div>
+                </div>
+                <div style="background: #161B22; padding: 1rem; border-radius: 8px; flex: 1; min-width: 140px; text-align: center;">
+                    <div style="font-size: 1.5rem; font-weight: 700; color: #58A6FF;">{parlays_won}W / {parlays_lost}L</div>
+                    <div style="color: #8B949E; font-size: 0.85rem;">Parlays</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        
         with DatabaseConnection.get_connection() as conn:
             query = """
                 SELECT match, selection, odds, ev_percentage, is_parlay
