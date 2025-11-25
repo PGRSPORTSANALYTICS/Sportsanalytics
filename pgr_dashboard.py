@@ -235,7 +235,9 @@ def roi_series(settled: pd.DataFrame):
     s = s.sort_values(["settled_at", "match_date", "created_at"], na_position="last")
     s["stake"] = s["stake"].astype(float)
     s["profit"] = s["profit"].astype(float)
-    s["when"] = pd.to_datetime(s["settled_at"].fillna(s["match_date"]))
+    settled_ts = pd.to_datetime(s["settled_at"], utc=True, errors="coerce")
+    match_ts = pd.to_datetime(s["match_date"], utc=True, errors="coerce")
+    s["when"] = settled_ts.fillna(match_ts).dt.tz_localize(None)
     s["bank"] = s["profit"].cumsum()
     return s[["when", "bank"]]
 
@@ -243,9 +245,10 @@ def roi_series(settled: pd.DataFrame):
 def rolling_hit_rate(settled: pd.DataFrame, window=50):
     if settled.empty:
         return pd.DataFrame({"when": [], "roll": []})
-    s = settled.sort_values("settled_at").copy()
+    s = settled.copy()
+    s["when"] = pd.to_datetime(s["settled_at"], utc=True, errors="coerce").dt.tz_localize(None)
+    s = s.sort_values("when")
     s["hit"] = (s["profit"] > 0).astype(int)
-    s["when"] = pd.to_datetime(s["settled_at"])
     s["roll"] = s["hit"].rolling(window, min_periods=1).mean() * 100
     return s[["when", "roll"]]
 
