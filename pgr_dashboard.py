@@ -20,6 +20,79 @@ PGR_DARK_BG = "#050A10"
 PGR_CARD_BG = "#0D141F"
 PGR_TEXT_MUTED = "#9BA3B5"
 
+
+def inject_pgr_global_background():
+    st.markdown("""
+    <style>
+    .stApp {
+        background: radial-gradient(circle at 20% 20%, rgba(0,255,166,0.08) 0%, rgba(0,0,0,1) 60%),
+                    radial-gradient(circle at 80% 80%, rgba(0,255,166,0.05) 0%, rgba(0,0,0,1) 70%),
+                    #000;
+        background-attachment: fixed;
+        color: #d7fff3 !important;
+        font-family: 'Inter', sans-serif !important;
+    }
+    @keyframes floatDust {
+        0% { transform: translateY(0px) translateX(0px); opacity: .2; }
+        50% { transform: translateY(-20px) translateX(10px); opacity: .5; }
+        100% { transform: translateY(0px) translateX(0px); opacity: .2; }
+    }
+    .neon-dust {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100vw; height: 100vh;
+        pointer-events: none;
+        z-index: -1;
+        background-image:
+          radial-gradient(circle, rgba(0,255,166,0.18) 2px, transparent 3px),
+          radial-gradient(circle, rgba(0,255,166,0.12) 1.6px, transparent 3px),
+          radial-gradient(circle, rgba(0,255,166,0.06) 2px, transparent 2.8px);
+        background-size: 120px 120px, 90px 90px, 160px 160px;
+        animation: floatDust 8s infinite ease-in-out;
+        opacity: 0.10;
+    }
+    .neon-grid::before {
+        content: "";
+        position: fixed;
+        bottom: -10vh;
+        left: 0;
+        width: 100vw;
+        height: 60vh;
+        background:
+          linear-gradient(transparent, rgba(0,255,166,0.08)),
+          repeating-linear-gradient(
+             to right,
+             rgba(0,255,166,0.10) 0px,
+             rgba(0,255,166,0.10) 1px,
+             transparent 1px,
+             transparent 40px
+          ),
+          repeating-linear-gradient(
+             to top,
+             rgba(0,255,166,0.10) 0px,
+             rgba(0,255,166,0.10) 1px,
+             transparent 1px,
+             transparent 40px
+          );
+        background-blend-mode: overlay;
+        pointer-events: none;
+        z-index: -2;
+    }
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: rgba(255,255,255,0.04); }
+    ::-webkit-scrollbar-thumb { background: rgba(0,255,166,0.45); border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(0,255,166,0.80); }
+    h1, h2, h3, h4, h5 {
+        color: #aaffea !important;
+        text-shadow: 0 0 12px rgba(0,255,166,0.35), 0 0 24px rgba(0,255,166,0.15);
+    }
+    .block-container { padding-top: 1.8rem; }
+    </style>
+    <div class="neon-dust"></div>
+    <div class="neon-grid"></div>
+    """, unsafe_allow_html=True)
+
+
 CUSTOM_CSS = f"""
 <style>
     .stApp {{
@@ -497,6 +570,8 @@ def render_product_tab(
 # ------------- MAIN APP ------------- #
 
 def main():
+    inject_pgr_global_background()
+
     try:
         df = load_all_bets()
     except Exception as e:
