@@ -1,10 +1,50 @@
 import os
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 import pandas as pd
 import streamlit as st
 from sqlalchemy import create_engine, text
+
+
+def normalize_result(raw_result: Optional[str]) -> str:
+    """
+    Normalize all possible result variants to: WON, LOST, PENDING, VOID.
+    Supports English and Swedish terminology.
+    """
+    if raw_result is None:
+        return "PENDING"
+
+    s = str(raw_result).strip().lower()
+
+    win_keywords = [
+        "won", "win", "wins", "winner",
+        "vinst", "vunnit", "vinna", "green",
+        "success"
+    ]
+
+    loss_keywords = [
+        "lost", "loss", "förlust",
+        "förlorat", "red"
+    ]
+
+    void_keywords = [
+        "void", "push", "refunded",
+        "money back", "pushed", "voided",
+        "tie", "draw", "oavgjort"
+    ]
+
+    if any(k in s for k in win_keywords):
+        return "WON"
+    if any(k in s for k in loss_keywords):
+        return "LOST"
+    if any(k in s for k in void_keywords):
+        return "VOID"
+
+    if s in ["pending", "open", "not settled", "running", "live", ""]:
+        return "PENDING"
+
+    return "PENDING"
 
 
 # ------------- CONFIG & THEME ------------- #
@@ -239,14 +279,22 @@ def load_all_bets() -> pd.DataFrame:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce")
 
-    # profit only for settled bets
+    # Normalize results for consistent handling
+    df["norm_result"] = df["result"].apply(normalize_result)
+
+    # profit only for settled bets (WON, LOST, VOID)
     df["profit"] = None
-    settled_mask = df["result"].isin(
-        ["WIN", "WON", "LOSS", "LOST", "VOID", "CANCELLED"]
-    ) & df["payout"].notna()
-    df.loc[settled_mask, "profit"] = (
-        df.loc[settled_mask, "payout"] - df.loc[settled_mask, "stake"]
+    settled_mask = df["norm_result"].isin(["WON", "LOST", "VOID"])
+    
+    # Calculate profit: WON gets payout - stake, LOST/VOID gets -stake (or 0 for VOID)
+    df.loc[settled_mask & (df["norm_result"] == "WON"), "profit"] = (
+        df.loc[settled_mask & (df["norm_result"] == "WON"), "payout"].fillna(0) - 
+        df.loc[settled_mask & (df["norm_result"] == "WON"), "stake"]
     )
+    df.loc[settled_mask & (df["norm_result"] == "LOST"), "profit"] = (
+        -df.loc[settled_mask & (df["norm_result"] == "LOST"), "stake"]
+    )
+    df.loc[settled_mask & (df["norm_result"] == "VOID"), "profit"] = 0.0
 
     return df
 
@@ -254,7 +302,7 @@ def load_all_bets() -> pd.DataFrame:
 # ------------- METRICS HELPERS ------------- #
 
 def compute_roi(df: pd.DataFrame) -> dict:
-    """Compute stake, payout, profit, ROI and hit-rate for a given slice."""
+    """Compute stake, payout, profit, ROI and hit-rate for a given slice using normalized results."""
     if df.empty:
         return dict(
             stake=0.0,
@@ -266,8 +314,13 @@ def compute_roi(df: pd.DataFrame) -> dict:
             hit_rate=0.0,
         )
 
-    # settled only
-    settled = df[df["profit"].notna()].copy()
+    # Ensure norm_result exists
+    if "norm_result" not in df.columns:
+        df = df.copy()
+        df["norm_result"] = df["result"].apply(normalize_result)
+
+    # settled only (WON, LOST, VOID)
+    settled = df[df["norm_result"].isin(["WON", "LOST", "VOID"])].copy()
     if settled.empty:
         return dict(
             stake=float(df["stake"].sum()),
@@ -280,12 +333,19 @@ def compute_roi(df: pd.DataFrame) -> dict:
         )
 
     total_stake = float(settled["stake"].sum())
-    total_payout = float(settled["payout"].sum())
+    
+    # Only count WON payouts for total payout
+    won_mask = settled["norm_result"] == "WON"
+    total_payout = float(settled.loc[won_mask, "payout"].fillna(0).sum())
+    
     profit = total_payout - total_stake
     roi = (profit / total_stake * 100) if total_stake > 0 else 0.0
 
-    wins = settled["profit"] > 0
-    hit_rate = (wins.sum() / len(settled) * 100) if len(settled) > 0 else 0.0
+    # Count wins (only WON, not VOID)
+    wins_count = won_mask.sum()
+    # Hit rate excludes VOID from denominator
+    non_void = settled[settled["norm_result"] != "VOID"]
+    hit_rate = (wins_count / len(non_void) * 100) if len(non_void) > 0 else 0.0
 
     return dict(
         stake=total_stake,
@@ -293,7 +353,7 @@ def compute_roi(df: pd.DataFrame) -> dict:
         profit=profit,
         roi=roi,
         bets=len(settled),
-        wins=int(wins.sum()),
+        wins=int(wins_count),
         hit_rate=hit_rate,
     )
 
