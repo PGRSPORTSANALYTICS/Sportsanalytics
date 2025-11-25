@@ -7,6 +7,23 @@ import streamlit as st
 from sqlalchemy import create_engine, text
 
 
+def split_bets_by_mode(df: pd.DataFrame):
+    """
+    Splits raw bets into:
+    - prod_bets: real bets (mode='PROD' or null)
+    - test_bets: backtests/simulated (mode in ['TEST', 'BACKTEST'])
+    """
+    if "mode" not in df.columns:
+        return df.copy(), df.iloc[0:0].copy()
+
+    mode_col = df["mode"].fillna("PROD").str.upper()
+
+    prod_bets = df[mode_col == "PROD"].copy()
+    test_bets = df[mode_col.isin(["TEST", "BACKTEST"])].copy()
+
+    return prod_bets, test_bets
+
+
 def format_kickoff(date_val) -> str:
     """
     Format match date for display, handling NaT/None/invalid values gracefully.
@@ -1207,8 +1224,7 @@ def main():
         )
 
     # Split PROD vs BACKTEST data
-    prod_df = df[df["mode"].str.upper() != "BACKTEST"].copy() if "mode" in df.columns else df.copy()
-    backtest_df = df[df["mode"].str.upper() == "BACKTEST"].copy() if "mode" in df.columns else pd.DataFrame()
+    prod_df, backtest_df = split_bets_by_mode(df)
 
     # Tabs for different products
     overview_tab, exact_tab, singles_tab, sgp_tab, women_tab, basket_tab, backtest_tab = st.tabs(
