@@ -222,6 +222,34 @@ def product_filter(df: pd.DataFrame, product_codes: List[str]) -> pd.DataFrame:
     return df[df["product"].isin(product_codes)].copy()
 
 
+def as_fixture(r):
+    ht = str(r.get("home_team", "")).strip()
+    at = str(r.get("away_team", "")).strip()
+    return f"{ht} – {at}".strip(" –")
+
+
+def roi_series(settled: pd.DataFrame):
+    if settled.empty:
+        return pd.DataFrame({"when": [], "bank": []})
+    s = settled.copy()
+    s = s.sort_values(["settled_at", "match_date", "created_at"], na_position="last")
+    s["stake"] = s["stake"].astype(float)
+    s["profit"] = s["profit"].astype(float)
+    s["when"] = pd.to_datetime(s["settled_at"].fillna(s["match_date"]))
+    s["bank"] = s["profit"].cumsum()
+    return s[["when", "bank"]]
+
+
+def rolling_hit_rate(settled: pd.DataFrame, window=50):
+    if settled.empty:
+        return pd.DataFrame({"when": [], "roll": []})
+    s = settled.sort_values("settled_at").copy()
+    s["hit"] = (s["profit"] > 0).astype(int)
+    s["when"] = pd.to_datetime(s["settled_at"])
+    s["roll"] = s["hit"].rolling(window, min_periods=1).mean() * 100
+    return s[["when", "roll"]]
+
+
 def style_bet_table(df: pd.DataFrame) -> pd.DataFrame:
     """Prepare a pretty table with decimal odds (2 decimals)."""
     if df.empty:
@@ -379,16 +407,40 @@ def render_product_tab(
 ):
     data = product_filter(df, product_codes)
 
-    st.markdown(f"#### {title}")
+    st.markdown(
+        f"#### {title} <span class='pgr-badge'>live</span>",
+        unsafe_allow_html=True,
+    )
     st.markdown(f'<div class="pgr-subtitle">{description}</div>', unsafe_allow_html=True)
 
     if data.empty:
         st.info("No bets for this product yet. Once your engine starts saving picks here, this tab will update automatically.")
         return
 
+    for c in ["odds", "stake", "payout", "profit"]:
+        if c in data.columns:
+            data[c] = pd.to_numeric(data[c], errors="coerce")
+
+    active = data[data["profit"].isna()].copy()
+    settled = data[data["profit"].notna()].copy()
+
+    st.markdown("##### Active Bets")
+    if active.empty:
+        st.caption("No active bets for this product right now.")
+    else:
+        if "match_date" in active.columns:
+            active["kickoff"] = pd.to_datetime(active["match_date"]).dt.strftime("%Y-%m-%d %H:%M")
+        active["fixture"] = active.apply(as_fixture, axis=1)
+        cols_active = [c for c in ["kickoff", "fixture", "odds", "stake", "mode"] if c in active.columns]
+        st.dataframe(
+            active[cols_active].sort_values("kickoff" if "kickoff" in cols_active else cols_active[0]),
+            use_container_width=True,
+            hide_index=True,
+        )
+
     summary = compute_roi(data)
 
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3 = st.columns(3)
     with c1:
         metric_card(
             "ROI",
@@ -405,41 +457,38 @@ def render_product_tab(
         metric_card(
             "Hit Rate",
             format_pct(summary["hit_rate"]),
-            f"{summary['wins']} wins / {summary['bets']} bets",
-        )
-    with c4:
-        metric_card(
-            "Total Bets",
-            f"{len(data):,}",
-            "Including pending bets",
+            f"{summary['bets']} settled",
         )
 
-    # Per-day equity curve
-    st.markdown("##### Equity Curve")
-    settled = data[data["profit"].notna()].copy()
-    if not settled.empty:
-        settled["date"] = settled["settled_at"].fillna(pd.to_datetime(settled["match_date"], errors="coerce"))
-        settled["date"] = pd.to_datetime(settled["date"], errors="coerce").dt.date
-        curve = (
-            settled.groupby("date")["profit"]
-            .sum()
-            .cumsum()
-            .reset_index(name="cumulative_profit")
-        )
-        curve = curve.set_index("date")
-        st.line_chart(curve, height=220)
+    st.markdown("##### Performance")
+    r1, r2 = st.columns((2, 1))
+    with r1:
+        roi_df = roi_series(settled)
+        if not roi_df.empty:
+            st.line_chart(roi_df.set_index("when"), height=220)
+        else:
+            st.caption("No settled bets yet.")
+        st.caption("Cumulative profit (kr)")
+    with r2:
+        hit_df = rolling_hit_rate(settled)
+        if not hit_df.empty:
+            st.line_chart(hit_df, x="when", y="roll", height=220)
+        else:
+            st.caption("No data yet.")
+        st.caption("Rolling hit rate (last 50)")
+
+    st.markdown("##### History")
+    if settled.empty:
+        st.caption("No settled bets yet.")
     else:
-        st.info("No settled bets for this product yet.")
-
-    # Last 100 bets
-    st.markdown("##### Latest 100 Bets")
-    latest = data.sort_values("created_at", ascending=False).head(100)
-    table = style_bet_table(latest)
-    st.dataframe(
-        table,
-        use_container_width=True,
-        height=420,
-    )
+        cols_hist = [c for c in ["settled_at", "match_date", "home_team", "away_team", "odds", "stake", "payout", "profit", "result"] if c in settled.columns]
+        if "settled_at" in settled.columns:
+            settled["settled_at"] = pd.to_datetime(settled["settled_at"])
+        st.dataframe(
+            settled.sort_values("settled_at", ascending=False)[cols_hist],
+            use_container_width=True,
+            hide_index=True,
+        )
 
 
 # ------------- MAIN APP ------------- #
