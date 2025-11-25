@@ -773,7 +773,8 @@ elif selected == 'college_basketball':
             product_stats = {'total': int(result['total_picks'].iloc[0] if not result.empty else 0), 'wins': 0, 'losses': 0, 'profit': 0.0}
             total_roi = 0.0  # No settled bets yet, so ROI is 0%
             hit_rate_200 = 0.0  # No settled bets yet
-            avg_odds = result['avg_odds'].iloc[0] if not result.empty else 0.0
+            odds_value = result['avg_odds'].iloc[0] if not result.empty else None
+            avg_odds = float(odds_value) if odds_value is not None else 0.0
             
     except Exception as e:
         print(f"Error loading College Basketball stats: {e}")
