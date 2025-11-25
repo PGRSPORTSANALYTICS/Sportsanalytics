@@ -1086,8 +1086,8 @@ if selected in ['sgp', 'monstersgp']:
                 WHERE outcome IS NULL
                   AND match_date >= CURRENT_DATE::text
                   AND ev_percentage > 0
-                  AND (parlay_description IS NULL OR parlay_description NOT LIKE '%Monster%')
-                  AND (parlay_description IS NULL OR parlay_description NOT LIKE '%BEAST%')
+                  AND (parlay_description IS NULL OR parlay_description NOT LIKE '%%Monster%%')
+                  AND (parlay_description IS NULL OR parlay_description NOT LIKE '%%BEAST%%')
                 ORDER BY ev_percentage DESC
                 LIMIT 50
             """
@@ -1098,7 +1098,7 @@ if selected in ['sgp', 'monstersgp']:
                 WHERE outcome IS NULL
                   AND match_date >= CURRENT_DATE::text
                   AND ev_percentage > 0
-                  AND (parlay_description LIKE '%Monster%' OR parlay_description LIKE '%BEAST%')
+                  AND (parlay_description LIKE '%%Monster%%' OR parlay_description LIKE '%%BEAST%%')
                 ORDER BY ev_percentage DESC
                 LIMIT 50
             """
