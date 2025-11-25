@@ -508,7 +508,7 @@ def render_product_tab(
             dt = pd.to_datetime(active["match_date"], errors="coerce")
             if hasattr(dt.dt, 'tz') and dt.dt.tz is not None:
                 dt = dt.dt.tz_localize(None)
-            active["kickoff"] = dt.dt.strftime("%d %b %H:%M").replace("NaT", "")
+            active["kickoff"] = dt.dt.strftime("%d %b %H:%M").fillna("")
         active["fixture"] = active.apply(as_fixture, axis=1)
         cols_active = [c for c in ["kickoff", "fixture", "odds", "stake", "mode"] if c in active.columns]
         st.dataframe(
@@ -564,12 +564,12 @@ def render_product_tab(
             dt_settled = pd.to_datetime(settled["settled_at"], errors="coerce")
             if hasattr(dt_settled.dt, 'tz') and dt_settled.dt.tz is not None:
                 dt_settled = dt_settled.dt.tz_localize(None)
-            settled["settled"] = dt_settled.dt.strftime("%d %b %H:%M").replace("NaT", "")
+            settled["settled"] = dt_settled.dt.strftime("%d %b %H:%M").fillna("")
         if "match_date" in settled.columns:
             dt_match = pd.to_datetime(settled["match_date"], errors="coerce")
             if hasattr(dt_match.dt, 'tz') and dt_match.dt.tz is not None:
                 dt_match = dt_match.dt.tz_localize(None)
-            settled["match"] = dt_match.dt.strftime("%d %b %H:%M").replace("NaT", "")
+            settled["match"] = dt_match.dt.strftime("%d %b %H:%M").fillna("")
         settled["fixture"] = settled.apply(as_fixture, axis=1)
         cols_hist = [c for c in ["settled", "match", "fixture", "odds", "stake", "payout", "profit", "result"] if c in settled.columns]
         st.dataframe(
