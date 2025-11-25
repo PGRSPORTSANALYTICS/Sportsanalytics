@@ -24,6 +24,24 @@ def split_bets_by_mode(df: pd.DataFrame):
     return prod_bets, test_bets
 
 
+def calculate_roi(bets: pd.DataFrame) -> float:
+    """Calculate ROI percentage from bets dataframe."""
+    summary = compute_roi(bets)
+    return summary["roi"]
+
+
+def calculate_hit_rate(bets: pd.DataFrame) -> float:
+    """Calculate hit rate percentage from bets dataframe."""
+    summary = compute_roi(bets)
+    return summary["hit_rate"]
+
+
+def calculate_profit(bets: pd.DataFrame) -> float:
+    """Calculate total profit from bets dataframe."""
+    summary = compute_roi(bets)
+    return summary["profit"]
+
+
 def format_kickoff(date_val) -> str:
     """
     Format match date for display, handling NaT/None/invalid values gracefully.
