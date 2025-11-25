@@ -505,7 +505,8 @@ def render_product_tab(
         st.caption("No active bets for this product right now.")
     else:
         if "match_date" in active.columns:
-            active["kickoff"] = pd.to_datetime(active["match_date"]).dt.strftime("%Y-%m-%d %H:%M")
+            dt = pd.to_datetime(active["match_date"], utc=True, errors="coerce").dt.tz_localize(None)
+            active["kickoff"] = dt.dt.strftime("%d %b %H:%M")
         active["fixture"] = active.apply(as_fixture, axis=1)
         cols_active = [c for c in ["kickoff", "fixture", "odds", "stake", "mode"] if c in active.columns]
         st.dataframe(
@@ -557,9 +558,14 @@ def render_product_tab(
     if settled.empty:
         st.caption("No settled bets yet.")
     else:
-        cols_hist = [c for c in ["settled_at", "match_date", "home_team", "away_team", "odds", "stake", "payout", "profit", "result"] if c in settled.columns]
         if "settled_at" in settled.columns:
-            settled["settled_at"] = pd.to_datetime(settled["settled_at"])
+            dt_settled = pd.to_datetime(settled["settled_at"], utc=True, errors="coerce").dt.tz_localize(None)
+            settled["settled"] = dt_settled.dt.strftime("%d %b %H:%M")
+        if "match_date" in settled.columns:
+            dt_match = pd.to_datetime(settled["match_date"], utc=True, errors="coerce").dt.tz_localize(None)
+            settled["match"] = dt_match.dt.strftime("%d %b %H:%M")
+        settled["fixture"] = settled.apply(as_fixture, axis=1)
+        cols_hist = [c for c in ["settled", "match", "fixture", "odds", "stake", "payout", "profit", "result"] if c in settled.columns]
         st.dataframe(
             settled.sort_values("settled_at", ascending=False)[cols_hist],
             use_container_width=True,
