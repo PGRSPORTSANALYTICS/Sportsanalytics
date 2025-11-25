@@ -556,7 +556,7 @@ class SGPPredictor:
             return []
         
         # Generate SGP combinations (max 4 legs, target 10x max odds)
-        # Focus on naturally correlated markets
+        # GOAL-BASED ONLY - no corners/shots (cannot verify)
         sgp_combinations = [
             # ========== SINGLE-LEG SGPs ==========
             
@@ -604,16 +604,25 @@ class SGPPredictor:
                 'description': 'Over 3.5 + BTTS'
             },
             
-            # ========== 3-LEG COMBOS (~5-7x) ==========
+            # Over 2.5 + 1H Over 0.5 (~3x)
+            {
+                'legs': [
+                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5}
+                ],
+                'description': 'Over 2.5 + 1H Goal'
+            },
             
-            # Over 2.5 + BTTS + Corners (~6x)
+            # ========== 3-LEG COMBOS (~5-8x) ==========
+            
+            # Over 2.5 + BTTS + 1H Over 0.5 (~5x)
             {
                 'legs': [
                     {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
                     {'market_type': 'BTTS', 'outcome': 'YES'},
-                    {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 10.5}
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5}
                 ],
-                'description': 'Over 2.5 + BTTS + Corners 10.5+'
+                'description': 'Over 2.5 + BTTS + 1H Goal'
             },
             
             # Over 3.5 + BTTS + 1H Over 0.5 (~7x)
@@ -623,31 +632,41 @@ class SGPPredictor:
                     {'market_type': 'BTTS', 'outcome': 'YES'},
                     {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5}
                 ],
-                'description': 'Over 3.5 + BTTS + 1H Over 0.5'
+                'description': 'Over 3.5 + BTTS + 1H Goal'
             },
             
-            # ========== 4-LEG COMBOS (MAX ~10x) ==========
-            
-            # Over 2.5 + BTTS + Corners + 1H Over 0.5 (~8x)
+            # Over 2.5 + BTTS + 2H Over 1.5 (~6x)
             {
                 'legs': [
                     {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
                     {'market_type': 'BTTS', 'outcome': 'YES'},
-                    {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 10.5},
-                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5}
+                    {'market_type': 'SECOND_HALF_GOALS', 'outcome': 'OVER', 'line': 1.5}
                 ],
-                'description': 'Over 2.5 + BTTS + Corners + 1H'
+                'description': 'Over 2.5 + BTTS + 2H Goals'
             },
             
-            # Over 3.5 + BTTS + Corners + 1H Over 0.5 (~10x max)
+            # ========== 4-LEG COMBOS (MAX ~10x) ==========
+            
+            # Over 2.5 + BTTS + 1H + 2H (~8x)
+            {
+                'legs': [
+                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
+                    {'market_type': 'BTTS', 'outcome': 'YES'},
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
+                    {'market_type': 'SECOND_HALF_GOALS', 'outcome': 'OVER', 'line': 0.5}
+                ],
+                'description': 'Over 2.5 + BTTS + Goals Both Halves'
+            },
+            
+            # Over 3.5 + BTTS + 1H + 2H (~10x max)
             {
                 'legs': [
                     {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 3.5},
                     {'market_type': 'BTTS', 'outcome': 'YES'},
-                    {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 9.5},
-                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5}
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
+                    {'market_type': 'SECOND_HALF_GOALS', 'outcome': 'OVER', 'line': 1.5}
                 ],
-                'description': 'Over 3.5 + BTTS + Corners + 1H'
+                'description': 'Over 3.5 + BTTS + 1H + 2H Goals'
             },
             
         ]
