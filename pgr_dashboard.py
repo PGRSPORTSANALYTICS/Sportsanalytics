@@ -972,19 +972,15 @@ if selected == 'college_basketball':
             
             st.markdown(f"""
             <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
-                <div style="background: #161B22; padding: 1rem; border-radius: 8px; flex: 1; min-width: 140px; text-align: center;">
-                    <div style="font-size: 1.5rem; font-weight: 700; color: #C9D1D9;">{wins}W / {losses}L</div>
-                    <div style="color: #8B949E; font-size: 0.85rem;">Overall ({win_rate:.0f}%)</div>
-                </div>
-                <div style="background: #161B22; padding: 1rem; border-radius: 8px; flex: 1; min-width: 140px; text-align: center;">
+                <div style="background: #161B22; padding: 1rem; border-radius: 8px; flex: 1; min-width: 180px; text-align: center; border-left: 3px solid #3FB68B;">
                     <div style="font-size: 1.5rem; font-weight: 700; color: {'#3FB68B' if singles_roi >= 0 else '#F85149'};">{singles_roi:+.1f}%</div>
-                    <div style="color: #8B949E; font-size: 0.85rem;">Singles ROI</div>
-                    <div style="color: #58A6FF; font-size: 0.8rem; margin-top: 0.3rem;">{singles_won}W / {singles_lost}L ({singles_rate:.0f}%)</div>
+                    <div style="color: #8B949E; font-size: 0.85rem;">⭐ Singles ROI</div>
+                    <div style="color: #58A6FF; font-size: 0.9rem; margin-top: 0.3rem; font-weight: 600;">{singles_won}W / {singles_lost}L ({singles_rate:.0f}%)</div>
                 </div>
-                <div style="background: #161B22; padding: 1rem; border-radius: 8px; flex: 1; min-width: 140px; text-align: center;">
+                <div style="background: #161B22; padding: 1rem; border-radius: 8px; flex: 1; min-width: 180px; text-align: center; border-left: 3px solid #58A6FF;">
                     <div style="font-size: 1.5rem; font-weight: 700; color: {'#3FB68B' if parlays_roi >= 0 else '#F85149'};">{parlays_roi:+.1f}%</div>
-                    <div style="color: #8B949E; font-size: 0.85rem;">Parlays ROI</div>
-                    <div style="color: #58A6FF; font-size: 0.8rem; margin-top: 0.3rem;">{parlays_won}W / {parlays_lost}L ({parlays_rate:.0f}%)</div>
+                    <div style="color: #8B949E; font-size: 0.85rem;">🎯 Parlays ROI</div>
+                    <div style="color: #58A6FF; font-size: 0.9rem; margin-top: 0.3rem; font-weight: 600;">{parlays_won}W / {parlays_lost}L ({parlays_rate:.0f}%)</div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
