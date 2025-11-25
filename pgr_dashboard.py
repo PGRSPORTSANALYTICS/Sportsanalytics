@@ -165,30 +165,32 @@ st.markdown("""
 def get_rolling_roi_data(days=30):
     """Get daily ROI data for the rolling chart"""
     # Get all settled bets from last 30 days
+    # Note: football_opportunities stores timestamps in seconds, sgp_predictions in milliseconds
     query = """
         SELECT 
-            DATE(TO_TIMESTAMP(settled_timestamp)) as bet_date,
+            bet_date,
             market,
             profit_loss,
             stake
         FROM (
-            SELECT settled_timestamp, market, profit_loss, stake
+            SELECT DATE(TO_TIMESTAMP(settled_timestamp)) as bet_date, market, profit_loss, stake
             FROM football_opportunities
             WHERE outcome IN (%s, %s) AND settled_timestamp IS NOT NULL
+              AND TO_TIMESTAMP(settled_timestamp) >= NOW() - INTERVAL '%s days'
             
             UNION ALL
             
-            SELECT settled_timestamp, 'sgp' as market, profit_loss, stake
+            SELECT DATE(TO_TIMESTAMP(settled_timestamp/1000)) as bet_date, 'sgp' as market, profit_loss, stake
             FROM sgp_predictions
             WHERE outcome IN (%s, %s) AND settled_timestamp IS NOT NULL
               AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
               AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
+              AND TO_TIMESTAMP(settled_timestamp/1000) >= NOW() - INTERVAL '%s days'
         ) combined
-        WHERE TO_TIMESTAMP(settled_timestamp) >= NOW() - INTERVAL '%s days'
         ORDER BY bet_date DESC
     """
     
-    rows = db_helper.execute(query, ('win', 'loss', 'win', 'loss', '%Monster%', '%BEAST%', days), fetch='all')
+    rows = db_helper.execute(query, ('win', 'loss', days, 'win', 'loss', '%Monster%', '%BEAST%', days), fetch='all')
     
     if not rows:
         return None
