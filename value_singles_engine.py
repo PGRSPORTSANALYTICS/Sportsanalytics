@@ -266,6 +266,9 @@ class ValueSinglesEngine:
             print("⚠️ ValueSinglesEngine: No fixtures today")
             return picks
 
+        from datetime import datetime, timezone
+        today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        
         for match in fixtures:
             match_id = match.get("match_id") or match.get("id") or f"{match.get('home_team')}_vs_{match.get('away_team')}"
             if match_id in avoid_match_ids:
@@ -274,6 +277,21 @@ class ValueSinglesEngine:
             home_team = match.get("home_team")
             away_team = match.get("away_team")
             if not home_team or not away_team:
+                continue
+            
+            # SAME-DAY FILTER: Only generate predictions for matches playing TODAY
+            commence_time = match.get('commence_time', '')
+            match_date = match.get('formatted_date') or match.get('match_date')
+            
+            if not match_date and commence_time:
+                try:
+                    dt = datetime.fromisoformat(commence_time.replace('Z', '+00:00'))
+                    match_date = dt.strftime("%Y-%m-%d")
+                except:
+                    match_date = commence_time[:10] if len(commence_time) > 10 else ""
+            
+            if match_date and match_date != today_str:
+                print(f"⏭️ Skipping {home_team} vs {away_team} - plays on {match_date}, not today ({today_str})")
                 continue
 
             # 2) Odds
