@@ -1206,15 +1206,20 @@ def main():
             use_container_width=True,
         )
 
+    # Split PROD vs BACKTEST data
+    prod_df = df[df["mode"].str.upper() != "BACKTEST"].copy() if "mode" in df.columns else df.copy()
+    backtest_df = df[df["mode"].str.upper() == "BACKTEST"].copy() if "mode" in df.columns else pd.DataFrame()
+
     # Tabs for different products
-    overview_tab, exact_tab, singles_tab, sgp_tab, women_tab, basket_tab = st.tabs(
+    overview_tab, exact_tab, singles_tab, sgp_tab, women_tab, basket_tab, backtest_tab = st.tabs(
         [
             "Overview",
             "Exact Score",
             "Value Singles",
             "SGP Parlays",
-            "Women’s 1X2",
+            "Women's 1X2",
             "College Basketball",
+            "Backtests",
         ]
     )
 
@@ -1250,6 +1255,32 @@ def main():
 
     with basket_tab:
         render_basketball_tab(df)
+
+    with backtest_tab:
+        st.subheader("Backtest Results (Not Included in Live ROI)")
+        if backtest_df.empty:
+            st.info("No backtest bets found. All current data is PROD.")
+        else:
+            # Calculate backtest metrics
+            backtest_settled = backtest_df[backtest_df["result"].isin(["WON", "LOST", "WIN", "LOSS"])].copy()
+            if not backtest_settled.empty:
+                bt_roi = compute_roi(backtest_settled)
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Backtest ROI", f"{bt_roi['roi']:.1f}%")
+                with col2:
+                    st.metric("Backtest Profit", f"{bt_roi['profit']:.0f} kr")
+                with col3:
+                    won = len(backtest_settled[backtest_settled["result"].isin(["WON", "WIN"])])
+                    hit_rate = (won / len(backtest_settled) * 100) if len(backtest_settled) > 0 else 0
+                    st.metric("Backtest Hit Rate", f"{hit_rate:.1f}%")
+            
+            display_cols = [c for c in ["match_date", "home_team", "away_team", "product", "selection", "stake", "odds", "payout", "result", "mode"] if c in backtest_df.columns]
+            st.dataframe(
+                backtest_df[display_cols].sort_values("match_date", ascending=False),
+                use_container_width=True,
+                hide_index=True,
+            )
 
 
 if __name__ == "__main__":
