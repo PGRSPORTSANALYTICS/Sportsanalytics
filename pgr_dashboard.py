@@ -7,6 +7,26 @@ import streamlit as st
 from sqlalchemy import create_engine, text
 
 
+def format_kickoff(date_val) -> str:
+    """
+    Format match date for display, handling NaT/None/invalid values gracefully.
+    Returns formatted string like '25 Nov 20:00' or 'TBD' if invalid.
+    """
+    if date_val is None:
+        return "TBD"
+    
+    try:
+        dt = pd.to_datetime(date_val, errors="coerce")
+        if pd.isna(dt):
+            return "TBD"
+        return dt.strftime("%d %b %H:%M")
+    except Exception:
+        date_str = str(date_val).strip().upper()
+        if date_str in ["NAT", "NONE", "NULL", ""]:
+            return "TBD"
+        return date_str[:16] if len(date_str) > 16 else date_str
+
+
 def normalize_result(raw_result: Optional[str]) -> str:
     """
     Normalize all possible result variants to: WON, LOST, PENDING, VOID.
@@ -673,8 +693,7 @@ def render_product_tab(
             else:
                 ev_bg, ev_border = "rgba(148,163,184,0.10)", "rgba(148,163,184,0.6)"
 
-            match_dt = pd.to_datetime(row.get("match_date"), errors="coerce")
-            match_str = match_dt.strftime("%d %b %H:%M") if pd.notna(match_dt) else str(row.get("match_date", ""))
+            match_str = format_kickoff(row.get("match_date"))
             
             home_team = str(row.get('home_team', '')).replace('"', '&quot;')
             away_team = str(row.get('away_team', '')).replace('"', '&quot;')
@@ -858,8 +877,7 @@ def render_basketball_tab(df: pd.DataFrame):
             else:
                 ev_bg, ev_border = "rgba(148,163,184,0.10)", "rgba(148,163,184,0.6)"
 
-            match_dt = pd.to_datetime(row.get("match_date"), errors="coerce")
-            match_str = match_dt.strftime("%d %b %H:%M") if pd.notna(match_dt) else str(row.get("match_date", ""))
+            match_str = format_kickoff(row.get("match_date"))
             
             match_name = str(row.get('home_team', '')).replace('"', '&quot;')
             odds_val = float(row.get('odds', 0))
@@ -899,8 +917,7 @@ def render_basketball_tab(df: pd.DataFrame):
             else:
                 ev_bg, ev_border = "rgba(148,163,184,0.10)", "rgba(148,163,184,0.6)"
 
-            match_dt = pd.to_datetime(row.get("match_date"), errors="coerce")
-            match_str = match_dt.strftime("%d %b %H:%M") if pd.notna(match_dt) else str(row.get("match_date", ""))
+            match_str = format_kickoff(row.get("match_date"))
             
             match_name = str(row.get('home_team', '')).replace('"', '&quot;')
             odds_val = float(row.get('odds', 0))
@@ -1111,8 +1128,7 @@ def render_sgp_parlays_tab():
             legs_html = "".join([f"<div style='margin:2px 0;'>• {p}</div>" for p in legs_list]) if legs_list else "<i>No leg details stored</i>"
 
             # Format match date
-            match_dt = pd.to_datetime(row.get("match_date"), errors="coerce")
-            match_str = match_dt.strftime("%d %b %H:%M") if pd.notna(match_dt) else str(row.get("match_date", ""))
+            match_str = format_kickoff(row.get("match_date"))
 
             home_team = str(row.get('home_team', '')).replace('"', '&quot;')
             away_team = str(row.get('away_team', '')).replace('"', '&quot;')
