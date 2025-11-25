@@ -181,7 +181,7 @@ def performance_breakdown(
                     <span class="pgr-stat-value">{row['hit_rate']:.1f}%</span>
                 </div>
                 <div class="pgr-progress-bar">
-                    <div class="pgr-progress-fill" style="width: {min(row['hit_rate'], 100)}%; background: {roi_color};"></div>
+                    <div class="pgr-progress-fill" style="width: {min(float(row['hit_rate']), 100)}%; background: {roi_color};"></div>
                 </div>
                 <div class="pgr-stat-row" style="margin-top: 0.75rem;">
                     <span class="pgr-stat-label">Profit</span>
