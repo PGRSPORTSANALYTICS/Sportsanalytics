@@ -31,7 +31,7 @@ class BetTracker:
         profit = payout - stake
         
         db_helper.execute('''
-            INSERT INTO bet_results (product_type, bet_id, stake, payout, profit, is_won, created_at)
+            INSERT INTO results_roi (product_type, bet_id, stake, payout, profit, is_won, created_at)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (product_type, bet_id) 
             DO UPDATE SET stake = EXCLUDED.stake, payout = EXCLUDED.payout, 
@@ -57,7 +57,7 @@ class BetTracker:
                     SUM(CASE WHEN is_won THEN 1 ELSE 0 END) as wins,
                     SUM(stake) as staked,
                     SUM(profit) as profit
-                FROM bet_results
+                FROM results_roi
                 WHERE product_type = %s
             ''', (product_type,), fetch='one')
         else:
@@ -67,7 +67,7 @@ class BetTracker:
                     SUM(CASE WHEN is_won THEN 1 ELSE 0 END) as wins,
                     SUM(stake) as staked,
                     SUM(profit) as profit
-                FROM bet_results
+                FROM results_roi
             ''', (), fetch='one')
         
         total, wins, staked, profit = row if row else (0, 0, 0, 0)
@@ -96,7 +96,7 @@ class BetTracker:
                 SUM(CASE WHEN is_won THEN 1 ELSE 0 END) as wins,
                 SUM(stake) as staked,
                 SUM(profit) as profit
-            FROM bet_results
+            FROM results_roi
             GROUP BY product_type
         ''', (), fetch='all')
         
