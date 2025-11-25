@@ -185,25 +185,34 @@ if page == "Dashboard":
     roi_df = pd.DataFrame(vals)
     roi_chart(roi_df, title="Cumulative ROI – PROD Bets")
 
-    picks = []
     matches = [
         ("Arsenal vs Chelsea", "Premier League"),
+        ("Liverpool vs Man City", "Premier League"),
+        ("Tottenham vs Man United", "Premier League"),
         ("Barcelona vs Real Madrid", "La Liga"),
+        ("Atletico vs Sevilla", "La Liga"),
         ("PSG vs Lyon", "Ligue 1"),
+        ("Marseille vs Monaco", "Ligue 1"),
         ("Bayern vs Dortmund", "Bundesliga"),
+        ("Leipzig vs Leverkusen", "Bundesliga"),
         ("Inter vs AC Milan", "Serie A"),
+        ("Juventus vs Napoli", "Serie A"),
+        ("Roma vs Lazio", "Serie A"),
     ]
     
-    for i in range(12):
-        match, league = random.choice(matches)
+    predictions = ["2-1", "1-0", "2-0", "1-1", "3-1", "2-2", "3-0", "1-2"]
+    products = ["Exact Score", "Exact Score", "SGP", "Women 1X2"]
+    
+    picks = []
+    for i, (match, league) in enumerate(matches):
         picks.append(
             {
                 "Match": match,
                 "League": league,
-                "Prediction": random.choice(["2-1", "1-0", "2-0", "1-1", "3-1"]),
-                "Odds": round(random.uniform(6.0, 15.0), 2),
-                "EV %": round(random.uniform(5, 25), 1),
-                "Product": random.choice(["Exact Score", "SGP", "Women 1X2"]),
+                "Prediction": predictions[i % len(predictions)],
+                "Odds": round(6.0 + i * 0.8, 2),
+                "EV %": round(5 + i * 1.5, 1),
+                "Product": products[i % len(products)],
             }
         )
 
