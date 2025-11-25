@@ -890,7 +890,7 @@ def main():
     with basket_tab:
         render_product_tab(
             df,
-            product_codes=["BASKETBALL", "NCAAB", "COLLEGE_BASKET"],
+            product_codes=["BASKET_SINGLE", "BASKET_PARLAY"],
             title="College Basketball",
             description="NCAAB value singles and small parlays from your basketball engine.",
         )
