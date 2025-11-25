@@ -112,9 +112,8 @@ def get_db_url() -> str:
 def load_all_bets() -> pd.DataFrame:
     """
     Load all bets from the `all_bets` view.
-    Expected columns:
-      id, product, stake, odds, payout, result, mode,
-      created_at, settled_at, home_team, away_team, match_date
+    We do NOT filter on mode here so that active / test bets also show up.
+    ROI is still only based on settled bets (where profit is not null).
     """
     db_url = get_db_url()
     engine = create_engine(db_url)
@@ -135,7 +134,6 @@ def load_all_bets() -> pd.DataFrame:
             away_team,
             match_date
         FROM all_bets
-        WHERE mode = 'PROD'
         ORDER BY created_at DESC
         """
     )
@@ -143,9 +141,8 @@ def load_all_bets() -> pd.DataFrame:
     with engine.connect() as conn:
         df = pd.read_sql(query, conn)
 
-    # Basic cleaning
-    numeric_cols = ["stake", "odds", "payout"]
-    for col in numeric_cols:
+    # numeric cleanup
+    for col in ["stake", "odds", "payout"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
@@ -153,11 +150,11 @@ def load_all_bets() -> pd.DataFrame:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce")
 
-    # Profit only for settled bets; pending = NaN
+    # profit only for settled bets
     df["profit"] = None
     settled_mask = df["result"].isin(
         ["WIN", "WON", "LOSS", "LOST", "VOID", "CANCELLED"]
-    )
+    ) & df["payout"].notna()
     df.loc[settled_mask, "profit"] = (
         df.loc[settled_mask, "payout"] - df.loc[settled_mask, "stake"]
     )
