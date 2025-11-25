@@ -455,6 +455,13 @@ def main():
         st.exception(e)
         return
 
+    with st.expander("Debug: last 20 raw bets"):
+        st.dataframe(
+            df[["created_at", "match_date", "product", "home_team", "away_team", "result", "mode", "stake", "odds"]]
+            .head(20),
+            use_container_width=True,
+        )
+
     # Tabs for different products
     overview_tab, exact_tab, singles_tab, sgp_tab, women_tab, basket_tab = st.tabs(
         [
