@@ -758,9 +758,21 @@ def render_sgp_parlays_tab():
                 ev_bg = "rgba(148,163,184,0.10)"
                 ev_border = "rgba(148,163,184,0.6)"
 
-            legs_text = row.get("parlay_description") or row.get("legs") or ""
-            legs_text = str(legs_text) if legs_text else ""
-            legs_html = "<br>".join([f"• {l.strip()}" for l in legs_text.split(",") if l.strip()])
+            # Build legs text from whatever columns we found
+            leg_cols = ["parlay_description", "legs", "leg_summary", "bet_legs", "markets", "selections", "description"]
+            legs_parts = []
+            for col in leg_cols:
+                val = row.get(col)
+                if val is None:
+                    continue
+                val_str = str(val).strip()
+                if not val_str or val_str.lower() == 'none':
+                    continue
+                legs_parts.append(val_str)
+                break  # Use first non-empty column found
+
+            legs_text = " | ".join(legs_parts)
+            legs_html = "<br>".join([f"• {p}" for p in legs_text.split(",") if p.strip()]) if legs_parts else ""
 
             # Format match date
             match_dt = pd.to_datetime(row.get("match_date"), errors="coerce")
