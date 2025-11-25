@@ -332,8 +332,8 @@ def render_overview(df: pd.DataFrame):
 
     settled = df[df["profit"].notna()].copy()
     if not settled.empty:
-        settled["date"] = settled["settled_at"].fillna(settled["match_date"])
-        settled["date"] = settled["date"].dt.date
+        settled["date"] = settled["settled_at"].fillna(pd.to_datetime(settled["match_date"], errors="coerce"))
+        settled["date"] = pd.to_datetime(settled["date"], errors="coerce").dt.date
         curve = (
             settled.groupby("date")["profit"]
             .sum()
@@ -421,8 +421,8 @@ def render_product_tab(
     st.markdown("##### Equity Curve")
     settled = data[data["profit"].notna()].copy()
     if not settled.empty:
-        settled["date"] = settled["settled_at"].fillna(settled["match_date"])
-        settled["date"] = settled["date"].dt.date
+        settled["date"] = settled["settled_at"].fillna(pd.to_datetime(settled["match_date"], errors="coerce"))
+        settled["date"] = pd.to_datetime(settled["date"], errors="coerce").dt.date
         curve = (
             settled.groupby("date")["profit"]
             .sum()
