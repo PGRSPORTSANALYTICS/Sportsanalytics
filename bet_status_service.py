@@ -5,9 +5,50 @@ Provides real-time bet tracking for dashboard and Telegram bot
 
 import pandas as pd
 from datetime import datetime, timedelta
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 import pytz
 from db_connection import DatabaseConnection
+
+
+def normalize_result(raw_result: Optional[str]) -> str:
+    """
+    Normalize all possible result variants to: WON, LOST, PENDING, VOID.
+    Supports English and Swedish terminology.
+    """
+    if raw_result is None:
+        return "PENDING"
+
+    s = raw_result.strip().lower()
+
+    win_keywords = [
+        "won", "win", "wins", "winner",
+        "vinst", "vunnit", "vinna", "green",
+        "success"
+    ]
+
+    loss_keywords = [
+        "lost", "loss", "förlust",
+        "förlorat", "red"
+    ]
+
+    void_keywords = [
+        "void", "push", "refunded",
+        "money back", "pushed", "voided",
+        "tie", "draw", "oavgjort"
+    ]
+
+    if any(k in s for k in win_keywords):
+        return "WON"
+    if any(k in s for k in loss_keywords):
+        return "LOST"
+    if any(k in s for k in void_keywords):
+        return "VOID"
+
+    if s in ["pending", "open", "not settled", "running", "live", ""]:
+        return "PENDING"
+
+    return "PENDING"
+
 
 class BetStatusService:
     """Centralized service for monitoring all bets across all products"""

@@ -7,6 +7,7 @@ import json
 from datetime import datetime, timedelta
 import time
 import logging
+from typing import Optional
 from db_helper import db_helper
 from team_name_mapper import TeamNameMapper
 from selenium import webdriver
@@ -18,6 +19,46 @@ from selenium.common.exceptions import TimeoutException
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def normalize_result(raw_result: Optional[str]) -> str:
+    """
+    Normalize all possible result variants to: WON, LOST, PENDING, VOID.
+    Supports English and Swedish terminology.
+    """
+    if raw_result is None:
+        return "PENDING"
+
+    s = raw_result.strip().lower()
+
+    win_keywords = [
+        "won", "win", "wins", "winner",
+        "vinst", "vunnit", "vinna", "green",
+        "success"
+    ]
+
+    loss_keywords = [
+        "lost", "loss", "förlust",
+        "förlorat", "red"
+    ]
+
+    void_keywords = [
+        "void", "push", "refunded",
+        "money back", "pushed", "voided",
+        "tie", "draw", "oavgjort"
+    ]
+
+    if any(k in s for k in win_keywords):
+        return "WON"
+    if any(k in s for k in loss_keywords):
+        return "LOST"
+    if any(k in s for k in void_keywords):
+        return "VOID"
+
+    if s in ["pending", "open", "not settled", "running", "live", ""]:
+        return "PENDING"
+
+    return "PENDING"
 
 class ResultsScraper:
     def __init__(self, db_path='data/real_football.db'):
