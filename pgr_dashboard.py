@@ -214,6 +214,18 @@ def load_all_bets() -> pd.DataFrame:
     with engine.connect() as conn:
         df = pd.read_sql(query, conn)
 
+    if df.empty:
+        st.info("No parlays in the database yet.")
+        return df
+
+    # Find any columns that look like "legs" / selections
+    leg_cols = [
+        c for c in df.columns
+        if c.lower() in ("leg_summary", "bet_legs", "markets", "selections", "description")
+        or c.lower().startswith("leg_")
+        or c.lower().endswith("_legs")
+    ]
+
     # numeric cleanup
     for col in ["stake", "odds", "payout"]:
         if col in df.columns:
