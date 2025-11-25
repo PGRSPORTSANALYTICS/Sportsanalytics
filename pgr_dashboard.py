@@ -207,7 +207,9 @@ def load_all_bets() -> pd.DataFrame:
             away_team,
             match_date,
             legs,
-            parlay_description
+            parlay_description,
+            ev,
+            selection
         FROM all_bets
         ORDER BY created_at DESC
         """
@@ -621,6 +623,11 @@ def render_product_tab(
             fixture = f"{home_team} vs {away_team}" if away_team else home_team
             odds_val = float(row.get('odds', 0))
             stake_val = float(row.get('stake', 100))
+            
+            selection = str(row.get('selection', '')).replace('"', '&quot;')
+            if not selection or selection.lower() == 'none':
+                selection = ""
+            bet_display = selection.replace("Exact Score: ", "").replace("Value Single: ", "") if selection else ""
 
             card_html = f"""<div style="padding:18px;margin:10px 0;border-radius:16px;background:radial-gradient(circle at top left, rgba(0,255,166,0.14), rgba(15,23,42,0.96));border:1px solid rgba(0,255,166,0.35);box-shadow:0 0 20px rgba(0,255,166,0.25);">
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
@@ -628,13 +635,14 @@ def render_product_tab(
 <div style="font-size:11px;padding:4px 9px;border-radius:999px;background:{ev_bg};border:1px solid {ev_border};color:#E5E7EB;text-transform:uppercase;letter-spacing:0.06em;">EV {ev:+.1f}%</div>
 </div>
 <div style="font-size:12px;color:#9CA3AF;margin-bottom:6px;">Kickoff: {match_str}</div>
+<div style="font-size:22px;font-weight:700;color:#00FFA6;margin:8px 0;letter-spacing:0.02em;">{bet_display}</div>
 <div style="display:flex;gap:18px;align-items:baseline;margin-top:4px;">
 <div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Odds</div><div style="font-size:20px;font-weight:600;color:#00FFA6;">{odds_val:.2f}</div></div>
 <div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">{stake_val:.0f} kr</div></div>
 </div>
 </div>"""
             st.markdown(card_html, unsafe_allow_html=True)
-            st.code(f"{fixture} | Odds {odds_val:.2f} | Stake {stake_val:.0f} kr", language="text")
+            st.code(f"{fixture} | {bet_display} | Odds {odds_val:.2f} | Stake {stake_val:.0f} kr", language="text")
 
     st.markdown("---")
 
