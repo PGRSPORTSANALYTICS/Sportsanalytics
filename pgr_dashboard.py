@@ -771,73 +771,39 @@ def render_sgp_parlays_tab():
                 legs_parts.append(val_str)
                 break  # Use first non-empty column found
 
-            legs_text = " | ".join(legs_parts)
-            legs_html = "<br>".join([f"• {p}" for p in legs_text.split(",") if p.strip()]) if legs_parts else ""
+            legs_text = legs_parts[0] if legs_parts else ""
+            legs_list = [p.strip() for p in legs_text.split(",") if p.strip()]
+            legs_html = "".join([f"<div style='margin:2px 0;'>• {p}</div>" for p in legs_list]) if legs_list else "<i>No leg details stored</i>"
 
             # Format match date
             match_dt = pd.to_datetime(row.get("match_date"), errors="coerce")
             match_str = match_dt.strftime("%d %b %H:%M") if pd.notna(match_dt) else str(row.get("match_date", ""))
 
-            with st.container():
-                st.markdown(
-                    f"""
-                    <div style="
-                        padding:18px 18px;
-                        margin:10px 0;
-                        border-radius:16px;
-                        background:radial-gradient(circle at top left, rgba(0,255,166,0.14), rgba(15,23,42,0.96));
-                        border:1px solid rgba(0,255,166,0.35);
-                        box-shadow:0 0 20px rgba(0,255,166,0.25);
-                        transition:all 0.18s ease-out;
-                    ">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-                            <div style="font-size:18px;font-weight:600;color:#E5E7EB;">
-                                {row['home_team']} – {row['away_team']}
-                            </div>
-                            <div style="
-                                font-size:11px;
-                                padding:4px 9px;
-                                border-radius:999px;
-                                background:{ev_bg};
-                                border:1px solid {ev_border};
-                                color:#E5E7EB;
-                                text-transform:uppercase;
-                                letter-spacing:0.06em;
-                            ">
-                                EV {ev:+.1f}%
-                            </div>
-                        </div>
+            home_team = str(row.get('home_team', '')).replace('"', '&quot;')
+            away_team = str(row.get('away_team', '')).replace('"', '&quot;')
+            odds_val = float(row.get('odds', 0))
+            stake_val = float(row.get('stake', 0))
 
-                        <div style="font-size:12px;color:#9CA3AF;margin-bottom:6px;">
-                            Kickoff: {match_str}
-                        </div>
+            card_html = f"""<div style="padding:18px;margin:10px 0;border-radius:16px;background:radial-gradient(circle at top left, rgba(0,255,166,0.14), rgba(15,23,42,0.96));border:1px solid rgba(0,255,166,0.35);box-shadow:0 0 20px rgba(0,255,166,0.25);">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+<div style="font-size:18px;font-weight:600;color:#E5E7EB;">{home_team} – {away_team}</div>
+<div style="font-size:11px;padding:4px 9px;border-radius:999px;background:{ev_bg};border:1px solid {ev_border};color:#E5E7EB;text-transform:uppercase;letter-spacing:0.06em;">EV {ev:+.1f}%</div>
+</div>
+<div style="font-size:12px;color:#9CA3AF;margin-bottom:6px;">Kickoff: {match_str}</div>
+<div style="font-size:13px;color:#CBD5F5;margin-bottom:8px;">
+<span style="font-weight:600;color:#E5E7EB;">SGP legs:</span>
+{legs_html}
+</div>
+<div style="display:flex;gap:18px;align-items:baseline;margin-top:4px;">
+<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Odds</div><div style="font-size:20px;font-weight:600;color:#00FFA6;">{odds_val:.2f}</div></div>
+<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">{stake_val:.0f} kr</div></div>
+</div>
+</div>"""
 
-                        <div style="font-size:13px;color:#CBD5F5;margin-bottom:8px;">
-                            <span style="font-weight:600;color:#E5E7EB;">SGP legs:</span><br>
-                            {legs_html if legs_html else '<i>No leg details stored</i>'}
-                        </div>
+            st.markdown(card_html, unsafe_allow_html=True)
 
-                        <div style="display:flex;gap:18px;align-items:baseline;margin-top:4px;">
-                            <div>
-                                <div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Odds</div>
-                                <div style="font-size:20px;font-weight:600;color:#00FFA6;">
-                                    {row['odds']:.2f}
-                                </div>
-                            </div>
-                            <div>
-                                <div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div>
-                                <div style="font-size:18px;font-weight:500;color:#E5E7EB;">
-                                    {row['stake']:.0f} kr
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-
-                bet_string = f"{row['home_team']} – {row['away_team']} | SGP: {legs_text} | Odds {row['odds']:.2f} | Stake {row['stake']:.0f} kr"
-                st.code(bet_string, language="text")
+            bet_string = f"{home_team} – {away_team} | SGP: {legs_text} | Odds {odds_val:.2f} | Stake {stake_val:.0f} kr"
+            st.code(bet_string, language="text")
 
     st.markdown("---")
     st.markdown("### Parlay history")
