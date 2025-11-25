@@ -556,7 +556,7 @@ class SGPPredictor:
             return []
         
         # Generate SGP combinations (max 4 legs, target 10x max odds)
-        # GOAL-BASED ONLY - no corners/shots (cannot verify)
+        # GOAL-BASED + TOTAL CORNERS (SofaScore verification enabled)
         sgp_combinations = [
             # ========== SINGLE-LEG SGPs ==========
             
@@ -645,6 +645,28 @@ class SGPPredictor:
                 'description': 'Over 2.5 + BTTS + 2H Goals'
             },
             
+            # ========== 3-LEG CORNERS COMBOS (~7-10x) ==========
+            
+            # Corners 10.5+ + Over 3.5 + BTTS (~7-8x) - Lille-style winner!
+            {
+                'legs': [
+                    {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 10.5},
+                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 3.5},
+                    {'market_type': 'BTTS', 'outcome': 'YES'}
+                ],
+                'description': 'Corners 10.5+ + Over 3.5 + BTTS'
+            },
+            
+            # Corners 9.5+ + Over 2.5 + BTTS (~5-6x) - Easier corners line
+            {
+                'legs': [
+                    {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 9.5},
+                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
+                    {'market_type': 'BTTS', 'outcome': 'YES'}
+                ],
+                'description': 'Corners 9.5+ + Over 2.5 + BTTS'
+            },
+            
             # ========== 4-LEG COMBOS (MAX ~10x) ==========
             
             # Over 2.5 + BTTS + 1H + 2H (~8x)
@@ -656,6 +678,17 @@ class SGPPredictor:
                     {'market_type': 'SECOND_HALF_GOALS', 'outcome': 'OVER', 'line': 0.5}
                 ],
                 'description': 'Over 2.5 + BTTS + Goals Both Halves'
+            },
+            
+            # Corners 10.5+ + Over 3.5 + 1H Over 1.5 + BTTS (~10x) - Lille winning combo!
+            {
+                'legs': [
+                    {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 10.5},
+                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 3.5},
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 1.5},
+                    {'market_type': 'BTTS', 'outcome': 'YES'}
+                ],
+                'description': 'Corners 10.5+ + Over 3.5 + 1H Over 1.5 + BTTS'
             },
             
             # Over 3.5 + BTTS + 1H + 2H (~10x max)
