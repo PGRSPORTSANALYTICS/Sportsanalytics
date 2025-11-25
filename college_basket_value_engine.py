@@ -192,7 +192,8 @@ class CollegeBasketValueEngine:
         client: OddsAPIClient,
         min_ev: float = 0.03,
         min_conf: float = 0.50,
-        max_picks_per_cycle: int = 30,
+        max_singles: int = 10,
+        max_parlays: int = 3,
         min_odds: float = 1.40,
         max_odds: float = 5.50,
         allow_parlays: bool = True,
@@ -200,7 +201,8 @@ class CollegeBasketValueEngine:
         self.client = client
         self.min_ev = min_ev
         self.min_conf = min_conf
-        self.max_picks = max_picks_per_cycle
+        self.max_singles = max_singles
+        self.max_parlays = max_parlays
         self.min_odds = min_odds
         self.max_odds = max_odds
         self.allow_parlays = allow_parlays
@@ -421,16 +423,25 @@ class CollegeBasketValueEngine:
                             )
 
         all_picks.sort(key=lambda x: (x.ev, x.confidence), reverse=True)
-        value_picks = all_picks[: self.max_picks]
+        
+        # Limit singles to max_singles
+        singles = all_picks[: self.max_singles]
 
-        if self.allow_parlays and value_picks:
-            top_for_parlay = value_picks[:25]
+        if self.allow_parlays and singles:
+            # Build parlays from top singles
+            top_for_parlay = all_picks[:25]
             parlays_3 = build_parlays(top_for_parlay, legs=3, min_parlay_ev=0.02)
             parlays_4 = build_parlays(top_for_parlay, legs=4, min_parlay_ev=0.03)
-            value_picks.extend(parlays_3)
-            value_picks.extend(parlays_4)
-            value_picks.sort(key=lambda x: (x.ev, x.confidence), reverse=True)
-            value_picks = value_picks[: self.max_picks]
+            
+            # Combine and sort all parlays, then limit to max_parlays
+            all_parlays = parlays_3 + parlays_4
+            all_parlays.sort(key=lambda x: x.ev, reverse=True)
+            parlays = all_parlays[: self.max_parlays]
+            
+            # Combine singles and parlays
+            value_picks = singles + parlays
+        else:
+            value_picks = singles
 
         return value_picks
 
