@@ -9,6 +9,7 @@ from typing import Dict, Optional
 from api_football_client import APIFootballClient
 from team_name_mapper import TeamNameMapper
 from db_helper import db_helper
+from sofascore_scraper import SofaScoreScraper
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -25,7 +26,8 @@ class MatchStatsService:
     def __init__(self):
         self.api_client = APIFootballClient()
         self.team_mapper = TeamNameMapper()
-        logger.info("✅ MatchStatsService initialized")
+        self.sofascore = SofaScoreScraper()
+        logger.info("✅ MatchStatsService initialized with SofaScore fallback")
     
     def get_match_stats(self, home_team: str, away_team: str, match_date: str, fixture_id: Optional[int] = None) -> Optional[Dict]:
         """
@@ -52,21 +54,38 @@ class MatchStatsService:
             return cached_stats
         
         # Step 2: Fetch from API-Football if not cached
+        enriched_stats = None
         if not fixture_id:
             # Need to find fixture_id first
             fixture_id = self._find_fixture_id(home_team, away_team, date_str)
-            if not fixture_id:
-                logger.warning(f"⚠️ Could not find fixture ID for {home_team} vs {away_team}")
-                return None
         
-        # Fetch detailed fixture data
-        enriched_stats = self._fetch_enriched_stats(fixture_id, home_team, away_team)
+        if fixture_id:
+            # Fetch detailed fixture data from API-Football
+            enriched_stats = self._fetch_enriched_stats(fixture_id, home_team, away_team)
+        
+        # Step 3: If API-Football failed or missing corners, try SofaScore fallback
+        if not enriched_stats or enriched_stats.get('corners') is None:
+            logger.info(f"🔄 Trying SofaScore fallback for {home_team} vs {away_team}")
+            sofascore_stats = self.sofascore.get_match_statistics(home_team, away_team, date_str)
+            
+            if sofascore_stats:
+                if not enriched_stats:
+                    # Use SofaScore entirely
+                    enriched_stats = sofascore_stats
+                else:
+                    # Merge - add corners from SofaScore to API-Football data
+                    if sofascore_stats.get('corners') is not None:
+                        enriched_stats['corners'] = sofascore_stats['corners']
+                        enriched_stats['corners_total'] = sofascore_stats['corners']
+                        enriched_stats['source'] = 'api-football+sofascore'
+                        logger.info(f"📐 Added corners from SofaScore: {sofascore_stats['corners']}")
         
         if enriched_stats:
-            # Step 3: Save to cache for future use
+            # Step 4: Save to cache for future use
             self._save_to_cache(home_norm, away_norm, date_str, enriched_stats)
             return enriched_stats
         
+        logger.warning(f"⚠️ Could not get stats for {home_team} vs {away_team} from any source")
         return None
     
     def _get_cached_stats(self, home_team: str, away_team: str, date_str: str) -> Optional[Dict]:

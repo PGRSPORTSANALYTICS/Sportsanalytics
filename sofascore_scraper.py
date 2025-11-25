@@ -465,6 +465,130 @@ class SofaScoreScraper:
         return all_fixtures
 
 
+    def get_match_statistics(self, home_team: str, away_team: str, match_date: str) -> Optional[Dict]:
+        """
+        Fetch detailed match statistics (corners, half-time score) from SofaScore
+        
+        Args:
+            home_team: Home team name
+            away_team: Away team name
+            match_date: Match date (YYYY-MM-DD format)
+        
+        Returns:
+            Dictionary with score, corners, half_time_goals, etc. or None if not found
+        """
+        try:
+            logger.info(f"🔍 SofaScore: Looking for {home_team} vs {away_team} on {match_date}")
+            
+            # Parse date
+            date_obj = datetime.strptime(match_date.split('T')[0], '%Y-%m-%d')
+            date_str = date_obj.strftime('%Y-%m-%d')
+            
+            # Search for events on this date
+            events_endpoint = f"sport/football/scheduled-events/{date_str}"
+            events_data = self._make_request(events_endpoint)
+            
+            if not events_data or 'events' not in events_data:
+                logger.warning(f"⚠️ No SofaScore events found for {date_str}")
+                return None
+            
+            # Normalize team names for matching
+            home_norm = home_team.lower().replace(' fc', '').replace(' cf', '').strip()
+            away_norm = away_team.lower().replace(' fc', '').replace(' cf', '').strip()
+            
+            # Find matching event
+            event_id = None
+            for event in events_data.get('events', []):
+                event_home = event.get('homeTeam', {}).get('name', '').lower()
+                event_away = event.get('awayTeam', {}).get('name', '').lower()
+                
+                # Flexible matching
+                if (home_norm in event_home or event_home in home_norm) and \
+                   (away_norm in event_away or event_away in away_norm):
+                    event_id = event.get('id')
+                    logger.info(f"✅ Found event ID {event_id}: {event_home} vs {event_away}")
+                    break
+            
+            if not event_id:
+                logger.warning(f"⚠️ No matching event found for {home_team} vs {away_team}")
+                return None
+            
+            # Get event details (includes score and half-time)
+            event_endpoint = f"event/{event_id}"
+            event_data = self._make_request(event_endpoint)
+            
+            if not event_data or 'event' not in event_data:
+                logger.warning(f"⚠️ No event data for ID {event_id}")
+                return None
+            
+            event = event_data['event']
+            
+            # Check if match is finished
+            status = event.get('status', {}).get('type')
+            if status != 'finished':
+                logger.info(f"⏳ Match not finished yet (status: {status})")
+                return None
+            
+            # Extract scores
+            home_score = event.get('homeScore', {}).get('current', 0)
+            away_score = event.get('awayScore', {}).get('current', 0)
+            
+            # Half-time scores (period1)
+            ht_home = event.get('homeScore', {}).get('period1')
+            ht_away = event.get('awayScore', {}).get('period1')
+            
+            # Get statistics (corners, etc.)
+            stats_endpoint = f"event/{event_id}/statistics"
+            stats_data = self._make_request(stats_endpoint)
+            
+            corners_total = None
+            if stats_data and 'statistics' in stats_data:
+                # SofaScore returns stats by period - we want "ALL" period
+                for period_stats in stats_data.get('statistics', []):
+                    if period_stats.get('period') == 'ALL':
+                        groups = period_stats.get('groups', [])
+                        for group in groups:
+                            for stat_item in group.get('statisticsItems', []):
+                                if stat_item.get('name') == 'Corner kicks':
+                                    home_corners = int(stat_item.get('home', '0'))
+                                    away_corners = int(stat_item.get('away', '0'))
+                                    corners_total = home_corners + away_corners
+                                    logger.info(f"📐 Corners: {home_corners} + {away_corners} = {corners_total}")
+                                    break
+                        break
+            
+            # Build result
+            total_goals = home_score + away_score
+            half_time_goals = None
+            second_half_goals = None
+            
+            if ht_home is not None and ht_away is not None:
+                half_time_goals = ht_home + ht_away
+                second_half_goals = total_goals - half_time_goals
+            
+            result = {
+                'score': f"{home_score}-{away_score}",
+                'actual_score': f"{home_score}-{away_score}",
+                'home_goals': home_score,
+                'away_goals': away_score,
+                'total_goals': total_goals,
+                'corners': corners_total,
+                'corners_total': corners_total,
+                'half_time_goals': half_time_goals,
+                'ht_home_goals': ht_home,
+                'ht_away_goals': ht_away,
+                'second_half_goals': second_half_goals,
+                'source': 'sofascore'
+            }
+            
+            logger.info(f"✅ SofaScore stats: {home_team} {home_score}-{away_score} {away_team}, HT: {ht_home}-{ht_away}, Corners: {corners_total}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"❌ SofaScore match statistics error: {e}")
+            return None
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     
