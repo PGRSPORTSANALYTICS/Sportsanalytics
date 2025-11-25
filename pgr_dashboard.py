@@ -205,7 +205,9 @@ def load_all_bets() -> pd.DataFrame:
             settled_at,
             home_team,
             away_team,
-            match_date
+            match_date,
+            legs,
+            parlay_description
         FROM all_bets
         ORDER BY created_at DESC
         """
@@ -311,6 +313,23 @@ def as_fixture(r):
     ht = str(r.get("home_team", "")).strip()
     at = str(r.get("away_team", "")).strip()
     return f"{ht} – {at}".strip(" –")
+
+
+def build_legs_display(row, leg_cols):
+    """Build legs text from available leg columns."""
+    legs_parts = []
+    for col in leg_cols:
+        val = row.get(col)
+        if val is None:
+            continue
+        val_str = str(val).strip()
+        if not val_str or val_str.lower() == 'none':
+            continue
+        legs_parts.append(val_str)
+    
+    legs_text = " | ".join(legs_parts)
+    legs_html = "<br>".join([f"• {p}" for p in legs_parts]) if legs_parts else ""
+    return legs_text, legs_html
 
 
 def roi_series(settled: pd.DataFrame):
@@ -522,7 +541,14 @@ def render_product_tab(
                 dt = dt.dt.tz_localize(None)
             active["kickoff"] = dt.dt.strftime("%d %b %H:%M").fillna("")
         active["fixture"] = active.apply(as_fixture, axis=1)
-        cols_active = [c for c in ["kickoff", "fixture", "odds", "stake", "mode"] if c in active.columns]
+        
+        # Add legs display for SGP products
+        if "parlay_description" in active.columns:
+            active["legs"] = active["parlay_description"].apply(
+                lambda x: str(x) if x and str(x).lower() != 'none' else ""
+            )
+        
+        cols_active = [c for c in ["kickoff", "fixture", "legs", "odds", "stake", "mode"] if c in active.columns and not active[c].isna().all()]
         st.dataframe(
             active[cols_active].sort_values("kickoff" if "kickoff" in cols_active else cols_active[0]),
             use_container_width=True,
@@ -583,7 +609,14 @@ def render_product_tab(
                 dt_match = dt_match.dt.tz_localize(None)
             settled["match"] = dt_match.dt.strftime("%d %b %H:%M").fillna("")
         settled["fixture"] = settled.apply(as_fixture, axis=1)
-        cols_hist = [c for c in ["settled", "match", "fixture", "odds", "stake", "payout", "profit", "result"] if c in settled.columns]
+        
+        # Add legs display for SGP products
+        if "parlay_description" in settled.columns:
+            settled["legs"] = settled["parlay_description"].apply(
+                lambda x: str(x) if x and str(x).lower() != 'none' else ""
+            )
+        
+        cols_hist = [c for c in ["settled", "match", "fixture", "legs", "odds", "stake", "payout", "profit", "result"] if c in settled.columns and not settled[c].isna().all()]
         st.dataframe(
             settled.sort_values("settled_at", ascending=False)[cols_hist],
             use_container_width=True,
