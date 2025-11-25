@@ -20,92 +20,68 @@ from datetime import date
 from db_helper import db_helper
 
 def get_all_time_stats() -> Dict:
-    """Get combined all-time statistics from both tables"""
-    # Exact Score stats - only count settled predictions with valid outcome
-    exact_row = db_helper.execute('''
+    """Get combined all-time statistics from unified results_roi table"""
+    
+    def get_product_stats(product_type: str):
+        """Get stats for a specific product from results_roi"""
+        row = db_helper.execute('''
+            SELECT 
+                COUNT(*) as total,
+                SUM(CASE WHEN is_won THEN 1 ELSE 0 END) as wins,
+                SUM(profit) as profit,
+                SUM(stake) as staked
+            FROM results_roi
+            WHERE product_type = %s
+        ''', (product_type,), fetch='one')
+        total, wins, profit, staked = row if row else (0, 0, 0.0, 0.0)
+        total = total or 0
+        wins = wins or 0
+        profit = profit or 0.0
+        staked = staked or 0.0
+        losses = total - wins
+        hit_rate = (wins / total * 100) if total > 0 else 0.0
+        return {
+            'total': total,
+            'wins': wins,
+            'losses': losses,
+            'hit_rate': round(hit_rate, 1),
+            'profit': round(profit, 2),
+            'staked': round(staked, 2)
+        }
+    
+    # Get stats for each product
+    exact_stats = get_product_stats('football_single')
+    sgp_stats = get_product_stats('sgp')
+    vs_stats = get_product_stats('value_single')
+    
+    # Combined stats
+    combined_row = db_helper.execute('''
         SELECT 
             COUNT(*) as total,
-            SUM(CASE WHEN outcome IN ('win', 'won') THEN 1 ELSE 0 END) as wins,
-            SUM(profit_loss) as profit,
+            SUM(CASE WHEN is_won THEN 1 ELSE 0 END) as wins,
+            SUM(profit) as profit,
             SUM(stake) as staked
-        FROM football_opportunities 
-        WHERE market = 'exact_score' AND outcome IN ('win', 'won', 'loss', 'lost')
+        FROM results_roi
     ''', (), fetch='one')
-    exact_total, exact_wins, exact_profit, exact_staked = exact_row if exact_row else (0, 0, 0.0, 0.0)
-    exact_losses = exact_total - (exact_wins or 0)
-    exact_hit_rate = (exact_wins / exact_total * 100) if exact_total > 0 else 0.0
-    
-    # SGP stats - only count settled predictions with valid outcome (EXCLUDE MonsterSGP - entertainment only)
-    # Note: Handle both 'win'/'won' and 'loss'/'lost' due to historical data inconsistency
-    sgp_row = db_helper.execute('''
-        SELECT 
-            COUNT(*) as total,
-            SUM(CASE WHEN outcome IN ('win', 'won') THEN 1 ELSE 0 END) as wins,
-            SUM(profit_loss) as profit,
-            SUM(stake) as staked
-        FROM sgp_predictions 
-        WHERE outcome IN ('win', 'won', 'loss', 'lost')
-          AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
-          AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
-    ''', ('%Monster%', '%BEAST%'), fetch='one')
-    sgp_total, sgp_wins, sgp_profit, sgp_staked = sgp_row if sgp_row else (0, 0, 0.0, 0.0)
-    sgp_losses = sgp_total - (sgp_wins or 0)
-    sgp_hit_rate = (sgp_wins / sgp_total * 100) if sgp_total > 0 else 0.0
-    
-    # Value Singles stats - only count settled predictions with valid outcome
-    vs_row = db_helper.execute('''
-        SELECT 
-            COUNT(*) as total,
-            SUM(CASE WHEN outcome IN ('win', 'won') THEN 1 ELSE 0 END) as wins,
-            SUM(profit_loss) as profit,
-            SUM(stake) as staked
-        FROM football_opportunities 
-        WHERE market = 'Value Single' AND outcome IN ('win', 'won', 'loss', 'lost')
-    ''', (), fetch='one')
-    vs_total, vs_wins, vs_profit, vs_staked = vs_row if vs_row else (0, 0, 0.0, 0.0)
-    vs_losses = vs_total - (vs_wins or 0)
-    vs_hit_rate = (vs_wins / vs_total * 100) if vs_total > 0 else 0.0
-    
-    # Combined stats (ES + regular SGP only)
-    combined_total = (exact_total or 0) + (sgp_total or 0)
-    combined_wins = (exact_wins or 0) + (sgp_wins or 0)
-    combined_losses = (exact_losses or 0) + (sgp_losses or 0)
-    combined_profit = (exact_profit or 0.0) + (sgp_profit or 0.0)
-    combined_staked = (exact_staked or 0.0) + (sgp_staked or 0.0)
-    combined_hit_rate = (combined_wins / combined_total * 100) if combined_total > 0 else 0.0
+    c_total, c_wins, c_profit, c_staked = combined_row if combined_row else (0, 0, 0.0, 0.0)
+    c_total = c_total or 0
+    c_wins = c_wins or 0
+    c_profit = c_profit or 0.0
+    c_staked = c_staked or 0.0
+    c_losses = c_total - c_wins
+    c_hit_rate = (c_wins / c_total * 100) if c_total > 0 else 0.0
     
     return {
-        'exact_score': {
-            'total': exact_total or 0,
-            'wins': exact_wins or 0,
-            'losses': exact_losses or 0,
-            'hit_rate': round(exact_hit_rate, 1),
-            'profit': round(exact_profit or 0.0, 2),
-            'staked': round(exact_staked or 0.0, 2)
-        },
-        'sgp': {
-            'total': sgp_total or 0,
-            'wins': sgp_wins or 0,
-            'losses': sgp_losses or 0,
-            'hit_rate': round(sgp_hit_rate, 1),
-            'profit': round(sgp_profit or 0.0, 2),
-            'staked': round(sgp_staked or 0.0, 2)
-        },
-        'value_singles': {
-            'total': vs_total or 0,
-            'wins': vs_wins or 0,
-            'losses': vs_losses or 0,
-            'hit_rate': round(vs_hit_rate, 1),
-            'profit': round(vs_profit or 0.0, 2),
-            'staked': round(vs_staked or 0.0, 2)
-        },
+        'exact_score': exact_stats,
+        'sgp': sgp_stats,
+        'value_singles': vs_stats,
         'combined': {
-            'total': combined_total,
-            'wins': combined_wins,
-            'losses': combined_losses,
-            'hit_rate': round(combined_hit_rate, 1),
-            'profit': round(combined_profit, 2),
-            'staked': round(combined_staked, 2)
+            'total': c_total,
+            'wins': c_wins,
+            'losses': c_losses,
+            'hit_rate': round(c_hit_rate, 1),
+            'profit': round(c_profit, 2),
+            'staked': round(c_staked, 2)
         }
     }
 

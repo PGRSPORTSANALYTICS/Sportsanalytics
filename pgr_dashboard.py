@@ -233,157 +233,96 @@ def get_rolling_roi_data(days=30):
     }
 
 def get_last_n_hit_rate(n=200, product='all'):
-    """Get hit rate for last N bets - product-specific"""
-    if product == 'exact_score':
+    """Get hit rate for last N bets from unified results_roi table"""
+    product_map = {
+        'exact_score': 'football_single',
+        'sgp': 'sgp',
+        'value_singles': 'value_single'
+    }
+    
+    if product == 'all':
         query = """
-            SELECT outcome
-            FROM football_opportunities
-            WHERE outcome IN (%s, %s)
-            ORDER BY settled_timestamp DESC
+            SELECT is_won
+            FROM results_roi
+            ORDER BY created_at DESC
             LIMIT %s
         """
-        rows = db_helper.execute(query, ('win', 'loss', n), fetch='all')
-        
-    elif product == 'sgp':
+        rows = db_helper.execute(query, (n,), fetch='all')
+    else:
+        product_type = product_map.get(product, product)
         query = """
-            SELECT outcome
-            FROM sgp_predictions
-            WHERE outcome IN ('win', 'won', 'loss', 'lost')
-              AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
-              AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
-            ORDER BY settled_timestamp DESC
+            SELECT is_won
+            FROM results_roi
+            WHERE product_type = %s
+            ORDER BY created_at DESC
             LIMIT %s
         """
-        rows = db_helper.execute(query, ('%Monster%', '%BEAST%', n), fetch='all')
-        
-    elif product == 'value_singles':
-        query = """
-            SELECT outcome
-            FROM football_opportunities
-            WHERE outcome IN (%s, %s)
-              AND market = %s
-            ORDER BY settled_timestamp DESC
-            LIMIT %s
-        """
-        rows = db_helper.execute(query, ('win', 'loss', 'Value Single', n), fetch='all')
-        
-    else:  # 'all' - combined
-        query = """
-            SELECT outcome
-            FROM (
-                SELECT outcome, settled_timestamp
-                FROM football_opportunities
-                WHERE outcome IN ('win', 'won', 'loss', 'lost')
-                
-                UNION ALL
-                
-                SELECT outcome, settled_timestamp
-                FROM sgp_predictions
-                WHERE outcome IN ('win', 'won', 'loss', 'lost')
-                  AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
-                  AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
-            ) combined
-            WHERE settled_timestamp IS NOT NULL
-            ORDER BY settled_timestamp DESC
-            LIMIT %s
-        """
-        rows = db_helper.execute(query, ('%Monster%', '%BEAST%', n), fetch='all')
+        rows = db_helper.execute(query, (product_type, n), fetch='all')
     
     if not rows:
         return 0.0
     
-    # Count wins - handle both 'win' and 'won' formats
-    wins = sum(1 for row in rows if row[0] in ('win', 'won'))
+    wins = sum(1 for row in rows if row[0])
     return (wins / len(rows) * 100) if rows else 0.0
 
 def get_avg_odds(product='all'):
-    """Get average odds - product-specific"""
-    if product == 'exact_score':
+    """Get average odds from unified results_roi table"""
+    product_map = {
+        'exact_score': 'football_single',
+        'sgp': 'sgp',
+        'value_singles': 'value_single'
+    }
+    
+    if product == 'all':
         query = """
-            SELECT AVG(odds) as avg_odds
-            FROM football_opportunities
-            WHERE market = 'exact_score' AND outcome IN ('win', 'loss')
+            SELECT AVG(CASE WHEN stake > 0 THEN payout / stake ELSE 0 END) as avg_odds
+            FROM results_roi
+            WHERE is_won = true
         """
         row = db_helper.execute(query, fetch='one')
-        
-    elif product == 'sgp':
+    else:
+        product_type = product_map.get(product, product)
         query = """
-            SELECT AVG(bookmaker_odds) as avg_odds
-            FROM sgp_predictions
-            WHERE outcome IN ('win', 'won', 'loss', 'lost')
-              AND (parlay_description IS NULL OR parlay_description NOT LIKE '%%Monster%%')
-              AND (parlay_description IS NULL OR parlay_description NOT LIKE '%%BEAST%%')
+            SELECT AVG(CASE WHEN stake > 0 THEN payout / stake ELSE 0 END) as avg_odds
+            FROM results_roi
+            WHERE product_type = %s AND is_won = true
         """
-        row = db_helper.execute(query, fetch='one')
-        
-    elif product == 'value_singles':
-        query = """
-            SELECT AVG(odds) as avg_odds
-            FROM football_opportunities
-            WHERE market = 'Value Single' AND outcome IN ('win', 'loss')
-        """
-        row = db_helper.execute(query, fetch='one')
-        
-    else:  # 'all' - combined
-        query = """
-            SELECT AVG(odds) as avg_odds
-            FROM (
-                SELECT odds
-                FROM football_opportunities
-                WHERE market = 'exact_score' AND outcome IN ('win', 'loss')
-                
-                UNION ALL
-                
-                SELECT bookmaker_odds as odds
-                FROM sgp_predictions
-                WHERE outcome IN ('win', 'loss')
-                  AND (parlay_description IS NULL OR parlay_description NOT LIKE '%%Monster%%')
-                  AND (parlay_description IS NULL OR parlay_description NOT LIKE '%%BEAST%%')
-            ) combined
-        """
-        row = db_helper.execute(query, fetch='one')
+        row = db_helper.execute(query, (product_type,), fetch='one')
     
     return row[0] if row and row[0] else 0.0
 
 def get_last_50_roi(product='exact_score'):
-    """Get ROI for last 50 bets by product type"""
-    if product == 'exact_score':
-        query = """
-            SELECT 
-                SUM(profit_loss) as profit,
-                SUM(stake) as staked
-            FROM (
-                SELECT profit_loss, stake, settled_timestamp
-                FROM football_opportunities
-                WHERE outcome IN (%s, %s)
-                  AND market = %s
-                ORDER BY settled_timestamp DESC
-                LIMIT 50
-            ) last_bets
-            WHERE settled_timestamp IS NOT NULL
-        """
-        row = db_helper.execute(query, ('win', 'loss', 'exact_score'), fetch='one')
-        
-    elif product == 'sgp':
-        query = """
-            SELECT 
-                SUM(profit_loss) as profit,
-                SUM(stake) as staked
-            FROM (
-                SELECT profit_loss, stake, settled_timestamp
-                FROM sgp_predictions
-                WHERE outcome IN (%s, %s)
-                  AND (parlay_description NOT LIKE %s)
-                  AND (parlay_description NOT LIKE %s)
-                ORDER BY settled_timestamp DESC
-                LIMIT 50
-            ) last_bets
-            WHERE settled_timestamp IS NOT NULL
-        """
-        row = db_helper.execute(query, ('win', 'loss', '%Monster%', '%BEAST%'), fetch='one')
+    """Get ROI for last 50 bets from unified results_roi table"""
+    product_map = {
+        'exact_score': 'football_single',
+        'sgp': 'sgp',
+        'value_singles': 'value_single'
+    }
     
-    else:  # MonsterSGP - no ROI tracking
-        return 0.0
+    if product == 'all':
+        query = """
+            SELECT SUM(profit) as profit, SUM(stake) as staked
+            FROM (
+                SELECT profit, stake
+                FROM results_roi
+                ORDER BY created_at DESC
+                LIMIT 50
+            ) last_bets
+        """
+        row = db_helper.execute(query, (), fetch='one')
+    else:
+        product_type = product_map.get(product, product)
+        query = """
+            SELECT SUM(profit) as profit, SUM(stake) as staked
+            FROM (
+                SELECT profit, stake
+                FROM results_roi
+                WHERE product_type = %s
+                ORDER BY created_at DESC
+                LIMIT 50
+            ) last_bets
+        """
+        row = db_helper.execute(query, (product_type,), fetch='one')
     
     if row and row[0] is not None and row[1] and row[1] > 0:
         return (row[0] / row[1] * 100)
