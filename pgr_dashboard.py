@@ -164,7 +164,7 @@ st.markdown("""
 @st.cache_data(ttl=300)
 def get_rolling_roi_data(days=30):
     """Get daily ROI data for the rolling chart"""
-    # Get all settled bets from last 30 days
+    # Get all settled bets from last 30 days (PROD mode only)
     # Note: football_opportunities stores timestamps in seconds, sgp_predictions in milliseconds
     query = """
         SELECT 
@@ -176,6 +176,7 @@ def get_rolling_roi_data(days=30):
             SELECT DATE(TO_TIMESTAMP(settled_timestamp)) as bet_date, market, profit_loss, stake
             FROM football_opportunities
             WHERE outcome IN (%s, %s) AND settled_timestamp IS NOT NULL
+              AND mode = 'PROD'
               AND TO_TIMESTAMP(settled_timestamp) >= NOW() - INTERVAL '%s days'
             
             UNION ALL
@@ -183,6 +184,7 @@ def get_rolling_roi_data(days=30):
             SELECT DATE(TO_TIMESTAMP(settled_timestamp/1000)) as bet_date, 'sgp' as market, profit_loss, stake
             FROM sgp_predictions
             WHERE outcome IN (%s, %s) AND settled_timestamp IS NOT NULL
+              AND mode = 'PROD'
               AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
               AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
               AND TO_TIMESTAMP(settled_timestamp/1000) >= NOW() - INTERVAL '%s days'
@@ -233,7 +235,7 @@ def get_rolling_roi_data(days=30):
     }
 
 def get_last_n_hit_rate(n=200, product='all'):
-    """Get hit rate for last N bets from unified results_roi table"""
+    """Get hit rate for last N bets from unified results_roi table (PROD mode only)"""
     product_map = {
         'exact_score': 'football_single',
         'sgp': 'sgp',
@@ -244,6 +246,7 @@ def get_last_n_hit_rate(n=200, product='all'):
         query = """
             SELECT is_won
             FROM results_roi
+            WHERE mode = 'PROD'
             ORDER BY created_at DESC
             LIMIT %s
         """
@@ -253,7 +256,7 @@ def get_last_n_hit_rate(n=200, product='all'):
         query = """
             SELECT is_won
             FROM results_roi
-            WHERE product_type = %s
+            WHERE product_type = %s AND mode = 'PROD'
             ORDER BY created_at DESC
             LIMIT %s
         """
@@ -266,7 +269,7 @@ def get_last_n_hit_rate(n=200, product='all'):
     return (wins / len(rows) * 100) if rows else 0.0
 
 def get_avg_odds(product='all'):
-    """Get average odds from unified results_roi table"""
+    """Get average odds from unified results_roi table (PROD mode only)"""
     product_map = {
         'exact_score': 'football_single',
         'sgp': 'sgp',
@@ -277,7 +280,7 @@ def get_avg_odds(product='all'):
         query = """
             SELECT AVG(CASE WHEN stake > 0 THEN payout / stake ELSE 0 END) as avg_odds
             FROM results_roi
-            WHERE is_won = true
+            WHERE is_won = true AND mode = 'PROD'
         """
         row = db_helper.execute(query, fetch='one')
     else:
@@ -285,14 +288,14 @@ def get_avg_odds(product='all'):
         query = """
             SELECT AVG(CASE WHEN stake > 0 THEN payout / stake ELSE 0 END) as avg_odds
             FROM results_roi
-            WHERE product_type = %s AND is_won = true
+            WHERE product_type = %s AND is_won = true AND mode = 'PROD'
         """
         row = db_helper.execute(query, (product_type,), fetch='one')
     
     return row[0] if row and row[0] else 0.0
 
 def get_last_50_roi(product='exact_score'):
-    """Get ROI for last 50 bets from unified results_roi table"""
+    """Get ROI for last 50 bets from unified results_roi table (PROD mode only)"""
     product_map = {
         'exact_score': 'football_single',
         'sgp': 'sgp',
@@ -305,6 +308,7 @@ def get_last_50_roi(product='exact_score'):
             FROM (
                 SELECT profit, stake
                 FROM results_roi
+                WHERE mode = 'PROD'
                 ORDER BY created_at DESC
                 LIMIT 50
             ) last_bets
@@ -317,7 +321,7 @@ def get_last_50_roi(product='exact_score'):
             FROM (
                 SELECT profit, stake
                 FROM results_roi
-                WHERE product_type = %s
+                WHERE product_type = %s AND mode = 'PROD'
                 ORDER BY created_at DESC
                 LIMIT 50
             ) last_bets
@@ -421,12 +425,12 @@ def get_upcoming_bets(limit=50, product='all'):
 
 @st.cache_data(ttl=60)
 def get_last_settled(limit=3, product='all'):
-    """Get last settled bets filtered by product type - order by match_date"""
+    """Get last settled bets filtered by product type - order by match_date (PROD mode only)"""
     if product == 'exact_score':
         query = """
             SELECT home_team, away_team, selection, odds, outcome, profit_loss, %s as market
             FROM football_opportunities
-            WHERE outcome IN (%s, %s)
+            WHERE outcome IN (%s, %s) AND mode = 'PROD'
             ORDER BY match_date DESC
             LIMIT %s
         """
@@ -436,7 +440,7 @@ def get_last_settled(limit=3, product='all'):
         query = """
             SELECT home_team, away_team, parlay_description, bookmaker_odds, outcome, profit_loss, %s as market
             FROM sgp_predictions
-            WHERE outcome IN (%s, %s)
+            WHERE outcome IN (%s, %s) AND mode = 'PROD'
               AND (parlay_description IS NULL OR parlay_description NOT LIKE '%%Monster%%')
               AND (parlay_description IS NULL OR parlay_description NOT LIKE '%%BEAST%%')
             ORDER BY match_date DESC
@@ -448,7 +452,7 @@ def get_last_settled(limit=3, product='all'):
         query = """
             SELECT home_team, away_team, parlay_description, bookmaker_odds, outcome, profit_loss, %s as market
             FROM sgp_predictions
-            WHERE outcome IN (%s, %s)
+            WHERE outcome IN (%s, %s) AND mode = 'PROD'
               AND (parlay_description LIKE '%%Monster%%' OR parlay_description LIKE '%%BEAST%%')
             ORDER BY match_date DESC
             LIMIT %s
@@ -459,7 +463,7 @@ def get_last_settled(limit=3, product='all'):
         query = """
             SELECT home_team, away_team, selection, odds, outcome, profit_loss, market
             FROM football_opportunities
-            WHERE outcome IN (%s, %s)
+            WHERE outcome IN (%s, %s) AND mode = 'PROD'
               AND market = %s
             ORDER BY match_date DESC
             LIMIT %s
@@ -473,14 +477,14 @@ def get_last_settled(limit=3, product='all'):
                 SELECT home_team, away_team, selection, odds, outcome, profit_loss, 
                     %s as market, match_date
                 FROM football_opportunities
-                WHERE outcome IN (%s, %s)
+                WHERE outcome IN (%s, %s) AND mode = 'PROD'
                 
                 UNION ALL
                 
                 SELECT home_team, away_team, parlay_description, bookmaker_odds, 
                     outcome, profit_loss, %s, match_date
                 FROM sgp_predictions
-                WHERE outcome IN (%s, %s)
+                WHERE outcome IN (%s, %s) AND mode = 'PROD'
                   AND (parlay_description IS NULL OR parlay_description NOT LIKE '%%Monster%%')
                   AND (parlay_description IS NULL OR parlay_description NOT LIKE '%%BEAST%%')
             ) combined
@@ -706,33 +710,33 @@ if selected not in ['women_1x2', 'college_basketball']:
 
 # Platform Total ROI (across all products)
 try:
-    # Football opportunities (Exact Score + Value Singles)
+    # Football opportunities (Exact Score + Value Singles) - PROD mode only
     football_query = """
         SELECT 
             SUM(profit_loss) as profit,
             SUM(stake) as staked
         FROM football_opportunities
-        WHERE outcome IN ('win', 'loss')
+        WHERE outcome IN ('win', 'loss') AND mode = 'PROD'
     """
     football_row = db_helper.execute(football_query, (), fetch='one')
     
-    # SGP predictions
+    # SGP predictions - PROD mode only
     sgp_query = """
         SELECT 
             SUM(profit_loss) as profit,
             SUM(stake) as staked
         FROM sgp_predictions
-        WHERE outcome IN ('win', 'loss')
+        WHERE outcome IN ('win', 'loss') AND mode = 'PROD'
     """
     sgp_row = db_helper.execute(sgp_query, (), fetch='one')
     
-    # Women's 1X2
+    # Women's 1X2 - PROD mode only
     women_query = """
         SELECT 
             SUM(profit_loss) as profit,
             SUM(stake) as staked
         FROM women_match_winner_predictions
-        WHERE outcome IN ('win', 'loss')
+        WHERE outcome IN ('win', 'loss') AND mode = 'PROD'
     """
     women_row = db_helper.execute(women_query, (), fetch='one')
     
@@ -875,7 +879,7 @@ if selected == 'college_basketball':
     st.markdown('<div class="section-header">🏀 COLLEGE BASKETBALL PICKS</div>', unsafe_allow_html=True)
     
     try:
-        # Get performance stats first - separate singles and parlays ROI
+        # Get performance stats first - separate singles and parlays ROI (PROD mode only)
         stats_query = """
             SELECT 
                 COUNT(*) FILTER (WHERE status IN ('won', 'lost')) as total_settled,
@@ -890,6 +894,7 @@ if selected == 'college_basketball':
                 COALESCE(SUM(CASE WHEN status = 'won' THEN (odds - 1) * 100 ELSE -100 END) 
                     FILTER (WHERE status IN ('won', 'lost') AND is_parlay = true), 0) as parlays_profit
             FROM basketball_predictions
+            WHERE mode = 'PROD'
         """
         stats_row = db_helper.execute(stats_query, (), fetch='one')
         

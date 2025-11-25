@@ -20,10 +20,10 @@ from datetime import date
 from db_helper import db_helper
 
 def get_all_time_stats() -> Dict:
-    """Get combined all-time statistics from unified results_roi table + pending counts"""
+    """Get combined all-time statistics from unified results_roi table + pending counts (PROD mode only)"""
     
     def get_product_stats(product_type: str):
-        """Get stats for a specific product from results_roi"""
+        """Get stats for a specific product from results_roi (PROD mode only)"""
         row = db_helper.execute('''
             SELECT 
                 COUNT(*) as total,
@@ -31,7 +31,7 @@ def get_all_time_stats() -> Dict:
                 SUM(profit) as profit,
                 SUM(stake) as staked
             FROM results_roi
-            WHERE product_type = %s
+            WHERE product_type = %s AND mode = 'PROD'
         ''', (product_type,), fetch='one')
         total, wins, profit, staked = row if row else (0, 0, 0.0, 0.0)
         total = total or 0
@@ -41,16 +41,16 @@ def get_all_time_stats() -> Dict:
         losses = total - wins
         hit_rate = (wins / total * 100) if total > 0 else 0.0
         
-        # Get pending count from source tables
+        # Get pending count from source tables (PROD mode only)
         pending = 0
         if product_type == 'football_single':
-            prow = db_helper.execute("SELECT COUNT(*) FROM football_opportunities WHERE market = 'exact_score' AND outcome IS NULL", (), fetch='one')
+            prow = db_helper.execute("SELECT COUNT(*) FROM football_opportunities WHERE market = 'exact_score' AND outcome IS NULL AND mode = 'PROD'", (), fetch='one')
             pending = prow[0] if prow else 0
         elif product_type == 'sgp':
-            prow = db_helper.execute("SELECT COUNT(*) FROM sgp_predictions WHERE outcome IS NULL AND (parlay_description IS NULL OR parlay_description NOT LIKE '%%Monster%%')", (), fetch='one')
+            prow = db_helper.execute("SELECT COUNT(*) FROM sgp_predictions WHERE outcome IS NULL AND mode = 'PROD' AND (parlay_description IS NULL OR parlay_description NOT LIKE '%%Monster%%')", (), fetch='one')
             pending = prow[0] if prow else 0
         elif product_type == 'value_single':
-            prow = db_helper.execute("SELECT COUNT(*) FROM football_opportunities WHERE market = 'Value Single' AND outcome IS NULL", (), fetch='one')
+            prow = db_helper.execute("SELECT COUNT(*) FROM football_opportunities WHERE market = 'Value Single' AND outcome IS NULL AND mode = 'PROD'", (), fetch='one')
             pending = prow[0] if prow else 0
         
         return {
@@ -68,7 +68,7 @@ def get_all_time_stats() -> Dict:
     sgp_stats = get_product_stats('sgp')
     vs_stats = get_product_stats('value_single')
     
-    # Combined stats
+    # Combined stats (PROD mode only)
     combined_row = db_helper.execute('''
         SELECT 
             COUNT(*) as total,
@@ -76,6 +76,7 @@ def get_all_time_stats() -> Dict:
             SUM(profit) as profit,
             SUM(stake) as staked
         FROM results_roi
+        WHERE mode = 'PROD'
     ''', (), fetch='one')
     c_total, c_wins, c_profit, c_staked = combined_row if combined_row else (0, 0, 0.0, 0.0)
     c_total = c_total or 0

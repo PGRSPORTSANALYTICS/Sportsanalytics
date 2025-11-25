@@ -282,11 +282,11 @@ class BetStatusService:
             return 999
 
     def get_women_1x2_performance(self) -> Dict:
-        """Get performance stats for women's 1X2 predictions"""
+        """Get performance stats for women's 1X2 predictions (PROD mode only)"""
         with DatabaseConnection.get_connection() as conn:
         
         try:
-            # Get all settled women's 1X2 bets
+            # Get all settled women's 1X2 bets (PROD mode only)
             query = '''
                 SELECT 
                     COUNT(*) as total_bets,
@@ -297,6 +297,7 @@ class BetStatusService:
                 FROM women_match_winner_predictions
                 WHERE status = 'settled'
                 AND outcome IS NOT NULL
+                AND mode = 'PROD'
             '''
             
             df = pd.read_sql(query, conn)
