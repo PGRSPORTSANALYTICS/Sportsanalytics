@@ -1,171 +1,229 @@
 #!/usr/bin/env python3
+"""
+UNIFIED BET TRACKING SERVICE
+============================
+Single source of truth for all betting results across all products.
+Simplifies ROI calculations and ensures data consistency.
+"""
 
-import sqlite3
-import random
-import time
-from datetime import datetime, timedelta
+from datetime import datetime
+from typing import Optional, Dict, List
+from db_helper import db_helper
+
 
 class BetTracker:
-    """Track bet outcomes and calculate ROI"""
+    """Unified bet tracking for all product types"""
     
-    def __init__(self):
-        self.db_path = "data/real_football.db"
+    PRODUCT_TYPES = [
+        'football_single',  # Exact Score predictions
+        'sgp',              # Same Game Parlays
+        'value_single',     # Value Singles (1X2, O/U, BTTS)
+        'womens_1x2',       # Women's Match Winner
+        'basket_single',    # College Basketball singles
+        'basket_parlay'     # College Basketball parlays
+    ]
     
-    def get_connection(self):
-        return sqlite3.connect(self.db_path)
-    
-    def settle_bet(self, bet_id: int, result: str, actual_odds: float = None):
-        """
-        Settle a bet with outcome
-        result: 'won', 'lost', 'void', 'half_won', 'half_lost'
-        """
-        conn = self.get_connection()
-        cursor = conn.cursor()
+    @staticmethod
+    def record_result(product_type: str, bet_id: int, stake: float, 
+                      odds: float, is_won: bool) -> Dict:
+        """Record a bet result in unified tracking table"""
+        payout = stake * odds if is_won else 0
+        profit = payout - stake
         
-        # Get bet details
-        cursor.execute('SELECT stake, odds FROM football_opportunities WHERE id = ?', (bet_id,))
-        bet_data = cursor.fetchone()
-        
-        if not bet_data:
-            print(f"Bet {bet_id} not found")
-            return
-        
-        stake, odds = bet_data
-        payout = 0
-        roi_percentage = 0
-        
-        if result == 'won':
-            payout = stake * odds
-            roi_percentage = ((payout - stake) / stake) * 100
-        elif result == 'lost':
-            payout = 0
-            roi_percentage = -100
-        elif result == 'void':
-            payout = stake  # Stake returned
-            roi_percentage = 0
-        elif result == 'half_won':
-            payout = stake + (stake * (odds - 1) / 2)
-            roi_percentage = ((payout - stake) / stake) * 100
-        elif result == 'half_lost':
-            payout = stake / 2
-            roi_percentage = ((payout - stake) / stake) * 100
-        
-        # Update bet in database
-        settled_timestamp = int(time.time())
-        cursor.execute('''
-            UPDATE football_opportunities 
-            SET result = ?, payout = ?, settled_timestamp = ?, roi_percentage = ?, status = 'settled'
-            WHERE id = ?
-        ''', (result, payout, settled_timestamp, roi_percentage, bet_id))
-        
-        conn.commit()
-        conn.close()
-        
-        print(f"✅ Bet {bet_id} settled: {result} | Payout: ${payout:.2f} | ROI: {roi_percentage:.1f}%")
-    
-    def simulate_realistic_results(self, limit=50):
-        """Simulate realistic betting results for recent opportunities"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        # Get unsettled bets older than 2 hours (simulating match completion)
-        two_hours_ago = int(time.time()) - (2 * 60 * 60)
-        cursor.execute('''
-            SELECT id, confidence, edge_percentage, stake, odds 
-            FROM football_opportunities 
-            WHERE status = 'pending' AND timestamp < ? 
-            ORDER BY timestamp DESC 
-            LIMIT ?
-        ''', (two_hours_ago, limit))
-        
-        pending_bets = cursor.fetchall()
-        
-        for bet_id, confidence, edge, stake, odds in pending_bets:
-            # Calculate win probability based on confidence and edge
-            base_win_rate = 0.45  # Base 45% win rate for 5%+ edge bets
-            confidence_bonus = (confidence / 100) * 0.25  # Up to 25% bonus for high confidence
-            edge_bonus = (edge / 100) * 0.1  # Small edge bonus
-            
-            win_probability = min(0.75, base_win_rate + confidence_bonus + edge_bonus)
-            
-            # Simulate outcome
-            random_val = random.random()
-            
-            if random_val < win_probability:
-                result = 'won'
-            elif random_val < win_probability + 0.05:  # 5% void rate
-                result = 'void'
-            else:
-                result = 'lost'
-            
-            self.settle_bet(bet_id, result)
-        
-        print(f"🎯 Simulated results for {len(pending_bets)} bets")
-    
-    def get_performance_stats(self):
-        """Get overall performance statistics"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        # Overall stats
-        cursor.execute('''
-            SELECT 
-                COUNT(*) as total_bets,
-                SUM(CASE WHEN result = 'won' THEN 1 ELSE 0 END) as wins,
-                SUM(CASE WHEN result = 'lost' THEN 1 ELSE 0 END) as losses,
-                SUM(stake) as total_staked,
-                SUM(payout) as total_payout,
-                AVG(roi_percentage) as avg_roi,
-                SUM(payout) - SUM(stake) as net_profit
-            FROM football_opportunities 
-            WHERE status = 'settled'
-        ''')
-        
-        stats = cursor.fetchone()
-        
-        if stats and stats[0] > 0:
-            total_bets, wins, losses, total_staked, total_payout, avg_roi, net_profit = stats
-            win_rate = (wins / total_bets) * 100 if total_bets > 0 else 0
-            total_roi = ((total_payout - total_staked) / total_staked) * 100 if total_staked > 0 else 0
-            
-            return {
-                'total_bets': total_bets,
-                'wins': wins,
-                'losses': losses,
-                'win_rate': win_rate,
-                'total_staked': total_staked,
-                'total_payout': total_payout,
-                'net_profit': net_profit,
-                'total_roi': total_roi,
-                'avg_roi_per_bet': avg_roi or 0
-            }
+        db_helper.execute('''
+            INSERT INTO bet_results (product_type, bet_id, stake, payout, profit, is_won, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (product_type, bet_id) 
+            DO UPDATE SET stake = EXCLUDED.stake, payout = EXCLUDED.payout, 
+                          profit = EXCLUDED.profit, is_won = EXCLUDED.is_won
+        ''', (product_type, bet_id, stake, payout, profit, is_won, datetime.now()))
         
         return {
-            'total_bets': 0, 'wins': 0, 'losses': 0, 'win_rate': 0,
-            'total_staked': 0, 'total_payout': 0, 'net_profit': 0,
-            'total_roi': 0, 'avg_roi_per_bet': 0
+            'product_type': product_type,
+            'bet_id': bet_id,
+            'stake': stake,
+            'payout': payout,
+            'profit': profit,
+            'is_won': is_won
         }
     
-    def get_recent_results(self, limit=10):
-        """Get recent settled bets"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
+    @staticmethod
+    def get_product_stats(product_type: Optional[str] = None) -> Dict:
+        """Get stats for a specific product or all products"""
+        if product_type:
+            row = db_helper.execute('''
+                SELECT 
+                    COUNT(*) as total,
+                    SUM(CASE WHEN is_won THEN 1 ELSE 0 END) as wins,
+                    SUM(stake) as staked,
+                    SUM(profit) as profit
+                FROM bet_results
+                WHERE product_type = %s
+            ''', (product_type,), fetch='one')
+        else:
+            row = db_helper.execute('''
+                SELECT 
+                    COUNT(*) as total,
+                    SUM(CASE WHEN is_won THEN 1 ELSE 0 END) as wins,
+                    SUM(stake) as staked,
+                    SUM(profit) as profit
+                FROM bet_results
+            ''', (), fetch='one')
         
-        cursor.execute('''
-            SELECT home_team, away_team, selection, odds, stake, result, payout, roi_percentage, settled_timestamp
-            FROM football_opportunities 
-            WHERE status = 'settled' 
-            ORDER BY settled_timestamp DESC 
-            LIMIT ?
-        ''', (limit,))
+        total, wins, staked, profit = row if row else (0, 0, 0, 0)
+        total = total or 0
+        wins = wins or 0
+        staked = staked or 0
+        profit = profit or 0
         
-        results = cursor.fetchall()
-        conn.close()
+        return {
+            'total': total,
+            'wins': wins,
+            'losses': total - wins,
+            'staked': round(staked, 2),
+            'profit': round(profit, 2),
+            'roi': round((profit / staked * 100), 1) if staked > 0 else 0,
+            'hit_rate': round((wins / total * 100), 1) if total > 0 else 0
+        }
+    
+    @staticmethod
+    def get_all_stats() -> Dict:
+        """Get stats grouped by product type"""
+        rows = db_helper.execute('''
+            SELECT 
+                product_type,
+                COUNT(*) as total,
+                SUM(CASE WHEN is_won THEN 1 ELSE 0 END) as wins,
+                SUM(stake) as staked,
+                SUM(profit) as profit
+            FROM bet_results
+            GROUP BY product_type
+        ''', (), fetch='all')
         
-        return results
+        stats = {}
+        for row in rows or []:
+            product_type, total, wins, staked, profit = row
+            total = total or 0
+            wins = wins or 0
+            staked = staked or 0
+            profit = profit or 0
+            
+            stats[product_type] = {
+                'total': total,
+                'wins': wins,
+                'losses': total - wins,
+                'staked': round(staked, 2),
+                'profit': round(profit, 2),
+                'roi': round((profit / staked * 100), 1) if staked > 0 else 0,
+                'hit_rate': round((wins / total * 100), 1) if total > 0 else 0
+            }
+        
+        return stats
 
-if __name__ == "__main__":
-    tracker = BetTracker()
-    tracker.simulate_realistic_results(30)
-    stats = tracker.get_performance_stats()
-    print(f"📊 Performance: {stats['win_rate']:.1f}% win rate, {stats['total_roi']:.1f}% ROI")
+
+def migrate_existing_data():
+    """Migrate existing bet data from all product tables"""
+    print("🔄 Migrating existing bet data to unified tracking...")
+    
+    migrated = 0
+    
+    # Migrate Exact Score predictions
+    exact_rows = db_helper.execute('''
+        SELECT id, stake, odds, outcome
+        FROM football_opportunities
+        WHERE market = 'exact_score' AND outcome IN ('win', 'won', 'loss', 'lost')
+    ''', (), fetch='all')
+    
+    for row in exact_rows or []:
+        bet_id, stake, odds, outcome = row
+        is_won = outcome in ('win', 'won')
+        BetTracker.record_result('football_single', bet_id, stake or 100, odds or 10, is_won)
+        migrated += 1
+    
+    print(f"  ✅ Migrated {len(exact_rows or [])} Exact Score bets")
+    
+    # Migrate SGP predictions (exclude Monster/BEAST)
+    sgp_rows = db_helper.execute('''
+        SELECT id, stake, bookmaker_odds, outcome
+        FROM sgp_predictions
+        WHERE outcome IN ('win', 'won', 'loss', 'lost')
+          AND (parlay_description IS NULL OR parlay_description NOT LIKE '%%Monster%%')
+          AND (parlay_description IS NULL OR parlay_description NOT LIKE '%%BEAST%%')
+    ''', (), fetch='all')
+    
+    for row in sgp_rows or []:
+        bet_id, stake, odds, outcome = row
+        is_won = outcome in ('win', 'won')
+        BetTracker.record_result('sgp', bet_id, stake or 160, odds or 3, is_won)
+        migrated += 1
+    
+    print(f"  ✅ Migrated {len(sgp_rows or [])} SGP bets")
+    
+    # Migrate Value Singles
+    vs_rows = db_helper.execute('''
+        SELECT id, stake, odds, outcome
+        FROM football_opportunities
+        WHERE market = 'Value Single' AND outcome IN ('win', 'won', 'loss', 'lost')
+    ''', (), fetch='all')
+    
+    for row in vs_rows or []:
+        bet_id, stake, odds, outcome = row
+        is_won = outcome in ('win', 'won')
+        BetTracker.record_result('value_single', bet_id, stake or 100, odds or 2, is_won)
+        migrated += 1
+    
+    print(f"  ✅ Migrated {len(vs_rows or [])} Value Singles bets")
+    
+    # Migrate Women's 1X2
+    try:
+        women_rows = db_helper.execute('''
+            SELECT id, stake, odds, outcome
+            FROM women_match_winner_predictions
+            WHERE outcome IN ('win', 'won', 'loss', 'lost')
+        ''', (), fetch='all')
+        
+        for row in women_rows or []:
+            bet_id, stake, odds, outcome = row
+            is_won = outcome in ('win', 'won')
+            BetTracker.record_result('womens_1x2', bet_id, stake or 100, odds or 2, is_won)
+            migrated += 1
+        
+        print(f"  ✅ Migrated {len(women_rows or [])} Women's 1X2 bets")
+    except Exception as e:
+        print(f"  ⚠️ Women's 1X2 table not found or empty: {e}")
+    
+    # Migrate College Basketball
+    try:
+        basket_rows = db_helper.execute('''
+            SELECT id, stake, odds, status, is_parlay
+            FROM basketball_predictions
+            WHERE status IN ('won', 'lost')
+        ''', (), fetch='all')
+        
+        for row in basket_rows or []:
+            bet_id, stake, odds, status, is_parlay = row
+            is_won = status == 'won'
+            product_type = 'basket_parlay' if is_parlay else 'basket_single'
+            BetTracker.record_result(product_type, bet_id, stake or 100, odds or 2, is_won)
+            migrated += 1
+        
+        print(f"  ✅ Migrated {len(basket_rows or [])} College Basketball bets")
+    except Exception as e:
+        print(f"  ⚠️ Basketball table not found or empty: {e}")
+    
+    print(f"\n✅ Total migrated: {migrated} bets")
+    
+    # Show summary
+    all_stats = BetTracker.get_all_stats()
+    print("\n📊 UNIFIED BET TRACKING SUMMARY:")
+    print("=" * 50)
+    for product, stats in all_stats.items():
+        print(f"  {product}: {stats['total']} bets | {stats['hit_rate']}% hit | {stats['roi']:+.1f}% ROI | {stats['profit']:+.0f} SEK")
+    
+    combined = BetTracker.get_product_stats()
+    print("-" * 50)
+    print(f"  TOTAL: {combined['total']} bets | {combined['hit_rate']}% hit | {combined['roi']:+.1f}% ROI | {combined['profit']:+.0f} SEK")
+
+
+if __name__ == '__main__':
+    migrate_existing_data()
