@@ -29,7 +29,8 @@ def run_prediction_cycle():
             client=client,
             min_ev=0.03,
             min_conf=0.50,
-            max_picks_per_cycle=30,
+            max_singles=10,
+            max_parlays=3,
             min_odds=1.40,
             max_odds=5.50,
             allow_parlays=True
