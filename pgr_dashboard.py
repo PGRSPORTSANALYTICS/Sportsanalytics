@@ -240,6 +240,7 @@ def load_all_bets() -> pd.DataFrame:
             odds,
             payout,
             result,
+            norm_result,
             mode,
             created_at,
             settled_at,
@@ -250,7 +251,7 @@ def load_all_bets() -> pd.DataFrame:
             parlay_description,
             ev,
             selection
-        FROM all_bets
+        FROM normalized_bets
         ORDER BY created_at DESC
         """
     )
@@ -279,14 +280,11 @@ def load_all_bets() -> pd.DataFrame:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce")
 
-    # Normalize results for consistent handling
-    df["norm_result"] = df["result"].apply(normalize_result)
-
-    # profit only for settled bets (WON, LOST, VOID)
+    # profit only for settled bets (WON, LOST, VOID) - norm_result comes from database view
     df["profit"] = None
     settled_mask = df["norm_result"].isin(["WON", "LOST", "VOID"])
     
-    # Calculate profit: WON gets payout - stake, LOST/VOID gets -stake (or 0 for VOID)
+    # Calculate profit: WON gets payout - stake, LOST gets -stake, VOID gets 0
     df.loc[settled_mask & (df["norm_result"] == "WON"), "profit"] = (
         df.loc[settled_mask & (df["norm_result"] == "WON"), "payout"].fillna(0) - 
         df.loc[settled_mask & (df["norm_result"] == "WON"), "stake"]
