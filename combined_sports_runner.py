@@ -69,6 +69,41 @@ def verify_basketball_results():
         logger.error(f"❌ Basketball verification error: {e}")
 
 
+def verify_football_results():
+    """Verify Football Exact Score and Value Singles results"""
+    try:
+        from verify_results import RealResultVerifier
+        logger.info("⚽ Verifying Football results...")
+        verifier = RealResultVerifier()
+        results = verifier.verify_pending_tips()
+        logger.info(f"⚽ Football verification: {results['verified']} verified, {results['failed']} failed")
+    except Exception as e:
+        logger.error(f"❌ Football verification error: {e}")
+
+
+def verify_sgp_results():
+    """Verify SGP parlay results"""
+    try:
+        from sgp_verifier import SGPVerifier
+        logger.info("🎲 Verifying SGP results...")
+        verifier = SGPVerifier()
+        results = verifier.verify_pending_sgps()
+        logger.info(f"🎲 SGP verification: {results.get('verified', 0)} verified")
+    except Exception as e:
+        logger.error(f"❌ SGP verification error: {e}")
+
+
+def verify_women_results():
+    """Verify Women's 1X2 results"""
+    try:
+        from women_1x2_verifier import verify_pending_women_predictions
+        logger.info("👩⚽ Verifying Women's 1X2 results...")
+        verified, failed = verify_pending_women_predictions()
+        logger.info(f"👩⚽ Women's verification: {verified} verified, {failed} failed")
+    except Exception as e:
+        logger.error(f"❌ Women's verification error: {e}")
+
+
 def run_performance_updates():
     """Run performance updates"""
     try:
@@ -108,7 +143,13 @@ def main():
     logger.info("🎲 SGP Predictions - Every 2 hours")
     logger.info("👩⚽ Women's 1X2 - Every 1 hour")
     logger.info("🏀 College Basketball - Every 2 hours")
-    logger.info("✅ Basketball Results - Every 30 minutes")
+    logger.info("="*80)
+    logger.info("🔍 RESULT VERIFICATION:")
+    logger.info("⚽ Football Results - Every 30 minutes")
+    logger.info("🎲 SGP Results - Every 30 minutes")
+    logger.info("👩⚽ Women's Results - Every 30 minutes")
+    logger.info("🏀 Basketball Results - Every 30 minutes")
+    logger.info("="*80)
     logger.info("📊 Performance Updates - Every 6 hours")
     logger.info("📂 Bet Categorizer - Daily at 23:00")
     logger.info("📅 Games Reminder - Daily at 08:00")
@@ -126,12 +167,18 @@ def main():
     time.sleep(5)
     run_performance_updates()
     
-    # Schedule recurring tasks
+    # Schedule recurring prediction tasks
     schedule.every(1).hours.do(run_football_predictions)
     schedule.every(2).hours.do(run_sgp_predictions)
     schedule.every(1).hours.do(run_women_1x2_predictions)
     schedule.every(2).hours.do(run_college_basketball)
+    
+    # Schedule result verification - Every 30 minutes
+    schedule.every(30).minutes.do(verify_football_results)
+    schedule.every(30).minutes.do(verify_sgp_results)
+    schedule.every(30).minutes.do(verify_women_results)
     schedule.every(30).minutes.do(verify_basketball_results)
+    
     schedule.every(6).hours.do(run_performance_updates)
     
     schedule.every().day.at("23:00").do(run_daily_categorizer)
