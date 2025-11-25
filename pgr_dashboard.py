@@ -42,6 +42,38 @@ def calculate_profit(bets: pd.DataFrame) -> float:
     return summary["profit"]
 
 
+def filter_by_product(bets: pd.DataFrame, product_codes: list) -> pd.DataFrame:
+    """Filter bets by product code(s)."""
+    if "product" not in bets.columns:
+        return bets.iloc[0:0].copy()
+    return bets[bets["product"].str.upper().isin([p.upper() for p in product_codes])].copy()
+
+
+def get_exact_score_bets(prod_bets: pd.DataFrame) -> pd.DataFrame:
+    """Get Exact Score / Final Score bets."""
+    return filter_by_product(prod_bets, ["EXACT_SCORE", "FINAL_SCORE"])
+
+
+def get_value_singles(prod_bets: pd.DataFrame) -> pd.DataFrame:
+    """Get Value Singles bets."""
+    return filter_by_product(prod_bets, ["VALUE_SINGLE", "VALUE_SINGLES", "FOOTBALL_SINGLE"])
+
+
+def get_sgp_parlays(prod_bets: pd.DataFrame) -> pd.DataFrame:
+    """Get SGP Parlay bets."""
+    return filter_by_product(prod_bets, ["SGP", "SGP_PARLAY"])
+
+
+def get_basket_bets(prod_bets: pd.DataFrame) -> pd.DataFrame:
+    """Get College Basketball bets."""
+    return filter_by_product(prod_bets, ["COLLEGE_BASKET", "BASKET_SINGLE", "BASKET_PARLAY", "NCAAB"])
+
+
+def get_women_1x2(prod_bets: pd.DataFrame) -> pd.DataFrame:
+    """Get Women's 1X2 bets."""
+    return filter_by_product(prod_bets, ["WOMEN_1X2", "WOMENS_1X2", "W1X2"])
+
+
 def format_kickoff(date_val) -> str:
     """
     Format match date for display, handling NaT/None/invalid values gracefully.
