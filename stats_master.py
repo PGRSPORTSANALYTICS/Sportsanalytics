@@ -103,7 +103,7 @@ def get_all_time_stats() -> Dict:
     }
 
 def get_todays_exact_score_stats() -> Dict:
-    """Get today's exact score statistics"""
+    """Get today's exact score statistics (PROD mode only)"""
     today = date.today().isoformat()
     
     row = db_helper.execute('''
@@ -115,6 +115,7 @@ def get_todays_exact_score_stats() -> Dict:
         WHERE market = %s 
         AND result IS NOT NULL 
         AND DATE(TO_TIMESTAMP(settled_timestamp)) = %s
+        AND mode = 'PROD'
     ''', ('win', 'won', 'exact_score', today), fetch='one')
     
     total, wins, profit = row if row else (0, 0, 0.0)
@@ -130,7 +131,7 @@ def get_todays_exact_score_stats() -> Dict:
     }
 
 def get_todays_sgp_stats() -> Dict:
-    """Get today's SGP statistics (EXCLUDE MonsterSGP - entertainment only)"""
+    """Get today's SGP statistics (PROD mode only, EXCLUDE MonsterSGP)"""
     today = date.today().isoformat()
     
     row = db_helper.execute('''
@@ -141,6 +142,7 @@ def get_todays_sgp_stats() -> Dict:
         FROM sgp_predictions 
         WHERE result IS NOT NULL 
         AND DATE(TO_TIMESTAMP(settled_timestamp)) = %s
+        AND mode = 'PROD'
         AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
         AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
     ''', ('win', 'won', today, '%Monster%', '%BEAST%'), fetch='one')
@@ -158,14 +160,14 @@ def get_todays_sgp_stats() -> Dict:
     }
 
 def get_exact_score_results() -> List[Dict]:
-    """Get all exact score settled predictions"""
+    """Get all exact score settled predictions (PROD mode only)"""
     rows = db_helper.execute('''
         SELECT 
             home_team, away_team, selection, odds, 
             actual_score, outcome, stake, profit_loss,
             league, settled_timestamp
         FROM football_opportunities 
-        WHERE market = %s AND result IS NOT NULL
+        WHERE market = %s AND result IS NOT NULL AND mode = 'PROD'
         ORDER BY settled_timestamp DESC
     ''', ('exact_score',), fetch='all')
     
@@ -188,7 +190,7 @@ def get_exact_score_results() -> List[Dict]:
     return results
 
 def get_sgp_results() -> List[Dict]:
-    """Get all SGP settled predictions (EXCLUDE MonsterSGP - entertainment only)"""
+    """Get all SGP settled predictions (PROD mode only, EXCLUDE MonsterSGP)"""
     rows = db_helper.execute('''
         SELECT 
             home_team, away_team, parlay_description, bookmaker_odds,
@@ -196,6 +198,7 @@ def get_sgp_results() -> List[Dict]:
             league, settled_timestamp
         FROM sgp_predictions 
         WHERE result IS NOT NULL
+        AND mode = 'PROD'
         AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
         AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
         ORDER BY settled_timestamp DESC
