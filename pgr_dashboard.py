@@ -248,13 +248,13 @@ def get_last_n_hit_rate(n=200, product='all'):
         query = """
             SELECT outcome
             FROM sgp_predictions
-            WHERE outcome IN (%s, %s)
+            WHERE outcome IN ('win', 'won', 'loss', 'lost')
               AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
               AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
             ORDER BY settled_timestamp DESC
             LIMIT %s
         """
-        rows = db_helper.execute(query, ('win', 'loss', '%Monster%', '%BEAST%', n), fetch='all')
+        rows = db_helper.execute(query, ('%Monster%', '%BEAST%', n), fetch='all')
         
     elif product == 'value_singles':
         query = """
@@ -273,13 +273,13 @@ def get_last_n_hit_rate(n=200, product='all'):
             FROM (
                 SELECT outcome, settled_timestamp
                 FROM football_opportunities
-                WHERE outcome IN (%s, %s)
+                WHERE outcome IN ('win', 'won', 'loss', 'lost')
                 
                 UNION ALL
                 
                 SELECT outcome, settled_timestamp
                 FROM sgp_predictions
-                WHERE outcome IN (%s, %s)
+                WHERE outcome IN ('win', 'won', 'loss', 'lost')
                   AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
                   AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
             ) combined
@@ -287,12 +287,13 @@ def get_last_n_hit_rate(n=200, product='all'):
             ORDER BY settled_timestamp DESC
             LIMIT %s
         """
-        rows = db_helper.execute(query, ('win', 'loss', 'win', 'loss', '%Monster%', '%BEAST%', n), fetch='all')
+        rows = db_helper.execute(query, ('%Monster%', '%BEAST%', n), fetch='all')
     
     if not rows:
         return 0.0
     
-    wins = sum(1 for row in rows if row[0] == 'win')
+    # Count wins - handle both 'win' and 'won' formats
+    wins = sum(1 for row in rows if row[0] in ('win', 'won'))
     return (wins / len(rows) * 100) if rows else 0.0
 
 def get_avg_odds(product='all'):
@@ -309,7 +310,7 @@ def get_avg_odds(product='all'):
         query = """
             SELECT AVG(bookmaker_odds) as avg_odds
             FROM sgp_predictions
-            WHERE outcome IN ('win', 'loss')
+            WHERE outcome IN ('win', 'won', 'loss', 'lost')
               AND (parlay_description IS NULL OR parlay_description NOT LIKE '%%Monster%%')
               AND (parlay_description IS NULL OR parlay_description NOT LIKE '%%BEAST%%')
         """
@@ -758,7 +759,9 @@ elif selected == 'college_basketball':
         avg_odds = 0.0
 
 if selected not in ['women_1x2', 'college_basketball']:
-    total_roi = (product_stats['profit'] / (product_stats['total'] * 100)) * 100 if product_stats['total'] > 0 else 0
+    # Calculate ROI using actual staked amounts (not assuming 100 SEK per bet)
+    staked = product_stats.get('staked', 0)
+    total_roi = (product_stats['profit'] / staked * 100) if staked > 0 else 0
     hit_rate_200 = get_last_n_hit_rate(200, product=selected)
     avg_odds = get_avg_odds(product=selected)
 

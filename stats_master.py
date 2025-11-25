@@ -25,27 +25,30 @@ def get_all_time_stats() -> Dict:
     exact_row = db_helper.execute('''
         SELECT 
             COUNT(*) as total,
-            SUM(CASE WHEN outcome = %s THEN 1 ELSE 0 END) as wins,
-            SUM(profit_loss) as profit
+            SUM(CASE WHEN outcome IN ('win', 'won') THEN 1 ELSE 0 END) as wins,
+            SUM(profit_loss) as profit,
+            SUM(stake) as staked
         FROM football_opportunities 
-        WHERE market = %s AND outcome IN (%s, %s)
-    ''', ('win', 'exact_score', 'win', 'loss'), fetch='one')
-    exact_total, exact_wins, exact_profit = exact_row if exact_row else (0, 0, 0.0)
+        WHERE market = 'exact_score' AND outcome IN ('win', 'won', 'loss', 'lost')
+    ''', (), fetch='one')
+    exact_total, exact_wins, exact_profit, exact_staked = exact_row if exact_row else (0, 0, 0.0, 0.0)
     exact_losses = exact_total - (exact_wins or 0)
     exact_hit_rate = (exact_wins / exact_total * 100) if exact_total > 0 else 0.0
     
     # SGP stats - only count settled predictions with valid outcome (EXCLUDE MonsterSGP - entertainment only)
+    # Note: Handle both 'win'/'won' and 'loss'/'lost' due to historical data inconsistency
     sgp_row = db_helper.execute('''
         SELECT 
             COUNT(*) as total,
-            SUM(CASE WHEN outcome = %s THEN 1 ELSE 0 END) as wins,
-            SUM(profit_loss) as profit
+            SUM(CASE WHEN outcome IN ('win', 'won') THEN 1 ELSE 0 END) as wins,
+            SUM(profit_loss) as profit,
+            SUM(stake) as staked
         FROM sgp_predictions 
-        WHERE outcome IN (%s, %s)
+        WHERE outcome IN ('win', 'won', 'loss', 'lost')
           AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
           AND (parlay_description IS NULL OR parlay_description NOT LIKE %s)
-    ''', ('win', 'win', 'loss', '%Monster%', '%BEAST%'), fetch='one')
-    sgp_total, sgp_wins, sgp_profit = sgp_row if sgp_row else (0, 0, 0.0)
+    ''', ('%Monster%', '%BEAST%'), fetch='one')
+    sgp_total, sgp_wins, sgp_profit, sgp_staked = sgp_row if sgp_row else (0, 0, 0.0, 0.0)
     sgp_losses = sgp_total - (sgp_wins or 0)
     sgp_hit_rate = (sgp_wins / sgp_total * 100) if sgp_total > 0 else 0.0
     
@@ -53,12 +56,13 @@ def get_all_time_stats() -> Dict:
     vs_row = db_helper.execute('''
         SELECT 
             COUNT(*) as total,
-            SUM(CASE WHEN outcome = %s THEN 1 ELSE 0 END) as wins,
-            SUM(profit_loss) as profit
+            SUM(CASE WHEN outcome IN ('win', 'won') THEN 1 ELSE 0 END) as wins,
+            SUM(profit_loss) as profit,
+            SUM(stake) as staked
         FROM football_opportunities 
-        WHERE market = %s AND outcome IN (%s, %s)
-    ''', ('win', 'Value Single', 'win', 'loss'), fetch='one')
-    vs_total, vs_wins, vs_profit = vs_row if vs_row else (0, 0, 0.0)
+        WHERE market = 'Value Single' AND outcome IN ('win', 'won', 'loss', 'lost')
+    ''', (), fetch='one')
+    vs_total, vs_wins, vs_profit, vs_staked = vs_row if vs_row else (0, 0, 0.0, 0.0)
     vs_losses = vs_total - (vs_wins or 0)
     vs_hit_rate = (vs_wins / vs_total * 100) if vs_total > 0 else 0.0
     
@@ -67,6 +71,7 @@ def get_all_time_stats() -> Dict:
     combined_wins = (exact_wins or 0) + (sgp_wins or 0)
     combined_losses = (exact_losses or 0) + (sgp_losses or 0)
     combined_profit = (exact_profit or 0.0) + (sgp_profit or 0.0)
+    combined_staked = (exact_staked or 0.0) + (sgp_staked or 0.0)
     combined_hit_rate = (combined_wins / combined_total * 100) if combined_total > 0 else 0.0
     
     return {
@@ -75,28 +80,32 @@ def get_all_time_stats() -> Dict:
             'wins': exact_wins or 0,
             'losses': exact_losses or 0,
             'hit_rate': round(exact_hit_rate, 1),
-            'profit': round(exact_profit or 0.0, 2)
+            'profit': round(exact_profit or 0.0, 2),
+            'staked': round(exact_staked or 0.0, 2)
         },
         'sgp': {
             'total': sgp_total or 0,
             'wins': sgp_wins or 0,
             'losses': sgp_losses or 0,
             'hit_rate': round(sgp_hit_rate, 1),
-            'profit': round(sgp_profit or 0.0, 2)
+            'profit': round(sgp_profit or 0.0, 2),
+            'staked': round(sgp_staked or 0.0, 2)
         },
         'value_singles': {
             'total': vs_total or 0,
             'wins': vs_wins or 0,
             'losses': vs_losses or 0,
             'hit_rate': round(vs_hit_rate, 1),
-            'profit': round(vs_profit or 0.0, 2)
+            'profit': round(vs_profit or 0.0, 2),
+            'staked': round(vs_staked or 0.0, 2)
         },
         'combined': {
             'total': combined_total,
             'wins': combined_wins,
             'losses': combined_losses,
             'hit_rate': round(combined_hit_rate, 1),
-            'profit': round(combined_profit, 2)
+            'profit': round(combined_profit, 2),
+            'staked': round(combined_staked, 2)
         }
     }
 
