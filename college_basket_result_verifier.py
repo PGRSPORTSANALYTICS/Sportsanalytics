@@ -72,7 +72,7 @@ class CollegeBasketballResultVerifier:
             return {"verified": 0, "failed": 0}
     
     def _get_pending_picks(self) -> List[Dict]:
-        """Get all pending picks from database"""
+        """Get all pending picks from database (excludes backtests)"""
         try:
             query = """
                 SELECT id, match, market, selection, odds, is_parlay, parlay_legs, 
@@ -81,6 +81,7 @@ class CollegeBasketballResultVerifier:
                 WHERE status = 'pending'
                   AND (commence_time < NOW() OR commence_time IS NULL)
                   AND created_at < NOW() - INTERVAL '2 hours'
+                  AND UPPER(COALESCE(mode, 'PROD')) = 'PROD'
                 ORDER BY created_at DESC
             """
             

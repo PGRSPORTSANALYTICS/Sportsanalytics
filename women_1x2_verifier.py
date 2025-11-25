@@ -32,6 +32,7 @@ def verify_pending_women_predictions() -> Tuple[int, int]:
                 FROM women_match_winner_predictions
                 WHERE outcome IS NULL
                 AND match_date < NOW() - INTERVAL '2 hours'
+                AND UPPER(COALESCE(mode, 'PROD')) = 'PROD'
                 ORDER BY match_date
                 LIMIT 20
             """)
