@@ -624,6 +624,221 @@ def render_product_tab(
         )
 
 
+def render_sgp_parlays_tab():
+    """Specialized SGP Parlays tab with beautiful card layout."""
+    st.markdown("## Same Game Parlays")
+    st.caption("High-edge correlated parlays built within a single match.")
+
+    db_url = get_db_url()
+    engine = create_engine(db_url)
+    
+    query = text("""
+        SELECT
+            id,
+            home_team,
+            away_team,
+            legs,
+            parlay_description,
+            bookmaker_odds as odds,
+            stake,
+            ev_percentage as ev,
+            result,
+            outcome,
+            match_date,
+            payout,
+            profit_loss
+        FROM sgp_predictions
+        WHERE mode = 'PROD'
+        ORDER BY match_date ASC, id ASC
+    """)
+    
+    with engine.connect() as conn:
+        df = pd.read_sql(query, conn)
+
+    if df.empty:
+        st.info("No parlays in the database yet.")
+        return
+
+    # Split active vs settled
+    active_mask = df["result"].isin(["PENDING", "OPEN", None, ""]) | df["result"].isna()
+    active_bets = df[active_mask].copy()
+    settled_bets = df[~active_mask].copy()
+
+    # ROI / PROFIT / HIT RATE for settled
+    if not settled_bets.empty:
+        total_staked = settled_bets["stake"].sum()
+
+        if "payout" in settled_bets.columns:
+            total_return = settled_bets["payout"].fillna(0).sum()
+        else:
+            won_mask = settled_bets["result"].isin(["WON", "WIN"])
+            total_return = (settled_bets["stake"] * settled_bets["odds"] * won_mask.astype(float)).sum()
+
+        profit = total_return - total_staked
+        roi = (profit / total_staked * 100) if total_staked > 0 else 0.0
+        hit_rate = settled_bets["result"].isin(["WON", "WIN"]).mean() * 100
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.markdown(
+                f"""
+                <div style="padding:14px 16px;border-radius:12px;
+                    background:rgba(0,255,166,0.06);border:1px solid rgba(0,255,166,0.3);">
+                    <div style="font-size:11px;text-transform:uppercase;color:#7EF3C9;">ROI</div>
+                    <div style="font-size:26px;font-weight:700;color:#00FFA6;">
+                        {roi:+.1f}%
+                    </div>
+                    <div style="font-size:12px;color:#9CA3AF;">
+                        On {total_staked:.0f} kr staked
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        with col2:
+            color = "#00FFA6" if profit >= 0 else "#F97373"
+            st.markdown(
+                f"""
+                <div style="padding:14px 16px;border-radius:12px;
+                    background:rgba(15,23,42,0.9);border:1px solid rgba(148,163,184,0.4);">
+                    <div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Profit</div>
+                    <div style="font-size:26px;font-weight:700;color:{color};">
+                        {profit:+.0f} kr
+                    </div>
+                    <div style="font-size:12px;color:#9CA3AF;">
+                        All settled parlays
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        with col3:
+            st.markdown(
+                f"""
+                <div style="padding:14px 16px;border-radius:12px;
+                    background:rgba(15,23,42,0.9);border:1px solid rgba(148,163,184,0.4);">
+                    <div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Hit rate</div>
+                    <div style="font-size:26px;font-weight:700;color:#E5E7EB;">
+                        {hit_rate:.1f}%
+                    </div>
+                    <div style="font-size:12px;color:#9CA3AF;">
+                        Won / settled parlays
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("---")
+
+    # ACTIVE PARLAYS
+    st.markdown("### Active Parlays (Ready to bet)")
+
+    if active_bets.empty:
+        st.info("No active parlays right now.")
+    else:
+        for _, row in active_bets.iterrows():
+            ev = row.get("ev", 0.0) or 0.0
+            try:
+                ev = float(ev)
+            except Exception:
+                ev = 0.0
+
+            # EV-badge color
+            if ev >= 15:
+                ev_bg = "rgba(34,197,94,0.18)"
+                ev_border = "rgba(34,197,94,0.8)"
+            elif ev >= 8:
+                ev_bg = "rgba(250,204,21,0.14)"
+                ev_border = "rgba(250,204,21,0.9)"
+            elif ev >= 3:
+                ev_bg = "rgba(59,130,246,0.14)"
+                ev_border = "rgba(59,130,246,0.7)"
+            else:
+                ev_bg = "rgba(148,163,184,0.10)"
+                ev_border = "rgba(148,163,184,0.6)"
+
+            legs_text = row.get("parlay_description") or row.get("legs") or ""
+            legs_text = str(legs_text) if legs_text else ""
+            legs_html = "<br>".join([f"• {l.strip()}" for l in legs_text.split(",") if l.strip()])
+
+            # Format match date
+            match_dt = pd.to_datetime(row.get("match_date"), errors="coerce")
+            match_str = match_dt.strftime("%d %b %H:%M") if pd.notna(match_dt) else str(row.get("match_date", ""))
+
+            with st.container():
+                st.markdown(
+                    f"""
+                    <div style="
+                        padding:18px 18px;
+                        margin:10px 0;
+                        border-radius:16px;
+                        background:radial-gradient(circle at top left, rgba(0,255,166,0.14), rgba(15,23,42,0.96));
+                        border:1px solid rgba(0,255,166,0.35);
+                        box-shadow:0 0 20px rgba(0,255,166,0.25);
+                        transition:all 0.18s ease-out;
+                    ">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                            <div style="font-size:18px;font-weight:600;color:#E5E7EB;">
+                                {row['home_team']} – {row['away_team']}
+                            </div>
+                            <div style="
+                                font-size:11px;
+                                padding:4px 9px;
+                                border-radius:999px;
+                                background:{ev_bg};
+                                border:1px solid {ev_border};
+                                color:#E5E7EB;
+                                text-transform:uppercase;
+                                letter-spacing:0.06em;
+                            ">
+                                EV {ev:+.1f}%
+                            </div>
+                        </div>
+
+                        <div style="font-size:12px;color:#9CA3AF;margin-bottom:6px;">
+                            Kickoff: {match_str}
+                        </div>
+
+                        <div style="font-size:13px;color:#CBD5F5;margin-bottom:8px;">
+                            <span style="font-weight:600;color:#E5E7EB;">SGP legs:</span><br>
+                            {legs_html if legs_html else '<i>No leg details stored</i>'}
+                        </div>
+
+                        <div style="display:flex;gap:18px;align-items:baseline;margin-top:4px;">
+                            <div>
+                                <div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Odds</div>
+                                <div style="font-size:20px;font-weight:600;color:#00FFA6;">
+                                    {row['odds']:.2f}
+                                </div>
+                            </div>
+                            <div>
+                                <div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div>
+                                <div style="font-size:18px;font-weight:500;color:#E5E7EB;">
+                                    {row['stake']:.0f} kr
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+                bet_string = f"{row['home_team']} – {row['away_team']} | SGP: {legs_text} | Odds {row['odds']:.2f} | Stake {row['stake']:.0f} kr"
+                st.code(bet_string, language="text")
+
+    st.markdown("---")
+    st.markdown("### Parlay history")
+
+    history_df = df.sort_values("match_date", ascending=False).head(100)
+    display_cols = [c for c in ["match_date", "home_team", "away_team", "parlay_description", "odds", "stake", "ev", "result", "payout"] if c in history_df.columns]
+    st.dataframe(
+        history_df[display_cols],
+        use_container_width=True,
+        hide_index=True,
+    )
+
+
 # ------------- MAIN APP ------------- #
 
 def main():
@@ -678,12 +893,7 @@ def main():
         )
 
     with sgp_tab:
-        render_product_tab(
-            df,
-            product_codes=["SGP", "SGP_PARLAY", "SAME_GAME_PARLAY"],
-            title="Same Game Parlays",
-            description="Parlays built from correlated markets within the same match.",
-        )
+        render_sgp_parlays_tab()
 
     with women_tab:
         render_product_tab(
