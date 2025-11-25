@@ -37,7 +37,7 @@ def load_all_bets(mode: str | None = None) -> pd.DataFrame:
     params = {}
 
     if mode and mode.upper() in ("PROD", "TEST"):
-        where = "WHERE mode = :mode"
+        where = "WHERE mode = %(mode)s"
         params["mode"] = mode.upper()
 
     query = f"""
@@ -57,11 +57,25 @@ def load_all_bets(mode: str | None = None) -> pd.DataFrame:
     """
 
     with engine.connect() as conn:
-        df = pd.read_sql(query, conn, params=params)
+        df = pd.read_sql(query, conn, params=params if params else None)
 
-    df["created_at"] = pd.to_datetime(df["created_at"])
+    if df.empty:
+        df["created_at"] = pd.to_datetime([])
+        df["settled_at"] = pd.to_datetime([])
+        df["profit"] = []
+        return df
+
+    df["created_at"] = pd.to_datetime(df["created_at"], errors="coerce", utc=True)
     if "settled_at" in df.columns:
-        df["settled_at"] = pd.to_datetime(df["settled_at"])
+        df["settled_at"] = pd.to_datetime(df["settled_at"], errors="coerce", utc=True)
+
+    df["created_at"] = df["created_at"].dt.tz_localize(None)
+    if "settled_at" in df.columns:
+        df["settled_at"] = df["settled_at"].dt.tz_localize(None)
+
+    min_date = pd.Timestamp("2020-01-01")
+    max_date = pd.Timestamp("2030-12-31")
+    df = df[(df["created_at"] >= min_date) & (df["created_at"] <= max_date) | df["created_at"].isna()]
 
     df["profit"] = df["payout"] - df["stake"]
 
