@@ -78,6 +78,70 @@ class ValueSinglesEngine:
         self.champion = champion
         self.ev_threshold = ev_threshold      # e.g. 0.03 = 3% EV (lowered from 5%)
         self.min_confidence = min_confidence  # confidence gate (lowered from 55%)
+        self._exact_score_cache = {}  # Cache for exact score predictions
+    
+    def _get_exact_score_outcome(self, home_team: str, away_team: str) -> Optional[str]:
+        """
+        Check if there's an existing exact score prediction for this match.
+        Returns 'HOME_WIN', 'DRAW', 'AWAY_WIN' or None if no prediction exists.
+        """
+        from db_helper import db_helper
+        
+        cache_key = f"{home_team}_{away_team}"
+        if cache_key in self._exact_score_cache:
+            return self._exact_score_cache[cache_key]
+        
+        try:
+            query = """
+                SELECT selection FROM football_opportunities 
+                WHERE home_team = %s AND away_team = %s 
+                  AND market = 'exact_score'
+                  AND outcome IS NULL
+                LIMIT 1
+            """
+            rows = db_helper.execute(query, (home_team, away_team), fetch='all')
+            
+            if rows and rows[0][0]:
+                selection = rows[0][0]  # e.g., "Exact Score: 2-1"
+                # Parse the score to determine outcome
+                import re
+                match = re.search(r'(\d+)-(\d+)', selection)
+                if match:
+                    home_goals = int(match.group(1))
+                    away_goals = int(match.group(2))
+                    if home_goals > away_goals:
+                        result = 'HOME_WIN'
+                    elif away_goals > home_goals:
+                        result = 'AWAY_WIN'
+                    else:
+                        result = 'DRAW'
+                    self._exact_score_cache[cache_key] = result
+                    return result
+            
+            self._exact_score_cache[cache_key] = None
+            return None
+        except Exception as e:
+            print(f"⚠️ Error checking exact score: {e}")
+            return None
+    
+    def _is_1x2_conflicting(self, home_team: str, away_team: str, market_key: str) -> bool:
+        """
+        Check if a 1X2 selection conflicts with existing exact score prediction.
+        Returns True if conflicting (should skip), False if OK to proceed.
+        """
+        if market_key not in ('HOME_WIN', 'AWAY_WIN', 'DRAW'):
+            return False  # Only check 1X2 markets
+        
+        existing_outcome = self._get_exact_score_outcome(home_team, away_team)
+        if existing_outcome is None:
+            return False  # No exact score prediction, OK to proceed
+        
+        # Conflict if exact score says one outcome but singles says another
+        if existing_outcome != market_key:
+            print(f"⚠️ CONFLICT BLOCKED: {home_team} vs {away_team} has exact score predicting {existing_outcome}, but value single would be {market_key}")
+            return True
+        
+        return False  # Same prediction, OK
 
     def _calc_ev(self, p_model: float, odds: float) -> float:
         # Expected value = p*odds - 1
@@ -264,6 +328,9 @@ class ValueSinglesEngine:
                 if market_key in ("HOME_WIN", "AWAY_WIN", "DRAW"):
                     if odds < 1.40 or odds > 4.00:  # More relaxed range
                         continue
+                    # Check for conflict with exact score prediction
+                    if self._is_1x2_conflicting(home_team, away_team, market_key):
+                        continue  # Skip conflicting 1X2 selections
 
                 ev = self._calc_ev(p_model, odds)
                 if ev < self.ev_threshold:
