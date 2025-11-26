@@ -821,40 +821,59 @@ def render_product_tab(
 
     st.markdown("---")
 
-    st.markdown("### Active Bets")
     if active.empty:
         st.info("No active bets right now.")
     else:
-        for _, row in active.iterrows():
-            ev = row.get("ev", 0.0) or 0.0
-            try:
-                ev = float(ev)
-            except Exception:
-                ev = 0.0
-
-            if ev >= 15:
-                ev_bg, ev_border = "rgba(34,197,94,0.18)", "rgba(34,197,94,0.8)"
-            elif ev >= 8:
-                ev_bg, ev_border = "rgba(250,204,21,0.14)", "rgba(250,204,21,0.9)"
-            elif ev >= 3:
-                ev_bg, ev_border = "rgba(59,130,246,0.14)", "rgba(59,130,246,0.7)"
-            else:
-                ev_bg, ev_border = "rgba(148,163,184,0.10)", "rgba(148,163,184,0.6)"
-
-            match_str = format_kickoff(row.get("match_date"))
+        from datetime import datetime, timedelta
+        import pytz
+        
+        now_utc = datetime.now(pytz.UTC)
+        today = now_utc.date()
+        tomorrow = today + timedelta(days=1)
+        
+        active["match_date_parsed"] = pd.to_datetime(active["match_date"], errors="coerce", utc=True)
+        active["match_day"] = active["match_date_parsed"].dt.date
+        
+        todays_picks = active[active["match_day"] == today].copy()
+        tomorrows_picks = active[active["match_day"] == tomorrow].copy()
+        upcoming_picks = active[(active["match_day"] != today) & (active["match_day"] != tomorrow)].copy()
+        
+        def render_bet_cards(bets_df, section_title, section_emoji):
+            st.markdown(f"### {section_emoji} {section_title}")
+            if bets_df.empty:
+                st.caption(f"No {section_title.lower()} available.")
+                return
             
-            home_team = str(row.get('home_team', '')).replace('"', '&quot;')
-            away_team = str(row.get('away_team', '')).replace('"', '&quot;')
-            fixture = f"{home_team} vs {away_team}" if away_team else home_team
-            odds_val = float(row.get('odds', 0))
-            stake_val = float(row.get('stake', 100))
-            
-            selection = str(row.get('selection', '')).replace('"', '&quot;')
-            if not selection or selection.lower() == 'none':
-                selection = ""
-            bet_display = selection.replace("Exact Score: ", "").replace("Value Single: ", "") if selection else ""
+            for _, row in bets_df.iterrows():
+                ev = row.get("ev", 0.0) or 0.0
+                try:
+                    ev = float(ev)
+                except Exception:
+                    ev = 0.0
 
-            card_html = f"""<div style="padding:18px;margin:10px 0;border-radius:16px;background:radial-gradient(circle at top left, rgba(0,255,166,0.14), rgba(15,23,42,0.96));border:1px solid rgba(0,255,166,0.35);box-shadow:0 0 20px rgba(0,255,166,0.25);">
+                if ev >= 15:
+                    ev_bg, ev_border = "rgba(34,197,94,0.18)", "rgba(34,197,94,0.8)"
+                elif ev >= 8:
+                    ev_bg, ev_border = "rgba(250,204,21,0.14)", "rgba(250,204,21,0.9)"
+                elif ev >= 3:
+                    ev_bg, ev_border = "rgba(59,130,246,0.14)", "rgba(59,130,246,0.7)"
+                else:
+                    ev_bg, ev_border = "rgba(148,163,184,0.10)", "rgba(148,163,184,0.6)"
+
+                match_str = format_kickoff(row.get("match_date"))
+                
+                home_team = str(row.get('home_team', '')).replace('"', '&quot;')
+                away_team = str(row.get('away_team', '')).replace('"', '&quot;')
+                fixture = f"{home_team} vs {away_team}" if away_team else home_team
+                odds_val = float(row.get('odds', 0))
+                stake_val = float(row.get('stake', 100))
+                
+                selection = str(row.get('selection', '')).replace('"', '&quot;')
+                if not selection or selection.lower() == 'none':
+                    selection = ""
+                bet_display = selection.replace("Exact Score: ", "").replace("Value Single: ", "") if selection else ""
+
+                card_html = f"""<div style="padding:18px;margin:10px 0;border-radius:16px;background:radial-gradient(circle at top left, rgba(0,255,166,0.14), rgba(15,23,42,0.96));border:1px solid rgba(0,255,166,0.35);box-shadow:0 0 20px rgba(0,255,166,0.25);">
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
 <div style="font-size:18px;font-weight:600;color:#E5E7EB;">⚽ {fixture}</div>
 <div style="font-size:11px;padding:4px 9px;border-radius:999px;background:{ev_bg};border:1px solid {ev_border};color:#E5E7EB;text-transform:uppercase;letter-spacing:0.06em;">EV {ev:+.1f}%</div>
@@ -866,8 +885,16 @@ def render_product_tab(
 <div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">{stake_val:.0f} kr</div></div>
 </div>
 </div>"""
-            st.markdown(card_html, unsafe_allow_html=True)
-            st.code(f"{fixture} | {bet_display} | Odds {odds_val:.2f} | Stake {stake_val:.0f} kr", language="text")
+                st.markdown(card_html, unsafe_allow_html=True)
+                st.code(f"{fixture} | {bet_display} | Odds {odds_val:.2f} | Stake {stake_val:.0f} kr", language="text")
+        
+        render_bet_cards(todays_picks, "Today's Picks", "🔥")
+        st.markdown("")
+        render_bet_cards(tomorrows_picks, "Tomorrow's Picks", "📅")
+        
+        if not upcoming_picks.empty:
+            st.markdown("")
+            render_bet_cards(upcoming_picks, "Upcoming Picks", "🗓️")
 
     st.markdown("---")
 
