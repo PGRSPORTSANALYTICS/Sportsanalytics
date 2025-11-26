@@ -844,7 +844,18 @@ def render_product_tab(
         today = now_utc.date()
         tomorrow = today + timedelta(days=1)
         
-        active["match_date_parsed"] = pd.to_datetime(active["match_date"], errors="coerce", utc=True)
+        def parse_match_date(val):
+            if pd.isna(val) or val is None or str(val).strip() == '':
+                return pd.NaT
+            s = str(val).strip()
+            if len(s) == 10 and '-' in s:
+                s = s + "T00:00:00Z"
+            try:
+                return pd.to_datetime(s, utc=True)
+            except:
+                return pd.NaT
+        
+        active["match_date_parsed"] = active["match_date"].apply(parse_match_date)
         active["match_day"] = active["match_date_parsed"].dt.date
         
         todays_picks = active[active["match_day"] == today].copy()
