@@ -74,6 +74,21 @@ def get_women_1x2(prod_bets: pd.DataFrame) -> pd.DataFrame:
     return filter_by_product(prod_bets, ["WOMEN_1X2", "WOMENS_1X2", "W1X2"])
 
 
+def build_training_data(all_bets: pd.DataFrame) -> pd.DataFrame:
+    """
+    Build training dataset combining PROD and BACKTEST data.
+    Adds 'source' column to identify origin.
+    Use this for ML model training where you want all available data.
+    """
+    prod_bets, backtest_bets = split_bets_by_mode(all_bets)
+
+    prod_bets = prod_bets.assign(source="PROD")
+    backtest_bets = backtest_bets.assign(source="BACKTEST")
+
+    train_df = pd.concat([prod_bets, backtest_bets], ignore_index=True)
+    return train_df
+
+
 def format_kickoff(date_val) -> str:
     """
     Format match date for display, handling NaT/None/invalid values gracefully.
