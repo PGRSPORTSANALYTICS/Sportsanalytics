@@ -860,7 +860,8 @@ def render_product_tab(
                 else:
                     ev_bg, ev_border = "rgba(148,163,184,0.10)", "rgba(148,163,184,0.6)"
 
-                match_str = format_kickoff(row.get("match_date"))
+                match_dt = row.get("match_date_parsed") or row.get("match_date")
+                match_str = format_kickoff(match_dt)
                 
                 home_team = str(row.get('home_team', '')).replace('"', '&quot;')
                 away_team = str(row.get('away_team', '')).replace('"', '&quot;')
