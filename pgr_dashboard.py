@@ -74,11 +74,17 @@ def get_women_1x2(prod_bets: pd.DataFrame) -> pd.DataFrame:
     return filter_by_product(prod_bets, ["WOMEN_1X2", "WOMENS_1X2", "W1X2"])
 
 
-def build_training_data(all_bets: pd.DataFrame) -> pd.DataFrame:
+def build_training_data(all_bets: pd.DataFrame, backtest_weight: float = 0.3) -> pd.DataFrame:
     """
     Build training dataset combining PROD and BACKTEST data.
-    Adds 'source' column to identify origin.
-    Use this for ML model training where you want all available data.
+    Adds 'source' column to identify origin and 'weight' for sample weighting.
+    
+    Args:
+        all_bets: All bets from database
+        backtest_weight: Weight for backtest samples (default 0.3, PROD always 1.0)
+    
+    Returns:
+        DataFrame with 'source' and 'weight' columns for ML training
     """
     prod_bets, backtest_bets = split_bets_by_mode(all_bets)
 
@@ -86,6 +92,12 @@ def build_training_data(all_bets: pd.DataFrame) -> pd.DataFrame:
     backtest_bets = backtest_bets.assign(source="BACKTEST")
 
     train_df = pd.concat([prod_bets, backtest_bets], ignore_index=True)
+    
+    train_df["weight"] = train_df["source"].map({
+        "PROD": 1.0,
+        "BACKTEST": backtest_weight,
+    })
+    
     return train_df
 
 
