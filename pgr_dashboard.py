@@ -166,21 +166,30 @@ def format_kickoff(date_val) -> str:
     try:
         if isinstance(date_val, str):
             if 'T' in date_val:
-                from datetime import datetime
-                dt_str = date_val.replace('Z', '+00:00')
-                dt = datetime.fromisoformat(dt_str)
-                return dt.strftime("%d %b %H:%M")
+                clean = date_val.replace('Z', '').replace('+00:00', '')
+                if 'T' in clean:
+                    date_part, time_part = clean.split('T')
+                    time_short = time_part[:5]
+                    from datetime import datetime
+                    dt = datetime.strptime(f"{date_part} {time_short}", "%Y-%m-%d %H:%M")
+                    return dt.strftime("%d %b %H:%M")
+        
+        if hasattr(date_val, 'strftime'):
+            return date_val.strftime("%d %b %H:%M")
         
         dt = pd.to_datetime(date_val, errors="coerce")
         if pd.isna(dt):
             return "TBD"
-        if hasattr(dt, 'tz') and dt.tz is not None:
-            dt = dt.tz_localize(None)
         return dt.strftime("%d %b %H:%M")
-    except Exception:
-        date_str = str(date_val).strip().upper()
-        if date_str in ["NAT", "NONE", "NULL", ""]:
+    except Exception as e:
+        date_str = str(date_val).strip()
+        if date_str.upper() in ["NAT", "NONE", "NULL", ""]:
             return "TBD"
+        if 'T' in date_str:
+            try:
+                return date_str.split('T')[0] + " " + date_str.split('T')[1][:5]
+            except:
+                pass
         return date_str[:16] if len(date_str) > 16 else date_str
 
 
