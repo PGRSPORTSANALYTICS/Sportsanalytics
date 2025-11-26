@@ -29,8 +29,8 @@ from db_connection import get_db_conn as get_conn
 # -------------------------
 
 RESULT_COLUMN_MAP = {
-    "basketball_predictions": "status",   # basketball uses 'status'
-    # other tables use 'result' as default
+    "basketball_predictions": "status",
+    "women_match_winner_predictions": "status",
 }
 
 def get_result_column(table_name: str) -> str:
