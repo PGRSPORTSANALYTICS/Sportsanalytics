@@ -24,6 +24,22 @@ def split_bets_by_mode(df: pd.DataFrame):
     return prod_bets, test_bets
 
 
+def get_prod_bets(df: pd.DataFrame) -> pd.DataFrame:
+    """Get only production bets (mode='PROD' or null)."""
+    if "mode" not in df.columns:
+        return df.copy()
+    mode_col = df["mode"].fillna("PROD").str.upper()
+    return df[mode_col == "PROD"].copy()
+
+
+def get_backtest_bets(df: pd.DataFrame) -> pd.DataFrame:
+    """Get only backtest bets (mode='BACKTEST' or 'TEST')."""
+    if "mode" not in df.columns:
+        return df.iloc[0:0].copy()
+    mode_col = df["mode"].fillna("PROD").str.upper()
+    return df[mode_col.isin(["TEST", "BACKTEST"])].copy()
+
+
 def calculate_roi(bets: pd.DataFrame) -> float:
     """Calculate ROI percentage from bets dataframe."""
     summary = compute_roi(bets)
