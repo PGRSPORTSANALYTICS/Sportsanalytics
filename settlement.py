@@ -25,6 +25,20 @@ from db_connection import get_db_conn as get_conn
 
 
 # -------------------------
+# Result column mapping per table
+# -------------------------
+
+RESULT_COLUMN_MAP = {
+    "basketball_predictions": "status",   # basketball uses 'status'
+    # other tables use 'result' as default
+}
+
+def get_result_column(table_name: str) -> str:
+    """Return the correct result/status column for a given table."""
+    return RESULT_COLUMN_MAP.get(table_name, "result")
+
+
+# -------------------------
 # Datamodell för matchresultat
 # -------------------------
 
