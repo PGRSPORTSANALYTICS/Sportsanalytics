@@ -862,6 +862,11 @@ def render_product_tab(
                 st.caption(f"No {section_title.lower()} available.")
                 return
             
+            if "match_date" in bets_df.columns:
+                st.caption(f"Debug: match_date column exists, first value: {bets_df['match_date'].iloc[0] if len(bets_df) > 0 else 'empty'}")
+            else:
+                st.caption("Debug: match_date column MISSING!")
+            
             for _, row in bets_df.iterrows():
                 ev = row.get("ev", 0.0) or 0.0
                 try:
@@ -878,7 +883,8 @@ def render_product_tab(
                 else:
                     ev_bg, ev_border = "rgba(148,163,184,0.10)", "rgba(148,163,184,0.6)"
 
-                match_str = format_kickoff(row.get("match_date"))
+                raw_match_date = row["match_date"] if "match_date" in row.index else None
+                match_str = format_kickoff(raw_match_date)
                 
                 home_team = str(row.get('home_team', '')).replace('"', '&quot;')
                 away_team = str(row.get('away_team', '')).replace('"', '&quot;')
