@@ -314,9 +314,9 @@ def settle_all_bets(mode: str = "PROD") -> None:
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # 1) Hämta pending bets från alla produkt-tabeller
+            # Note: Basketball skipped - handled by college_basket_result_verifier.py
             singles = _fetch_pending(cur, "football_opportunities", mode)
             sgps = _fetch_pending(cur, "sgp_predictions", mode)
-            baskets = _fetch_pending(cur, "basketball_predictions", mode)
             women = _fetch_pending(cur, "women_match_winner_predictions", mode)
 
             to_update: List[Tuple[str, int, str, float]] = []  # (table, id, result, payout)
@@ -349,13 +349,9 @@ def settle_all_bets(mode: str = "PROD") -> None:
                 to_update.append(("sgp_predictions", row["id"], status, payout))
 
             # --- BASKETBALL ---
-            for row in baskets:
-                fixture_id = row["fixture_id"]
-                res_obj = results_by_fixture.get(fixture_id)
-                if not res_obj:
-                    continue
-                status, payout = settle_basketball(row, res_obj)
-                to_update.append(("basketball_predictions", row["id"], status, payout))
+            # Basketball is handled by college_basket_result_verifier.py
+            # using The Odds API scores (no fixture_id in basketball table)
+            # Skip here - verification runs separately in Combined Sports Engine
 
             # --- WOMEN_1X2 ---
             for row in women:
@@ -367,18 +363,10 @@ def settle_all_bets(mode: str = "PROD") -> None:
                 to_update.append(("women_match_winner_predictions", row["id"], status, payout))
 
             # Nu uppdaterar vi alla bets i databasen
+            from datetime import datetime
+            now = datetime.now()
             for table, bet_id, status, payout in to_update:
-                cur.execute(
-                    f"""
-                    UPDATE {table}
-                    SET
-                        result = %s,
-                        payout = %s,
-                        settled_at = NOW()
-                    WHERE id = %s
-                    """,
-                    (status, payout, bet_id),
-                )
+                _update_result(cur, table, bet_id, status, payout, now, mode)
 
         conn.commit()
     finally:

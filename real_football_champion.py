@@ -3093,6 +3093,49 @@ class RealFootballChampion:
             print(f"❌ EXACT SCORE SAVE ERROR: {e}")
             return False
 
+def run_single_cycle():
+    """Run a single prediction cycle and return (non-blocking)"""
+    try:
+        champion = RealFootballChampion()
+        
+        print("🎯 EXACT SCORE PREDICTIONS MODE - Single Cycle")
+        print("=" * 60)
+        
+        exact_scores = champion.run_exact_score_analysis()
+        
+        try:
+            print("\n💰 VALUE SINGLES ENGINE - Analyzing markets...")
+            value_engine = ValueSinglesEngine(champion, ev_threshold=0.03, min_confidence=50)
+            value_singles = value_engine.generate_value_singles(max_picks=6)
+            if value_singles:
+                saved = value_engine.save_value_singles(value_singles)
+                print(f"✅ Saved {saved} VALUE SINGLES predictions")
+            else:
+                print("📊 No value singles found this cycle")
+        except Exception as e:
+            print(f"⚠️ Value Singles generation failed: {e}")
+        
+        print("\n🔄 CHECKING EXACT SCORE RESULTS...")
+        updated_bets = champion.results_scraper.update_bet_outcomes()
+        if updated_bets > 0:
+            print(f"✅ Updated {updated_bets} exact score outcomes")
+        else:
+            print("📊 No pending exact scores to update")
+        
+        try:
+            from milestone_tracker import check_500_milestone
+            check_500_milestone()
+        except Exception as e:
+            print(f"⚠️ Milestone check failed: {e}")
+        
+        print("✅ Football prediction cycle complete")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Error in football prediction cycle: {e}")
+        return False
+
+
 def main():
     """Main execution function - EXACT SCORES ONLY"""
     try:

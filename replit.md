@@ -35,6 +35,9 @@ The system employs advanced prediction features including:
 - **Hybrid Bet Monitoring System:** Unified real-time tracking for Exact Score and SGP predictions via a central `BetStatusService`, a Live Bet Control Center (Dashboard), and extended Telegram bot commands.
 - **Dual Telegram Channels:** Separate broadcast channels for different prediction types with smart volume control.
 - **Intelligent Result Verification System:** Production-ready caching and cooldown system to prevent API quota exhaustion with multi-source fallback (Flashscore, API-Football, The Odds API, Sofascore).
+- **Non-Blocking Engine Architecture (Nov 26, 2025):** Combined Sports Engine uses `run_single_cycle()` function in real_football_champion.py instead of the blocking `main()` infinite loop, allowing proper sequential execution of all prediction cycles (Football → SGP → Women → Basketball).
+- **Dynamic Settlement Column System:** settlement.py uses `RESULT_COLUMN_MAP` and `_update_result()` helper functions to dynamically select between "status" (basketball/women) and "result" (football) columns during bet settlement.
+- **Separated Basketball Verification:** Basketball settlement handled exclusively by college_basket_result_verifier.py using The Odds API scores endpoint, not part of fixture-based settle_all_bets flow.
 
 ### System Design Choices
 - **Data Layer:** Migrated from SQLite to PostgreSQL (Replit's built-in Neon database) to eliminate database locking issues during concurrent workflow access, using connection pooling.

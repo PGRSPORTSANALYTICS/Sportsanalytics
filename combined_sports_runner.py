@@ -22,7 +22,8 @@ def run_football_predictions():
     try:
         import real_football_champion
         logger.info("⚽ Starting Football Exact Score cycle...")
-        real_football_champion.main()
+        real_football_champion.run_single_cycle()
+        logger.info("✅ Football Exact Score cycle complete")
     except Exception as e:
         logger.error(f"❌ Football prediction error: {e}")
 
