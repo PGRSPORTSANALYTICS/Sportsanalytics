@@ -74,6 +74,18 @@ def get_women_1x2(prod_bets: pd.DataFrame) -> pd.DataFrame:
     return filter_by_product(prod_bets, ["WOMEN_1X2", "WOMENS_1X2", "W1X2"])
 
 
+def weighted_roi(df: pd.DataFrame) -> float:
+    """
+    Calculate ROI with sample weights.
+    Useful for blended PROD/BACKTEST metrics where PROD has higher weight.
+    """
+    if "weight" not in df.columns:
+        df = df.assign(weight=1.0)
+    stake = (df["stake"] * df["weight"]).sum()
+    profit = ((df["payout"] - df["stake"]) * df["weight"]).sum()
+    return 100 * profit / stake if stake > 0 else 0.0
+
+
 def build_training_data(all_bets: pd.DataFrame, backtest_weight: float = 0.3) -> pd.DataFrame:
     """
     Build training dataset combining PROD and BACKTEST data.
