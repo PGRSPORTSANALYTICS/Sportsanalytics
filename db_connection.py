@@ -132,3 +132,15 @@ class DatabaseConnection:
             logger.info("🔌 PostgreSQL connection pool closed")
 
 db = DatabaseConnection()
+
+
+def get_db_conn():
+    """
+    Backwards-compatible helper for scripts (e.g. settlement.py)
+    that expect a plain psycopg2 connection object.
+    Uses the shared DatabaseConnection pool.
+    """
+    if DatabaseConnection._connection_pool is None:
+        DatabaseConnection.initialize_pool()
+
+    return DatabaseConnection._connection_pool.getconn()
