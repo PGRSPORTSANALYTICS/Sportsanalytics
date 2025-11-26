@@ -286,7 +286,7 @@ def settle_all_bets(mode: str = "PROD") -> None:
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # 1) Hämta pending bets från alla produkt-tabeller
-            singles = _fetch_pending(cur, "football_opportunitties", mode)
+            singles = _fetch_pending(cur, "football_opportunities", mode)
             sgps = _fetch_pending(cur, "sgp_predictions", mode)
             baskets = _fetch_pending(cur, "basketball_predictions", mode)
             women = _fetch_pending(cur, "women_match_winner_predictions", mode)
