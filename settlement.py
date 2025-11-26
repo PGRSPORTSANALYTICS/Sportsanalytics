@@ -273,15 +273,15 @@ def settle_women_1x2(row: Dict[str, Any], result: MatchResult) -> Tuple[str, flo
 # -------------------------
 
 def _fetch_pending(cur, table: str, mode: str) -> List[Dict[str, Any]]:
-    cur.execute(
-        f"""
+    result_col = get_result_column(table)
+
+    query = f"""
         SELECT *
         FROM {table}
-        WHERE result = 'PENDING'
+        WHERE {result_col} = 'PENDING'
           AND mode = %s
-        """,
-        (mode,),
-    )
+    """
+    cur.execute(query, (mode,))
     return cur.fetchall()
 
 
