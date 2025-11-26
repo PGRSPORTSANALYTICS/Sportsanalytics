@@ -336,6 +336,18 @@ class SGPChampion:
             logger.error(f"❌ Telegram send failed: {e}")
 
 
+def run_single_cycle():
+    """Run a single SGP generation cycle without blocking wait"""
+    try:
+        champion = SGPChampion()
+        champion.generate_daily_sgps()
+        logger.info("✅ SGP single cycle complete")
+    except Exception as e:
+        logger.error(f"❌ Error in SGP generation cycle: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 def main():
     """Run SGP Champion continuously"""
     import time

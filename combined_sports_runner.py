@@ -31,9 +31,10 @@ def run_football_predictions():
 def run_sgp_predictions():
     """Run SGP predictions"""
     try:
-        import sgp_champion
+        from sgp_champion import run_single_cycle
         logger.info("🎲 Starting SGP cycle...")
-        sgp_champion.main()
+        run_single_cycle()
+        logger.info("✅ SGP cycle complete")
     except Exception as e:
         logger.error(f"❌ SGP prediction error: {e}")
 
