@@ -164,33 +164,28 @@ def format_kickoff(date_val) -> str:
         return "TBD"
     
     try:
-        if isinstance(date_val, str):
-            if 'T' in date_val:
-                clean = date_val.replace('Z', '').replace('+00:00', '')
-                if 'T' in clean:
-                    date_part, time_part = clean.split('T')
-                    time_short = time_part[:5]
-                    from datetime import datetime
-                    dt = datetime.strptime(f"{date_part} {time_short}", "%Y-%m-%d %H:%M")
-                    return dt.strftime("%d %b %H:%M")
+        date_str = str(date_val).strip()
+        
+        if date_str.upper() in ["NAT", "NONE", "NULL", "", "NATTYPE"]:
+            return "TBD"
+        
+        if 'T' in date_str:
+            clean = date_str.replace('Z', '').replace('+00:00', '')
+            date_part, time_part = clean.split('T')
+            time_short = time_part[:5]
+            from datetime import datetime as dt_module
+            parsed = dt_module.strptime(f"{date_part} {time_short}", "%Y-%m-%d %H:%M")
+            return parsed.strftime("%d %b %H:%M")
         
         if hasattr(date_val, 'strftime'):
             return date_val.strftime("%d %b %H:%M")
         
-        dt = pd.to_datetime(date_val, errors="coerce")
-        if pd.isna(dt):
+        parsed = pd.to_datetime(date_val, errors="coerce")
+        if pd.isna(parsed):
             return "TBD"
-        return dt.strftime("%d %b %H:%M")
-    except Exception as e:
-        date_str = str(date_val).strip()
-        if date_str.upper() in ["NAT", "NONE", "NULL", ""]:
-            return "TBD"
-        if 'T' in date_str:
-            try:
-                return date_str.split('T')[0] + " " + date_str.split('T')[1][:5]
-            except:
-                pass
-        return date_str[:16] if len(date_str) > 16 else date_str
+        return parsed.strftime("%d %b %H:%M")
+    except Exception:
+        return "TBD"
 
 
 def normalize_result(raw_result: Optional[str]) -> str:
@@ -861,11 +856,6 @@ def render_product_tab(
             if bets_df.empty:
                 st.caption(f"No {section_title.lower()} available.")
                 return
-            
-            if "match_date" in bets_df.columns:
-                st.caption(f"Debug: match_date column exists, first value: {bets_df['match_date'].iloc[0] if len(bets_df) > 0 else 'empty'}")
-            else:
-                st.caption("Debug: match_date column MISSING!")
             
             for _, row in bets_df.iterrows():
                 ev = row.get("ev", 0.0) or 0.0
