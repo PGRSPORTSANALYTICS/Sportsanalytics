@@ -285,6 +285,20 @@ def _fetch_pending(cur, table: str, mode: str) -> List[Dict[str, Any]]:
     return cur.fetchall()
 
 
+def _update_result(cur, table_name: str, bet_id: int, result_value: str, payout: float, settled_at, mode: str):
+    result_col = get_result_column(table_name)
+
+    query = f"""
+        UPDATE {table_name}
+        SET {result_col} = %s,
+            payout = %s,
+            verified_at = %s
+        WHERE id = %s
+          AND mode = %s
+    """
+    cur.execute(query, (result_value, payout, settled_at, bet_id, mode))
+
+
 # -------------------------
 # Huvud-funktion: settle_all_bets
 # -------------------------
