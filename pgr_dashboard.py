@@ -86,6 +86,32 @@ def weighted_roi(df: pd.DataFrame) -> float:
     return 100 * profit / stake if stake > 0 else 0.0
 
 
+def run_backtest(start_date: str, end_date: str, algorithm_fn, load_fixtures_fn, save_bets_fn) -> dict:
+    """
+    Run backtest on historical fixtures and save results with mode='BACKTEST'.
+    
+    Args:
+        start_date: Start date (YYYY-MM-DD)
+        end_date: End date (YYYY-MM-DD)
+        algorithm_fn: Function that takes a match and returns bets
+        load_fixtures_fn: Function that loads fixtures for date range
+        save_bets_fn: Function that saves bets to database
+    
+    Returns:
+        dict with status and count of bets generated
+    """
+    fixtures = load_fixtures_fn(start_date, end_date)
+    total_bets = 0
+    
+    for match in fixtures:
+        bets = algorithm_fn(match)
+        if bets:
+            save_bets_fn(bets, mode="BACKTEST")
+            total_bets += len(bets) if isinstance(bets, list) else 1
+    
+    return {"status": "done", "bets_generated": total_bets, "matches_processed": len(fixtures)}
+
+
 def build_training_data(all_bets: pd.DataFrame, backtest_weight: float = 0.3) -> pd.DataFrame:
     """
     Build training dataset combining PROD and BACKTEST data.
