@@ -59,7 +59,7 @@ def load_fixtures_for_range(start: datetime, end: datetime) -> List[Dict[str, An
         
         league_ids = [
             league["api_football_id"] 
-            for league in LEAGUE_REGISTRY.values() 
+            for league in LEAGUE_REGISTRY 
             if league.get("api_football_id")
         ]
         
