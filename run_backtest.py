@@ -49,86 +49,90 @@ def load_fixtures_for_range(start: datetime, end: datetime) -> List[Dict[str, An
     Returns:
         Lista med dictionaries: fixture_id, home_team, away_team, kickoff, league
     """
+    from league_config import LEAGUE_REGISTRY
+    
+    league_ids = []
+    
+    for league in LEAGUE_REGISTRY:
+        if isinstance(league, dict):
+            api_id = league.get("api_football_id") or league.get("league_id")
+        else:
+            api_id = (
+                getattr(league, "api_football_id", None)
+                or getattr(league, "league_id", None)
+                or getattr(league, "id", None)
+            )
+        
+        if api_id:
+            league_ids.append(api_id)
+    
+    if not league_ids:
+        league_ids = [39, 140, 135, 78, 61, 88, 94, 2, 3, 848]
+    
     fixtures = []
     
     try:
         from api_football_client import APIFootballClient
-        from league_config import LEAGUE_REGISTRY
         
-        client = APIFootballClient()
-        
-        league_ids = [
-            league["api_football_id"] 
-            for league in LEAGUE_REGISTRY 
-            if league.get("api_football_id")
-        ]
-        
-        if not league_ids:
-            league_ids = [39, 140, 135, 78, 61, 88, 94, 2, 3, 848]
+        api_football_client = APIFootballClient()
         
         print(f"[BACKTEST] Fetching fixtures from {len(league_ids)} leagues...")
         print(f"[BACKTEST] Date range: {start.strftime('%Y-%m-%d')} to {end.strftime('%Y-%m-%d')}")
         
-        current_year = start.year
-        current_season = current_year if start.month >= 7 else current_year - 1
-        
         for league_id in league_ids:
             try:
-                params = {
-                    'league': league_id,
-                    'season': current_season,
-                    'from': start.strftime('%Y-%m-%d'),
-                    'to': end.strftime('%Y-%m-%d'),
-                }
-                
-                if hasattr(client, '_fetch_with_cache'):
-                    cache_key = f"backtest_fixtures_{league_id}_{start.strftime('%Y%m%d')}_{end.strftime('%Y%m%d')}"
-                    response = client._fetch_with_cache('fixtures', params, cache_key, ttl_hours=168)
+                if hasattr(api_football_client, 'get_fixtures_for_league'):
+                    league_fixtures = api_football_client.get_fixtures_for_league(
+                        league_id=league_id,
+                        start_date=start,
+                        end_date=end,
+                    )
+                    fixtures.extend(league_fixtures)
+                    print(f"[BACKTEST] League {league_id}: {len(league_fixtures)} fixtures")
                 else:
-                    import requests
-                    api_key = os.environ.get("API_FOOTBALL_KEY")
-                    if not api_key:
-                        print(f"[BACKTEST] ⚠️ No API_FOOTBALL_KEY, skipping league {league_id}")
+                    current_year = start.year
+                    current_season = current_year if start.month >= 7 else current_year - 1
+                    
+                    params = {
+                        'league': league_id,
+                        'season': current_season,
+                        'from': start.strftime('%Y-%m-%d'),
+                        'to': end.strftime('%Y-%m-%d'),
+                    }
+                    
+                    cache_key = f"backtest_fixtures_{league_id}_{start.strftime('%Y%m%d')}_{end.strftime('%Y%m%d')}"
+                    response = api_football_client._fetch_with_cache('fixtures', params, cache_key, ttl_hours=168)
+                    
+                    if not response:
                         continue
                     
-                    headers = {'x-apisports-key': api_key}
-                    url = "https://v3.football.api-sports.io/fixtures"
-                    resp = requests.get(url, headers=headers, params=params, timeout=15)
-                    if resp.status_code == 200:
-                        response = resp.json().get('response', [])
-                    else:
-                        response = []
-                
-                if not response:
-                    continue
-                
-                for fixture in response:
-                    fixture_info = fixture.get('fixture', {})
-                    teams = fixture.get('teams', {})
-                    league_info = fixture.get('league', {})
+                    for fixture in response:
+                        fixture_info = fixture.get('fixture', {})
+                        teams = fixture.get('teams', {})
+                        league_info = fixture.get('league', {})
+                        
+                        kickoff_str = fixture_info.get('date', '')
+                        kickoff = None
+                        if kickoff_str:
+                            try:
+                                kickoff = datetime.fromisoformat(kickoff_str.replace('Z', '+00:00'))
+                            except:
+                                pass
+                        
+                        fixtures.append({
+                            "fixture_id": fixture_info.get('id'),
+                            "home_team": teams.get('home', {}).get('name', 'Unknown'),
+                            "away_team": teams.get('away', {}).get('name', 'Unknown'),
+                            "kickoff": kickoff,
+                            "kickoff_str": kickoff_str,
+                            "league": league_info.get('name', f'League {league_id}'),
+                            "league_id": league_id,
+                            "status": fixture_info.get('status', {}).get('short', 'NS'),
+                            "home_score": fixture.get('goals', {}).get('home'),
+                            "away_score": fixture.get('goals', {}).get('away'),
+                        })
                     
-                    kickoff_str = fixture_info.get('date', '')
-                    kickoff = None
-                    if kickoff_str:
-                        try:
-                            kickoff = datetime.fromisoformat(kickoff_str.replace('Z', '+00:00'))
-                        except:
-                            pass
-                    
-                    fixtures.append({
-                        "fixture_id": fixture_info.get('id'),
-                        "home_team": teams.get('home', {}).get('name', 'Unknown'),
-                        "away_team": teams.get('away', {}).get('name', 'Unknown'),
-                        "kickoff": kickoff,
-                        "kickoff_str": kickoff_str,
-                        "league": league_info.get('name', f'League {league_id}'),
-                        "league_id": league_id,
-                        "status": fixture_info.get('status', {}).get('short', 'NS'),
-                        "home_score": fixture.get('goals', {}).get('home'),
-                        "away_score": fixture.get('goals', {}).get('away'),
-                    })
-                
-                print(f"[BACKTEST] League {league_id}: {len(response)} fixtures")
+                    print(f"[BACKTEST] League {league_id}: {len(response)} fixtures")
                 
             except Exception as e:
                 print(f"[BACKTEST] ⚠️ Error fetching league {league_id}: {e}")
