@@ -662,15 +662,17 @@ class ResultsScraper:
                     profit_loss = self.calculate_profit_loss(outcome, odds, stake)
                     payout = self.calculate_payout(outcome, odds, stake)
                     
+                    actual_score = f"{cached_result.get('home_score', 0)}-{cached_result.get('away_score', 0)}"
                     db_helper.execute('''
                         UPDATE football_opportunities 
-                        SET outcome = %s, result = %s, profit_loss = %s, payout = %s, updated_at = %s
+                        SET outcome = %s, result = %s, profit_loss = %s, payout = %s, 
+                            actual_score = %s, status = 'settled', updated_at = %s
                         WHERE id = %s
-                    ''', (outcome, outcome, profit_loss, payout, datetime.now().isoformat(), bet_id))
+                    ''', (outcome, outcome, profit_loss, payout, actual_score, datetime.now().isoformat(), bet_id))
                     
                     updated_count += 1
                     self._mark_bet_checked(bet_id)  # Mark cooldown after success
-                    logger.info(f"✅ Updated bet {bet_id} from cache: {home_team} vs {away_team} | {selection} = {outcome}")
+                    logger.info(f"✅ Updated bet {bet_id} from cache: {home_team} vs {away_team} | {selection} = {outcome} (Score: {actual_score})")
                 else:
                     # Cache miss - need to fetch
                     if clean_date not in bets_needing_fetch:
@@ -704,16 +706,18 @@ class ResultsScraper:
                         outcome = self.determine_bet_outcome(selection, match_result)
                         profit_loss = self.calculate_profit_loss(outcome, odds, stake)
                         payout = self.calculate_payout(outcome, odds, stake)
+                        actual_score = f"{match_result.get('home_score', 0)}-{match_result.get('away_score', 0)}"
                         
                         db_helper.execute('''
                             UPDATE football_opportunities 
-                            SET outcome = %s, result = %s, profit_loss = %s, payout = %s, updated_at = %s
+                            SET outcome = %s, result = %s, profit_loss = %s, payout = %s,
+                                actual_score = %s, status = 'settled', updated_at = %s
                             WHERE id = %s
-                        ''', (outcome, outcome, profit_loss, payout, datetime.now().isoformat(), bet_id))
+                        ''', (outcome, outcome, profit_loss, payout, actual_score, datetime.now().isoformat(), bet_id))
                         
                         updated_count += 1
                         self._mark_bet_checked(bet_id)  # Mark cooldown only after success
-                        logger.info(f"✅ Updated bet {bet_id}: {home_team} vs {away_team} | {selection} = {outcome}")
+                        logger.info(f"✅ Updated bet {bet_id}: {home_team} vs {away_team} | {selection} = {outcome} (Score: {actual_score})")
                     else:
                         # No result found - mark checked to avoid immediate retry
                         self._mark_bet_checked(bet_id)
