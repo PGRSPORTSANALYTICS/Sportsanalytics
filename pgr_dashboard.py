@@ -158,7 +158,7 @@ def build_training_data(all_bets: pd.DataFrame, backtest_weight: float = 0.3) ->
 def format_kickoff(date_val) -> str:
     """
     Format match date for display, handling NaT/None/invalid values gracefully.
-    Returns formatted string like '25 Nov 20:00' or 'TBD' if invalid.
+    Returns formatted string like '25 Nov 20:00' or '25 Nov' for date-only.
     """
     if date_val is None:
         return "TBD"
@@ -177,12 +177,22 @@ def format_kickoff(date_val) -> str:
             parsed = dt_module.strptime(f"{date_part} {time_short}", "%Y-%m-%d %H:%M")
             return parsed.strftime("%d %b %H:%M")
         
+        import re
+        if re.match(r'^\d{4}-\d{2}-\d{2}$', date_str):
+            from datetime import datetime as dt_module
+            parsed = dt_module.strptime(date_str, "%Y-%m-%d")
+            return parsed.strftime("%d %b")
+        
         if hasattr(date_val, 'strftime'):
+            if hasattr(date_val, 'hour') and date_val.hour == 0 and hasattr(date_val, 'minute') and date_val.minute == 0:
+                return date_val.strftime("%d %b")
             return date_val.strftime("%d %b %H:%M")
         
         parsed = pd.to_datetime(date_val, errors="coerce")
         if pd.isna(parsed):
             return "TBD"
+        if parsed.hour == 0 and parsed.minute == 0:
+            return parsed.strftime("%d %b")
         return parsed.strftime("%d %b %H:%M")
     except Exception:
         return "TBD"
