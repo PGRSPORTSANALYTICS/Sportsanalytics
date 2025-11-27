@@ -128,6 +128,20 @@ from collections import Counter
 # Max times a single match can appear across selected parlays (for diversity)
 MAX_PARLAYS_PER_MATCH = 2
 
+# ---- PARLAY SCORING SETTINGS (tweakable) ----
+EV_WEIGHT = 2.0
+MID_ODDS_MIN = 2.0
+MID_ODDS_MAX = 6.0
+HIGH_ODDS_MIN = 6.0
+HIGH_ODDS_MAX = 12.0
+MID_ODDS_BONUS = 4.0
+HIGH_ODDS_BONUS = 2.0
+VERY_HIGH_ODDS_THRESHOLD = 15.0
+VERY_HIGH_ODDS_PENALTY = 8.0
+LEGS_PENALTY_START = 4
+LEGS_PENALTY_PER_EXTRA = 1.5
+MAX_LEGS_HARD_CAP = 7
+
 
 def allowed_parlays(num_singles: int) -> int:
     """
@@ -144,15 +158,33 @@ def allowed_parlays(num_singles: int) -> int:
 def parlay_score(parlay: BasketPick) -> float:
     """
     Score a parlay for ranking. Higher = better.
-    Uses EV as primary factor with small bonus for higher odds.
+    Uses EV, odds bonuses/penalties, and leg count penalties.
     """
     ev = parlay.ev
     odds = parlay.odds
+    legs = parlay.meta.get("legs", 3)
     
-    score = ev * 100.0
+    # Hard cap on legs
+    if legs > MAX_LEGS_HARD_CAP:
+        return -999.0
     
-    if 2.0 <= odds <= 10.0:
-        score += (odds - 2.0) * 1.0
+    # Base score from EV
+    score = ev * 100.0 * EV_WEIGHT
+    
+    # Odds bonuses
+    if MID_ODDS_MIN <= odds <= MID_ODDS_MAX:
+        score += MID_ODDS_BONUS
+    elif HIGH_ODDS_MIN < odds <= HIGH_ODDS_MAX:
+        score += HIGH_ODDS_BONUS
+    
+    # Very high odds penalty
+    if odds > VERY_HIGH_ODDS_THRESHOLD:
+        score -= VERY_HIGH_ODDS_PENALTY
+    
+    # Leg count penalty (starts at 4+ legs)
+    if legs > LEGS_PENALTY_START:
+        extra_legs = legs - LEGS_PENALTY_START
+        score -= extra_legs * LEGS_PENALTY_PER_EXTRA
     
     return score
 
