@@ -123,6 +123,61 @@ def clamp(x: float, lo: float, hi: float) -> float:
 # Parlay builder (multi-game)
 # ----------------------------
 
+# Max times a single match can appear across selected parlays (for diversity)
+MAX_PARLAYS_PER_MATCH = 2
+
+
+def parlay_score(parlay: BasketPick) -> float:
+    """
+    Score a parlay for ranking. Higher = better.
+    Uses EV as primary factor with small bonus for higher odds.
+    """
+    ev = parlay.ev
+    odds = parlay.odds
+    
+    score = ev * 100.0
+    
+    if 2.0 <= odds <= 10.0:
+        score += (odds - 2.0) * 1.0
+    
+    return score
+
+
+def select_diverse_parlays(parlays: List[BasketPick], max_parlays: int) -> List[BasketPick]:
+    """
+    Select parlays with match diversity - limits how many parlays can use the same match.
+    Returns up to max_parlays with good spread across different matches.
+    """
+    from collections import Counter
+    
+    if not parlays:
+        return []
+    
+    parlays_sorted = sorted(parlays, key=parlay_score, reverse=True)
+    
+    selected: List[BasketPick] = []
+    match_usage: Counter = Counter()
+    
+    for parlay in parlays_sorted:
+        if len(selected) >= max_parlays:
+            break
+        
+        parlay_matches = parlay.meta.get("matches", [])
+        
+        can_use = True
+        for match in parlay_matches:
+            if match_usage[match] >= MAX_PARLAYS_PER_MATCH:
+                can_use = False
+                break
+        
+        if can_use:
+            selected.append(parlay)
+            for match in parlay_matches:
+                match_usage[match] += 1
+    
+    return selected
+
+
 def build_parlays(picks: List[BasketPick], legs: int = 3, min_parlay_ev: float = 0.02) -> List[BasketPick]:
     """
     Builds 3/4-leg multi-game parlays from top singles.
@@ -438,10 +493,10 @@ class CollegeBasketValueEngine:
             # <10 singles → max 2 parlays
             dynamic_max_parlays = 5 if len(singles) >= 10 else 2
             
-            # Combine and sort all parlays, then limit
+            # Combine all parlays and select with match diversity
+            # Each match can only appear in MAX_PARLAYS_PER_MATCH parlays
             all_parlays = parlays_3 + parlays_4
-            all_parlays.sort(key=lambda x: x.ev, reverse=True)
-            parlays = all_parlays[:dynamic_max_parlays]
+            parlays = select_diverse_parlays(all_parlays, dynamic_max_parlays)
             
             # Combine singles and parlays
             value_picks = singles + parlays
