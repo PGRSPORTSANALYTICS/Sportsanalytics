@@ -123,8 +123,22 @@ def clamp(x: float, lo: float, hi: float) -> float:
 # Parlay builder (multi-game)
 # ----------------------------
 
+from collections import Counter
+
 # Max times a single match can appear across selected parlays (for diversity)
 MAX_PARLAYS_PER_MATCH = 2
+
+
+def allowed_parlays(num_singles: int) -> int:
+    """
+    Returns max number of parlays based on how many singles we have.
+    Rules:
+    - Under 10 singles -> max 2 parlays
+    - 10 or more singles -> max 5 parlays
+    """
+    if num_singles < 10:
+        return 2
+    return 5
 
 
 def parlay_score(parlay: BasketPick) -> float:
@@ -143,37 +157,42 @@ def parlay_score(parlay: BasketPick) -> float:
     return score
 
 
-def select_diverse_parlays(parlays: List[BasketPick], max_parlays: int) -> List[BasketPick]:
+def pick_parlays_for_today(
+    num_singles: int,
+    parlay_candidates: List[BasketPick],
+) -> List[BasketPick]:
     """
-    Select parlays with match diversity - limits how many parlays can use the same match.
-    Returns up to max_parlays with good spread across different matches.
+    Selects which parlays to use today based on:
+    - How many singles we have (determines max parlays)
+    - Max parlays per match (to avoid too much reuse)
+    - Score (EV/odds) so we pick the best first
     """
-    from collections import Counter
+    max_parlays = allowed_parlays(num_singles)
     
-    if not parlays:
+    if max_parlays <= 0 or not parlay_candidates:
         return []
     
-    parlays_sorted = sorted(parlays, key=parlay_score, reverse=True)
+    sorted_candidates = sorted(
+        parlay_candidates,
+        key=parlay_score,
+        reverse=True,
+    )
     
     selected: List[BasketPick] = []
     match_usage: Counter = Counter()
     
-    for parlay in parlays_sorted:
+    for parlay in sorted_candidates:
         if len(selected) >= max_parlays:
             break
         
         parlay_matches = parlay.meta.get("matches", [])
         
-        can_use = True
-        for match in parlay_matches:
-            if match_usage[match] >= MAX_PARLAYS_PER_MATCH:
-                can_use = False
-                break
+        if any(match_usage[m] >= MAX_PARLAYS_PER_MATCH for m in parlay_matches):
+            continue
         
-        if can_use:
-            selected.append(parlay)
-            for match in parlay_matches:
-                match_usage[match] += 1
+        selected.append(parlay)
+        for m in parlay_matches:
+            match_usage[m] += 1
     
     return selected
 
@@ -488,15 +507,14 @@ class CollegeBasketValueEngine:
             parlays_3 = build_parlays(top_for_parlay, legs=3, min_parlay_ev=0.02)
             parlays_4 = build_parlays(top_for_parlay, legs=4, min_parlay_ev=0.03)
             
-            # Dynamic parlay limit based on number of singles:
-            # 10+ singles → max 5 parlays
-            # <10 singles → max 2 parlays
-            dynamic_max_parlays = 5 if len(singles) >= 10 else 2
-            
-            # Combine all parlays and select with match diversity
-            # Each match can only appear in MAX_PARLAYS_PER_MATCH parlays
+            # Combine all parlay candidates
             all_parlays = parlays_3 + parlays_4
-            parlays = select_diverse_parlays(all_parlays, dynamic_max_parlays)
+            
+            # Select parlays with diversity constraints:
+            # - Uses allowed_parlays() for dynamic limit (2 if <10 singles, else 5)
+            # - Each match can only appear in MAX_PARLAYS_PER_MATCH parlays
+            # - Picks best by score (EV + odds bonus)
+            parlays = pick_parlays_for_today(len(singles), all_parlays)
             
             # Combine singles and parlays
             value_picks = singles + parlays
