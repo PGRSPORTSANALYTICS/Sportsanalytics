@@ -535,6 +535,85 @@ class SGPPredictor:
         p_all = hits.mean()
         return float(p_all)
     
+    def get_exact_score_prediction(self, home_team: str, away_team: str) -> Optional[Tuple[int, int]]:
+        """
+        Check if there's an existing exact score prediction for this match.
+        
+        Returns:
+            Tuple of (home_goals, away_goals) if prediction exists, None otherwise
+        """
+        try:
+            result = db_helper.execute('''
+                SELECT selection FROM football_opportunities 
+                WHERE home_team = %s AND away_team = %s 
+                AND market = 'exact_score'
+                AND status = 'pending'
+                ORDER BY timestamp DESC
+                LIMIT 1
+            ''', (home_team, away_team), fetch='one')
+            
+            if result and result[0]:
+                selection = result[0]
+                # Parse "Exact Score: 2-1" format
+                if ':' in selection:
+                    score_part = selection.split(':')[-1].strip()
+                    if '-' in score_part:
+                        parts = score_part.split('-')
+                        if len(parts) == 2:
+                            home_goals = int(parts[0].strip())
+                            away_goals = int(parts[1].strip())
+                            return (home_goals, away_goals)
+        except Exception as e:
+            logger.debug(f"Error checking exact score prediction: {e}")
+        
+        return None
+    
+    def is_sgp_conflicting(self, sgp_combination: Dict, exact_score: Tuple[int, int]) -> bool:
+        """
+        Check if an SGP combination conflicts with the exact score prediction.
+        
+        Args:
+            sgp_combination: Dict with 'legs' list containing market_type, outcome, line
+            exact_score: Tuple of (home_goals, away_goals)
+        
+        Returns:
+            True if the SGP conflicts with the exact score, False if compatible
+        """
+        home_goals, away_goals = exact_score
+        total_goals = home_goals + away_goals
+        btts = home_goals > 0 and away_goals > 0
+        
+        for leg in sgp_combination.get('legs', []):
+            market_type = leg.get('market_type')
+            outcome = leg.get('outcome')
+            line = leg.get('line', 0)
+            
+            if market_type == 'OVER_UNDER_GOALS':
+                if outcome == 'OVER' and total_goals <= line:
+                    return True
+                if outcome == 'UNDER' and total_goals >= line:
+                    return True
+                    
+            elif market_type == 'BTTS':
+                if outcome == 'YES' and not btts:
+                    return True
+                if outcome == 'NO' and btts:
+                    return True
+                    
+            elif market_type == 'HALF_TIME_GOALS':
+                if outcome == 'OVER' and line >= 1.5:
+                    ht_expected = total_goals * 0.45
+                    if ht_expected < line:
+                        return True
+                        
+            elif market_type == 'SECOND_HALF_GOALS':
+                if outcome == 'OVER' and line >= 1.5:
+                    sh_expected = total_goals * 0.55
+                    if sh_expected < line:
+                        return True
+        
+        return False
+    
     def generate_sgp_for_match(self, match_data: Dict[str, Any], lambda_home: float, lambda_away: float, 
                               player_data: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """
@@ -549,11 +628,19 @@ class SGPPredictor:
         Returns:
             SGP prediction dict or None if no value found
         """
+        home_team = match_data.get('home_team', '')
+        away_team = match_data.get('away_team', '')
+        
         # Skip Premier League - negative ROI (-88.7%) based on offline analysis
         league = match_data.get('league', '')
         if 'Premier League' in league:
-            logger.info(f"⏭️  Skipping SGP for {match_data.get('home_team')} vs {match_data.get('away_team')} (Premier League - unprofitable)")
+            logger.info(f"⏭️  Skipping SGP for {home_team} vs {away_team} (Premier League - unprofitable)")
             return []
+        
+        # Check for conflicting exact score prediction
+        exact_score = self.get_exact_score_prediction(home_team, away_team)
+        if exact_score:
+            logger.info(f"📊 Found exact score prediction {exact_score[0]}-{exact_score[1]} for {home_team} vs {away_team}")
         
         # Generate SGP combinations (max 4 legs, target 10x max odds)
         # GOAL-BASED + TOTAL CORNERS (SofaScore verification enabled)
@@ -706,8 +793,15 @@ class SGPPredictor:
         
         # Keep top 3 SGPs by EV instead of just 1
         all_sgps = []
+        blocked_count = 0
         
         for sgp in sgp_combinations:
+            # Check for conflict with exact score prediction
+            if exact_score and self.is_sgp_conflicting(sgp, exact_score):
+                logger.debug(f"⚠️  BLOCKED: {sgp['description']} conflicts with {exact_score[0]}-{exact_score[1]} prediction")
+                blocked_count += 1
+                continue
+            
             # Calculate probabilities for each leg
             legs_with_probs = []
             
@@ -925,6 +1019,8 @@ class SGPPredictor:
         deduplicated_sgps = list(unique_sgps.values())
         deduplicated_sgps.sort(key=lambda x: x['ev_percentage'], reverse=True)
         
+        if blocked_count > 0:
+            logger.info(f"   🚫 CONFLICT BLOCKED: {blocked_count} SGPs blocked due to exact score prediction")
         logger.info(f"   🎯 Generated {len(all_sgps)} SGPs, deduplicated to {len(deduplicated_sgps)} unique")
         
         # Return top 3 unique SGPs
