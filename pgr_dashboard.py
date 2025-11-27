@@ -163,7 +163,15 @@ def format_kickoff(date_val) -> str:
     if date_val is None:
         return "TBD"
     
+    if pd.isna(date_val):
+        return "TBD"
+    
     try:
+        if hasattr(date_val, 'strftime'):
+            if hasattr(date_val, 'hour') and date_val.hour == 0 and hasattr(date_val, 'minute') and date_val.minute == 0:
+                return date_val.strftime("%d %b")
+            return date_val.strftime("%d %b %H:%M")
+        
         date_str = str(date_val).strip()
         
         if date_str.upper() in ["NAT", "NONE", "NULL", "", "NATTYPE"]:
@@ -182,11 +190,6 @@ def format_kickoff(date_val) -> str:
             from datetime import datetime as dt_module
             parsed = dt_module.strptime(date_str, "%Y-%m-%d")
             return parsed.strftime("%d %b")
-        
-        if hasattr(date_val, 'strftime'):
-            if hasattr(date_val, 'hour') and date_val.hour == 0 and hasattr(date_val, 'minute') and date_val.minute == 0:
-                return date_val.strftime("%d %b")
-            return date_val.strftime("%d %b %H:%M")
         
         parsed = pd.to_datetime(date_val, errors="coerce")
         if pd.isna(parsed):
