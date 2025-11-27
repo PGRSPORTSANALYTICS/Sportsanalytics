@@ -89,8 +89,8 @@ def verify_sgp_results():
         from sgp_verifier import SGPVerifier
         logger.info("🎲 Verifying SGP results...")
         verifier = SGPVerifier()
-        results = verifier.verify_pending_sgps()
-        logger.info(f"🎲 SGP verification: {results.get('verified', 0)} verified")
+        verifier.run_verification()
+        logger.info("🎲 SGP verification complete")
     except Exception as e:
         logger.error(f"❌ SGP verification error: {e}")
 
