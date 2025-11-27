@@ -178,7 +178,7 @@ def parlay_score(parlay: BasketPick) -> float:
         score += HIGH_ODDS_BONUS
     
     # Very high odds penalty
-    if odds > VERY_HIGH_ODDS_THRESHOLD:
+    if odds >= VERY_HIGH_ODDS_THRESHOLD:
         score -= VERY_HIGH_ODDS_PENALTY
     
     # Leg count penalty (starts at 4+ legs)
