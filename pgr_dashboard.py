@@ -163,12 +163,21 @@ def format_kickoff(date_val) -> str:
     if date_val is None:
         return "TBD"
     
-    if pd.isna(date_val):
-        return "TBD"
+    try:
+        if pd.isna(date_val):
+            return "TBD"
+    except (TypeError, ValueError):
+        pass
     
     try:
-        if hasattr(date_val, 'strftime'):
-            if hasattr(date_val, 'hour') and date_val.hour == 0 and hasattr(date_val, 'minute') and date_val.minute == 0:
+        if isinstance(date_val, pd.Timestamp):
+            if date_val.hour == 0 and date_val.minute == 0:
+                return date_val.strftime("%d %b")
+            return date_val.strftime("%d %b %H:%M")
+        
+        from datetime import datetime as dt_module
+        if isinstance(date_val, dt_module):
+            if date_val.hour == 0 and date_val.minute == 0:
                 return date_val.strftime("%d %b")
             return date_val.strftime("%d %b %H:%M")
         
@@ -181,14 +190,24 @@ def format_kickoff(date_val) -> str:
             clean = date_str.replace('Z', '').replace('+00:00', '')
             date_part, time_part = clean.split('T')
             time_short = time_part[:5]
-            from datetime import datetime as dt_module
             parsed = dt_module.strptime(f"{date_part} {time_short}", "%Y-%m-%d %H:%M")
             return parsed.strftime("%d %b %H:%M")
         
         import re
-        if re.match(r'^\d{4}-\d{2}-\d{2}$', date_str):
-            from datetime import datetime as dt_module
-            parsed = dt_module.strptime(date_str, "%Y-%m-%d")
+        date_only_match = re.match(r'^(\d{4}-\d{2}-\d{2})', date_str)
+        if date_only_match:
+            date_part = date_only_match.group(1)
+            if ' ' in date_str and ':' in date_str:
+                try:
+                    time_match = re.search(r'(\d{2}:\d{2})', date_str)
+                    if time_match:
+                        time_part = time_match.group(1)
+                        if time_part != "00:00":
+                            parsed = dt_module.strptime(f"{date_part} {time_part}", "%Y-%m-%d %H:%M")
+                            return parsed.strftime("%d %b %H:%M")
+                except:
+                    pass
+            parsed = dt_module.strptime(date_part, "%Y-%m-%d")
             return parsed.strftime("%d %b")
         
         parsed = pd.to_datetime(date_val, errors="coerce")
@@ -470,9 +489,25 @@ def load_all_bets_from_db() -> pd.DataFrame:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    for col in ["created_at", "settled_at", "match_date"]:
+    for col in ["created_at", "settled_at"]:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce")
+    
+    if "match_date" in df.columns:
+        def convert_match_date(val):
+            if pd.isna(val) or val is None:
+                return pd.NaT
+            s = str(val).strip()
+            if not s or s.upper() in ['NAT', 'NONE', 'NULL']:
+                return pd.NaT
+            try:
+                return pd.to_datetime(s, utc=True)
+            except:
+                try:
+                    return pd.to_datetime(s)
+                except:
+                    return pd.NaT
+        df["match_date"] = df["match_date"].apply(convert_match_date)
 
     # profit only for settled bets (WON, LOST, VOID) - norm_result comes from database view
     df["profit"] = None
