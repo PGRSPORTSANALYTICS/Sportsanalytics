@@ -124,6 +124,39 @@ class ValueSinglesEngine:
             print(f"⚠️ Error checking exact score: {e}")
             return None
     
+    def _get_exact_score_goals(self, home_team: str, away_team: str) -> Optional[tuple]:
+        """
+        Get the exact score prediction goals for this match.
+        Returns tuple of (home_goals, away_goals) or None if no prediction.
+        """
+        cache_key = f"{home_team}_{away_team}_goals"
+        if cache_key in self._exact_score_cache:
+            return self._exact_score_cache[cache_key]
+        
+        try:
+            query = """
+                SELECT selection FROM football_opportunities 
+                WHERE home_team = %s AND away_team = %s 
+                  AND market = 'exact_score'
+                  AND outcome IS NULL
+                LIMIT 1
+            """
+            rows = db_helper.execute(query, (home_team, away_team), fetch='all')
+            
+            if rows and rows[0][0]:
+                selection = rows[0][0]
+                import re
+                match = re.search(r'(\d+)-(\d+)', selection)
+                if match:
+                    result = (int(match.group(1)), int(match.group(2)))
+                    self._exact_score_cache[cache_key] = result
+                    return result
+            
+            self._exact_score_cache[cache_key] = None
+            return None
+        except Exception as e:
+            return None
+    
     def _is_1x2_conflicting(self, home_team: str, away_team: str, market_key: str) -> bool:
         """
         Check if a 1X2 selection conflicts with existing exact score prediction.
@@ -142,6 +175,43 @@ class ValueSinglesEngine:
             return True
         
         return False  # Same prediction, OK
+    
+    def _is_goals_conflicting(self, home_team: str, away_team: str, market_key: str) -> bool:
+        """
+        Check if an Over/Under goals selection conflicts with exact score prediction.
+        Returns True if conflicting (should skip), False if OK to proceed.
+        """
+        # Parse market key (e.g., "FT_OVER_2_5" or "FT_UNDER_3_5")
+        if not market_key.startswith('FT_OVER_') and not market_key.startswith('FT_UNDER_'):
+            return False  # Not a goals market
+        
+        exact_goals = self._get_exact_score_goals(home_team, away_team)
+        if exact_goals is None:
+            return False  # No exact score prediction
+        
+        total_goals = exact_goals[0] + exact_goals[1]
+        
+        # Parse the line (e.g., "FT_OVER_2_5" -> line = 2.5)
+        parts = market_key.split('_')
+        if len(parts) >= 4:
+            try:
+                line = float(f"{parts[2]}.{parts[3]}")
+            except ValueError:
+                return False
+        else:
+            return False
+        
+        is_over = 'OVER' in market_key
+        
+        # Check conflict
+        if is_over and total_goals <= line:
+            print(f"⚠️ GOALS CONFLICT BLOCKED: {home_team} vs {away_team} - Over {line} conflicts with {exact_goals[0]}-{exact_goals[1]} ({total_goals} goals)")
+            return True
+        elif not is_over and total_goals >= line:
+            print(f"⚠️ GOALS CONFLICT BLOCKED: {home_team} vs {away_team} - Under {line} conflicts with {exact_goals[0]}-{exact_goals[1]} ({total_goals} goals)")
+            return True
+        
+        return False  # No conflict
 
     def _calc_ev(self, p_model: float, odds: float) -> float:
         # Expected value = p*odds - 1
@@ -349,6 +419,10 @@ class ValueSinglesEngine:
                     # Check for conflict with exact score prediction
                     if self._is_1x2_conflicting(home_team, away_team, market_key):
                         continue  # Skip conflicting 1X2 selections
+                
+                # Check for Over/Under goals conflict with exact score
+                if self._is_goals_conflicting(home_team, away_team, market_key):
+                    continue  # Skip conflicting Over/Under selections
 
                 ev = self._calc_ev(p_model, odds)
                 if ev < self.ev_threshold:
