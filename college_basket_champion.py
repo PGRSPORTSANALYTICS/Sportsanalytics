@@ -30,7 +30,7 @@ def run_prediction_cycle():
             min_ev=0.03,
             min_conf=0.50,
             max_singles=10,
-            max_parlays=3,
+            max_parlays=5,  # Dynamic: 5 if 10+ singles, else 2
             min_odds=1.40,
             max_odds=5.50,
             allow_parlays=True

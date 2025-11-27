@@ -433,10 +433,15 @@ class CollegeBasketValueEngine:
             parlays_3 = build_parlays(top_for_parlay, legs=3, min_parlay_ev=0.02)
             parlays_4 = build_parlays(top_for_parlay, legs=4, min_parlay_ev=0.03)
             
-            # Combine and sort all parlays, then limit to max_parlays
+            # Dynamic parlay limit based on number of singles:
+            # 10+ singles → max 5 parlays
+            # <10 singles → max 2 parlays
+            dynamic_max_parlays = 5 if len(singles) >= 10 else 2
+            
+            # Combine and sort all parlays, then limit
             all_parlays = parlays_3 + parlays_4
             all_parlays.sort(key=lambda x: x.ev, reverse=True)
-            parlays = all_parlays[: self.max_parlays]
+            parlays = all_parlays[:dynamic_max_parlays]
             
             # Combine singles and parlays
             value_picks = singles + parlays
