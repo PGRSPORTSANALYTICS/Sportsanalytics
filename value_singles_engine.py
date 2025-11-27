@@ -176,18 +176,57 @@ class ValueSinglesEngine:
         
         return False  # Same prediction, OK
     
-    def _is_goals_conflicting(self, home_team: str, away_team: str, market_key: str) -> bool:
+    def _get_exact_score_ev(self, home_team: str, away_team: str) -> Optional[tuple]:
         """
-        Check if an Over/Under goals selection conflicts with exact score prediction.
-        Returns True if conflicting (should skip), False if OK to proceed.
+        Get the exact score prediction's EV and ID for this match.
+        Returns tuple of (ev_percentage, prediction_id) or None if no prediction.
         """
-        # Parse market key (e.g., "FT_OVER_2_5" or "FT_UNDER_3_5")
+        try:
+            query = """
+                SELECT id, edge_percentage FROM football_opportunities 
+                WHERE home_team = %s AND away_team = %s 
+                  AND market = 'exact_score'
+                  AND status = 'pending'
+                ORDER BY timestamp DESC
+                LIMIT 1
+            """
+            rows = db_helper.execute(query, (home_team, away_team), fetch='all')
+            
+            if rows and rows[0]:
+                return (float(rows[0][1] or 0), rows[0][0])  # (ev, id)
+            return None
+        except Exception as e:
+            print(f"⚠️ Error getting exact score EV: {e}")
+            return None
+    
+    def _delete_exact_score_prediction(self, prediction_id: int, home_team: str, away_team: str, reason: str):
+        """Delete an exact score prediction when Value Single has better EV."""
+        try:
+            db_helper.execute(
+                "DELETE FROM football_opportunities WHERE id = %s AND status = 'pending'",
+                (prediction_id,)
+            )
+            print(f"🔄 REPLACED: Deleted Exact Score #{prediction_id} for {home_team} vs {away_team} - {reason}")
+        except Exception as e:
+            print(f"⚠️ Error deleting exact score: {e}")
+    
+    def _check_conflict_with_ev_comparison(self, home_team: str, away_team: str, market_key: str, 
+                                            value_single_ev: float) -> str:
+        """
+        Smart conflict resolution: Compare EVs and decide which prediction to keep.
+        
+        Returns:
+            'skip' - Skip Value Single (Exact Score has better EV)
+            'replace' - Replace Exact Score with Value Single (Value Single has better EV)
+            'ok' - No conflict, proceed normally
+        """
+        # Check if this is a goals market that could conflict
         if not market_key.startswith('FT_OVER_') and not market_key.startswith('FT_UNDER_'):
-            return False  # Not a goals market
+            return 'ok'  # Not a goals market, no conflict possible
         
         exact_goals = self._get_exact_score_goals(home_team, away_team)
         if exact_goals is None:
-            return False  # No exact score prediction
+            return 'ok'  # No exact score prediction
         
         total_goals = exact_goals[0] + exact_goals[1]
         
@@ -197,21 +236,54 @@ class ValueSinglesEngine:
             try:
                 line = float(f"{parts[2]}.{parts[3]}")
             except ValueError:
-                return False
+                return 'ok'
         else:
-            return False
+            return 'ok'
         
         is_over = 'OVER' in market_key
         
-        # Check conflict
+        # Check if there's a conflict
+        has_conflict = False
         if is_over and total_goals <= line:
-            print(f"⚠️ GOALS CONFLICT BLOCKED: {home_team} vs {away_team} - Over {line} conflicts with {exact_goals[0]}-{exact_goals[1]} ({total_goals} goals)")
-            return True
+            has_conflict = True
         elif not is_over and total_goals >= line:
-            print(f"⚠️ GOALS CONFLICT BLOCKED: {home_team} vs {away_team} - Under {line} conflicts with {exact_goals[0]}-{exact_goals[1]} ({total_goals} goals)")
-            return True
+            has_conflict = True
         
-        return False  # No conflict
+        if not has_conflict:
+            return 'ok'
+        
+        # There's a conflict - compare EVs
+        exact_score_data = self._get_exact_score_ev(home_team, away_team)
+        if exact_score_data is None:
+            return 'ok'
+        
+        exact_score_ev, exact_score_id = exact_score_data
+        
+        # Convert Value Single EV to percentage for comparison (it's already decimal like 0.05 for 5%)
+        value_single_ev_pct = value_single_ev * 100
+        
+        print(f"⚖️  EV COMPARISON: {home_team} vs {away_team}")
+        print(f"   Value Single ({market_key}): {value_single_ev_pct:.1f}% EV")
+        print(f"   Exact Score ({exact_goals[0]}-{exact_goals[1]}): {exact_score_ev:.1f}% EV")
+        
+        if value_single_ev_pct > exact_score_ev:
+            # Value Single is better - delete exact score and use value single
+            self._delete_exact_score_prediction(
+                exact_score_id, home_team, away_team,
+                f"Value Single EV ({value_single_ev_pct:.1f}%) > Exact Score EV ({exact_score_ev:.1f}%)"
+            )
+            return 'replace'
+        else:
+            # Exact Score is better - skip value single
+            print(f"   ➡️  Keeping Exact Score (better EV)")
+            return 'skip'
+    
+    def _is_goals_conflicting(self, home_team: str, away_team: str, market_key: str) -> bool:
+        """
+        DEPRECATED: Use _check_conflict_with_ev_comparison instead.
+        Kept for backward compatibility but now just returns False.
+        """
+        return False  # Now handled by _check_conflict_with_ev_comparison
 
     def _calc_ev(self, p_model: float, odds: float) -> float:
         # Expected value = p*odds - 1
@@ -419,14 +491,17 @@ class ValueSinglesEngine:
                     # Check for conflict with exact score prediction
                     if self._is_1x2_conflicting(home_team, away_team, market_key):
                         continue  # Skip conflicting 1X2 selections
-                
-                # Check for Over/Under goals conflict with exact score
-                if self._is_goals_conflicting(home_team, away_team, market_key):
-                    continue  # Skip conflicting Over/Under selections
 
                 ev = self._calc_ev(p_model, odds)
                 if ev < self.ev_threshold:
                     continue
+                
+                # Smart conflict resolution for Over/Under goals vs Exact Score
+                # Compare EVs - keep whichever has better value
+                conflict_result = self._check_conflict_with_ev_comparison(home_team, away_team, market_key, ev)
+                if conflict_result == 'skip':
+                    continue  # Exact Score has better EV, skip this Value Single
+                # If 'replace', the Exact Score was deleted, continue with this Value Single
 
                 confidence = int(min(100, max(0, 50 + ev * 250)))  # simple confidence proxy
                 if confidence < self.min_confidence:
