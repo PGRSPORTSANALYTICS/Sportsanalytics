@@ -261,11 +261,9 @@ class RealFootballChampion:
         
         # API-Football league ID to name mapping - GLOBAL COVERAGE (NO DUPLICATES)
         self.league_id_to_name = {
-            # Major European Leagues
+            # Major European Leagues (Tier 1)
             39: 'Premier League',
             40: 'English Championship', 
-            41: 'English League One',
-            42: 'English League Two',
             140: 'La Liga',
             135: 'Serie A', 
             78: 'Bundesliga',
@@ -275,19 +273,32 @@ class RealFootballChampion:
             144: 'Belgian First Division',
             88: 'Scottish Premiership',
             
-            # Nordic/Eastern Europe
-            218: 'Swedish Allsvenskan',
+            # European Cups (Tier 1)
+            2: 'Champions League',
+            3: 'Europa League',
+            848: 'Conference League',
+            
+            # Lower Tier European Leagues (Tier 3 - HIGH VALUE TARGETS)
+            41: 'English League One',
+            42: 'English League Two',
+            79: 'German 2. Bundesliga',
+            136: 'Italian Serie B',
+            141: 'Spanish Segunda Division',
+            62: 'French Ligue 2',
+            89: 'Dutch Eerste Divisie',
+            95: 'Portuguese Segunda Liga',
+            
+            # Nordic/Eastern Europe (Tier 3)
+            113: 'Swedish Allsvenskan',
             103: 'Norwegian Eliteserien',
             119: 'Danish Superliga',
+            218: 'Austrian Bundesliga',
+            207: 'Swiss Super League',
+            197: 'Greek Super League',
             106: 'Polish Ekstraklasa',
             345: 'Czech First League',
             203: 'Turkish Super League',
             235: 'Russian Premier League',
-            
-            # European Cups
-            2: 'Champions League',
-            3: 'Europa League',
-            848: 'Conference League',
             
             # South America (24/7 Coverage)
             71: 'Brazilian Serie A',

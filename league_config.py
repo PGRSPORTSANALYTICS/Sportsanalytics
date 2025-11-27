@@ -131,11 +131,77 @@ LEAGUE_REGISTRY: List[LeagueConfig] = [
         timezone="Europe/London"
     ),
     
+    # === LOWER TIER EUROPEAN LEAGUES (Tier 3) - HIGH VALUE TARGETS ===
+    LeagueConfig(
+        name="English League One",
+        odds_api_key="soccer_england_league1",
+        api_football_id=41,
+        country="England",
+        tier=3,
+        timezone="Europe/London"
+    ),
+    LeagueConfig(
+        name="English League Two",
+        odds_api_key="soccer_england_league2",
+        api_football_id=42,
+        country="England",
+        tier=3,
+        timezone="Europe/London"
+    ),
+    LeagueConfig(
+        name="German 2. Bundesliga",
+        odds_api_key="soccer_germany_bundesliga2",
+        api_football_id=79,
+        country="Germany",
+        tier=3,
+        timezone="Europe/Berlin"
+    ),
+    LeagueConfig(
+        name="Italian Serie B",
+        odds_api_key="soccer_italy_serie_b",
+        api_football_id=136,
+        country="Italy",
+        tier=3,
+        timezone="Europe/Rome"
+    ),
+    LeagueConfig(
+        name="Spanish Segunda Division",
+        odds_api_key="soccer_spain_segunda_division",
+        api_football_id=141,
+        country="Spain",
+        tier=3,
+        timezone="Europe/Madrid"
+    ),
+    LeagueConfig(
+        name="French Ligue 2",
+        odds_api_key="soccer_france_ligue_two",
+        api_football_id=62,
+        country="France",
+        tier=3,
+        timezone="Europe/Paris"
+    ),
+    LeagueConfig(
+        name="Dutch Eerste Divisie",
+        odds_api_key="soccer_netherlands_eerste_divisie",
+        api_football_id=89,
+        country="Netherlands",
+        tier=3,
+        timezone="Europe/Amsterdam"
+    ),
+    LeagueConfig(
+        name="Portuguese Segunda Liga",
+        odds_api_key="soccer_portugal_segunda_liga",
+        api_football_id=95,
+        country="Portugal",
+        tier=3,
+        timezone="Europe/Lisbon"
+    ),
+    
     # === NORDIC & EASTERN EUROPE (Tier 3) ===
     LeagueConfig(
         name="Swedish Allsvenskan",
         odds_api_key="soccer_sweden_allsvenskan",
-        api_football_id=218,
+        api_football_id=113,
         country="Sweden",
         tier=3,
         timezone="Europe/Stockholm"
@@ -149,12 +215,68 @@ LEAGUE_REGISTRY: List[LeagueConfig] = [
         timezone="Europe/Oslo"
     ),
     LeagueConfig(
+        name="Danish Superliga",
+        odds_api_key="soccer_denmark_superliga",
+        api_football_id=119,
+        country="Denmark",
+        tier=3,
+        timezone="Europe/Copenhagen"
+    ),
+    LeagueConfig(
+        name="Austrian Bundesliga",
+        odds_api_key="soccer_austria_bundesliga",
+        api_football_id=218,  # Note: Austrian Bundesliga ID is 218
+        country="Austria",
+        tier=3,
+        timezone="Europe/Vienna"
+    ),
+    LeagueConfig(
+        name="Swiss Super League",
+        odds_api_key="soccer_switzerland_superleague",
+        api_football_id=207,
+        country="Switzerland",
+        tier=3,
+        timezone="Europe/Zurich"
+    ),
+    LeagueConfig(
+        name="Greek Super League",
+        odds_api_key="soccer_greece_super_league",
+        api_football_id=197,
+        country="Greece",
+        tier=3,
+        timezone="Europe/Athens"
+    ),
+    LeagueConfig(
+        name="Polish Ekstraklasa",
+        odds_api_key="soccer_poland_ekstraklasa",
+        api_football_id=106,
+        country="Poland",
+        tier=3,
+        timezone="Europe/Warsaw"
+    ),
+    LeagueConfig(
+        name="Czech First League",
+        odds_api_key="soccer_czech_liga",
+        api_football_id=345,
+        country="Czech Republic",
+        tier=3,
+        timezone="Europe/Prague"
+    ),
+    LeagueConfig(
         name="Turkish Super League",
         odds_api_key="soccer_turkey_super_league",
         api_football_id=203,
         country="Turkey",
         tier=2,
         timezone="Europe/Istanbul"
+    ),
+    LeagueConfig(
+        name="Russian Premier League",
+        odds_api_key="soccer_russia_premier_league",
+        api_football_id=235,
+        country="Russia",
+        tier=3,
+        timezone="Europe/Moscow"
     ),
     
     # === SOUTH AMERICA - WINTER LEAGUES (Tier 2) ===
