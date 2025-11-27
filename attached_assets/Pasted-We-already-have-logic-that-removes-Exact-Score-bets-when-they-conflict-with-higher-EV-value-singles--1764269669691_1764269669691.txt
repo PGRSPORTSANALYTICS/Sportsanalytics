@@ -1,0 +1,43 @@
+We already have logic that removes Exact Score bets when they conflict with higher-EV value singles.
+I now want a refill logic so we keep a stable number of Exact Score picks per day.
+Goal:
+Keep up to TARGET_EXACT_SCORE_BETS (for example 6) Final Score bets per day.
+If conflicts remove one or more Exact Score bets, automatically try to add replacement bets from backup candidates.
+Implementation details:
+When generating Exact Score candidates:
+Build a list all_exact_score_candidates (already filtered by min EV, odds, etc).
+Sort them by EV descending.
+When selecting the main Exact Score picks the first time:
+Iterate candidates in EV order.
+For each candidate, check for conflicts against existing bets (same fixture, goals conflict with value singles / other markets, etc).
+If no conflict and we still haven’t reached TARGET_EXACT_SCORE_BETS, add it to selected_exact_scores.
+Otherwise, push it to a backup_exact_scores list (these are “bench” picks).
+Run the existing conflict resolution step that may delete some Exact Score bets when a higher-EV value single exists on the same match.
+After conflicts are resolved, run a new function, for example refill_exact_scores(...):
+Kopiera kod
+Python
+TARGET_EXACT_SCORE_BETS = 6
+
+def refill_exact_scores(selected_exact_scores, backup_exact_scores, other_bets):
+    """
+    selected_exact_scores: list of Exact Score bets that survived conflicts
+    backup_exact_scores: list of remaining candidates sorted by EV desc
+    other_bets: all non-Exact-Score bets (value singles, SGP, etc)
+    """
+    def conflicts(bet, current_exact_scores, other_bets):
+        # Same logic as today:
+        # - same fixture id?  
+        # - goals-line conflict with any value single or SGP in same match?  
+        # Return True if conflict, else False
+        ...
+
+    while len(selected_exact_scores) < TARGET_EXACT_SCORE_BETS and backup_exact_scores:
+        candidate = backup_exact_scores.pop(0)
+        if not conflicts(candidate, selected_exact_scores, other_bets):
+            selected_exact_scores.append(candidate)
+
+    return selected_exact_scores
+Make sure this refill step runs before bets are written to the database so the dashboards show the final, refilled set of Exact Score bets.
+Please wire this into the existing pipeline where Exact Score bets are generated and conflicts are resolved. Keep logging so I can see messages like:
+REFILL: Added backup Exact Score for {match} with EV {ev}%
+REFILL: No suitable backup found, staying at {n} Exact Score bets.

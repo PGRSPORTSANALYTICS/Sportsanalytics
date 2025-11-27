@@ -2201,10 +2201,244 @@ class RealFootballChampion:
         
         return total_opportunities
     
+    # 🎯 TARGET EXACT SCORE BETS per cycle (used by refill system)
+    TARGET_EXACT_SCORE_BETS = 6
+    
+    def _ensure_backup_table_exists(self):
+        """Create backup candidates table if it doesn't exist"""
+        try:
+            db_helper.execute('''
+                CREATE TABLE IF NOT EXISTS exact_score_backups (
+                    id SERIAL PRIMARY KEY,
+                    home_team VARCHAR(255) NOT NULL,
+                    away_team VARCHAR(255) NOT NULL,
+                    league VARCHAR(255),
+                    match_date VARCHAR(50),
+                    kickoff_time VARCHAR(50),
+                    score_prediction VARCHAR(20),
+                    odds DECIMAL(8,2),
+                    edge_percentage DECIMAL(8,2),
+                    confidence INTEGER,
+                    elite_value DECIMAL(8,4),
+                    analysis_json TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    used BOOLEAN DEFAULT FALSE
+                )
+            ''')
+        except Exception as e:
+            print(f"⚠️ Backup table creation warning: {e}")
+    
+    def _clear_old_backups(self):
+        """Clear old backup candidates (keep only today's)"""
+        try:
+            today = datetime.now().strftime('%Y-%m-%d')
+            db_helper.execute('''
+                DELETE FROM exact_score_backups 
+                WHERE DATE(created_at) < %s OR used = TRUE
+            ''', (today,))
+        except Exception as e:
+            print(f"⚠️ Backup cleanup warning: {e}")
+    
+    def _save_backup_candidate(self, candidate: Dict, match: Dict, enriched_analysis: Dict) -> bool:
+        """Save a backup candidate for potential refill later"""
+        try:
+            import json
+            db_helper.execute('''
+                INSERT INTO exact_score_backups 
+                (home_team, away_team, league, match_date, kickoff_time, 
+                 score_prediction, odds, edge_percentage, confidence, elite_value, analysis_json)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ''', (
+                match['home_team'],
+                match['away_team'],
+                match.get('league_name', 'Unknown'),
+                match.get('commence_time', ''),
+                match.get('commence_time', ''),
+                candidate['score_text'],
+                round(1 / candidate['probability'], 2),  # Convert prob to odds
+                candidate.get('edge_percentage', 8.0),
+                candidate.get('confidence', 70),
+                candidate['elite_value'],
+                json.dumps(enriched_analysis) if enriched_analysis else '{}'
+            ))
+            return True
+        except Exception as e:
+            print(f"⚠️ Backup save error: {e}")
+            return False
+    
+    def _check_exact_score_conflicts(self, home_team: str, away_team: str, score_text: str) -> bool:
+        """
+        Check if an exact score prediction would conflict with existing Value Singles.
+        Returns True if there's a conflict, False if OK to proceed.
+        """
+        try:
+            # Parse the score
+            parts = score_text.split('-')
+            if len(parts) != 2:
+                return False
+            home_goals, away_goals = int(parts[0]), int(parts[1])
+            total_goals = home_goals + away_goals
+            
+            # Check for conflicting Value Singles (Over/Under goals)
+            result = db_helper.execute('''
+                SELECT selection FROM football_opportunities 
+                WHERE home_team = %s AND away_team = %s 
+                  AND market = 'value_singles' 
+                  AND status = 'pending'
+            ''', (home_team, away_team), fetch='all')
+            
+            if not result:
+                return False  # No Value Singles, no conflict
+            
+            for row in result:
+                selection = row[0].lower() if row[0] else ''
+                
+                # Check Over conflicts (e.g., "Over 2.5 Goals" with score 1-1 = 2 goals)
+                if 'over' in selection and 'goals' in selection:
+                    # Parse line (e.g., "Over 2.5 Goals" -> 2.5)
+                    for part in selection.split():
+                        try:
+                            line = float(part)
+                            if total_goals <= line:
+                                print(f"   ⚠️ Backup conflict: {score_text} ({total_goals} goals) vs Over {line}")
+                                return True
+                            break
+                        except ValueError:
+                            continue
+                
+                # Check Under conflicts (e.g., "Under 2.5 Goals" with score 2-1 = 3 goals)
+                elif 'under' in selection and 'goals' in selection:
+                    for part in selection.split():
+                        try:
+                            line = float(part)
+                            if total_goals >= line:
+                                print(f"   ⚠️ Backup conflict: {score_text} ({total_goals} goals) vs Under {line}")
+                                return True
+                            break
+                        except ValueError:
+                            continue
+            
+            return False  # No conflicts
+        except Exception as e:
+            print(f"⚠️ Conflict check error: {e}")
+            return False  # Assume no conflict on error
+    
+    def refill_exact_scores(self) -> int:
+        """
+        Refill exact score predictions from backup candidates after Value Singles
+        conflict resolution may have deleted some.
+        
+        Returns number of refilled predictions.
+        """
+        print("\n🔄 REFILL CHECK: Checking Exact Score count...")
+        
+        # Count current pending exact scores for today
+        today = datetime.now().strftime('%Y-%m-%d')
+        result = db_helper.execute('''
+            SELECT COUNT(*) FROM football_opportunities 
+            WHERE DATE(match_date) >= %s 
+              AND market = 'exact_score' 
+              AND status = 'pending'
+        ''', (today,), fetch='one')
+        current_count = result[0] if result else 0
+        
+        print(f"📊 Current Exact Scores: {current_count}/{self.TARGET_EXACT_SCORE_BETS}")
+        
+        if current_count >= self.TARGET_EXACT_SCORE_BETS:
+            print(f"✅ Target reached, no refill needed")
+            return 0
+        
+        needed = self.TARGET_EXACT_SCORE_BETS - current_count
+        print(f"🎯 Need to refill {needed} Exact Score prediction(s)")
+        
+        # Get backup candidates sorted by elite_value (best first)
+        backups = db_helper.execute('''
+            SELECT id, home_team, away_team, league, match_date, kickoff_time,
+                   score_prediction, odds, edge_percentage, confidence, elite_value, analysis_json
+            FROM exact_score_backups 
+            WHERE used = FALSE 
+              AND DATE(created_at) = %s
+            ORDER BY elite_value DESC
+        ''', (today,), fetch='all')
+        
+        if not backups:
+            print(f"⚠️ REFILL: No backup candidates available, staying at {current_count} Exact Score bets")
+            return 0
+        
+        print(f"📦 Found {len(backups)} backup candidates")
+        
+        refilled = 0
+        for backup in backups:
+            if refilled >= needed:
+                break
+            
+            backup_id, home_team, away_team, league, match_date, kickoff_time, \
+                score_text, odds, edge_pct, confidence, elite_value, analysis_json = backup
+            
+            # Check for conflicts with existing predictions
+            if self._check_exact_score_conflicts(home_team, away_team, score_text):
+                print(f"   ⏭️ SKIP: {home_team} vs {away_team} {score_text} - conflicts with Value Single")
+                continue
+            
+            # Check if we already have a prediction for this match
+            exists = db_helper.execute('''
+                SELECT COUNT(*) FROM football_opportunities 
+                WHERE home_team = %s AND away_team = %s AND market = 'exact_score' AND status = 'pending'
+            ''', (home_team, away_team), fetch='one')
+            
+            if exists and exists[0] > 0:
+                print(f"   ⏭️ SKIP: {home_team} vs {away_team} - already has exact score prediction")
+                continue
+            
+            # Create and save the prediction from backup
+            try:
+                import json
+                analysis = json.loads(analysis_json) if analysis_json else {}
+                
+                opportunity = FootballOpportunity(
+                    match_id=f"{home_team}_vs_{away_team}_refill",
+                    home_team=home_team,
+                    away_team=away_team,
+                    league=league,
+                    market='exact_score',
+                    selection=f"Exact Score: {score_text}",
+                    odds=float(odds),
+                    edge_percentage=float(edge_pct),
+                    confidence=int(confidence),
+                    analysis=analysis,
+                    stake=160.0,
+                    match_date=match_date,
+                    kickoff_time=kickoff_time,
+                    start_time=kickoff_time
+                )
+                
+                saved = self.save_exact_score_opportunity(opportunity)
+                if saved:
+                    # Mark backup as used
+                    db_helper.execute(
+                        "UPDATE exact_score_backups SET used = TRUE WHERE id = %s",
+                        (backup_id,)
+                    )
+                    refilled += 1
+                    print(f"   🔄 REFILL: Added backup Exact Score for {home_team} vs {away_team} ({score_text}) with EV {elite_value:.2f}")
+            except Exception as e:
+                print(f"   ⚠️ Refill save error: {e}")
+        
+        if refilled > 0:
+            print(f"✅ REFILL COMPLETE: Added {refilled} Exact Score prediction(s)")
+        else:
+            print(f"⚠️ REFILL: No suitable backup found, staying at {current_count} Exact Score bets")
+        
+        return refilled
+    
     def run_exact_score_analysis(self):
         """Run exact score analysis - MAX 75 per day for optimal learning"""
         print("\n🎯 EXACT SCORE ANALYSIS - INTELLIGENT VOLUME CONTROL")
         print("=" * 50)
+        
+        # Ensure backup table exists and clear old entries
+        self._ensure_backup_table_exists()
+        self._clear_old_backups()
         
         # 🕒 START TIMER - Maximum 15 minutes for analysis to ensure Value Singles can run
         import time as time_module
@@ -2859,11 +3093,20 @@ class RealFootballChampion:
                 # 🆕 NO PATTERN FILTER - Let models predict ANY score based on data analysis
                 
                 if passes_league and passes_quality and passes_odds and passes_confidence and passes_elite_value:
-                    # Save exact score opportunity (bypass daily limit)
-                    saved = self.save_exact_score_opportunity(opportunity)
-                    if saved:
-                        total_exact_scores += 1
-                        print(f"   ✅ ELITE PREDICTION SAVED")
+                    # Check if we've reached target for this cycle (save primary picks first)
+                    if total_exact_scores < self.TARGET_EXACT_SCORE_BETS:
+                        # Save exact score opportunity (primary pick)
+                        saved = self.save_exact_score_opportunity(opportunity)
+                        if saved:
+                            total_exact_scores += 1
+                            print(f"   ✅ ELITE PREDICTION SAVED (Primary #{total_exact_scores})")
+                    else:
+                        # Save as backup candidate for potential refill
+                        selected['edge_percentage'] = edge_percentage
+                        selected['confidence'] = confidence
+                        backup_saved = self._save_backup_candidate(selected, match, enriched_analysis)
+                        if backup_saved:
+                            print(f"   📦 BACKUP SAVED: {selected['score_text']} (EV: {selected['elite_value']:.2f})")
                 else:
                     # Skip low-quality predictions
                     skip_reasons = []
@@ -3125,6 +3368,15 @@ def run_single_cycle():
         except Exception as e:
             print(f"⚠️ Value Singles generation failed: {e}")
         
+        # 🔄 REFILL: After Value Singles may have deleted some Exact Scores (EV comparison),
+        # refill from backup candidates to maintain TARGET_EXACT_SCORE_BETS
+        try:
+            refilled = champion.refill_exact_scores()
+            if refilled > 0:
+                print(f"🔄 Refilled {refilled} Exact Score prediction(s) from backups")
+        except Exception as e:
+            print(f"⚠️ Exact Score refill failed: {e}")
+        
         print("\n🔄 CHECKING EXACT SCORE RESULTS...")
         updated_bets = champion.results_scraper.update_bet_outcomes()
         if updated_bets > 0:
@@ -3175,6 +3427,15 @@ def main():
                     print("📊 No value singles found this cycle")
             except Exception as e:
                 print(f"⚠️ Value Singles generation failed: {e}")
+            
+            # 🔄 REFILL: After Value Singles may have deleted some Exact Scores,
+            # refill from backup candidates to maintain TARGET_EXACT_SCORE_BETS
+            try:
+                refilled = champion.refill_exact_scores()
+                if refilled > 0:
+                    print(f"🔄 Refilled {refilled} Exact Score prediction(s) from backups")
+            except Exception as e:
+                print(f"⚠️ Exact Score refill failed: {e}")
             
             # Check if it's time for results update (every 5 minutes)
             current_time = time.time()
