@@ -270,15 +270,6 @@ LEAGUE_REGISTRY: List[LeagueConfig] = [
         tier=2,
         timezone="Europe/Istanbul"
     ),
-    LeagueConfig(
-        name="Russian Premier League",
-        odds_api_key="soccer_russia_premier_league",
-        api_football_id=235,
-        country="Russia",
-        tier=3,
-        timezone="Europe/Moscow"
-    ),
-    
     # === SOUTH AMERICA - WINTER LEAGUES (Tier 2) ===
     LeagueConfig(
         name="Brazilian Serie A",

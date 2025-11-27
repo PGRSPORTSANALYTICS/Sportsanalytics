@@ -298,7 +298,6 @@ class RealFootballChampion:
             106: 'Polish Ekstraklasa',
             345: 'Czech First League',
             203: 'Turkish Super League',
-            235: 'Russian Premier League',
             
             # South America (24/7 Coverage)
             71: 'Brazilian Serie A',
