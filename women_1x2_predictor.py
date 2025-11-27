@@ -1,9 +1,12 @@
 """
 Women's Football 1X2 (Match Winner) Predictor
 Generates Home/Draw/Away predictions with EV-based filtering
+Uses The Odds API for real bookmaker odds
 """
 
 import logging
+import os
+import requests
 from typing import List, Dict, Optional
 from datetime import datetime, timezone
 from dataclasses import dataclass
@@ -13,8 +16,20 @@ from psycopg2.extras import execute_values
 from db_connection import DatabaseConnection
 from women_league_detector import get_women_detector
 from api_football_client import APIFootballClient
+from api_cache_manager import APICacheManager
 
 logger = logging.getLogger(__name__)
+
+# Women's football sport keys for The Odds API
+WOMEN_ODDS_SPORT_KEYS = [
+    'soccer_england_wsl',           # Women's Super League (England)
+    'soccer_usa_nwsl',              # NWSL (USA)
+    'soccer_germany_frauen_bundesliga',  # Frauen-Bundesliga (Germany)
+    'soccer_france_feminine',       # Division 1 Feminine (France)
+    'soccer_spain_primera_femenina',  # Liga F (Spain)
+    'soccer_italy_serie_a_women',   # Serie A Femminile (Italy)
+    'soccer_uefa_womens_champions_league',  # UWCL
+]
 
 # EV thresholds per mode
 EV_THRESHOLDS = {
@@ -53,7 +68,7 @@ class Women1X2Prediction:
 
 
 class Women1X2Predictor:
-    """Generate 1X2 predictions for women's football"""
+    """Generate 1X2 predictions for women's football using real odds"""
     
     def __init__(self, mode: str = CURRENT_MODE):
         self.mode = mode
@@ -61,7 +76,17 @@ class Women1X2Predictor:
         self.detector = get_women_detector()
         self.api_client = APIFootballClient()
         
+        # The Odds API integration
+        self.odds_api_key = os.getenv('THE_ODDS_API_KEY')
+        self.odds_base_url = "https://api.the-odds-api.com/v4"
+        self.cache_manager = APICacheManager('odds_api_women', quota_limit=450)
+        self.odds_cache: Dict[str, Dict] = {}  # Team name -> odds mapping
+        
         logger.info(f"🎯 Women's 1X2 Predictor initialized (Mode: {mode}, EV Threshold: {self.ev_threshold:.1%})")
+        if self.odds_api_key:
+            logger.info("✅ The Odds API key loaded for real women's odds")
+        else:
+            logger.warning("⚠️ THE_ODDS_API_KEY not found - will use synthetic odds")
     
     def get_upcoming_women_matches(self) -> List[Dict]:
         """Fetch upcoming women's matches (cached)"""
@@ -146,26 +171,134 @@ class Women1X2Predictor:
             logger.error(f"❌ Error calculating probabilities: {e}")
             return None
     
+    def fetch_women_odds_from_api(self) -> Dict[str, Dict]:
+        """Fetch all women's football odds from The Odds API"""
+        if not self.odds_api_key:
+            logger.warning("⚠️ No Odds API key - cannot fetch real odds")
+            return {}
+        
+        all_odds: Dict[str, Dict] = {}
+        
+        for sport_key in WOMEN_ODDS_SPORT_KEYS:
+            try:
+                cache_key = f"women_h2h_{sport_key}"
+                cached = self.cache_manager.get_cached_response(cache_key, f'odds/{sport_key}')
+                
+                if cached is not None:
+                    for event in cached:
+                        match_key = self._create_match_key(event.get('home_team', ''), event.get('away_team', ''))
+                        if match_key:
+                            all_odds[match_key] = self._extract_h2h_odds(event)
+                    continue
+                
+                if not self.cache_manager.check_quota_available():
+                    logger.warning("⚠️ Odds API quota exhausted")
+                    break
+                
+                url = f"{self.odds_base_url}/sports/{sport_key}/odds"
+                params = {
+                    'apiKey': self.odds_api_key,
+                    'regions': 'eu,uk',
+                    'markets': 'h2h',
+                    'oddsFormat': 'decimal'
+                }
+                
+                response = requests.get(url, params=params, timeout=10)
+                
+                if response.status_code == 404:
+                    continue
+                
+                response.raise_for_status()
+                self.cache_manager.increment_request_count()
+                
+                events = response.json()
+                
+                if events:
+                    self.cache_manager.cache_response(cache_key, f'odds/{sport_key}', events, ttl_hours=1)
+                    logger.info(f"✅ Fetched {len(events)} women's matches from {sport_key}")
+                    
+                    for event in events:
+                        match_key = self._create_match_key(event.get('home_team', ''), event.get('away_team', ''))
+                        if match_key:
+                            all_odds[match_key] = self._extract_h2h_odds(event)
+                
+            except Exception as e:
+                logger.debug(f"⚠️ Error fetching {sport_key}: {e}")
+                continue
+        
+        logger.info(f"📊 Total women's matches with real odds: {len(all_odds)}")
+        self.odds_cache = all_odds
+        return all_odds
+    
+    def _create_match_key(self, home: str, away: str) -> Optional[str]:
+        """Create a normalized match key for matching fixtures to odds"""
+        if not home or not away:
+            return None
+        home_norm = home.lower().replace(' ', '').replace('-', '').replace('.', '')[:15]
+        away_norm = away.lower().replace(' ', '').replace('-', '').replace('.', '')[:15]
+        return f"{home_norm}_{away_norm}"
+    
+    def _extract_h2h_odds(self, event: Dict) -> Dict:
+        """Extract best h2h odds from event"""
+        odds = {'HOME': None, 'DRAW': None, 'AWAY': None, 'bookmaker': None}
+        
+        home_team = event.get('home_team', '')
+        away_team = event.get('away_team', '')
+        
+        for bookmaker in event.get('bookmakers', []):
+            for market in bookmaker.get('markets', []):
+                if market.get('key') == 'h2h':
+                    for outcome in market.get('outcomes', []):
+                        name = outcome.get('name', '')
+                        price = outcome.get('price', 0)
+                        
+                        if name == home_team:
+                            if odds['HOME'] is None or price > odds['HOME']:
+                                odds['HOME'] = price
+                        elif name == away_team:
+                            if odds['AWAY'] is None or price > odds['AWAY']:
+                                odds['AWAY'] = price
+                        elif name.lower() == 'draw':
+                            if odds['DRAW'] is None or price > odds['DRAW']:
+                                odds['DRAW'] = price
+                        
+                        if odds['bookmaker'] is None:
+                            odds['bookmaker'] = bookmaker.get('key', 'Unknown')
+        
+        return odds
+    
     def get_1x2_odds(self, fixture: Dict) -> Optional[Dict]:
-        """Get 1X2 odds from bookmakers"""
+        """Get 1X2 odds from The Odds API or fallback to synthetic"""
         try:
-            # Try to get odds from The Odds API (cached)
-            match_id = str(fixture.get('fixture', {}).get('id'))
+            home_team = fixture.get('teams', {}).get('home', {}).get('name', '')
+            away_team = fixture.get('teams', {}).get('away', {}).get('name', '')
             
-            # For now, use synthetic odds based on probabilities
-            # (Real implementation would fetch from odds API)
+            # Try to find real odds from cache
+            match_key = self._create_match_key(home_team, away_team)
+            
+            if match_key and match_key in self.odds_cache:
+                real_odds = self.odds_cache[match_key]
+                if real_odds.get('HOME') and real_odds.get('DRAW') and real_odds.get('AWAY'):
+                    logger.debug(f"✅ Real odds found for {home_team} vs {away_team}")
+                    return {
+                        'HOME': real_odds['HOME'],
+                        'DRAW': real_odds['DRAW'],
+                        'AWAY': real_odds['AWAY'],
+                        'source': 'the_odds_api',
+                        'bookmaker': real_odds.get('bookmaker', 'Unknown')
+                    }
+            
+            # Fallback: synthetic odds (will rarely pass EV threshold)
             probs = self.calculate_1x2_probabilities(fixture)
-            
             if not probs:
                 return None
             
-            # Convert probabilities to odds with bookmaker margin (~5%)
             margin = 0.05
-            
             return {
                 'HOME': round(1.0 / (probs['HOME'] * (1 + margin)), 2),
                 'DRAW': round(1.0 / (probs['DRAW'] * (1 + margin)), 2),
-                'AWAY': round(1.0 / (probs['AWAY'] * (1 + margin)), 2)
+                'AWAY': round(1.0 / (probs['AWAY'] * (1 + margin)), 2),
+                'source': 'synthetic'
             }
             
         except Exception as e:
@@ -194,8 +327,14 @@ class Women1X2Predictor:
         """Generate 1X2 predictions for women's matches"""
         logger.info(f"🎯 Generating women's 1X2 predictions (Mode: {self.mode})...")
         
+        # Fetch real odds from The Odds API first
+        logger.info("📊 Fetching real women's football odds from The Odds API...")
+        self.fetch_women_odds_from_api()
+        
         fixtures = self.get_upcoming_women_matches()
         predictions = []
+        real_odds_count = 0
+        synthetic_odds_count = 0
         
         for fixture in fixtures:
             try:
@@ -205,6 +344,12 @@ class Women1X2Predictor:
                 
                 if not probs or not odds:
                     continue
+                
+                # Track odds source
+                if odds.get('source') == 'the_odds_api':
+                    real_odds_count += 1
+                else:
+                    synthetic_odds_count += 1
                 
                 # Find best EV bet
                 best_selection = None
@@ -265,6 +410,7 @@ class Women1X2Predictor:
                 continue
         
         logger.info(f"🎯 Generated {len(predictions)} women's 1X2 predictions")
+        logger.info(f"📊 Odds sources: {real_odds_count} real (The Odds API), {synthetic_odds_count} synthetic")
         return predictions
     
     def save_predictions(self, predictions: List[Women1X2Prediction]) -> int:
