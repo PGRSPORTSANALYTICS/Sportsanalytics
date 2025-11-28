@@ -1386,6 +1386,40 @@ def render_sgp_parlays_tab():
                 """,
                 unsafe_allow_html=True,
             )
+        
+        # Track Record section
+        st.markdown("")
+        st.markdown("#### Track Record")
+        
+        # Calculate wins and losses
+        loss_count = len(settled_bets) - won_count
+        
+        # Create visual track record (last 20 settled bets)
+        recent_settled = settled_bets.tail(20).copy()
+        track_dots = []
+        for _, row in recent_settled.iterrows():
+            is_win = row["result"] in ["WON", "WIN"] or row["outcome"] in ["won", "WON"]
+            if is_win:
+                track_dots.append('<span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#00FFA6;margin:2px;"></span>')
+            else:
+                track_dots.append('<span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#F97373;margin:2px;"></span>')
+        
+        track_html = "".join(track_dots)
+        
+        st.markdown(
+            f"""
+            <div style="padding:14px 16px;border-radius:12px;
+                background:rgba(15,23,42,0.9);border:1px solid rgba(148,163,184,0.4);margin-top:12px;">
+                <div style="font-size:12px;color:#9CA3AF;margin-bottom:8px;">
+                    Last {len(recent_settled)} SGPs: <span style="color:#00FFA6;">{won_count}W</span> - <span style="color:#F97373;">{loss_count}L</span>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:2px;">
+                    {track_html}
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
     st.markdown("---")
 
