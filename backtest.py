@@ -148,11 +148,6 @@ def fetch_sgp_bets(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
 ) -> List[Bet]:
-    """
-    Hämtar settled SGP-bets från sgp_predictions.
-    Kräver:
-        - settled_timestamp IS NOT NULL
-    """
     sql = """
         SELECT
             match_date,
@@ -162,7 +157,9 @@ def fetch_sgp_bets(
             legs,
             bookmaker_odds,
             stake,
-            outcome
+            outcome,
+            payout,
+            profit_loss
         FROM sgp_predictions
         WHERE settled_timestamp IS NOT NULL
     """
@@ -183,9 +180,14 @@ def fetch_sgp_bets(
 
     bets: List[Bet] = []
     for r in rows:
-        odds = float(r["bookmaker_odds"]) if r["bookmaker_odds"] is not None else 0.0
-        stake = float(r["stake"]) if r["stake"] is not None else 0.0
-        payout, profit = compute_payout_profit(stake, odds, r["outcome"])
+        odds = float(r["bookmaker_odds"] or 0.0)
+        stake = float(r["stake"] or 0.0)
+
+        if r["profit_loss"] is not None:
+            profit = float(r["profit_loss"])
+            payout = profit + stake
+        else:
+            payout, profit = compute_payout_profit(stake, odds, r["outcome"] or "")
 
         desc = f"{r['home_team']} vs {r['away_team']} – {r['legs']} @{odds}"
         bets.append(
