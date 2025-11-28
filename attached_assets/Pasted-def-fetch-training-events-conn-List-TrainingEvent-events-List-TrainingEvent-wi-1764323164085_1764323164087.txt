@@ -1,0 +1,74 @@
+def fetch_training_events(conn) -> List[TrainingEvent]:
+    events: List[TrainingEvent] = []
+
+    with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+
+        # ----- EXACT SCORE -----
+        sql = """
+            SELECT match_date, league, edge_percentage, odds, stake, profit_loss
+            FROM football_opportunities
+            WHERE settled_timestamp IS NOT NULL
+              AND market = 'exact_score'
+              AND stake IS NOT NULL
+              AND profit_loss IS NOT NULL
+        """
+        cur.execute(sql)
+        for r in cur.fetchall():
+            events.append(
+                TrainingEvent(
+                    market_type="exact_score",
+                    match_date=r["match_date"],
+                    league=r["league"],
+                    ev=float(r["edge_percentage"]) if r["edge_percentage"] else None,
+                    odds=float(r["odds"]) if r["odds"] else None,
+                    stake=float(r["stake"]),
+                    profit_loss=float(r["profit_loss"]),
+                )
+            )
+
+        # ----- VALUE SINGLES (allt som inte är exact score) -----
+        sql = """
+            SELECT match_date, league, edge_percentage, odds, stake, profit_loss
+            FROM football_opportunities
+            WHERE settled_timestamp IS NOT NULL
+              AND (market IS NULL OR market != 'exact_score')
+              AND stake IS NOT NULL
+              AND profit_loss IS NOT NULL
+        """
+        cur.execute(sql)
+        for r in cur.fetchall():
+            events.append(
+                TrainingEvent(
+                    market_type="value_single",
+                    match_date=r["match_date"],
+                    league=r["league"],
+                    ev=float(r["edge_percentage"]) if r["edge_percentage"] else None,
+                    odds=float(r["odds"]) if r["odds"] else None,
+                    stake=float(r["stake"]),
+                    profit_loss=float(r["profit_loss"]),
+                )
+            )
+
+        # ----- SGP -----
+        sql = """
+            SELECT match_date, league, ev_percentage, bookmaker_odds, stake, profit_loss
+            FROM sgp_predictions
+            WHERE settled_timestamp IS NOT NULL
+              AND stake IS NOT NULL
+              AND profit_loss IS NOT NULL
+        """
+        cur.execute(sql)
+        for r in cur.fetchall():
+            events.append(
+                TrainingEvent(
+                    market_type="sgp",
+                    match_date=r["match_date"],
+                    league=r["league"],
+                    ev=float(r["ev_percentage"]) if r["ev_percentage"] else None,
+                    odds=float(r["bookmaker_odds"]) if r["bookmaker_odds"] else None,
+                    stake=float(r["stake"]),
+                    profit_loss=float(r["profit_loss"]),
+                )
+            )
+
+    return events
