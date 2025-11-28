@@ -95,6 +95,7 @@ def fetch_exact_score_bets(
         FROM football_opportunities
         WHERE market = 'exact_score'
           AND settled_timestamp IS NOT NULL
+          AND mode != 'TEST'
     """
 
     params = []
@@ -162,6 +163,7 @@ def fetch_sgp_bets(
             profit_loss
         FROM sgp_predictions
         WHERE settled_timestamp IS NOT NULL
+          AND mode != 'TEST'
     """
 
     params = []
