@@ -79,14 +79,6 @@ def fetch_exact_score_bets(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
 ) -> List[Bet]:
-    """
-    Hämtar settled Exact Score-bets från football_opportunities.
-    Kräver:
-        - market = 'exact_score'
-        - settled_timestamp IS NOT NULL (settled)
-    Använder stake-kolumnen i tabellen. Om profit_loss/payout finns
-    används ändå vår egen formel så allt blir konsekvent.
-    """
     sql = """
         SELECT
             match_date,
@@ -97,7 +89,9 @@ def fetch_exact_score_bets(
             selection,
             odds,
             stake,
-            outcome
+            outcome,
+            payout,
+            profit_loss
         FROM football_opportunities
         WHERE market = 'exact_score'
           AND settled_timestamp IS NOT NULL
@@ -119,9 +113,16 @@ def fetch_exact_score_bets(
 
     bets: List[Bet] = []
     for r in rows:
-        odds = float(r["odds"]) if r["odds"] is not None else 0.0
-        stake = float(r["stake"]) if r["stake"] is not None else 0.0
-        payout, profit = compute_payout_profit(stake, odds, r["outcome"])
+        odds = float(r["odds"] or 0.0)
+        stake = float(r["stake"] or 0.0)
+
+        # Om profit_loss finns: använd den.
+        if r["profit_loss"] is not None:
+            profit = float(r["profit_loss"])
+            payout = profit + stake
+        else:
+            # fallback till outcome-baserad beräkning
+            payout, profit = compute_payout_profit(stake, odds, r["outcome"] or "")
 
         desc = f"{r['home_team']} vs {r['away_team']} – {r['selection']} @{odds}"
         bets.append(
