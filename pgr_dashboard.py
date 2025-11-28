@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import List, Optional
 
 import pandas as pd
+import plotly.express as px
 import streamlit as st
 from sqlalchemy import create_engine, text
 
@@ -753,16 +754,39 @@ def render_overview(df: pd.DataFrame):
 
     settled = df[df["profit"].notna()].copy()
     if not settled.empty:
-        settled["date"] = settled["settled_at"].fillna(pd.to_datetime(settled["match_date"], errors="coerce"))
-        settled["date"] = pd.to_datetime(settled["date"], errors="coerce").dt.date
+        settled["date"] = pd.to_datetime(settled["settled_at"], errors="coerce")
+        settled.loc[settled["date"].isna(), "date"] = pd.to_datetime(settled.loc[settled["date"].isna(), "match_date"], errors="coerce")
+        settled = settled.dropna(subset=["date"])
+        settled["date"] = settled["date"].dt.date
+        
         curve = (
             settled.groupby("date")["profit"]
             .sum()
             .cumsum()
             .reset_index(name="cumulative_profit")
         )
-        curve = curve.set_index("date")
-        st.line_chart(curve, height=260)
+        curve["date"] = pd.to_datetime(curve["date"])
+        
+        fig = px.line(
+            curve,
+            x="date",
+            y="cumulative_profit",
+            labels={"date": "Date", "cumulative_profit": "Cumulative Profit (SEK)"},
+        )
+        fig.update_layout(
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            font_color="#FFFFFF",
+            xaxis=dict(
+                tickformat="%b %d",
+                gridcolor="rgba(255,255,255,0.1)",
+            ),
+            yaxis=dict(gridcolor="rgba(255,255,255,0.1)"),
+            height=300,
+            margin=dict(l=0, r=0, t=10, b=0),
+        )
+        fig.update_traces(line_color="#00F59D", line_width=3)
+        st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("No settled bets yet – equity curve will appear once results are in.")
 
@@ -777,8 +801,27 @@ def render_overview(df: pd.DataFrame):
                 .reset_index(name="ROI")
             )
             agg = agg.sort_values("ROI", ascending=False)
-            agg = agg.set_index("product")
-            st.bar_chart(agg, height=260)
+            
+            fig = px.bar(
+                agg,
+                x="product",
+                y="ROI",
+                labels={"product": "Product", "ROI": "ROI (%)"},
+                color="ROI",
+                color_continuous_scale=["#FF4444", "#FFAA00", "#00F59D"],
+            )
+            fig.update_layout(
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                font_color="#FFFFFF",
+                xaxis=dict(gridcolor="rgba(255,255,255,0.1)"),
+                yaxis=dict(gridcolor="rgba(255,255,255,0.1)"),
+                height=300,
+                margin=dict(l=0, r=0, t=10, b=0),
+                showlegend=False,
+                coloraxis_showscale=False,
+            )
+            st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("Waiting for settled bets before we can show per-product ROI.")
     else:
