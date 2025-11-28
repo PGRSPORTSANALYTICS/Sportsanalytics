@@ -106,7 +106,7 @@ class SGPPredictor:
                 ev_percentage REAL,
                 
                 -- Staking
-                stake REAL DEFAULT 160,
+                stake REAL DEFAULT 480,
                 kelly_stake REAL,
                 
                 -- Status tracking
@@ -1040,7 +1040,7 @@ class SGPPredictor:
         # Calculate Kelly stake with dynamic sizing from self-learner
         kelly_multiplier = self.self_learner.get_dynamic_kelly()
         kelly_fraction = (sgp['parlay_probability'] * sgp['bookmaker_odds'] - 1.0) / (sgp['bookmaker_odds'] - 1.0)
-        kelly_stake = max(0, min(kelly_fraction * kelly_multiplier, 0.05)) * 1000  # 5% max, 1000 SEK bankroll
+        kelly_stake = max(0, min(kelly_fraction * kelly_multiplier, 0.05)) * 30000  # 5% max, 30,000 SEK bankroll
         
         # Convert pricing metadata to JSON string
         import json
@@ -1067,7 +1067,7 @@ class SGPPredictor:
             sgp['fair_odds'],
             sgp['bookmaker_odds'],
             sgp['ev_percentage'],
-            160.0,  # Default stake
+            480.0,  # 1.6% of 30,000 SEK bankroll
             kelly_stake,
             'v1.0_copula_poisson_live',
             200000,

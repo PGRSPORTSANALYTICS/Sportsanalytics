@@ -2406,7 +2406,7 @@ class RealFootballChampion:
                     edge_percentage=float(edge_pct),
                     confidence=int(confidence),
                     analysis=analysis,
-                    stake=160.0,
+                    stake=480.0,
                     match_date=match_date,
                     kickoff_time=kickoff_time,
                     start_time=kickoff_time
@@ -3047,7 +3047,7 @@ class RealFootballChampion:
                     edge_percentage=edge_percentage,
                     confidence=confidence,
                     analysis=enriched_analysis,  # 🆕 Now includes ALL advanced features
-                    stake=160.0,  # SEK - Lower stake for exact scores
+                    stake=480.0,  # SEK - 1.6% of 30,000 bankroll
                     match_date=match.get('commence_time', ''),
                     kickoff_time=match.get('commence_time', ''),
                     start_time=match.get('commence_time', '')  # Add required start_time parameter

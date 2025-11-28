@@ -582,7 +582,7 @@ class ValueSinglesEngine:
                         "expected_home_goals": float(lh),
                         "expected_away_goals": float(la)
                     }),
-                    "stake": match.get("stake", 100),
+                    "stake": match.get("stake", 480),
                     "match_date": match_date,
                     "kickoff_time": kickoff_time,
                     "quality_score": float(match.get("quality_score", 50)),
