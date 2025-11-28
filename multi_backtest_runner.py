@@ -1,246 +1,179 @@
-"""
-multi_backtest_runner.py
-------------------------
-
-Kör backtest / performance-analys för ALLA dina system samtidigt,
-baserat på historiska bets i databasen.
-
-Antaganden (som du kan ändra i KONFIG-delen nedan):
-
-- Alla bets ligger i EN tabell (t.ex. "bets")
-- Kolumner:
-    product     - t.ex. 'VALUE_SINGLE', 'EXACT_SCORE', 'SGP', ...
-    mode        - t.ex. 'PROD', 'BACKTEST', 'DEMO'
-    stake       - decimal/float, insats i SEK
-    payout      - decimal/float, utbetalt belopp (inkl. stake vid vinst)
-    created_at  - timestamp när betet skapades
-
-För High-End Bets använder vi samma tabell men filtrerar på EV-kolumnen:
-    ev_decimal  - t.ex. 0.12 för 12% edge (ändra namn i config om din kolumn heter något annat)
-
-Kör med:
-    python multi_backtest_runner.py
-
-Justera DEFAULT_START/END om du vill byta period.
-"""
-
-from __future__ import annotations
-
 import os
-import logging
-from dataclasses import dataclass
-from datetime import date, datetime
-from typing import Dict, Optional, Tuple
-
+import datetime as dt
 import psycopg2
-import psycopg2.extras
+from psycopg2.extras import DictCursor
 
-# ============================================================
-# KONFIGURATION
-# ============================================================
+# ==========================================
+# DB-CONNECTION
+# ==========================================
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
-# Postgres-anslutning: använder samma DATABASE_URL som du har i Replit
-DATABASE_URL = os.getenv("DATABASE_URL")
+def get_conn():
+    return psycopg2.connect(DATABASE_URL, sslmode="require", cursor_factory=DictCursor)
 
-if not DATABASE_URL:
-    raise RuntimeError(
-        "DATABASE_URL saknas. Lägg in din Postgres-URL i Replit Secrets "
-        "(key = DATABASE_URL)."
-    )
 
-# Namn på din bets-tabell
-BETS_TABLE = "bets"  # ändra om din tabell heter något annat
+# ==========================================
+# SYSTEM DEFINITIONS
+# ==========================================
+SYSTEMS = [
+    ("VALUE_SINGLES",       "Value Singles"),
+    ("EXACT_SCORE",         "Exact Score"),
+    ("SGP",                 "Same Game Parlays"),
+    ("COLLEGE_BASKETBALL",  "College Basketball"),
+    # Lägg till fler här om du vill visa dem i listan
+]
 
-# Kolumnnamn – ändra här om de skiljer sig i din DB
-COL_PRODUCT = "product"
-COL_MODE = "mode"
-COL_STAKE = "stake"
-COL_PAYOUT = "payout"
-COL_CREATED_AT = "created_at"
-COL_EV = "ev_decimal"  # används bara för high-end; ändra till t.ex. "edge" om du har det
+# ==========================================
+# TABELL-KONFIG – JUSTERA HÄR
+# ==========================================
+# !!! VIKTIGT !!!
+#  - Byt kolumnnamn så de matchar dina riktiga tabeller.
+#  - extra_where kan vara tom sträng "" om du inte filtrerar på bet_type.
+#
+# Jag gissar på kolumnnamn, så räkna med att du behöver ändra dem.
+# Kolla i Supabase vad kolumnerna heter exakt.
 
-# Default-datum för backtestperiod
-DEFAULT_START = date(2024, 9, 1)
-DEFAULT_END = date(2024, 11, 25)
-
-# Vilket "mode" vi ska analysera – oftast PROD (livebets),
-# men du kan sätta BACKTEST om du vill analysera simulerade bets.
-TARGET_MODE = "PROD"
-
-# System / produkter som ska köras
-# key = label som skrivs ut i terminalen
-# value = (product_code, extra_sql_filter)
-SYSTEMS: Dict[str, Tuple[str, Optional[str]]] = {
-    "Value Singles": ("VALUE_SINGLE", None),
-    "Exact Score / Final Score": ("EXACT_SCORE", None),
-    "Same Game Parlays": ("SGP", None),
-    "Monster SGP": ("MONSTER_SGP", None),
-    "Women 1X2": ("WOMEN_1X2", None),
-    "College Basketball": ("COLLEGE_BASKETBALL", None),
-    # High-End: filtrerar på EV-kolumnen
-    "High-End Bets (8%+ EV)": ("VALUE_SINGLE", f"{COL_EV} >= 0.08"),
+TABLE_CONFIG = {
+    "EXACT_SCORE": {
+        "table": "football_opportunities",
+        "stake_col": "stake_sek",      # TODO: byt till rätt kolumn
+        "profit_col": "profit_sek",    # TODO: byt till rätt kolumn (netto)
+        "status_col": "status",        # t.ex. 'WON' / 'LOST' / 'PENDING'
+        "date_col": "kickoff_time",    # eller 'event_date' / 'created_at'
+        "extra_where": "AND bet_type = 'EXACT_SCORE'"  # TODO: justera eller ta bort
+    },
+    "VALUE_SINGLES": {
+        "table": "football_opportunities",
+        "stake_col": "stake_sek",      # TODO
+        "profit_col": "profit_sek",    # TODO
+        "status_col": "status",        # TODO
+        "date_col": "kickoff_time",    # TODO
+        "extra_where": "AND bet_type = 'VALUE_SINGLE'"  # TODO eller ""
+    },
+    "SGP": {
+        "table": "sgp_predictions",
+        "stake_col": "stake_sek",      # TODO
+        "profit_col": "profit_sek",    # TODO
+        "status_col": "status",        # t.ex. 'SETTLED'
+        "date_col": "kickoff_time",    # TODO
+        "extra_where": ""              # ev. "AND is_monster = FALSE"
+    },
+    "COLLEGE_BASKETBALL": {
+        "table": "basketball_predictions",
+        "stake_col": "stake_sek",      # TODO
+        "profit_col": "profit_sek",    # TODO
+        "status_col": "status",        # TODO
+        "date_col": "game_time",       # TODO
+        "extra_where": ""              # ev. "AND league = 'NCAAB'"
+    },
+    # Exempel om du vill koppla in fler senare:
+    # "MONSTER_SGP": {
+    #     "table": "sgp_predictions",
+    #     "stake_col": "...",
+    #     "profit_col": "...",
+    #     "status_col": "...",
+    #     "date_col": "...",
+    #     "extra_where": "AND is_monster = TRUE"
+    # },
 }
 
-# ============================================================
-# Logging
-# ============================================================
 
-logger = logging.getLogger("multi_backtest")
-if not logger.handlers:
-    handler = logging.StreamHandler()
-    fmt = "[MULTI_BACKTEST] %(message)s"
-    handler.setFormatter(logging.Formatter(fmt))
-    logger.addHandler(handler)
-logger.setLevel(logging.INFO)
+# ==========================================
+# BACKTEST-LOGIK FÖR ETT SYSTEM
+# ==========================================
+def run_backtest_for_system(system_id, date_from, date_to):
+    cfg = TABLE_CONFIG.get(system_id)
 
-# ============================================================
-# Datamodell för resultat
-# ============================================================
+    if cfg is None:
+        print(f"[MULTI_BACKTEST] ⚠️  Skipping {system_id} – no table config yet")
+        return {
+            "bets": 0,
+            "staked": 0.0,
+            "profit": 0.0,
+            "roi": 0.0,
+        }
 
+    table = cfg["table"]
+    stake_col = cfg["stake_col"]
+    profit_col = cfg["profit_col"]
+    status_col = cfg["status_col"]
+    date_col = cfg["date_col"]
+    extra_where = cfg["extra_where"]
 
-@dataclass
-class BacktestResult:
-    system_name: str
-    product_code: str
-    bets: int
-    total_stake: float
-    profit: float  # payout - stake
-    roi_pct: float
-
-    def pretty(self) -> str:
-        return (
-            f"{self.system_name} ({self.product_code})\n"
-            f"   Bets:   {self.bets}\n"
-            f"   Stake:  {self.total_stake:,.2f} SEK\n"
-            f"   Profit: {self.profit:,.2f} SEK\n"
-            f"   ROI:    {self.roi_pct:.2f}%\n"
-        )
-
-
-# ============================================================
-# DB-hjälpare
-# ============================================================
-
-
-def get_connection():
-    """Skapar en ny Postgres-connection."""
-    return psycopg2.connect(DATABASE_URL)
-
-
-def run_backtest_for_system(
-    system_name: str,
-    product_code: str,
-    start: date,
-    end: date,
-    extra_filter: Optional[str] = None,
-) -> BacktestResult:
-    """
-    Läser bets för ett system från databasen och räknar ut
-    antal bets, total stake, profit och ROI.
-    """
-
-    logger.info("=" * 56)
-    logger.info(f"→ {system_name} ({product_code})")
-    logger.info(f"   Period: {start} → {end}")
-    logger.info(f"   Mode:   {TARGET_MODE}")
-    if extra_filter:
-        logger.info(f"   Extra filter: {extra_filter}")
-
+    # OBS: ändra 'SETTLED' om du använder annan status för färdiga spel
     query = f"""
         SELECT
-            COUNT(*)                              AS bets,
-            COALESCE(SUM({COL_STAKE}), 0)        AS total_stake,
-            COALESCE(SUM({COL_PAYOUT} - {COL_STAKE}), 0) AS profit
-        FROM {BETS_TABLE}
-        WHERE {COL_PRODUCT} = %(product)s
-          AND {COL_MODE} = %(mode)s
-          AND {COL_CREATED_AT} >= %(start)s
-          AND {COL_CREATED_AT} < (%(end)s::date + INTERVAL '1 day')
+            COUNT(*)                         AS bets,
+            COALESCE(SUM({stake_col}), 0.0)  AS staked,
+            COALESCE(SUM({profit_col}), 0.0) AS profit
+        FROM {table}
+        WHERE {date_col} >= %(date_from)s
+          AND {date_col} <  %(date_to)s
+          AND {status_col} = 'SETTLED'
+          {extra_where}
     """
 
-    params = {
-        "product": product_code,
-        "mode": TARGET_MODE,
-        "start": datetime.combine(start, datetime.min.time()),
-        "end": datetime.combine(end, datetime.min.time()),
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(query, {"date_from": date_from, "date_to": date_to})
+        row = cur.fetchone()
+
+    bets = row["bets"]
+    staked = float(row["staked"])
+    profit = float(row["profit"])
+    roi = (profit / staked * 100.0) if staked > 0 else 0.0
+
+    return {
+        "bets": bets,
+        "staked": staked,
+        "profit": profit,
+        "roi": roi,
     }
 
-    if extra_filter:
-        query += f" AND ({extra_filter})"
 
-    with get_connection() as conn:
-        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-            cur.execute(query, params)
-            row = cur.fetchone()
+# ==========================================
+# MAIN
+# ==========================================
+def main():
+    # Standardperiod: från 1 sep 2024 till idag
+    today = dt.date.today()
+    default_from = dt.date(2024, 9, 1)
+    default_to = today + dt.timedelta(days=1)
 
-    bets = int(row["bets"]) if row["bets"] is not None else 0
-    total_stake = float(row["total_stake"]) if row["total_stake"] is not None else 0.0
-    profit = float(row["profit"]) if row["profit"] is not None else 0.0
+    date_from = default_from
+    date_to = default_to
 
-    if total_stake > 0:
-        roi_pct = (profit / total_stake) * 100.0
-    else:
-        roi_pct = 0.0
+    print("[MULTI_BACKTEST] " + "=" * 60)
+    print(f"[MULTI_BACKTEST] Period: {date_from} → {date_to}")
+    print("[MULTI_BACKTEST] Mode: PROD (läser riktiga tabeller)")
+    print("[MULTI_BACKTEST] " + "=" * 60)
 
-    logger.info(f"   Bets:   {bets}")
-    logger.info(f"   Stake:  {total_stake:,.2f} SEK")
-    logger.info(f"   Profit: {profit:,.2f} SEK")
-    logger.info(f"   ROI:    {roi_pct:.2f}%")
+    total_bets = 0
+    total_staked = 0.0
+    total_profit = 0.0
 
-    return BacktestResult(
-        system_name=system_name,
-        product_code=product_code,
-        bets=bets,
-        total_stake=total_stake,
-        profit=profit,
-        roi_pct=roi_pct,
-    )
+    for system_id, label in SYSTEMS:
+        print(f"\n[MULTI_BACKTEST] → {label} ({system_id})")
 
+        res = run_backtest_for_system(system_id, date_from, date_to)
 
-# ============================================================
-# Huvud-funktion
-# ============================================================
+        total_bets += res["bets"]
+        total_staked += res["staked"]
+        total_profit += res["profit"]
 
+        print(f"  Bets:    {res['bets']}")
+        print(f"  Staked:  {res['staked']:.2f} SEK")
+        print(f"  Profit:  {res['profit']:.2f} SEK")
+        print(f"  ROI:     {res['roi']:.2f}%")
 
-def main() -> None:
-    logger.info("=" * 56)
-    logger.info("PGR MULTI-SYSTEM BACKTEST / PERFORMANCE ANALYSIS")
-    logger.info("=" * 56)
-    logger.info(f"Default period: {DEFAULT_START} → {DEFAULT_END}")
-    logger.info(f"Mode: {TARGET_MODE}\n")
+    total_roi = (total_profit / total_staked * 100.0) if total_staked > 0 else 0.0
 
-    all_results = []
-
-    for system_name, (product_code, extra_filter) in SYSTEMS.items():
-        res = run_backtest_for_system(
-            system_name=system_name,
-            product_code=product_code,
-            start=DEFAULT_START,
-            end=DEFAULT_END,
-            extra_filter=extra_filter,
-        )
-        all_results.append(res)
-
-    # Sammanfattning
-    logger.info("=" * 56)
-    logger.info("SUMMARY")
-    logger.info("=" * 56)
-
-    total_bets = sum(r.bets for r in all_results)
-    total_stake = sum(r.total_stake for r in all_results)
-    total_profit = sum(r.profit for r in all_results)
-    total_roi = (total_profit / total_stake) * 100.0 if total_stake > 0 else 0.0
-
-    for r in all_results:
-        logger.info(r.pretty())
-
-    logger.info("-" * 56)
-    logger.info(f"TOTAL BETS:   {total_bets}")
-    logger.info(f"TOTAL STAKE:  {total_stake:,.2f} SEK")
-    logger.info(f"TOTAL PROFIT: {total_profit:,.2f} SEK")
-    logger.info(f"TOTAL ROI:    {total_roi:.2f}%")
-    logger.info("-" * 56)
-
+    print("\n" + "=" * 60)
+    print("SUMMARY")
+    print("=" * 60)
+    print(f"Total Bets:   {total_bets}")
+    print(f"Total Staked: {total_staked:.2f} SEK")
+    print(f"Total Profit: {total_profit:.2f} SEK")
+    print(f"Avg ROI:      {total_roi:.2f}%")
 
 if __name__ == "__main__":
     main()
