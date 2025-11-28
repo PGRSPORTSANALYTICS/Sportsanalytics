@@ -51,17 +51,17 @@ def get_db_connection():
 def compute_payout_profit(stake: float, odds: float, outcome: str) -> Tuple[float, float]:
     """
     Standardmodell:
-        WON  -> payout = stake * odds, profit = payout - stake
-        LOST -> payout = 0,           profit = -stake
+        WON/won  -> payout = stake * odds, profit = payout - stake
+        LOST/lost -> payout = 0,           profit = -stake
     """
     if outcome is None:
         return 0.0, 0.0
 
-    outcome_upper = outcome.upper()
-    if outcome_upper == "WON":
+    outcome_lower = outcome.lower()
+    if outcome_lower in ("won", "win"):
         payout = stake * odds
         profit = payout - stake
-    elif outcome_upper == "LOST":
+    elif outcome_lower in ("lost", "loss"):
         payout = 0.0
         profit = -stake
     else:
@@ -213,8 +213,8 @@ def fetch_sgp_bets(
 def aggregate_metrics(bets: List[Bet]) -> Dict:
     total_stake = sum(b.stake for b in bets)
     total_profit = sum(b.profit for b in bets)
-    won = sum(1 for b in bets if b.outcome.upper() == "WON")
-    lost = sum(1 for b in bets if b.outcome.upper() == "LOST")
+    won = sum(1 for b in bets if b.outcome.lower() in ("won", "win"))
+    lost = sum(1 for b in bets if b.outcome.lower() in ("lost", "loss"))
 
     n_bets = len(bets)
     roi = (total_profit / total_stake * 100) if total_stake > 0 else 0.0
@@ -231,9 +231,9 @@ def aggregate_metrics(bets: List[Bet]) -> Dict:
         bucket["bets"] += 1
         bucket["stake"] += b.stake
         bucket["profit"] += b.profit
-        if b.outcome.upper() == "WON":
+        if b.outcome.lower() in ("won", "win"):
             bucket["won"] += 1
-        elif b.outcome.upper() == "LOST":
+        elif b.outcome.lower() in ("lost", "loss"):
             bucket["lost"] += 1
 
     # räkna ROI/hitrate per market
