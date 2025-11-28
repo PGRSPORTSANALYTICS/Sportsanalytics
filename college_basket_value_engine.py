@@ -530,12 +530,24 @@ class CollegeBasketValueEngine:
 
         all_picks.sort(key=lambda x: (x.ev, x.confidence), reverse=True)
         
+        # DEDUP: Keep only the best EV bet per game
+        best_by_match: Dict[str, BasketPick] = {}
+        for pick in all_picks:
+            if pick.match not in best_by_match:
+                best_by_match[pick.match] = pick
+            elif pick.ev > best_by_match[pick.match].ev:
+                best_by_match[pick.match] = pick
+        
+        # Get unique picks (one per game, best EV)
+        unique_picks = list(best_by_match.values())
+        unique_picks.sort(key=lambda x: (x.ev, x.confidence), reverse=True)
+        
         # Limit singles to max_singles
-        singles = all_picks[: self.max_singles]
+        singles = unique_picks[: self.max_singles]
 
         if self.allow_parlays and singles:
-            # Build parlays from top singles
-            top_for_parlay = all_picks[:25]
+            # Build parlays from unique picks (already deduped - one per game)
+            top_for_parlay = unique_picks[:25]
             parlays_3 = build_parlays(top_for_parlay, legs=3, min_parlay_ev=0.02)
             parlays_4 = build_parlays(top_for_parlay, legs=4, min_parlay_ev=0.03)
             
