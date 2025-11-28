@@ -754,8 +754,7 @@ def render_overview(df: pd.DataFrame):
 
     settled = df[df["profit"].notna()].copy()
     if not settled.empty:
-        settled["date"] = pd.to_datetime(settled["settled_at"], errors="coerce")
-        settled.loc[settled["date"].isna(), "date"] = pd.to_datetime(settled.loc[settled["date"].isna(), "match_date"], errors="coerce")
+        settled["date"] = pd.to_datetime(settled["match_date"], errors="coerce")
         settled = settled.dropna(subset=["date"])
         settled["date"] = settled["date"].dt.date
         
