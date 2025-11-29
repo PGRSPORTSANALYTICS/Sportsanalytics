@@ -723,27 +723,45 @@ def render_overview(df: pd.DataFrame):
     )
 
     summary = compute_roi(df)
+    
+    STARTING_BANKROLL = 10000.0
+    current_bankroll = STARTING_BANKROLL + summary["profit"]
+    bankroll_growth = ((current_bankroll / STARTING_BANKROLL) - 1) * 100
 
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3 = st.columns(3)
     with col1:
         metric_card(
-            "Total ROI",
-            format_pct(summary["roi"]),
-            f"On {format_money(summary['stake'])} staked",
+            "Starting Bankroll",
+            format_money(STARTING_BANKROLL),
+            "Initial capital",
         )
     with col2:
+        metric_card(
+            "Current Bankroll",
+            format_money(current_bankroll),
+            f"{bankroll_growth:+.1f}% growth",
+        )
+    with col3:
         metric_card(
             "Total Profit",
             format_money(summary["profit"]),
             "All settled bets",
         )
-    with col3:
+    
+    col4, col5, col6 = st.columns(3)
+    with col4:
+        metric_card(
+            "Total ROI",
+            format_pct(summary["roi"]),
+            f"On {format_money(summary['stake'])} staked",
+        )
+    with col5:
         metric_card(
             "Hit Rate",
             format_pct(summary["hit_rate"]),
             f"{summary['wins']} wins out of {summary['bets']} bets",
         )
-    with col4:
+    with col6:
         metric_card(
             "Bets Tracked",
             f"{len(df):,}",
