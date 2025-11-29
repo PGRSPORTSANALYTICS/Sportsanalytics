@@ -38,6 +38,7 @@ The system employs advanced prediction features including:
 - **Non-Blocking Engine Architecture (Nov 26, 2025):** Combined Sports Engine uses `run_single_cycle()` function in real_football_champion.py and sgp_champion.py instead of blocking `main()` infinite loops, allowing proper sequential execution of all prediction cycles (Football → SGP → Women → Basketball).
 - **Dynamic Settlement Column System:** settlement.py uses `RESULT_COLUMN_MAP` and `_update_result()` helper functions to dynamically select between "status" (basketball/women) and "result" (football) columns during bet settlement.
 - **Separated Basketball Verification:** Basketball settlement handled exclusively by college_basket_result_verifier.py using The Odds API scores endpoint, not part of fixture-based settle_all_bets flow.
+- **Bankroll Management System (Nov 29, 2025):** Centralized `BankrollManager` class prevents over-betting by tracking current bankroll, pending exposure, and daily limits. All prediction engines (SGP, Value Singles, Basketball) check available funds before placing bets. Maximum daily exposure capped at 80% of bankroll. System blocks new bets when limits are reached.
 
 ### System Design Choices
 - **Data Layer:** Migrated from SQLite to PostgreSQL (Replit's built-in Neon database) to eliminate database locking issues during concurrent workflow access, using connection pooling.
