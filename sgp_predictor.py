@@ -730,7 +730,7 @@ class SGPPredictor:
                     {'market_type': 'BTTS', 'outcome': 'YES'},
                     {'market_type': 'SECOND_HALF_GOALS', 'outcome': 'OVER', 'line': 1.5}
                 ],
-                'description': 'Over 2.5 + BTTS + 2H Goals'
+                'description': 'Over 2.5 + BTTS + 2H Over 1.5'
             },
             
             # ========== 3-LEG CORNERS COMBOS (~7-10x) ==========
@@ -765,7 +765,7 @@ class SGPPredictor:
                     {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
                     {'market_type': 'SECOND_HALF_GOALS', 'outcome': 'OVER', 'line': 0.5}
                 ],
-                'description': 'Over 2.5 + BTTS + Goals Both Halves'
+                'description': 'Over 2.5 + BTTS + 1H Over 0.5 + 2H Over 0.5'
             },
             
             # Corners 10.5+ + Over 3.5 + 1H Over 1.5 + BTTS (~10x) - Lille winning combo!
@@ -787,7 +787,7 @@ class SGPPredictor:
                     {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5},
                     {'market_type': 'SECOND_HALF_GOALS', 'outcome': 'OVER', 'line': 1.5}
                 ],
-                'description': 'Over 3.5 + BTTS + 1H + 2H Goals'
+                'description': 'Over 3.5 + BTTS + 1H Over 0.5 + 2H Over 1.5'
             },
             
         ]
