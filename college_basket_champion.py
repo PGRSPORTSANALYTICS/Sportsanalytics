@@ -27,12 +27,12 @@ def run_prediction_cycle():
         client = OddsAPIClient()
         engine = CollegeBasketValueEngine(
             client=client,
-            min_ev=0.03,
-            min_conf=0.50,
-            max_singles=10,
-            max_parlays=5,  # Dynamic: 5 if 10+ singles, else 2
-            min_odds=1.40,
-            max_odds=5.50,
+            min_ev=0.05,  # INCREASED: 5% EV minimum (was 3%)
+            min_conf=0.55,  # INCREASED: 55% confidence (was 50%)
+            max_singles=6,  # REDUCED: 6 singles max (was 10)
+            max_parlays=3,  # REDUCED: 3 parlays max (was 5)
+            min_odds=1.50,  # TIGHTER: 1.50 min odds (was 1.40)
+            max_odds=4.50,  # TIGHTER: 4.50 max odds (was 5.50)
             allow_parlays=True
         )
         

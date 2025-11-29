@@ -2142,7 +2142,7 @@ class RealFootballChampion:
         print("=" * 60)
         
         # Check daily limit first - STRICT SELECTIVITY 
-        DAILY_LIMIT = 15  # 🔧 CRITICAL: High-quality predictions, balanced quantity
+        DAILY_LIMIT = 8  # 🔧 REDUCED: Quality over quantity (was 15)
         current_count = self.get_todays_count()
         if current_count >= DAILY_LIMIT:
             print(f"⚠️ DAILY LIMIT REACHED: {current_count}/{DAILY_LIMIT} bets already generated today")
@@ -3376,8 +3376,8 @@ def run_single_cycle():
         
         try:
             print("\n💰 VALUE SINGLES ENGINE - Analyzing markets...")
-            value_engine = ValueSinglesEngine(champion, ev_threshold=0.03, min_confidence=50)
-            value_singles = value_engine.generate_value_singles(max_picks=6)
+            value_engine = ValueSinglesEngine(champion, ev_threshold=0.05, min_confidence=55)
+            value_singles = value_engine.generate_value_singles(max_picks=4)
             if value_singles:
                 saved = value_engine.save_value_singles(value_singles)
                 print(f"✅ Saved {saved} VALUE SINGLES predictions")

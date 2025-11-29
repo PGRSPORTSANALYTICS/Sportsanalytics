@@ -136,7 +136,7 @@ class SGPChampion:
             return 1.5, 1.3  # Safe defaults
     
     def check_daily_limit(self) -> bool:
-        """Check if we've hit daily SGP limit (max 20 per day)"""
+        """Check if we've hit daily SGP limit (max 12 per day)"""
         today = datetime.now().date().isoformat()
         
         result = db_helper.execute('''
@@ -147,7 +147,7 @@ class SGPChampion:
         
         count = result[0] if result else 0
         
-        return count < 20  # Max 20 SGPs per day
+        return count < 12  # Max 12 SGPs per day (reduced from 20)
     
     def _map_sport_key_to_league(self, sport_key: str) -> str:
         """Map The Odds API sport_key to readable league name"""
@@ -178,7 +178,7 @@ class SGPChampion:
         logger.info("="*80)
         
         if not self.check_daily_limit():
-            logger.info("⚠️  Daily limit reached (20 SGPs). Skipping generation.")
+            logger.info("⚠️  Daily limit reached (12 SGPs). Skipping generation.")
             return
         
         # Get today's matches
