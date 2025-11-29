@@ -190,14 +190,14 @@ class SGPChampion:
         
         logger.info(f"⚽ Analyzing {len(matches)} matches for SGP opportunities...")
         
-        sgps_generated = 0
-        all_sgps = []
+        all_candidates = []  # Collect ALL candidates first
         
-        # PHASE 1: Generate and save ALL SGPs (don't broadcast yet)
+        # PHASE 1: Generate ALL SGP candidates (don't save yet)
         for match in matches:
             home_team = match['home_team']
             away_team = match['away_team']
             league = self._map_sport_key_to_league(match.get('sport_key', ''))
+            match_id = match.get('id', f"{home_team}_{away_team}")
             
             # Get xG predictions
             logger.info(f"   📊 Analyzing {home_team} vs {away_team}...")
@@ -207,7 +207,6 @@ class SGPChampion:
             player_data = None
             if self.api_football:
                 try:
-                    # Get fixture from API-Football to fetch player stats
                     fixture = self.api_football.get_fixture_by_teams_and_date(
                         home_team, away_team, match['commence_time']
                     )
@@ -216,7 +215,7 @@ class SGPChampion:
                         fixture_id = fixture.get('fixture', {}).get('id')
                         home_team_id = fixture.get('teams', {}).get('home', {}).get('id')
                         away_team_id = fixture.get('teams', {}).get('away', {}).get('id')
-                        league_id = fixture.get('league', {}).get('id', 39)  # Default Premier League
+                        league_id = fixture.get('league', {}).get('id', 39)
                         
                         if fixture_id and home_team_id and away_team_id:
                             player_data = self.api_football.get_top_scorers(
@@ -226,9 +225,8 @@ class SGPChampion:
                 except Exception as e:
                     logger.warning(f"   ⚠️ Could not fetch player data: {e}")
             
-            # Generate SGPs (returns top 3 by EV)
             match_data = {
-                'match_id': match.get('id', ''),
+                'match_id': match_id,
                 'home_team': home_team,
                 'away_team': away_team,
                 'league': league,
@@ -239,24 +237,85 @@ class SGPChampion:
             sgps = self.sgp_predictor.generate_sgp_for_match(match_data, lambda_home, lambda_away, player_data)
             
             if sgps:
-                # Save all SGPs and track them
                 for sgp in sgps:
-                    self.sgp_predictor.save_sgp_prediction(sgp)
-                    all_sgps.append(sgp)
-                    sgps_generated += 1
-                
-                logger.info(f"   ✅ Generated {len(sgps)} SGPs for this match")
+                    sgp['_match_id'] = match_id  # Track which match this belongs to
+                    all_candidates.append(sgp)
+                logger.info(f"   ✅ Found {len(sgps)} SGP candidates")
             else:
                 logger.info(f"   ⚠️ No qualifying SGPs found")
+        
+        logger.info(f"\n📊 Total candidates before filtering: {len(all_candidates)}")
+        
+        # PHASE 2: Apply per-match cap (max 2 SGPs per match) + global cap (12/day)
+        selected_sgps = self._apply_per_match_cap(all_candidates, max_per_match=2, global_cap=12)
+        
+        # PHASE 3: Save only the selected SGPs to database
+        sgps_generated = 0
+        for sgp in selected_sgps:
+            self.sgp_predictor.save_sgp_prediction(sgp)
+            sgps_generated += 1
+        
+        logger.info("="*80)
+        logger.info(f"✅ SGP Generation Complete: {sgps_generated} predictions saved (from {len(all_candidates)} candidates)")
+        logger.info("="*80)
+        
+        # PHASE 4: Broadcast the selected predictions
+        self._select_and_broadcast_top_sgps(selected_sgps)
+    
+    def _apply_per_match_cap(self, candidates: List[Dict[str, Any]], max_per_match: int = 2, global_cap: int = 12) -> List[Dict[str, Any]]:
+        """
+        Apply per-match cap and global cap to SGP candidates.
+        Sort by edge_percentage descending, pick max 2 per match, up to 12 total.
+        """
+        if not candidates:
+            return []
+        
+        # Sort ALL candidates by edge_percentage (EV) descending - best first
+        sorted_candidates = sorted(
+            candidates, 
+            key=lambda x: x.get('ev_percentage', x.get('edge_percentage', 0)), 
+            reverse=True
+        )
+        
+        logger.info(f"🔍 Sorting {len(sorted_candidates)} candidates by edge percentage...")
+        
+        # Track how many SGPs we've selected per match
+        match_counts = {}  # {match_id: count}
+        selected = []
+        
+        for sgp in sorted_candidates:
+            # Check global cap
+            if len(selected) >= global_cap:
+                logger.info(f"⚠️  Global cap reached ({global_cap} SGPs)")
+                break
             
-            logger.info(f"   ✅ Analysis complete")
+            # Get match_id (we added _match_id during generation)
+            match_id = sgp.get('_match_id', '')
+            if not match_id:
+                # Fallback: create match_id from match_data
+                match_data = sgp.get('match_data', {})
+                match_id = f"{match_data.get('home_team', '')}_{match_data.get('away_team', '')}"
+            
+            # Check per-match cap
+            current_count = match_counts.get(match_id, 0)
+            if current_count >= max_per_match:
+                continue  # Skip - this match already has max SGPs
+            
+            # Select this SGP
+            selected.append(sgp)
+            match_counts[match_id] = current_count + 1
+            
+            ev = sgp.get('ev_percentage', sgp.get('edge_percentage', 0))
+            desc = sgp.get('description', 'Unknown')
+            logger.info(f"   ✅ Selected: {desc} (EV: {ev:.1f}%) - Match {match_id[:20]}... ({match_counts[match_id]}/{max_per_match})")
         
-        logger.info("="*80)
-        logger.info(f"✅ SGP Generation Complete: {sgps_generated} predictions saved to database")
-        logger.info("="*80)
+        # Log summary
+        matches_with_sgps = len(match_counts)
+        logger.info(f"\n📊 Selection Summary:")
+        logger.info(f"   • {len(selected)} SGPs selected from {len(candidates)} candidates")
+        logger.info(f"   • Spread across {matches_with_sgps} matches (max {max_per_match} per match)")
         
-        # PHASE 2: Smart Selection - Only broadcast the BEST predictions
-        self._select_and_broadcast_top_sgps(all_sgps)
+        return selected
     
     def _select_and_broadcast_top_sgps(self, all_sgps: List[Dict[str, Any]]):
         """Smart selection: Only broadcast top 15 regular SGP + top 10 MonsterSGP"""
