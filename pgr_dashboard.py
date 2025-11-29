@@ -5,6 +5,7 @@ from typing import List, Optional
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+from streamlit_autorefresh import st_autorefresh
 from sqlalchemy import create_engine, text
 
 
@@ -268,6 +269,8 @@ st.set_page_config(
     page_icon="📊",
     layout="wide",
 )
+
+st_autorefresh(interval=60000, limit=None, key="dashboard_autorefresh")
 
 PGR_PRIMARY = "#00FFC2"
 PGR_DARK_BG = "#050A10"
