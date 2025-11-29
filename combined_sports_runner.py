@@ -115,6 +115,16 @@ def run_daily_games_reminder():
         logger.error(f"❌ Daily reminder error: {e}")
 
 
+def run_daily_recap():
+    """Send daily recap of all results at 22:30"""
+    try:
+        from daily_recap import send_daily_recap
+        logger.info("📊 Running daily recap...")
+        send_daily_recap()
+    except Exception as e:
+        logger.error(f"❌ Daily recap error: {e}")
+
+
 def main():
     """Main orchestration loop"""
     logger.info("="*80)
@@ -130,6 +140,7 @@ def main():
     logger.info("🏀 Basketball Results - Every 30 minutes")
     logger.info("="*80)
     logger.info("📊 Performance Updates - Every 6 hours")
+    logger.info("📊 Daily Recap - Daily at 22:30")
     logger.info("📂 Bet Categorizer - Daily at 23:00")
     logger.info("📅 Games Reminder - Daily at 08:00")
     logger.info("="*80)
@@ -156,6 +167,7 @@ def main():
     
     schedule.every(6).hours.do(run_performance_updates)
     
+    schedule.every().day.at("22:30").do(run_daily_recap)
     schedule.every().day.at("23:00").do(run_daily_categorizer)
     schedule.every().day.at("08:00").do(run_daily_games_reminder)
     
