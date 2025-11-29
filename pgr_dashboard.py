@@ -1521,13 +1521,12 @@ def main():
     prod_bets, backtest_bets = split_bets_by_mode(all_bets)
 
     # Tabs for different products
-    overview_tab, exact_tab, singles_tab, sgp_tab, women_tab, basket_tab, backtest_tab = st.tabs(
+    overview_tab, exact_tab, singles_tab, sgp_tab, basket_tab, backtest_tab = st.tabs(
         [
             "Overview",
             "Exact Score",
             "Value Singles",
             "SGP Parlays",
-            "Women's 1X2",
             "College Basketball",
             "Backtests",
         ]
@@ -1555,13 +1554,6 @@ def main():
     with sgp_tab:
         render_sgp_parlays_tab()
 
-    with women_tab:
-        render_product_tab(
-            prod_bets,
-            product_codes=["WOMEN_1X2", "WOMENS_1X2", "W1X2"],
-            title="Women’s 1X2",
-            description="Match-winner bets in women’s football – a softer market with big edges.",
-        )
 
     with basket_tab:
         render_basketball_tab(prod_bets)
