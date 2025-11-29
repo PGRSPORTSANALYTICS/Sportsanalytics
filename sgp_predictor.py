@@ -16,6 +16,7 @@ import os
 from sgp_self_learner import SGPSelfLearner
 from sgp_odds_pricing import OddsPricingService
 from db_helper import db_helper
+from bankroll_manager import get_bankroll_manager
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -1026,8 +1027,19 @@ class SGPPredictor:
         # Return top 3 unique SGPs
         return deduplicated_sgps[:3]
     
-    def save_sgp_prediction(self, sgp: Dict[str, Any]):
-        """Save SGP prediction to database"""
+    def save_sgp_prediction(self, sgp: Dict[str, Any]) -> bool:
+        """Save SGP prediction to database with bankroll check"""
+        
+        # Check bankroll before saving
+        try:
+            bankroll_mgr = get_bankroll_manager()
+            can_bet, reason = bankroll_mgr.can_place_bet(480)
+            if not can_bet:
+                logger.warning(f"⛔ BANKROLL LIMIT: {reason} - Skipping SGP")
+                return False
+        except Exception as e:
+            logger.warning(f"⚠️ Bankroll check failed: {e} - Proceeding with caution")
+        
         match_data = sgp['match_data']
         
         # Format legs as text
@@ -1078,6 +1090,7 @@ class SGPPredictor:
         ))
         
         logger.info(f"✅ SGP saved: {match_data['home_team']} vs {match_data['away_team']} | {sgp['description']} | EV: {sgp['ev_percentage']:.1f}%")
+        return True
 
 
 def test_sgp_predictor():

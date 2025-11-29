@@ -15,6 +15,7 @@ import time
 import math
 import requests
 from itertools import combinations
+from bankroll_manager import get_bankroll_manager
 
 
 # ----------------------------
@@ -574,6 +575,13 @@ class CollegeBasketValueEngine:
         if not picks or self.db_conn is None:
             return 0
 
+        # Check bankroll before saving any bets
+        try:
+            bankroll_mgr = get_bankroll_manager()
+        except Exception as e:
+            print(f"⚠️ Bankroll manager init failed: {e}")
+            bankroll_mgr = None
+
         saved = 0
         with self.db_conn.get_connection() as conn:
             cursor = conn.cursor()
@@ -601,6 +609,13 @@ class CollegeBasketValueEngine:
             conn.commit()
             
             for p in picks:
+                # Bankroll check for each pick
+                if bankroll_mgr:
+                    can_bet, reason = bankroll_mgr.can_place_bet(480)
+                    if not can_bet:
+                        print(f"⛔ BANKROLL LIMIT: {reason} - Skipping basketball pick")
+                        break  # Stop placing more bets
+                
                 try:
                     is_parlay = "PARLAY" in p.match
                     parlay_legs = p.meta.get("legs", 1) if is_parlay else 1

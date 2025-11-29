@@ -10,6 +10,7 @@ import math
 import time
 import json
 from typing import Dict, Any, List, Optional, Tuple, Set
+from bankroll_manager import get_bankroll_manager
 
 
 def poisson_pmf(lmb: float, k: int) -> float:
@@ -618,7 +619,22 @@ class ValueSinglesEngine:
 
     def save_value_singles(self, singles: List[Dict[str, Any]]) -> int:
         saved = 0
+        
+        # Check bankroll before saving any bets
+        try:
+            bankroll_mgr = get_bankroll_manager()
+        except Exception as e:
+            print(f"⚠️ Bankroll manager init failed: {e}")
+            bankroll_mgr = None
+        
         for s in singles:
+            # Bankroll check for each bet
+            if bankroll_mgr:
+                can_bet, reason = bankroll_mgr.can_place_bet(s.get("stake", 480))
+                if not can_bet:
+                    print(f"⛔ BANKROLL LIMIT: {reason} - Skipping value single")
+                    break  # Stop placing more bets
+            
             try:
                 # Prefer generic save_opportunity if it exists
                 if hasattr(self.champion, "save_opportunity"):
