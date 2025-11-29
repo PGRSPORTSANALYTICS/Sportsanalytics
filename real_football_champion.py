@@ -3215,13 +3215,16 @@ class RealFootballChampion:
             quality_score = (opp_dict.get('edge_percentage', 0) * 0.6) + (opp_dict.get('confidence', 0) * 0.4)
             today_date = datetime.now().strftime('%Y-%m-%d')
             
+            # Get bet_placed flag from value singles engine
+            bet_placed = opp_dict.get('bet_placed', True)
+            
             # Insert prediction
             db_helper.execute('''
                 INSERT INTO football_opportunities 
                 (timestamp, match_id, home_team, away_team, league, market, selection, 
                  odds, edge_percentage, confidence, analysis, stake, match_date, kickoff_time,
-                 quality_score, recommended_date, recommended_tier, daily_rank, mode)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 quality_score, recommended_date, recommended_tier, daily_rank, mode, bet_placed)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ''', (
                 opp_dict.get('timestamp', int(time.time())),
                 opp_dict.get('match_id'),
@@ -3241,7 +3244,8 @@ class RealFootballChampion:
                 today_date,
                 opp_dict.get('recommended_tier', 'SINGLE'),
                 opp_dict.get('daily_rank', 999),
-                'PROD'  # Production mode
+                'PROD',  # Production mode
+                bet_placed
             ))
             
             return True
@@ -3270,13 +3274,25 @@ class RealFootballChampion:
         quality_score = (opportunity.edge_percentage * 0.6) + (opportunity.confidence * 0.4)
         today_date = datetime.now().strftime('%Y-%m-%d')
         
+        # Check bankroll - determines if actual bet placed
+        bet_placed = True
+        try:
+            from bankroll_manager import get_bankroll_manager
+            bankroll_mgr = get_bankroll_manager()
+            can_bet, reason = bankroll_mgr.can_place_bet(opportunity.stake)
+            if not can_bet:
+                bet_placed = False
+                print(f"⛔ BANKROLL LIMIT: {reason} - Saving prediction only (no bet)")
+        except Exception as e:
+            print(f"⚠️ Bankroll check failed: {e} - Proceeding with bet")
+        
         try:
             result = db_helper.execute('''
                 INSERT INTO football_opportunities 
                 (timestamp, match_id, home_team, away_team, league, market, selection, 
                  odds, edge_percentage, confidence, analysis, stake, match_date, kickoff_time,
-                 quality_score, recommended_date, recommended_tier, daily_rank, mode)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 quality_score, recommended_date, recommended_tier, daily_rank, mode, bet_placed)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
             ''', (
                 int(time.time()),
@@ -3290,20 +3306,22 @@ class RealFootballChampion:
                 float(opportunity.edge_percentage),
                 int(opportunity.confidence),
                 json.dumps(opportunity.analysis),
-                float(opportunity.stake),
+                float(opportunity.stake) if bet_placed else 0,  # Zero stake if not bet
                 opportunity.match_date,
                 opportunity.kickoff_time,
                 float(quality_score),
                 today_date,
                 'exact_score',  # Special tier for exact scores
                 0,  # Not part of daily ranking
-                'PROD'  # Production mode
+                'PROD',  # Production mode
+                bet_placed
             ), fetch='one')
             
             # Get the actual prediction ID from the database
             prediction_id = result[0] if result else None
             
-            print(f"✅ EXACT SCORE SAVED: {opportunity.home_team} vs {opportunity.away_team} (ID: {prediction_id})")
+            status = "✅ BET PLACED" if bet_placed else "📊 PREDICTION ONLY"
+            print(f"{status}: {opportunity.home_team} vs {opportunity.away_team} (ID: {prediction_id})")
             
             # 📊 Log features for analytics
             if self.feature_analytics:

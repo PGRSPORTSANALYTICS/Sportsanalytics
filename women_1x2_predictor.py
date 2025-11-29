@@ -414,10 +414,18 @@ class Women1X2Predictor:
         return predictions
     
     def save_predictions(self, predictions: List[Women1X2Prediction]) -> int:
-        """Save predictions to database"""
+        """Save predictions to database - always saves, tracks if bet was placed"""
         if not predictions:
             logger.info("📊 No predictions to save")
             return 0
+        
+        # Check bankroll manager for available funds
+        try:
+            from bankroll_manager import get_bankroll_manager
+            bankroll_mgr = get_bankroll_manager()
+        except Exception as e:
+            logger.warning(f"⚠️ Bankroll manager init failed: {e}")
+            bankroll_mgr = None
         
         with DatabaseConnection.get_connection() as conn:
             try:
@@ -425,7 +433,19 @@ class Women1X2Predictor:
                 
                 # Prepare data for batch insert
                 data = []
+                bets_placed = 0
                 for pred in predictions:
+                    # Check bankroll for each prediction
+                    bet_placed = True
+                    if bankroll_mgr:
+                        can_bet, reason = bankroll_mgr.can_place_bet(pred.stake)
+                        if not can_bet:
+                            bet_placed = False
+                            logger.warning(f"⛔ BANKROLL LIMIT: {reason} - Saving prediction only")
+                    
+                    if bet_placed:
+                        bets_placed += 1
+                    
                     data.append((
                         pred.match_id,
                         pred.league,
@@ -439,10 +459,11 @@ class Women1X2Predictor:
                         pred.model_prob,
                         pred.odds,
                         pred.ev_percentage,
-                        pred.stake,
+                        pred.stake if bet_placed else 0,  # Zero stake if no bet
                         self.mode,
                         psycopg2.extras.Json(pred.notes),
-                        'PROD'  # Production mode for ROI tracking
+                        'PROD',  # Production mode for ROI tracking
+                        bet_placed
                     ))
                 
                 # Batch insert with ON CONFLICT DO NOTHING
@@ -452,7 +473,7 @@ class Women1X2Predictor:
                     INSERT INTO women_match_winner_predictions 
                     (match_id, league, league_id, home_team, away_team, match_date, 
                      kickoff_time, selection, implied_prob, model_prob, odds, 
-                     ev_percentage, stake, source_mode, notes, mode)
+                     ev_percentage, stake, source_mode, notes, mode, bet_placed)
                     VALUES %s
                     ON CONFLICT (match_id) DO NOTHING
                     """,
@@ -460,7 +481,7 @@ class Women1X2Predictor:
                 )
                 
                 saved_count = cur.rowcount
-                logger.info(f"💾 Saved {saved_count} women's 1X2 predictions to database")
+                logger.info(f"💾 Women's 1X2: {saved_count} predictions saved, {bets_placed} bets placed")
                 
                 return saved_count
                 

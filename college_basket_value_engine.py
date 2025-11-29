@@ -583,6 +583,7 @@ class CollegeBasketValueEngine:
             bankroll_mgr = None
 
         saved = 0
+        bets_placed = 0
         with self.db_conn.get_connection() as conn:
             cursor = conn.cursor()
             
@@ -603,18 +604,20 @@ class CollegeBasketValueEngine:
                     parlay_legs INTEGER DEFAULT 1,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     status VARCHAR(50) DEFAULT 'pending',
+                    bet_placed BOOLEAN DEFAULT TRUE,
                     UNIQUE(match, market, selection, created_at)
                 )
             """)
             conn.commit()
             
             for p in picks:
-                # Bankroll check for each pick
+                # Bankroll check for each pick - determines if actual bet placed
+                bet_placed = True
                 if bankroll_mgr:
                     can_bet, reason = bankroll_mgr.can_place_bet(480)
                     if not can_bet:
-                        print(f"⛔ BANKROLL LIMIT: {reason} - Skipping basketball pick")
-                        break  # Stop placing more bets
+                        bet_placed = False
+                        print(f"⛔ BANKROLL LIMIT: {reason} - Saving prediction only (no bet)")
                 
                 try:
                     is_parlay = "PARLAY" in p.match
@@ -626,8 +629,8 @@ class CollegeBasketValueEngine:
                         """
                         INSERT INTO basketball_predictions
                         (match, league, market, selection, odds, probability, ev_percentage, 
-                         confidence, commence_time, bookmaker, is_parlay, parlay_legs, mode)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                         confidence, commence_time, bookmaker, is_parlay, parlay_legs, mode, bet_placed)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         ON CONFLICT (match, market, selection, created_at) DO NOTHING
                         """,
                         (
@@ -643,14 +646,21 @@ class CollegeBasketValueEngine:
                             bookmaker,
                             is_parlay,
                             parlay_legs,
-                            'PROD'  # Production mode
+                            'PROD',  # Production mode
+                            bet_placed
                         )
                     )
                     saved += 1
+                    if bet_placed:
+                        bets_placed += 1
+                        print(f"✅ BET PLACED: {p.match} -> {p.selection} @ {p.odds:.2f}")
+                    else:
+                        print(f"📊 PREDICTION ONLY: {p.match} -> {p.selection} @ {p.odds:.2f}")
                 except Exception as e:
                     print(f"Error saving pick: {e}")
                     continue
             
             conn.commit()
         
+        print(f"📈 Basketball: {saved} predictions saved, {bets_placed} bets placed")
         return saved

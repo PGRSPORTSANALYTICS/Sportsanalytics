@@ -1028,17 +1028,18 @@ class SGPPredictor:
         return deduplicated_sgps[:3]
     
     def save_sgp_prediction(self, sgp: Dict[str, Any]) -> bool:
-        """Save SGP prediction to database with bankroll check"""
+        """Save SGP prediction to database - always saves, but tracks if bet was placed"""
         
-        # Check bankroll before saving
+        # Check bankroll - determines if we actually place the bet
+        bet_placed = True
         try:
             bankroll_mgr = get_bankroll_manager()
             can_bet, reason = bankroll_mgr.can_place_bet(480)
             if not can_bet:
-                logger.warning(f"⛔ BANKROLL LIMIT: {reason} - Skipping SGP")
-                return False
+                bet_placed = False
+                logger.warning(f"⛔ BANKROLL LIMIT: {reason} - Prediction saved but NO BET placed")
         except Exception as e:
-            logger.warning(f"⚠️ Bankroll check failed: {e} - Proceeding with caution")
+            logger.warning(f"⚠️ Bankroll check failed: {e} - Proceeding with bet")
         
         match_data = sgp['match_data']
         
@@ -1063,8 +1064,8 @@ class SGPPredictor:
                 timestamp, match_id, home_team, away_team, league, match_date, kickoff_time,
                 legs, parlay_description, parlay_probability, fair_odds, bookmaker_odds, ev_percentage,
                 stake, kelly_stake, model_version, simulations, correlation_method,
-                pricing_mode, pricing_metadata, mode
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                pricing_mode, pricing_metadata, mode, bet_placed
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ''', (
             int(datetime.now().timestamp()),
             match_data.get('match_id', ''),
@@ -1079,18 +1080,20 @@ class SGPPredictor:
             sgp['fair_odds'],
             sgp['bookmaker_odds'],
             sgp['ev_percentage'],
-            480.0,  # 1.6% of 30,000 SEK bankroll
-            kelly_stake,
+            480.0 if bet_placed else 0,  # Only stake if bet placed
+            kelly_stake if bet_placed else 0,
             'v1.0_copula_poisson_live',
             200000,
             'copula',
             sgp.get('pricing_mode', 'simulated'),
             pricing_metadata_str,
-            'PROD'  # Production mode
+            'PROD',  # Production mode
+            bet_placed
         ))
         
-        logger.info(f"✅ SGP saved: {match_data['home_team']} vs {match_data['away_team']} | {sgp['description']} | EV: {sgp['ev_percentage']:.1f}%")
-        return True
+        status = "✅ BET PLACED" if bet_placed else "📊 PREDICTION ONLY (no bet)"
+        logger.info(f"{status}: {match_data['home_team']} vs {match_data['away_team']} | {sgp['description']} | EV: {sgp['ev_percentage']:.1f}%")
+        return bet_placed
 
 
 def test_sgp_predictor():

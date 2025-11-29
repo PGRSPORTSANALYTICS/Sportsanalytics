@@ -619,6 +619,7 @@ class ValueSinglesEngine:
 
     def save_value_singles(self, singles: List[Dict[str, Any]]) -> int:
         saved = 0
+        bets_placed = 0
         
         # Check bankroll before saving any bets
         try:
@@ -628,12 +629,18 @@ class ValueSinglesEngine:
             bankroll_mgr = None
         
         for s in singles:
-            # Bankroll check for each bet
+            # Bankroll check for each bet - determines if actual bet placed
+            bet_placed = True
             if bankroll_mgr:
                 can_bet, reason = bankroll_mgr.can_place_bet(s.get("stake", 480))
                 if not can_bet:
-                    print(f"⛔ BANKROLL LIMIT: {reason} - Skipping value single")
-                    break  # Stop placing more bets
+                    bet_placed = False
+                    print(f"⛔ BANKROLL LIMIT: {reason} - Saving prediction only (no bet)")
+            
+            # Add bet_placed flag to the single
+            s["bet_placed"] = bet_placed
+            if not bet_placed:
+                s["stake"] = 0  # Zero stake for prediction-only entries
             
             try:
                 # Prefer generic save_opportunity if it exists
@@ -644,7 +651,13 @@ class ValueSinglesEngine:
 
                 if ok:
                     saved += 1
-                    print(f"✅ VALUE SINGLE SAVED: {s['home_team']} vs {s['away_team']} -> {s['selection']} @ {s['odds']:.2f} (EV {s['edge_percentage']:.1f}%)")
+                    if bet_placed:
+                        bets_placed += 1
+                        print(f"✅ BET PLACED: {s['home_team']} vs {s['away_team']} -> {s['selection']} @ {s['odds']:.2f} (EV {s['edge_percentage']:.1f}%)")
+                    else:
+                        print(f"📊 PREDICTION ONLY: {s['home_team']} vs {s['away_team']} -> {s['selection']} @ {s['odds']:.2f} (EV {s['edge_percentage']:.1f}%)")
             except Exception as e:
                 print(f"❌ Value single save failed: {e}")
+        
+        print(f"📈 Summary: {saved} predictions saved, {bets_placed} bets placed")
         return saved
