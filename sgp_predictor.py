@@ -656,13 +656,7 @@ class SGPPredictor:
                 'description': 'Over 2.5 Goals'
             },
             
-            # Over 3.5 Goals (~2.5x)
-            {
-                'legs': [
-                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 3.5}
-                ],
-                'description': 'Over 3.5 Goals'
-            },
+            # REMOVED: Over 3.5 Goals alone - 22% hit rate, -1,042 kr loss
             
             # BTTS Yes (~1.9x)
             {
@@ -692,13 +686,22 @@ class SGPPredictor:
                 'description': 'Over 3.5 + BTTS'
             },
             
-            # Over 2.5 + 1H Over 0.5 (~3x)
+            # Over 2.5 + 1H Over 0.5 (~3x) - 66.7% hit rate!
             {
                 'legs': [
                     {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
                     {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5}
                 ],
                 'description': 'Over 2.5 + 1H Goal'
+            },
+            
+            # Over 2.5 + Corners 8.5+ (~3.5x) - NEW: Adding corners to O2.5
+            {
+                'legs': [
+                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
+                    {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 8.5}
+                ],
+                'description': 'Over 2.5 + Corners 8.5+'
             },
             
             # ========== 3-LEG COMBOS (~5-8x) ==========
@@ -753,6 +756,26 @@ class SGPPredictor:
                     {'market_type': 'BTTS', 'outcome': 'YES'}
                 ],
                 'description': 'Corners 9.5+ + Over 2.5 + BTTS'
+            },
+            
+            # Corners 8.5+ + Over 2.5 + 1H Goal (~5x) - NEW: Corners + best hit rate combo
+            {
+                'legs': [
+                    {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 8.5},
+                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5}
+                ],
+                'description': 'Corners 8.5+ + Over 2.5 + 1H Goal'
+            },
+            
+            # Corners 9.5+ + Over 2.5 + 1H Goal (~6x) - NEW: Higher corners + 1H
+            {
+                'legs': [
+                    {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 9.5},
+                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
+                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5}
+                ],
+                'description': 'Corners 9.5+ + Over 2.5 + 1H Goal'
             },
             
             # ========== 4-LEG COMBOS (MAX ~10x) ==========
