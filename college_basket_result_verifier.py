@@ -1,6 +1,7 @@
 """
 COLLEGE BASKETBALL RESULT VERIFIER
 Automatically verifies College Basketball picks using The Odds API
+With ESPN fallback when API quota is exhausted
 """
 
 import os
@@ -11,13 +12,14 @@ from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
 import time
 from db_helper import DatabaseHelper
+from espn_basketball_scraper import ESPNBasketballScraper
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 
 class CollegeBasketballResultVerifier:
-    """Verifies College Basketball picks using The Odds API scores endpoint"""
+    """Verifies College Basketball picks using The Odds API scores endpoint with ESPN fallback"""
     
     def __init__(self):
         self.api_key = os.getenv('THE_ODDS_API_KEY')
@@ -25,6 +27,7 @@ class CollegeBasketballResultVerifier:
             raise ValueError("THE_ODDS_API_KEY environment variable is required")
         
         self.db = DatabaseHelper()
+        self.espn_scraper = ESPNBasketballScraper()
         self.verified_count = 0
         self.failed_count = 0
         
@@ -36,7 +39,6 @@ class CollegeBasketballResultVerifier:
         logger.info("🏀 Starting College Basketball result verification")
         
         try:
-            # Get pending picks from database
             pending_picks = self._get_pending_picks()
             logger.info(f"📊 Found {len(pending_picks)} picks pending verification")
             
@@ -44,15 +46,18 @@ class CollegeBasketballResultVerifier:
                 logger.info("✅ No pending picks to verify")
                 return {"verified": 0, "failed": 0}
             
-            # Fetch completed games from The Odds API
             completed_games = self._fetch_completed_games()
-            logger.info(f"📊 Found {len(completed_games)} completed games from API")
+            logger.info(f"📊 Found {len(completed_games)} completed games from The Odds API")
             
             if not completed_games:
-                logger.warning("⚠️ No completed games found from API")
+                logger.warning("⚠️ The Odds API returned no games - trying ESPN fallback...")
+                completed_games = self._fetch_espn_fallback()
+                logger.info(f"📊 Found {len(completed_games)} completed games from ESPN")
+            
+            if not completed_games:
+                logger.warning("⚠️ No completed games found from any source")
                 return {"verified": 0, "failed": 0}
             
-            # Process each pending pick
             for pick in pending_picks:
                 try:
                     self._verify_single_pick(pick, completed_games)
@@ -70,6 +75,14 @@ class CollegeBasketballResultVerifier:
         except Exception as e:
             logger.error(f"❌ Verification error: {e}")
             return {"verified": 0, "failed": 0}
+    
+    def _fetch_espn_fallback(self) -> List[Dict]:
+        """Fetch completed games from ESPN as fallback"""
+        try:
+            return self.espn_scraper.fetch_completed_games(days_back=2)
+        except Exception as e:
+            logger.error(f"❌ ESPN fallback error: {e}")
+            return []
     
     def _get_pending_picks(self) -> List[Dict]:
         """Get all pending picks from database (excludes backtests)"""
