@@ -20,7 +20,7 @@ class BankrollManager:
     
     STARTING_BANKROLL = 10_000  # SEK
     MAX_DAILY_EXPOSURE_PCT = 0.80  # Max 80% of bankroll can be at risk
-    DEFAULT_STAKE = 480  # SEK per bet
+    DEFAULT_STAKE = 160  # SEK per bet (reduced for better bankroll management)
     
     def __init__(self):
         self.database_url = os.environ.get("DATABASE_URL")
@@ -184,5 +184,5 @@ if __name__ == "__main__":
     manager.print_status()
     
     # Test bet placement
-    can_bet, reason = manager.can_place_bet(480)
-    print(f"Can place 480 SEK bet: {can_bet} - {reason}")
+    can_bet, reason = manager.can_place_bet(160)
+    print(f"Can place 160 SEK bet: {can_bet} - {reason}")

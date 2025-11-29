@@ -614,7 +614,7 @@ class CollegeBasketValueEngine:
                 # Bankroll check for each pick - determines if actual bet placed
                 bet_placed = True
                 if bankroll_mgr:
-                    can_bet, reason = bankroll_mgr.can_place_bet(480)
+                    can_bet, reason = bankroll_mgr.can_place_bet(160)
                     if not can_bet:
                         bet_placed = False
                         print(f"⛔ BANKROLL LIMIT: {reason} - Saving prediction only (no bet)")

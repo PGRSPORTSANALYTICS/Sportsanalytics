@@ -1034,7 +1034,7 @@ class SGPPredictor:
         bet_placed = True
         try:
             bankroll_mgr = get_bankroll_manager()
-            can_bet, reason = bankroll_mgr.can_place_bet(480)
+            can_bet, reason = bankroll_mgr.can_place_bet(160)
             if not can_bet:
                 bet_placed = False
                 logger.warning(f"⛔ BANKROLL LIMIT: {reason} - Prediction saved but NO BET placed")
@@ -1080,7 +1080,7 @@ class SGPPredictor:
             sgp['fair_odds'],
             sgp['bookmaker_odds'],
             sgp['ev_percentage'],
-            480.0 if bet_placed else 0,  # Only stake if bet placed
+            160.0 if bet_placed else 0,  # Only stake if bet placed
             kelly_stake if bet_placed else 0,
             'v1.0_copula_poisson_live',
             200000,

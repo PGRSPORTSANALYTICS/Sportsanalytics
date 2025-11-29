@@ -325,7 +325,7 @@ class SGPChampion:
                 'bookmaker_odds': sgp['bookmaker_odds'],
                 'odds': sgp['bookmaker_odds'],
                 'ev_percentage': sgp['ev_percentage'],
-                'stake': 480
+                'stake': 160
             }
             
             # Use broadcast_prediction with SGP type
