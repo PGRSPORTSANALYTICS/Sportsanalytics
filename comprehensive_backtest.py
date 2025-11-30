@@ -116,7 +116,7 @@ def comprehensive_backtest():
     print(f"   ✨ Efficiency: {smart_ai_total/total_bets*100:.0f}% of bets, {smart_ai_wins/current_wins*100:.0f}% of wins\n")
     
     # ROI Analysis (simplified - assumes average 12x odds)
-    avg_stake = 160  # SEK per bet
+    avg_stake = 173  # SEK per bet (16 USD × 10.8)
     avg_odds = 12
     
     current_roi_sek = (current_wins * avg_odds * avg_stake) - (total_bets * avg_stake)

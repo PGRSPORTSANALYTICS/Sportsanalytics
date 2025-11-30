@@ -20,7 +20,7 @@ class BankrollManager:
     
     STARTING_BANKROLL = 10_000  # SEK
     MAX_DAILY_EXPOSURE_PCT = 0.80  # Max 80% of bankroll can be at risk
-    DEFAULT_STAKE = 160  # SEK per bet (reduced for better bankroll management)
+    DEFAULT_STAKE = 173  # SEK per bet (16 USD × 10.8)
     
     def __init__(self):
         self.database_url = os.environ.get("DATABASE_URL")

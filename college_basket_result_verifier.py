@@ -400,8 +400,8 @@ class CollegeBasketballResultVerifier:
             return None
     
     def _calculate_profit_loss(self, odds: float, outcome: str) -> float:
-        """Calculate profit/loss for 160 SEK stake"""
-        stake = 160.0
+        """Calculate profit/loss for 16 USD (173 SEK) stake"""
+        stake = 173.0  # 16 USD × 10.8
         
         if outcome == "won":
             return (odds - 1.0) * stake

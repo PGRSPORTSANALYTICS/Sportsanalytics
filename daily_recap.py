@@ -114,7 +114,7 @@ def get_todays_results():
             """, (today,))
             rows = cur.fetchall()
             
-            stake = 160
+            stake = 173  # 16 USD × 10.8
             for row in rows:
                 match, selection, odds, status = row
                 is_win = status in ('won', 'WON')

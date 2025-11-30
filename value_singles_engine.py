@@ -583,7 +583,7 @@ class ValueSinglesEngine:
                         "expected_home_goals": float(lh),
                         "expected_away_goals": float(la)
                     }),
-                    "stake": match.get("stake", 160),
+                    "stake": match.get("stake", 173),  # 16 USD × 10.8
                     "match_date": match_date,
                     "kickoff_time": kickoff_time,
                     "quality_score": float(match.get("quality_score", 50)),
@@ -632,7 +632,7 @@ class ValueSinglesEngine:
             # Bankroll check for each bet - determines if actual bet placed
             bet_placed = True
             if bankroll_mgr:
-                can_bet, reason = bankroll_mgr.can_place_bet(s.get("stake", 160))
+                can_bet, reason = bankroll_mgr.can_place_bet(s.get("stake", 173))
                 if not can_bet:
                     bet_placed = False
                     print(f"⛔ BANKROLL LIMIT: {reason} - Saving prediction only (no bet)")

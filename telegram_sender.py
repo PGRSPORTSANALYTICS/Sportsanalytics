@@ -300,7 +300,7 @@ class TelegramBroadcaster:
         score = prediction['selection'].replace('Exact Score: ', '')
         odds = prediction['odds']
         confidence = prediction.get('confidence', 'N/A')
-        stake = prediction.get('stake', 160)
+        stake = prediction.get('stake', 173)  # 16 USD × 10.8
         
         analysis_text = ""
         if prediction.get('analysis_json'):
@@ -441,7 +441,7 @@ Target: 20-25% WR, +100-200% ROI
         
         odds = prediction.get('bookmaker_odds', prediction.get('odds', 0))
         ev = prediction.get('ev_percentage', 0)
-        stake = prediction.get('stake', 160)
+        stake = prediction.get('stake', 173)  # 16 USD × 10.8
         
         league = prediction.get('league', 'N/A')
         
