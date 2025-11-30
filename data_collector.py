@@ -8,12 +8,33 @@ import json
 from datetime import datetime
 from typing import Dict, Any, Optional, List
 import os
+import numpy as np
 
 # Database imports using SQLAlchemy (compatible with existing infrastructure)
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
+
+
+def _convert_numpy_types(value):
+    """Convert numpy types to Python native types for database storage"""
+    if value is None:
+        return None
+    if isinstance(value, (np.integer, np.int64, np.int32)):
+        return int(value)
+    if isinstance(value, (np.floating, np.float64, np.float32)):
+        return float(value)
+    if isinstance(value, np.bool_):
+        return bool(value)
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    return value
+
+
+def _clean_params(params: dict) -> dict:
+    """Clean all parameter values of numpy types"""
+    return {k: _convert_numpy_types(v) for k, v in params.items()}
 
 class DataCollector:
     """
@@ -206,6 +227,9 @@ class DataCollector:
                 'match_score': match_score, 'pred_quality': prediction_quality,
                 'source': data_source, 'bet': bet_placed, 'atype': analysis_type
             }
+            
+            # Convert numpy types to native Python types for database compatibility
+            params = _clean_params(params)
             
             # Use engine.begin() for auto-commit transaction
             with self._engine.begin() as conn:
