@@ -537,7 +537,11 @@ def load_all_bets_from_db() -> pd.DataFrame:
 # ------------- METRICS HELPERS ------------- #
 
 def compute_roi(df: pd.DataFrame) -> dict:
-    """Compute stake, payout, profit, ROI and hit-rate for a given slice using normalized results."""
+    """Compute stake, payout, profit, ROI and hit-rate for a given slice using normalized results.
+    
+    Note: Database stores values in SEK. We convert to USD for display using USD_TO_SEK rate.
+    ROI percentage remains the same regardless of currency.
+    """
     if df.empty:
         return dict(
             stake=0.0,
@@ -557,8 +561,10 @@ def compute_roi(df: pd.DataFrame) -> dict:
     # settled only (WON, LOST, VOID)
     settled = df[df["norm_result"].isin(["WON", "LOST", "VOID"])].copy()
     if settled.empty:
+        # Convert SEK to USD
+        stake_sek = float(df["stake"].sum())
         return dict(
-            stake=float(df["stake"].sum()),
+            stake=stake_sek / USD_TO_SEK,
             payout=0.0,
             profit=0.0,
             roi=0.0,
@@ -567,14 +573,15 @@ def compute_roi(df: pd.DataFrame) -> dict:
             hit_rate=0.0,
         )
 
-    total_stake = float(settled["stake"].sum())
+    # Database values are in SEK - convert to USD
+    total_stake_sek = float(settled["stake"].sum())
     
     # Only count WON payouts for total payout
     won_mask = settled["norm_result"] == "WON"
-    total_payout = float(settled.loc[won_mask, "payout"].fillna(0).sum())
+    total_payout_sek = float(settled.loc[won_mask, "payout"].fillna(0).sum())
     
-    profit = total_payout - total_stake
-    roi = (profit / total_stake * 100) if total_stake > 0 else 0.0
+    profit_sek = total_payout_sek - total_stake_sek
+    roi = (profit_sek / total_stake_sek * 100) if total_stake_sek > 0 else 0.0
 
     # Count wins (only WON, not VOID)
     wins_count = won_mask.sum()
@@ -582,11 +589,12 @@ def compute_roi(df: pd.DataFrame) -> dict:
     non_void = settled[settled["norm_result"] != "VOID"]
     hit_rate = (wins_count / len(non_void) * 100) if len(non_void) > 0 else 0.0
 
+    # Return values converted to USD
     return dict(
-        stake=total_stake,
-        payout=total_payout,
-        profit=profit,
-        roi=roi,
+        stake=total_stake_sek / USD_TO_SEK,
+        payout=total_payout_sek / USD_TO_SEK,
+        profit=profit_sek / USD_TO_SEK,
+        roi=roi,  # ROI is currency-independent
         bets=len(settled),
         wins=int(wins_count),
         hit_rate=hit_rate,
@@ -649,6 +657,7 @@ def build_legs_display(row, leg_cols):
 
 
 def roi_series(settled: pd.DataFrame):
+    """Build cumulative profit series for equity curve (converted to USD)."""
     if settled.empty:
         return pd.DataFrame({"when": [], "bank": []})
     s = settled.copy()
@@ -658,7 +667,8 @@ def roi_series(settled: pd.DataFrame):
     settled_ts = pd.to_datetime(s["settled_at"], utc=True, errors="coerce")
     match_ts = pd.to_datetime(s["match_date"], utc=True, errors="coerce")
     s["when"] = settled_ts.fillna(match_ts).dt.tz_localize(None)
-    s["bank"] = s["profit"].cumsum()
+    # Convert SEK to USD for display
+    s["bank"] = s["profit"].cumsum() / USD_TO_SEK
     return s[["when", "bank"]]
 
 
@@ -674,7 +684,7 @@ def rolling_hit_rate(settled: pd.DataFrame, window=50):
 
 
 def style_bet_table(df: pd.DataFrame) -> pd.DataFrame:
-    """Prepare a pretty table with decimal odds (2 decimals)."""
+    """Prepare a pretty table with decimal odds (2 decimals). Converts SEK to USD."""
     if df.empty:
         return df
 
@@ -698,24 +708,24 @@ def style_bet_table(df: pd.DataFrame) -> pd.DataFrame:
         if col in out.columns:
             out[col] = out[col].dt.strftime("%Y-%m-%d")
 
-    # numeric formatting
+    # Convert SEK to USD and format
     for col in ["stake", "payout", "profit"]:
         if col in out.columns:
-            out[col] = out[col].astype(float).round(2)
+            out[col] = (out[col].astype(float) / USD_TO_SEK).round(2)
 
     if "odds" in out.columns:
         out["odds"] = out["odds"].astype(float).round(2)
 
-    # Rename headers
+    # Rename headers (with USD indicator)
     rename_map = {
         "match_date": "Match Date",
         "home_team": "Home",
         "away_team": "Away",
         "product": "Product",
-        "stake": "Stake",
+        "stake": "Stake (USD)",
         "odds": "Odds",
-        "payout": "Payout",
-        "profit": "Profit",
+        "payout": "Payout (USD)",
+        "profit": "Profit (USD)",
         "result": "Result",
     }
     out = out.rename(columns=rename_map)
@@ -908,12 +918,16 @@ def render_product_tab(
     settled = data[data["result"].isin(["WON", "LOST", "WIN", "LOSS"])].copy()
 
     if not settled.empty:
-        total_staked = settled["stake"].sum()
-        total_return = settled["payout"].fillna(0).sum()
-        profit = total_return - total_staked
-        roi = (profit / total_staked * 100) if total_staked > 0 else 0.0
+        total_staked_sek = settled["stake"].sum()
+        total_return_sek = settled["payout"].fillna(0).sum()
+        profit_sek = total_return_sek - total_staked_sek
+        roi = (profit_sek / total_staked_sek * 100) if total_staked_sek > 0 else 0.0
         won_count = (settled["result"].isin(["WON", "WIN"])).sum()
         hit_rate = (won_count / len(settled) * 100) if len(settled) > 0 else 0.0
+        
+        # Convert to USD for display
+        total_staked_usd = total_staked_sek / USD_TO_SEK
+        profit_usd = profit_sek / USD_TO_SEK
 
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -926,22 +940,21 @@ def render_product_tab(
                         {roi:+.1f}%
                     </div>
                     <div style="font-size:12px;color:#9CA3AF;">
-                        On {total_staked:.0f} USD (≈{total_staked * USD_TO_SEK:.0f} SEK)
+                        On {total_staked_usd:.0f} USD (≈{total_staked_sek:.0f} SEK)
                     </div>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
         with col2:
-            color = "#00FFA6" if profit >= 0 else "#F97373"
-            sek_profit = profit * USD_TO_SEK
+            color = "#00FFA6" if profit_usd >= 0 else "#F97373"
             st.markdown(
                 f"""
                 <div style="padding:14px 16px;border-radius:12px;
                     background:rgba(15,23,42,0.9);border:1px solid rgba(148,163,184,0.4);">
                     <div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Profit</div>
                     <div style="font-size:26px;font-weight:700;color:{color};">
-                        {profit:+.0f} USD<span style="font-size:14px;color:#9CA3AF;"> (≈{sek_profit:+.0f} SEK)</span>
+                        {profit_usd:+.0f} USD<span style="font-size:14px;color:#9CA3AF;"> (≈{profit_sek:+.0f} SEK)</span>
                     </div>
                     <div style="font-size:12px;color:#9CA3AF;">
                         All settled bets
@@ -1129,12 +1142,16 @@ def render_basketball_tab(df: pd.DataFrame):
     active_data = all_data[~all_data["result"].isin(["WON", "LOST", "WIN", "LOSS", "VOID"])].copy()
 
     if not settled_data.empty:
-        total_staked = settled_data["stake"].sum()
-        total_return = settled_data["payout"].fillna(0).sum()
-        profit = total_return - total_staked
-        roi = (profit / total_staked * 100) if total_staked > 0 else 0.0
+        total_staked_sek = settled_data["stake"].sum()
+        total_return_sek = settled_data["payout"].fillna(0).sum()
+        profit_sek = total_return_sek - total_staked_sek
+        roi = (profit_sek / total_staked_sek * 100) if total_staked_sek > 0 else 0.0
         won_count = (settled_data["result"].isin(["WON", "WIN"])).sum()
         hit_rate = (won_count / len(settled_data) * 100) if len(settled_data) > 0 else 0.0
+        
+        # Convert to USD for display
+        total_staked_usd = total_staked_sek / USD_TO_SEK
+        profit_usd = profit_sek / USD_TO_SEK
 
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -1147,22 +1164,21 @@ def render_basketball_tab(df: pd.DataFrame):
                         {roi:+.1f}%
                     </div>
                     <div style="font-size:12px;color:#9CA3AF;">
-                        On {total_staked:.0f} USD (≈{total_staked * USD_TO_SEK:.0f} SEK)
+                        On {total_staked_usd:.0f} USD (≈{total_staked_sek:.0f} SEK)
                     </div>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
         with col2:
-            color = "#00FFA6" if profit >= 0 else "#F97373"
-            sek_profit = profit * USD_TO_SEK
+            color = "#00FFA6" if profit_usd >= 0 else "#F97373"
             st.markdown(
                 f"""
                 <div style="padding:14px 16px;border-radius:12px;
                     background:rgba(15,23,42,0.9);border:1px solid rgba(148,163,184,0.4);">
                     <div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Profit</div>
                     <div style="font-size:26px;font-weight:700;color:{color};">
-                        {profit:+.0f} USD<span style="font-size:14px;color:#9CA3AF;"> (≈{sek_profit:+.0f} SEK)</span>
+                        {profit_usd:+.0f} USD<span style="font-size:14px;color:#9CA3AF;"> (≈{profit_sek:+.0f} SEK)</span>
                     </div>
                     <div style="font-size:12px;color:#9CA3AF;">
                         All settled bets
@@ -1368,19 +1384,23 @@ def render_sgp_parlays_tab():
 
     # ROI / PROFIT / HIT RATE for settled
     if not settled_bets.empty:
-        total_staked = settled_bets["stake"].sum()
+        total_staked_sek = settled_bets["stake"].sum()
 
         if "payout" in settled_bets.columns:
-            total_return = settled_bets["payout"].fillna(0).sum()
+            total_return_sek = settled_bets["payout"].fillna(0).sum()
         else:
             # Check both result and outcome for wins
             won_mask = settled_bets["result"].isin(["WON", "WIN"]) | settled_bets["outcome"].isin(["won", "win", "WON", "WIN"])
-            total_return = (settled_bets["stake"] * settled_bets["odds"] * won_mask.astype(float)).sum()
+            total_return_sek = (settled_bets["stake"] * settled_bets["odds"] * won_mask.astype(float)).sum()
 
-        profit = total_return - total_staked
-        roi = (profit / total_staked * 100) if total_staked > 0 else 0.0
+        profit_sek = total_return_sek - total_staked_sek
+        roi = (profit_sek / total_staked_sek * 100) if total_staked_sek > 0 else 0.0
         won_count = (settled_bets["result"].isin(["WON", "WIN"]) | settled_bets["outcome"].isin(["won", "win", "WON", "WIN"])).sum()
         hit_rate = (won_count / len(settled_bets) * 100) if len(settled_bets) > 0 else 0.0
+        
+        # Convert to USD for display
+        total_staked_usd = total_staked_sek / USD_TO_SEK
+        profit_usd = profit_sek / USD_TO_SEK
 
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -1393,22 +1413,21 @@ def render_sgp_parlays_tab():
                         {roi:+.1f}%
                     </div>
                     <div style="font-size:12px;color:#9CA3AF;">
-                        On {total_staked:.0f} USD (≈{total_staked * USD_TO_SEK:.0f} SEK)
+                        On {total_staked_usd:.0f} USD (≈{total_staked_sek:.0f} SEK)
                     </div>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
         with col2:
-            color = "#00FFA6" if profit >= 0 else "#F97373"
-            sek_profit = profit * USD_TO_SEK
+            color = "#00FFA6" if profit_usd >= 0 else "#F97373"
             st.markdown(
                 f"""
                 <div style="padding:14px 16px;border-radius:12px;
                     background:rgba(15,23,42,0.9);border:1px solid rgba(148,163,184,0.4);">
                     <div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Profit</div>
                     <div style="font-size:26px;font-weight:700;color:{color};">
-                        {profit:+.0f} USD<span style="font-size:14px;color:#9CA3AF;"> (≈{sek_profit:+.0f} SEK)</span>
+                        {profit_usd:+.0f} USD<span style="font-size:14px;color:#9CA3AF;"> (≈{profit_sek:+.0f} SEK)</span>
                     </div>
                     <div style="font-size:12px;color:#9CA3AF;">
                         All settled parlays
