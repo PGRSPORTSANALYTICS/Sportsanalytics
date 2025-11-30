@@ -1004,6 +1004,216 @@ def render_overview(df: pd.DataFrame):
                 st.write(f"- Records: {training_stats.get('sgp_records', 0):,}")
     else:
         st.info("AI training data collection starting - stats will appear after next prediction cycle.")
+    
+    # Learning Track Record Section
+    render_learning_track_record()
+
+
+def render_learning_track_record():
+    """Render the Learning Track Record section showing AI prediction performance."""
+    from data_collector import get_collector
+    
+    st.markdown("### 📊 Learning System Track Record")
+    
+    collector = get_collector()
+    summary = collector.get_track_record_summary()
+    
+    if summary.get('error') or summary.get('settled', 0) == 0:
+        st.info("Track record will appear once predictions are settled and verified. Currently collecting data...")
+        return
+    
+    # Top-level KPI Cards
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.markdown(
+            f"""
+            <div style="padding:14px 16px;border-radius:12px;
+                background:rgba(0,245,157,0.08);border:1px solid rgba(0,245,157,0.3);">
+                <div style="font-size:11px;text-transform:uppercase;color:#00F59D;">Overall Accuracy</div>
+                <div style="font-size:28px;font-weight:700;color:#00F59D;">
+                    {summary['accuracy_pct']:.1f}%
+                </div>
+                <div style="font-size:12px;color:#9CA3AF;">
+                    {summary['correct']}/{summary['settled']} correct
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    
+    with col2:
+        st.markdown(
+            f"""
+            <div style="padding:14px 16px;border-radius:12px;
+                background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.3);">
+                <div style="font-size:11px;text-transform:uppercase;color:#3B82F6;">Bets Accuracy</div>
+                <div style="font-size:28px;font-weight:700;color:#3B82F6;">
+                    {summary['bets_accuracy_pct']:.1f}%
+                </div>
+                <div style="font-size:12px;color:#9CA3AF;">
+                    {summary['bets_correct']}/{summary['bets_settled']} bets won
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    
+    with col3:
+        st.markdown(
+            f"""
+            <div style="padding:14px 16px;border-radius:12px;
+                background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.3);">
+                <div style="font-size:11px;text-transform:uppercase;color:#A855F7;">Predictions Accuracy</div>
+                <div style="font-size:28px;font-weight:700;color:#A855F7;">
+                    {summary['predictions_accuracy_pct']:.1f}%
+                </div>
+                <div style="font-size:12px;color:#9CA3AF;">
+                    {summary['predictions_correct']}/{summary['predictions_settled']} correct (no bet)
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    
+    with col4:
+        st.markdown(
+            f"""
+            <div style="padding:14px 16px;border-radius:12px;
+                background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.2);">
+                <div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Total Data Points</div>
+                <div style="font-size:28px;font-weight:700;color:#FFFFFF;">
+                    {summary['total_records']:,}
+                </div>
+                <div style="font-size:12px;color:#9CA3AF;">
+                    {summary['settled']} settled
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    
+    # Expandable sections for detailed breakdown
+    with st.expander("📈 Performance by Prediction Type", expanded=False):
+        by_type = collector.get_accuracy_by_type()
+        if by_type:
+            import pandas as pd
+            type_df = pd.DataFrame(by_type)
+            type_df.columns = ['Type', 'Total', 'Settled', 'Correct', 'Accuracy %', 'Avg Prob %', 'Avg Edge %']
+            type_df['Accuracy %'] = type_df['Accuracy %'].apply(lambda x: f"{x:.1f}%")
+            type_df['Avg Prob %'] = type_df['Avg Prob %'].apply(lambda x: f"{x*100:.1f}%" if x else "N/A")
+            type_df['Avg Edge %'] = type_df['Avg Edge %'].apply(lambda x: f"{x:.1f}%" if x else "N/A")
+            st.dataframe(type_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No data by type yet.")
+    
+    with st.expander("🏆 Performance by League", expanded=False):
+        by_league = collector.get_accuracy_by_league(min_samples=3)
+        if by_league:
+            import pandas as pd
+            league_df = pd.DataFrame(by_league)
+            league_df.columns = ['League', 'Total', 'Settled', 'Correct', 'Accuracy %']
+            league_df['Accuracy %'] = league_df['Accuracy %'].apply(lambda x: f"{x:.1f}%")
+            st.dataframe(league_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("Need more settled predictions per league (min 3) to show breakdown.")
+    
+    # Accuracy Trend Chart
+    daily_data = collector.get_daily_accuracy(days=30)
+    if daily_data and len(daily_data) >= 2:
+        import pandas as pd
+        import plotly.graph_objects as go
+        
+        daily_df = pd.DataFrame(daily_data)
+        daily_df['date'] = pd.to_datetime(daily_df['date'])
+        
+        # Calculate 7-day rolling accuracy
+        daily_df['rolling_correct'] = daily_df['correct'].rolling(window=7, min_periods=1).sum()
+        daily_df['rolling_settled'] = daily_df['settled'].rolling(window=7, min_periods=1).sum()
+        daily_df['rolling_accuracy'] = (daily_df['rolling_correct'] / daily_df['rolling_settled'] * 100).fillna(0)
+        
+        fig = go.Figure()
+        
+        # Daily accuracy bars
+        fig.add_trace(go.Bar(
+            x=daily_df['date'],
+            y=daily_df['accuracy_pct'],
+            name='Daily Accuracy',
+            marker_color='rgba(0,245,157,0.4)',
+            hovertemplate='%{x}<br>Accuracy: %{y:.1f}%<extra></extra>'
+        ))
+        
+        # 7-day rolling average line
+        fig.add_trace(go.Scatter(
+            x=daily_df['date'],
+            y=daily_df['rolling_accuracy'],
+            mode='lines',
+            name='7-Day Average',
+            line=dict(color='#00F59D', width=3),
+            hovertemplate='%{x}<br>7-Day Avg: %{y:.1f}%<extra></extra>'
+        ))
+        
+        fig.update_layout(
+            title='Prediction Accuracy Over Time',
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            font_color="#FFFFFF",
+            xaxis=dict(gridcolor="rgba(255,255,255,0.1)", title="Date"),
+            yaxis=dict(gridcolor="rgba(255,255,255,0.1)", title="Accuracy %", range=[0, 100]),
+            height=300,
+            margin=dict(l=0, r=0, t=40, b=0),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            hovermode="x unified"
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # Model Calibration Chart
+    calibration_data = collector.get_calibration_data(bins=10)
+    if calibration_data and len(calibration_data) >= 2:
+        with st.expander("🎯 Model Calibration (Predicted vs Actual)", expanded=False):
+            import pandas as pd
+            import plotly.graph_objects as go
+            
+            cal_df = pd.DataFrame(calibration_data)
+            
+            fig = go.Figure()
+            
+            # Perfect calibration line
+            fig.add_trace(go.Scatter(
+                x=[0, 100],
+                y=[0, 100],
+                mode='lines',
+                name='Perfect Calibration',
+                line=dict(color='rgba(255,255,255,0.3)', dash='dash'),
+            ))
+            
+            # Actual calibration
+            fig.add_trace(go.Scatter(
+                x=cal_df['predicted_rate'],
+                y=cal_df['actual_rate'],
+                mode='markers+lines',
+                name='Model Calibration',
+                marker=dict(size=10, color='#00F59D'),
+                line=dict(color='#00F59D', width=2),
+                text=cal_df['probability_bin'],
+                hovertemplate='Bin: %{text}<br>Predicted: %{x:.1f}%<br>Actual: %{y:.1f}%<extra></extra>'
+            ))
+            
+            fig.update_layout(
+                title='Model Calibration: Predicted Probability vs Actual Hit Rate',
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                font_color="#FFFFFF",
+                xaxis=dict(gridcolor="rgba(255,255,255,0.1)", title="Predicted Probability %", range=[0, 100]),
+                yaxis=dict(gridcolor="rgba(255,255,255,0.1)", title="Actual Hit Rate %", range=[0, 100]),
+                height=300,
+                margin=dict(l=0, r=0, t=40, b=0),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            st.caption("A well-calibrated model follows the diagonal line. Points above = model underestimates, below = overestimates.")
 
 
 def render_product_tab(

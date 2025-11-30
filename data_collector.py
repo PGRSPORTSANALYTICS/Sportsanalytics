@@ -487,6 +487,202 @@ class DataCollector:
             return 0
 
 
+    def get_track_record_summary(self) -> Dict[str, Any]:
+        """Get overall track record summary for learning system"""
+        if not self._engine:
+            return {"error": "No database engine"}
+        
+        try:
+            with self._engine.connect() as conn:
+                result = conn.execute(text("""
+                    SELECT 
+                        COUNT(*) as total_records,
+                        SUM(CASE WHEN actual_score IS NOT NULL THEN 1 ELSE 0 END) as settled,
+                        SUM(CASE WHEN prediction_correct = true THEN 1 ELSE 0 END) as correct,
+                        SUM(CASE WHEN bet_placed = true THEN 1 ELSE 0 END) as bets_placed,
+                        SUM(CASE WHEN bet_placed = true AND actual_score IS NOT NULL THEN 1 ELSE 0 END) as bets_settled,
+                        SUM(CASE WHEN bet_placed = true AND prediction_correct = true THEN 1 ELSE 0 END) as bets_correct,
+                        SUM(CASE WHEN bet_placed = false THEN 1 ELSE 0 END) as predictions_only,
+                        SUM(CASE WHEN bet_placed = false AND actual_score IS NOT NULL THEN 1 ELSE 0 END) as predictions_settled,
+                        SUM(CASE WHEN bet_placed = false AND prediction_correct = true THEN 1 ELSE 0 END) as predictions_correct
+                    FROM training_data
+                """))
+                row = result.fetchone()
+                
+                if row:
+                    settled = row[1] or 0
+                    correct = row[2] or 0
+                    bets_settled = row[4] or 0
+                    bets_correct = row[5] or 0
+                    preds_settled = row[7] or 0
+                    preds_correct = row[8] or 0
+                    
+                    return {
+                        'total_records': row[0] or 0,
+                        'settled': settled,
+                        'correct': correct,
+                        'accuracy_pct': (correct / settled * 100) if settled > 0 else 0,
+                        'bets_placed': row[3] or 0,
+                        'bets_settled': bets_settled,
+                        'bets_correct': bets_correct,
+                        'bets_accuracy_pct': (bets_correct / bets_settled * 100) if bets_settled > 0 else 0,
+                        'predictions_only': row[6] or 0,
+                        'predictions_settled': preds_settled,
+                        'predictions_correct': preds_correct,
+                        'predictions_accuracy_pct': (preds_correct / preds_settled * 100) if preds_settled > 0 else 0
+                    }
+                return {}
+        except SQLAlchemyError as e:
+            logger.error(f"❌ Error getting track record summary: {e}")
+            return {"error": str(e)}
+    
+    def get_accuracy_by_type(self) -> List[Dict[str, Any]]:
+        """Get accuracy breakdown by analysis type"""
+        if not self._engine:
+            return []
+        
+        try:
+            with self._engine.connect() as conn:
+                result = conn.execute(text("""
+                    SELECT 
+                        analysis_type,
+                        COUNT(*) as total,
+                        SUM(CASE WHEN actual_score IS NOT NULL THEN 1 ELSE 0 END) as settled,
+                        SUM(CASE WHEN prediction_correct = true THEN 1 ELSE 0 END) as correct,
+                        AVG(model_probability) as avg_probability,
+                        AVG(edge_percentage) as avg_edge
+                    FROM training_data
+                    GROUP BY analysis_type
+                    ORDER BY total DESC
+                """))
+                
+                records = []
+                for row in result.fetchall():
+                    settled = row[2] or 0
+                    correct = row[3] or 0
+                    records.append({
+                        'type': row[0] or 'Unknown',
+                        'total': row[1] or 0,
+                        'settled': settled,
+                        'correct': correct,
+                        'accuracy_pct': (correct / settled * 100) if settled > 0 else 0,
+                        'avg_probability': row[4] or 0,
+                        'avg_edge': row[5] or 0
+                    })
+                return records
+        except SQLAlchemyError as e:
+            logger.error(f"❌ Error getting accuracy by type: {e}")
+            return []
+    
+    def get_accuracy_by_league(self, min_samples: int = 5) -> List[Dict[str, Any]]:
+        """Get accuracy breakdown by league (min samples for statistical significance)"""
+        if not self._engine:
+            return []
+        
+        try:
+            with self._engine.connect() as conn:
+                result = conn.execute(text("""
+                    SELECT 
+                        league,
+                        COUNT(*) as total,
+                        SUM(CASE WHEN actual_score IS NOT NULL THEN 1 ELSE 0 END) as settled,
+                        SUM(CASE WHEN prediction_correct = true THEN 1 ELSE 0 END) as correct
+                    FROM training_data
+                    WHERE league IS NOT NULL AND league != ''
+                    GROUP BY league
+                    HAVING SUM(CASE WHEN actual_score IS NOT NULL THEN 1 ELSE 0 END) >= :min_samples
+                    ORDER BY SUM(CASE WHEN prediction_correct = true THEN 1 ELSE 0 END)::float / 
+                             NULLIF(SUM(CASE WHEN actual_score IS NOT NULL THEN 1 ELSE 0 END), 0) DESC
+                """), {'min_samples': min_samples})
+                
+                records = []
+                for row in result.fetchall():
+                    settled = row[2] or 0
+                    correct = row[3] or 0
+                    records.append({
+                        'league': row[0],
+                        'total': row[1] or 0,
+                        'settled': settled,
+                        'correct': correct,
+                        'accuracy_pct': (correct / settled * 100) if settled > 0 else 0
+                    })
+                return records
+        except SQLAlchemyError as e:
+            logger.error(f"❌ Error getting accuracy by league: {e}")
+            return []
+    
+    def get_daily_accuracy(self, days: int = 30) -> List[Dict[str, Any]]:
+        """Get daily accuracy for trend analysis"""
+        if not self._engine:
+            return []
+        
+        try:
+            with self._engine.connect() as conn:
+                result = conn.execute(text("""
+                    SELECT 
+                        DATE(match_date) as day,
+                        COUNT(*) as total,
+                        SUM(CASE WHEN actual_score IS NOT NULL THEN 1 ELSE 0 END) as settled,
+                        SUM(CASE WHEN prediction_correct = true THEN 1 ELSE 0 END) as correct
+                    FROM training_data
+                    WHERE match_date >= CURRENT_DATE - :days
+                    GROUP BY DATE(match_date)
+                    ORDER BY DATE(match_date) ASC
+                """), {'days': days})
+                
+                records = []
+                for row in result.fetchall():
+                    settled = row[2] or 0
+                    correct = row[3] or 0
+                    records.append({
+                        'date': row[0],
+                        'total': row[1] or 0,
+                        'settled': settled,
+                        'correct': correct,
+                        'accuracy_pct': (correct / settled * 100) if settled > 0 else 0
+                    })
+                return records
+        except SQLAlchemyError as e:
+            logger.error(f"❌ Error getting daily accuracy: {e}")
+            return []
+    
+    def get_calibration_data(self, bins: int = 10) -> List[Dict[str, Any]]:
+        """Get model calibration data (predicted probability vs actual hit rate)"""
+        if not self._engine:
+            return []
+        
+        try:
+            with self._engine.connect() as conn:
+                result = conn.execute(text("""
+                    SELECT 
+                        FLOOR(model_probability * :bins) / :bins as prob_bin,
+                        COUNT(*) as total,
+                        SUM(CASE WHEN prediction_correct = true THEN 1 ELSE 0 END) as correct,
+                        AVG(model_probability) as avg_predicted
+                    FROM training_data
+                    WHERE model_probability IS NOT NULL 
+                    AND actual_score IS NOT NULL
+                    GROUP BY FLOOR(model_probability * :bins)
+                    ORDER BY prob_bin ASC
+                """), {'bins': bins})
+                
+                records = []
+                for row in result.fetchall():
+                    total = row[1] or 0
+                    correct = row[2] or 0
+                    records.append({
+                        'probability_bin': f"{int((row[0] or 0) * 100)}-{int((row[0] or 0) * 100 + 100/bins)}%",
+                        'total': total,
+                        'correct': correct,
+                        'actual_rate': (correct / total * 100) if total > 0 else 0,
+                        'predicted_rate': (row[3] or 0) * 100
+                    })
+                return records
+        except SQLAlchemyError as e:
+            logger.error(f"❌ Error getting calibration data: {e}")
+            return []
+
+
 # Global instance for easy access
 _collector = None
 
