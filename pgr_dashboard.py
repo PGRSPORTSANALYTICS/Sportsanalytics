@@ -750,7 +750,7 @@ def render_overview(df: pd.DataFrame):
 
     summary = compute_roi(df)
     
-    STARTING_BANKROLL = 10000.0
+    STARTING_BANKROLL = 1000.0  # USD (≈10,800 SEK)
     current_bankroll = STARTING_BANKROLL + summary["profit"]
     bankroll_growth = ((current_bankroll / STARTING_BANKROLL) - 1) * 100
 
