@@ -134,10 +134,10 @@ def main():
     logger.info("🎲 SGP Predictions - Every 2 hours")
     logger.info("🏀 College Basketball - Every 2 hours")
     logger.info("="*80)
-    logger.info("🔍 RESULT VERIFICATION:")
-    logger.info("⚽ Football Results - Every 30 minutes")
-    logger.info("🎲 SGP Results - Every 30 minutes")
-    logger.info("🏀 Basketball Results - Every 30 minutes")
+    logger.info("🔍 FAST RESULT VERIFICATION (5-minute cycles):")
+    logger.info("⚽ Football Results - Every 5 minutes")
+    logger.info("🎲 SGP Results - Every 5 minutes")
+    logger.info("🏀 Basketball Results - Every 5 minutes")
     logger.info("="*80)
     logger.info("📊 Performance Updates - Every 6 hours")
     logger.info("📊 Daily Recap - Daily at 22:30")
@@ -160,10 +160,10 @@ def main():
     schedule.every(2).hours.do(run_sgp_predictions)
     schedule.every(2).hours.do(run_college_basketball)
     
-    # Schedule result verification - Every 30 minutes
-    schedule.every(30).minutes.do(verify_football_results)
-    schedule.every(30).minutes.do(verify_sgp_results)
-    schedule.every(30).minutes.do(verify_basketball_results)
+    # Schedule result verification - Every 5 minutes for FAST results
+    schedule.every(5).minutes.do(verify_football_results)
+    schedule.every(5).minutes.do(verify_sgp_results)
+    schedule.every(5).minutes.do(verify_basketball_results)
     
     schedule.every(6).hours.do(run_performance_updates)
     

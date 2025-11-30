@@ -137,7 +137,7 @@ class ResultsScraper:
         return self.team_mapper.standardize(team_name)
     
     def _should_check_bet(self, bet_id):
-        """Check if enough time has passed since last verification (30 min cooldown)"""
+        """Check if enough time has passed since last verification (5 min cooldown for faster results)"""
         try:
             row = db_helper.execute('''
                 SELECT last_checked_at FROM verification_tracking WHERE bet_id = %s
@@ -147,8 +147,8 @@ class ResultsScraper:
                 last_checked = datetime.fromisoformat(row[0])
                 minutes_since = (datetime.now() - last_checked).total_seconds() / 60
                 
-                # 30 minute cooldown
-                if minutes_since < 30:
+                # 5 minute cooldown (reduced from 30 for faster result fetching)
+                if minutes_since < 5:
                     logger.debug(f"⏭️ Skipping bet {bet_id} (checked {minutes_since:.1f}m ago)")
                     return False
             
@@ -583,8 +583,8 @@ class ResultsScraper:
             return []
     
     def get_results_for_date(self, date_str):
-        """Get results from multiple sources for a date (no per-date caching, uses per-match cache instead)"""
-        logger.info(f"🔍 Getting results for {date_str}")
+        """Get results from multiple sources for a date - OPTIMIZED FOR SPEED"""
+        logger.info(f"⚡ FAST getting results for {date_str}")
         
         # Extract just the date part if timestamp is included
         if 'T' in date_str or len(date_str) > 10:
@@ -592,16 +592,24 @@ class ResultsScraper:
         else:
             clean_date = date_str
         
-        # Skip Flashscore (too slow with Selenium) - go straight to API-Football
+        # PRIORITY 1: The Odds API (FASTEST - single request per sport, returns immediately)
+        results = self.get_odds_api_results(clean_date)
+        
+        if results:
+            logger.info(f"⚡ Got {len(results)} results from The Odds API (fast path)")
+            return results
+        
+        # PRIORITY 2: Sofascore API (fast JSON endpoint)
+        logger.info("📡 The Odds API empty, trying Sofascore...")
+        results = self.get_sofascore_results(clean_date)
+        
+        if results:
+            logger.info(f"📊 Got {len(results)} results from Sofascore")
+            return results
+        
+        # PRIORITY 3: API-Football (slower - loops through leagues, uses quota)
+        logger.info("📡 Sofascore empty, trying API-Football...")
         results = self.get_api_football_results(clean_date)
-        
-        if not results:
-            logger.info("📡 No results from API-Football, trying The Odds API...")
-            results = self.get_odds_api_results(clean_date)
-        
-        if not results:
-            logger.info("📡 No results from The Odds API, trying Sofascore...")
-            results = self.get_sofascore_results(clean_date)
         
         logger.info(f"📊 Found {len(results)} total results for {clean_date}")
         return results
