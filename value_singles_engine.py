@@ -9,8 +9,10 @@
 import math
 import time
 import json
+from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple, Set
 from bankroll_manager import get_bankroll_manager
+from data_collector import get_collector
 
 
 def poisson_pmf(lmb: float, k: int) -> float:
@@ -663,6 +665,34 @@ class ValueSinglesEngine:
                         print(f"✅ BET PLACED: {s['home_team']} vs {s['away_team']} -> {s['selection']} @ {s['odds']:.2f} (EV {s['edge_percentage']:.1f}%)")
                     else:
                         print(f"📊 PREDICTION ONLY: {s['home_team']} vs {s['away_team']} -> {s['selection']} @ {s['odds']:.2f} (EV {s['edge_percentage']:.1f}%)")
+                    
+                    # 📊 COLLECT DATA FOR AI TRAINING
+                    try:
+                        collector = get_collector()
+                        analysis = json.loads(s.get('analysis', '{}'))
+                        match_dt = None
+                        if s.get('match_date'):
+                            try:
+                                match_dt = datetime.strptime(s['match_date'], '%Y-%m-%d')
+                            except:
+                                pass
+                        
+                        collector.collect_value_single(
+                            home_team=s['home_team'],
+                            away_team=s['away_team'],
+                            league=s.get('league', ''),
+                            match_date=match_dt,
+                            market_type=analysis.get('market_key', ''),
+                            odds=s.get('odds', 0),
+                            model_probability=analysis.get('p_model', 0),
+                            edge=analysis.get('ev', 0),
+                            home_xg=analysis.get('expected_home_goals'),
+                            away_xg=analysis.get('expected_away_goals'),
+                            odds_data={'odds': s.get('odds'), 'market': analysis.get('market_key')},
+                            bet_placed=bet_placed
+                        )
+                    except Exception as e:
+                        pass  # Silent fail for data collection
             except Exception as e:
                 print(f"❌ Value single save failed: {e}")
         
