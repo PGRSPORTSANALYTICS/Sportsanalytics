@@ -26,6 +26,7 @@ from team_name_mapper import TeamNameMapper
 from db_helper import db_helper
 from value_singles_engine import ValueSinglesEngine
 from bankroll_manager import get_bankroll_manager
+from data_collector import get_collector
 
 # League configuration
 from league_config import get_odds_api_keys, get_league_by_odds_key, LEAGUE_REGISTRY
@@ -2948,6 +2949,46 @@ class RealFootballChampion:
             if not best_match or match_score < required_threshold:
                 threshold_info = f"threshold: {required_threshold}" if selected_score else "threshold: 90"
                 print(f"   ⏭️ SKIPPED: Match score {match_score:.0f} below {threshold_info} for {selected_score or 'any score'} (H: {expected_home_goals:.1f}g/gm, A: {expected_away_goals:.1f}g/gm)")
+                
+                # 📊 COLLECT DATA FOR AI TRAINING (even when no bet placed!)
+                try:
+                    collector = get_collector()
+                    match_dt = None
+                    if match.get('commence_time'):
+                        try:
+                            match_dt = datetime.fromisoformat(match['commence_time'].replace('Z', '+00:00'))
+                        except:
+                            pass
+                    
+                    collector.collect_match_analysis(
+                        home_team=match['home_team'],
+                        away_team=match['away_team'],
+                        league=match.get('league_name', ''),
+                        match_date=match_dt,
+                        home_form={
+                            'goals_per_game': home_goals_per_game,
+                            'conceded_per_game': home_conceded_per_game,
+                            'clean_sheet_rate': home_clean_sheet_rate
+                        },
+                        away_form={
+                            'goals_per_game': away_goals_per_game,
+                            'conceded_per_game': away_conceded_per_game,
+                            'clean_sheet_rate': away_clean_sheet_rate
+                        },
+                        home_xg=xg_data.get('home_xg'),
+                        away_xg=xg_data.get('away_xg'),
+                        h2h_data=enriched_analysis.get('h2h', {}),
+                        predicted_score=selected_score if selected_score else None,
+                        model_probability=best_match['probability'] if best_match else None,
+                        match_score=int(match_score),
+                        prediction_quality=enriched_analysis.get('quality_score'),
+                        bet_placed=False,
+                        data_source="exact_score_engine",
+                        analysis_type="exact_score_skipped"
+                    )
+                except Exception as e:
+                    pass  # Silent fail for data collection
+                
                 continue
             
             selected = best_match
@@ -3117,6 +3158,47 @@ class RealFootballChampion:
                         if saved:
                             total_exact_scores += 1
                             print(f"   ✅ ELITE PREDICTION SAVED (Primary #{total_exact_scores})")
+                            
+                            # 📊 COLLECT DATA FOR AI TRAINING (bet placed!)
+                            try:
+                                collector = get_collector()
+                                match_dt = None
+                                if match.get('commence_time'):
+                                    try:
+                                        match_dt = datetime.fromisoformat(match['commence_time'].replace('Z', '+00:00'))
+                                    except:
+                                        pass
+                                
+                                collector.collect_match_analysis(
+                                    home_team=match['home_team'],
+                                    away_team=match['away_team'],
+                                    league=match.get('league_name', ''),
+                                    match_date=match_dt,
+                                    home_form={
+                                        'goals_per_game': home_goals_per_game,
+                                        'conceded_per_game': home_conceded_per_game,
+                                        'clean_sheet_rate': home_clean_sheet_rate
+                                    },
+                                    away_form={
+                                        'goals_per_game': away_goals_per_game,
+                                        'conceded_per_game': away_conceded_per_game,
+                                        'clean_sheet_rate': away_clean_sheet_rate
+                                    },
+                                    home_xg=xg_data.get('home_xg'),
+                                    away_xg=xg_data.get('away_xg'),
+                                    h2h_data=enriched_analysis.get('h2h', {}),
+                                    predicted_score=score_text,
+                                    model_probability=best_probability,
+                                    model_confidence=confidence,
+                                    edge_percentage=edge_percentage,
+                                    match_score=int(match_score),
+                                    prediction_quality=quality_score,
+                                    bet_placed=True,
+                                    data_source="exact_score_engine",
+                                    analysis_type="exact_score_bet"
+                                )
+                            except Exception as e:
+                                pass  # Silent fail for data collection
                     else:
                         # Save as backup candidate for potential refill
                         selected['edge_percentage'] = edge_percentage
@@ -3138,6 +3220,47 @@ class RealFootballChampion:
                     if not passes_elite_value:
                         skip_reasons.append(f"value={selected['elite_value']:.2f}")
                     print(f"   ⏭️ SKIPPED (data-driven filter: {', '.join(skip_reasons)})")
+                    
+                    # 📊 COLLECT DATA FOR AI TRAINING (filtered but good analysis!)
+                    try:
+                        collector = get_collector()
+                        match_dt = None
+                        if match.get('commence_time'):
+                            try:
+                                match_dt = datetime.fromisoformat(match['commence_time'].replace('Z', '+00:00'))
+                            except:
+                                pass
+                        
+                        collector.collect_match_analysis(
+                            home_team=match['home_team'],
+                            away_team=match['away_team'],
+                            league=match.get('league_name', ''),
+                            match_date=match_dt,
+                            home_form={
+                                'goals_per_game': home_goals_per_game,
+                                'conceded_per_game': home_conceded_per_game,
+                                'clean_sheet_rate': home_clean_sheet_rate
+                            },
+                            away_form={
+                                'goals_per_game': away_goals_per_game,
+                                'conceded_per_game': away_conceded_per_game,
+                                'clean_sheet_rate': away_clean_sheet_rate
+                            },
+                            home_xg=xg_data.get('home_xg'),
+                            away_xg=xg_data.get('away_xg'),
+                            h2h_data=enriched_analysis.get('h2h', {}),
+                            predicted_score=score_text,
+                            model_probability=best_probability,
+                            model_confidence=confidence,
+                            edge_percentage=edge_percentage,
+                            match_score=int(match_score),
+                            prediction_quality=quality_score,
+                            bet_placed=False,
+                            data_source="exact_score_engine",
+                            analysis_type="exact_score_filtered"
+                        )
+                    except Exception as e:
+                        pass  # Silent fail for data collection
         
         print(f"\n🎯 EXACT SCORE ANALYSIS COMPLETE: {total_exact_scores} predictions generated")
         return total_exact_scores
