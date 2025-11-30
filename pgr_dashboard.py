@@ -8,6 +8,10 @@ import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 from sqlalchemy import create_engine, text
 
+# ============ CURRENCY CONFIGURATION ============
+# All internal calculations use USD. Display shows USD with SEK equivalent.
+USD_TO_SEK = 10.8  # Adjust manually when exchange rate changes
+
 
 def split_bets_by_mode(df: pd.DataFrame):
     """
@@ -590,7 +594,26 @@ def compute_roi(df: pd.DataFrame) -> dict:
 
 
 def format_money(x: float) -> str:
-    return f"{x:,.0f} kr" if abs(x) >= 1000 else f"{x:,.2f} kr"
+    """Format money in USD with SEK equivalent: '1,234 USD (≈ 13,327 SEK)'"""
+    sek = x * USD_TO_SEK
+    if abs(x) >= 1000:
+        return f"{x:,.0f} USD (≈ {sek:,.0f} SEK)"
+    else:
+        return f"{x:,.2f} USD (≈ {sek:,.0f} SEK)"
+
+
+def format_money_short(x: float) -> str:
+    """Short format for inline use: '1,234 USD'"""
+    if abs(x) >= 1000:
+        return f"{x:,.0f} USD"
+    else:
+        return f"{x:,.2f} USD"
+
+
+def format_money_inline(x: float) -> str:
+    """Inline format with both currencies for cards/UI: '1,234 USD (≈13,327 SEK)'"""
+    sek = x * USD_TO_SEK
+    return f"{x:,.0f} USD (≈{sek:,.0f} SEK)"
 
 
 def format_pct(x: float) -> str:
@@ -791,7 +814,7 @@ def render_overview(df: pd.DataFrame):
             curve,
             x="date",
             y="cumulative_profit",
-            labels={"date": "Date", "cumulative_profit": "Cumulative Profit (SEK)"},
+            labels={"date": "Date", "cumulative_profit": "Cumulative Profit (USD)"},
         )
         fig.update_layout(
             plot_bgcolor="rgba(0,0,0,0)",
@@ -903,7 +926,7 @@ def render_product_tab(
                         {roi:+.1f}%
                     </div>
                     <div style="font-size:12px;color:#9CA3AF;">
-                        On {total_staked:.0f} kr staked
+                        On {total_staked:.0f} USD (≈{total_staked * USD_TO_SEK:.0f} SEK)
                     </div>
                 </div>
                 """,
@@ -911,13 +934,14 @@ def render_product_tab(
             )
         with col2:
             color = "#00FFA6" if profit >= 0 else "#F97373"
+            sek_profit = profit * USD_TO_SEK
             st.markdown(
                 f"""
                 <div style="padding:14px 16px;border-radius:12px;
                     background:rgba(15,23,42,0.9);border:1px solid rgba(148,163,184,0.4);">
                     <div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Profit</div>
                     <div style="font-size:26px;font-weight:700;color:{color};">
-                        {profit:+.0f} kr
+                        {profit:+.0f} USD<span style="font-size:14px;color:#9CA3AF;"> (≈{sek_profit:+.0f} SEK)</span>
                     </div>
                     <div style="font-size:12px;color:#9CA3AF;">
                         All settled bets
@@ -1018,11 +1042,11 @@ def render_product_tab(
 <div style="font-size:22px;font-weight:700;color:#00FFA6;margin:8px 0;letter-spacing:0.02em;">{bet_display}</div>
 <div style="display:flex;gap:18px;align-items:baseline;margin-top:4px;">
 <div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Odds</div><div style="font-size:20px;font-weight:600;color:#00FFA6;">{odds_val:.2f}</div></div>
-<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">{stake_val:.0f} kr</div></div>
+<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">{stake_val:.0f} USD<span style="font-size:11px;color:#9CA3AF;"> (≈{stake_val * USD_TO_SEK:.0f} SEK)</span></div></div>
 </div>
 </div>"""
                 st.markdown(card_html, unsafe_allow_html=True)
-                st.code(f"{fixture} | {bet_display} | Odds {odds_val:.2f} | Stake {stake_val:.0f} kr", language="text")
+                st.code(f"{fixture} | {bet_display} | Odds {odds_val:.2f} | Stake {stake_val:.0f} USD", language="text")
         
         render_bet_cards(todays_picks, "Today's Picks", "🔥")
         st.markdown("")
@@ -1042,7 +1066,7 @@ def render_product_tab(
             st.line_chart(roi_df.set_index("when"), height=220)
         else:
             st.caption("No settled bets yet.")
-        st.caption("Cumulative profit (kr)")
+        st.caption("Cumulative profit (USD)")
     with r2:
         hit_df = rolling_hit_rate(settled)
         if not hit_df.empty:
@@ -1123,7 +1147,7 @@ def render_basketball_tab(df: pd.DataFrame):
                         {roi:+.1f}%
                     </div>
                     <div style="font-size:12px;color:#9CA3AF;">
-                        On {total_staked:.0f} kr staked
+                        On {total_staked:.0f} USD (≈{total_staked * USD_TO_SEK:.0f} SEK)
                     </div>
                 </div>
                 """,
@@ -1131,13 +1155,14 @@ def render_basketball_tab(df: pd.DataFrame):
             )
         with col2:
             color = "#00FFA6" if profit >= 0 else "#F97373"
+            sek_profit = profit * USD_TO_SEK
             st.markdown(
                 f"""
                 <div style="padding:14px 16px;border-radius:12px;
                     background:rgba(15,23,42,0.9);border:1px solid rgba(148,163,184,0.4);">
                     <div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Profit</div>
                     <div style="font-size:26px;font-weight:700;color:{color};">
-                        {profit:+.0f} kr
+                        {profit:+.0f} USD<span style="font-size:14px;color:#9CA3AF;"> (≈{sek_profit:+.0f} SEK)</span>
                     </div>
                     <div style="font-size:12px;color:#9CA3AF;">
                         All settled bets
@@ -1210,7 +1235,7 @@ def render_basketball_tab(df: pd.DataFrame):
 <div style="font-size:22px;font-weight:700;color:#3B82F6;margin:8px 0;letter-spacing:0.02em;">📍 {pick_display}</div>
 <div style="display:flex;gap:18px;align-items:baseline;margin-top:4px;">
 <div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Odds</div><div style="font-size:20px;font-weight:600;color:#3B82F6;">{odds_val:.2f}</div></div>
-<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">{stake_val:.0f} kr</div></div>
+<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">{stake_val:.0f} USD<span style="font-size:11px;color:#9CA3AF;"> (≈{stake_val * USD_TO_SEK:.0f} SEK)</span></div></div>
 </div>
 </div>"""
             st.markdown(card_html, unsafe_allow_html=True)
@@ -1258,7 +1283,7 @@ def render_basketball_tab(df: pd.DataFrame):
 <div style="font-size:22px;font-weight:700;color:#A855F7;margin:8px 0;letter-spacing:0.02em;">📍 {pick_display}</div>
 <div style="display:flex;gap:18px;align-items:baseline;margin-top:4px;">
 <div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Odds</div><div style="font-size:20px;font-weight:600;color:#A855F7;">{odds_val:.2f}</div></div>
-<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">{stake_val:.0f} kr</div></div>
+<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">{stake_val:.0f} USD<span style="font-size:11px;color:#9CA3AF;"> (≈{stake_val * USD_TO_SEK:.0f} SEK)</span></div></div>
 </div>
 </div>"""
             st.markdown(card_html, unsafe_allow_html=True)
@@ -1278,7 +1303,7 @@ def render_basketball_tab(df: pd.DataFrame):
             st.caption("No settled singles yet.")
         else:
             s_summary = compute_roi(singles)
-            st.markdown(f"**{len(singles_settled)} settled** | ROI: {s_summary['roi']:.1f}% | Profit: {s_summary['profit']:.0f} kr")
+            st.markdown(f"**{len(singles_settled)} settled** | ROI: {s_summary['roi']:.1f}% | Profit: {s_summary['profit']:.0f} USD (≈{s_summary['profit'] * USD_TO_SEK:.0f} SEK)")
             singles_settled["fixture"] = singles_settled.apply(as_fixture, axis=1)
             cols = [c for c in ["fixture", "odds", "result", "profit"] if c in singles_settled.columns]
             if cols:
@@ -1290,7 +1315,7 @@ def render_basketball_tab(df: pd.DataFrame):
             st.caption("No settled parlays yet.")
         else:
             p_summary = compute_roi(parlays)
-            st.markdown(f"**{len(parlays_settled)} settled** | ROI: {p_summary['roi']:.1f}% | Profit: {p_summary['profit']:.0f} kr")
+            st.markdown(f"**{len(parlays_settled)} settled** | ROI: {p_summary['roi']:.1f}% | Profit: {p_summary['profit']:.0f} USD (≈{p_summary['profit'] * USD_TO_SEK:.0f} SEK)")
             parlays_settled["fixture"] = parlays_settled.apply(as_fixture, axis=1)
             cols = [c for c in ["fixture", "odds", "result", "profit"] if c in parlays_settled.columns]
             if cols:
@@ -1368,7 +1393,7 @@ def render_sgp_parlays_tab():
                         {roi:+.1f}%
                     </div>
                     <div style="font-size:12px;color:#9CA3AF;">
-                        On {total_staked:.0f} kr staked
+                        On {total_staked:.0f} USD (≈{total_staked * USD_TO_SEK:.0f} SEK)
                     </div>
                 </div>
                 """,
@@ -1376,13 +1401,14 @@ def render_sgp_parlays_tab():
             )
         with col2:
             color = "#00FFA6" if profit >= 0 else "#F97373"
+            sek_profit = profit * USD_TO_SEK
             st.markdown(
                 f"""
                 <div style="padding:14px 16px;border-radius:12px;
                     background:rgba(15,23,42,0.9);border:1px solid rgba(148,163,184,0.4);">
                     <div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Profit</div>
                     <div style="font-size:26px;font-weight:700;color:{color};">
-                        {profit:+.0f} kr
+                        {profit:+.0f} USD<span style="font-size:14px;color:#9CA3AF;"> (≈{sek_profit:+.0f} SEK)</span>
                     </div>
                     <div style="font-size:12px;color:#9CA3AF;">
                         All settled parlays
@@ -1474,13 +1500,13 @@ def render_sgp_parlays_tab():
 </div>
 <div style="display:flex;gap:18px;align-items:baseline;margin-top:4px;">
 <div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Odds</div><div style="font-size:20px;font-weight:600;color:#00FFA6;">{odds_val:.2f}</div></div>
-<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">{stake_val:.0f} kr</div></div>
+<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">{stake_val:.0f} USD<span style="font-size:11px;color:#9CA3AF;"> (≈{stake_val * USD_TO_SEK:.0f} SEK)</span></div></div>
 </div>
 </div>"""
 
             st.markdown(card_html, unsafe_allow_html=True)
 
-            bet_string = f"{home_team} – {away_team} | SGP: {legs_text} | Odds {odds_val:.2f} | Stake {stake_val:.0f} kr"
+            bet_string = f"{home_team} – {away_team} | SGP: {legs_text} | Odds {odds_val:.2f} | Stake {stake_val:.0f} USD"
             st.code(bet_string, language="text")
 
     st.markdown("---")
@@ -1571,7 +1597,7 @@ def main():
                 with col1:
                     st.metric("Backtest ROI", f"{bt_roi['roi']:.1f}%")
                 with col2:
-                    st.metric("Backtest Profit", f"{bt_roi['profit']:.0f} kr")
+                    st.metric("Backtest Profit", f"{bt_roi['profit']:.0f} USD (≈{bt_roi['profit'] * USD_TO_SEK:.0f} SEK)")
                 with col3:
                     won = len(backtest_settled[backtest_settled["result"].isin(["WON", "WIN"])])
                     hit_rate = (won / len(backtest_settled) * 100) if len(backtest_settled) > 0 else 0
