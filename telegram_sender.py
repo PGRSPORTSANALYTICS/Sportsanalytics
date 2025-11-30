@@ -300,7 +300,8 @@ class TelegramBroadcaster:
         score = prediction['selection'].replace('Exact Score: ', '')
         odds = prediction['odds']
         confidence = prediction.get('confidence', 'N/A')
-        stake = prediction.get('stake', 173)  # 16 USD × 10.8
+        stake_sek = prediction.get('stake', 173)  # Dynamic stake in SEK
+        stake_usd = stake_sek / 10.8  # Convert to USD
         
         analysis_text = ""
         if prediction.get('analysis_json'):
@@ -339,10 +340,10 @@ class TelegramBroadcaster:
 Predicted Score: {score}
 Odds: {odds}x
 Confidence: {confidence}/100
-Recommended Stake: {stake} SEK
+💵 Stake: ${stake_usd:.0f} (1.2u)
 
-Potential Return: {int(stake * odds)} SEK
-Profit: {int(stake * (odds - 1))} SEK
+Potential Return: ${int(stake_usd * odds)} (≈{int(stake_sek * odds)} SEK)
+Profit: ${int(stake_usd * (odds - 1))} (≈{int(stake_sek * (odds - 1))} SEK)
 
 ⏰ KICKOFF: {match_time}
 🏆 League: {league}
@@ -351,7 +352,7 @@ Profit: {int(stake * (odds - 1))} SEK
 
 📊 LIVE PERFORMANCE
 {stats['wins']}/{stats['total']} wins ({stats['win_rate']:.1f}%)
-Total Profit: {stats['profit']:.0f} SEK ({stats['roi']:.1f}% ROI)
+Total Profit: ${stats['profit'] / 10.8:.0f} ({stats['roi']:.1f}% ROI)
 Target: 20-25% WR, +100-200% ROI
 """
         return message
@@ -441,7 +442,8 @@ Target: 20-25% WR, +100-200% ROI
         
         odds = prediction.get('bookmaker_odds', prediction.get('odds', 0))
         ev = prediction.get('ev_percentage', 0)
-        stake = prediction.get('stake', 173)  # 16 USD × 10.8
+        stake_sek = prediction.get('stake', 173)  # Dynamic stake in SEK
+        stake_usd = stake_sek / 10.8  # Convert to USD
         
         league = prediction.get('league', 'N/A')
         
@@ -467,10 +469,10 @@ Target: 20-25% WR, +100-200% ROI
 
 💰 Odds: {odds:.1f}x
 📈 Expected Value: {ev:+.1f}%
-💵 Recommended Stake: {stake} SEK
+💵 Stake: ${stake_usd:.0f} (1.2u)
 
-Potential Return: {int(stake * odds)} SEK
-Profit: {int(stake * (odds - 1))} SEK
+Potential Return: ${int(stake_usd * odds)} (≈{int(stake_sek * odds)} SEK)
+Profit: ${int(stake_usd * (odds - 1))} (≈{int(stake_sek * (odds - 1))} SEK)
 
 ⏰ KICKOFF: {match_time}
 🏆 League: {league}

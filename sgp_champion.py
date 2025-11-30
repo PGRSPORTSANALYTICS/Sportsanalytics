@@ -16,6 +16,7 @@ from sgp_predictor import SGPPredictor
 from telegram_sender import TelegramBroadcaster
 from api_football_client import APIFootballClient
 from db_helper import db_helper
+from bankroll_manager import get_bankroll_manager
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -373,6 +374,13 @@ class SGPChampion:
         try:
             match_data = sgp['match_data']
             
+            # Get dynamic stake (1.2% of bankroll)
+            try:
+                bankroll_mgr = get_bankroll_manager()
+                dynamic_stake = bankroll_mgr.get_dynamic_stake()
+            except Exception:
+                dynamic_stake = 173.0  # Fallback
+            
             # Format prediction for Telegram broadcaster
             prediction = {
                 'home_team': match_data['home_team'],
@@ -384,7 +392,7 @@ class SGPChampion:
                 'bookmaker_odds': sgp['bookmaker_odds'],
                 'odds': sgp['bookmaker_odds'],
                 'ev_percentage': sgp['ev_percentage'],
-                'stake': 173  # 16 USD × 10.8
+                'stake': dynamic_stake
             }
             
             # Use broadcast_prediction with SGP type

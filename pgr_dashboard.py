@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 import pandas as pd
 import plotly.express as px
@@ -11,6 +11,29 @@ from sqlalchemy import create_engine, text
 # ============ CURRENCY CONFIGURATION ============
 # All internal calculations use USD. Display shows USD with SEK equivalent.
 USD_TO_SEK = 10.8  # Adjust manually when exchange rate changes
+
+# ============ DYNAMIC STAKING ============
+# 1.2% of bankroll per bet, 1 unit = 1% of bankroll
+STAKE_PCT = 0.012  # 1.2% per bet
+BASE_UNIT_PCT = 0.01  # 1 unit = 1%
+STAKE_UNITS = STAKE_PCT / BASE_UNIT_PCT  # 1.2u
+
+
+def get_stake_display(stake_sek: float) -> str:
+    """
+    Format stake for display with units.
+    Converts SEK stake to USD and shows units (1.2u).
+    """
+    stake_usd = stake_sek / USD_TO_SEK
+    return f"${stake_usd:.0f} ({STAKE_UNITS:.1f}u)"
+
+
+def get_stake_display_full(stake_sek: float) -> str:
+    """
+    Format stake for display with units and SEK equivalent.
+    """
+    stake_usd = stake_sek / USD_TO_SEK
+    return f"${stake_usd:.0f} ({STAKE_UNITS:.1f}u) <span style='font-size:11px;color:#9CA3AF;'>≈{stake_sek:.0f} SEK</span>"
 
 
 def split_bets_by_mode(df: pd.DataFrame):
@@ -1039,7 +1062,8 @@ def render_product_tab(
                 away_team = str(row.get('away_team', '')).replace('"', '&quot;')
                 fixture = f"{home_team} vs {away_team}" if away_team else home_team
                 odds_val = float(row.get('odds', 0))
-                stake_val = float(row.get('stake', 100))
+                stake_sek = float(row.get('stake', 173))  # Stored in SEK
+                stake_usd = stake_sek / USD_TO_SEK
                 
                 selection = str(row.get('selection', '')).replace('"', '&quot;')
                 if not selection or selection.lower() == 'none':
@@ -1055,11 +1079,11 @@ def render_product_tab(
 <div style="font-size:22px;font-weight:700;color:#00FFA6;margin:8px 0;letter-spacing:0.02em;">{bet_display}</div>
 <div style="display:flex;gap:18px;align-items:baseline;margin-top:4px;">
 <div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Odds</div><div style="font-size:20px;font-weight:600;color:#00FFA6;">{odds_val:.2f}</div></div>
-<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">{stake_val:.0f} USD<span style="font-size:11px;color:#9CA3AF;"> (≈{stake_val * USD_TO_SEK:.0f} SEK)</span></div></div>
+<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">${stake_usd:.0f} ({STAKE_UNITS:.1f}u)<span style="font-size:11px;color:#9CA3AF;"> ≈{stake_sek:.0f} SEK</span></div></div>
 </div>
 </div>"""
                 st.markdown(card_html, unsafe_allow_html=True)
-                st.code(f"{fixture} | {bet_display} | Odds {odds_val:.2f} | Stake {stake_val:.0f} USD", language="text")
+                st.code(f"{fixture} | {bet_display} | Odds {odds_val:.2f} | Stake ${stake_usd:.0f} ({STAKE_UNITS:.1f}u)", language="text")
         
         render_bet_cards(todays_picks, "Today's Picks", "🔥")
         st.markdown("")
@@ -1235,7 +1259,8 @@ def render_basketball_tab(df: pd.DataFrame):
             away_team = str(row.get('away_team', '')).replace('"', '&quot;')
             match_name = f"{home_team} vs {away_team}" if away_team else home_team
             odds_val = float(row.get('odds', 0))
-            stake_val = float(row.get('stake', 100))
+            stake_sek = float(row.get('stake', 173))  # Stored in SEK
+            stake_usd = stake_sek / USD_TO_SEK
             
             selection = str(row.get('selection', '')).replace('"', '&quot;')
             if not selection or selection.lower() == 'none':
@@ -1251,11 +1276,11 @@ def render_basketball_tab(df: pd.DataFrame):
 <div style="font-size:22px;font-weight:700;color:#3B82F6;margin:8px 0;letter-spacing:0.02em;">📍 {pick_display}</div>
 <div style="display:flex;gap:18px;align-items:baseline;margin-top:4px;">
 <div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Odds</div><div style="font-size:20px;font-weight:600;color:#3B82F6;">{odds_val:.2f}</div></div>
-<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">{stake_val:.0f} USD<span style="font-size:11px;color:#9CA3AF;"> (≈{stake_val * USD_TO_SEK:.0f} SEK)</span></div></div>
+<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">${stake_usd:.0f} ({STAKE_UNITS:.1f}u)<span style="font-size:11px;color:#9CA3AF;"> ≈{stake_sek:.0f} SEK</span></div></div>
 </div>
 </div>"""
             st.markdown(card_html, unsafe_allow_html=True)
-            st.code(f"{match_name} | {pick_display} | Odds {odds_val:.2f}", language="text")
+            st.code(f"{match_name} | {pick_display} | Odds {odds_val:.2f} | Stake ${stake_usd:.0f} ({STAKE_UNITS:.1f}u)", language="text")
 
     st.markdown("---")
 
@@ -1283,7 +1308,8 @@ def render_basketball_tab(df: pd.DataFrame):
             away_team = str(row.get('away_team', '')).replace('"', '&quot;')
             match_name = f"{home_team} vs {away_team}" if away_team else home_team
             odds_val = float(row.get('odds', 0))
-            stake_val = float(row.get('stake', 100))
+            stake_sek = float(row.get('stake', 173))  # Stored in SEK
+            stake_usd = stake_sek / USD_TO_SEK
             
             selection = str(row.get('selection', '')).replace('"', '&quot;')
             if not selection or selection.lower() == 'none':
@@ -1299,11 +1325,11 @@ def render_basketball_tab(df: pd.DataFrame):
 <div style="font-size:22px;font-weight:700;color:#A855F7;margin:8px 0;letter-spacing:0.02em;">📍 {pick_display}</div>
 <div style="display:flex;gap:18px;align-items:baseline;margin-top:4px;">
 <div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Odds</div><div style="font-size:20px;font-weight:600;color:#A855F7;">{odds_val:.2f}</div></div>
-<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">{stake_val:.0f} USD<span style="font-size:11px;color:#9CA3AF;"> (≈{stake_val * USD_TO_SEK:.0f} SEK)</span></div></div>
+<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">${stake_usd:.0f} ({STAKE_UNITS:.1f}u)<span style="font-size:11px;color:#9CA3AF;"> ≈{stake_sek:.0f} SEK</span></div></div>
 </div>
 </div>"""
             st.markdown(card_html, unsafe_allow_html=True)
-            st.code(f"{match_name} | {pick_display} | Odds {odds_val:.2f}", language="text")
+            st.code(f"{match_name} | {pick_display} | Odds {odds_val:.2f} | Stake ${stake_usd:.0f} ({STAKE_UNITS:.1f}u)", language="text")
 
     st.markdown("---")
     st.markdown("### Bet History")
@@ -1505,7 +1531,8 @@ def render_sgp_parlays_tab():
             home_team = str(row.get('home_team', '')).replace('"', '&quot;')
             away_team = str(row.get('away_team', '')).replace('"', '&quot;')
             odds_val = float(row.get('odds', 0))
-            stake_val = float(row.get('stake', 0))
+            stake_sek = float(row.get('stake', 173))  # Stored in SEK
+            stake_usd = stake_sek / USD_TO_SEK
 
             card_html = f"""<div style="padding:18px;margin:10px 0;border-radius:16px;background:radial-gradient(circle at top left, rgba(0,255,166,0.14), rgba(15,23,42,0.96));border:1px solid rgba(0,255,166,0.35);box-shadow:0 0 20px rgba(0,255,166,0.25);">
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
@@ -1519,13 +1546,13 @@ def render_sgp_parlays_tab():
 </div>
 <div style="display:flex;gap:18px;align-items:baseline;margin-top:4px;">
 <div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Odds</div><div style="font-size:20px;font-weight:600;color:#00FFA6;">{odds_val:.2f}</div></div>
-<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">{stake_val:.0f} USD<span style="font-size:11px;color:#9CA3AF;"> (≈{stake_val * USD_TO_SEK:.0f} SEK)</span></div></div>
+<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">${stake_usd:.0f} ({STAKE_UNITS:.1f}u)<span style="font-size:11px;color:#9CA3AF;"> ≈{stake_sek:.0f} SEK</span></div></div>
 </div>
 </div>"""
 
             st.markdown(card_html, unsafe_allow_html=True)
 
-            bet_string = f"{home_team} – {away_team} | SGP: {legs_text} | Odds {odds_val:.2f} | Stake {stake_val:.0f} USD"
+            bet_string = f"{home_team} – {away_team} | SGP: {legs_text} | Odds {odds_val:.2f} | Stake ${stake_usd:.0f} ({STAKE_UNITS:.1f}u)"
             st.code(bet_string, language="text")
 
     st.markdown("---")

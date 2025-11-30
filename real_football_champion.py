@@ -25,6 +25,7 @@ from referee_analyzer import RefereeAnalyzer
 from team_name_mapper import TeamNameMapper
 from db_helper import db_helper
 from value_singles_engine import ValueSinglesEngine
+from bankroll_manager import get_bankroll_manager
 
 # League configuration
 from league_config import get_odds_api_keys, get_league_by_odds_key, LEAGUE_REGISTRY
@@ -2395,6 +2396,13 @@ class RealFootballChampion:
                 import json
                 analysis = json.loads(analysis_json) if analysis_json else {}
                 
+                # Get dynamic stake (1.2% of bankroll)
+                try:
+                    bankroll_mgr = get_bankroll_manager()
+                    dynamic_stake = bankroll_mgr.get_dynamic_stake()
+                except Exception:
+                    dynamic_stake = 173.0  # Fallback
+                
                 opportunity = FootballOpportunity(
                     match_id=f"{home_team}_vs_{away_team}_refill",
                     home_team=home_team,
@@ -2406,7 +2414,7 @@ class RealFootballChampion:
                     edge_percentage=float(edge_pct),
                     confidence=int(confidence),
                     analysis=analysis,
-                    stake=173.0,  # 16 USD × 10.8
+                    stake=dynamic_stake,
                     match_date=match_date,
                     kickoff_time=kickoff_time,
                     start_time=kickoff_time
@@ -3036,6 +3044,15 @@ class RealFootballChampion:
                 # Create exact score opportunity
                 score_text = f"{best_score['home_goals']}-{best_score['away_goals']}"
                 
+                # Get dynamic stake (1.2% of bankroll)
+                try:
+                    bankroll_mgr = get_bankroll_manager()
+                    dynamic_stake = bankroll_mgr.get_dynamic_stake()
+                    stake_units = bankroll_mgr.get_stake_units()
+                except Exception:
+                    dynamic_stake = 173.0  # Fallback
+                    stake_units = 1.2
+                
                 opportunity = FootballOpportunity(
                     match_id=match.get('id', f"{match['home_team']}_vs_{match['away_team']}"),
                     home_team=match['home_team'],
@@ -3046,11 +3063,11 @@ class RealFootballChampion:
                     odds=round(final_odds, 2),
                     edge_percentage=edge_percentage,
                     confidence=confidence,
-                    analysis=enriched_analysis,  # 🆕 Now includes ALL advanced features
-                    stake=173.0,  # 16 USD × 10.8
+                    analysis=enriched_analysis,
+                    stake=dynamic_stake,
                     match_date=match.get('commence_time', ''),
                     kickoff_time=match.get('commence_time', ''),
-                    start_time=match.get('commence_time', '')  # Add required start_time parameter
+                    start_time=match.get('commence_time', '')
                 )
                 
                 print(f"🎯 EXACT SCORE PREDICTION:")

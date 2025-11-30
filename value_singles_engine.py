@@ -565,6 +565,13 @@ class ValueSinglesEngine:
                         match_date = commence_time[:10] if len(commence_time) > 10 else ""
                         kickoff_time = commence_time[11:16] if len(commence_time) > 16 else ""
                 
+                # Get dynamic stake (1.2% of bankroll)
+                try:
+                    bankroll_mgr = get_bankroll_manager()
+                    dynamic_stake = bankroll_mgr.get_dynamic_stake()
+                except Exception:
+                    dynamic_stake = 173.0  # Fallback
+                
                 opportunity = {
                     "timestamp": int(time.time()),
                     "match_id": match_id,
@@ -583,7 +590,7 @@ class ValueSinglesEngine:
                         "expected_home_goals": float(lh),
                         "expected_away_goals": float(la)
                     }),
-                    "stake": match.get("stake", 173),  # 16 USD × 10.8
+                    "stake": dynamic_stake,
                     "match_date": match_date,
                     "kickoff_time": kickoff_time,
                     "quality_score": float(match.get("quality_score", 50)),
@@ -632,7 +639,7 @@ class ValueSinglesEngine:
             # Bankroll check for each bet - determines if actual bet placed
             bet_placed = True
             if bankroll_mgr:
-                can_bet, reason = bankroll_mgr.can_place_bet(s.get("stake", 173))
+                can_bet, reason = bankroll_mgr.can_place_bet(s.get("stake", bankroll_mgr.get_dynamic_stake()))
                 if not can_bet:
                     bet_placed = False
                     print(f"⛔ BANKROLL LIMIT: {reason} - Saving prediction only (no bet)")

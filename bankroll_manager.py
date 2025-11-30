@@ -1,26 +1,32 @@
 """
 Bankroll Manager - Centralized exposure control for all betting systems.
 
-Prevents over-betting by tracking:
-1. Current bankroll (starting + settled profits)
-2. Pending exposure (sum of unsettled bet stakes)
-3. Available funds (bankroll - pending exposure)
+Features:
+1. Dynamic staking: 1.2% of current bankroll per bet
+2. Unit system: 1 unit = 1% of bankroll (each bet = 1.2u)
+3. Daily loss protection: Stop betting if daily loss ≥ 20% of bankroll
+4. Exposure limits: Max 80% of bankroll at risk
 
-Ensures we never stake more than what's available.
+Ensures smart money management and protects the bankroll.
 """
 
 import os
 from datetime import datetime
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict
 from sqlalchemy import create_engine, text
 
 
 class BankrollManager:
     """Manages bankroll and exposure limits across all betting systems."""
     
-    STARTING_BANKROLL = 10_000  # SEK
+    STARTING_BANKROLL = 10_800  # SEK (1,000 USD × 10.8)
     MAX_DAILY_EXPOSURE_PCT = 0.80  # Max 80% of bankroll can be at risk
-    DEFAULT_STAKE = 173  # SEK per bet (16 USD × 10.8)
+    DAILY_LOSS_LIMIT_PCT = 0.20  # Stop betting if daily loss ≥ 20%
+    
+    STAKE_PCT = 0.012  # 1.2% of bankroll per bet
+    BASE_UNIT_PCT = 0.01  # 1 unit = 1% of bankroll
+    
+    USD_TO_SEK = 10.8  # Conversion rate
     
     def __init__(self):
         self.database_url = os.environ.get("DATABASE_URL")
@@ -40,6 +46,20 @@ class BankrollManager:
             total_profit = float(row[0]) if row else 0
         
         return self.STARTING_BANKROLL + total_profit
+    
+    def get_dynamic_stake(self) -> float:
+        """Calculate dynamic stake: 1.2% of current bankroll."""
+        bankroll = self.get_current_bankroll()
+        return bankroll * self.STAKE_PCT
+    
+    def get_stake_units(self) -> float:
+        """Get number of units per bet (1.2u = 1.2% / 1%)."""
+        return self.STAKE_PCT / self.BASE_UNIT_PCT  # Always 1.2
+    
+    def get_unit_value(self) -> float:
+        """Get value of 1 unit in SEK (1% of bankroll)."""
+        bankroll = self.get_current_bankroll()
+        return bankroll * self.BASE_UNIT_PCT
     
     def get_pending_exposure(self) -> float:
         """Get total stakes for all unsettled bets."""
@@ -68,6 +88,36 @@ class BankrollManager:
         
         return today
     
+    def get_today_profit_loss(self) -> float:
+        """Get today's total profit/loss from settled bets."""
+        with self.engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT COALESCE(SUM(profit_loss), 0) as today_pl
+                FROM bets
+                WHERE DATE(created_at) = CURRENT_DATE
+                  AND LOWER(outcome) IN ('won', 'win', 'lost', 'loss')
+            """))
+            row = result.fetchone()
+            today_pl = float(row[0]) if row else 0
+        
+        return today_pl
+    
+    def is_daily_loss_limit_reached(self) -> Tuple[bool, float, float]:
+        """
+        Check if daily loss limit (20% of bankroll) has been reached.
+        
+        Returns:
+            (limit_reached: bool, current_loss: float, limit_amount: float)
+        """
+        bankroll = self.get_current_bankroll()
+        loss_limit = bankroll * self.DAILY_LOSS_LIMIT_PCT
+        today_pl = self.get_today_profit_loss()
+        
+        if today_pl < 0 and abs(today_pl) >= loss_limit:
+            return True, abs(today_pl), loss_limit
+        
+        return False, abs(min(0, today_pl)), loss_limit
+    
     def get_available_funds(self) -> float:
         """Calculate available funds: bankroll - pending exposure."""
         bankroll = self.get_current_bankroll()
@@ -92,7 +142,12 @@ class BankrollManager:
         Returns:
             (can_place: bool, reason: str)
         """
-        stake = stake or self.DEFAULT_STAKE
+        if stake is None:
+            stake = self.get_dynamic_stake()
+        
+        limit_reached, current_loss, limit_amount = self.is_daily_loss_limit_reached()
+        if limit_reached:
+            return False, f"Daily loss limit reached: -{current_loss:.0f} SEK (limit: {limit_amount:.0f} SEK). No more bets today."
         
         available = self.get_available_funds()
         daily_remaining = self.get_remaining_daily_budget()
@@ -112,20 +167,45 @@ class BankrollManager:
         Returns:
             (success: bool, actual_stake: float, message: str)
         """
-        stake = stake or self.DEFAULT_STAKE
+        if stake is None:
+            stake = self.get_dynamic_stake()
         
         can_place, reason = self.can_place_bet(stake)
         
         if can_place:
             return True, stake, "Stake reserved"
         
-        # Try reduced stake if funds are limited
-        available = min(self.get_available_funds(), self.get_remaining_daily_budget())
+        if "Daily loss limit reached" in reason:
+            return False, 0, reason
         
-        if available >= 100:  # Minimum stake threshold
+        available = min(self.get_available_funds(), self.get_remaining_daily_budget())
+        min_stake = self.get_current_bankroll() * 0.005  # Min 0.5% of bankroll
+        
+        if available >= min_stake:
             return True, available, f"Reduced stake to {available:.0f} SEK due to limits"
         
         return False, 0, reason
+    
+    def get_stake_info(self) -> Dict:
+        """Get complete stake information for display."""
+        bankroll = self.get_current_bankroll()
+        stake_sek = self.get_dynamic_stake()
+        stake_usd = stake_sek / self.USD_TO_SEK
+        units = self.get_stake_units()
+        unit_value_sek = self.get_unit_value()
+        unit_value_usd = unit_value_sek / self.USD_TO_SEK
+        
+        return {
+            "bankroll_sek": bankroll,
+            "bankroll_usd": bankroll / self.USD_TO_SEK,
+            "stake_sek": stake_sek,
+            "stake_usd": stake_usd,
+            "units": units,
+            "unit_value_sek": unit_value_sek,
+            "unit_value_usd": unit_value_usd,
+            "stake_pct": self.STAKE_PCT * 100,
+            "display_text": f"${stake_usd:.0f} ({units:.1f}u)"
+        }
     
     def get_status(self) -> dict:
         """Get full bankroll status report."""
@@ -135,10 +215,14 @@ class BankrollManager:
         today_exposure = self.get_today_exposure()
         max_daily = self.get_max_daily_exposure()
         daily_remaining = self.get_remaining_daily_budget()
+        today_pl = self.get_today_profit_loss()
+        limit_reached, current_loss, loss_limit = self.is_daily_loss_limit_reached()
+        stake_info = self.get_stake_info()
         
         return {
             "starting_bankroll": self.STARTING_BANKROLL,
             "current_bankroll": bankroll,
+            "bankroll_usd": bankroll / self.USD_TO_SEK,
             "total_profit": bankroll - self.STARTING_BANKROLL,
             "pending_exposure": pending,
             "available_funds": available,
@@ -147,28 +231,45 @@ class BankrollManager:
             "daily_remaining": daily_remaining,
             "exposure_pct": (pending / bankroll * 100) if bankroll > 0 else 0,
             "today_pct": (today_exposure / max_daily * 100) if max_daily > 0 else 0,
+            "today_profit_loss": today_pl,
+            "daily_loss_limit": loss_limit,
+            "daily_loss_limit_reached": limit_reached,
+            "dynamic_stake_sek": stake_info["stake_sek"],
+            "dynamic_stake_usd": stake_info["stake_usd"],
+            "stake_units": stake_info["units"],
+            "stake_display": stake_info["display_text"],
         }
     
     def print_status(self):
         """Print formatted bankroll status."""
         status = self.get_status()
-        print("\n" + "="*50)
+        print("\n" + "="*60)
         print("💰 BANKROLL STATUS")
-        print("="*50)
-        print(f"Starting Bankroll:  {status['starting_bankroll']:,.0f} SEK")
-        print(f"Current Bankroll:   {status['current_bankroll']:,.0f} SEK")
+        print("="*60)
+        print(f"Starting Bankroll:  {status['starting_bankroll']:,.0f} SEK (${status['starting_bankroll']/self.USD_TO_SEK:,.0f} USD)")
+        print(f"Current Bankroll:   {status['current_bankroll']:,.0f} SEK (${status['bankroll_usd']:,.0f} USD)")
         print(f"Total Profit:       {status['total_profit']:+,.0f} SEK")
-        print("-"*50)
+        print("-"*60)
+        print(f"📊 DYNAMIC STAKE (1.2% of bankroll):")
+        print(f"   Stake per bet:   {status['dynamic_stake_sek']:.0f} SEK (${status['dynamic_stake_usd']:.0f} USD)")
+        print(f"   Units per bet:   {status['stake_units']:.1f}u")
+        print(f"   Display:         {status['stake_display']}")
+        print("-"*60)
         print(f"Pending Exposure:   {status['pending_exposure']:,.0f} SEK ({status['exposure_pct']:.1f}%)")
         print(f"Available Funds:    {status['available_funds']:,.0f} SEK")
-        print("-"*50)
-        print(f"Today's Exposure:   {status['today_exposure']:,.0f} SEK")
+        print("-"*60)
+        print(f"📅 TODAY'S ACTIVITY:")
+        print(f"   Today's Exposure:  {status['today_exposure']:,.0f} SEK")
+        print(f"   Today's P/L:       {status['today_profit_loss']:+,.0f} SEK")
+        print(f"   Daily Loss Limit:  {status['daily_loss_limit']:,.0f} SEK (20% of bankroll)")
+        if status['daily_loss_limit_reached']:
+            print(f"   ⛔ DAILY LOSS LIMIT REACHED - NO MORE BETS TODAY")
+        print("-"*60)
         print(f"Max Daily Limit:    {status['max_daily_exposure']:,.0f} SEK")
         print(f"Daily Remaining:    {status['daily_remaining']:,.0f} SEK ({status['today_pct']:.1f}% used)")
-        print("="*50 + "\n")
+        print("="*60 + "\n")
 
 
-# Singleton instance for easy import
 _manager = None
 
 def get_bankroll_manager() -> BankrollManager:
@@ -183,6 +284,7 @@ if __name__ == "__main__":
     manager = get_bankroll_manager()
     manager.print_status()
     
-    # Test bet placement
-    can_bet, reason = manager.can_place_bet(160)
-    print(f"Can place 160 SEK bet: {can_bet} - {reason}")
+    stake = manager.get_dynamic_stake()
+    can_bet, reason = manager.can_place_bet(stake)
+    print(f"Dynamic stake: {stake:.0f} SEK ({manager.get_stake_units():.1f}u)")
+    print(f"Can place bet: {can_bet} - {reason}")
