@@ -695,14 +695,15 @@ class SGPPredictor:
                 'description': 'Over 2.5 + 1H Goal'
             },
             
-            # Over 2.5 + Corners 8.5+ (~3.5x) - NEW: Adding corners to O2.5
-            {
-                'legs': [
-                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
-                    {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 8.5}
-                ],
-                'description': 'Over 2.5 + Corners 8.5+'
-            },
+            # DISABLED: Corners legs temporarily removed due to low hit rate
+            # Over 2.5 + Corners 8.5+ (~3.5x) - DISABLED
+            # {
+            #     'legs': [
+            #         {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
+            #         {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 8.5}
+            #     ],
+            #     'description': 'Over 2.5 + Corners 8.5+'
+            # },
             
             # ========== 3-LEG COMBOS (~5-8x) ==========
             
@@ -736,47 +737,8 @@ class SGPPredictor:
                 'description': 'Over 2.5 + BTTS + 2H Over 1.5'
             },
             
-            # ========== 3-LEG CORNERS COMBOS (~7-10x) ==========
-            
-            # Corners 10.5+ + Over 3.5 + BTTS (~7-8x) - Lille-style winner!
-            {
-                'legs': [
-                    {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 10.5},
-                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 3.5},
-                    {'market_type': 'BTTS', 'outcome': 'YES'}
-                ],
-                'description': 'Corners 10.5+ + Over 3.5 + BTTS'
-            },
-            
-            # Corners 9.5+ + Over 2.5 + BTTS (~5-6x) - Easier corners line
-            {
-                'legs': [
-                    {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 9.5},
-                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
-                    {'market_type': 'BTTS', 'outcome': 'YES'}
-                ],
-                'description': 'Corners 9.5+ + Over 2.5 + BTTS'
-            },
-            
-            # Corners 8.5+ + Over 2.5 + 1H Goal (~5x) - NEW: Corners + best hit rate combo
-            {
-                'legs': [
-                    {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 8.5},
-                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
-                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5}
-                ],
-                'description': 'Corners 8.5+ + Over 2.5 + 1H Goal'
-            },
-            
-            # Corners 9.5+ + Over 2.5 + 1H Goal (~6x) - NEW: Higher corners + 1H
-            {
-                'legs': [
-                    {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 9.5},
-                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 2.5},
-                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5}
-                ],
-                'description': 'Corners 9.5+ + Over 2.5 + 1H Goal'
-            },
+            # ========== 3-LEG CORNERS COMBOS - DISABLED (low hit rate) ==========
+            # All corners combos temporarily disabled
             
             # ========== 4-LEG COMBOS (MAX ~10x) ==========
             
@@ -791,16 +753,7 @@ class SGPPredictor:
                 'description': 'Over 2.5 + BTTS + 1H Over 0.5 + 2H Over 0.5'
             },
             
-            # Corners 10.5+ + Over 3.5 + 1H Over 1.5 + BTTS (~10x) - Lille winning combo!
-            {
-                'legs': [
-                    {'market_type': 'CORNERS', 'outcome': 'OVER', 'line': 10.5},
-                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'OVER', 'line': 3.5},
-                    {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 1.5},
-                    {'market_type': 'BTTS', 'outcome': 'YES'}
-                ],
-                'description': 'Corners 10.5+ + Over 3.5 + 1H Over 1.5 + BTTS'
-            },
+            # DISABLED: Corners 10.5+ combo - low hit rate
             
             # Over 3.5 + BTTS + 1H + 2H (~10x max)
             {
