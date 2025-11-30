@@ -69,6 +69,52 @@ def get_backtest_bets(df: pd.DataFrame) -> pd.DataFrame:
     return df[mode_col.isin(["TEST", "BACKTEST"])].copy()
 
 
+def get_training_data_stats() -> dict:
+    """Get statistics from training_data table for AI model improvement."""
+    try:
+        db_url = os.getenv("DATABASE_URL")
+        if not db_url:
+            return {}
+        
+        engine = create_engine(db_url)
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT 
+                    COUNT(*) as total_records,
+                    COUNT(CASE WHEN bet_placed = true THEN 1 END) as bets_placed,
+                    COUNT(CASE WHEN bet_placed = false THEN 1 END) as predictions_only,
+                    COUNT(DISTINCT home_team || ' vs ' || away_team) as unique_matches,
+                    COUNT(DISTINCT league) as unique_leagues,
+                    COUNT(CASE WHEN analysis_type = 'exact_score_bet' THEN 1 END) as exact_score_bets,
+                    COUNT(CASE WHEN analysis_type = 'exact_score_filtered' THEN 1 END) as exact_score_filtered,
+                    COUNT(CASE WHEN analysis_type = 'exact_score_skipped' THEN 1 END) as exact_score_skipped,
+                    COUNT(CASE WHEN data_source = 'value_singles_engine' THEN 1 END) as value_singles_records,
+                    COUNT(CASE WHEN data_source = 'sgp_engine' THEN 1 END) as sgp_records,
+                    MIN(created_at) as earliest_record,
+                    MAX(created_at) as latest_record
+                FROM training_data
+            """))
+            row = result.fetchone()
+            if row:
+                return {
+                    'total_records': row[0] or 0,
+                    'bets_placed': row[1] or 0,
+                    'predictions_only': row[2] or 0,
+                    'unique_matches': row[3] or 0,
+                    'unique_leagues': row[4] or 0,
+                    'exact_score_bets': row[5] or 0,
+                    'exact_score_filtered': row[6] or 0,
+                    'exact_score_skipped': row[7] or 0,
+                    'value_singles_records': row[8] or 0,
+                    'sgp_records': row[9] or 0,
+                    'earliest_record': row[10],
+                    'latest_record': row[11]
+                }
+    except Exception as e:
+        st.sidebar.warning(f"AI training data stats unavailable: {e}")
+    return {}
+
+
 def calculate_roi(bets: pd.DataFrame) -> float:
     """Calculate ROI percentage from bets dataframe."""
     summary = compute_roi(bets)
@@ -912,6 +958,52 @@ def render_overview(df: pd.DataFrame):
         height=380,
         column_config=None,
     )
+    
+    # AI Training Data Stats
+    st.markdown("### 🤖 AI Training Data Collection")
+    training_stats = get_training_data_stats()
+    if training_stats and training_stats.get('total_records', 0) > 0:
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            metric_card(
+                "Total Records",
+                f"{training_stats['total_records']:,}",
+                f"Training data points"
+            )
+        with col2:
+            metric_card(
+                "Bets Placed",
+                f"{training_stats['bets_placed']:,}",
+                "With actual stakes"
+            )
+        with col3:
+            metric_card(
+                "Predictions Only",
+                f"{training_stats['predictions_only']:,}",
+                "AI analysis captured"
+            )
+        with col4:
+            metric_card(
+                "Unique Matches",
+                f"{training_stats['unique_matches']:,}",
+                f"Across {training_stats['unique_leagues']} leagues"
+            )
+        
+        with st.expander("View Data Collection Breakdown"):
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.markdown("**Exact Score Engine**")
+                st.write(f"- Bets: {training_stats.get('exact_score_bets', 0):,}")
+                st.write(f"- Filtered: {training_stats.get('exact_score_filtered', 0):,}")
+                st.write(f"- Skipped: {training_stats.get('exact_score_skipped', 0):,}")
+            with col2:
+                st.markdown("**Value Singles Engine**")
+                st.write(f"- Records: {training_stats.get('value_singles_records', 0):,}")
+            with col3:
+                st.markdown("**SGP Engine**")
+                st.write(f"- Records: {training_stats.get('sgp_records', 0):,}")
+    else:
+        st.info("AI training data collection starting - stats will appear after next prediction cycle.")
 
 
 def render_product_tab(
