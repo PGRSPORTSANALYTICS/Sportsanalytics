@@ -17,6 +17,7 @@ from telegram_sender import TelegramBroadcaster
 from api_football_client import APIFootballClient
 from db_helper import db_helper
 from bankroll_manager import get_bankroll_manager
+from data_collector import get_collector
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -247,6 +248,38 @@ class SGPChampion:
         
         logger.info(f"\n📊 Total candidates before filtering: {len(all_candidates)}")
         
+        # 📊 COLLECT ALL CANDIDATES FOR AI TRAINING (even those not selected)
+        try:
+            collector = get_collector()
+            for candidate in all_candidates:
+                try:
+                    match_data = candidate.get('match_data', {})
+                    match_dt = None
+                    if match_data.get('match_date'):
+                        try:
+                            match_dt = datetime.fromisoformat(match_data['match_date'].replace('Z', '+00:00'))
+                        except:
+                            pass
+                    
+                    collector.collect_sgp_prediction(
+                        home_team=match_data.get('home_team', ''),
+                        away_team=match_data.get('away_team', ''),
+                        league=match_data.get('league', ''),
+                        match_date=match_dt,
+                        legs=candidate.get('legs', []),
+                        combined_probability=candidate.get('probability', 0),
+                        combined_odds=candidate.get('combined_odds', 0),
+                        edge=candidate.get('ev_percentage', candidate.get('edge_percentage', 0)) / 100 if candidate.get('ev_percentage', candidate.get('edge_percentage', 0)) else 0,
+                        sgp_type=candidate.get('description', '').split(':')[0] if ':' in candidate.get('description', '') else 'SGP',
+                        xg_data={'lambda_home': candidate.get('lambda_home'), 'lambda_away': candidate.get('lambda_away')},
+                        bet_placed=False  # Candidate, not yet selected
+                    )
+                except:
+                    pass
+            logger.info(f"📊 Collected {len(all_candidates)} SGP candidates for AI training")
+        except Exception as e:
+            pass  # Silent fail for data collection
+        
         # PHASE 2: Apply per-match cap (max 2 SGPs per match) + global cap (12/day)
         selected_sgps = self._apply_per_match_cap(all_candidates, max_per_match=2, global_cap=12)
         
@@ -255,6 +288,33 @@ class SGPChampion:
         for sgp in selected_sgps:
             self.sgp_predictor.save_sgp_prediction(sgp)
             sgps_generated += 1
+            
+            # 📊 COLLECT DATA FOR AI TRAINING
+            try:
+                collector = get_collector()
+                match_data = sgp.get('match_data', {})
+                match_dt = None
+                if match_data.get('match_date'):
+                    try:
+                        match_dt = datetime.fromisoformat(match_data['match_date'].replace('Z', '+00:00'))
+                    except:
+                        pass
+                
+                collector.collect_sgp_prediction(
+                    home_team=match_data.get('home_team', ''),
+                    away_team=match_data.get('away_team', ''),
+                    league=match_data.get('league', ''),
+                    match_date=match_dt,
+                    legs=sgp.get('legs', []),
+                    combined_probability=sgp.get('probability', 0),
+                    combined_odds=sgp.get('combined_odds', 0),
+                    edge=sgp.get('ev_percentage', sgp.get('edge_percentage', 0)) / 100 if sgp.get('ev_percentage', sgp.get('edge_percentage', 0)) else 0,
+                    sgp_type=sgp.get('description', '').split(':')[0] if ':' in sgp.get('description', '') else 'SGP',
+                    xg_data={'lambda_home': sgp.get('lambda_home'), 'lambda_away': sgp.get('lambda_away')},
+                    bet_placed=True
+                )
+            except Exception as e:
+                pass  # Silent fail for data collection
         
         logger.info("="*80)
         logger.info(f"✅ SGP Generation Complete: {sgps_generated} predictions saved (from {len(all_candidates)} candidates)")
