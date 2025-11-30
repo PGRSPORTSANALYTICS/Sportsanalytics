@@ -15,6 +15,43 @@ from bankroll_manager import get_bankroll_manager
 from data_collector import get_collector
 
 
+# ============================================================
+# VALUE SINGLES HARD FILTERS (Nov 30, 2025)
+# These filters ensure ONLY high-quality, low-variance bets
+# ============================================================
+
+# Minimum Expected Value (EV) required - 8% edge
+MIN_VALUE_SINGLE_EV = 0.08  # 8% edge (was 3%)
+
+# Odds range filter - only medium odds for lower variance
+MIN_VALUE_SINGLE_ODDS = 1.60
+MAX_VALUE_SINGLE_ODDS = 2.50
+
+# Minimum model confidence/probability required
+MIN_VALUE_SINGLE_CONFIDENCE = 0.58  # 58% model probability
+
+# Maximum number of value singles per day (top N by EV)
+MAX_VALUE_SINGLES_PER_DAY = 4
+
+# Major league whitelist (using odds_api_key identifiers)
+# Only bet on leagues with reliable data and predictable outcomes
+VALUE_SINGLE_LEAGUE_WHITELIST = {
+    # Top 5 European Leagues
+    "soccer_epl",                    # Premier League
+    "soccer_spain_la_liga",          # La Liga  
+    "soccer_italy_serie_a",          # Serie A
+    "soccer_germany_bundesliga",     # Bundesliga
+    "soccer_france_ligue_one",       # Ligue 1
+    # European Cups
+    "soccer_uefa_champs_league",     # Champions League
+    "soccer_uefa_europa_league",     # Europa League
+    # Nordic
+    "soccer_sweden_allsvenskan",     # Allsvenskan
+    # Americas
+    "soccer_usa_mls",                # MLS
+}
+
+
 def poisson_pmf(lmb: float, k: int) -> float:
     return math.exp(-lmb) * (lmb ** k) / math.factorial(k)
 
@@ -77,10 +114,11 @@ class ValueSinglesEngine:
     If some are missing, the engine will skip gracefully.
     """
 
-    def __init__(self, champion, ev_threshold: float = 0.03, min_confidence: int = 50):
+    def __init__(self, champion, ev_threshold: float = None, min_confidence: int = None):
         self.champion = champion
-        self.ev_threshold = ev_threshold      # e.g. 0.03 = 3% EV (lowered from 5%)
-        self.min_confidence = min_confidence  # confidence gate (lowered from 55%)
+        # Use hard-coded constants for strict filtering (Nov 30, 2025)
+        self.ev_threshold = MIN_VALUE_SINGLE_EV  # 8% EV requirement
+        self.min_confidence = 50  # Base confidence threshold (probability filter is separate)
         self._exact_score_cache = {}  # Cache for exact score predictions
     
     def _get_exact_score_outcome(self, home_team: str, away_team: str) -> Optional[str]:
@@ -397,9 +435,12 @@ class ValueSinglesEngine:
         avoid_match_ids = avoid_match_ids or set()
         picks: List[Dict[str, Any]] = []
 
-        print("🔥 VALUE SINGLES START")
-        print("   min_ev =", getattr(self, "min_ev", getattr(self, "ev_threshold", None)))
-        print("   min_conf =", getattr(self, "min_confidence", None))
+        print("🔥 VALUE SINGLES START (HARD FILTERS ACTIVE)")
+        print(f"   min_ev = {MIN_VALUE_SINGLE_EV*100:.0f}%")
+        print(f"   odds_range = {MIN_VALUE_SINGLE_ODDS} - {MAX_VALUE_SINGLE_ODDS}")
+        print(f"   min_model_prob = {MIN_VALUE_SINGLE_CONFIDENCE*100:.0f}%")
+        print(f"   max_picks/day = {MAX_VALUE_SINGLES_PER_DAY}")
+        print(f"   leagues = {len(VALUE_SINGLE_LEAGUE_WHITELIST)} whitelisted")
 
         # 1) Get fixtures
         if not hasattr(self.champion, "get_todays_fixtures"):
@@ -437,6 +478,12 @@ class ValueSinglesEngine:
             
             if match_date and match_date != today_str:
                 print(f"⏭️ Skipping {home_team} vs {away_team} - plays on {match_date}, not today ({today_str})")
+                continue
+            
+            # LEAGUE WHITELIST FILTER: Only major leagues for lower variance
+            league_key = match.get('sport_key') or match.get('league_key') or match.get('odds_api_key') or ''
+            if league_key and league_key not in VALUE_SINGLE_LEAGUE_WHITELIST:
+                print(f"⏭️ Skipping {home_team} vs {away_team} - league '{league_key}' not in whitelist")
                 continue
 
             # 2) Odds
@@ -486,25 +533,30 @@ class ValueSinglesEngine:
                 odds = odds_dict.get(market_key)
                 if odds is None:
                     continue
+                
+                # HARD FILTER: Odds range 1.60 - 2.50 for low variance
+                if not (MIN_VALUE_SINGLE_ODDS <= odds <= MAX_VALUE_SINGLE_ODDS):
+                    continue  # Skip bets outside safe odds range
+                
+                # HARD FILTER: Model probability >= 58% for high confidence
+                if p_model < MIN_VALUE_SINGLE_CONFIDENCE:
+                    continue  # Skip low-confidence predictions
 
-                # Relaxed moneyline filter: avoid extreme favorites/underdogs
+                # Check for conflict with exact score prediction (1X2 markets only)
                 if market_key in ("HOME_WIN", "AWAY_WIN", "DRAW"):
-                    if odds < 1.40 or odds > 4.00:  # More relaxed range
-                        continue
-                    # Check for conflict with exact score prediction
                     if self._is_1x2_conflicting(home_team, away_team, market_key):
                         continue  # Skip conflicting 1X2 selections
 
                 ev = self._calc_ev(p_model, odds)
-                if ev < self.ev_threshold:
+                
+                # HARD FILTER: Minimum 8% EV
+                if ev < MIN_VALUE_SINGLE_EV:
                     continue
                 
                 # Smart conflict resolution for Over/Under goals vs Exact Score
-                # Compare EVs - keep whichever has better value
                 conflict_result = self._check_conflict_with_ev_comparison(home_team, away_team, market_key, ev)
                 if conflict_result == 'skip':
                     continue  # Exact Score has better EV, skip this Value Single
-                # If 'replace', the Exact Score was deleted, continue with this Value Single
 
                 confidence = int(min(100, max(0, 50 + ev * 250)))  # simple confidence proxy
                 if confidence < self.min_confidence:
@@ -602,16 +654,16 @@ class ValueSinglesEngine:
 
                 picks.append(opportunity)
 
-        # Debug: Show top candidates
+        # Debug: Show all candidates that passed hard filters
+        print(f"\n📊 VALUE SINGLES SUMMARY: {len(picks)} candidates passed hard filters")
         if picks:
             picks.sort(key=lambda x: x["edge_percentage"], reverse=True)
-            top = picks[:3]
-            for c in top:
+            for c in picks[:5]:  # Show top 5
                 ev_show = c.get("edge_percentage", 0)
                 p_model = json.loads(c.get("analysis", "{}")).get("p_model", 0)
-                print(f"   TOP CAND: {c.get('market')} {c.get('selection')} | odds={c.get('odds', 0):.2f} p={p_model:.2%} EV={ev_show:.2f}%")
+                print(f"   CANDIDATE: {c['home_team']} vs {c['away_team']} | {c.get('selection')} | odds={c.get('odds', 0):.2f} p={p_model:.2%} EV={ev_show:.1f}%")
 
-        # 5) Sort by EV and enforce unique matches
+        # 5) Sort by EV, enforce unique matches, and LIMIT TO MAX_VALUE_SINGLES_PER_DAY
         picks.sort(key=lambda x: x["edge_percentage"], reverse=True)
 
         unique: List[Dict[str, Any]] = []
@@ -621,8 +673,13 @@ class ValueSinglesEngine:
                 continue
             unique.append(p)
             used_matches.add(p["match_id"])
-            if len(unique) >= max_picks:
+            # HARD LIMIT: Maximum 4 value singles per day
+            if len(unique) >= MAX_VALUE_SINGLES_PER_DAY:
                 break
+        
+        print(f"🎯 SELECTED: Top {len(unique)} value singles (max {MAX_VALUE_SINGLES_PER_DAY}/day)")
+        for i, p in enumerate(unique, 1):
+            print(f"   #{i}: {p['home_team']} vs {p['away_team']} | {p['selection']} @ {p['odds']:.2f} (EV {p['edge_percentage']:.1f}%)")
 
         return unique
 
