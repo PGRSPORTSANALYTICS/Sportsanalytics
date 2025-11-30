@@ -1053,16 +1053,23 @@ class SGPPredictor:
     def save_sgp_prediction(self, sgp: Dict[str, Any]) -> bool:
         """Save SGP prediction to database - always saves, but tracks if bet was placed"""
         
-        # Check bankroll - determines if we actually place the bet
+        # Get dynamic stake (1.2% of bankroll) - same as all other engines
+        dynamic_stake = 173.0  # Fallback
+        current_bankroll = 30000  # Fallback for kelly calculation
         bet_placed = True
+        
         try:
             bankroll_mgr = get_bankroll_manager()
-            can_bet, reason = bankroll_mgr.can_place_bet(160)
+            dynamic_stake = bankroll_mgr.get_dynamic_stake()
+            current_bankroll = bankroll_mgr.get_current_bankroll()
+            
+            # Check bankroll - determines if we actually place the bet
+            can_bet, reason = bankroll_mgr.can_place_bet(dynamic_stake)
             if not can_bet:
                 bet_placed = False
                 logger.warning(f"⛔ BANKROLL LIMIT: {reason} - Prediction saved but NO BET placed")
         except Exception as e:
-            logger.warning(f"⚠️ Bankroll check failed: {e} - Proceeding with bet")
+            logger.warning(f"⚠️ Bankroll check failed: {e} - Using fallback stake")
         
         match_data = sgp['match_data']
         
@@ -1076,7 +1083,7 @@ class SGPPredictor:
         # Calculate Kelly stake with dynamic sizing from self-learner
         kelly_multiplier = self.self_learner.get_dynamic_kelly()
         kelly_fraction = (sgp['parlay_probability'] * sgp['bookmaker_odds'] - 1.0) / (sgp['bookmaker_odds'] - 1.0)
-        kelly_stake = max(0, min(kelly_fraction * kelly_multiplier, 0.05)) * 30000  # 5% max, 30,000 SEK bankroll
+        kelly_stake = max(0, min(kelly_fraction * kelly_multiplier, 0.05)) * current_bankroll  # 5% max of current bankroll
         
         # Convert pricing metadata to JSON string
         import json
@@ -1103,7 +1110,7 @@ class SGPPredictor:
             sgp['fair_odds'],
             sgp['bookmaker_odds'],
             sgp['ev_percentage'],
-            160.0 if bet_placed else 0,  # Only stake if bet placed
+            dynamic_stake if bet_placed else 0,  # Dynamic stake (1.2% of bankroll)
             kelly_stake if bet_placed else 0,
             'v1.0_copula_poisson_live',
             200000,
