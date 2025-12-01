@@ -666,6 +666,14 @@ class SGPPredictor:
                 'description': 'BTTS Yes'
             },
             
+            # BTTS No (~1.9x)
+            {
+                'legs': [
+                    {'market_type': 'BTTS', 'outcome': 'NO'}
+                ],
+                'description': 'BTTS No'
+            },
+            
             # ========== 2-LEG COMBOS (~3-5x) ==========
             
             # Over 2.5 + BTTS (~3.5x)
@@ -693,6 +701,24 @@ class SGPPredictor:
                     {'market_type': 'HALF_TIME_GOALS', 'outcome': 'OVER', 'line': 0.5}
                 ],
                 'description': 'Over 2.5 + 1H Goal'
+            },
+            
+            # Under 2.5 + BTTS No (~3.5x) - Defensive low-scoring game
+            {
+                'legs': [
+                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'UNDER', 'line': 2.5},
+                    {'market_type': 'BTTS', 'outcome': 'NO'}
+                ],
+                'description': 'Under 2.5 + BTTS No'
+            },
+            
+            # Under 3.5 + BTTS No (~2.5x) - More likely to hit
+            {
+                'legs': [
+                    {'market_type': 'OVER_UNDER_GOALS', 'outcome': 'UNDER', 'line': 3.5},
+                    {'market_type': 'BTTS', 'outcome': 'NO'}
+                ],
+                'description': 'Under 3.5 + BTTS No'
             },
             
             # DISABLED: Corners legs temporarily removed due to low hit rate
