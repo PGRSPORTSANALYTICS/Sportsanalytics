@@ -155,6 +155,14 @@ def main():
     time.sleep(5)
     run_performance_updates()
     
+    # CRITICAL: Run all verifications immediately on startup
+    # This ensures no bets drag for days waiting for scheduler
+    logger.info("🔄 Running immediate result verification...")
+    verify_football_results()
+    verify_sgp_results()
+    verify_basketball_results()
+    logger.info("✅ Initial verification complete")
+    
     # Schedule recurring prediction tasks
     schedule.every(1).hours.do(run_football_predictions)
     schedule.every(2).hours.do(run_sgp_predictions)
