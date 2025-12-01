@@ -1006,6 +1006,27 @@ class SGPPredictor:
     def save_sgp_prediction(self, sgp: Dict[str, Any]) -> bool:
         """Save SGP prediction to database - always saves, but tracks if bet was placed"""
         
+        match_data = sgp['match_data']
+        
+        # DUPLICATE CHECK: Prevent duplicate SGPs for same match + parlay
+        try:
+            existing = db_helper.fetchone('''
+                SELECT id FROM sgp_predictions 
+                WHERE home_team = %s AND away_team = %s 
+                AND parlay_description = %s
+                AND DATE(match_date) = DATE(%s)
+            ''', (
+                match_data['home_team'],
+                match_data['away_team'],
+                sgp['description'],
+                match_data.get('match_date', '')
+            ))
+            if existing:
+                logger.info(f"⏭️ DUPLICATE SKIPPED: {match_data['home_team']} vs {match_data['away_team']} | {sgp['description']}")
+                return False
+        except Exception as e:
+            logger.warning(f"⚠️ Duplicate check failed: {e}")
+        
         # Get dynamic stake (1.2% of bankroll) - same as all other engines
         dynamic_stake = 173.0  # Fallback
         current_bankroll = 30000  # Fallback for kelly calculation
@@ -1023,8 +1044,6 @@ class SGPPredictor:
                 logger.warning(f"⛔ BANKROLL LIMIT: {reason} - Prediction saved but NO BET placed")
         except Exception as e:
             logger.warning(f"⚠️ Bankroll check failed: {e} - Using fallback stake")
-        
-        match_data = sgp['match_data']
         
         # Format legs as text
         legs_text = " | ".join([
