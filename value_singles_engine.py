@@ -170,6 +170,8 @@ class ValueSinglesEngine:
         Get the exact score prediction goals for this match.
         Returns tuple of (home_goals, away_goals) or None if no prediction.
         """
+        from db_helper import db_helper
+        
         cache_key = f"{home_team}_{away_team}_goals"
         if cache_key in self._exact_score_cache:
             return self._exact_score_cache[cache_key]
@@ -196,6 +198,7 @@ class ValueSinglesEngine:
             self._exact_score_cache[cache_key] = None
             return None
         except Exception as e:
+            print(f"⚠️ Error getting exact score goals: {e}")
             return None
     
     def _is_1x2_conflicting(self, home_team: str, away_team: str, market_key: str) -> bool:
@@ -222,6 +225,8 @@ class ValueSinglesEngine:
         Get the exact score prediction's EV and ID for this match.
         Returns tuple of (ev_percentage, prediction_id) or None if no prediction.
         """
+        from db_helper import db_helper
+        
         try:
             query = """
                 SELECT id, edge_percentage FROM football_opportunities 
@@ -242,6 +247,8 @@ class ValueSinglesEngine:
     
     def _delete_exact_score_prediction(self, prediction_id: int, home_team: str, away_team: str, reason: str):
         """Delete an exact score prediction when Value Single has better EV."""
+        from db_helper import db_helper
+        
         try:
             db_helper.execute(
                 "DELETE FROM football_opportunities WHERE id = %s AND status = 'pending'",
