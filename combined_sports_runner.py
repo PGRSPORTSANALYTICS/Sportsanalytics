@@ -49,6 +49,17 @@ def run_college_basketball():
         logger.error(f"❌ College Basketball prediction error: {e}")
 
 
+def run_ml_parlay():
+    """Run ML Parlay predictions (TEST MODE - no external posting)"""
+    try:
+        from ml_parlay_engine import run_prediction_cycle
+        logger.info("🎰 Starting ML Parlay cycle (TEST MODE)...")
+        run_prediction_cycle()
+        logger.info("✅ ML Parlay cycle complete")
+    except Exception as e:
+        logger.error(f"❌ ML Parlay prediction error: {e}")
+
+
 def verify_basketball_results():
     """Verify College Basketball results"""
     try:
@@ -83,6 +94,18 @@ def verify_sgp_results():
         logger.info("🎲 SGP verification complete")
     except Exception as e:
         logger.error(f"❌ SGP verification error: {e}")
+
+
+def verify_ml_parlay_results():
+    """Verify ML Parlay results (TEST MODE)"""
+    try:
+        from ml_parlay_verifier import MLParlayVerifier
+        logger.info("🎰 Verifying ML Parlay results...")
+        verifier = MLParlayVerifier()
+        results = verifier.verify_pending_parlays()
+        logger.info(f"🎰 ML Parlay verification: {results['verified']} verified, {results['failed']} failed")
+    except Exception as e:
+        logger.error(f"❌ ML Parlay verification error: {e}")
 
 
 def run_performance_updates():
@@ -133,11 +156,13 @@ def main():
     logger.info("⚽ Football Exact Score - Every 1 hour")
     logger.info("🎲 SGP Predictions - Every 2 hours")
     logger.info("🏀 College Basketball - Every 2 hours")
+    logger.info("🎰 ML Parlay (TEST MODE) - Every 3 hours")
     logger.info("="*80)
     logger.info("🔍 FAST RESULT VERIFICATION (5-minute cycles):")
     logger.info("⚽ Football Results - Every 5 minutes")
     logger.info("🎲 SGP Results - Every 5 minutes")
     logger.info("🏀 Basketball Results - Every 5 minutes")
+    logger.info("🎰 ML Parlay Results - Every 5 minutes")
     logger.info("="*80)
     logger.info("📊 Performance Updates - Every 6 hours")
     logger.info("📊 Daily Recap - Daily at 22:30")
@@ -153,6 +178,8 @@ def main():
     time.sleep(5)
     run_college_basketball()
     time.sleep(5)
+    run_ml_parlay()
+    time.sleep(5)
     run_performance_updates()
     
     # CRITICAL: Run all verifications immediately on startup
@@ -161,17 +188,20 @@ def main():
     verify_football_results()
     verify_sgp_results()
     verify_basketball_results()
+    verify_ml_parlay_results()
     logger.info("✅ Initial verification complete")
     
     # Schedule recurring prediction tasks
     schedule.every(1).hours.do(run_football_predictions)
     schedule.every(2).hours.do(run_sgp_predictions)
     schedule.every(2).hours.do(run_college_basketball)
+    schedule.every(3).hours.do(run_ml_parlay)
     
     # Schedule result verification - Every 5 minutes for FAST results
     schedule.every(5).minutes.do(verify_football_results)
     schedule.every(5).minutes.do(verify_sgp_results)
     schedule.every(5).minutes.do(verify_basketball_results)
+    schedule.every(5).minutes.do(verify_ml_parlay_results)
     
     schedule.every(6).hours.do(run_performance_updates)
     
