@@ -732,11 +732,67 @@ class ResultsScraper:
                         logger.debug(f"⏭️ No result yet for bet {bet_id}: {home_team} vs {away_team}")
             
             logger.info(f"🎯 Updated {updated_count} bet outcomes")
+            
+            # Update training data with results
+            self._update_training_data_results()
+            
             return updated_count
             
         except Exception as e:
             logger.error(f"Error updating bet outcomes: {e}")
             return 0
+    
+    def _update_training_data_results(self):
+        """Update training_data table with actual match results for AI learning"""
+        try:
+            # Find training records that need results (match already played)
+            pending_training = db_helper.execute('''
+                SELECT id, home_team, away_team, match_date, predicted_score
+                FROM training_data 
+                WHERE actual_score IS NULL
+                  AND match_date IS NOT NULL
+                  AND match_date::date <= CURRENT_DATE
+                ORDER BY match_date
+                LIMIT 100
+            ''', fetch='all')
+            
+            if not pending_training:
+                return
+            
+            logger.info(f"🧠 Updating {len(pending_training)} training data records with results...")
+            
+            updated_count = 0
+            for record in pending_training:
+                record_id, home_team, away_team, match_date, predicted_score = record
+                clean_date = str(match_date).split('T')[0] if match_date else ''
+                
+                # Check cache for result
+                cached_result = self._get_cached_match_result(home_team, away_team, clean_date)
+                
+                if cached_result:
+                    home_score = cached_result.get('home_score', 0)
+                    away_score = cached_result.get('away_score', 0)
+                    actual_score = f"{home_score}-{away_score}"
+                    
+                    # Check if prediction was correct
+                    prediction_correct = (predicted_score == actual_score) if predicted_score else False
+                    
+                    db_helper.execute('''
+                        UPDATE training_data 
+                        SET actual_home_goals = %s,
+                            actual_away_goals = %s,
+                            actual_score = %s,
+                            prediction_correct = %s
+                        WHERE id = %s
+                    ''', (home_score, away_score, actual_score, prediction_correct, record_id))
+                    
+                    updated_count += 1
+            
+            if updated_count > 0:
+                logger.info(f"🧠 AI LEARNING: Updated {updated_count} training records with actual results")
+                
+        except Exception as e:
+            logger.warning(f"⚠️ Training data update error: {e}")
     
     def team_match(self, scraped_team, bet_team):
         """Check if team names match (allowing for variations)"""
