@@ -1576,15 +1576,19 @@ class RealFootballChampion:
         
         for prediction in predictions:
             # 🎯 Check if this match already has a prediction (prevent duplicates)
+            # Use LIKE pattern for date to handle different timezone formats (Z vs +00:00)
+            match_date = prediction.get('match_date', '')
+            match_date_prefix = match_date[:10] if match_date else ''
             result = db_helper.execute('''
                 SELECT COUNT(*) FROM football_opportunities
                 WHERE home_team = %s AND away_team = %s 
-                AND market = 'Exact Score'
-                AND (outcome IS NULL OR outcome = '' OR outcome = 'unknown')
-            ''', (prediction['home_team'], prediction['away_team']), fetch='one')
+                AND (market = 'exact_score' OR market = 'Exact Score')
+                AND match_date::text LIKE %s
+                AND (outcome IS NULL OR outcome = '' OR outcome = 'unknown' OR outcome = 'PENDING')
+            ''', (prediction['home_team'], prediction['away_team'], f"{match_date_prefix}%"), fetch='one')
             
             if result and result[0] > 0:
-                print(f"   🔄 DUPLICATE BLOCKED: {prediction['home_team']} vs {prediction['away_team']} already has prediction")
+                print(f"   🔄 DUPLICATE BLOCKED: {prediction['home_team']} vs {prediction['away_team']} already has prediction for {match_date_prefix}")
                 continue
             
             # 🎯 Evaluate all top scores and pick the BEST one
@@ -3398,12 +3402,14 @@ class RealFootballChampion:
         
         # Check if this match already has ANY prediction (regardless of score)
         # This prevents duplicate predictions with different scores for the same match
+        # Use DATE cast for robust comparison (handles Z vs +00:00 formats)
+        match_date_prefix = opportunity.match_date[:10] if opportunity.match_date else ''
         result = db_helper.execute('''
             SELECT COUNT(*) FROM football_opportunities 
             WHERE home_team = %s AND away_team = %s AND market = 'exact_score'
-            AND match_date = %s
-            AND status = 'pending'
-        ''', (opportunity.home_team, opportunity.away_team, opportunity.match_date), fetch='one')
+            AND match_date::text LIKE %s
+            AND (outcome IS NULL OR outcome = 'PENDING')
+        ''', (opportunity.home_team, opportunity.away_team, f"{match_date_prefix}%"), fetch='one')
         
         duplicate_count = result[0] if result else 0
         if duplicate_count > 0:
