@@ -1439,6 +1439,123 @@ def render_product_tab(
         )
 
 
+def render_ml_parlay_tab():
+    """Render ML Parlay tab showing moneyline parlays (TEST MODE)."""
+    st.markdown("## ML Parlay (Moneyline Parlays)")
+    st.caption("LOW/MEDIUM risk parlays from 1X2/Moneyline/DNB markets. **INTERNAL TEST MODE**")
+    
+    try:
+        from db_helper import db_helper
+        
+        parlays = db_helper.execute(
+            """SELECT parlay_id, match_date, num_legs, parlay_description, 
+                      total_odds, combined_ev, confidence_score, stake, 
+                      potential_payout, status, outcome, profit_loss, mode
+               FROM ml_parlay_predictions 
+               ORDER BY timestamp DESC 
+               LIMIT 50""",
+            fetch='all'
+        )
+        
+        if not parlays:
+            st.info("No ML Parlays yet. The engine runs every 3 hours and creates parlays when matches meet the strict filters (1.40-2.10 odds, 4%+ EV per leg).")
+            return
+        
+        columns = ['parlay_id', 'match_date', 'num_legs', 'parlay_description', 
+                   'total_odds', 'combined_ev', 'confidence_score', 'stake',
+                   'potential_payout', 'status', 'outcome', 'profit_loss', 'mode']
+        df = pd.DataFrame(parlays, columns=columns)
+        
+        settled = df[df['status'] == 'settled'].copy()
+        pending = df[df['status'] == 'pending'].copy()
+        
+        if not settled.empty:
+            settled['profit_loss'] = pd.to_numeric(settled['profit_loss'], errors='coerce').fillna(0)
+            settled['stake'] = pd.to_numeric(settled['stake'], errors='coerce').fillna(0)
+            
+            total_profit = settled['profit_loss'].sum()
+            total_staked = settled['stake'].sum()
+            roi = (total_profit / total_staked * 100) if total_staked > 0 else 0
+            won = len(settled[settled['outcome'] == 'won'])
+            hit_rate = (won / len(settled) * 100) if len(settled) > 0 else 0
+            
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                color = "#00FFA6" if roi >= 0 else "#F97373"
+                st.markdown(f"""
+                    <div style="padding:12px;border-radius:10px;background:rgba(15,23,42,0.9);border:1px solid {color};">
+                        <div style="font-size:11px;color:#9CA3AF;">ROI</div>
+                        <div style="font-size:22px;font-weight:700;color:{color};">{roi:+.1f}%</div>
+                    </div>
+                """, unsafe_allow_html=True)
+            with col2:
+                color = "#00FFA6" if total_profit >= 0 else "#F97373"
+                profit_usd = total_profit / USD_TO_SEK
+                st.markdown(f"""
+                    <div style="padding:12px;border-radius:10px;background:rgba(15,23,42,0.9);border:1px solid rgba(148,163,184,0.4);">
+                        <div style="font-size:11px;color:#9CA3AF;">Profit</div>
+                        <div style="font-size:22px;font-weight:700;color:{color};">${profit_usd:+.0f}</div>
+                    </div>
+                """, unsafe_allow_html=True)
+            with col3:
+                st.markdown(f"""
+                    <div style="padding:12px;border-radius:10px;background:rgba(15,23,42,0.9);border:1px solid rgba(148,163,184,0.4);">
+                        <div style="font-size:11px;color:#9CA3AF;">Hit Rate</div>
+                        <div style="font-size:22px;font-weight:700;color:#E5E7EB;">{hit_rate:.1f}%</div>
+                    </div>
+                """, unsafe_allow_html=True)
+            with col4:
+                st.markdown(f"""
+                    <div style="padding:12px;border-radius:10px;background:rgba(15,23,42,0.9);border:1px solid rgba(148,163,184,0.4);">
+                        <div style="font-size:11px;color:#9CA3AF;">Settled</div>
+                        <div style="font-size:22px;font-weight:700;color:#E5E7EB;">{won}/{len(settled)}</div>
+                    </div>
+                """, unsafe_allow_html=True)
+        
+        st.markdown("---")
+        
+        st.markdown("### 🎰 Pending ML Parlays")
+        if pending.empty:
+            st.info("No pending ML parlays. Next batch generates when matches meet the filters.")
+        else:
+            for _, row in pending.iterrows():
+                ev = float(row.get('combined_ev', 0) or 0)
+                odds = float(row.get('total_odds', 0) or 0)
+                stake_sek = float(row.get('stake', 0) or 0)
+                stake_usd = stake_sek / USD_TO_SEK
+                desc = str(row.get('parlay_description', ''))
+                legs = int(row.get('num_legs', 0) or 0)
+                
+                ev_color = "#00FFA6" if ev >= 10 else "#FBBF24" if ev >= 5 else "#9CA3AF"
+                
+                card_html = f"""
+                <div style="padding:16px;margin:10px 0;border-radius:14px;background:radial-gradient(circle at top left, rgba(168,85,247,0.12), rgba(15,23,42,0.96));border:1px solid rgba(168,85,247,0.4);">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                        <div style="font-size:11px;padding:3px 8px;border-radius:999px;background:rgba(168,85,247,0.2);color:#A855F7;">TEST MODE • {legs} LEGS</div>
+                        <div style="font-size:11px;padding:3px 8px;border-radius:999px;background:rgba(0,255,166,0.1);color:{ev_color};">EV {ev:+.1f}%</div>
+                    </div>
+                    <div style="font-size:16px;color:#E5E7EB;margin-bottom:10px;">{desc}</div>
+                    <div style="display:flex;gap:20px;">
+                        <div><span style="font-size:11px;color:#9CA3AF;">ODDS</span><br/><span style="font-size:18px;font-weight:600;color:#A855F7;">{odds:.2f}x</span></div>
+                        <div><span style="font-size:11px;color:#9CA3AF;">STAKE</span><br/><span style="font-size:18px;font-weight:600;color:#E5E7EB;">${stake_usd:.0f}</span></div>
+                    </div>
+                </div>
+                """
+                st.markdown(card_html, unsafe_allow_html=True)
+        
+        st.markdown("---")
+        st.markdown("### 📜 ML Parlay History")
+        if settled.empty:
+            st.info("No settled ML parlays yet.")
+        else:
+            display_df = settled[['parlay_id', 'match_date', 'num_legs', 'parlay_description', 'total_odds', 'combined_ev', 'outcome', 'profit_loss']].copy()
+            display_df.columns = ['ID', 'Date', 'Legs', 'Description', 'Odds', 'EV%', 'Result', 'P/L']
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
+            
+    except Exception as e:
+        st.error(f"Error loading ML Parlay data: {e}")
+
+
 def render_basketball_tab(df: pd.DataFrame):
     """Render College Basketball tab with SGP-style card layout."""
     st.markdown("## College Basketball")
@@ -1895,12 +2012,13 @@ def main():
     prod_bets, backtest_bets = split_bets_by_mode(all_bets)
 
     # Tabs for different products
-    overview_tab, exact_tab, singles_tab, sgp_tab, basket_tab, backtest_tab = st.tabs(
+    overview_tab, exact_tab, singles_tab, sgp_tab, ml_parlay_tab, basket_tab, backtest_tab = st.tabs(
         [
             "Overview",
             "Exact Score",
             "Value Singles",
             "SGP Parlays",
+            "ML Parlay",
             "College Basketball",
             "Backtests",
         ]
@@ -1928,6 +2046,8 @@ def main():
     with sgp_tab:
         render_sgp_parlays_tab()
 
+    with ml_parlay_tab:
+        render_ml_parlay_tab()
 
     with basket_tab:
         render_basketball_tab(prod_bets)
