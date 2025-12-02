@@ -1227,6 +1227,15 @@ def render_product_tab(
 
     st.markdown(f"## {title}")
     st.caption(description)
+    
+    # Add odds warning for Exact Score products
+    if "EXACT_SCORE" in product_codes or "FINAL_SCORE" in product_codes:
+        st.markdown(
+            """<div style="padding:8px 12px;border-radius:8px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.4);margin-bottom:16px;">
+                <span style="color:#FBBF24;">⚠️</span> <span style="color:#E5E7EB;font-size:13px;">Odds may differ from your bookmaker. Our odds are calculated from statistical models.</span>
+            </div>""",
+            unsafe_allow_html=True
+        )
 
     if data.empty:
         st.info("No bets for this product yet. Once your engine starts saving picks here, this tab will update automatically.")
