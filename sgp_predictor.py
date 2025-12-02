@@ -1053,6 +1053,25 @@ class SGPPredictor:
         except Exception as e:
             logger.warning(f"⚠️ Duplicate check failed: {e}")
         
+        # PER-MATCH CAP: Max 2 SGPs per match
+        MAX_SGP_PER_MATCH = 2
+        try:
+            match_count = db_helper.fetchone('''
+                SELECT COUNT(*) FROM sgp_predictions 
+                WHERE home_team = %s AND away_team = %s 
+                AND DATE(match_date) = DATE(%s)
+                AND (outcome IS NULL OR outcome = 'PENDING' OR outcome = '')
+            ''', (
+                match_data['home_team'],
+                match_data['away_team'],
+                match_data.get('match_date', '')
+            ))
+            if match_count and match_count[0] >= MAX_SGP_PER_MATCH:
+                logger.info(f"⚠️ PER-MATCH CAP: {match_data['home_team']} vs {match_data['away_team']} already has {match_count[0]} SGPs (max {MAX_SGP_PER_MATCH})")
+                return False
+        except Exception as e:
+            logger.warning(f"⚠️ Per-match cap check failed: {e}")
+        
         # Get dynamic stake (1.2% of bankroll) - same as all other engines
         dynamic_stake = 173.0  # Fallback
         current_bankroll = 30000  # Fallback for kelly calculation
