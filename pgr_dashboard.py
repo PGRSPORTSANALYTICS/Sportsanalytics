@@ -1246,17 +1246,20 @@ def render_product_tab(
             data[c] = pd.to_numeric(data[c], errors="coerce")
     
     data["profit"] = data["payout"].fillna(0) - data["stake"].fillna(100)
-    data.loc[~data["result"].isin(["WON", "LOST", "WIN", "LOSS"]), "profit"] = pd.NA
+    
+    # Use norm_result for filtering (normalized to WON/LOST/PENDING/VOID)
+    result_col = "norm_result" if "norm_result" in data.columns else "result"
+    data.loc[~data[result_col].isin(["WON", "LOST"]), "profit"] = pd.NA
 
-    active = data[~data["result"].isin(["WON", "LOST", "WIN", "LOSS", "VOID"])].copy()
-    settled = data[data["result"].isin(["WON", "LOST", "WIN", "LOSS"])].copy()
+    active = data[~data[result_col].isin(["WON", "LOST", "VOID"])].copy()
+    settled = data[data[result_col].isin(["WON", "LOST"])].copy()
 
     if not settled.empty:
         total_staked_sek = settled["stake"].sum()
         total_return_sek = settled["payout"].fillna(0).sum()
         profit_sek = total_return_sek - total_staked_sek
         roi = (profit_sek / total_staked_sek * 100) if total_staked_sek > 0 else 0.0
-        won_count = (settled["result"].isin(["WON", "WIN"])).sum()
+        won_count = (settled[result_col] == "WON").sum()
         hit_rate = (won_count / len(settled) * 100) if len(settled) > 0 else 0.0
         
         # Convert to USD for display
@@ -1342,7 +1345,10 @@ def render_product_tab(
         
         todays_picks = active[active["match_day"] == today].copy()
         tomorrows_picks = active[active["match_day"] == tomorrow].copy()
-        upcoming_picks = active[(active["match_day"] != today) & (active["match_day"] != tomorrow)].copy()
+        # Only show future matches (after tomorrow) in Upcoming - not past unsettled matches
+        upcoming_picks = active[active["match_day"] > tomorrow].copy()
+        # Past unsettled matches (awaiting settlement)
+        past_unsettled = active[active["match_day"] < today].copy()
         
         def render_bet_cards(bets_df, section_title, section_emoji):
             st.markdown(f"### {section_emoji} {section_title}")
@@ -1403,6 +1409,26 @@ def render_product_tab(
         if not upcoming_picks.empty:
             st.markdown("")
             render_bet_cards(upcoming_picks, "Upcoming Picks", "🗓️")
+        
+        if not past_unsettled.empty:
+            st.markdown("")
+            st.markdown(f"### ⏳ Awaiting Results ({len(past_unsettled)} bets)")
+            st.caption("These matches have finished but results haven't been verified yet.")
+            for _, row in past_unsettled.iterrows():
+                home_team = str(row.get('home_team', '')).replace('"', '&quot;')
+                away_team = str(row.get('away_team', '')).replace('"', '&quot;')
+                fixture = f"{home_team} vs {away_team}" if away_team else home_team
+                selection = str(row.get('selection', '')).replace('"', '&quot;')
+                bet_display = selection.replace("Exact Score: ", "").replace("Value Single: ", "") if selection else ""
+                odds_val = float(row.get('odds', 0))
+                match_str = format_kickoff(row.get("match_date"))
+                st.markdown(
+                    f"""<div style="padding:12px;margin:6px 0;border-radius:10px;background:rgba(148,163,184,0.08);border:1px solid rgba(148,163,184,0.3);">
+                    <div style="color:#9CA3AF;font-size:14px;">⏳ {fixture} - <span style="color:#E5E7EB;">{bet_display}</span> @ {odds_val:.2f}</div>
+                    <div style="font-size:11px;color:#6B7280;">Played: {match_str}</div>
+                    </div>""",
+                    unsafe_allow_html=True
+                )
 
     st.markdown("---")
 
