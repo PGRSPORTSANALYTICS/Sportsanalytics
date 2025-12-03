@@ -765,7 +765,7 @@ class ResultsScraper:
                     db_helper.execute('''
                         UPDATE football_opportunities 
                         SET outcome = %s, result = %s, profit_loss = %s, payout = %s, 
-                            actual_score = %s, status = 'settled', updated_at = %s
+                            actual_score = %s, status = 'settled', bet_category = 'historical', updated_at = %s
                         WHERE id = %s
                     ''', (outcome, outcome, profit_loss, payout, actual_score, datetime.now().isoformat(), bet_id))
                     
@@ -847,7 +847,7 @@ class ResultsScraper:
                         db_helper.execute('''
                             UPDATE football_opportunities 
                             SET outcome = %s, result = %s, profit_loss = %s, payout = %s,
-                                actual_score = %s, status = 'settled', updated_at = %s
+                                actual_score = %s, status = 'settled', bet_category = 'historical', updated_at = %s
                             WHERE id = %s
                         ''', (outcome, outcome, profit_loss, payout, actual_score, datetime.now().isoformat(), bet_id))
                         
