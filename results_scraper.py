@@ -7,9 +7,10 @@ import json
 from datetime import datetime, timedelta
 import time
 import logging
-from typing import Optional
+from typing import Optional, List
 from db_helper import db_helper
 from team_name_mapper import TeamNameMapper
+from telegram_sender import TelegramBroadcaster
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -66,6 +67,91 @@ class ResultsScraper:
         self.team_mapper = TeamNameMapper()
         self._init_cache_db()
         self._init_verification_tracking()
+        self._init_telegram()
+        self.settled_bets_buffer: List[dict] = []
+    
+    def _init_telegram(self):
+        """Initialize Telegram broadcaster for result notifications"""
+        try:
+            self.telegram = TelegramBroadcaster()
+            self.telegram_channel = self.telegram.get_channel('exact_score')
+            logger.info(f"✅ Telegram initialized for result notifications (channel: {self.telegram_channel})")
+        except Exception as e:
+            logger.warning(f"⚠️ Telegram not available: {e}")
+            self.telegram = None
+            self.telegram_channel = None
+    
+    def _send_result_notification(self, bet_info: dict):
+        """Send Telegram notification when a bet is settled"""
+        if not self.telegram or not self.telegram_channel:
+            return
+        
+        try:
+            outcome = bet_info.get('outcome', '').upper()
+            home_team = bet_info.get('home_team', 'Unknown')
+            away_team = bet_info.get('away_team', 'Unknown')
+            selection = bet_info.get('selection', '')
+            actual_score = bet_info.get('actual_score', '?-?')
+            odds = bet_info.get('odds', 0)
+            stake = bet_info.get('stake', 0)
+            profit_loss = bet_info.get('profit_loss', 0)
+            
+            if outcome == 'WIN':
+                emoji = "✅"
+                status = "WON"
+                color_emoji = "🟢"
+            else:
+                emoji = "❌"
+                status = "LOST"
+                color_emoji = "🔴"
+            
+            message = f"""{emoji} RESULT: {status}
+
+⚽ {home_team} vs {away_team}
+📊 Final Score: {actual_score}
+🎯 Our Pick: {selection}
+💰 Odds: {odds:.2f}
+
+{color_emoji} P/L: ${profit_loss/10.8:+.0f} ({profit_loss:+.0f} SEK)
+"""
+            self.telegram.send_message(self.telegram_channel, message)
+            logger.info(f"📱 Sent result notification: {home_team} vs {away_team} = {status}")
+        except Exception as e:
+            logger.error(f"❌ Failed to send result notification: {e}")
+    
+    def _send_batch_results(self):
+        """Send batch summary of all settled bets"""
+        if not self.telegram or not self.telegram_channel or not self.settled_bets_buffer:
+            return
+        
+        try:
+            wins = [b for b in self.settled_bets_buffer if b.get('outcome', '').upper() == 'WIN']
+            losses = [b for b in self.settled_bets_buffer if b.get('outcome', '').upper() == 'LOSS']
+            
+            total_profit = sum(b.get('profit_loss', 0) for b in self.settled_bets_buffer)
+            total_profit_usd = total_profit / 10.8
+            
+            message = f"""📊 RESULTS UPDATE
+
+✅ Wins: {len(wins)}
+❌ Losses: {len(losses)}
+
+💰 Session P/L: ${total_profit_usd:+.0f} ({total_profit:+.0f} SEK)
+
+"""
+            for bet in self.settled_bets_buffer:
+                outcome = bet.get('outcome', '').upper()
+                emoji = "✅" if outcome == 'WIN' else "❌"
+                home = bet.get('home_team', '')[:15]
+                away = bet.get('away_team', '')[:15]
+                score = bet.get('actual_score', '?-?')
+                message += f"{emoji} {home} vs {away}: {score}\n"
+            
+            self.telegram.send_message(self.telegram_channel, message)
+            logger.info(f"📱 Sent batch results: {len(self.settled_bets_buffer)} bets")
+            self.settled_bets_buffer = []
+        except Exception as e:
+            logger.error(f"❌ Failed to send batch results: {e}")
     
     def _init_cache_db(self):
         """Initialize results cache database (PostgreSQL version)"""
@@ -681,6 +767,18 @@ class ResultsScraper:
                     updated_count += 1
                     self._mark_bet_checked(bet_id)  # Mark cooldown after success
                     logger.info(f"✅ Updated bet {bet_id} from cache: {home_team} vs {away_team} | {selection} = {outcome} (Score: {actual_score})")
+                    
+                    # Send Telegram notification
+                    self._send_result_notification({
+                        'outcome': outcome,
+                        'home_team': home_team,
+                        'away_team': away_team,
+                        'selection': selection,
+                        'actual_score': actual_score,
+                        'odds': odds,
+                        'stake': stake,
+                        'profit_loss': profit_loss
+                    })
                 else:
                     # Cache miss - need to fetch
                     if clean_date not in bets_needing_fetch:
@@ -726,6 +824,18 @@ class ResultsScraper:
                         updated_count += 1
                         self._mark_bet_checked(bet_id)  # Mark cooldown only after success
                         logger.info(f"✅ Updated bet {bet_id}: {home_team} vs {away_team} | {selection} = {outcome} (Score: {actual_score})")
+                        
+                        # Send Telegram notification
+                        self._send_result_notification({
+                            'outcome': outcome,
+                            'home_team': home_team,
+                            'away_team': away_team,
+                            'selection': selection,
+                            'actual_score': actual_score,
+                            'odds': odds,
+                            'stake': stake,
+                            'profit_loss': profit_loss
+                        })
                     else:
                         # No result found - mark checked to avoid immediate retry
                         self._mark_bet_checked(bet_id)
