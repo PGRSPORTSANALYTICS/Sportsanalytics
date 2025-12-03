@@ -1854,9 +1854,9 @@ def render_sgp_parlays_tab():
         return
 
     # Split active vs settled - check BOTH result and outcome columns
-    # Settled = has result (WON/LOSS) OR has outcome (won/loss/win/lost)
-    outcome_settled = df["outcome"].isin(["won", "win", "loss", "lost", "WON", "WIN", "LOSS", "LOST"])
-    result_settled = df["result"].isin(["WON", "WIN", "LOSS", "LOST"])
+    # Settled = has result (WON/LOSS/VOID) OR has outcome (won/loss/win/lost/void)
+    outcome_settled = df["outcome"].isin(["won", "win", "loss", "lost", "WON", "WIN", "LOSS", "LOST", "void", "VOID"])
+    result_settled = df["result"].isin(["WON", "WIN", "LOSS", "LOST", "VOID", "void"])
     settled_mask = outcome_settled | result_settled
     
     active_bets = df[~settled_mask].copy()
