@@ -632,11 +632,8 @@ class SGPPredictor:
         home_team = match_data.get('home_team', '')
         away_team = match_data.get('away_team', '')
         
-        # Skip Premier League - negative ROI (-88.7%) based on offline analysis
+        # Premier League requires higher EV threshold (8%) due to historical -88.7% ROI
         league = match_data.get('league', '')
-        if 'Premier League' in league:
-            logger.info(f"⏭️  Skipping SGP for {home_team} vs {away_team} (Premier League - unprofitable)")
-            return []
         
         # Check for conflicting exact score prediction
         exact_score = self.get_exact_score_prediction(home_team, away_team)
@@ -967,12 +964,16 @@ class SGPPredictor:
             # Calculate EV
             ev_pct = (bookmaker_odds / fair_odds - 1.0) * 100.0
             
-            # SIMPLIFIED FILTER: 5% EV minimum across all odds (Dec 3, 2025)
+            # SIMPLIFIED FILTER: EV minimum varies by league (Dec 3, 2025)
             MIN_ODDS = 2.5
             MAX_ODDS = 10.0  # Hard cap at 10x odds
             
-            # Flat 5% EV minimum for all SGPs
-            min_ev_required = 5.0  # 5% EV threshold (lowered from tiered system)
+            # League-specific EV thresholds (Premier League needs higher due to historical poor ROI)
+            league = match_data.get('league', '')
+            if 'Premier League' in league:
+                min_ev_required = 8.0  # 8% for Premier League (historical -88.7% ROI)
+            else:
+                min_ev_required = 5.0  # 5% for other leagues
             
             # Assign tier based on odds for display purposes only
             if bookmaker_odds >= 8.0:
