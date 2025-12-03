@@ -615,6 +615,50 @@ class SGPPredictor:
         
         return False
     
+    def _should_skip_btts_yes(self, match_data: Dict[str, Any], lambda_home: float, lambda_away: float) -> Tuple[bool, str]:
+        """
+        Check if BTTS Yes should be skipped based on H2H data (NEW: Dec 3, 2025)
+        
+        Uses blended probability: 60% Poisson + 40% H2H historical rate
+        Skips BTTS Yes if blended rate is below threshold (35% for Premier League, 30% others)
+        Only applies when we have sufficient H2H data (4+ matches)
+        
+        Returns:
+            Tuple of (should_skip, reason)
+        """
+        h2h_btts_rate = match_data.get('h2h_btts_rate', 0.5)
+        h2h_total_matches = match_data.get('h2h_total_matches', 0)
+        league = match_data.get('league', '')
+        
+        # Only apply filter if we have sufficient H2H data (4+ matches)
+        if h2h_total_matches < 4:
+            return False, "Insufficient H2H data"
+        
+        # Calculate Poisson-based BTTS probability
+        poisson_btts_prob = self.calculate_btts_prob(lambda_home, lambda_away, btts=True)
+        
+        # Blend: 60% Poisson model + 40% H2H historical rate
+        blended_btts_rate = 0.6 * poisson_btts_prob + 0.4 * h2h_btts_rate
+        
+        # League-specific threshold (Premier League stricter due to historical poor performance)
+        threshold = 0.35 if league == 'Premier League' else 0.30
+        
+        if blended_btts_rate < threshold:
+            home_team = match_data.get('home_team', '')
+            away_team = match_data.get('away_team', '')
+            reason = f"H2H BTTS filter: {h2h_btts_rate:.0%} H2H rate + {poisson_btts_prob:.0%} model = {blended_btts_rate:.0%} blended < {threshold:.0%} threshold"
+            logger.info(f"   🚫 BTTS Yes blocked for {home_team} vs {away_team}: {reason}")
+            return True, reason
+        
+        return False, ""
+    
+    def _combination_has_btts_yes(self, combo: Dict[str, Any]) -> bool:
+        """Check if a combination includes BTTS Yes leg"""
+        for leg in combo.get('legs', []):
+            if leg.get('market_type') == 'BTTS' and leg.get('outcome') == 'YES':
+                return True
+        return False
+    
     def generate_sgp_for_match(self, match_data: Dict[str, Any], lambda_home: float, lambda_away: float, 
                               player_data: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """
@@ -634,6 +678,9 @@ class SGPPredictor:
         
         # Premier League requires higher EV threshold (8%) due to historical -88.7% ROI
         league = match_data.get('league', '')
+        
+        # Check if BTTS Yes should be filtered based on H2H data (NEW: Dec 3, 2025)
+        skip_btts_yes, btts_skip_reason = self._should_skip_btts_yes(match_data, lambda_home, lambda_away)
         
         # Check for conflicting exact score prediction
         exact_score = self.get_exact_score_prediction(home_team, away_team)
@@ -790,6 +837,17 @@ class SGPPredictor:
             },
             
         ]
+        
+        # Filter out BTTS Yes combinations if H2H data indicates low scoring (NEW: Dec 3, 2025)
+        if skip_btts_yes:
+            original_count = len(sgp_combinations)
+            sgp_combinations = [
+                combo for combo in sgp_combinations 
+                if not self._combination_has_btts_yes(combo)
+            ]
+            filtered_count = original_count - len(sgp_combinations)
+            if filtered_count > 0:
+                logger.info(f"   🎯 H2H filter removed {filtered_count} BTTS Yes combinations")
         
         # Keep top 3 SGPs by EV instead of just 1
         all_sgps = []

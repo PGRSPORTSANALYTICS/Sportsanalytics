@@ -18,6 +18,8 @@ from api_football_client import APIFootballClient
 from db_helper import db_helper
 from bankroll_manager import get_bankroll_manager
 from data_collector import get_collector
+from advanced_features import AdvancedFeaturesAPI
+from api_cache_manager import APICacheManager
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -36,6 +38,15 @@ class SGPChampion:
         except (ValueError, Exception) as e:
             self.api_football = None
             logger.warning(f"⚠️ API-Football client not available ({e}). Player props disabled, generating basic SGPs only.")
+        
+        # Initialize Advanced Features for H2H BTTS filtering
+        try:
+            self.cache_manager = APICacheManager(api_name='api_football')
+            self.advanced_features = AdvancedFeaturesAPI(cache_manager=self.cache_manager)
+            logger.info("✅ Advanced Features initialized for H2H BTTS filtering")
+        except Exception as e:
+            self.advanced_features = None
+            logger.warning(f"⚠️ Advanced Features not available ({e}). H2H BTTS filtering disabled.")
         
         logger.info("✅ SGP Champion initialized")
     
@@ -207,6 +218,8 @@ class SGPChampion:
             
             # Fetch player data for player props (only if API-Football available)
             player_data = None
+            home_team_id = None
+            away_team_id = None
             if self.api_football:
                 try:
                     fixture = self.api_football.get_fixture_by_teams_and_date(
@@ -227,13 +240,35 @@ class SGPChampion:
                 except Exception as e:
                     logger.warning(f"   ⚠️ Could not fetch player data: {e}")
             
+            # Fetch H2H data for BTTS filtering (NEW: Dec 3, 2025)
+            h2h_btts_rate = 0.5  # Default neutral rate
+            h2h_total_matches = 0
+            h2h_avg_home_goals = None
+            h2h_avg_away_goals = None
+            if self.advanced_features and home_team_id and away_team_id:
+                try:
+                    h2h_data = self.advanced_features.get_head_to_head(home_team_id, away_team_id, last_n=10)
+                    h2h_btts_rate = h2h_data.get('btts_rate', 0.5)
+                    h2h_total_matches = h2h_data.get('total_matches', 0)
+                    h2h_avg_home_goals = h2h_data.get('avg_team1_goals')
+                    h2h_avg_away_goals = h2h_data.get('avg_team2_goals')
+                    if h2h_total_matches >= 4:
+                        logger.info(f"   📊 H2H BTTS rate: {h2h_btts_rate:.0%} ({h2h_total_matches} matches)")
+                except Exception as e:
+                    logger.warning(f"   ⚠️ Could not fetch H2H data: {e}")
+            
             match_data = {
                 'match_id': match_id,
                 'home_team': home_team,
                 'away_team': away_team,
                 'league': league,
                 'match_date': match['commence_time'],
-                'kickoff_time': match['commence_time']
+                'kickoff_time': match['commence_time'],
+                # H2H BTTS data for filtering (NEW: Dec 3, 2025)
+                'h2h_btts_rate': h2h_btts_rate,
+                'h2h_total_matches': h2h_total_matches,
+                'h2h_avg_home_goals': h2h_avg_home_goals,
+                'h2h_avg_away_goals': h2h_avg_away_goals
             }
             
             sgps = self.sgp_predictor.generate_sgp_for_match(match_data, lambda_home, lambda_away, player_data)
