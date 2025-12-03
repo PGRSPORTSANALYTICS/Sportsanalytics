@@ -96,11 +96,16 @@ class ResultsScraper:
             stake = bet_info.get('stake', 0)
             profit_loss = bet_info.get('profit_loss', 0)
             
+            # Map all outcome types to correct display
             if outcome == 'WIN':
                 emoji = "✅"
                 status = "WON"
                 color_emoji = "🟢"
-            else:
+            elif outcome == 'VOID' or outcome == 'PUSH':
+                emoji = "↩️"
+                status = "VOID/PUSH"
+                color_emoji = "⚪"
+            else:  # LOSS or any other outcome
                 emoji = "❌"
                 status = "LOST"
                 color_emoji = "🔴"
@@ -797,22 +802,47 @@ class ResultsScraper:
                 for bet in date_bets:
                     bet_id, home_team, away_team, selection, match_date, odds, stake = bet
                     
-                    # Find matching result
+                    # Find matching result - check both normal and swapped home/away order
                     match_result = None
+                    teams_swapped = False
                     for result in results:
+                        # Normal order match
                         if (self.team_match(result['home_team'], home_team) and 
                             self.team_match(result['away_team'], away_team)):
                             match_result = result
+                            teams_swapped = False
+                            break
+                        # Swapped order match (API might have home/away reversed)
+                        if (self.team_match(result['home_team'], away_team) and 
+                            self.team_match(result['away_team'], home_team)):
+                            match_result = result
+                            teams_swapped = True
+                            logger.info(f"🔄 Home/away swapped for {home_team} vs {away_team} (API: {result['home_team']} vs {result['away_team']})")
                             break
                     
                     if match_result:
                         # Cache this result for future use
                         self._save_match_result(match_result, match_date.split('T')[0], match_result.get('source', 'unknown'))
                         
-                        outcome = self.determine_bet_outcome(selection, match_result)
+                        # If teams are swapped, we need to swap the result for correct outcome determination
+                        if teams_swapped:
+                            # Create a swapped result for bet outcome calculation
+                            swapped_result = {
+                                'home_team': match_result['away_team'],
+                                'away_team': match_result['home_team'],
+                                'home_score': match_result['away_score'],
+                                'away_score': match_result['home_score'],
+                                'total_goals': match_result.get('total_goals', match_result['home_score'] + match_result['away_score']),
+                                'result': 'away' if match_result.get('result') == 'home' else ('home' if match_result.get('result') == 'away' else 'draw')
+                            }
+                            outcome = self.determine_bet_outcome(selection, swapped_result)
+                            actual_score = f"{swapped_result.get('home_score', 0)}-{swapped_result.get('away_score', 0)}"
+                        else:
+                            outcome = self.determine_bet_outcome(selection, match_result)
+                            actual_score = f"{match_result.get('home_score', 0)}-{match_result.get('away_score', 0)}"
+                        
                         profit_loss = self.calculate_profit_loss(outcome, odds, stake)
                         payout = self.calculate_payout(outcome, odds, stake)
-                        actual_score = f"{match_result.get('home_score', 0)}-{match_result.get('away_score', 0)}"
                         
                         db_helper.execute('''
                             UPDATE football_opportunities 
@@ -906,6 +936,14 @@ class ResultsScraper:
     
     def team_match(self, scraped_team, bet_team):
         """Check if team names match (allowing for variations)"""
+        # First, try to standardize both names using TeamNameMapper
+        std_scraped = self.team_mapper.standardize(scraped_team)
+        std_bet = self.team_mapper.standardize(bet_team)
+        
+        # Exact match after standardization
+        if std_scraped.lower() == std_bet.lower():
+            return True
+        
         # Normalize both teams - remove special chars, extra spaces, common prefixes
         def normalize(team):
             team = team.lower()
@@ -922,8 +960,18 @@ class ResultsScraper:
         if scraped_norm == bet_norm:
             return True
         
+        # Also normalize standardized names
+        std_scraped_norm = normalize(std_scraped)
+        std_bet_norm = normalize(std_bet)
+        
+        if std_scraped_norm == std_bet_norm:
+            return True
+        
         # One contains the other (handles shortened names)
         if scraped_norm in bet_norm or bet_norm in scraped_norm:
+            return True
+        
+        if std_scraped_norm in std_bet_norm or std_bet_norm in std_scraped_norm:
             return True
         
         # Check if main city/club name matches (first significant word)
