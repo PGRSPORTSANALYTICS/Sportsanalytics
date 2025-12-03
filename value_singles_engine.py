@@ -20,8 +20,8 @@ from data_collector import get_collector
 # These filters ensure ONLY high-quality, low-variance bets
 # ============================================================
 
-# Minimum Expected Value (EV) required - 6% edge
-MIN_VALUE_SINGLE_EV = 0.06  # 6% edge (lowered from 8%)
+# Minimum Expected Value (EV) required - 5% edge
+MIN_VALUE_SINGLE_EV = 0.05  # 5% edge (lowered from 6%)
 
 # Odds range filter - only medium odds for lower variance
 MIN_VALUE_SINGLE_ODDS = 1.60
