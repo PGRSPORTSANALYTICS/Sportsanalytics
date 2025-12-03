@@ -799,11 +799,11 @@ class SGPPredictor:
         blocked_count = 0
         
         for sgp in sgp_combinations:
-            # Check for conflict with exact score prediction
-            if exact_score and self.is_sgp_conflicting(sgp, exact_score):
-                logger.debug(f"⚠️  BLOCKED: {sgp['description']} conflicts with {exact_score[0]}-{exact_score[1]} prediction")
-                blocked_count += 1
-                continue
+            # DISABLED: Allow SGP even if exact score exists (user request Dec 3, 2025)
+            # if exact_score and self.is_sgp_conflicting(sgp, exact_score):
+            #     logger.debug(f"⚠️  BLOCKED: {sgp['description']} conflicts with {exact_score[0]}-{exact_score[1]} prediction")
+            #     blocked_count += 1
+            #     continue
             
             # Calculate probabilities for each leg
             legs_with_probs = []
@@ -967,32 +967,21 @@ class SGPPredictor:
             # Calculate EV
             ev_pct = (bookmaker_odds / fair_odds - 1.0) * 100.0
             
-            # TIERED FILTER SYSTEM: Balance value bets vs entertainment parlays
-            # Tier 1 (Value Bets): Positive EV, lower odds (2.5x-5x)
-            # Tier 2 (Premium Parlays): Moderate negative EV, mid odds (5x-8x)  
-            # Tier 3 (Jackpot Plays): Loose negative EV, mid-high odds (8x-10x)
-            
+            # SIMPLIFIED FILTER: 5% EV minimum across all odds (Dec 3, 2025)
             MIN_ODDS = 2.5
             MAX_ODDS = 10.0  # Hard cap at 10x odds
             
-            # Tiered EV requirements based on odds
-            # Note: Calibration is conservative (predicts 8-12% but actual hit rate is 33.6%)
-            # Accept wider EV range for entertainment value on high-odds parlays
+            # Flat 5% EV minimum for all SGPs
+            min_ev_required = 5.0  # 5% EV threshold (lowered from tiered system)
+            
+            # Assign tier based on odds for display purposes only
             if bookmaker_odds >= 8.0:
-                # Jackpot Tier: Monster parlays for entertainment (accept over-conservative calibration)
-                min_ev_required = -50.0  # Widened from -30% due to conservative calibration
                 bet_tier = "Jackpot Play"
             elif bookmaker_odds >= 5.0:
-                # Premium Tier: Balanced risk/reward
-                min_ev_required = -35.0  # Widened from -20% due to conservative calibration
                 bet_tier = "Premium Parlay"
             elif bookmaker_odds >= 3.5:
-                # Value Tier: Slight edge or small negative
-                min_ev_required = -10.0
                 bet_tier = "Value Parlay"
             else:
-                # Conservative: Require positive EV for lower odds
-                min_ev_required = 0.0
                 bet_tier = "Value Bet"
             
             # Apply filters: EV threshold, min odds, and MAX 10x cap
