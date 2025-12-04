@@ -5,6 +5,8 @@ description = "Add your description here"
 requires-python = ">=3.11"
 dependencies = [
     "beautifulsoup4>=4.14.2",
+    "db>=0.1.1",
+    "fastapi>=0.123.8",
     "joblib>=1.5.2",
     "lxml>=5.4.0",
     "matplotlib>=3.10.7",
@@ -25,5 +27,6 @@ dependencies = [
     "telegram>=0.0.1",
     "tensorflow>=2.20.0",
     "trafilatura>=2.0.0",
+    "uvicorn>=0.38.0",
     "xgboost>=3.0.5",
 ]
