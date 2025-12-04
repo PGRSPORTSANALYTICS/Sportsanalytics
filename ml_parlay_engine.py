@@ -496,6 +496,35 @@ class MLParlayEngine:
         
         return result[0] if result else 0
     
+    def _get_existing_parlay_signatures(self) -> set:
+        """Get signatures of existing parlays to prevent duplicates"""
+        import json
+        
+        today = datetime.utcnow().date()
+        result = db_helper.execute(
+            """SELECT legs FROM ml_parlay_predictions 
+               WHERE match_date = %s""",
+            (str(today),),
+            fetch='all'
+        )
+        
+        signatures = set()
+        if result:
+            for row in result:
+                try:
+                    legs = json.loads(row[0]) if row[0] else []
+                    # Create signature from match_id + selection
+                    sig = tuple(sorted([f"{l.get('match_id')}:{l.get('selection')}" for l in legs]))
+                    signatures.add(sig)
+                except:
+                    pass
+        
+        return signatures
+    
+    def _parlay_signature(self, legs: List[Dict]) -> tuple:
+        """Create a unique signature for a parlay based on its legs"""
+        return tuple(sorted([f"{l.get('match_id')}:{l.get('selection')}" for l in legs]))
+    
     def _build_parlays(self, candidates: List[Dict]) -> List[Dict]:
         """
         Build parlays from candidate legs.
@@ -505,6 +534,7 @@ class MLParlayEngine:
         - No duplicate matches within a parlay
         - Prioritize highest EV combinations
         - Max 3 parlays per day
+        - No duplicate parlays (same legs as existing)
         """
         existing = self._get_existing_parlays_today()
         remaining_slots = MAX_ML_PARLAYS_PER_DAY - existing
@@ -516,6 +546,10 @@ class MLParlayEngine:
         if len(candidates) < ML_PARLAY_MIN_LEGS:
             logger.info(f"⏭️ Only {len(candidates)} candidates, need at least {ML_PARLAY_MIN_LEGS}")
             return []
+        
+        # Get existing parlay signatures to avoid duplicates
+        existing_signatures = self._get_existing_parlay_signatures()
+        logger.info(f"📋 Found {len(existing_signatures)} existing parlay signatures")
         
         parlays = []
         used_matches = set()
@@ -555,11 +589,21 @@ class MLParlayEngine:
                     break
             
             if len(parlay_legs) >= ML_PARLAY_MIN_LEGS:
+                # Check if this parlay is a duplicate of an existing one
+                sig = self._parlay_signature(parlay_legs)
+                if sig in existing_signatures:
+                    logger.info(f"⏭️ Skipping duplicate parlay (already exists)")
+                    # Still mark matches as used so we try different combinations
+                    used_matches.update(parlay_matches)
+                    continue
+                
                 parlays.append({
                     'legs': parlay_legs,
                     'matches_used': parlay_matches
                 })
                 
+                # Add to existing signatures to prevent duplicates within this run
+                existing_signatures.add(sig)
                 used_matches.update(parlay_matches)
             else:
                 break

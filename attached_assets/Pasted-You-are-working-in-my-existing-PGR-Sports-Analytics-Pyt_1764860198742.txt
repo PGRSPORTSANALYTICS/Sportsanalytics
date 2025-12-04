@@ -1,0 +1,268 @@
+You are working in my existing PGR Sports Analytics Python project.  
+This project already has:
+- A running backend on Railway (currently started from main.py or similar)
+- A database where matches, predictions and bets are stored (likely via SQLAlchemy or similar ORM)
+- Existing logic that:
+  - pulls data from external sports/odds APIs
+  - runs AI models / prediction engines
+  - stores predictions, EV, products (value singles, SGP, exact score, basketball, ml_parlay, etc.) in the database
+- An existing HTTP server (FastAPI / Flask / something similar) used to expose status or health endpoints for the engine.
+
+I want to add a **read-only HTTP API** that will later be used by my website (hosted separately) to display AI data to users.
+
+### IMPORTANT GENERAL REQUIREMENTS
+
+1. **Do NOT make any direct calls to external odds or sports APIs inside these endpoints.**
+   All endpoints must read from our **existing database only**.
+   External APIs are called by our engine logic on a schedule, not per web request.
+
+2. Endpoints must be **non-blocking** and must not interfere with the main prediction/cron loop.
+   If we use FastAPI with async, use async endpoints.
+   If we use Flask or something else, integrate cleanly with that framework.
+
+3. Reuse existing models / ORM classes if they exist:
+   - tables like `matches`, `predictions`, `bets`, `leagues`, etc.
+   - fields that store:
+     - match id
+     - home/away team names
+     - kickoff time
+     - league name
+     - model probabilities (home/draw/away, over/under, etc.) if stored
+     - EV values per market
+     - product type (VALUE_SINGLE, SGP, EXACT_SCORE, BASKETBALL, ML_PARLAY, etc.)
+
+4. Put all new API-related code together in a sensible module (for example `api.py` or inside the existing main web app file) and register the routes in the existing app instance.
+
+---
+
+## STEP 1 – Detect the web framework and app entrypoint
+
+1. Inspect the project to determine:
+   - Are we using FastAPI, Flask, or something else?
+   - Where is the current web app created? (e.g., `app = FastAPI()` or `app = Flask(__name__)`)
+
+2. Briefly summarize what you found **in comments in the code**, not in the chat.  
+   Example:
+   ```python
+   # Using FastAPI, app is created in main.py
+STEP 2 – Create a basic health endpoint
+Add a simple health endpoint:
+
+GET /api/health
+
+It should return JSON like:
+
+json
+Kopiera kod
+{
+  "status": "ok",
+  "engine": "pgr-sports-analytics",
+  "version": "<some_version_if_available>",
+  "timestamp": "<current_utc_iso_timestamp>"
+}
+Use Python’s datetime for the timestamp.
+
+STEP 3 – Implement /api/matches/today
+Add a new endpoint:
+
+GET /api/matches/today
+
+This endpoint should:
+
+Determine “today” in the system’s timezone or UTC (be consistent with how matches are stored).
+
+Query the database for all matches where:
+
+kickoff is today (or within the next 24h from now)
+
+OR use the same date logic that the engine uses to decide “today’s matches”.
+
+For each match, try to include:
+
+match_id
+
+league (name or code)
+
+home_team
+
+away_team
+
+kickoff (ISO 8601 string)
+
+products_available: list of product types that have predictions for this match, e.g.:
+
+json
+Kopiera kod
+["VALUE_SINGLE", "SGP", "EXACT_SCORE", "BASKETBALL", "ML_PARLAY"]
+If model probabilities are stored for 1X2 (home/draw/away), include them:
+
+json
+Kopiera kod
+"ai_probabilities": {
+  "home": 0.42,
+  "draw": 0.29,
+  "away": 0.29
+}
+If EV per market is available (e.g. for home ML, away ML, over/under 2.5, BTTS, etc.), include a simple EV structure:
+
+json
+Kopiera kod
+"ev": {
+  "home_ml": 0.04,
+  "draw_ml": -0.02,
+  "away_ml": 0.01,
+  "over_2_5": 0.07,
+  "under_2_5": -0.03
+}
+Only include keys we actually have data for. Skip missing ones.
+
+If there is a model confidence score stored, include it as:
+
+json
+Kopiera kod
+"confidence": "low" | "medium" | "high"
+Or if we only have numeric confidence, return:
+
+json
+Kopiera kod
+"confidence_score": 0.78
+Return a JSON payload like:
+
+json
+Kopiera kod
+{
+  "matches": [
+    {
+      "match_id": 12345,
+      "league": "Premier League",
+      "home_team": "Brentford",
+      "away_team": "Arsenal",
+      "kickoff": "2025-12-04T21:00:00Z",
+      "products_available": ["VALUE_SINGLE", "SGP", "EXACT_SCORE"],
+      "ai_probabilities": {
+        "home": 0.18,
+        "draw": 0.22,
+        "away": 0.60
+      },
+      "ev": {
+        "home_ml": 0.04,
+        "away_ml": 0.05,
+        "over_2_5": 0.07
+      },
+      "confidence_score": 0.76
+    }
+  ]
+}
+Make sure:
+
+The endpoint handles the case where there are no matches today. In that case, return {"matches": []}.
+
+The endpoint does not crash if some matches do not have probabilities or EV yet — just omit those fields for that match.
+
+STEP 4 – Implement /api/match/{match_id}
+Add another endpoint:
+
+GET /api/match/{match_id}
+
+This should:
+
+Look up a single match by match_id (the same ID used internally / in the DB).
+
+Return:
+
+Basic info: league, teams, kickoff
+
+All AI-related data we have for that match:
+
+1X2 probabilities
+
+EV per market (ML, O/U, BTTS, etc.)
+
+Any correct score distribution if available (top 5 scores with probabilities)
+
+Any product-level flags (e.g., value single chosen, SGP built, etc.)
+
+Example response shape:
+
+json
+Kopiera kod
+{
+  "match_id": 12345,
+  "league": "Premier League",
+  "home_team": "Brentford",
+  "away_team": "Arsenal",
+  "kickoff": "2025-12-04T21:00:00Z",
+  "ai_probabilities": {
+    "home": 0.18,
+    "draw": 0.22,
+    "away": 0.60
+  },
+  "ev": {
+    "home_ml": 0.04,
+    "away_ml": 0.05,
+    "over_2_5": 0.07,
+    "under_2_5": -0.03
+  },
+  "correct_score_distribution": [
+    {"score": "1-1", "probability": 0.16},
+    {"score": "1-2", "probability": 0.14},
+    {"score": "0-2", "probability": 0.12},
+    {"score": "2-1", "probability": 0.10},
+    {"score": "2-2", "probability": 0.08}
+  ],
+  "products": {
+    "VALUE_SINGLE": {
+      "selected": true,
+      "picks": [
+        {"market": "AWAY_ML", "odds": 1.80, "ev": 0.07}
+      ]
+    },
+    "SGP": {
+      "selected": true,
+      "parlays": [
+        {
+          "legs": ["AWAY_ML", "OVER_1_5"],
+          "odds": 3.20,
+          "ev": 0.09
+        }
+      ]
+    },
+    "EXACT_SCORE": {
+      "selected": true,
+      "top_pick": {"score": "1-2", "odds": 9.50, "ev": 0.11}
+    }
+  }
+}
+If the match does not exist, return a proper 404 with a JSON error message:
+
+json
+Kopiera kod
+{"error": "match_not_found"}
+STEP 5 – Code quality & structure
+Keep endpoints and DB queries clean and separated.
+
+If there is a services or repository layer already in the project, add helper functions there, e.g.:
+
+get_today_matches_with_ai_data(db_session)
+
+get_match_ai_details(db_session, match_id)
+
+Use existing DB session / dependency injection patterns instead of creating new engine connections manually.
+
+Add basic error handling and avoid crashing if some data is missing for a match.
+
+STEP 6 – Show me where to call it
+At the end, ensure that:
+
+The API is registered on the same app that the Railway deployment uses.
+
+You add a short code comment or docstring indicating:
+
+how to reach the endpoints (e.g. /api/matches/today, /api/match/{match_id})
+
+Do not change anything related to deployment configuration; just ensure that when I push this to Railway, the new endpoints will be available on the existing base URL.
+
+When you are done, summarize the new endpoints in comments in the code.
+
+yaml
+Kopiera kod
