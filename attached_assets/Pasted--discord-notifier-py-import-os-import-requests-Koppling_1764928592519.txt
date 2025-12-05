@@ -1,0 +1,69 @@
+# discord_notifier.py
+import os
+import requests
+
+# Koppling: produkt-typ i databasen → rätt webhook-env
+PRODUCT_WEBHOOKS = {
+    "EXACT_SCORE": os.getenv("WEBHOOK_Final_score"),
+    "SGP": os.getenv("WEBHOOK_SGP"),
+    "ML_PARLAY": os.getenv("WEBHOOK_ML_PARLAYS"),
+    "VALUE_SINGLE": os.getenv("WEBHOOK_Value_singles"),
+    "BASKETBALL_SINGLE": os.getenv("WEB_HOOK_College_basket"),
+    "BASKETBALL": os.getenv("WEB_HOOK_College_basket"),  # om du använder denna
+}
+
+def format_bet_message(bet) -> str:
+    """
+    Anpassa efter dina fält på Bet-modellen.
+    Antag att du har ungefär:
+      bet.league, bet.home_team, bet.away_team
+      bet.kickoff, bet.product_type
+      bet.market, bet.selection
+      bet.odds, bet.ev, bet.stake_units / bet.stake
+    """
+    lines = [
+        f"**{bet.league}** – {bet.home_team} vs {bet.away_team}",
+        f"Kickoff: `{bet.kickoff}`",
+        "",
+        f"**Product:** {bet.product_type}",
+        f"**Bet:** {bet.market} – {bet.selection}",
+        f"**Odds:** {bet.odds:.2f}",
+    ]
+
+    # EV om det finns
+    ev = getattr(bet, "ev", None)
+    if ev is not None:
+        lines.append(f"**EV:** {ev * 100:.1f}%")
+
+    # Units / stake
+    stake_units = getattr(bet, "stake_units", None)
+    if stake_units is not None:
+        lines.append(f"**Stake:** {stake_units}u")
+    else:
+        stake = getattr(bet, "stake", None)
+        if stake is not None:
+            lines.append(f"**Stake:** {stake:.2f}")
+
+    lines.append("")
+    lines.append("_PGR Sports Analytics – AI-powered betting_")
+
+    return "\n".join(lines)
+
+
+def send_bet_to_discord(bet):
+    """
+    Skickar ett bet till rätt Discord-kanal baserat på bet.product_type.
+    Avbryter tyst om ingen webhook är satt (så inget kraschar).
+    """
+    webhook_url = PRODUCT_WEBHOOKS.get(bet.product_type)
+    if not webhook_url:
+        # Ingen kanal mappad för denna produkt
+        return
+
+    payload = {"content": format_bet_message(bet)}
+
+    try:
+        requests.post(webhook_url, json=payload, timeout=5)
+    except Exception as e:
+        # Logga men krascha inte motorn
+        print(f"[DISCORD] Failed to post bet {getattr(bet, 'id', '?')}: {e}")
