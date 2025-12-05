@@ -31,6 +31,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from db_helper import db_helper
+from auth_discord import router as discord_auth_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -52,9 +53,12 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # In production, restrict to your domain
     allow_credentials=True,
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+
+# Include Discord OAuth router
+app.include_router(discord_auth_router)
 
 # =============================================================================
 # Response Models
