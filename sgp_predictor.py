@@ -17,6 +17,7 @@ from sgp_self_learner import SGPSelfLearner
 from sgp_odds_pricing import OddsPricingService
 from db_helper import db_helper
 from bankroll_manager import get_bankroll_manager
+from discord_notifier import send_bet_to_discord
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -1190,6 +1191,24 @@ class SGPPredictor:
         
         status = "✅ BET PLACED" if bet_placed else "📊 PREDICTION ONLY (no bet)"
         logger.info(f"{status}: {match_data['home_team']} vs {match_data['away_team']} | {sgp['description']} | EV: {sgp['ev_percentage']:.1f}%")
+        
+        if bet_placed:
+            try:
+                send_bet_to_discord({
+                    'league': match_data.get('league', ''),
+                    'home_team': match_data['home_team'],
+                    'away_team': match_data['away_team'],
+                    'match_date': match_data.get('match_date', ''),
+                    'product': 'SGP',
+                    'selection': sgp['description'],
+                    'odds': sgp['bookmaker_odds'],
+                    'ev': sgp['ev_percentage'],
+                    'stake': dynamic_stake
+                }, product_type='SGP')
+                logger.info("📱 Discord notification sent")
+            except Exception as e:
+                logger.warning(f"Discord notification failed: {e}")
+        
         return bet_placed
 
 

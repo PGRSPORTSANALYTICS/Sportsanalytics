@@ -22,6 +22,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional, Tuple
 from db_helper import db_helper
 from bankroll_manager import get_bankroll_manager
+from discord_notifier import send_bet_to_discord
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -753,6 +754,21 @@ class MLParlayEngine:
             parlay_id = self._save_parlay(parlay, metrics)
             if parlay_id:
                 created_ids.append(parlay_id)
+                try:
+                    leg_teams = [f"{leg['home_team']} vs {leg['away_team']}" for leg in parlay['legs'][:2]]
+                    send_bet_to_discord({
+                        'league': 'ML Parlay',
+                        'home_team': leg_teams[0] if leg_teams else '',
+                        'away_team': f"+{len(parlay['legs'])-1} more" if len(parlay['legs']) > 1 else '',
+                        'match_date': parlay['legs'][0].get('match_date', '') if parlay['legs'] else '',
+                        'product': 'ML_PARLAY',
+                        'selection': metrics.get('description', f"{len(parlay['legs'])}-leg parlay"),
+                        'odds': metrics.get('total_odds', 1.0),
+                        'ev': metrics.get('combined_ev', 0) * 100,
+                        'stake': metrics.get('stake', 0)
+                    }, product_type='ML_PARLAY')
+                except Exception as e:
+                    logger.warning(f"Discord notification failed: {e}")
         
         logger.info("="*60)
         logger.info(f"✅ ML PARLAY ENGINE - Created {len(created_ids)} parlays")

@@ -16,6 +16,7 @@ import math
 import requests
 from itertools import combinations
 from bankroll_manager import get_bankroll_manager
+from discord_notifier import send_bet_to_discord
 
 
 # ----------------------------
@@ -654,6 +655,21 @@ class CollegeBasketValueEngine:
                     if bet_placed:
                         bets_placed += 1
                         print(f"✅ BET PLACED: {p.match} -> {p.selection} @ {p.odds:.2f}")
+                        try:
+                            product_type = "BASKET_PARLAY" if is_parlay else "BASKET_SINGLE"
+                            send_bet_to_discord({
+                                'league': 'NCAAB',
+                                'home_team': p.match.split(' vs ')[0] if ' vs ' in p.match else p.match,
+                                'away_team': p.match.split(' vs ')[1] if ' vs ' in p.match else '',
+                                'match_date': str(commence_time) if commence_time else '',
+                                'product': product_type,
+                                'selection': p.selection,
+                                'odds': p.odds,
+                                'ev': p.ev * 100,
+                                'stake': 160
+                            }, product_type=product_type)
+                        except Exception as e:
+                            print(f"Discord notification failed: {e}")
                     else:
                         print(f"📊 PREDICTION ONLY: {p.match} -> {p.selection} @ {p.odds:.2f}")
                 except Exception as e:

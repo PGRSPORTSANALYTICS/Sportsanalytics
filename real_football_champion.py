@@ -27,6 +27,7 @@ from db_helper import db_helper
 from value_singles_engine import ValueSinglesEngine
 from bankroll_manager import get_bankroll_manager
 from data_collector import get_collector
+from discord_notifier import send_bet_to_discord
 
 # League configuration
 from league_config import get_odds_api_keys, get_league_by_odds_key, LEAGUE_REGISTRY
@@ -1709,6 +1710,21 @@ class RealFootballChampion:
                     
                     saved_count += 1
                     print(f"✅ SAVED BEST: {prediction['home_team']} vs {prediction['away_team']} → {score_pred['score']} @ {score_pred['odds']:.1f} (confidence: {confidence_score})")
+                    
+                    try:
+                        send_bet_to_discord({
+                            'league': prediction.get('league', 'EXACT SCORE'),
+                            'home_team': prediction['home_team'],
+                            'away_team': prediction['away_team'],
+                            'match_date': today_date,
+                            'product': 'EXACT_SCORE',
+                            'selection': f"Exact Score {score_pred['score']}",
+                            'odds': score_pred['odds'],
+                            'ev': (score_pred['probability'] * score_pred['odds'] - 1) * 100,
+                            'stake': 15.00
+                        }, product_type='EXACT_SCORE')
+                    except Exception as e:
+                        print(f"Discord notification failed: {e}")
                     
                 except Exception as e:
                     print(f"❌ ERROR saving exact score prediction: {e}")
