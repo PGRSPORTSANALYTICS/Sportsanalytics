@@ -1194,13 +1194,18 @@ class SGPPredictor:
         
         if bet_placed:
             try:
+                legs_text = " | ".join([
+                    f"{leg['market_type']} {leg['outcome']}" + 
+                    (f" ({leg['line']})" if leg.get('line') else "")
+                    for leg in sgp['legs']
+                ])
                 send_bet_to_discord({
-                    'league': match_data.get('league', ''),
+                    'league': match_data.get('league', 'SGP'),
                     'home_team': match_data['home_team'],
                     'away_team': match_data['away_team'],
                     'match_date': match_data.get('match_date', ''),
                     'product': 'SGP',
-                    'selection': sgp['description'],
+                    'selection': f"{sgp['description']}\nLegs: {legs_text}",
                     'odds': sgp['bookmaker_odds'],
                     'ev': sgp['ev_percentage'],
                     'stake': dynamic_stake
