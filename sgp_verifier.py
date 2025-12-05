@@ -15,6 +15,7 @@ from telegram_sender import TelegramBroadcaster
 from sgp_self_learner import SGPSelfLearner
 from team_name_mapper import TeamNameMapper
 from match_stats_service import get_match_stats_service
+from discord_notifier import send_result_to_discord
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -234,10 +235,12 @@ class SGPVerifier:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        # Get stake, odds, legs, and probability
-        cursor.execute('SELECT stake, bookmaker_odds, legs, parlay_probability FROM sgp_predictions WHERE id = ?', (sgp_id,))
+        # Get stake, odds, legs, probability, and team info for notifications
+        cursor.execute('''SELECT stake, bookmaker_odds, legs, parlay_probability, 
+                                home_team, away_team, league, parlay_description, result
+                         FROM sgp_predictions WHERE id = ?''', (sgp_id,))
         row = cursor.fetchone()
-        stake, odds, legs_text, parlay_probability = row
+        stake, odds, legs_text, parlay_probability, home_team, away_team, league, description, actual_result = row
         
         # Calculate profit/loss
         if outcome == 'win':
@@ -265,6 +268,24 @@ class SGPVerifier:
         
         conn.commit()
         conn.close()
+        
+        # Send Discord notification
+        try:
+            discord_info = {
+                'outcome': 'WIN' if outcome == 'win' else 'LOSS',
+                'home_team': home_team,
+                'away_team': away_team,
+                'selection': description or legs_text,
+                'actual_score': actual_score or actual_result or '?-?',
+                'odds': odds,
+                'profit_loss': profit_loss,
+                'product_type': 'SGP',
+                'league': league or ''
+            }
+            send_result_to_discord(discord_info, 'SGP')
+            logger.info(f"📢 Sent SGP result to Discord: {home_team} vs {away_team}")
+        except Exception as e:
+            logger.warning(f"⚠️ Discord notification failed: {e}")
         
         # Update self-learning system
         try:

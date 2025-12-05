@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 import time
 from db_helper import DatabaseHelper
 from espn_basketball_scraper import ESPNBasketballScraper
+from discord_notifier import send_result_to_discord
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -185,6 +186,23 @@ class CollegeBasketballResultVerifier:
             status_emoji = "✅" if outcome == "won" else "❌"
             logger.info(f"{status_emoji} {pick['match']}: {pick['selection']} - {outcome.upper()} (P&L: ${profit_loss:.2f})")
             
+            # Send Discord notification
+            try:
+                discord_info = {
+                    'outcome': 'WIN' if outcome == 'won' else 'LOSS',
+                    'home_team': pick['match'].split(' vs ')[0] if ' vs ' in pick['match'] else pick['match'],
+                    'away_team': pick['match'].split(' vs ')[1] if ' vs ' in pick['match'] else '',
+                    'selection': pick['selection'],
+                    'actual_score': f"{game_result.get('home_score', '?')}-{game_result.get('away_score', '?')}",
+                    'odds': pick['odds'],
+                    'profit_loss': profit_loss * 10.8,  # Convert to SEK
+                    'product_type': 'BASKETBALL',
+                    'league': 'NCAAB'
+                }
+                send_result_to_discord(discord_info, 'BASKETBALL')
+            except Exception as e:
+                logger.warning(f"⚠️ Discord notification failed: {e}")
+            
             self.verified_count += 1
             return True
             
@@ -244,6 +262,23 @@ class CollegeBasketballResultVerifier:
             
             status_emoji = "✅" if outcome == "won" else "❌"
             logger.info(f"{status_emoji} PARLAY {pick['match']}: {outcome.upper()} (P&L: ${profit_loss:.2f})")
+            
+            # Send Discord notification
+            try:
+                discord_info = {
+                    'outcome': 'WIN' if outcome == 'won' else 'LOSS',
+                    'home_team': pick['match'].replace('PARLAY: ', ''),
+                    'away_team': '',
+                    'selection': pick['selection'],
+                    'actual_score': 'Parlay',
+                    'odds': pick['odds'],
+                    'profit_loss': profit_loss * 10.8,  # Convert to SEK
+                    'product_type': 'BASKET_PARLAY',
+                    'league': 'NCAAB'
+                }
+                send_result_to_discord(discord_info, 'BASKET_PARLAY')
+            except Exception as e:
+                logger.warning(f"⚠️ Discord notification failed: {e}")
             
             self.verified_count += 1
             return True

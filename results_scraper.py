@@ -11,6 +11,7 @@ from typing import Optional, List
 from db_helper import db_helper
 from team_name_mapper import TeamNameMapper
 from telegram_sender import TelegramBroadcaster
+from discord_notifier import send_result_to_discord
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -82,20 +83,40 @@ class ResultsScraper:
             self.telegram_channel = None
     
     def _send_result_notification(self, bet_info: dict):
-        """Send Telegram notification when a bet is settled"""
+        """Send Telegram + Discord notification when a bet is settled"""
+        outcome = bet_info.get('outcome', '').upper()
+        home_team = bet_info.get('home_team', 'Unknown')
+        away_team = bet_info.get('away_team', 'Unknown')
+        selection = bet_info.get('selection', '')
+        actual_score = bet_info.get('actual_score', '?-?')
+        odds = bet_info.get('odds', 0)
+        stake = bet_info.get('stake', 0)
+        profit_loss = bet_info.get('profit_loss', 0)
+        product_type = bet_info.get('product_type', 'EXACT_SCORE')
+        league = bet_info.get('league', '')
+        
+        # Send to Discord (all products)
+        try:
+            discord_info = {
+                'outcome': outcome,
+                'home_team': home_team,
+                'away_team': away_team,
+                'selection': selection,
+                'actual_score': actual_score,
+                'odds': odds,
+                'profit_loss': profit_loss,
+                'product_type': product_type,
+                'league': league
+            }
+            send_result_to_discord(discord_info, product_type)
+        except Exception as e:
+            logger.error(f"❌ Failed to send Discord result: {e}")
+        
+        # Send to Telegram
         if not self.telegram or not self.telegram_channel:
             return
         
         try:
-            outcome = bet_info.get('outcome', '').upper()
-            home_team = bet_info.get('home_team', 'Unknown')
-            away_team = bet_info.get('away_team', 'Unknown')
-            selection = bet_info.get('selection', '')
-            actual_score = bet_info.get('actual_score', '?-?')
-            odds = bet_info.get('odds', 0)
-            stake = bet_info.get('stake', 0)
-            profit_loss = bet_info.get('profit_loss', 0)
-            
             # Map all outcome types to correct display
             if outcome == 'WIN':
                 emoji = "✅"
@@ -122,7 +143,7 @@ class ResultsScraper:
             self.telegram.send_message(self.telegram_channel, message)
             logger.info(f"📱 Sent result notification: {home_team} vs {away_team} = {status}")
         except Exception as e:
-            logger.error(f"❌ Failed to send result notification: {e}")
+            logger.error(f"❌ Failed to send Telegram result: {e}")
     
     def _send_batch_results(self):
         """Send batch summary of all settled bets"""

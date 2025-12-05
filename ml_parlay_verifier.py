@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 from db_helper import db_helper
 from bankroll_manager import get_bankroll_manager
+from discord_notifier import send_result_to_discord
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -294,6 +295,24 @@ class MLParlayVerifier:
                 
                 emoji = "✅" if outcome == 'won' else "❌" if outcome == 'lost' else "↩️"
                 logger.info(f"{emoji} ML Parlay {parlay_id}: {outcome.upper()} | P/L: {profit_loss:+.2f} SEK")
+                
+                # Send Discord notification
+                try:
+                    parlay_desc = " + ".join([f"{l.get('home_team', '')} vs {l.get('away_team', '')}" for l in legs[:3]])
+                    discord_info = {
+                        'outcome': 'WIN' if outcome == 'won' else ('VOID' if outcome == 'push' else 'LOSS'),
+                        'home_team': parlay_desc,
+                        'away_team': '',
+                        'selection': ' | '.join([l.get('selection', '') for l in legs]),
+                        'actual_score': 'Parlay',
+                        'odds': total_odds,
+                        'profit_loss': profit_loss,
+                        'product_type': 'ML_PARLAY',
+                        'league': legs[0].get('league_key', '') if legs else ''
+                    }
+                    send_result_to_discord(discord_info, 'ML_PARLAY')
+                except Exception as e:
+                    logger.warning(f"⚠️ Discord notification failed: {e}")
                 
                 stats['verified'] += 1
             
