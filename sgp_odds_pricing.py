@@ -23,13 +23,13 @@ class OddsPricingService:
     - Graceful fallback for unsupported markets
     """
     
-    def __init__(self, parlay_margin: float = 0.07):
+    def __init__(self, parlay_margin: float = 0.40):
         """
         Initialize odds pricing service
         
         Args:
-            parlay_margin: Bookmaker's parlay margin (default 7%)
-                          This mimics the vig bookmakers apply to parlays
+            parlay_margin: Bookmaker's parlay margin (default 40%)
+                          Realistic margin - Bet365/similar apply 40-50% on SGPs
         """
         self.parlay_margin = parlay_margin
         self.odds_cache = {}

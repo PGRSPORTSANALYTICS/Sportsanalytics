@@ -81,7 +81,7 @@ class SGPPredictor:
     def __init__(self):
         self._init_database()
         self.self_learner = SGPSelfLearner()
-        self.odds_pricing = OddsPricingService(parlay_margin=0.07)
+        self.odds_pricing = OddsPricingService(parlay_margin=0.40)  # Realistic SGP margin (Bet365 uses ~45%)
         logger.info("✅ SGP Predictor initialized with self-learning and live odds")
     
     def _init_database(self):
