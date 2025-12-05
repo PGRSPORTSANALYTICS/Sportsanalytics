@@ -179,12 +179,12 @@ class SGPVerifier:
             logger.error(f"❌ Error checking leg result: {e}")
             return None  # Return None instead of False to avoid false losses
     
-    def verify_sgp(self, sgp: Dict[str, Any]) -> Optional[str]:
+    def verify_sgp(self, sgp: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         Verify a single SGP prediction using enriched match statistics
         
         Returns:
-            'win', 'loss', or None if match not finished or data incomplete
+            Dict with 'outcome' and 'score', or None if match not finished or data incomplete
         """
         # Get enriched match statistics from centralized service
         match_stats = self.stats_service.get_match_stats(
@@ -198,7 +198,8 @@ class SGPVerifier:
             # Match not finished yet or data unavailable
             return None
         
-        logger.info(f"✅ Verifying: {sgp['home_team']} vs {sgp['away_team']} | {match_stats['score']}")
+        actual_score = match_stats.get('score', match_stats.get('actual_score', '?-?'))
+        logger.info(f"✅ Verifying: {sgp['home_team']} vs {sgp['away_team']} | {actual_score}")
         
         # Parse legs
         legs = self.parse_legs(sgp['legs'])
@@ -228,7 +229,10 @@ class SGPVerifier:
         if has_unsupported_market:
             return None
         
-        return 'win' if all_legs_won else 'loss'
+        return {
+            'outcome': 'win' if all_legs_won else 'loss',
+            'score': actual_score
+        }
     
     def mark_sgp_result(self, sgp_id: int, outcome: str, actual_score: Optional[str] = None):
         """Mark SGP as won or lost and update self-learning"""
@@ -337,8 +341,9 @@ class SGPVerifier:
             result_data = self.verify_sgp(sgp)
             
             if result_data:
-                outcome = result_data
-                self.mark_sgp_result(sgp['id'], outcome)
+                outcome = result_data['outcome']
+                actual_score = result_data['score']
+                self.mark_sgp_result(sgp['id'], outcome, actual_score)
                 verified_count += 1
                 
                 if outcome == 'win':
