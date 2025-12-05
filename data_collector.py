@@ -512,50 +512,112 @@ class DataCollector:
 
 
     def get_track_record_summary(self) -> Dict[str, Any]:
-        """Get overall track record summary for learning system"""
+        """Get overall track record summary pulling from ALL bet sources"""
         if not self._engine:
             return {"error": "No database engine"}
         
         try:
             with self._engine.connect() as conn:
+                total_settled = 0
+                total_correct = 0
+                bets_settled = 0
+                bets_correct = 0
+                total_records = 0
+                
+                result = conn.execute(text("SELECT COUNT(*) FROM training_data"))
+                total_records = result.fetchone()[0] or 0
+                
                 result = conn.execute(text("""
                     SELECT 
-                        COUNT(*) as total_records,
-                        SUM(CASE WHEN actual_score IS NOT NULL THEN 1 ELSE 0 END) as settled,
-                        SUM(CASE WHEN prediction_correct = true THEN 1 ELSE 0 END) as correct,
-                        SUM(CASE WHEN bet_placed = true THEN 1 ELSE 0 END) as bets_placed,
-                        SUM(CASE WHEN bet_placed = true AND actual_score IS NOT NULL THEN 1 ELSE 0 END) as bets_settled,
-                        SUM(CASE WHEN bet_placed = true AND prediction_correct = true THEN 1 ELSE 0 END) as bets_correct,
-                        SUM(CASE WHEN bet_placed = false THEN 1 ELSE 0 END) as predictions_only,
-                        SUM(CASE WHEN bet_placed = false AND actual_score IS NOT NULL THEN 1 ELSE 0 END) as predictions_settled,
-                        SUM(CASE WHEN bet_placed = false AND prediction_correct = true THEN 1 ELSE 0 END) as predictions_correct
-                    FROM training_data
+                        COUNT(*) as settled,
+                        SUM(CASE WHEN outcome = 'win' THEN 1 ELSE 0 END) as wins
+                    FROM sgp_predictions WHERE status = 'settled'
                 """))
                 row = result.fetchone()
-                
                 if row:
-                    settled = row[1] or 0
-                    correct = row[2] or 0
-                    bets_settled = row[4] or 0
-                    bets_correct = row[5] or 0
-                    preds_settled = row[7] or 0
-                    preds_correct = row[8] or 0
-                    
-                    return {
-                        'total_records': row[0] or 0,
-                        'settled': settled,
-                        'correct': correct,
-                        'accuracy_pct': (correct / settled * 100) if settled > 0 else 0,
-                        'bets_placed': row[3] or 0,
-                        'bets_settled': bets_settled,
-                        'bets_correct': bets_correct,
-                        'bets_accuracy_pct': (bets_correct / bets_settled * 100) if bets_settled > 0 else 0,
-                        'predictions_only': row[6] or 0,
-                        'predictions_settled': preds_settled,
-                        'predictions_correct': preds_correct,
-                        'predictions_accuracy_pct': (preds_correct / preds_settled * 100) if preds_settled > 0 else 0
-                    }
-                return {}
+                    sgp_settled = row[0] or 0
+                    sgp_wins = row[1] or 0
+                    total_settled += sgp_settled
+                    total_correct += sgp_wins
+                    bets_settled += sgp_settled
+                    bets_correct += sgp_wins
+                
+                result = conn.execute(text("""
+                    SELECT 
+                        COUNT(*) as settled,
+                        SUM(CASE WHEN outcome = 'WIN' THEN 1 ELSE 0 END) as wins
+                    FROM football_opportunities 
+                    WHERE market = 'exact_score' AND outcome IN ('WIN', 'LOSS')
+                """))
+                row = result.fetchone()
+                if row:
+                    es_settled = row[0] or 0
+                    es_wins = row[1] or 0
+                    total_settled += es_settled
+                    total_correct += es_wins
+                    bets_settled += es_settled
+                    bets_correct += es_wins
+                
+                result = conn.execute(text("""
+                    SELECT 
+                        COUNT(*) as settled,
+                        SUM(CASE WHEN outcome = 'WIN' THEN 1 ELSE 0 END) as wins
+                    FROM football_opportunities 
+                    WHERE market != 'exact_score' AND outcome IN ('WIN', 'LOSS')
+                """))
+                row = result.fetchone()
+                if row:
+                    vs_settled = row[0] or 0
+                    vs_wins = row[1] or 0
+                    total_settled += vs_settled
+                    total_correct += vs_wins
+                    bets_settled += vs_settled
+                    bets_correct += vs_wins
+                
+                result = conn.execute(text("""
+                    SELECT 
+                        COUNT(*) as settled,
+                        SUM(CASE WHEN status = 'won' THEN 1 ELSE 0 END) as wins
+                    FROM basketball_predictions WHERE status IN ('won', 'lost')
+                """))
+                row = result.fetchone()
+                if row:
+                    bb_settled = row[0] or 0
+                    bb_wins = row[1] or 0
+                    total_settled += bb_settled
+                    total_correct += bb_wins
+                    bets_settled += bb_settled
+                    bets_correct += bb_wins
+                
+                preds_settled = 0
+                preds_correct = 0
+                result = conn.execute(text("""
+                    SELECT 
+                        COUNT(*) as settled,
+                        SUM(CASE WHEN prediction_correct = true THEN 1 ELSE 0 END) as correct
+                    FROM training_data 
+                    WHERE bet_placed = false AND actual_score IS NOT NULL
+                """))
+                row = result.fetchone()
+                if row:
+                    preds_settled = row[0] or 0
+                    preds_correct = row[1] or 0
+                
+                return {
+                    'total_records': total_records,
+                    'settled': total_settled,
+                    'correct': total_correct,
+                    'accuracy_pct': (total_correct / total_settled * 100) if total_settled > 0 else 0,
+                    'bets_placed': bets_settled,
+                    'bets_settled': bets_settled,
+                    'bets_correct': bets_correct,
+                    'bets_accuracy_pct': (bets_correct / bets_settled * 100) if bets_settled > 0 else 0,
+                    'predictions_only': total_records - bets_settled,
+                    'predictions_settled': preds_settled,
+                    'predictions_correct': preds_correct,
+                    'predictions_accuracy_pct': (preds_correct / preds_settled * 100) if preds_settled > 0 else 0
+                }
+                
         except SQLAlchemyError as e:
             logger.error(f"❌ Error getting track record summary: {e}")
             return {"error": str(e)}
