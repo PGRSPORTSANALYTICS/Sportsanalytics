@@ -1157,20 +1157,25 @@ class SGPPredictor:
         import json
         pricing_metadata_str = json.dumps(sgp.get('pricing_metadata', {}))
         
-        db_helper.execute('''
+        match_date_str = match_data.get('match_date', '')
+        match_date_only = match_date_str[:10] if match_date_str else None
+        
+        result = db_helper.execute('''
             INSERT INTO sgp_predictions (
-                timestamp, match_id, home_team, away_team, league, match_date, kickoff_time,
+                timestamp, match_id, home_team, away_team, league, match_date, match_date_only, kickoff_time,
                 legs, parlay_description, parlay_probability, fair_odds, bookmaker_odds, ev_percentage,
                 stake, kelly_stake, model_version, simulations, correlation_method,
                 pricing_mode, pricing_metadata, mode, bet_placed
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (home_team, away_team, parlay_description, match_date_only) DO NOTHING
         ''', (
             int(datetime.now().timestamp()),
             match_data.get('match_id', ''),
             match_data['home_team'],
             match_data['away_team'],
             match_data.get('league', ''),
-            match_data.get('match_date', ''),
+            match_date_str,
+            match_date_only,
             match_data.get('kickoff_time', ''),
             legs_text,
             sgp['description'],
@@ -1178,14 +1183,14 @@ class SGPPredictor:
             sgp['fair_odds'],
             sgp['bookmaker_odds'],
             sgp['ev_percentage'],
-            dynamic_stake if bet_placed else 0,  # Dynamic stake (1.2% of bankroll)
+            dynamic_stake if bet_placed else 0,
             kelly_stake if bet_placed else 0,
             'v1.0_copula_poisson_live',
             200000,
             'copula',
             sgp.get('pricing_mode', 'simulated'),
             pricing_metadata_str,
-            'PROD',  # Production mode
+            'PROD',
             bet_placed
         ))
         
