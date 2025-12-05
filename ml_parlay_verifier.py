@@ -290,9 +290,6 @@ class MLParlayVerifier:
                     (outcome, result, profit_loss, int(time.time()), parlay_id)
                 )
                 
-                bankroll_mgr = get_bankroll_manager()
-                bankroll_mgr.record_bet_result('ML_PARLAY', stake, profit_loss, parlay_id)
-                
                 emoji = "✅" if outcome == 'won' else "❌" if outcome == 'lost' else "↩️"
                 logger.info(f"{emoji} ML Parlay {parlay_id}: {outcome.upper()} | P/L: {profit_loss:+.2f} SEK")
                 
