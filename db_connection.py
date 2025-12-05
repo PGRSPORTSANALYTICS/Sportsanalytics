@@ -4,8 +4,37 @@ from psycopg2.extras import RealDictCursor
 import os
 import logging
 from contextlib import contextmanager
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
 logger = logging.getLogger(__name__)
+
+def clean_database_url(url):
+    """Clean DATABASE_URL to fix SSL mode issues across different environments"""
+    if not url:
+        return url
+    
+    try:
+        parsed = urlparse(url)
+        query_params = parse_qs(parsed.query)
+        
+        if 'sslmode' in query_params:
+            sslmode_val = query_params['sslmode'][0] if query_params['sslmode'] else 'require'
+            sslmode_val = sslmode_val.strip('"').strip("'")
+            query_params['sslmode'] = [sslmode_val]
+        
+        new_query = urlencode({k: v[0] for k, v in query_params.items()})
+        cleaned = urlunparse((
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path,
+            parsed.params,
+            new_query,
+            parsed.fragment
+        ))
+        return cleaned
+    except Exception as e:
+        logger.warning(f"Could not parse DATABASE_URL, using as-is: {e}")
+        return url
 
 class DatabaseConnection:
     _connection_pool = None
@@ -15,11 +44,11 @@ class DatabaseConnection:
         """Initialize connection pool for concurrent access with TCP keepalives"""
         if cls._connection_pool is None:
             try:
-                # Add TCP keepalives to prevent idle connection drops (SSL errors)
+                db_url = clean_database_url(os.environ.get('DATABASE_URL'))
                 cls._connection_pool = psycopg2.pool.ThreadedConnectionPool(
                     minconn,
                     maxconn,
-                    os.environ.get('DATABASE_URL'),
+                    db_url,
                     keepalives=1,           # Enable TCP keepalives
                     keepalives_idle=30,     # Start keepalives after 30s idle
                     keepalives_interval=10, # Keepalive interval 10s
