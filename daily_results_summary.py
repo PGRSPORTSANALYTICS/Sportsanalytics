@@ -172,7 +172,9 @@ def get_stats_for_date(match_date: str, market_type: str):
 
 def send_results_summary_for_date(match_date: str):
     """Send results summary for a specific match date - 10 min after last match"""
-    logger.info(f"📊 Sending results summary for {match_date}...")
+    # DISABLED: User requested no result notifications to Telegram
+    logger.info(f"📊 Results summary DISABLED for {match_date} (user request)")
+    return
     
     # Get both exact score and SGP results for this specific date
     exact_results = get_results_for_date(match_date)
