@@ -708,7 +708,7 @@ class ResultsScraper:
         try:
             # Use db_helper for fetching pending bets
             pending_bets = db_helper.execute('''
-                SELECT id, home_team, away_team, selection, match_date, odds, stake
+                SELECT id, home_team, away_team, selection, match_date, odds, stake, market, league
                 FROM football_opportunities 
                 WHERE (outcome IS NULL OR outcome = '') 
                   AND match_date IS NOT NULL 
@@ -744,8 +744,13 @@ class ResultsScraper:
             bets_needing_fetch = {}  # Group by date for efficient fetching
             
             for bet in bets_to_check:
-                bet_id, home_team, away_team, selection, match_date, odds, stake = bet
+                bet_id, home_team, away_team, selection, match_date, odds, stake, market, league = bet
                 clean_date = match_date.split('T')[0] if 'T' in match_date else match_date
+                
+                # Map market to product_type for Discord routing
+                product_type = 'EXACT_SCORE'
+                if market and 'value' in str(market).lower():
+                    product_type = 'VALUE_SINGLE'
                 
                 # Check per-match cache first
                 cached_result = self._get_cached_match_result(home_team, away_team, clean_date)
@@ -769,7 +774,7 @@ class ResultsScraper:
                     self._mark_bet_checked(bet_id)  # Mark cooldown after success
                     logger.info(f"✅ Updated bet {bet_id} from cache: {home_team} vs {away_team} | {selection} = {outcome} (Score: {actual_score})")
                     
-                    # Send Telegram notification
+                    # Send notification with correct product_type
                     self._send_result_notification({
                         'outcome': outcome,
                         'home_team': home_team,
@@ -778,7 +783,9 @@ class ResultsScraper:
                         'actual_score': actual_score,
                         'odds': odds,
                         'stake': stake,
-                        'profit_loss': profit_loss
+                        'profit_loss': profit_loss,
+                        'product_type': product_type,
+                        'league': league or ''
                     })
                 else:
                     # Cache miss - need to fetch
@@ -796,7 +803,12 @@ class ResultsScraper:
                 
                 # Process each bet
                 for bet in date_bets:
-                    bet_id, home_team, away_team, selection, match_date, odds, stake = bet
+                    bet_id, home_team, away_team, selection, match_date, odds, stake, market, league = bet
+                    
+                    # Map market to product_type for Discord routing
+                    product_type = 'EXACT_SCORE'
+                    if market and 'value' in str(market).lower():
+                        product_type = 'VALUE_SINGLE'
                     
                     # Find matching result - check both normal and swapped home/away order
                     match_result = None
@@ -851,7 +863,7 @@ class ResultsScraper:
                         self._mark_bet_checked(bet_id)  # Mark cooldown only after success
                         logger.info(f"✅ Updated bet {bet_id}: {home_team} vs {away_team} | {selection} = {outcome} (Score: {actual_score})")
                         
-                        # Send Telegram notification
+                        # Send Discord notification with correct product_type
                         self._send_result_notification({
                             'outcome': outcome,
                             'home_team': home_team,
@@ -860,7 +872,9 @@ class ResultsScraper:
                             'actual_score': actual_score,
                             'odds': odds,
                             'stake': stake,
-                            'profit_loss': profit_loss
+                            'profit_loss': profit_loss,
+                            'product_type': product_type,
+                            'league': league or ''
                         })
                     else:
                         # No result found - mark checked to avoid immediate retry
