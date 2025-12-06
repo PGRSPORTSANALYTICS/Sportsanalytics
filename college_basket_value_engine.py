@@ -577,6 +577,7 @@ class CollegeBasketValueEngine:
     def save_picks(self, picks: List[BasketPick]) -> int:
         """
         Saves to PostgreSQL database using basketball_predictions table
+        Enforces DAILY LIMITS: max 15 singles + 3 parlays per day (total 18 bets)
         """
         if not picks or self.db_conn is None:
             return 0
@@ -590,6 +591,31 @@ class CollegeBasketValueEngine:
 
         saved = 0
         bets_placed = 0
+        
+        # DAILY LIMIT CHECK - Count already placed bets TODAY
+        with self.db_conn.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT 
+                    COALESCE(SUM(CASE WHEN is_parlay = false AND bet_placed = true THEN 1 ELSE 0 END), 0) as singles_today,
+                    COALESCE(SUM(CASE WHEN is_parlay = true AND bet_placed = true THEN 1 ELSE 0 END), 0) as parlays_today
+                FROM basketball_predictions
+                WHERE DATE(created_at) = CURRENT_DATE
+            """)
+            row = cursor.fetchone()
+            singles_today = int(row[0]) if row else 0
+            parlays_today = int(row[1]) if row else 0
+        
+        singles_remaining = max(0, self.max_singles - singles_today)
+        parlays_remaining = max(0, self.max_parlays - parlays_today)
+        
+        print(f"📊 Daily limits: Singles {singles_today}/{self.max_singles}, Parlays {parlays_today}/{self.max_parlays}")
+        print(f"   Remaining: {singles_remaining} singles, {parlays_remaining} parlays")
+        
+        if singles_remaining == 0 and parlays_remaining == 0:
+            print("⛔ DAILY LIMIT REACHED - No more basketball bets today")
+            return 0
+
         with self.db_conn.get_connection() as conn:
             cursor = conn.cursor()
             
@@ -616,7 +642,20 @@ class CollegeBasketValueEngine:
             """)
             conn.commit()
             
+            singles_placed = 0
+            parlays_placed = 0
+            
             for p in picks:
+                is_parlay = "PARLAY" in p.match
+                
+                # DAILY LIMIT CHECK - Skip if we've hit the daily limit for this type
+                if is_parlay and parlays_placed >= parlays_remaining:
+                    print(f"⏭️ DAILY LIMIT: Skipping parlay {p.match} (already have {parlays_today + parlays_placed})")
+                    continue
+                if not is_parlay and singles_placed >= singles_remaining:
+                    print(f"⏭️ DAILY LIMIT: Skipping single {p.match} (already have {singles_today + singles_placed})")
+                    continue
+                
                 # Bankroll check for each pick - determines if actual bet placed
                 bet_placed = True
                 if bankroll_mgr:
@@ -626,7 +665,6 @@ class CollegeBasketValueEngine:
                         print(f"⛔ BANKROLL LIMIT: {reason} - Saving prediction only (no bet)")
                 
                 try:
-                    is_parlay = "PARLAY" in p.match
                     parlay_legs = p.meta.get("legs", 1) if is_parlay else 1
                     commence_time = p.meta.get("commence_time")
                     bookmaker = p.meta.get("book", "Unknown")
@@ -659,6 +697,10 @@ class CollegeBasketValueEngine:
                     saved += 1
                     if bet_placed:
                         bets_placed += 1
+                        if is_parlay:
+                            parlays_placed += 1
+                        else:
+                            singles_placed += 1
                         print(f"✅ BET PLACED: {p.match} -> {p.selection} @ {p.odds:.2f}")
                         try:
                             product_type = "BASKET_PARLAY" if is_parlay else "BASKET_SINGLE"
