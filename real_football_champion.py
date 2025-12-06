@@ -1568,14 +1568,29 @@ class RealFootballChampion:
         return exact_score_predictions
     
     def save_exact_score_predictions(self, predictions: List[Dict]):
-        """Save exact score predictions to database"""
+        """Save exact score predictions to database (with DAILY LIMIT enforcement)"""
         
         today_date = datetime.now().strftime('%Y-%m-%d')
+        
+        # DAILY LIMIT CHECK - Only 8 exact score bets per day
+        DAILY_LIMIT = 8
+        current_count = self.get_todays_count()
+        remaining_slots = max(0, DAILY_LIMIT - current_count)
+        
+        print(f"📊 Exact Score Daily Limit: {current_count}/{DAILY_LIMIT} bets (remaining: {remaining_slots})")
+        
+        if remaining_slots == 0:
+            print("⛔ DAILY LIMIT REACHED - No more exact score bets today")
+            return
         
         saved_count = 0
         filtered_count = 0
         
         for prediction in predictions:
+            # Check limit before each save
+            if saved_count >= remaining_slots:
+                print(f"⛔ DAILY LIMIT REACHED: {DAILY_LIMIT} exact score bets")
+                break
             # 🎯 Check if this match already has a prediction (prevent duplicates)
             # Use LIKE pattern for date to handle different timezone formats (Z vs +00:00)
             match_date = prediction.get('match_date', '')

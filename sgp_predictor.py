@@ -1084,6 +1084,23 @@ class SGPPredictor:
         
         match_data = sgp['match_data']
         
+        # DAILY LIMIT CHECK - Max 10 SGP bets per day (HARD STOP if check fails)
+        MAX_SGP_DAILY = 10
+        try:
+            daily_count = db_helper.execute('''
+                SELECT COUNT(*) FROM sgp_predictions 
+                WHERE DATE(to_timestamp(timestamp)) = CURRENT_DATE AND bet_placed = true
+            ''', fetch='one')
+            sgp_today = daily_count[0] if daily_count else 0
+            if sgp_today >= MAX_SGP_DAILY:
+                logger.info(f"⛔ SGP DAILY LIMIT REACHED: {sgp_today}/{MAX_SGP_DAILY} SGP bets today")
+                return False
+            logger.info(f"📊 SGP Daily: {sgp_today}/{MAX_SGP_DAILY} (remaining: {MAX_SGP_DAILY - sgp_today})")
+        except Exception as e:
+            # HARD STOP: If we can't check the limit, don't allow any more bets
+            logger.error(f"⛔ SGP daily limit check FAILED - blocking bet: {e}")
+            return False
+        
         # DUPLICATE CHECK: Prevent duplicate SGPs for same match + parlay
         try:
             existing = db_helper.execute('''
