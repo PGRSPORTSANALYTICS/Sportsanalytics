@@ -26,6 +26,9 @@ class TelegramBroadcaster:
     
     def send_message(self, chat_id: str, text: str) -> bool:
         """Send a message to a Telegram chat"""
+        # TELEGRAM DISABLED - User requested complete stop
+        logger.info("🚫 TELEGRAM DISABLED - Message not sent")
+        return False
         try:
             url = f"{self.api_url}/sendMessage"
             payload = {
