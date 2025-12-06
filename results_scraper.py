@@ -897,7 +897,8 @@ class ResultsScraper:
         try:
             # Find training records that need results (match already played)
             pending_training = db_helper.execute('''
-                SELECT id, home_team, away_team, match_date, predicted_score
+                SELECT id, home_team, away_team, match_date, predicted_score, analysis_type,
+                       predicted_home_goals, predicted_away_goals
                 FROM training_data 
                 WHERE actual_score IS NULL
                   AND match_date IS NOT NULL
@@ -913,7 +914,7 @@ class ResultsScraper:
             
             updated_count = 0
             for record in pending_training:
-                record_id, home_team, away_team, match_date, predicted_score = record
+                record_id, home_team, away_team, match_date, predicted_score, analysis_type, pred_home, pred_away = record
                 clean_date = str(match_date).split('T')[0] if match_date else ''
                 
                 # Check cache for result
@@ -923,9 +924,48 @@ class ResultsScraper:
                     home_score = cached_result.get('home_score', 0)
                     away_score = cached_result.get('away_score', 0)
                     actual_score = f"{home_score}-{away_score}"
+                    total_goals = home_score + away_score
+                    btts = home_score > 0 and away_score > 0
                     
-                    # Check if prediction was correct
-                    prediction_correct = (predicted_score == actual_score) if predicted_score else False
+                    # Determine prediction_correct based on analysis_type
+                    prediction_correct = False
+                    analysis_type_lower = (analysis_type or '').lower()
+                    
+                    if 'exact_score' in analysis_type_lower:
+                        # Exact score: predicted_score must match actual_score
+                        prediction_correct = (predicted_score == actual_score) if predicted_score else False
+                    
+                    elif 'value_single' in analysis_type_lower:
+                        # Value singles: check market type in analysis_type
+                        if 'over_2_5' in analysis_type_lower or 'ft_over_2_5' in analysis_type_lower:
+                            prediction_correct = total_goals > 2.5
+                        elif 'under_2_5' in analysis_type_lower or 'ft_under_2_5' in analysis_type_lower:
+                            prediction_correct = total_goals < 2.5
+                        elif 'over_3_5' in analysis_type_lower or 'ft_over_3_5' in analysis_type_lower:
+                            prediction_correct = total_goals > 3.5
+                        elif 'under_3_5' in analysis_type_lower or 'ft_under_3_5' in analysis_type_lower:
+                            prediction_correct = total_goals < 3.5
+                        elif 'btts_yes' in analysis_type_lower:
+                            prediction_correct = btts
+                        elif 'btts_no' in analysis_type_lower:
+                            prediction_correct = not btts
+                        elif 'home_win' in analysis_type_lower:
+                            prediction_correct = home_score > away_score
+                        elif 'away_win' in analysis_type_lower:
+                            prediction_correct = away_score > home_score
+                        elif 'draw' in analysis_type_lower:
+                            prediction_correct = home_score == away_score
+                    
+                    elif 'sgp' in analysis_type_lower:
+                        # SGP: Check predicted goals vs actual (within tolerance)
+                        if pred_home is not None and pred_away is not None:
+                            # Consider correct if total goals prediction was in right direction
+                            pred_total = (pred_home or 0) + (pred_away or 0)
+                            # SGP usually predicts over/under - check if direction was right
+                            if pred_total >= 2.5 and total_goals >= 3:
+                                prediction_correct = True
+                            elif pred_total < 2.5 and total_goals <= 2:
+                                prediction_correct = True
                     
                     db_helper.execute('''
                         UPDATE training_data 
@@ -937,6 +977,8 @@ class ResultsScraper:
                     ''', (home_score, away_score, actual_score, prediction_correct, record_id))
                     
                     updated_count += 1
+                    if prediction_correct:
+                        logger.debug(f"✅ Training correct: {home_team} vs {away_team} ({analysis_type})")
             
             if updated_count > 0:
                 logger.info(f"🧠 AI LEARNING: Updated {updated_count} training records with actual results")
