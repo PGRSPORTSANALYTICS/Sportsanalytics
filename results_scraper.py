@@ -84,6 +84,8 @@ class ResultsScraper:
     
     def _send_result_notification(self, bet_info: dict):
         """Send Telegram + Discord notification when a bet is settled"""
+        # DISABLED: User requested no result notifications to Telegram
+        # Only send to Discord now
         outcome = bet_info.get('outcome', '').upper()
         home_team = bet_info.get('home_team', 'Unknown')
         away_team = bet_info.get('away_team', 'Unknown')
@@ -112,41 +114,14 @@ class ResultsScraper:
         except Exception as e:
             logger.error(f"❌ Failed to send Discord result: {e}")
         
-        # Send to Telegram
-        if not self.telegram or not self.telegram_channel:
-            return
-        
-        try:
-            # Map all outcome types to correct display
-            if outcome == 'WIN':
-                emoji = "✅"
-                status = "WON"
-                color_emoji = "🟢"
-            elif outcome == 'VOID' or outcome == 'PUSH':
-                emoji = "↩️"
-                status = "VOID/PUSH"
-                color_emoji = "⚪"
-            else:  # LOSS or any other outcome
-                emoji = "❌"
-                status = "LOST"
-                color_emoji = "🔴"
-            
-            message = f"""{emoji} RESULT: {status}
-
-⚽ {home_team} vs {away_team}
-📊 Final Score: {actual_score}
-🎯 Our Pick: {selection}
-💰 Odds: {odds:.2f}
-
-{color_emoji} P/L: ${profit_loss/10.8:+.0f} ({profit_loss:+.0f} SEK)
-"""
-            self.telegram.send_message(self.telegram_channel, message)
-            logger.info(f"📱 Sent result notification: {home_team} vs {away_team} = {status}")
-        except Exception as e:
-            logger.error(f"❌ Failed to send Telegram result: {e}")
+        # TELEGRAM RESULT NOTIFICATIONS DISABLED (user request Dec 6, 2025)
+        # Results still tracked in database and sent to Discord
+        return
     
     def _send_batch_results(self):
         """Send batch summary of all settled bets"""
+        # DISABLED: User requested no result notifications to Telegram
+        return
         if not self.telegram or not self.telegram_channel or not self.settled_bets_buffer:
             return
         
