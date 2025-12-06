@@ -1025,8 +1025,8 @@ class SGPPredictor:
             
             # AI-LEARNED FILTER: Based on 653 settled bets analysis (Dec 3, 2025)
             # ADJUSTED Dec 6: Widened range for more volume on big matchdays
-            MIN_ODDS = 2.5   # Reverted to original (Dec 6)
-            MAX_ODDS = 10.0  # Reverted to original (Dec 6)
+            MIN_ODDS = 4.0   # Data-driven: 4.00+ odds = +18,533 SEK, 3.00-3.99 = -2,881 SEK
+            MAX_ODDS = 10.0  # Keep wide range for high-value parlays
             
             # League-specific EV thresholds (Premier League needs higher due to historical poor ROI)
             league = match_data.get('league', '')
