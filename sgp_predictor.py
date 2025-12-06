@@ -1086,7 +1086,7 @@ class SGPPredictor:
         
         # DUPLICATE CHECK: Prevent duplicate SGPs for same match + parlay
         try:
-            existing = db_helper.fetchone('''
+            existing = db_helper.execute('''
                 SELECT id FROM sgp_predictions 
                 WHERE home_team = %s AND away_team = %s 
                 AND parlay_description = %s
@@ -1096,7 +1096,7 @@ class SGPPredictor:
                 match_data['away_team'],
                 sgp['description'],
                 match_data.get('match_date', '')
-            ))
+            ), fetch='one')
             if existing:
                 logger.info(f"⏭️ DUPLICATE SKIPPED: {match_data['home_team']} vs {match_data['away_team']} | {sgp['description']}")
                 return False
@@ -1106,7 +1106,7 @@ class SGPPredictor:
         # PER-MATCH CAP: Max 2 SGPs per match
         MAX_SGP_PER_MATCH = 2
         try:
-            match_count = db_helper.fetchone('''
+            match_count = db_helper.execute('''
                 SELECT COUNT(*) FROM sgp_predictions 
                 WHERE home_team = %s AND away_team = %s 
                 AND DATE(match_date) = DATE(%s)
@@ -1115,7 +1115,7 @@ class SGPPredictor:
                 match_data['home_team'],
                 match_data['away_team'],
                 match_data.get('match_date', '')
-            ))
+            ), fetch='one')
             if match_count and match_count[0] >= MAX_SGP_PER_MATCH:
                 logger.info(f"⚠️ PER-MATCH CAP: {match_data['home_team']} vs {match_data['away_team']} already has {match_count[0]} SGPs (max {MAX_SGP_PER_MATCH})")
                 return False
