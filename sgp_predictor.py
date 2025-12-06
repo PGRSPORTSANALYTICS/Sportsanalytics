@@ -1025,8 +1025,8 @@ class SGPPredictor:
             
             # AI-LEARNED FILTER: Based on 653 settled bets analysis (Dec 3, 2025)
             # ADJUSTED Dec 6: Widened range for more volume on big matchdays
-            MIN_ODDS = 3.5   # Widened from 4.0 to capture more value plays
-            MAX_ODDS = 8.0   # Raised from 6.0 to include premium parlays
+            MIN_ODDS = 2.5   # Reverted to original (Dec 6)
+            MAX_ODDS = 10.0  # Reverted to original (Dec 6)
             
             # League-specific EV thresholds (Premier League needs higher due to historical poor ROI)
             league = match_data.get('league', '')
