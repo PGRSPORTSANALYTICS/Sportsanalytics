@@ -17,13 +17,21 @@ class BacktestAnalyzer:
     """Analyzes historical betting performance across multiple dimensions"""
     
     def __init__(self):
-        self.sgp_data = None
-        self.basketball_data = None
-        self.training_data = None
+        self.sgp_data = pd.DataFrame()
+        self.basketball_data = pd.DataFrame()
+        self.training_data = pd.DataFrame()
+        self.load_error = None
         self._load_data()
     
     def _load_data(self):
         """Load all settled predictions from database"""
+        import os
+        
+        if not os.getenv("DATABASE_URL"):
+            self.load_error = "DATABASE_URL not configured"
+            logger.warning(self.load_error)
+            return
+        
         try:
             sgp_rows = DatabaseHelper.execute("""
                 SELECT 
@@ -91,6 +99,7 @@ class BacktestAnalyzer:
             logger.info(f"Loaded SGP: {len(self.sgp_data)}, Basketball: {len(self.basketball_data)}, Training: {len(self.training_data)}")
             
         except Exception as e:
+            self.load_error = str(e)
             logger.error(f"Error loading backtest data: {e}")
             self.sgp_data = pd.DataFrame()
             self.basketball_data = pd.DataFrame()

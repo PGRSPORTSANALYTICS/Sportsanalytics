@@ -1591,6 +1591,140 @@ def render_ml_parlay_tab():
         st.error(f"Error loading ML Parlay data: {e}")
 
 
+def render_backtest_analysis():
+    """Render comprehensive backtest analysis tab with EV, odds, and league breakdowns."""
+    from backtest_analyzer import BacktestAnalyzer
+    
+    st.markdown("## Historical Performance Analysis")
+    st.caption("Data-driven analysis of what actually works based on all settled bets.")
+    
+    try:
+        analyzer = BacktestAnalyzer()
+        
+        if analyzer.load_error:
+            st.warning(f"Could not load backtest data: {analyzer.load_error}")
+            return
+        
+        stats = analyzer.get_summary_stats()
+        
+        if not stats:
+            st.info("No settled bets available for analysis yet. Place some bets and wait for results!")
+            return
+        
+        st.markdown("### Summary by Product")
+        cols = st.columns(len(stats))
+        for i, (product, data) in enumerate(stats.items()):
+            with cols[i]:
+                product_name = product.replace('_', ' ').title()
+                roi_color = "#10B981" if data['roi'] > 0 else "#EF4444"
+                st.markdown(f"""
+                <div style="padding:16px;border-radius:12px;background:linear-gradient(135deg, rgba(30,41,59,0.9), rgba(15,23,42,0.95));border:1px solid rgba(99,102,241,0.3);">
+                    <div style="font-size:14px;color:#9CA3AF;margin-bottom:8px;">{product_name}</div>
+                    <div style="font-size:28px;font-weight:600;color:{roi_color};">{data['roi']:+.1f}%</div>
+                    <div style="font-size:12px;color:#6B7280;margin-top:4px;">
+                        {data['wins']}/{data['total_bets']} wins ({data['hit_rate']:.1f}% HR)
+                    </div>
+                    <div style="font-size:12px;color:#6B7280;">
+                        {data['total_profit']:+,.0f} SEK profit
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        st.markdown("---")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("### EV Threshold Analysis")
+            st.caption("Which EV ranges generate the best returns?")
+            ev_df = analyzer.analyze_ev_thresholds()
+            if not ev_df.empty:
+                st.dataframe(ev_df, use_container_width=True, hide_index=True)
+                
+                best_ev = ev_df.iloc[0]['EV Range']
+                best_roi = ev_df.iloc[0]['ROI']
+                st.success(f"Best performer: **{best_ev}** EV range with **{best_roi}** ROI")
+        
+        with col2:
+            st.markdown("### Odds Range Analysis")
+            st.caption("Which odds ranges are most profitable?")
+            odds_df = analyzer.analyze_odds_ranges()
+            if not odds_df.empty:
+                st.dataframe(odds_df, use_container_width=True, hide_index=True)
+                
+                best_odds = odds_df.iloc[0]['Odds Range']
+                best_roi = odds_df.iloc[0]['ROI']
+                st.success(f"Best performer: **{best_odds}** odds with **{best_roi}** ROI")
+        
+        st.markdown("---")
+        
+        col3, col4 = st.columns(2)
+        
+        with col3:
+            st.markdown("### League Performance")
+            st.caption("Which leagues predict best?")
+            league_df = analyzer.analyze_by_league()
+            if not league_df.empty:
+                st.dataframe(league_df, use_container_width=True, hide_index=True)
+        
+        with col4:
+            st.markdown("### Basketball Market Analysis")
+            st.caption("Which basketball markets are most accurate?")
+            market_df = analyzer.analyze_by_market()
+            if not market_df.empty:
+                st.dataframe(market_df, use_container_width=True, hide_index=True)
+        
+        st.markdown("---")
+        
+        col5, col6 = st.columns(2)
+        
+        with col5:
+            st.markdown("### SGP Odds Deep Dive")
+            st.caption("Fine-grained SGP odds analysis")
+            sgp_odds_df = analyzer.get_sgp_odds_analysis()
+            if not sgp_odds_df.empty:
+                st.dataframe(sgp_odds_df, use_container_width=True, hide_index=True)
+        
+        with col6:
+            st.markdown("### Basketball Confidence Levels")
+            st.caption("How confidence correlates with accuracy")
+            conf_df = analyzer.analyze_confidence_thresholds()
+            if not conf_df.empty:
+                st.dataframe(conf_df, use_container_width=True, hide_index=True)
+        
+        st.markdown("---")
+        st.markdown("### Key Insights")
+        
+        insights = []
+        
+        if not odds_df.empty:
+            profitable_odds = odds_df[odds_df['ROI'].str.contains(r'\+')]
+            if not profitable_odds.empty:
+                ranges = profitable_odds['Odds Range'].tolist()
+                insights.append(f"Profitable odds ranges: **{', '.join(ranges)}**")
+        
+        if not ev_df.empty:
+            best_ev_row = ev_df.iloc[0]
+            insights.append(f"Optimal EV threshold: **{best_ev_row['EV Range']}** ({best_ev_row['ROI']} ROI)")
+        
+        if not league_df.empty:
+            profitable_leagues = league_df[league_df['ROI'].str.contains(r'\+')]
+            if not profitable_leagues.empty:
+                top_leagues = profitable_leagues.head(3)['League'].tolist()
+                insights.append(f"Top performing leagues: **{', '.join(top_leagues)}**")
+        
+        if insights:
+            for insight in insights:
+                st.markdown(f"- {insight}")
+        else:
+            st.info("More data needed for actionable insights.")
+            
+    except Exception as e:
+        st.error(f"Error loading backtest analysis: {e}")
+        import traceback
+        st.code(traceback.format_exc())
+
+
 def render_basketball_tab(df: pd.DataFrame):
     """Render College Basketball tab with SGP-style card layout."""
     st.markdown("## College Basketball")
@@ -2088,30 +2222,7 @@ def main():
         render_basketball_tab(prod_bets)
 
     with backtest_tab:
-        st.subheader("Backtest Results (Not Included in Live ROI)")
-        if backtest_bets.empty:
-            st.info("No backtest bets found. All current data is PROD.")
-        else:
-            # Calculate backtest metrics
-            backtest_settled = backtest_bets[backtest_bets["result"].isin(["WON", "LOST", "WIN", "LOSS"])].copy()
-            if not backtest_settled.empty:
-                bt_roi = compute_roi(backtest_settled)
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Backtest ROI", f"{bt_roi['roi']:.1f}%")
-                with col2:
-                    st.metric("Backtest Profit", f"{bt_roi['profit']:.0f} USD (≈{bt_roi['profit'] * USD_TO_SEK:.0f} SEK)")
-                with col3:
-                    won = len(backtest_settled[backtest_settled["result"].isin(["WON", "WIN"])])
-                    hit_rate = (won / len(backtest_settled) * 100) if len(backtest_settled) > 0 else 0
-                    st.metric("Backtest Hit Rate", f"{hit_rate:.1f}%")
-            
-            display_cols = [c for c in ["match_date", "home_team", "away_team", "product", "selection", "stake", "odds", "payout", "result", "mode"] if c in backtest_df.columns]
-            st.dataframe(
-                backtest_bets[display_cols].sort_values("match_date", ascending=False),
-                use_container_width=True,
-                hide_index=True,
-            )
+        render_backtest_analysis()
 
 
 if __name__ == "__main__":
