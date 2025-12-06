@@ -231,10 +231,11 @@ def pick_parlays_for_today(
     return selected
 
 
-def build_parlays(picks: List[BasketPick], legs: int = 3, min_parlay_ev: float = 0.02) -> List[BasketPick]:
+def build_parlays(picks: List[BasketPick], legs: int = 3, min_parlay_ev: float = 0.02, max_parlay_odds: float = 50.0) -> List[BasketPick]:
     """
     Builds 3/4-leg multi-game parlays from top singles.
     Ensures only 1 pick per match inside the parlay.
+    Caps parlay odds to max_parlay_odds to avoid unrealistic longshots.
     """
     parlays: List[BasketPick] = []
     if len(picks) < legs:
@@ -264,6 +265,10 @@ def build_parlays(picks: List[BasketPick], legs: int = 3, min_parlay_ev: float =
             selections.append(p.selection)
             base_evs.append(p.ev)
             confs.append(p.confidence)
+
+        # Skip parlays with unrealistic odds (lottery tickets)
+        if odds_prod > max_parlay_odds:
+            continue
 
         parlay_ev = ev_from_prob_odds(prob_prod, odds_prod)
 
