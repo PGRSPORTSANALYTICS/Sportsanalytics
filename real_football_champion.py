@@ -3423,9 +3423,9 @@ class RealFootballChampion:
         result = db_helper.execute('''
             SELECT COUNT(*) FROM football_opportunities 
             WHERE home_team = %s AND away_team = %s AND market = 'exact_score'
-            AND match_date::text LIKE %s
-            AND (outcome IS NULL OR outcome = 'PENDING')
-        ''', (opportunity.home_team, opportunity.away_team, f"{match_date_prefix}%"), fetch='one')
+            AND DATE(match_date::timestamp) = DATE(%s::timestamp)
+            AND (outcome IS NULL OR outcome = '' OR outcome = 'PENDING')
+        ''', (opportunity.home_team, opportunity.away_team, opportunity.match_date), fetch='one')
         
         duplicate_count = result[0] if result else 0
         if duplicate_count > 0:
