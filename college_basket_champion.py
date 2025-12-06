@@ -32,7 +32,7 @@ def run_prediction_cycle():
             max_singles=15,  # 15 singles max
             max_parlays=3,  # 3 parlays max
             min_odds=1.40,  # 1.40 min odds
-            max_odds=5.50,  # 5.50 max odds
+            max_odds=12.00,  # 12.00 max odds (widened from 5.50)
             allow_parlays=True
         )
         
