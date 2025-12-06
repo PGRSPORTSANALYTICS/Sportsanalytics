@@ -2417,12 +2417,12 @@ class RealFootballChampion:
                 import json
                 analysis = json.loads(analysis_json) if analysis_json else {}
                 
-                # Get dynamic stake (1.2% of bankroll)
+                # Get exact score stake (0.6% of bankroll - lower for high variance)
                 try:
                     bankroll_mgr = get_bankroll_manager()
-                    dynamic_stake = bankroll_mgr.get_dynamic_stake()
+                    dynamic_stake = bankroll_mgr.get_exact_score_stake()
                 except Exception:
-                    dynamic_stake = 173.0  # Fallback
+                    dynamic_stake = 86.0  # Fallback (half of 173)
                 
                 opportunity = FootballOpportunity(
                     match_id=f"{home_team}_vs_{away_team}_refill",
@@ -3105,14 +3105,14 @@ class RealFootballChampion:
                 # Create exact score opportunity
                 score_text = f"{best_score['home_goals']}-{best_score['away_goals']}"
                 
-                # Get dynamic stake (1.2% of bankroll)
+                # Get exact score stake (0.6% of bankroll - lower for high variance)
                 try:
                     bankroll_mgr = get_bankroll_manager()
-                    dynamic_stake = bankroll_mgr.get_dynamic_stake()
-                    stake_units = bankroll_mgr.get_stake_units()
+                    dynamic_stake = bankroll_mgr.get_exact_score_stake()
+                    stake_units = 0.6  # Exact score uses 0.6u
                 except Exception:
-                    dynamic_stake = 173.0  # Fallback
-                    stake_units = 1.2
+                    dynamic_stake = 86.0  # Fallback (half of 173)
+                    stake_units = 0.6
                 
                 opportunity = FootballOpportunity(
                     match_id=match.get('id', f"{match['home_team']}_vs_{match['away_team']}"),

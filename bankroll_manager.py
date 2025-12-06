@@ -23,7 +23,8 @@ class BankrollManager:
     MAX_DAILY_EXPOSURE_PCT = 0.80  # Max 80% of bankroll can be at risk
     DAILY_LOSS_LIMIT_PCT = 0.20  # Stop betting if daily loss ≥ 20%
     
-    STAKE_PCT = 0.012  # 1.2% of bankroll per bet
+    STAKE_PCT = 0.012  # 1.2% of bankroll per bet (standard)
+    EXACT_SCORE_STAKE_PCT = 0.006  # 0.6% for exact score (higher variance)
     BASE_UNIT_PCT = 0.01  # 1 unit = 1% of bankroll
     
     USD_TO_SEK = 10.8  # Conversion rate
@@ -51,6 +52,11 @@ class BankrollManager:
         """Calculate dynamic stake: 1.2% of current bankroll."""
         bankroll = self.get_current_bankroll()
         return bankroll * self.STAKE_PCT
+    
+    def get_exact_score_stake(self) -> float:
+        """Calculate exact score stake: 0.6% of current bankroll (lower due to higher variance)."""
+        bankroll = self.get_current_bankroll()
+        return bankroll * self.EXACT_SCORE_STAKE_PCT
     
     def get_stake_units(self) -> float:
         """Get number of units per bet (1.2u = 1.2% / 1%)."""
