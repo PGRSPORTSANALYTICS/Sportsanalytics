@@ -1025,9 +1025,9 @@ class SGPPredictor:
             
             # AI-LEARNED FILTER: Based on 653 settled bets analysis (Dec 3, 2025)
             # Data showed: Odds 4-6 = +12.8% edge, Odds 2-4 = -14.8% (losing)
-            # 4-DAY TRIAL: Dec 3-7, 2025 - Testing AI-learned optimal odds range
-            MIN_ODDS = 4.0   # Raised from 2.5 - skip losing 2-4 zone
-            MAX_ODDS = 6.0   # Lowered from 10.0 - avoid 6-10 dead zone
+            # ADJUSTED Dec 6: Widened MIN from 4.0 to 3.5 for more volume
+            MIN_ODDS = 3.5   # Widened from 4.0 to capture more value plays
+            MAX_ODDS = 6.0   # Keep 6.0 cap - avoid 6-10 dead zone
             
             # League-specific EV thresholds (Premier League needs higher due to historical poor ROI)
             league = match_data.get('league', '')
