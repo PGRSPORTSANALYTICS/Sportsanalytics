@@ -23,9 +23,12 @@ from data_collector import get_collector
 # Minimum Expected Value (EV) required - 5% edge
 MIN_VALUE_SINGLE_EV = 0.05  # 5% edge (lowered from 6%)
 
-# Odds range filter - only medium odds for lower variance
+# Odds range filter - data-driven (Dec 6, 2025)
+# 1.60-1.79 = +2,147 SEK profit, 1.80-2.50 = -473 SEK loss
+# Betting only profitable range, collecting data on higher odds for learning
 MIN_VALUE_SINGLE_ODDS = 1.60
-MAX_VALUE_SINGLE_ODDS = 2.50
+MAX_VALUE_SINGLE_ODDS = 1.79  # Reduced from 2.50 - higher odds losing money
+MAX_LEARNING_ODDS = 2.50      # Still collect predictions up to 2.50 for AI training
 
 # Minimum model confidence/probability required
 MIN_VALUE_SINGLE_CONFIDENCE = 0.58  # 58% model probability
@@ -444,7 +447,7 @@ class ValueSinglesEngine:
 
         print("🔥 VALUE SINGLES START (HARD FILTERS ACTIVE)")
         print(f"   min_ev = {MIN_VALUE_SINGLE_EV*100:.0f}%")
-        print(f"   odds_range = {MIN_VALUE_SINGLE_ODDS} - {MAX_VALUE_SINGLE_ODDS}")
+        print(f"   betting_odds = {MIN_VALUE_SINGLE_ODDS} - {MAX_VALUE_SINGLE_ODDS} | learning_odds = {MIN_VALUE_SINGLE_ODDS} - {MAX_LEARNING_ODDS}")
         print(f"   min_model_prob = {MIN_VALUE_SINGLE_CONFIDENCE*100:.0f}%")
         print(f"   max_picks/day = {MAX_VALUE_SINGLES_PER_DAY}")
         print(f"   leagues = {len(VALUE_SINGLE_LEAGUE_WHITELIST)} whitelisted")
@@ -541,9 +544,9 @@ class ValueSinglesEngine:
                 if odds is None:
                     continue
                 
-                # HARD FILTER: Odds range 1.60 - 2.50 for low variance
-                if not (MIN_VALUE_SINGLE_ODDS <= odds <= MAX_VALUE_SINGLE_ODDS):
-                    continue  # Skip bets outside safe odds range
+                # ODDS FILTER: Generate predictions for 1.60-2.50 (learning), bet only 1.60-1.79
+                if not (MIN_VALUE_SINGLE_ODDS <= odds <= MAX_LEARNING_ODDS):
+                    continue  # Skip bets outside learning range
                 
                 # HARD FILTER: Model probability >= 58% for high confidence
                 if p_model < MIN_VALUE_SINGLE_CONFIDENCE:
@@ -704,7 +707,14 @@ class ValueSinglesEngine:
         for s in singles:
             # Bankroll check for each bet - determines if actual bet placed
             bet_placed = True
-            if bankroll_mgr:
+            odds = s.get('odds', 0)
+            
+            # ODDS FILTER: Only bet 1.60-1.79, collect data for 1.80-2.50 (Dec 6, 2025)
+            if odds > MAX_VALUE_SINGLE_ODDS:
+                bet_placed = False
+                print(f"📊 LEARNING DATA: {s['home_team']} vs {s['away_team']} @ {odds:.2f} (odds > {MAX_VALUE_SINGLE_ODDS} - collecting for AI training)")
+            
+            if bankroll_mgr and bet_placed:
                 can_bet, reason = bankroll_mgr.can_place_bet(s.get("stake", bankroll_mgr.get_dynamic_stake()))
                 if not can_bet:
                     bet_placed = False
