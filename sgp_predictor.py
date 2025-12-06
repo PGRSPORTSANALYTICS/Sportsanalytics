@@ -1024,10 +1024,9 @@ class SGPPredictor:
             ev_pct = (bookmaker_odds / fair_odds - 1.0) * 100.0
             
             # AI-LEARNED FILTER: Based on 653 settled bets analysis (Dec 3, 2025)
-            # Data showed: Odds 4-6 = +12.8% edge, Odds 2-4 = -14.8% (losing)
-            # ADJUSTED Dec 6: Widened MIN from 4.0 to 3.5 for more volume
+            # ADJUSTED Dec 6: Widened range for more volume on big matchdays
             MIN_ODDS = 3.5   # Widened from 4.0 to capture more value plays
-            MAX_ODDS = 6.0   # Keep 6.0 cap - avoid 6-10 dead zone
+            MAX_ODDS = 8.0   # Raised from 6.0 to include premium parlays
             
             # League-specific EV thresholds (Premier League needs higher due to historical poor ROI)
             league = match_data.get('league', '')
