@@ -1591,6 +1591,134 @@ def render_ml_parlay_tab():
         st.error(f"Error loading ML Parlay data: {e}")
 
 
+def render_daily_card_tab():
+    """Render the Daily Betting Card tab with EV-filtered selections."""
+    from daily_card_selector import DailyCardSelector
+    
+    st.markdown("## Today's Betting Card")
+    st.caption("AI-curated daily picks based on EV tiers and optimal odds ranges.")
+    
+    if st.button("Refresh Daily Card", key="refresh_daily_card"):
+        st.rerun()
+    
+    try:
+        selector = DailyCardSelector()
+        card = selector.generate_daily_card()
+        
+        if card['error']:
+            st.error(f"Error loading data: {card['error']}")
+            return
+        
+        if card['summary'] and card['summary'].get('total_bets', 0) == 0:
+            st.info("No official value plays today based on current EV filters. Check back later!")
+            return
+        
+        summary = card['summary']
+        st.markdown("### Card Summary")
+        cols = st.columns(4)
+        with cols[0]:
+            st.metric("Total Picks", summary['total_bets'])
+        with cols[1]:
+            st.metric("Value Singles", summary['value_singles_count'])
+        with cols[2]:
+            st.metric("SGP Bets", summary['sgp_count'])
+        with cols[3]:
+            st.metric("Basketball", summary['basketball_count'])
+        
+        st.markdown("---")
+        
+        if card['sgp']:
+            st.markdown("### SGP Bets")
+            for bet in card['sgp']:
+                tier_color = "#10B981" if bet['tier'] == 'A' else "#F59E0B" if bet['tier'] == 'B' else "#6B7280"
+                ev_color = "#10B981" if bet['ev'] > 0.10 else "#F59E0B" if bet['ev'] > 0.05 else "#9CA3AF"
+                st.markdown(f"""
+                <div style="padding:16px;margin:10px 0;border-radius:14px;background:radial-gradient(circle at top left, rgba(99,102,241,0.15), rgba(15,23,42,0.96));border:1px solid rgba(99,102,241,0.4);">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                        <div style="font-size:11px;padding:3px 8px;border-radius:999px;background:{tier_color}33;color:{tier_color};">TIER {bet['tier']}</div>
+                        <div style="font-size:11px;padding:3px 8px;border-radius:999px;background:{ev_color}22;color:{ev_color};">EV +{bet['ev']*100:.1f}%</div>
+                    </div>
+                    <div style="font-size:13px;color:#9CA3AF;margin-bottom:4px;">{bet['league']}</div>
+                    <div style="font-size:16px;color:#E5E7EB;font-weight:600;margin-bottom:6px;">{bet['matchup']}</div>
+                    <div style="font-size:14px;color:#A5B4FC;margin-bottom:10px;">{bet['selection']}</div>
+                    <div style="display:flex;gap:24px;">
+                        <div><span style="font-size:11px;color:#9CA3AF;">ODDS</span><br/><span style="font-size:20px;font-weight:600;color:#6366F1;">{bet['odds']:.2f}x</span></div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        if card['basketball']:
+            st.markdown("### Basketball")
+            for bet in card['basketball']:
+                tier_color = "#10B981" if bet['tier'] == 'A' else "#F59E0B" if bet['tier'] == 'B' else "#6B7280"
+                ev_color = "#10B981" if bet['ev'] > 0.10 else "#F59E0B" if bet['ev'] > 0.05 else "#9CA3AF"
+                st.markdown(f"""
+                <div style="padding:16px;margin:10px 0;border-radius:14px;background:radial-gradient(circle at top left, rgba(249,115,22,0.15), rgba(15,23,42,0.96));border:1px solid rgba(249,115,22,0.4);">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                        <div style="font-size:11px;padding:3px 8px;border-radius:999px;background:{tier_color}33;color:{tier_color};">TIER {bet['tier']}</div>
+                        <div style="font-size:11px;padding:3px 8px;border-radius:999px;background:{ev_color}22;color:{ev_color};">EV +{bet['ev']*100:.1f}%</div>
+                    </div>
+                    <div style="font-size:13px;color:#9CA3AF;margin-bottom:4px;">{bet['league']} • {bet['market']}</div>
+                    <div style="font-size:16px;color:#E5E7EB;font-weight:600;margin-bottom:6px;">{bet['matchup']}</div>
+                    <div style="font-size:14px;color:#FDBA74;margin-bottom:10px;">{bet['selection']}</div>
+                    <div style="display:flex;gap:24px;">
+                        <div><span style="font-size:11px;color:#9CA3AF;">ODDS</span><br/><span style="font-size:20px;font-weight:600;color:#F97316;">{bet['odds']:.2f}x</span></div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        if card['value_singles']:
+            st.markdown("### Value Singles")
+            for bet in card['value_singles']:
+                tier_color = "#10B981" if bet['tier'] == 'A' else "#F59E0B" if bet['tier'] == 'B' else "#6B7280"
+                ev_color = "#10B981" if bet['ev'] > 0.10 else "#F59E0B" if bet['ev'] > 0.05 else "#9CA3AF"
+                st.markdown(f"""
+                <div style="padding:16px;margin:10px 0;border-radius:14px;background:radial-gradient(circle at top left, rgba(16,185,129,0.15), rgba(15,23,42,0.96));border:1px solid rgba(16,185,129,0.4);">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                        <div style="font-size:11px;padding:3px 8px;border-radius:999px;background:{tier_color}33;color:{tier_color};">TIER {bet['tier']}</div>
+                        <div style="font-size:11px;padding:3px 8px;border-radius:999px;background:{ev_color}22;color:{ev_color};">EV +{bet['ev']*100:.1f}%</div>
+                    </div>
+                    <div style="font-size:13px;color:#9CA3AF;margin-bottom:4px;">{bet['league']} • {bet['market']}</div>
+                    <div style="font-size:16px;color:#E5E7EB;font-weight:600;margin-bottom:6px;">{bet['matchup']}</div>
+                    <div style="font-size:14px;color:#6EE7B7;margin-bottom:10px;">{bet['selection']}</div>
+                    <div style="display:flex;gap:24px;">
+                        <div><span style="font-size:11px;color:#9CA3AF;">ODDS</span><br/><span style="font-size:20px;font-weight:600;color:#10B981;">{bet['odds']:.2f}x</span></div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        st.markdown("---")
+        st.markdown("### Average Stats")
+        stats_cols = st.columns(3)
+        with stats_cols[0]:
+            if summary['sgp_count'] > 0:
+                st.markdown(f"""
+                <div style="padding:12px;border-radius:10px;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);">
+                    <div style="font-size:12px;color:#9CA3AF;">SGP Average</div>
+                    <div style="font-size:16px;color:#6366F1;">EV: {summary['sgp_avg_ev']:.1f}% • Odds: {summary['sgp_avg_odds']:.2f}x</div>
+                </div>
+                """, unsafe_allow_html=True)
+        with stats_cols[1]:
+            if summary['basketball_count'] > 0:
+                st.markdown(f"""
+                <div style="padding:12px;border-radius:10px;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);">
+                    <div style="font-size:12px;color:#9CA3AF;">Basketball Average</div>
+                    <div style="font-size:16px;color:#F97316;">EV: {summary['basketball_avg_ev']:.1f}% • Odds: {summary['basketball_avg_odds']:.2f}x</div>
+                </div>
+                """, unsafe_allow_html=True)
+        with stats_cols[2]:
+            if summary['value_singles_count'] > 0:
+                st.markdown(f"""
+                <div style="padding:12px;border-radius:10px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);">
+                    <div style="font-size:12px;color:#9CA3AF;">Value Singles Average</div>
+                    <div style="font-size:16px;color:#10B981;">EV: {summary['value_singles_avg_ev']:.1f}% • Odds: {summary['value_singles_avg_odds']:.2f}x</div>
+                </div>
+                """, unsafe_allow_html=True)
+        
+    except Exception as e:
+        st.error(f"Error generating daily card: {e}")
+
+
 def render_backtest_analysis():
     """Render comprehensive backtest analysis tab with EV, odds, and league breakdowns."""
     from backtest_analyzer import BacktestAnalyzer
@@ -2181,8 +2309,9 @@ def main():
     prod_bets, backtest_bets = split_bets_by_mode(all_bets)
 
     # Tabs for different products
-    overview_tab, exact_tab, singles_tab, sgp_tab, ml_parlay_tab, basket_tab, backtest_tab = st.tabs(
+    daily_card_tab, overview_tab, exact_tab, singles_tab, sgp_tab, ml_parlay_tab, basket_tab, backtest_tab = st.tabs(
         [
+            "Daily Card",
             "Overview",
             "Exact Score",
             "Value Singles",
@@ -2192,6 +2321,9 @@ def main():
             "Backtests",
         ]
     )
+
+    with daily_card_tab:
+        render_daily_card_tab()
 
     with overview_tab:
         render_overview(prod_bets)

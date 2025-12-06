@@ -128,7 +128,8 @@ class DailyCardSelector:
                     
                     if ev < 0:
                         continue
-                    if odds < 1.40 and ev < 0.10:
+                    min_odds, max_odds = self.BASKETBALL_ODDS_RANGE
+                    if odds < min_odds or odds > max_odds:
                         continue
                     
                     self.basketball_bets.append({

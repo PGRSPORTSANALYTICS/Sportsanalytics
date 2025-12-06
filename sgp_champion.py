@@ -29,7 +29,12 @@ class SGPChampion:
     
     def __init__(self):
         self.sgp_predictor = SGPPredictor()
-        self.telegram = TelegramBroadcaster()
+        
+        try:
+            self.telegram = TelegramBroadcaster()
+        except (ValueError, Exception) as e:
+            self.telegram = None
+            logger.warning(f"⚠️ Telegram not available: {e}")
         
         # Try to initialize API-Football client for player props (optional)
         try:
@@ -491,8 +496,11 @@ class SGPChampion:
             }
             
             # Use broadcast_prediction with SGP type
-            self.telegram.broadcast_prediction(prediction, prediction_type='sgp')
-            logger.info("📱 SGP sent to Telegram (SGP Channel)")
+            if self.telegram:
+                self.telegram.broadcast_prediction(prediction, prediction_type='sgp')
+                logger.info("📱 SGP sent to Telegram (SGP Channel)")
+            else:
+                logger.info("📱 Telegram disabled - SGP prediction logged only")
             
         except Exception as e:
             logger.error(f"❌ Telegram send failed: {e}")
