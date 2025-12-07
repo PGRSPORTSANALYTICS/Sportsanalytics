@@ -16,6 +16,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# ============================================================
+# PRODUCT ENABLE/DISABLE FLAGS - Set to False to pause product
+# ============================================================
+ENABLE_FOOTBALL_EXACT_SCORE = False  # PAUSED - no verified positive ROI yet
+ENABLE_SGP = False                   # PAUSED - losing money
+ENABLE_COLLEGE_BASKETBALL = True     # ACTIVE - 53.8% hit rate, profitable
+ENABLE_ML_PARLAY = False             # PAUSED - test mode, unverified
+
 
 def run_football_predictions():
     """Run football exact score predictions"""
@@ -170,16 +178,32 @@ def main():
     logger.info("📅 Games Reminder - Daily at 08:00")
     logger.info("="*80)
     
-    # Run all engines immediately on startup
+    # Run enabled engines on startup
     logger.info("🎬 Running initial prediction cycles...")
-    run_football_predictions()
-    time.sleep(5)
-    run_sgp_predictions()
-    time.sleep(5)
-    run_college_basketball()
-    time.sleep(5)
-    run_ml_parlay()
-    time.sleep(5)
+    if ENABLE_FOOTBALL_EXACT_SCORE:
+        run_football_predictions()
+        time.sleep(5)
+    else:
+        logger.info("⏸️ Football Exact Score PAUSED")
+    
+    if ENABLE_SGP:
+        run_sgp_predictions()
+        time.sleep(5)
+    else:
+        logger.info("⏸️ SGP PAUSED")
+    
+    if ENABLE_COLLEGE_BASKETBALL:
+        run_college_basketball()
+        time.sleep(5)
+    else:
+        logger.info("⏸️ College Basketball PAUSED")
+    
+    if ENABLE_ML_PARLAY:
+        run_ml_parlay()
+        time.sleep(5)
+    else:
+        logger.info("⏸️ ML Parlay PAUSED")
+    
     run_performance_updates()
     
     # CRITICAL: Run all verifications immediately on startup
@@ -191,11 +215,15 @@ def main():
     verify_ml_parlay_results()
     logger.info("✅ Initial verification complete")
     
-    # Schedule recurring prediction tasks
-    schedule.every(1).hours.do(run_football_predictions)
-    schedule.every(2).hours.do(run_sgp_predictions)
-    schedule.every(2).hours.do(run_college_basketball)
-    schedule.every(3).hours.do(run_ml_parlay)
+    # Schedule recurring prediction tasks (only enabled products)
+    if ENABLE_FOOTBALL_EXACT_SCORE:
+        schedule.every(1).hours.do(run_football_predictions)
+    if ENABLE_SGP:
+        schedule.every(2).hours.do(run_sgp_predictions)
+    if ENABLE_COLLEGE_BASKETBALL:
+        schedule.every(2).hours.do(run_college_basketball)
+    if ENABLE_ML_PARLAY:
+        schedule.every(3).hours.do(run_ml_parlay)
     
     # Schedule result verification - Every 5 minutes for FAST results
     schedule.every(5).minutes.do(verify_football_results)
