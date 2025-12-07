@@ -2042,8 +2042,8 @@ class RealFootballChampion:
         ]
         confidence = int(sum(confidence_factors) / len(confidence_factors))
         
-        # Fixed stake: $16 USD = 173 SEK
-        stake = 173.0  # Fixed stake as requested
+        # Fixed stake: $5.5 USD = 59 SEK
+        stake = 59.0  # Fixed stake as requested
         
         # Get ML predictions if learning system is available
         ml_predictions = {}
@@ -2437,8 +2437,8 @@ class RealFootballChampion:
                 import json
                 analysis = json.loads(analysis_json) if analysis_json else {}
                 
-                # Fixed exact score stake: $16 USD = 173 SEK
-                dynamic_stake = 173.0
+                # Fixed exact score stake: $5.5 USD = 59 SEK
+                dynamic_stake = 59.0
                 
                 opportunity = FootballOpportunity(
                     match_id=f"{home_team}_vs_{away_team}_refill",
@@ -3138,8 +3138,8 @@ class RealFootballChampion:
                 # Use Monte Carlo-derived edge (not random heuristic)
                 edge_percentage = mc_edge_percentage
                 
-                # Fixed exact score stake: $16 USD = 173 SEK
-                dynamic_stake = 173.0
+                # Fixed exact score stake: $5.5 USD = 59 SEK
+                dynamic_stake = 59.0
                 stake_units = 1.0  # Fixed stake
                 
                 opportunity = FootballOpportunity(

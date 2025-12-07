@@ -54,8 +54,8 @@ class BankrollManager:
         return bankroll * self.STAKE_PCT
     
     def get_exact_score_stake(self) -> float:
-        """Fixed exact score stake: $16 USD = 173 SEK."""
-        return 173.0  # Fixed $16 USD stake as requested
+        """Fixed exact score stake: $5.5 USD = 59 SEK."""
+        return 59.0  # Fixed $5.5 USD stake as requested
     
     def get_stake_units(self) -> float:
         """Get number of units per bet (1.2u = 1.2% / 1%)."""
