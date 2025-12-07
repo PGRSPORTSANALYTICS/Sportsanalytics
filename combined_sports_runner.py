@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 ENABLE_FOOTBALL_EXACT_SCORE = True   # ENABLED - lowered stake to $16
 ENABLE_SGP = True                    # ACTIVE - 32% hit rate, +$13,352 profit!
 ENABLE_COLLEGE_BASKETBALL = True     # ACTIVE - 63.3% hit rate, +$3,446 profit
-ENABLE_ML_PARLAY = False             # PAUSED - test mode only
+ENABLE_ML_PARLAY = True              # ENABLED - test mode (data collection only)
 
 
 def run_football_predictions():
