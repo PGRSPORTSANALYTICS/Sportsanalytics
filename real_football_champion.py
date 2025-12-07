@@ -382,8 +382,8 @@ class RealFootballChampion:
         self.min_edge_under = self.premium_min_edge_under
         self.min_confidence_under = self.premium_min_confidence_under
         self.max_daily_under = 2
-        self.max_stake = 1050.0  # SEK
-        self.base_stake = 260.0  # SEK
+        self.max_stake = 173.0   # SEK (~$16 USD) - lowered to reduce risk
+        self.base_stake = 173.0  # SEK (~$16 USD) - fixed stake
         
         # PostgreSQL database already initialized via db_helper (no need to init_database)
         
