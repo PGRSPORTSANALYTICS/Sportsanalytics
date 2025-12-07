@@ -120,6 +120,40 @@ def apply_tiered_filter(candidates: List[BetCandidate], max_bets: int = 10) -> L
     return selected
 
 
+def build_daily_card(candidates: List[BetCandidate], max_per_tier: int = 4) -> List[BetCandidate]:
+    """
+    Build the daily betting card with priority from each tier.
+    
+    Priority order:
+    1. Up to 4 L1 (High Trust) picks
+    2. Up to 4 L2 (Medium Trust) picks
+    3. Up to 4 L3 (Soft Value) picks
+    
+    Emergency fallback: If less than 3 bets, take top 5 by confidence.
+    
+    Returns: Daily card with up to 12 bets total.
+    """
+    level1 = filter_level1_high_trust(candidates)
+    level2 = filter_level2_medium_trust([c for c in candidates if c not in level1])
+    level3 = filter_level3_soft_value([c for c in candidates if c not in level1 and c not in level2])
+    
+    level1_sorted = sorted(level1, key=lambda x: x.ev_sim, reverse=True)[:max_per_tier]
+    level2_sorted = sorted(level2, key=lambda x: x.ev_model, reverse=True)[:max_per_tier]
+    level3_sorted = sorted(level3, key=lambda x: x.ev_model, reverse=True)[:max_per_tier]
+    
+    daily_card = []
+    daily_card += level1_sorted
+    daily_card += level2_sorted
+    daily_card += level3_sorted
+    
+    if len(daily_card) < 3:
+        daily_card = sorted(candidates, key=lambda x: x.confidence, reverse=True)[:5]
+        for b in daily_card:
+            b.tier = "EMERGENCY_FALLBACK"
+    
+    return daily_card
+
+
 def summarize_filtered_bets(bets: List[BetCandidate]) -> dict:
     """Get summary of filtered bets by tier."""
     tier_counts = {}
