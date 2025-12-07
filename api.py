@@ -647,6 +647,150 @@ async def get_performance_summary():
 
 
 # =============================================================================
+# Monte Carlo Simulation Endpoint
+# =============================================================================
+
+from monte_carlo_simulator import simulate_match, calc_ev, fair_odds
+
+class OneXTwoProb(BaseModel):
+    home: float
+    draw: float
+    away: float
+
+class SimulationResult(BaseModel):
+    scores: Dict[str, float]
+    one_x_two: OneXTwoProb
+    btts_yes: float
+    over_25: float
+    over_35: float
+
+class ValueHint(BaseModel):
+    market: str
+    selection: str
+    model_prob: float
+    market_odds: Optional[float] = None
+    fair_odds: Optional[float] = None
+    edge: float
+    ev: float
+
+class SimulationResponse(BaseModel):
+    home_team: str
+    away_team: str
+    home_xg: float
+    away_xg: float
+    simulation: SimulationResult
+    value_hints: List[ValueHint]
+    top_scores: List[Dict[str, Any]]
+
+@app.get("/api/simulate", response_model=SimulationResponse, tags=["Monte Carlo"])
+async def simulate_match_endpoint(
+    home_xg: float = 1.5,
+    away_xg: float = 1.2,
+    home_team: str = "Home",
+    away_team: str = "Away",
+    n_sim: int = 10000,
+    home_odds: Optional[float] = None,
+    draw_odds: Optional[float] = None,
+    away_odds: Optional[float] = None,
+    over25_odds: Optional[float] = None,
+    btts_odds: Optional[float] = None
+):
+    """
+    Run Monte Carlo simulation for a match.
+    
+    Simulates 10,000 matches using Poisson distribution and returns:
+    - Exact score probabilities
+    - 1X2, BTTS, Over/Under probabilities
+    - Value hints comparing model vs market odds
+    """
+    try:
+        sim = simulate_match(home_xg, away_xg, n_sim=n_sim)
+        
+        value_hints = []
+        
+        p1 = sim["one_x_two"]["1"]
+        px = sim["one_x_two"]["X"]
+        p2 = sim["one_x_two"]["2"]
+        
+        if home_odds:
+            ev1 = calc_ev(p1, home_odds)
+            value_hints.append(ValueHint(
+                market="1X2", selection="1",
+                model_prob=p1, market_odds=home_odds,
+                fair_odds=fair_odds(p1),
+                edge=ev1["edge"], ev=ev1["ev"]
+            ))
+        
+        if draw_odds:
+            evx = calc_ev(px, draw_odds)
+            value_hints.append(ValueHint(
+                market="1X2", selection="X",
+                model_prob=px, market_odds=draw_odds,
+                fair_odds=fair_odds(px),
+                edge=evx["edge"], ev=evx["ev"]
+            ))
+        
+        if away_odds:
+            ev2 = calc_ev(p2, away_odds)
+            value_hints.append(ValueHint(
+                market="1X2", selection="2",
+                model_prob=p2, market_odds=away_odds,
+                fair_odds=fair_odds(p2),
+                edge=ev2["edge"], ev=ev2["ev"]
+            ))
+        
+        if over25_odds:
+            ev_over = calc_ev(sim["over_25"], over25_odds)
+            value_hints.append(ValueHint(
+                market="OVER_2_5", selection="over",
+                model_prob=sim["over_25"], market_odds=over25_odds,
+                fair_odds=fair_odds(sim["over_25"]),
+                edge=ev_over["edge"], ev=ev_over["ev"]
+            ))
+        
+        if btts_odds:
+            ev_btts = calc_ev(sim["btts_yes"], btts_odds)
+            value_hints.append(ValueHint(
+                market="BTTS", selection="yes",
+                model_prob=sim["btts_yes"], market_odds=btts_odds,
+                fair_odds=fair_odds(sim["btts_yes"]),
+                edge=ev_btts["edge"], ev=ev_btts["ev"]
+            ))
+        
+        value_hints.sort(key=lambda x: x.ev, reverse=True)
+        
+        sorted_scores = sorted(sim["scores"].items(), key=lambda x: x[1], reverse=True)[:5]
+        top_scores = [
+            {"score": score, "probability": prob, "fair_odds": fair_odds(prob)}
+            for score, prob in sorted_scores
+        ]
+        
+        return SimulationResponse(
+            home_team=home_team,
+            away_team=away_team,
+            home_xg=home_xg,
+            away_xg=away_xg,
+            simulation=SimulationResult(
+                scores=sim["scores"],
+                one_x_two=OneXTwoProb(
+                    home=sim["one_x_two"]["1"],
+                    draw=sim["one_x_two"]["X"],
+                    away=sim["one_x_two"]["2"]
+                ),
+                btts_yes=sim["btts_yes"],
+                over_25=sim["over_25"],
+                over_35=sim["over_35"]
+            ),
+            value_hints=value_hints,
+            top_scores=top_scores
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in simulate_match: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
 # Run with: uvicorn api:app --host 0.0.0.0 --port 8000
 # =============================================================================
 
