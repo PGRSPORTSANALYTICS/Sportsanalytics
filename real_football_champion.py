@@ -2042,9 +2042,8 @@ class RealFootballChampion:
         ]
         confidence = int(sum(confidence_factors) / len(confidence_factors))
         
-        # Calculate stake using Kelly Criterion
-        kelly_fraction = edge / 100 / (odds - 1)
-        stake = min(self.max_stake, max(5.0, self.base_stake * kelly_fraction))
+        # Fixed stake: $16 USD = 173 SEK
+        stake = 173.0  # Fixed stake as requested
         
         # Get ML predictions if learning system is available
         ml_predictions = {}
@@ -2438,12 +2437,8 @@ class RealFootballChampion:
                 import json
                 analysis = json.loads(analysis_json) if analysis_json else {}
                 
-                # Get exact score stake (0.6% of bankroll - lower for high variance)
-                try:
-                    bankroll_mgr = get_bankroll_manager()
-                    dynamic_stake = bankroll_mgr.get_exact_score_stake()
-                except Exception:
-                    dynamic_stake = 86.0  # Fallback (half of 173)
+                # Fixed exact score stake: $16 USD = 173 SEK
+                dynamic_stake = 173.0
                 
                 opportunity = FootballOpportunity(
                     match_id=f"{home_team}_vs_{away_team}_refill",
@@ -3143,14 +3138,9 @@ class RealFootballChampion:
                 # Use Monte Carlo-derived edge (not random heuristic)
                 edge_percentage = mc_edge_percentage
                 
-                # Get exact score stake (0.6% of bankroll - lower for high variance)
-                try:
-                    bankroll_mgr = get_bankroll_manager()
-                    dynamic_stake = bankroll_mgr.get_exact_score_stake()
-                    stake_units = 0.6  # Exact score uses 0.6u
-                except Exception:
-                    dynamic_stake = 86.0  # Fallback (half of 173)
-                    stake_units = 0.6
+                # Fixed exact score stake: $16 USD = 173 SEK
+                dynamic_stake = 173.0
+                stake_units = 1.0  # Fixed stake
                 
                 opportunity = FootballOpportunity(
                     match_id=match.get('id', f"{match['home_team']}_vs_{match['away_team']}"),

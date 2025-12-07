@@ -54,9 +54,8 @@ class BankrollManager:
         return bankroll * self.STAKE_PCT
     
     def get_exact_score_stake(self) -> float:
-        """Calculate exact score stake: 0.6% of current bankroll (lower due to higher variance)."""
-        bankroll = self.get_current_bankroll()
-        return bankroll * self.EXACT_SCORE_STAKE_PCT
+        """Fixed exact score stake: $16 USD = 173 SEK."""
+        return 173.0  # Fixed $16 USD stake as requested
     
     def get_stake_units(self) -> float:
         """Get number of units per bet (1.2u = 1.2% / 1%)."""
