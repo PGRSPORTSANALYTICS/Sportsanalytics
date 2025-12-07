@@ -1657,17 +1657,18 @@ class RealFootballChampion:
                 odds = score_pred.get('odds', 0)
                 score = score_pred.get('score', '')
                 
-                # VALUE BETTING CRITERIA (Professional Standard):
+                # VALUE BETTING CRITERIA (PGR Final Score Strategy v1.0):
                 # 1. Poisson probability ≥ 7% (realistic for exact scores)
-                # 2. Expected value ≥ 1.15 (15%+ edge)
-                # 3. Proven scores: 2-0, 3-1, 2-1 (66.7%, 28.6%, 16.1% win rates!)
-                # 4. Odds: 7-16x range
+                # 2. Expected value ≥ 1.05 (5%+ edge minimum)
+                # 3. Proven scores: 2-1, 2-0, 0-1, 1-1 (best historical hit rates)
+                # 4. Odds: 10.0-12.0x (SWEET SPOT - 13.3% hit rate vs 8.9% outside)
+                # 5. Confidence ≥ 70%
                 expected_value = poisson_prob * odds if odds > 0 else 0
                 
-                is_proven_score = score in ['2-0', '3-1', '2-1']
+                is_proven_score = score in ['2-1', '2-0', '0-1', '1-1', '1-0']
                 has_good_probability = poisson_prob >= 0.07  # 7%+
-                has_value = expected_value >= 1.15  # 15% edge
-                good_odds = 7.0 <= odds <= 16.0
+                has_value = expected_value >= 1.05  # 5% edge minimum
+                good_odds = 10.0 <= odds <= 12.0  # SWEET SPOT: 13.3% hit rate
                 
                 should_save = (
                     is_proven_score and
