@@ -1,0 +1,173 @@
+from fastapi import FastAPI, Depends, HTTPException
+from pydantic import BaseModel
+from typing import Dict, Any
+import datetime
+
+app = FastAPI()
+
+
+# === Pydantic-modeller för snyggt svar ===
+
+class OneXTwoProb(BaseModel):
+    one: float
+    draw: float
+    two: float
+
+
+class SimulationResult(BaseModel):
+    scores: Dict[str, float]
+    one_x_two: OneXTwoProb
+    btts_yes: float
+    over_25: float
+    over_35: float
+
+
+class ValueHint(BaseModel):
+    market: str
+    selection: str
+    model_prob: float
+    market_odds: float
+    fair_odds: float | None
+    edge: float
+    ev: float
+
+
+class MatchInfo(BaseModel):
+    match_id: int
+    league: str
+    home_team: str
+    away_team: str
+    start_time: datetime.datetime
+
+
+class SimulationResponse(BaseModel):
+    match: MatchInfo
+    simulation: SimulationResult
+    value_hints: list[ValueHint]
+
+
+# === Dependency för DB (anpassa till din setup) ===
+
+def get_db():
+    # returnera din DB-connection / session här
+    # t.ex. med context manager eller global connector
+    raise NotImplementedError("Implementera get_db() till din databas")
+
+
+# === Själva endpointen ===
+
+@app.get("/simulate_match", response_model=SimulationResponse)
+def simulate_match_endpoint(match_id: int, n_sim: int = 10000, conn=Depends(get_db)):
+    # 1. Hämta match-data
+    row = get_match_row(conn, match_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Match not found")
+
+    lambda_home = float(row["exp_goals_home"])
+    lambda_away = float(row["exp_goals_away"])
+
+    # 2. Kör simulering
+    sim = simulate_match(lambda_home, lambda_away, n_sim=n_sim)
+
+    # 3. Hämta odds från marknaden
+    odds = get_market_odds(conn, match_id)
+
+    # 4. Bygg value-hints (om odds finns)
+    value_hints: list[ValueHint] = []
+
+    # 1X2
+    p1 = sim["one_x_two"]["1"]
+    px = sim["one_x_two"]["X"]
+    p2 = sim["one_x_two"]["2"]
+
+    if odds["1"]:
+        ev1 = calc_ev(p1, odds["1"])
+        value_hints.append(ValueHint(
+            market="1X2",
+            selection="1",
+            model_prob=p1,
+            market_odds=odds["1"],
+            fair_odds=fair_odds(p1),
+            edge=ev1["edge"],
+            ev=ev1["ev"],
+        ))
+
+    if odds["X"]:
+        evx = calc_ev(px, odds["X"])
+        value_hints.append(ValueHint(
+            market="1X2",
+            selection="X",
+            model_prob=px,
+            market_odds=odds["X"],
+            fair_odds=fair_odds(px),
+            edge=evx["edge"],
+            ev=evx["ev"],
+        ))
+
+    if odds["2"]:
+        ev2 = calc_ev(p2, odds["2"])
+        value_hints.append(ValueHint(
+            market="1X2",
+            selection="2",
+            model_prob=p2,
+            market_odds=odds["2"],
+            fair_odds=fair_odds(p2),
+            edge=ev2["edge"],
+            ev=ev2["ev"],
+        ))
+
+    # Över 2.5
+    if odds["over_25"]:
+        ev_over = calc_ev(sim["over_25"], odds["over_25"])
+        value_hints.append(ValueHint(
+            market="OVER_2_5",
+            selection="over",
+            model_prob=sim["over_25"],
+            market_odds=odds["over_25"],
+            fair_odds=fair_odds(sim["over_25"]),
+            edge=ev_over["edge"],
+            ev=ev_over["ev"],
+        ))
+
+    # BTTS Yes
+    if odds["btts_yes"]:
+        ev_btts = calc_ev(sim["btts_yes"], odds["btts_yes"])
+        value_hints.append(ValueHint(
+            market="BTTS",
+            selection="yes",
+            model_prob=sim["btts_yes"],
+            market_odds=odds["btts_yes"],
+            fair_odds=fair_odds(sim["btts_yes"]),
+            edge=ev_btts["edge"],
+            ev=ev_btts["ev"],
+        ))
+
+    # Sortera value_hints efter EV (högst först)
+    value_hints.sort(key=lambda x: x.ev, reverse=True)
+
+    # 5. Bygg responsobjekt
+    match_info = MatchInfo(
+        match_id=row["match_id"],
+        league=row["league"],
+        home_team=row["home_team"],
+        away_team=row["away_team"],
+        start_time=row["start_time"],
+    )
+
+    sim_result = SimulationResult(
+        scores=sim["scores"],
+        one_x_two=OneXTwoProb(
+            one=sim["one_x_two"]["1"],
+            draw=sim["one_x_two"]["X"],
+            two=sim["one_x_two"]["2"],
+        ),
+        btts_yes=sim["btts_yes"],
+        over_25=sim["over_25"],
+        over_35=sim["over_35"],
+    )
+
+    return SimulationResponse(
+        match=match_info,
+        simulation=sim_result,
+        value_hints=value_hints,
+    )
