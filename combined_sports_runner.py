@@ -19,10 +19,10 @@ logger = logging.getLogger(__name__)
 # ============================================================
 # PRODUCT ENABLE/DISABLE FLAGS - Set to False to pause product
 # ============================================================
-ENABLE_FOOTBALL_EXACT_SCORE = False  # PAUSED - no verified positive ROI yet
-ENABLE_SGP = False                   # PAUSED - losing money
-ENABLE_COLLEGE_BASKETBALL = True     # ACTIVE - 53.8% hit rate, profitable
-ENABLE_ML_PARLAY = False             # PAUSED - test mode, unverified
+ENABLE_FOOTBALL_EXACT_SCORE = False  # PAUSED - 9.1% hit rate, -$902 loss
+ENABLE_SGP = True                    # ACTIVE - 32% hit rate, +$13,352 profit!
+ENABLE_COLLEGE_BASKETBALL = True     # ACTIVE - 63.3% hit rate, +$3,446 profit
+ENABLE_ML_PARLAY = False             # PAUSED - test mode only
 
 
 def run_football_predictions():
