@@ -3,6 +3,7 @@
 SGP (Same Game Parlay) Predictor
 Generates automated SGP predictions using REAL AI probabilities from Poisson/Neural Net
 Runs daily in parallel with exact score predictions
+Monte Carlo integration added Dec 2025 for accurate probabilities
 """
 
 import numpy as np
@@ -18,6 +19,7 @@ from sgp_odds_pricing import OddsPricingService
 from db_helper import db_helper
 from bankroll_manager import get_bankroll_manager
 from discord_notifier import send_bet_to_discord
+from monte_carlo_integration import run_monte_carlo, classify_trust_level
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -126,11 +128,26 @@ class SGPPredictor:
                 
                 -- Odds pricing metadata
                 pricing_mode TEXT DEFAULT 'simulated',
-                pricing_metadata TEXT
+                pricing_metadata TEXT,
+                
+                -- Monte Carlo + Trust Level fields (Dec 2025)
+                trust_level TEXT,
+                sim_probability REAL,
+                ev_sim REAL,
+                disagreement REAL
             )
         ''')
         
-        logger.info("✅ SGP database schema ready")
+        # Add columns if they don't exist (for existing tables)
+        try:
+            db_helper.execute('ALTER TABLE sgp_predictions ADD COLUMN IF NOT EXISTS trust_level TEXT')
+            db_helper.execute('ALTER TABLE sgp_predictions ADD COLUMN IF NOT EXISTS sim_probability REAL')
+            db_helper.execute('ALTER TABLE sgp_predictions ADD COLUMN IF NOT EXISTS ev_sim REAL')
+            db_helper.execute('ALTER TABLE sgp_predictions ADD COLUMN IF NOT EXISTS disagreement REAL')
+        except Exception:
+            pass  # Columns already exist
+        
+        logger.info("✅ SGP database schema ready (with Monte Carlo + trust fields)")
     
     def calculate_over_under_prob(self, lambda_home: float, lambda_away: float, line: float = 2.5, over: bool = True) -> float:
         """
@@ -1047,6 +1064,91 @@ class SGPPredictor:
             
             # Apply filters: EV threshold, min odds, and MAX 10x cap
             if ev_pct > min_ev_required and MIN_ODDS <= bookmaker_odds <= MAX_ODDS:
+                # 🎯 TRUST LEVEL CLASSIFICATION (Dec 2025)
+                # Run Monte Carlo and compare with calibrated parlay probability
+                try:
+                    mc = run_monte_carlo(lambda_home, lambda_away, n_sim=10000)
+                    
+                    # Calculate MC-based parlay probability by multiplying MC leg probabilities
+                    mc_leg_probs = []
+                    mc_unmapped_legs = 0
+                    for leg in legs_with_probs:
+                        market = leg.get('market', '')
+                        selection = leg.get('selection', '')
+                        
+                        # Map SGP leg to MC probability - STRICT mapping required
+                        mc_prob_for_leg = None
+                        if market == 'OVER_UNDER_GOALS':
+                            if 'Over 2.5' in selection:
+                                mc_prob_for_leg = mc.over_25_prob
+                            elif 'Under 2.5' in selection:
+                                mc_prob_for_leg = 1.0 - mc.over_25_prob
+                            elif 'Over 3.5' in selection:
+                                mc_prob_for_leg = mc.over_35_prob
+                            elif 'Under 3.5' in selection:
+                                mc_prob_for_leg = 1.0 - mc.over_35_prob
+                        elif market == 'BTTS':
+                            if 'Yes' in selection:
+                                mc_prob_for_leg = mc.btts_yes_prob
+                            else:
+                                mc_prob_for_leg = 1.0 - mc.btts_yes_prob
+                        elif market == 'MATCH_RESULT':
+                            if 'Home' in selection or selection == '1':
+                                mc_prob_for_leg = mc.home_win_prob
+                            elif 'Draw' in selection or selection == 'X':
+                                mc_prob_for_leg = mc.draw_prob
+                            else:
+                                mc_prob_for_leg = mc.away_win_prob
+                        elif market in ('HALF_TIME_GOALS', 'SECOND_HALF_GOALS'):
+                            # Half-time goals use scaled probabilities from full-game MC
+                            if 'Over' in selection:
+                                mc_prob_for_leg = mc.over_25_prob * 0.5  # Rough scaling
+                            else:
+                                mc_prob_for_leg = 1.0 - (mc.over_25_prob * 0.5)
+                        
+                        if mc_prob_for_leg is not None:
+                            mc_leg_probs.append(mc_prob_for_leg)
+                        else:
+                            # Unmapped market - STRICT: Skip this SGP entirely
+                            mc_unmapped_legs += 1
+                            logger.debug(f"   ⚠️ MC unmapped leg: {market} - {selection}")
+                    
+                    # STRICT MC VALIDATION: Skip SGP if ANY leg is unmapped
+                    if mc_unmapped_legs > 0:
+                        logger.warning(f"   ⛔ SKIPPING SGP: {mc_unmapped_legs} leg(s) have no Monte Carlo mapping - cannot ensure MC-driven trust")
+                        continue  # Skip this SGP entirely
+                    
+                    # Calculate MC parlay probability (product of independent probs)
+                    mc_parlay_prob = 1.0
+                    for prob in mc_leg_probs:
+                        mc_parlay_prob *= max(prob, 0.01)  # Floor to avoid zero
+                    
+                    # Compare MC parlay prob with calibrated model
+                    mc_sim_prob = mc_parlay_prob
+                    mc_disagreement = abs(mc_parlay_prob - parlay_prob)
+                    logger.debug(f"   🎲 MC Parlay: {mc_parlay_prob:.2%} vs Model: {parlay_prob:.2%} (disagreement: {mc_disagreement:.2%})")
+                    
+                except Exception as e:
+                    # Monte Carlo failed - skip this SGP to maintain strict MC-only trust
+                    logger.warning(f"⚠️ Monte Carlo failed: {e} - SKIPPING SGP to maintain MC integrity")
+                    continue  # Skip this SGP entirely
+                
+                # Calculate EV from Monte Carlo probability: EV = mc_prob * odds - 1
+                ev_sim = mc_sim_prob * bookmaker_odds - 1.0  # MC-derived EV
+                ev_model = parlay_prob * bookmaker_odds - 1.0  # Model-derived EV for comparison
+                sim_approved = ev_sim >= 0.03  # 3% threshold
+                
+                trust_level = classify_trust_level(
+                    ev_sim=ev_sim,
+                    ev_model=ev_model,  # Model EV for comparison
+                    confidence=mc_sim_prob,
+                    disagreement=mc_disagreement,
+                    sim_approved=sim_approved,
+                    odds=bookmaker_odds
+                )
+                
+                logger.info(f"   🏷️ Trust: {trust_level} | EV={ev_pct:.1f}% | Odds={bookmaker_odds:.2f}x")
+                
                 all_sgps.append({
                     'legs': legs_with_probs,
                     'description': sgp['description'],
@@ -1057,7 +1159,12 @@ class SGPPredictor:
                     'ev_percentage': ev_pct,
                     'match_data': match_data,
                     'pricing_mode': pricing_mode,
-                    'pricing_metadata': pricing_metadata
+                    'pricing_metadata': pricing_metadata,
+                    # Monte Carlo + Trust Level fields (Dec 2025)
+                    'trust_level': trust_level,
+                    'sim_probability': mc_sim_prob,
+                    'ev_sim': ev_sim,
+                    'disagreement': mc_disagreement
                 })
         
         # DEDUPLICATION: Remove duplicate SGP combinations
@@ -1181,8 +1288,9 @@ class SGPPredictor:
                 timestamp, match_id, home_team, away_team, league, match_date, match_date_only, kickoff_time,
                 legs, parlay_description, parlay_probability, fair_odds, bookmaker_odds, ev_percentage,
                 stake, kelly_stake, model_version, simulations, correlation_method,
-                pricing_mode, pricing_metadata, mode, bet_placed
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                pricing_mode, pricing_metadata, mode, bet_placed,
+                trust_level, sim_probability, ev_sim, disagreement
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (home_team, away_team, parlay_description, match_date_only) DO NOTHING
         ''', (
             int(datetime.now().timestamp()),
@@ -1201,13 +1309,17 @@ class SGPPredictor:
             sgp['ev_percentage'],
             dynamic_stake if bet_placed else 0,
             kelly_stake if bet_placed else 0,
-            'v1.0_copula_poisson_live',
+            'v1.0_copula_poisson_mc',  # Updated model version
             200000,
             'copula',
             sgp.get('pricing_mode', 'simulated'),
             pricing_metadata_str,
             'PROD',
-            bet_placed
+            bet_placed,
+            sgp.get('trust_level', 'L3_SOFT_VALUE'),
+            sgp.get('sim_probability', sgp['parlay_probability']),
+            sgp.get('ev_sim', sgp['ev_percentage'] / 100.0),
+            sgp.get('disagreement', 0.0)
         ))
         
         status = "✅ BET PLACED" if bet_placed else "📊 PREDICTION ONLY (no bet)"

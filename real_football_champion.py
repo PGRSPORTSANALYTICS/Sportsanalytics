@@ -28,6 +28,7 @@ from value_singles_engine import ValueSinglesEngine
 from bankroll_manager import get_bankroll_manager
 from data_collector import get_collector
 from discord_notifier import send_bet_to_discord
+from monte_carlo_integration import run_monte_carlo, classify_trust_level
 
 # League configuration
 from league_config import get_odds_api_keys, get_league_by_odds_key, LEAGUE_REGISTRY
@@ -74,6 +75,10 @@ class FootballOpportunity:
     stake: float
     match_date: str = ""
     kickoff_time: str = ""
+    # Monte Carlo fields (Dec 2025)
+    sim_probability: float = 0.0
+    home_xg: float = 0.0
+    away_xg: float = 0.0
 
 class RealFootballChampion:
     """🏆 Advanced Real Football Betting Champion"""
@@ -3115,11 +3120,28 @@ class RealFootballChampion:
                 confidence_variation = random.randint(-3, 3)
                 confidence = min(95, max(60, int(base_confidence + confidence_variation)))
                 
-                # Calculate edge based on ensemble vs market odds
-                edge_percentage = max(3.0, random.uniform(5.0, 15.0))
-                
                 # Create exact score opportunity
                 score_text = f"{best_score['home_goals']}-{best_score['away_goals']}"
+                
+                # 🎲 RUN MONTE CARLO SIMULATION for exact score (Dec 2025 upgrade)
+                try:
+                    mc_result = run_monte_carlo(xG_home, xG_away, n_sim=10000)
+                    mc_prob = mc_result.score_probs.get(score_text, 0.0)
+                    # Use MC probability directly (no floor - let MC drive the decision)
+                    if mc_prob <= 0:
+                        mc_prob = best_probability  # Fallback only if MC returns 0
+                    mc_disagreement = abs(mc_prob - best_probability)
+                    # Calculate edge from Monte Carlo probability: EV = prob * odds - 1
+                    mc_edge_percentage = (mc_prob * final_odds - 1) * 100  # Allow negative EV
+                    print(f"   🎲 Monte Carlo: {mc_prob:.1%} (vs ensemble: {best_probability:.1%}, edge: {mc_edge_percentage:.1f}%)")
+                except Exception as mc_error:
+                    print(f"   ⚠️ Monte Carlo failed: {mc_error} - using ensemble probability")
+                    mc_prob = best_probability
+                    mc_disagreement = 0.0
+                    mc_edge_percentage = (best_probability * final_odds - 1) * 100  # Allow negative EV
+                
+                # Use Monte Carlo-derived edge (not random heuristic)
+                edge_percentage = mc_edge_percentage
                 
                 # Get exact score stake (0.6% of bankroll - lower for high variance)
                 try:
@@ -3144,8 +3166,15 @@ class RealFootballChampion:
                     stake=dynamic_stake,
                     match_date=match.get('commence_time', ''),
                     kickoff_time=match.get('commence_time', ''),
-                    start_time=match.get('commence_time', '')
+                    start_time=match.get('commence_time', ''),
+                    # Monte Carlo: use MC probability (not ensemble)
+                    sim_probability=mc_prob,
+                    home_xg=xG_home,
+                    away_xg=xG_away
                 )
+                
+                # Store disagreement in analysis for use in save function
+                enriched_analysis['mc_disagreement'] = mc_disagreement
                 
                 print(f"🎯 EXACT SCORE PREDICTION:")
                 print(f"   📊 {opportunity.selection} @ {opportunity.odds}")
@@ -3464,13 +3493,31 @@ class RealFootballChampion:
         except Exception as e:
             print(f"⚠️ Bankroll check failed: {e} - Proceeding with bet")
         
+        # 🎯 TRUST LEVEL CLASSIFICATION (Dec 2025 - with Monte Carlo)
+        # Calculate trust level based on EV and Monte Carlo analysis
+        ev_sim = opportunity.edge_percentage / 100.0
+        sim_approved = ev_sim >= 0.03
+        # Get disagreement from Monte Carlo vs ensemble analysis
+        mc_disagreement = opportunity.analysis.get('mc_disagreement', 0.0) if isinstance(opportunity.analysis, dict) else 0.0
+        
+        trust_level = classify_trust_level(
+            ev_sim=ev_sim,
+            ev_model=ev_sim,
+            confidence=opportunity.sim_probability if opportunity.sim_probability > 0 else opportunity.confidence / 100.0,
+            disagreement=mc_disagreement,
+            sim_approved=sim_approved,
+            odds=opportunity.odds
+        )
+        print(f"   🏷️ Trust Level: {trust_level} (MC disagree: {mc_disagreement:.1%})")
+        
         try:
             result = db_helper.execute('''
                 INSERT INTO football_opportunities 
                 (timestamp, match_id, home_team, away_team, league, market, selection, 
                  odds, edge_percentage, confidence, analysis, stake, match_date, kickoff_time,
-                 quality_score, recommended_date, recommended_tier, daily_rank, mode, bet_placed)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 quality_score, recommended_date, recommended_tier, daily_rank, mode, bet_placed,
+                 trust_level, sim_probability, ev_sim, disagreement)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
             ''', (
                 int(time.time()),
@@ -3492,7 +3539,11 @@ class RealFootballChampion:
                 'exact_score',  # Special tier for exact scores
                 0,  # Not part of daily ranking
                 'PROD',  # Production mode
-                bet_placed
+                bet_placed,
+                trust_level,
+                opportunity.sim_probability if opportunity.sim_probability > 0 else opportunity.confidence / 100.0,  # sim_probability from Monte Carlo
+                ev_sim,
+                mc_disagreement  # Monte Carlo vs ensemble disagreement
             ), fetch='one')
             
             # Get the actual prediction ID from the database
