@@ -4,6 +4,8 @@
 # - Builds single bets from model xG / Poisson probabilities
 # - Supports multiple markets
 # - Avoids duplicates vs other systems
+# - Monte Carlo integration for accurate probabilities (Dec 2025)
+# - Tiered trust system (L1/L2/L3) for performance tracking
 # ------------------------------------------------------------
 
 import math
@@ -13,6 +15,7 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple, Set
 from bankroll_manager import get_bankroll_manager
 from data_collector import get_collector
+from monte_carlo_integration import run_monte_carlo, classify_trust_level, analyze_bet_with_monte_carlo
 
 
 # ============================================================
@@ -340,31 +343,48 @@ class ValueSinglesEngine:
         # Expected value = p*odds - 1
         return (p_model * odds) - 1.0
 
-    def _build_single_markets(self, lh: float, la: float) -> Dict[str, float]:
+    def _build_single_markets(self, lh: float, la: float, use_monte_carlo: bool = True) -> Dict[str, float]:
         """
         Returns model probabilities for ALL single-bet markets.
+        Uses Monte Carlo simulation for more accurate probabilities (Dec 2025).
         """
-        # Over/Under Goals (0.5 - 4.5)
+        if use_monte_carlo:
+            # Run Monte Carlo simulation (10,000 iterations)
+            mc = run_monte_carlo(lh, la, n_sim=10000)
+            
+            # Use simulation probabilities
+            p_hw = mc.home_win_prob
+            p_d = mc.draw_prob
+            p_aw = mc.away_win_prob
+            p_btts_yes = mc.btts_yes_prob
+            p_over25 = mc.over_25_prob
+            p_over35 = mc.over_35_prob
+            
+            # Derive other markets from simulation
+            p_under25 = 1 - p_over25
+            p_btts_no = 1 - p_btts_yes
+            
+            print(f"🎲 Monte Carlo: HW={p_hw:.1%} D={p_d:.1%} AW={p_aw:.1%} O2.5={p_over25:.1%} BTTS={p_btts_yes:.1%}")
+        else:
+            # Fall back to basic Poisson
+            p_hw, p_d, p_aw = prob_1x2(lh, la)
+            p_btts_yes = prob_btts(lh, la)
+            p_over25 = prob_total_over(lh, la, 2.5)
+            p_over35 = prob_total_over(lh, la, 3.5)
+            p_under25 = 1 - p_over25
+            p_btts_no = 1 - p_btts_yes
+        
+        # Over/Under Goals (0.5 - 4.5) - keep Poisson for less common lines
         p_over05 = prob_total_over(lh, la, 0.5)
         p_under05 = 1 - p_over05
         p_over15 = prob_total_over(lh, la, 1.5)
         p_under15 = 1 - p_over15
-        p_over25 = prob_total_over(lh, la, 2.5)
-        p_under25 = 1 - p_over25
-        p_over35 = prob_total_over(lh, la, 3.5)
-        p_under35 = 1 - p_over35
         p_over45 = prob_total_over(lh, la, 4.5)
         p_under45 = 1 - p_over45
+        p_under35 = 1 - p_over35
         
         # 1H Over/Under
         p_over05_1h = prob_total_over(lh * 0.45, la * 0.45, 0.5)
-        
-        # BTTS
-        p_btts_yes = prob_btts(lh, la)
-        p_btts_no = 1 - p_btts_yes
-        
-        # 1X2 Moneyline
-        p_hw, p_d, p_aw = prob_1x2(lh, la)
         
         # Double Chance
         p_home_or_draw = p_hw + p_d
@@ -572,6 +592,25 @@ class ValueSinglesEngine:
                 if confidence < self.min_confidence:
                     continue
 
+                # 🎯 TRUST LEVEL CLASSIFICATION (Dec 2025)
+                # Calculate simulation EV and disagreement
+                sim_prob = p_model  # Monte Carlo probability already used
+                ev_sim = ev  # Already calculated with MC probability
+                disagreement = abs(sim_prob - p_model)  # Will be 0 since using same prob
+                sim_approved = ev_sim >= 0.03  # 3% EV threshold
+                
+                trust_level = classify_trust_level(
+                    ev_sim=ev_sim,
+                    ev_model=ev,
+                    confidence=sim_prob,
+                    disagreement=disagreement,
+                    sim_approved=sim_approved,
+                    odds=odds
+                )
+                
+                # Print trust level for visibility
+                print(f"   🏷️ Trust: {trust_level} | EV={ev:.1%} | Conf={sim_prob:.0%}")
+
                 selection_text = {
                     # Over/Under Goals
                     "FT_OVER_0_5": "Over 0.5 Goals",
@@ -659,7 +698,12 @@ class ValueSinglesEngine:
                     "kickoff_time": kickoff_time,
                     "quality_score": float(match.get("quality_score", 50)),
                     "recommended_tier": "SINGLE",
-                    "daily_rank": 999
+                    "daily_rank": 999,
+                    # Monte Carlo + Trust Level fields (Dec 2025)
+                    "trust_level": trust_level,
+                    "sim_probability": float(sim_prob),
+                    "ev_sim": float(ev_sim),
+                    "disagreement": float(disagreement)
                 }
 
                 picks.append(opportunity)
