@@ -669,13 +669,25 @@ class CollegeBasketValueEngine:
                     commence_time = p.meta.get("commence_time")
                     bookmaker = p.meta.get("book", "Unknown")
                     
+                    # Check if this exact pick already exists (same match, market, selection)
+                    cursor.execute(
+                        """
+                        SELECT COUNT(*) FROM basketball_predictions
+                        WHERE match = %s AND market = %s AND selection = %s
+                        AND DATE(created_at) = CURRENT_DATE
+                        """,
+                        (p.match, p.market, p.selection)
+                    )
+                    if cursor.fetchone()[0] > 0:
+                        print(f"⏭️ DUPLICATE: Skipping {p.match} {p.selection} (already saved today)")
+                        continue
+                    
                     cursor.execute(
                         """
                         INSERT INTO basketball_predictions
                         (match, league, market, selection, odds, probability, ev_percentage, 
                          confidence, commence_time, bookmaker, is_parlay, parlay_legs, mode, bet_placed)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        ON CONFLICT (match, market, selection, created_at) DO NOTHING
                         """,
                         (
                             p.match,
