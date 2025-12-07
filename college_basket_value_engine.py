@@ -309,7 +309,7 @@ class CollegeBasketValueEngine:
         max_parlays: int = 3,
         min_odds: float = 1.40,
         max_odds: float = 5.50,
-        allow_parlays: bool = True,
+        allow_parlays: bool = False,  # DISABLED - parlays losing money
     ):
         self.client = client
         self.min_ev = min_ev
