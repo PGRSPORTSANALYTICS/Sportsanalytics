@@ -308,7 +308,7 @@ class CollegeBasketValueEngine:
         max_singles: int = 10,
         max_parlays: int = 3,
         min_odds: float = 1.40,
-        max_odds: float = 5.50,
+        max_odds: float = 3.00,  # AI-learned: odds 3.0+ lose money (backtest Dec 7)
         allow_parlays: bool = False,  # DISABLED - parlays losing money
     ):
         self.client = client
