@@ -343,7 +343,7 @@ st.set_page_config(
     layout="wide",
 )
 
-st_autorefresh(interval=60000, limit=None, key="dashboard_autorefresh")
+st_autorefresh(interval=300000, limit=None, key="dashboard_autorefresh")  # 5 min refresh
 
 PGR_PRIMARY = "#00FFC2"
 PGR_DARK_BG = "#050A10"
