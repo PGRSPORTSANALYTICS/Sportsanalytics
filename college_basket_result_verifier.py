@@ -195,7 +195,7 @@ class CollegeBasketballResultVerifier:
                     'selection': pick['selection'],
                     'actual_score': f"{game_result.get('home_score', '?')}-{game_result.get('away_score', '?')}",
                     'odds': pick['odds'],
-                    'profit_loss': profit_loss * 10.8,  # Convert to SEK
+                    'profit_loss': profit_loss,  # Already in SEK (173 stake)
                     'product_type': 'BASKETBALL',
                     'league': 'NCAAB'
                 }
@@ -272,7 +272,7 @@ class CollegeBasketballResultVerifier:
                     'selection': pick['selection'],
                     'actual_score': 'Parlay',
                     'odds': pick['odds'],
-                    'profit_loss': profit_loss * 10.8,  # Convert to SEK
+                    'profit_loss': profit_loss,  # Already in SEK (173 stake)
                     'product_type': 'BASKET_PARLAY',
                     'league': 'NCAAB'
                 }
