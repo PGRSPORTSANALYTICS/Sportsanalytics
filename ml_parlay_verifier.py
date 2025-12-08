@@ -95,6 +95,54 @@ class MLParlayVerifier:
             logger.error(f"❌ Error fetching scores for {sport_key}: {e}")
             return {}
     
+    def _fetch_from_cache(self, home_team: str, away_team: str) -> Optional[Dict]:
+        """Fallback: Fetch match result from match_results_cache table"""
+        try:
+            def normalize_team(name):
+                return name.lower().replace(' fc', '').replace('fc ', '').strip()
+            
+            results = db_helper.execute(
+                """SELECT home_team, away_team, home_score, away_score
+                   FROM match_results_cache
+                   WHERE match_date::date >= CURRENT_DATE - INTERVAL '7 days'""",
+                fetch='all'
+            )
+            
+            if not results:
+                return None
+            
+            home_norm = normalize_team(home_team)
+            away_norm = normalize_team(away_team)
+            
+            for row in results:
+                cache_home = normalize_team(row[0] or '')
+                cache_away = normalize_team(row[1] or '')
+                
+                if (home_norm in cache_home or cache_home in home_norm) and \
+                   (away_norm in cache_away or cache_away in away_norm):
+                    return {
+                        'home_team': row[0],
+                        'away_team': row[1],
+                        'home_score': row[2],
+                        'away_score': row[3],
+                        'completed': True
+                    }
+                # Also check reversed order (some sources swap home/away)
+                if (away_norm in cache_home or cache_home in away_norm) and \
+                   (home_norm in cache_away or cache_away in home_norm):
+                    return {
+                        'home_team': row[1],
+                        'away_team': row[0],
+                        'home_score': row[3],
+                        'away_score': row[2],
+                        'completed': True
+                    }
+            
+            return None
+        except Exception as e:
+            logger.debug(f"Cache lookup failed: {e}")
+            return None
+    
     def _determine_leg_result(self, leg: Dict, match_result: Dict) -> str:
         """
         Determine if a leg won or lost.
@@ -247,6 +295,10 @@ class MLParlayVerifier:
                                 result.get('away_team', '').lower() == away_team.lower()):
                                 match_result = result
                                 break
+                    
+                    # Fallback: Check match_results_cache table
+                    if not match_result:
+                        match_result = self._fetch_from_cache(home_team, away_team)
                     
                     if match_result and match_result.get('completed'):
                         result = self._determine_leg_result(leg, match_result)
