@@ -23,21 +23,20 @@ from monte_carlo_integration import run_monte_carlo, classify_trust_level, analy
 # These filters ensure ONLY high-quality, low-variance bets
 # ============================================================
 
-# Minimum Expected Value (EV) required - 5% edge
-MIN_VALUE_SINGLE_EV = 0.05  # 5% edge (lowered from 6%)
+# Minimum Expected Value (EV) required - 4% edge (INCREASED Dec 8 for volume)
+MIN_VALUE_SINGLE_EV = 0.04  # 4% edge (lowered from 5%)
 
 # Odds range filter - data-driven (Dec 6, 2025)
-# 1.60-1.79 = +2,147 SEK profit, 1.80-2.50 = -473 SEK loss
-# Betting only profitable range, collecting data on higher odds for learning
+# EXPANDED Dec 8: Allow odds up to 2.10 for high-trust bets
 MIN_VALUE_SINGLE_ODDS = 1.60
-MAX_VALUE_SINGLE_ODDS = 1.79  # Reduced from 2.50 - higher odds losing money
+MAX_VALUE_SINGLE_ODDS = 2.10  # Expanded from 1.79 for more volume
 MAX_LEARNING_ODDS = 2.50      # Still collect predictions up to 2.50 for AI training
 
 # Minimum model confidence/probability required
-MIN_VALUE_SINGLE_CONFIDENCE = 0.58  # 58% model probability
+MIN_VALUE_SINGLE_CONFIDENCE = 0.55  # Lowered from 58% to 55% for more volume
 
 # Maximum number of value singles per day (top N by EV)
-MAX_VALUE_SINGLES_PER_DAY = 4
+MAX_VALUE_SINGLES_PER_DAY = 8  # Doubled from 4 to 8 for volume target
 
 # Major league whitelist (using odds_api_key identifiers)
 # Only bet on leagues with reliable data and predictable outcomes

@@ -1041,16 +1041,17 @@ class SGPPredictor:
             ev_pct = (bookmaker_odds / fair_odds - 1.0) * 100.0
             
             # AI-LEARNED FILTER: Based on 653 settled bets analysis (Dec 3, 2025)
-            # ADJUSTED Dec 6: Widened range for more volume on big matchdays
-            MIN_ODDS = 4.0   # Data-driven: 4.00+ odds = +18,533 SEK, 3.00-3.99 = -2,881 SEK
+            # ADJUSTED Dec 8: Lower thresholds for more volume while maintaining quality
+            MIN_ODDS = 3.5   # Lowered from 4.0 to increase volume (with EV protection)
             MAX_ODDS = 10.0  # Keep wide range for high-value parlays
             
             # League-specific EV thresholds (Premier League needs higher due to historical poor ROI)
+            # ADJUSTED Dec 8: Lower thresholds for more volume (500 bets target by Jan 15)
             league = match_data.get('league', '')
             if 'Premier League' in league:
-                min_ev_required = 8.0  # 8% for Premier League (historical -88.7% ROI)
+                min_ev_required = 6.0  # Lowered from 8% (still cautious for EPL)
             else:
-                min_ev_required = 5.0  # 5% for other leagues
+                min_ev_required = 3.0  # Lowered from 5% to 3% for more volume
             
             # Assign tier based on odds for display purposes only
             if bookmaker_odds >= 8.0:
@@ -1191,8 +1192,8 @@ class SGPPredictor:
         
         match_data = sgp['match_data']
         
-        # DAILY LIMIT CHECK - Max 10 SGP bets per day (HARD STOP if check fails)
-        MAX_SGP_DAILY = 10
+        # DAILY LIMIT CHECK - Max 20 SGP bets per day (INCREASED Dec 8 for volume target)
+        MAX_SGP_DAILY = 20
         try:
             daily_count = db_helper.execute('''
                 SELECT COUNT(*) FROM sgp_predictions 

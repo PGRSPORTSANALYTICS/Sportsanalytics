@@ -93,15 +93,16 @@ def verify_football_results():
 
 
 def verify_sgp_results():
-    """Verify SGP parlay results"""
+    """Verify SGP parlay results using PostgreSQL-based settlement"""
     try:
-        from sgp_verifier import SGPVerifier
+        from sgp_settlement import settle_pending_sgp_bets
         logger.info("🎲 Verifying SGP results...")
-        verifier = SGPVerifier()
-        verifier.run_verification()
-        logger.info("🎲 SGP verification complete")
+        settled_count = settle_pending_sgp_bets()
+        logger.info(f"🎲 SGP verification complete: {settled_count} bets settled")
     except Exception as e:
         logger.error(f"❌ SGP verification error: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 def verify_ml_parlay_results():

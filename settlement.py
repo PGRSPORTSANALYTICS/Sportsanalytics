@@ -13,6 +13,7 @@ Central settlement-logik för PGR Sports Analytics.
 from dataclasses import dataclass
 from typing import Dict, Tuple, Optional, Any, List
 import json
+import time
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
@@ -285,18 +286,26 @@ def _fetch_pending(cur, table: str, mode: str) -> List[Dict[str, Any]]:
     return cur.fetchall()
 
 
-def _update_result(cur, table_name: str, bet_id: int, result_value: str, payout: float, settled_at, mode: str):
+def _update_result(cur, table_name: str, bet_id: int, result_value: str, payout: float, settled_at, mode: str, stake: float = 0.0):
     result_col = get_result_column(table_name)
+    
+    outcome_lowercase = 'win' if result_value == 'WON' else ('loss' if result_value == 'LOST' else 'void')
+    profit_loss = payout - stake if payout > 0 else -stake
+    settled_ts = int(settled_at.timestamp()) if hasattr(settled_at, 'timestamp') else int(time.time())
 
     query = f"""
         UPDATE {table_name}
         SET {result_col} = %s,
+            outcome = %s,
             payout = %s,
+            profit_loss = %s,
+            status = 'settled',
+            settled_timestamp = %s,
             verified_at = %s
         WHERE id = %s
           AND mode = %s
     """
-    cur.execute(query, (result_value, payout, settled_at, bet_id, mode))
+    cur.execute(query, (result_value, outcome_lowercase, payout, profit_loss, settled_ts, settled_at, bet_id, mode))
 
 
 # -------------------------
@@ -319,7 +328,7 @@ def settle_all_bets(mode: str = "PROD") -> None:
             sgps = _fetch_pending(cur, "sgp_predictions", mode)
             women = _fetch_pending(cur, "women_match_winner_predictions", mode)
 
-            to_update: List[Tuple[str, int, str, float]] = []  # (table, id, result, payout)
+            to_update: List[Tuple[str, int, str, float, float]] = []  # (table, id, result, payout, stake)
 
             # --- VALUE_SINGLE + EXACT_SCORE (antar product-kolumn i football_opportunitties) ---
             for row in singles:
@@ -337,7 +346,8 @@ def settle_all_bets(mode: str = "PROD") -> None:
                     # okänd produkt – hoppa
                     continue
 
-                to_update.append(("football_opportunitties", row["id"], status, payout))
+                stake = float(row.get("stake", 0))
+                to_update.append(("football_opportunitties", row["id"], status, payout, stake))
 
             # --- SGP_PARLAY ---
             for row in sgps:
@@ -346,7 +356,8 @@ def settle_all_bets(mode: str = "PROD") -> None:
                 if not res_obj:
                     continue
                 status, payout = settle_sgp_parlay(row, res_obj)
-                to_update.append(("sgp_predictions", row["id"], status, payout))
+                stake = float(row.get("stake", 0))
+                to_update.append(("sgp_predictions", row["id"], status, payout, stake))
 
             # --- BASKETBALL ---
             # Basketball is handled by college_basket_result_verifier.py
@@ -360,13 +371,14 @@ def settle_all_bets(mode: str = "PROD") -> None:
                 if not res_obj:
                     continue
                 status, payout = settle_women_1x2(row, res_obj)
-                to_update.append(("women_match_winner_predictions", row["id"], status, payout))
+                stake = float(row.get("stake", 0))
+                to_update.append(("women_match_winner_predictions", row["id"], status, payout, stake))
 
             # Nu uppdaterar vi alla bets i databasen
             from datetime import datetime
             now = datetime.now()
-            for table, bet_id, status, payout in to_update:
-                _update_result(cur, table, bet_id, status, payout, now, mode)
+            for table, bet_id, status, payout, stake in to_update:
+                _update_result(cur, table, bet_id, status, payout, now, mode, stake)
 
         conn.commit()
     finally:
