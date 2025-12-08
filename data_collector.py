@@ -152,7 +152,10 @@ class DataCollector:
         # Meta
         data_source: str = "combined_engine",
         bet_placed: bool = False,
-        analysis_type: str = "exact_score"
+        analysis_type: str = "exact_score",
+        
+        # Monte Carlo Trust Level (L1/L2/L3)
+        trust_level: str = None
     ) -> bool:
         """
         Store comprehensive match analysis data.
@@ -225,7 +228,8 @@ class DataCollector:
                 'edge': edge_percentage,
                 'poisson': poisson_prob, 'neural': neural_prob, 'h2h_wt': h2h_weight,
                 'match_score': match_score, 'pred_quality': prediction_quality,
-                'source': data_source, 'bet': bet_placed, 'atype': analysis_type
+                'source': data_source, 'bet': bet_placed, 'atype': analysis_type,
+                'trust_level': trust_level
             }
             
             # Convert numpy types to native Python types for database compatibility
@@ -263,7 +267,7 @@ class DataCollector:
                         
                         match_score, prediction_quality,
                         
-                        data_source, bet_placed, analysis_type
+                        data_source, bet_placed, analysis_type, trust_level
                     ) VALUES (
                         :match_id, :home_team, :away_team, :league, :match_date,
                         :home_goals_scored, :home_goals_conceded, :home_clean_sheets, :home_ppg,
@@ -279,7 +283,7 @@ class DataCollector:
                         :model_prob, :model_conf, :edge,
                         :poisson, :neural, :h2h_wt,
                         :match_score, :pred_quality,
-                        :source, :bet, :atype
+                        :source, :bet, :atype, :trust_level
                     )
                 """), params)
             
@@ -349,7 +353,8 @@ class DataCollector:
         combined_probability: float,
         edge: float,
         confidence: int = None,
-        bet_placed: bool = False
+        bet_placed: bool = False,
+        trust_level: str = None
     ) -> bool:
         """Collect SGP analysis data"""
         
@@ -364,7 +369,8 @@ class DataCollector:
             edge_percentage=edge,
             bet_placed=bet_placed,
             data_source="sgp_engine",
-            analysis_type="sgp"
+            analysis_type="sgp",
+            trust_level=trust_level
         )
     
     def collect_sgp_prediction(
@@ -379,7 +385,8 @@ class DataCollector:
         edge: float,
         sgp_type: str = "SGP",
         xg_data: Dict[str, Any] = None,
-        bet_placed: bool = False
+        bet_placed: bool = False,
+        trust_level: str = None
     ) -> bool:
         """Collect SGP prediction data for AI training"""
         
@@ -397,7 +404,8 @@ class DataCollector:
             edge_percentage=edge * 100 if edge and edge < 1 else edge,
             bet_placed=bet_placed,
             data_source="sgp_engine",
-            analysis_type=f"sgp_{sgp_type.lower().replace(' ', '_')}"
+            analysis_type=f"sgp_{sgp_type.lower().replace(' ', '_')}",
+            trust_level=trust_level
         )
     
     def get_collection_stats(self) -> Dict[str, Any]:
