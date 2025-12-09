@@ -23,19 +23,24 @@ from monte_carlo_integration import run_monte_carlo, classify_trust_level, analy
 # These filters ensure ONLY high-quality, low-variance bets
 # ============================================================
 
-# Minimum Expected Value (EV) required - TIGHTENED Dec 9 for better ROI
-MIN_VALUE_SINGLE_EV = 0.06  # 6% edge - back to quality over volume
+# ============================================================
+# VALUE SINGLES - NOW THE CORE PRODUCT (Dec 9, 2025 Pivot)
+# Lower bookmaker margins (4-8%) vs SGP (28-45%) = better ROI
+# ============================================================
 
-# Odds range filter - TIGHTENED Dec 9
-MIN_VALUE_SINGLE_ODDS = 1.60
-MAX_VALUE_SINGLE_ODDS = 1.85  # Back to 1.85 - lower variance zone
+# Minimum Expected Value (EV) - balanced for volume + quality
+MIN_VALUE_SINGLE_EV = 0.05  # 5% edge - realistic threshold
+
+# Odds range filter - sweet spot for value
+MIN_VALUE_SINGLE_ODDS = 1.55  # Slightly lower min for more supply
+MAX_VALUE_SINGLE_ODDS = 1.95  # Moderate range, lower variance
 MAX_LEARNING_ODDS = 2.50      # Still collect predictions up to 2.50 for AI training
 
-# Minimum model confidence/probability required - TIGHTENED
-MIN_VALUE_SINGLE_CONFIDENCE = 0.58  # Back to 58% for quality
+# Minimum model confidence/probability required
+MIN_VALUE_SINGLE_CONFIDENCE = 0.56  # Balanced threshold
 
-# Maximum number of value singles per day (top N by EV)
-MAX_VALUE_SINGLES_PER_DAY = 5  # Reduced from 8 - quality over quantity
+# Maximum number of value singles per day - THIS IS NOW CORE PRODUCT
+MAX_VALUE_SINGLES_PER_DAY = 10  # Increased - Value Singles are the focus now
 
 # Major league whitelist (using odds_api_key identifiers)
 # Only bet on leagues with reliable data and predictable outcomes
