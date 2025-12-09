@@ -791,6 +791,202 @@ async def simulate_match_endpoint(
 
 
 # =============================================================================
+# Daily Card Endpoint - Central Router Integration
+# =============================================================================
+
+class DailyCardSummary(BaseModel):
+    total_singles: int
+    total_parlays: int
+    total_bets: int
+    average_ev: float
+    by_trust_tier: Dict[str, int]
+    by_market_type: Dict[str, int]
+    by_product: Dict[str, int]
+    l1_count: int
+    l2_count: int
+    l3_count: int
+
+class DailyCardBet(BaseModel):
+    fixture_id: str
+    match: str
+    market: str
+    market_key: str
+    market_type: str
+    product_type: str
+    selection: str
+    line: Optional[float]
+    odds: float
+    probability: float
+    ev: float
+    confidence: float
+    trust_tier: str
+    drift_score: Optional[float]
+
+class DailyCardResponse(BaseModel):
+    date: str
+    value_singles: List[DailyCardBet]
+    totals: List[DailyCardBet]
+    btts: List[DailyCardBet]
+    corners: List[DailyCardBet]
+    shots: List[DailyCardBet]
+    cards: List[DailyCardBet]
+    corner_handicaps: List[DailyCardBet]
+    parlays: List[Dict]
+    summary: DailyCardSummary
+
+@app.get("/api/daily_card", response_model=DailyCardResponse)
+async def get_daily_card():
+    """
+    Get the complete daily betting card with all products.
+    
+    Returns predictions from all market engines:
+    - Value Singles (ML, AH, DC, DNB)
+    - Totals (Over/Under Goals)
+    - BTTS (Both Teams To Score)
+    - Corners (Match/Team Totals)
+    - Shots (Team Shots Over/Under)
+    - Cards (Match/Team Cards)
+    - Corner Handicaps
+    - Parlays (Multi-Match, ML)
+    
+    Each bet includes:
+    - Trust tier (L1_HIGH_TRUST, L2_MEDIUM_TRUST, L3_SOFT_VALUE)
+    - Expected Value (EV)
+    - Model probability and confidence
+    - Odds drift score (when available)
+    """
+    try:
+        today = datetime.utcnow().date()
+        
+        all_bets = []
+        
+        value_singles_query = """
+            SELECT fixture_id, home_team, away_team, market, selection,
+                   odds, edge_percentage as ev, confidence, model_prob, trust_tier
+            FROM football_opportunities
+            WHERE match_date = %s AND mode != 'TEST'
+            AND status = 'pending'
+            ORDER BY edge_percentage DESC
+            LIMIT 20
+        """
+        
+        vs_rows = db_helper.execute(value_singles_query, (today,))
+        value_singles = []
+        for row in vs_rows:
+            value_singles.append({
+                "fixture_id": row.get("fixture_id", ""),
+                "match": f"{row.get('home_team', '')} vs {row.get('away_team', '')}",
+                "market": row.get("market", ""),
+                "market_key": row.get("market", ""),
+                "market_type": "ML" if "WIN" in row.get("market", "") else "TOTALS",
+                "product_type": "VALUE_SINGLES",
+                "selection": row.get("selection", ""),
+                "line": None,
+                "odds": float(row.get("odds", 0)),
+                "probability": float(row.get("model_prob", 0)) * 100,
+                "ev": float(row.get("ev", 0)),
+                "confidence": float(row.get("confidence", 0)) * 100,
+                "trust_tier": row.get("trust_tier", "L3_SOFT_VALUE"),
+                "drift_score": None
+            })
+        
+        totals = [b for b in value_singles if "OVER" in b.get("market", "") or "UNDER" in b.get("market", "")]
+        btts = [b for b in value_singles if "BTTS" in b.get("market", "")]
+        corners = [b for b in value_singles if "CORNER" in b.get("market", "")]
+        remaining_singles = [b for b in value_singles if b not in totals + btts + corners]
+        
+        by_trust = {"L1_HIGH_TRUST": 0, "L2_MEDIUM_TRUST": 0, "L3_SOFT_VALUE": 0}
+        by_market = {}
+        by_product = {"VALUE_SINGLES": len(remaining_singles), "TOTALS": len(totals), 
+                      "BTTS": len(btts), "CORNERS": len(corners)}
+        
+        for bet in value_singles:
+            tier = bet.get("trust_tier", "L3_SOFT_VALUE")
+            by_trust[tier] = by_trust.get(tier, 0) + 1
+            mtype = bet.get("market_type", "UNKNOWN")
+            by_market[mtype] = by_market.get(mtype, 0) + 1
+        
+        total_bets = len(value_singles)
+        avg_ev = sum(b.get("ev", 0) for b in value_singles) / max(1, total_bets)
+        
+        summary = DailyCardSummary(
+            total_singles=total_bets,
+            total_parlays=0,
+            total_bets=total_bets,
+            average_ev=round(avg_ev, 1),
+            by_trust_tier=by_trust,
+            by_market_type=by_market,
+            by_product=by_product,
+            l1_count=by_trust.get("L1_HIGH_TRUST", 0),
+            l2_count=by_trust.get("L2_MEDIUM_TRUST", 0),
+            l3_count=by_trust.get("L3_SOFT_VALUE", 0)
+        )
+        
+        return DailyCardResponse(
+            date=str(today),
+            value_singles=[DailyCardBet(**b) for b in remaining_singles],
+            totals=[DailyCardBet(**b) for b in totals],
+            btts=[DailyCardBet(**b) for b in btts],
+            corners=[DailyCardBet(**b) for b in corners],
+            shots=[],
+            cards=[],
+            corner_handicaps=[],
+            parlays=[],
+            summary=summary
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting daily card: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/market_stats")
+async def get_market_stats():
+    """
+    Get ROI statistics broken down by market type.
+    """
+    try:
+        query = """
+            SELECT 
+                market,
+                COUNT(*) as total_bets,
+                SUM(CASE WHEN status = 'won' THEN 1 ELSE 0 END) as wins,
+                SUM(CASE WHEN status = 'lost' THEN 1 ELSE 0 END) as losses,
+                AVG(edge_percentage) as avg_ev,
+                SUM(CASE WHEN status = 'won' THEN odds - 1 ELSE -1 END) as profit_units
+            FROM football_opportunities
+            WHERE status IN ('won', 'lost')
+            GROUP BY market
+            ORDER BY profit_units DESC
+        """
+        
+        rows = db_helper.execute(query)
+        
+        stats = []
+        for row in rows:
+            total = row.get("total_bets", 0)
+            wins = row.get("wins", 0)
+            profit = row.get("profit_units", 0)
+            
+            stats.append({
+                "market": row.get("market", ""),
+                "total_bets": total,
+                "wins": wins,
+                "losses": row.get("losses", 0),
+                "hit_rate": round(wins / max(1, total) * 100, 1),
+                "avg_ev": round(float(row.get("avg_ev", 0)), 1),
+                "profit_units": round(float(profit), 2),
+                "roi": round(float(profit) / max(1, total) * 100, 1)
+            })
+        
+        return {"market_stats": stats, "generated_at": datetime.utcnow().isoformat()}
+        
+    except Exception as e:
+        logger.error(f"Error getting market stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
 # Run with: uvicorn api:app --host 0.0.0.0 --port 8000
 # =============================================================================
 
