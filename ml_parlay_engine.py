@@ -50,7 +50,7 @@ MIN_ML_PARLAY_LEG_EV = 0.03  # 3% EV threshold - PRODUCTION
 MIN_ML_PARLAY_TOTAL_EV = 5.0  # 5% total combined EV required
 
 # Parlay construction limits
-MAX_ML_PARLAYS_PER_DAY = 3
+MAX_ML_PARLAYS_PER_DAY = 5  # Increased from 3 (Dec 9, 2025)
 ML_PARLAY_MIN_LEGS = 2
 ML_PARLAY_MAX_LEGS = 4
 
