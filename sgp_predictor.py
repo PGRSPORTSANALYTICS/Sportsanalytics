@@ -1041,8 +1041,8 @@ class SGPPredictor:
             ev_pct = (bookmaker_odds / fair_odds - 1.0) * 100.0
             
             # AI-LEARNED FILTER: Based on 653 settled bets analysis (Dec 3, 2025)
-            # ADJUSTED Dec 8: Lower thresholds for more volume while maintaining quality
-            MIN_ODDS = 3.5   # Lowered from 4.0 to increase volume (with EV protection)
+            # ADJUSTED Dec 9: Lower min odds to 3.0x for more Champions League action
+            MIN_ODDS = 3.0   # Lowered from 3.5 to catch more 3-leg parlays
             MAX_ODDS = 10.0  # Keep wide range for high-value parlays
             
             # League-specific EV thresholds (Premier League needs higher due to historical poor ROI)
@@ -1053,12 +1053,20 @@ class SGPPredictor:
             else:
                 min_ev_required = 3.0  # Lowered from 5% to 3% for more volume
             
+            # Debug: Log rejection reason
+            if bookmaker_odds < MIN_ODDS:
+                logger.debug(f"   ❌ REJECTED: odds {bookmaker_odds:.2f}x < {MIN_ODDS}x min")
+            elif bookmaker_odds > MAX_ODDS:
+                logger.debug(f"   ❌ REJECTED: odds {bookmaker_odds:.2f}x > {MAX_ODDS}x max")
+            elif ev_pct <= min_ev_required:
+                logger.debug(f"   ❌ REJECTED: EV {ev_pct:.1f}% <= {min_ev_required}% min (fair: {fair_odds:.2f}x)")
+            
             # Assign tier based on odds for display purposes only
             if bookmaker_odds >= 8.0:
                 bet_tier = "Jackpot Play"
             elif bookmaker_odds >= 5.0:
                 bet_tier = "Premium Parlay"
-            elif bookmaker_odds >= 3.5:
+            elif bookmaker_odds >= 3.0:
                 bet_tier = "Value Parlay"
             else:
                 bet_tier = "Value Bet"

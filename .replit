@@ -144,4 +144,4 @@ localPort = 46291
 externalPort = 8008
 
 [agent]
-integrations = ["web_scraper==1.0.0"]
+integrations = ["web_scraper:1.0.0"]
