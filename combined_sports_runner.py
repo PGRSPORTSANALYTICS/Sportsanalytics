@@ -120,6 +120,26 @@ def verify_ml_parlay_results():
         logger.error(f"❌ ML Parlay verification error: {e}")
 
 
+def run_clv_update_cycle():
+    """Run CLV (Closing Line Value) update cycle - capture closing odds near kickoff"""
+    try:
+        from clv_service import run_clv_update_cycle as clv_cycle
+        logger.info("📊 Running CLV update cycle...")
+        stats = clv_cycle()
+        if stats.get('updated', 0) > 0:
+            avg_clv = stats.get('avg_clv')
+            if avg_clv is not None:
+                logger.info(f"📊 CLV cycle: {stats['updated']} bets updated, avg CLV: {avg_clv:+.2f}%")
+            else:
+                logger.info(f"📊 CLV cycle: {stats['updated']} bets updated")
+        else:
+            logger.info(f"📊 CLV cycle: No bets updated ({stats.get('candidates', 0)} candidates checked)")
+    except Exception as e:
+        logger.error(f"❌ CLV update cycle error: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 def print_daily_stake_summary():
     """Print today's staking summary"""
     try:
@@ -200,6 +220,7 @@ def main():
     logger.info("🏀 Basketball Results - Every 5 minutes")
     logger.info("🎰 ML Parlay Results - Every 5 minutes")
     logger.info("="*80)
+    logger.info("📊 CLV Tracking - Every 10 minutes (closing odds capture)")
     logger.info("📊 Performance Updates - Every 6 hours")
     logger.info("📊 Daily Recap - Daily at 22:30")
     logger.info("📂 Bet Categorizer - Daily at 23:00")
@@ -261,6 +282,9 @@ def main():
     schedule.every(5).minutes.do(verify_parlay_results)
     schedule.every(5).minutes.do(verify_basketball_results)
     schedule.every(5).minutes.do(verify_ml_parlay_results)
+    
+    # Schedule CLV update - Every 10 minutes to capture closing odds
+    schedule.every(10).minutes.do(run_clv_update_cycle)
     
     # Print stake summary every hour
     schedule.every(1).hours.do(print_daily_stake_summary)

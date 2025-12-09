@@ -647,6 +647,104 @@ async def get_performance_summary():
 
 
 # =============================================================================
+# CLV (Closing Line Value) Endpoint
+# =============================================================================
+
+class CLVStatsResponse(BaseModel):
+    avg_clv_all: Optional[float] = None
+    avg_clv_last_100: Optional[float] = None
+    positive_share: Optional[float] = None
+    total_with_clv: int = 0
+    generated_at: str
+
+@app.get("/api/clv_stats", response_model=CLVStatsResponse, tags=["Analytics"])
+async def get_clv_stats_endpoint():
+    """
+    Get Closing Line Value (CLV) statistics.
+    
+    CLV measures whether you got better odds than the closing line.
+    Positive CLV indicates long-term betting edge.
+    
+    Returns:
+    - avg_clv_all: Average CLV across all bets with closing odds
+    - avg_clv_last_100: Average CLV of last 100 bets
+    - positive_share: Percentage of bets with positive CLV
+    - total_with_clv: Total number of bets with CLV data
+    """
+    try:
+        from clv_service import get_clv_stats
+        stats = get_clv_stats()
+        
+        return CLVStatsResponse(
+            avg_clv_all=stats.get('avg_clv_all'),
+            avg_clv_last_100=stats.get('avg_clv_last_100'),
+            positive_share=stats.get('positive_share'),
+            total_with_clv=stats.get('total_with_clv', 0),
+            generated_at=datetime.utcnow().isoformat() + "Z"
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in get_clv_stats: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/bets/recent", tags=["Analytics"])
+async def get_recent_bets(limit: int = 50, product: Optional[str] = None):
+    """
+    Get recent bets with CLV data for bet history display.
+    
+    Parameters:
+    - limit: Maximum number of bets to return (default 50)
+    - product: Filter by product type (optional)
+    
+    Returns list of bets with:
+    - Basic bet info (teams, selection, odds, result)
+    - CLV data (open_odds, close_odds, clv_pct)
+    """
+    try:
+        query = """
+            SELECT id, match_id, home_team, away_team, market, selection,
+                   odds, open_odds, close_odds, clv_pct, outcome, profit_loss,
+                   match_date, trust_level, edge_percentage
+            FROM football_opportunities
+            WHERE bet_placed = true
+            ORDER BY timestamp DESC
+            LIMIT %s
+        """
+        rows = db_helper.execute(query, (limit,), fetch='all') or []
+        
+        bets = []
+        for row in rows:
+            bets.append({
+                'id': row[0],
+                'match_id': row[1],
+                'home_team': row[2],
+                'away_team': row[3],
+                'market': row[4],
+                'selection': row[5],
+                'odds': row[6],
+                'open_odds': row[7],
+                'close_odds': row[8],
+                'clv_pct': round(row[9], 2) if row[9] else None,
+                'outcome': row[10],
+                'profit_loss': row[11],
+                'match_date': row[12],
+                'trust_level': row[13],
+                'ev': row[14]
+            })
+        
+        return {
+            'bets': bets,
+            'count': len(bets),
+            'generated_at': datetime.utcnow().isoformat() + "Z"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in get_recent_bets: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# =============================================================================
 # Monte Carlo Simulation Endpoint
 # =============================================================================
 
