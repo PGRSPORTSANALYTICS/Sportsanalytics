@@ -647,7 +647,8 @@ def load_all_bets_from_db() -> pd.DataFrame:
             legs,
             parlay_description,
             ev,
-            selection
+            selection,
+            clv_pct
         FROM normalized_bets
         ORDER BY created_at DESC
         """
@@ -924,6 +925,15 @@ def metric_card(label: str, value: str, sublabel: str = ""):
     )
 
 
+def get_clv_stats_for_dashboard() -> dict:
+    """Fetch CLV stats for dashboard display."""
+    try:
+        from clv_service import get_clv_stats
+        return get_clv_stats()
+    except Exception as e:
+        return {'avg_clv_all': None, 'avg_clv_last_100': None, 'positive_share': None, 'total_with_clv': 0}
+
+
 def render_overview(df: pd.DataFrame):
     st.markdown(
         '<div class="pgr-header">PGR Sports Analytics</div>',
@@ -936,8 +946,9 @@ def render_overview(df: pd.DataFrame):
 
     units_summary = compute_roi_units(df)
     money_summary = compute_roi(df)
+    clv_stats = get_clv_stats_for_dashboard()
 
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         metric_card(
             "Total ROI",
@@ -957,6 +968,16 @@ def render_overview(df: pd.DataFrame):
             f"{units_summary['wins']}W / {units_summary['losses']}L / {units_summary['pushes']}P",
         )
     with col4:
+        clv_value = clv_stats.get('avg_clv_last_100')
+        clv_display = f"{clv_value:+.1f}%" if clv_value is not None else "N/A"
+        clv_positive = clv_stats.get('positive_share')
+        clv_sub = f"{clv_positive:.0f}% positive CLV" if clv_positive is not None else "Collecting closing odds..."
+        metric_card(
+            "Average CLV",
+            clv_display,
+            clv_sub,
+        )
+    with col5:
         metric_card(
             "Bets Tracked",
             f"{units_summary['bets']:,}",
@@ -1594,7 +1615,14 @@ def render_product_tab(
             settled["match"] = dt_match.dt.strftime("%d %b %H:%M").fillna("")
         settled["fixture"] = settled.apply(as_fixture, axis=1)
         
-        cols_hist = [c for c in ["settled", "match", "fixture", "odds", "stake", "payout", "profit", "result"] if c in settled.columns and not settled[c].isna().all()]
+        if "clv_pct" in settled.columns:
+            settled["CLV"] = settled["clv_pct"].apply(
+                lambda x: f"{x:+.1f}%" if pd.notna(x) else "–"
+            )
+            cols_hist = [c for c in ["settled", "match", "fixture", "odds", "CLV", "stake", "payout", "profit", "result"] if c in settled.columns and not settled[c].isna().all()]
+        else:
+            cols_hist = [c for c in ["settled", "match", "fixture", "odds", "stake", "payout", "profit", "result"] if c in settled.columns and not settled[c].isna().all()]
+        
         st.dataframe(
             settled.sort_values("settled_at", ascending=False)[cols_hist],
             use_container_width=True,

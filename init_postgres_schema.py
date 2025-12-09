@@ -49,7 +49,11 @@ def init_schema():
                 tier TEXT DEFAULT 'legacy',
                 publish_status TEXT DEFAULT 'pending',
                 actual_score TEXT,
-                bet_category TEXT DEFAULT 'today'
+                bet_category TEXT DEFAULT 'today',
+                open_odds REAL,
+                close_odds REAL,
+                clv_pct REAL,
+                odds_source VARCHAR(64) DEFAULT 'the_odds_api'
             )
         ''')
         
