@@ -57,6 +57,17 @@ The system employs advanced prediction features including:
   - **Multi-Match Parlays:** 2-3 legs (was 2-4), total odds 3.00-10.00 (was 4.00-20.00), EV 3% (was 5%), max 2/day (was 3).
   - **Basketball:** EV 1.5% (was 3%), confidence 52% (was 50%), max 12 singles (was 10).
   - Target: 5-15 Value Singles on typical match days.
+- **MultiMarket Expansion v1.0 (Dec 9, 2025):** Significantly increased daily volume with dedicated product engines:
+  - **New Product Architecture:** Separate engines for each market type with independent daily limits.
+  - **Asian Handicap Support:** Added AH -0.5, -1.0, -1.5, +0.5, +1.0, +1.5 for home/away teams to Value Singles.
+  - **Totals Engine:** Dedicated Over/Under engine with lines 0.5-4.5, max 10/day.
+  - **BTTS Engine:** Dedicated Both Teams To Score engine, max 8/day.
+  - **Corners Engine:** Match corners (6/day) + Team corners (4/day) with xG-derived modeling.
+  - **Daily Card Builder:** Orchestrates all products with tier prioritization (L1 > L2 > L3).
+  - **MultiMarket Runner:** Integration layer for executing all product cycles.
+  - **New Files:** `multimarket_config.py`, `totals_engine.py`, `btts_engine.py`, `corners_engine.py`, `daily_card_builder.py`, `multimarket_runner.py`.
+  - **Monte Carlo Integration:** All products use MC simulation for probability and EV calculation.
+  - **Expected Daily Volume:** 5-15 Value Singles + ~10 Totals + ~8 BTTS + ~6 Corners + 2-5 ML Parlays.
 
 ### System Design Choices
 - **Data Layer:** Migration from SQLite to PostgreSQL (Replit's Neon database) with connection pooling for concurrency.
