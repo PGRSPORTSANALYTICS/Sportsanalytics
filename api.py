@@ -861,20 +861,20 @@ async def get_daily_card():
         all_bets = []
         
         value_singles_query = """
-            SELECT fixture_id, home_team, away_team, market, selection,
-                   odds, edge_percentage as ev, confidence, model_prob, trust_tier
+            SELECT match_id, home_team, away_team, market, selection,
+                   odds, edge_percentage as ev, confidence, model_prob, trust_level
             FROM football_opportunities
             WHERE match_date = %s AND mode != 'TEST'
             AND status = 'pending'
             ORDER BY edge_percentage DESC
-            LIMIT 20
+            LIMIT 30
         """
         
         vs_rows = db_helper.execute(value_singles_query, (today,))
         value_singles = []
         for row in vs_rows:
             value_singles.append({
-                "fixture_id": row.get("fixture_id", ""),
+                "fixture_id": str(row.get("match_id", "")),
                 "match": f"{row.get('home_team', '')} vs {row.get('away_team', '')}",
                 "market": row.get("market", ""),
                 "market_key": row.get("market", ""),
@@ -886,7 +886,7 @@ async def get_daily_card():
                 "probability": float(row.get("model_prob", 0)) * 100,
                 "ev": float(row.get("ev", 0)),
                 "confidence": float(row.get("confidence", 0)) * 100,
-                "trust_tier": row.get("trust_tier", "L3_SOFT_VALUE"),
+                "trust_tier": row.get("trust_level", "L3_SOFT_VALUE"),
                 "drift_score": None
             })
         
