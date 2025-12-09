@@ -470,8 +470,10 @@ class ValueSinglesEngine:
                         match_date = commence_time[:10] if len(commence_time) > 10 else ""
                         kickoff_time = commence_time[11:16] if len(commence_time) > 16 else ""
                 
-                # Fixed stake for Value Singles: 460 SEK (~$42 USD)
-                VALUE_SINGLES_STAKE = 460.0  # SEK - standard stake for value singles
+                # 1.6% Kelly stake of bankroll
+                bankroll_mgr = get_bankroll_manager()
+                current_bankroll = bankroll_mgr.get_current_bankroll()
+                VALUE_SINGLES_STAKE = round(current_bankroll * 0.016, 2)  # 1.6% Kelly
                 
                 opportunity = {
                     "timestamp": int(time.time()),

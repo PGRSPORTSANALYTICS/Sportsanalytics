@@ -656,10 +656,16 @@ class CollegeBasketValueEngine:
                     print(f"⏭️ DAILY LIMIT: Skipping single {p.match} (already have {singles_today + singles_placed})")
                     continue
                 
+                # Calculate 1.6% Kelly stake of bankroll
+                kelly_stake = 160  # default fallback
+                if bankroll_mgr:
+                    current_bankroll = bankroll_mgr.get_current_bankroll()
+                    kelly_stake = round(current_bankroll * 0.016, 2)  # 1.6% Kelly
+                
                 # Bankroll check for each pick - determines if actual bet placed
                 bet_placed = True
                 if bankroll_mgr:
-                    can_bet, reason = bankroll_mgr.can_place_bet(160)
+                    can_bet, reason = bankroll_mgr.can_place_bet(kelly_stake)
                     if not can_bet:
                         bet_placed = False
                         print(f"⛔ BANKROLL LIMIT: {reason} - Saving prediction only (no bet)")
@@ -725,7 +731,7 @@ class CollegeBasketValueEngine:
                                 'selection': p.selection,
                                 'odds': p.odds,
                                 'ev': p.ev * 100,
-                                'stake': 160
+                                'stake': kelly_stake
                             }, product_type=product_type)
                         except Exception as e:
                             print(f"Discord notification failed: {e}")

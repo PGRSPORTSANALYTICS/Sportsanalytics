@@ -26,8 +26,8 @@ MIN_PARLAY_EV = 0.05  # 5% minimum EV
 MAX_PARLAYS_PER_DAY = 3
 ALLOWED_TRUST_LEVELS = {"L1", "L2"}  # Only high-trust bets
 
-# Stake configuration
-PARLAY_STAKE_SEK = 200.0  # Fixed stake per parlay in SEK
+# Stake configuration - 1.6% Kelly stake of bankroll
+KELLY_STAKE_PCT = 0.016  # 1.6% of bankroll
 
 
 def build_parlays_from_singles(singles: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -164,6 +164,12 @@ def _evaluate_parlay(legs: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     if ev < MIN_PARLAY_EV:
         return None
     
+    # Calculate 1.6% Kelly stake of bankroll
+    from bankroll_manager import get_bankroll_manager
+    bankroll_mgr = get_bankroll_manager()
+    current_bankroll = bankroll_mgr.get_current_bankroll()
+    stake = round(current_bankroll * KELLY_STAKE_PCT, 2)
+    
     # Build parlay object
     parlay = {
         'timestamp': int(time.time()),
@@ -172,8 +178,8 @@ def _evaluate_parlay(legs: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         'total_probability': round(total_prob, 4),
         'ev': round(ev, 4),
         'ev_percentage': round(ev * 100, 1),
-        'stake': PARLAY_STAKE_SEK,
-        'potential_return': round(PARLAY_STAKE_SEK * total_odds, 2),
+        'stake': stake,
+        'potential_return': round(stake * total_odds, 2),
         'legs': leg_details,
         'legs_json': json.dumps(leg_details),
         'product_type': 'PARLAY'
