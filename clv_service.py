@@ -1,0 +1,502 @@
+"""
+📊 CLV SERVICE - Closing Line Value Tracking
+============================================
+Fetches closing odds and calculates CLV for all bets.
+
+CLV = (open_odds - close_odds) / close_odds * 100
+
+A positive CLV means you got better odds than the market closed at,
+which is a strong indicator of long-term betting edge.
+"""
+
+import os
+import logging
+from datetime import datetime, timedelta, timezone
+from typing import Dict, List, Optional, Any
+from db_helper import db_helper
+from real_odds_api import RealOddsAPI
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+ODDS_SOURCE_DEFAULT = 'the_odds_api'
+CLOSING_WINDOW_BEFORE_KICKOFF_MINUTES = 20
+CLOSING_WINDOW_AFTER_KICKOFF_MINUTES = 5
+
+class CLVService:
+    """Service for tracking Closing Line Value"""
+    
+    def __init__(self):
+        try:
+            self.odds_api = RealOddsAPI()
+            logger.info("✅ CLVService initialized with RealOddsAPI")
+        except Exception as e:
+            logger.warning(f"⚠️ CLVService: RealOddsAPI init failed: {e}")
+            self.odds_api = None
+    
+    def get_candidates_for_closing_odds(self) -> List[Dict[str, Any]]:
+        """
+        Get bets that are candidates for closing odds collection.
+        
+        Candidates are bets where:
+        - close_odds IS NULL
+        - kickoff_time - now <= 20 minutes
+        - now <= kickoff_time + 5 minutes
+        - Football only (for now)
+        
+        Returns:
+            List of bet dicts with id, match_id, home_team, away_team, market, 
+            selection, open_odds, kickoff_time
+        """
+        now = datetime.now(timezone.utc)
+        
+        candidates = []
+        
+        try:
+            rows = db_helper.execute("""
+                SELECT id, match_id, home_team, away_team, market, selection, 
+                       open_odds, kickoff_time, match_date, league
+                FROM football_opportunities
+                WHERE close_odds IS NULL
+                  AND open_odds IS NOT NULL
+                  AND status = 'pending'
+                  AND bet_placed = true
+                ORDER BY kickoff_time ASC
+            """, fetch='all') or []
+            
+            for row in rows:
+                bet_id, match_id, home_team, away_team, market, selection, \
+                    open_odds, kickoff_time, match_date, league = row
+                
+                kickoff_dt = self._parse_kickoff_time(kickoff_time, match_date)
+                if not kickoff_dt:
+                    continue
+                
+                time_to_kickoff = (kickoff_dt - now).total_seconds() / 60
+                
+                if -CLOSING_WINDOW_AFTER_KICKOFF_MINUTES <= time_to_kickoff <= CLOSING_WINDOW_BEFORE_KICKOFF_MINUTES:
+                    candidates.append({
+                        'id': bet_id,
+                        'match_id': match_id,
+                        'home_team': home_team,
+                        'away_team': away_team,
+                        'market': market,
+                        'selection': selection,
+                        'open_odds': open_odds,
+                        'kickoff_time': kickoff_time,
+                        'match_date': match_date,
+                        'league': league,
+                        'time_to_kickoff_min': time_to_kickoff
+                    })
+            
+            logger.info(f"📊 CLV: Found {len(candidates)} candidates for closing odds collection")
+            return candidates
+            
+        except Exception as e:
+            logger.error(f"❌ CLV: Error fetching candidates: {e}")
+            return []
+    
+    def _parse_kickoff_time(self, kickoff_time: Optional[str], match_date: Optional[str]) -> Optional[datetime]:
+        """Parse kickoff time into datetime object"""
+        if not kickoff_time and not match_date:
+            return None
+        
+        formats = [
+            '%Y-%m-%dT%H:%M:%SZ',
+            '%Y-%m-%dT%H:%M:%S+00:00',
+            '%Y-%m-%dT%H:%M:%S',
+            '%Y-%m-%d %H:%M:%S',
+            '%Y-%m-%d %H:%M',
+        ]
+        
+        time_str = kickoff_time or match_date
+        if not time_str:
+            return None
+            
+        for fmt in formats:
+            try:
+                dt = datetime.strptime(time_str, fmt)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                return dt
+            except ValueError:
+                continue
+        
+        if match_date and len(match_date) == 10:
+            try:
+                dt = datetime.strptime(match_date, '%Y-%m-%d')
+                dt = dt.replace(hour=15, minute=0, tzinfo=timezone.utc)
+                return dt
+            except ValueError:
+                pass
+        
+        return None
+    
+    def fetch_closing_odds_for_bet(self, bet: Dict[str, Any]) -> Optional[float]:
+        """
+        Fetch closing odds for a specific bet.
+        
+        Uses The Odds API to get current market odds for the fixture/market.
+        Prefers sharp bookmakers (Pinnacle, Betfair) when available.
+        
+        Args:
+            bet: Dict with match_id, market, selection, home_team, away_team
+            
+        Returns:
+            Closing odds as float, or None if unavailable
+        """
+        if not self.odds_api:
+            return None
+        
+        try:
+            match_id = bet.get('match_id')
+            market = bet.get('market', '').lower()
+            selection = bet.get('selection', '')
+            home_team = bet.get('home_team', '')
+            away_team = bet.get('away_team', '')
+            
+            sport_key = self._get_sport_key_for_league(bet.get('league', ''))
+            if not sport_key:
+                sport_key = 'soccer_epl'
+            
+            market_type = self._map_market_to_odds_api(market)
+            
+            odds_data = self.odds_api.get_live_odds(
+                sport_key, 
+                regions=['eu', 'uk'],
+                markets=[market_type]
+            )
+            
+            if not odds_data:
+                return None
+            
+            for event in odds_data:
+                if self._match_event(event, home_team, away_team):
+                    closing_odds = self._extract_odds_for_selection(
+                        event, market, selection, home_team, away_team
+                    )
+                    if closing_odds:
+                        logger.info(f"📊 CLV: Found closing odds {closing_odds:.2f} for {home_team} vs {away_team}")
+                        return closing_odds
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"❌ CLV: Error fetching closing odds: {e}")
+            return None
+    
+    def _get_sport_key_for_league(self, league: str) -> Optional[str]:
+        """Map league name to Odds API sport key"""
+        league_mapping = {
+            'Premier League': 'soccer_epl',
+            'La Liga': 'soccer_spain_la_liga',
+            'Serie A': 'soccer_italy_serie_a',
+            'Bundesliga': 'soccer_germany_bundesliga',
+            'Ligue 1': 'soccer_france_ligue_one',
+            'Champions League': 'soccer_uefa_champs_league',
+            'Europa League': 'soccer_uefa_europa_league',
+            'Eredivisie': 'soccer_netherlands_eredivisie',
+            'Portuguese Primeira': 'soccer_portugal_primeira_liga',
+        }
+        return league_mapping.get(league)
+    
+    def _map_market_to_odds_api(self, market: str) -> str:
+        """Map internal market names to Odds API market types"""
+        market_lower = market.lower()
+        
+        if 'over' in market_lower or 'under' in market_lower:
+            return 'totals'
+        elif 'btts' in market_lower:
+            return 'btts'
+        else:
+            return 'h2h'
+    
+    def _match_event(self, event: Dict, home_team: str, away_team: str) -> bool:
+        """Check if Odds API event matches our bet's teams"""
+        event_home = event.get('home_team', '').lower()
+        event_away = event.get('away_team', '').lower()
+        
+        home_lower = home_team.lower()
+        away_lower = away_team.lower()
+        
+        if event_home == home_lower and event_away == away_lower:
+            return True
+        
+        home_words = set(home_lower.split())
+        away_words = set(away_lower.split())
+        event_home_words = set(event_home.split())
+        event_away_words = set(event_away.split())
+        
+        home_match = len(home_words & event_home_words) >= 1
+        away_match = len(away_words & event_away_words) >= 1
+        
+        return home_match and away_match
+    
+    def _extract_odds_for_selection(
+        self, 
+        event: Dict, 
+        market: str, 
+        selection: str,
+        home_team: str,
+        away_team: str
+    ) -> Optional[float]:
+        """Extract odds for specific selection from event data"""
+        bookmakers = event.get('bookmakers', [])
+        
+        sharp_books = ['pinnacle', 'betfair', 'betfair_ex_eu']
+        
+        sorted_books = sorted(
+            bookmakers,
+            key=lambda b: 0 if b.get('key', '').lower() in sharp_books else 1
+        )
+        
+        selection_lower = selection.lower()
+        market_lower = market.lower()
+        
+        for bookmaker in sorted_books:
+            markets = bookmaker.get('markets', [])
+            
+            for mkt in markets:
+                outcomes = mkt.get('outcomes', [])
+                
+                for outcome in outcomes:
+                    outcome_name = outcome.get('name', '').lower()
+                    outcome_price = outcome.get('price')
+                    
+                    if self._selection_matches_outcome(selection_lower, outcome_name, home_team, away_team, market_lower):
+                        if outcome_price:
+                            return float(outcome_price)
+        
+        return None
+    
+    def _selection_matches_outcome(
+        self, 
+        selection: str, 
+        outcome: str, 
+        home_team: str, 
+        away_team: str,
+        market: str
+    ) -> bool:
+        """Check if our selection matches the outcome from Odds API"""
+        selection_lower = selection.lower()
+        outcome_lower = outcome.lower()
+        home_lower = home_team.lower()
+        away_lower = away_team.lower()
+        
+        if selection_lower == outcome_lower:
+            return True
+        
+        if 'home' in selection_lower or home_lower in selection_lower:
+            if home_lower in outcome_lower or outcome_lower == home_lower:
+                return True
+        
+        if 'away' in selection_lower or away_lower in selection_lower:
+            if away_lower in outcome_lower or outcome_lower == away_lower:
+                return True
+        
+        if 'draw' in selection_lower and 'draw' in outcome_lower:
+            return True
+        
+        if 'over' in selection_lower and 'over' in outcome_lower:
+            sel_line = self._extract_line(selection_lower)
+            out_line = self._extract_line(outcome_lower)
+            if sel_line and out_line and abs(sel_line - out_line) < 0.01:
+                return True
+        
+        if 'under' in selection_lower and 'under' in outcome_lower:
+            sel_line = self._extract_line(selection_lower)
+            out_line = self._extract_line(outcome_lower)
+            if sel_line and out_line and abs(sel_line - out_line) < 0.01:
+                return True
+        
+        if 'btts' in selection_lower or 'both teams' in selection_lower:
+            if 'yes' in selection_lower and 'yes' in outcome_lower:
+                return True
+            if 'no' in selection_lower and 'no' in outcome_lower:
+                return True
+        
+        return False
+    
+    def _extract_line(self, text: str) -> Optional[float]:
+        """Extract numeric line from selection text like 'Over 2.5'"""
+        import re
+        match = re.search(r'(\d+\.?\d*)', text)
+        if match:
+            return float(match.group(1))
+        return None
+    
+    def update_clv_for_bet(self, bet_id: int, closing_odds: float) -> bool:
+        """
+        Calculate and update CLV for a bet.
+        
+        CLV = (open_odds - close_odds) / close_odds * 100
+        
+        Args:
+            bet_id: Database ID of the bet
+            closing_odds: The closing line odds
+            
+        Returns:
+            True if update successful, False otherwise
+        """
+        try:
+            row = db_helper.execute(
+                "SELECT open_odds FROM football_opportunities WHERE id = %s",
+                (bet_id,),
+                fetch='one'
+            )
+            
+            if not row or not row[0]:
+                logger.warning(f"⚠️ CLV: No open_odds found for bet {bet_id}")
+                return False
+            
+            open_odds = float(row[0])
+            
+            if closing_odds <= 1.0:
+                logger.warning(f"⚠️ CLV: Invalid closing odds {closing_odds} for bet {bet_id}")
+                return False
+            
+            clv_pct = ((open_odds - closing_odds) / closing_odds) * 100.0
+            
+            db_helper.execute("""
+                UPDATE football_opportunities 
+                SET close_odds = %s, clv_pct = %s
+                WHERE id = %s
+            """, (closing_odds, clv_pct, bet_id))
+            
+            logger.info(f"✅ CLV: Updated bet {bet_id}: open={open_odds:.2f}, close={closing_odds:.2f}, CLV={clv_pct:+.2f}%")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ CLV: Error updating bet {bet_id}: {e}")
+            return False
+    
+    def run_clv_update_cycle(self) -> Dict[str, Any]:
+        """
+        Main CLV update cycle.
+        
+        1. Fetch candidate bets (close to kickoff)
+        2. Try to fetch closing odds for each
+        3. Update CLV where possible
+        
+        Returns:
+            Dict with cycle statistics
+        """
+        logger.info("=" * 60)
+        logger.info("📊 CLV UPDATE CYCLE STARTING")
+        logger.info("=" * 60)
+        
+        stats = {
+            'candidates': 0,
+            'updated': 0,
+            'failed': 0,
+            'clv_values': [],
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }
+        
+        candidates = self.get_candidates_for_closing_odds()
+        stats['candidates'] = len(candidates)
+        
+        if not candidates:
+            logger.info("📊 CLV: No candidates for closing odds update")
+            return stats
+        
+        for bet in candidates:
+            bet_id = bet['id']
+            
+            closing_odds = self.fetch_closing_odds_for_bet(bet)
+            
+            if closing_odds:
+                if self.update_clv_for_bet(bet_id, closing_odds):
+                    stats['updated'] += 1
+                    open_odds = bet.get('open_odds', 0)
+                    if open_odds and closing_odds > 1.0:
+                        clv = ((open_odds - closing_odds) / closing_odds) * 100.0
+                        stats['clv_values'].append(clv)
+                else:
+                    stats['failed'] += 1
+            else:
+                stats['failed'] += 1
+                logger.debug(f"📊 CLV: Could not fetch closing odds for bet {bet_id}")
+        
+        if stats['clv_values']:
+            avg_clv = sum(stats['clv_values']) / len(stats['clv_values'])
+            stats['avg_clv'] = avg_clv
+            logger.info(f"📊 CLV CYCLE COMPLETE: {stats['updated']} updated, avg CLV: {avg_clv:+.2f}%")
+        else:
+            stats['avg_clv'] = None
+            logger.info(f"📊 CLV CYCLE COMPLETE: {stats['updated']} updated, {stats['failed']} failed")
+        
+        logger.info("=" * 60)
+        return stats
+
+
+def get_clv_stats() -> Dict[str, Any]:
+    """
+    Get aggregated CLV statistics for dashboard/API.
+    
+    Returns:
+        Dict with avg_clv_all, avg_clv_last_100, positive_share
+    """
+    stats = {
+        'avg_clv_all': None,
+        'avg_clv_last_100': None,
+        'positive_share': None,
+        'total_with_clv': 0
+    }
+    
+    try:
+        row = db_helper.execute("""
+            SELECT 
+                AVG(clv_pct) as avg_clv_all,
+                COUNT(*) as total_with_clv,
+                SUM(CASE WHEN clv_pct > 0 THEN 1 ELSE 0 END) as positive_count
+            FROM football_opportunities
+            WHERE clv_pct IS NOT NULL
+        """, fetch='one')
+        
+        if row:
+            stats['avg_clv_all'] = round(row[0], 2) if row[0] else None
+            stats['total_with_clv'] = row[1] or 0
+            if row[1] and row[1] > 0:
+                stats['positive_share'] = round((row[2] or 0) / row[1] * 100, 1)
+        
+        row_100 = db_helper.execute("""
+            SELECT AVG(clv_pct)
+            FROM (
+                SELECT clv_pct 
+                FROM football_opportunities
+                WHERE clv_pct IS NOT NULL
+                ORDER BY timestamp DESC
+                LIMIT 100
+            ) as recent
+        """, fetch='one')
+        
+        if row_100 and row_100[0]:
+            stats['avg_clv_last_100'] = round(row_100[0], 2)
+        
+    except Exception as e:
+        logger.error(f"❌ Error fetching CLV stats: {e}")
+    
+    return stats
+
+
+def run_clv_update_cycle() -> Dict[str, Any]:
+    """Convenience function to run CLV update cycle"""
+    service = CLVService()
+    return service.run_clv_update_cycle()
+
+
+if __name__ == "__main__":
+    print("🧪 Testing CLV Service...")
+    
+    clv_service = CLVService()
+    candidates = clv_service.get_candidates_for_closing_odds()
+    print(f"Found {len(candidates)} candidates")
+    
+    for c in candidates[:3]:
+        print(f"  - {c['home_team']} vs {c['away_team']} | {c['market']} | {c['time_to_kickoff_min']:.1f}min to kickoff")
+    
+    stats = get_clv_stats()
+    print(f"\nCLV Stats: {stats}")
+    
+    print(f"\nTest CLV calculation: open=2.00, close=1.80 => CLV = {((2.0-1.8)/1.8)*100:.2f}%")

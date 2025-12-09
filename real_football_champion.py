@@ -3415,13 +3415,15 @@ class RealFootballChampion:
             # Get bet_placed flag from value singles engine
             bet_placed = opp_dict.get('bet_placed', True)
             
-            # Insert prediction
+            # Insert prediction with CLV tracking fields
+            odds_value = float(opp_dict.get('odds', 0))
             db_helper.execute('''
                 INSERT INTO football_opportunities 
                 (timestamp, match_id, home_team, away_team, league, market, selection, 
                  odds, edge_percentage, confidence, analysis, stake, match_date, kickoff_time,
-                 quality_score, recommended_date, recommended_tier, daily_rank, mode, bet_placed)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 quality_score, recommended_date, recommended_tier, daily_rank, mode, bet_placed,
+                 open_odds, odds_source)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ''', (
                 opp_dict.get('timestamp', int(time.time())),
                 opp_dict.get('match_id'),
@@ -3430,7 +3432,7 @@ class RealFootballChampion:
                 opp_dict.get('league'),
                 opp_dict.get('market'),
                 opp_dict.get('selection'),
-                float(opp_dict.get('odds', 0)),
+                odds_value,
                 float(opp_dict.get('edge_percentage', 0)),
                 int(opp_dict.get('confidence', 0)),
                 opp_dict.get('analysis', '{}'),
@@ -3442,7 +3444,9 @@ class RealFootballChampion:
                 opp_dict.get('recommended_tier', 'SINGLE'),
                 opp_dict.get('daily_rank', 999),
                 'PROD',  # Production mode
-                bet_placed
+                bet_placed,
+                odds_value,  # open_odds = odds at bet creation
+                opp_dict.get('odds_source', 'the_odds_api')
             ))
             
             return True
