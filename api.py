@@ -688,6 +688,31 @@ async def get_clv_stats_endpoint():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@app.get("/api/units/daily", tags=["Analytics"])
+async def get_daily_units(days: int = 30):
+    """
+    Get daily profit/loss in units for the last N days.
+    
+    Parameters:
+    - days: Number of days to look back (default 30)
+    
+    Returns:
+    - daily_units: List of {date, units, bet_count} sorted by date desc
+    - month_summary: Current month total units
+    - best_day: Best performing day
+    - worst_day: Worst performing day
+    """
+    try:
+        from daily_units_service import get_daily_units as fetch_daily_units
+        result = fetch_daily_units(days_back=days)
+        result['generated_at'] = datetime.utcnow().isoformat() + "Z"
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error in get_daily_units: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
 @app.get("/api/bets/recent", tags=["Analytics"])
 async def get_recent_bets(limit: int = 50, product: Optional[str] = None):
     """

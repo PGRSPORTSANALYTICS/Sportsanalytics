@@ -1,0 +1,95 @@
+You are the lead engineer for PGR Sports Analytics.
+
+Goal:
+Add a Daily Units Tracking system that shows total profit/loss in units per calendar day.
+
+This system must be:
+- Based on settled bets only
+- Unit-based (no bankroll, no currency)
+- Derived from existing bet data (do NOT overcomplicate)
+
+--------------------------------
+1. Data assumptions
+--------------------------------
+
+Each bet already has or should have:
+- settled_at (datetime)
+- result (win / loss / push)
+- profit_units (float, e.g. +1.05, -1.0, 0.0)
+
+If any of these are missing:
+- Ensure profit_units is computed at settlement time using:
+  - win: (odds - 1)
+  - loss: -1
+  - push/void: 0
+
+--------------------------------
+2. Daily aggregation logic
+--------------------------------
+
+Implement a query or service that aggregates bets by day:
+
+- Group by DATE(settled_at)
+- Sum profit_units per day
+
+Example result per row:
+- date
+- total_units_for_day
+
+--------------------------------
+3. API endpoint
+--------------------------------
+
+Create a new endpoint, e.g.:
+
+GET /api/units/daily
+
+Response example:
+
+{
+  "daily_units": [
+    { "date": "2025-12-08", "units": 10.4 },
+    { "date": "2025-12-09", "units": -3.0 },
+    { "date": "2025-12-10", "units": 6.8 }
+  ],
+  "month_summary": {
+    "month": "2025-12",
+    "total_units": 14.2
+  }
+}
+
+Also include:
+- best_day (date + units)
+- worst_day (date + units)
+
+--------------------------------
+4. Dashboard integration (v1)
+--------------------------------
+
+Add a simple section to the dashboard:
+
+Title: "Daily Units"
+
+- List recent days (most recent first)
+- Show units with + / - sign
+- Green for positive, red for negative, neutral for zero
+- Keep UI minimal (no charts required in v1)
+
+--------------------------------
+5. Validation
+--------------------------------
+
+- Verify that days with no settled bets are not shown
+- Verify sums match individual bet profit_units
+- Log a small sample aggregation to confirm correctness
+
+--------------------------------
+Non-goals
+--------------------------------
+
+- No bankroll tracking
+- No stake sizing logic
+- No charts or advanced analytics in this step
+
+Outcome:
+A clean, motivating, and transparent daily unit performance view.

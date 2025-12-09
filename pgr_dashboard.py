@@ -994,6 +994,60 @@ def render_overview(df: pd.DataFrame):
         with rcol3:
             st.metric("Money ROI", f"{money_summary['roi']:+.1f}%")
 
+    st.markdown("### 📅 Daily Units")
+    
+    try:
+        from daily_units_service import get_daily_units
+        daily_data = get_daily_units(days_back=14)
+        
+        if daily_data.get('daily_units'):
+            dcol1, dcol2, dcol3 = st.columns(3)
+            with dcol1:
+                month_units = daily_data['month_summary']['total_units']
+                month_sign = "+" if month_units >= 0 else ""
+                month_color = "#00F59D" if month_units >= 0 else "#FF4444"
+                st.markdown(f"""
+                    <div style="text-align: center; padding: 10px;">
+                        <div style="font-size: 0.9rem; color: #888;">This Month</div>
+                        <div style="font-size: 1.8rem; font-weight: bold; color: {month_color};">{month_sign}{month_units:.1f}u</div>
+                    </div>
+                """, unsafe_allow_html=True)
+            with dcol2:
+                if daily_data.get('best_day'):
+                    best = daily_data['best_day']
+                    st.markdown(f"""
+                        <div style="text-align: center; padding: 10px;">
+                            <div style="font-size: 0.9rem; color: #888;">Best Day</div>
+                            <div style="font-size: 1.4rem; font-weight: bold; color: #00F59D;">+{best['units']:.1f}u</div>
+                            <div style="font-size: 0.8rem; color: #666;">{best['date']}</div>
+                        </div>
+                    """, unsafe_allow_html=True)
+            with dcol3:
+                if daily_data.get('worst_day'):
+                    worst = daily_data['worst_day']
+                    st.markdown(f"""
+                        <div style="text-align: center; padding: 10px;">
+                            <div style="font-size: 0.9rem; color: #888;">Worst Day</div>
+                            <div style="font-size: 1.4rem; font-weight: bold; color: #FF4444;">{worst['units']:.1f}u</div>
+                            <div style="font-size: 0.8rem; color: #666;">{worst['date']}</div>
+                        </div>
+                    """, unsafe_allow_html=True)
+            
+            st.markdown("**Recent Days:**")
+            for day in daily_data['daily_units'][:7]:
+                units = day['units']
+                sign = "+" if units >= 0 else ""
+                color = "#00F59D" if units > 0 else ("#FF4444" if units < 0 else "#888888")
+                st.markdown(
+                    f"<span style='color: #888;'>{day['date']}</span> &nbsp; "
+                    f"<span style='color: {color}; font-weight: bold;'>{sign}{units:.2f} units</span> "
+                    f"<span style='color: #666;'>({day['bet_count']} bets)</span>",
+                    unsafe_allow_html=True
+                )
+        else:
+            st.info("No settled bets yet - daily units will appear once results are in.")
+    except Exception as e:
+        st.warning(f"Daily units unavailable")
 
     st.markdown("### 📈 Equity Curve (Units)")
 
