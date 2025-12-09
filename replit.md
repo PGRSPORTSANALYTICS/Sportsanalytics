@@ -78,6 +78,29 @@ The system employs advanced prediction features including:
   - **New Files:** `multimarket_config.py`, `totals_engine.py`, `btts_engine.py`, `corners_engine.py`, `daily_card_builder.py`, `multimarket_runner.py`.
   - **Monte Carlo Integration:** All products use MC simulation for probability and EV calculation.
   - **Expected Daily Volume:** 5-15 Value Singles + ~10 Totals + ~8 BTTS + ~6 Corners + 2-5 ML Parlays.
+- **MultiMarket Expansion v1.1 - New Markets (Dec 9, 2025):** Extended platform with 5 additional market types:
+  - **Shots Engine (`shots_engine.py`):** Team/match shots Over/Under predictions using xG-derived shot distributions.
+    - Lines: Team total shots (8.5-12.5), Shots on target (2.5-4.5), Home/Away shots (3.5-6.5).
+    - Daily limit: 6 team shots, uses Poisson simulation with defensive adjustment.
+  - **Cards Engine (`cards_engine.py`):** Match/team cards predictions with derby detection.
+    - Lines: Match cards (2.5-6.5), Booking points (30.5-50.5), Team cards (0.5-2.5).
+    - Derby factor: +15% card probability for rivalry matches.
+    - Daily limit: 6 match cards, 4 team cards.
+  - **Corner Handicap Engine (`corner_handicap_engine.py`):** Corner handicap line predictions.
+    - Lines: -2.5, -1.5, -0.5, +0.5, +1.5, +2.5 for home/away.
+    - Uses corner difference simulation with home advantage factor.
+    - Daily limit: 6 corner handicaps.
+  - **Odds Drift Module (`odds_drift.py`):** Real-time odds movement tracking and drift scoring.
+    - Database table: `odds_snapshots` tracks open/last odds per fixture/market.
+    - Drift score: -2.0 to +2.0 scale indicating market agreement with model.
+    - Bet blocking: L1 bets blocked if drift < -0.5, L2 blocked if drift < -1.0.
+  - **Central Router (`central_router.py`):** Orchestration layer for all prediction engines.
+    - Unified candidate format across all engines.
+    - Daily card builder with product-specific limits.
+    - Drift filter integration for bet quality control.
+  - **API Endpoints:** Added `/api/daily_card` and `/api/market_stats` for external access.
+  - **New MarketTypes:** SHOTS_TEAM, SHOTS_PLAYER, CARDS_MATCH, CARDS_TEAM, CORNERS_HANDICAP.
+  - **60+ new market mappings** in `multimarket_config.py` with labels and type classifications.
 
 ### System Design Choices
 - **Data Layer:** Migration from SQLite to PostgreSQL (Replit's Neon database) with connection pooling for concurrency.
