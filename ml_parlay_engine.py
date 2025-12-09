@@ -34,12 +34,12 @@ logger = logging.getLogger(__name__)
 # Master switch
 ML_PARLAY_ENABLED = True
 
-# Odds filters per leg
-ML_PARLAY_MIN_ODDS = 1.40
-ML_PARLAY_MAX_ODDS = 2.10
+# Odds filters per leg - TEST MODE: Wider range
+ML_PARLAY_MIN_ODDS = 1.20  # TEST MODE: Lowered from 1.40
+ML_PARLAY_MAX_ODDS = 3.00  # TEST MODE: Raised from 2.10
 
-# Minimum EV per leg (4% edge)
-MIN_ML_PARLAY_LEG_EV = 0.04
+# Minimum EV per leg (0% edge for testing - raise to 4% for production)
+MIN_ML_PARLAY_LEG_EV = 0.00  # TEST MODE: 0% EV threshold - TESTING ONLY
 
 # Parlay construction limits
 MAX_ML_PARLAYS_PER_DAY = 3
@@ -266,6 +266,7 @@ class MLParlayEngine:
             
             today = datetime.utcnow().date()
             tomorrow = today + timedelta(days=1)
+            day_after = today + timedelta(days=2)  # TEST MODE: Extended to 3 days
             
             for league_key in ML_PARLAY_LEAGUE_WHITELIST:
                 try:
@@ -293,8 +294,8 @@ class MLParlayEngine:
                             match_dt = datetime.fromisoformat(commence_time.replace('Z', '+00:00'))
                             match_date = match_dt.date()
                             
-                            if match_date != today and match_date != tomorrow:
-                                continue
+                            if match_date != today and match_date != tomorrow and match_date != day_after:
+                                continue  # TEST MODE: Include matches up to 3 days ahead
                             
                             home_team = match.get('home_team', '')
                             away_team = match.get('away_team', '')
@@ -708,7 +709,8 @@ class MLParlayEngine:
                     leg['selection'], leg['odds'], leg['model_probability'], leg['edge_percentage']
                 ))
             
-            bankroll_mgr.record_pending_bet('ML_PARLAY', stake, parlay_id)
+            # TEST MODE: Skip bankroll tracking
+            # bankroll_mgr.record_pending_bet('ML_PARLAY', stake, parlay_id)
             
             logger.info(f"✅ Saved ML Parlay {parlay_id}: {len(parlay['legs'])} legs @ {metrics['total_odds']:.2f}x, EV {metrics['combined_ev']:.1f}%")
             return parlay_id
