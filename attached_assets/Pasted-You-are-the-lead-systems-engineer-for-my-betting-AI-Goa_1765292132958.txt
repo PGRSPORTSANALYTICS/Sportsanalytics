@@ -1,0 +1,120 @@
+You are the lead systems engineer for my betting AI. 
+
+Goal: 
+Extend the system with more football markets (shots props, cards, corner handicaps) and integrate them with a central engine router and odds drift analysis. The final system must:
+- Still prioritize +EV bets
+- Always TRY to produce a daily card for commercial use
+- Keep all results tracked in the database for ROI analysis
+
+Key existing modules you can reuse:
+- helper_db.py  (DB helpers)
+- monte_carlo_db.py  (simulation logic)
+- bet_filter.py  (L1/L2/L3 trust tiers)
+- totals_engine.py  (over/under goals)
+- multimarket_config.py  (product + market configs)
+- Routes in FastAPI for predictions and daily betting card
+
+### STEP 1 – Data and config
+
+1. Extend the database schema and helper_db functions to support new market types:
+   - SHOTS_PLAYER (player shots, player shots on target)
+   - SHOTS_TEAM (team total shots, shots on target)
+   - CARDS_MATCH (total cards / booking points)
+   - CARDS_TEAM (team cards)
+   - CORNERS_HANDICAP (corner handicap lines, e.g. Home -1.5)
+2. Update multimarket_config.py so each product knows which market types it can use:
+   - Value Singles: ML, AH, DNB, DC, Totals, BTTS, Corners total, Team corners, Shots team, Cards match
+   - Props product (for later): player shots and player cards
+   - Parlay engines: can build parlays across ML, Totals, BTTS, Corners, Shots, Cards
+
+### STEP 2 – New prediction engines
+
+Create or extend engines for:
+
+1. SHOTS ENGINE
+   - For team shots and player shots
+   - Use Monte Carlo or Poisson-based simulations with:
+     - team xG, xShots, pace, attacking style
+     - defensive stats of opponent
+     - for players: share of team shots, minutes, role
+   - Return probabilities for:
+     - Over/Under lines (e.g. over 2.5 SOT, over 10.5 team shots)
+
+2. CARDS ENGINE
+   - Model distribution of cards:
+     - team historical cards / fouls
+     - referee stats (cards per match) when available
+     - derby / rivalry flag and competition intensity
+   - Return probabilities for:
+     - Over/Under match cards
+     - Over/Under team cards
+
+3. CORNER HANDICAP ENGINE
+   - Reuse the corners engine, but shift focus to difference between teams
+   - Model probability that Team A wins corners by at least the handicap line
+   - Return probabilities for handicap lines like:
+     - Home -1.5, Home -2.5, Away +1.5, etc.
+
+Each engine should expose a function like:
+- generate_market_predictions(fixture, odds_snapshot, db_conn) -> list of candidate bets
+Where each bet has:
+- fixture_id, market_type, selection, line, model_prob, book_odds, EV, confidence, metadata
+
+### STEP 3 – Odds drift analysis
+
+Build an odds drift module:
+
+1. For each market/selection we consider, store:
+   - open_odds (first time we see this line)
+   - last_odds, last_update_time
+2. Each time odds are refreshed, compute:
+   - drift_pct = (last_odds - open_odds) / open_odds
+3. Provide a helper:
+   - get_drift_score(drift_pct, direction_vs_model) that:
+      - rewards moves toward our model probability
+      - penalizes moves away from our model
+4. Integrate drift_score into bet_filter / trust tiers:
+   - For L1 bets: require drift_score >= 0 (market not strongly against us)
+   - For L3 bets: allow negative drift_score but mark them as “market disagrees”
+
+### STEP 4 – Central Engine Router
+
+Create a module, for example central_router.py, that:
+
+1. For a given prediction cycle:
+   - Loads all fixtures for supported leagues
+   - For each fixture, calls ALL active engines:
+     - ML/AH, Totals, BTTS, Corners total, Team corners, Shots engine, Cards engine, Corner handicap engine
+2. Collects candidate bets from all engines into a common structure
+3. Sends all candidates to bet_filter.py to classify them into L1 / L2 / L3 using:
+   - EV thresholds per market
+   - Confidence thresholds
+   - Disagreement / drift_score limits
+4. Applies daily product limits and diversity:
+   - Value Singles: try to fill up to 15 bets/day across different markets and leagues
+   - Totals: up to 10/day
+   - BTTS: up to 8/day
+   - Corners (match + team + handicap): combined limit per day
+   - Keep a balance between markets so the daily card looks attractive and varied
+5. Returns a final “Daily Betting Card” object that contains:
+   - All qualified singles (tagged with market type and trust tier)
+   - All parlays (if they are built from L1/L2 legs)
+   - Summary stats (number of bets, average EV, markets represented)
+
+### STEP 5 – Integration and UI
+
+1. Wire the central router into the existing prediction workflow:
+   - Replace any old hard-coded selection logic with calls to central_router
+2. Expose a FastAPI endpoint like:
+   - GET /api/daily_card
+   Which returns the full card, trust tiers, and market breakdown.
+3. Make sure the dashboard uses the new router and still tracks ROI by:
+   - Product (Value Singles, Totals, BTTS, Corners, Shots, Cards, Parlays)
+   - Market type (ML, AH, Totals, BTTS, Corners, Shots, Cards, etc.)
+
+Important:
+- Reuse as much of the existing Monte Carlo and filter logic as possible.
+- Keep everything data-driven with configuration, not hard-coded rules.
+- Make safe defaults if data for a new market is incomplete (e.g. skip player props if we don’t have enough minutes or stats).
+
+Start with implementing the data + config changes and stub engines, then integrate the central router and odds drift module. After that, we can refine thresholds based on backtests.

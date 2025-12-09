@@ -28,6 +28,11 @@ class MarketType(Enum):
     CORNERS = "CORNERS"
     DNB = "DNB"
     TEAM_TOTALS = "TEAM_TOTALS"
+    SHOTS_TEAM = "SHOTS_TEAM"
+    SHOTS_PLAYER = "SHOTS_PLAYER"
+    CARDS_MATCH = "CARDS_MATCH"
+    CARDS_TEAM = "CARDS_TEAM"
+    CORNERS_HANDICAP = "CORNERS_HANDICAP"
 
 
 class ProductType(Enum):
@@ -35,8 +40,12 @@ class ProductType(Enum):
     TOTALS = "TOTALS"
     BTTS = "BTTS"
     CORNERS = "CORNERS"
+    SHOTS = "SHOTS"
+    CARDS = "CARDS"
+    CORNERS_HANDICAP = "CORNERS_HANDICAP"
     ML_PARLAYS = "ML_PARLAYS"
     MULTI_MATCH_PARLAYS = "MULTI_MATCH_PARLAYS"
+    PROPS = "PROPS"
 
 
 @dataclass
