@@ -81,17 +81,52 @@ class BankrollManager:
         return pending
     
     def get_today_exposure(self) -> float:
-        """Get total stakes placed today (both pending and settled)."""
+        """Get total stakes placed today across ALL bet tables."""
+        total = 0.0
         with self.engine.connect() as conn:
-            result = conn.execute(text("""
-                SELECT COALESCE(SUM(stake), 0) as today_stakes
-                FROM bets
-                WHERE DATE(created_at) = CURRENT_DATE
-            """))
-            row = result.fetchone()
-            today = float(row[0]) if row else 0
-        
-        return today
+            queries = [
+                "SELECT COALESCE(SUM(stake), 0) FROM football_opportunities WHERE DATE(created_at) = CURRENT_DATE",
+                "SELECT COALESCE(SUM(stake), 0) FROM sgp_predictions WHERE DATE(created_at) = CURRENT_DATE",
+                "SELECT COALESCE(SUM(stake), 0) FROM ml_parlay_predictions WHERE DATE(timestamp) = CURRENT_DATE",
+                "SELECT COALESCE(SUM(CASE WHEN bet_placed THEN 160 ELSE 0 END), 0) FROM basketball_predictions WHERE DATE(created_at) = CURRENT_DATE",
+            ]
+            for q in queries:
+                try:
+                    result = conn.execute(text(q))
+                    row = result.fetchone()
+                    total += float(row[0]) if row and row[0] else 0
+                except:
+                    pass
+        return total
+    
+    def get_today_stake_breakdown(self) -> dict:
+        """Get breakdown of today's stakes by product type."""
+        breakdown = {
+            'value_singles': 0.0,
+            'parlays': 0.0, 
+            'ml_parlays': 0.0,
+            'basketball': 0.0,
+            'total': 0.0
+        }
+        with self.engine.connect() as conn:
+            try:
+                result = conn.execute(text("SELECT COALESCE(SUM(stake), 0) FROM football_opportunities WHERE DATE(created_at) = CURRENT_DATE"))
+                breakdown['value_singles'] = float(result.fetchone()[0] or 0)
+            except: pass
+            try:
+                result = conn.execute(text("SELECT COALESCE(SUM(stake), 0) FROM sgp_predictions WHERE DATE(created_at) = CURRENT_DATE"))
+                breakdown['parlays'] = float(result.fetchone()[0] or 0)
+            except: pass
+            try:
+                result = conn.execute(text("SELECT COALESCE(SUM(stake), 0) FROM ml_parlay_predictions WHERE DATE(timestamp) = CURRENT_DATE"))
+                breakdown['ml_parlays'] = float(result.fetchone()[0] or 0)
+            except: pass
+            try:
+                result = conn.execute(text("SELECT COALESCE(SUM(CASE WHEN bet_placed THEN 160 ELSE 0 END), 0) FROM basketball_predictions WHERE DATE(created_at) = CURRENT_DATE"))
+                breakdown['basketball'] = float(result.fetchone()[0] or 0)
+            except: pass
+        breakdown['total'] = sum([breakdown['value_singles'], breakdown['parlays'], breakdown['ml_parlays'], breakdown['basketball']])
+        return breakdown
     
     def get_today_profit_loss(self) -> float:
         """Get today's total profit/loss from settled bets."""
@@ -263,8 +298,14 @@ class BankrollManager:
         print(f"Pending Exposure:   {status['pending_exposure']:,.0f} SEK ({status['exposure_pct']:.1f}%)")
         print(f"Available Funds:    {status['available_funds']:,.0f} SEK")
         print("-"*60)
-        print(f"📅 TODAY'S ACTIVITY:")
-        print(f"   Today's Exposure:  {status['today_exposure']:,.0f} SEK")
+        breakdown = self.get_today_stake_breakdown()
+        print(f"📅 TODAY'S STAKING (1.6% Kelly):")
+        print(f"   Value Singles:     {breakdown['value_singles']:,.0f} SEK")
+        print(f"   Multi-Match:       {breakdown['parlays']:,.0f} SEK")
+        print(f"   ML Parlays:        {breakdown['ml_parlays']:,.0f} SEK")
+        print(f"   Basketball:        {breakdown['basketball']:,.0f} SEK")
+        print(f"   ─────────────────────────────")
+        print(f"   TOTAL STAKED:      {breakdown['total']:,.0f} SEK (${breakdown['total']/self.USD_TO_SEK:,.0f} USD)")
         print(f"   Today's P/L:       {status['today_profit_loss']:+,.0f} SEK")
         print(f"   Daily Loss Limit:  {status['daily_loss_limit']:,.0f} SEK (20% of bankroll)")
         if status['daily_loss_limit_reached']:

@@ -120,6 +120,30 @@ def verify_ml_parlay_results():
         logger.error(f"❌ ML Parlay verification error: {e}")
 
 
+def print_daily_stake_summary():
+    """Print today's staking summary"""
+    try:
+        from bankroll_manager import get_bankroll_manager
+        bankroll_mgr = get_bankroll_manager()
+        breakdown = bankroll_mgr.get_today_stake_breakdown()
+        current_bankroll = bankroll_mgr.get_current_bankroll()
+        usd_rate = 10.75
+        
+        logger.info("="*60)
+        logger.info("💰 TODAY'S STAKING SUMMARY (1.6% Kelly)")
+        logger.info("="*60)
+        logger.info(f"   Value Singles:     {breakdown['value_singles']:,.0f} SEK")
+        logger.info(f"   Multi-Match:       {breakdown['parlays']:,.0f} SEK")
+        logger.info(f"   ML Parlays:        {breakdown['ml_parlays']:,.0f} SEK")
+        logger.info(f"   Basketball:        {breakdown['basketball']:,.0f} SEK")
+        logger.info("-"*60)
+        logger.info(f"   TOTAL STAKED:      {breakdown['total']:,.0f} SEK (${breakdown['total']/usd_rate:,.0f} USD)")
+        logger.info(f"   Current Bankroll:  {current_bankroll:,.0f} SEK (${current_bankroll/usd_rate:,.0f} USD)")
+        logger.info("="*60)
+    except Exception as e:
+        logger.error(f"❌ Stake summary error: {e}")
+
+
 def run_performance_updates():
     """Run performance updates"""
     try:
@@ -208,6 +232,9 @@ def main():
     else:
         logger.info("⏸️ ML Parlay PAUSED")
     
+    # Print daily stake summary after all prediction cycles
+    print_daily_stake_summary()
+    
     run_performance_updates()
     
     # CRITICAL: Run all verifications immediately on startup
@@ -234,6 +261,9 @@ def main():
     schedule.every(5).minutes.do(verify_parlay_results)
     schedule.every(5).minutes.do(verify_basketball_results)
     schedule.every(5).minutes.do(verify_ml_parlay_results)
+    
+    # Print stake summary every hour
+    schedule.every(1).hours.do(print_daily_stake_summary)
     
     schedule.every(6).hours.do(run_performance_updates)
     
