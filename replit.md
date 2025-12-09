@@ -44,6 +44,7 @@ The system employs advanced prediction features including:
 - **PostgreSQL SGP Settlement (Dec 8, 2025):** New `sgp_settlement.py` module handles automatic SGP bet settlement using team-name matching against `match_results_cache` table. Supports all common leg types (Over/Under goals, BTTS, 1H/2H goals, corners) with VOID fallback for unknown markets.
 - **Increased Bet Volume (Dec 8, 2025):** SGP daily limit raised to 20, min EV lowered to 3% (6% EPL), min odds lowered to 3.5x. Value Singles daily limit raised to 8, max odds expanded to 2.10, min EV lowered to 4%.
 - **Trust Level Learning (Dec 8, 2025):** Added `trust_level` field to training_data table. Data collector now captures L1/L2/L3 trust classifications from Monte Carlo simulations for future performance analysis.
+- **Quality Tightening (Dec 9, 2025):** Reverted to stricter filters after ROI dropped to 7%. SGP: MIN_ODDS back to 4.0x, EV thresholds 6-10% by league. Value Singles: EV 6%, confidence 58%, max odds 1.85, daily limit 5. Focus on quality over volume to improve ROI.
 
 ### System Design Choices
 - **Data Layer:** Migration from SQLite to PostgreSQL (Replit's Neon database) with connection pooling for concurrency.

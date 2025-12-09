@@ -1041,17 +1041,19 @@ class SGPPredictor:
             ev_pct = (bookmaker_odds / fair_odds - 1.0) * 100.0
             
             # AI-LEARNED FILTER: Based on 653 settled bets analysis (Dec 3, 2025)
-            # ADJUSTED Dec 9: Lower min odds to 3.0x for more Champions League action
-            MIN_ODDS = 3.0   # Lowered from 3.5 to catch more 3-leg parlays
+            # TIGHTENED Dec 9: Quality > Volume - stricter gates to improve ROI
+            MIN_ODDS = 4.0   # Back to 4.0x - higher odds = higher edge required
             MAX_ODDS = 10.0  # Keep wide range for high-value parlays
             
-            # League-specific EV thresholds (Premier League needs higher due to historical poor ROI)
-            # ADJUSTED Dec 8: Lower thresholds for more volume (500 bets target by Jan 15)
+            # STRICT EV thresholds - only bet when we have real edge
+            # TIGHTENED Dec 9: Back to stricter thresholds for better ROI
             league = match_data.get('league', '')
             if 'Premier League' in league:
-                min_ev_required = 6.0  # Lowered from 8% (still cautious for EPL)
+                min_ev_required = 8.0  # EPL needs 8%+ edge
+            elif any(x in league for x in ['Eredivisie', 'Belgian', 'Primeira']):
+                min_ev_required = 10.0  # Problematic leagues need 10%+ (or skip)
             else:
-                min_ev_required = 3.0  # Lowered from 5% to 3% for more volume
+                min_ev_required = 6.0  # Standard leagues need 6%+ edge
             
             # Debug: Log rejection reason
             if bookmaker_odds < MIN_ODDS:
