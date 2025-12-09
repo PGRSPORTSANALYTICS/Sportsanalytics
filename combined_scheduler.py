@@ -12,8 +12,8 @@ from datetime import datetime
 
 # Import prediction modules
 from real_football_champion import main as run_exact_score_predictions
-from sgp_champion import main as run_sgp_predictions
 from women_1x2_champion import main as run_women_predictions
+from parlay_builder import run_parlay_builder
 from auto_bet_logger import run_automatic_cycle as run_bet_logging
 from daily_bet_categorizer import run_categorization
 from daily_games_reminder import send_daily_reminder
@@ -38,7 +38,7 @@ def safe_run(task_name, task_func):
 def run_all_predictions():
     """Run all prediction generators"""
     safe_run("Exact Score Predictions", run_exact_score_predictions)
-    safe_run("SGP Predictions", run_sgp_predictions)
+    safe_run("Parlay Builder", run_parlay_builder)
     safe_run("Women's 1X2 Predictions", run_women_predictions)
 
 def run_daily_tasks():
@@ -57,7 +57,7 @@ def main():
     logger.info("🎯 COMBINED SCHEDULER - RAILWAY DEPLOYMENT")
     logger.info("=" * 80)
     logger.info("📊 Exact Score Predictions: Every 1 hour")
-    logger.info("🎰 SGP Predictions: Every 1 hour")
+    logger.info("🎲 Parlay Builder: Every 1 hour")
     logger.info("👩⚽ Women's 1X2 Predictions: Every 1 hour")
     logger.info("📝 Auto Bet Logger: Every 30 minutes")
     logger.info("📅 Daily Tasks: Every day at 00:01")

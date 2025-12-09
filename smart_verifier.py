@@ -7,7 +7,7 @@ import time
 from datetime import datetime, timedelta
 from results_scraper import ResultsScraper
 from telegram_sender import TelegramBroadcaster
-from sgp_verifier import SGPVerifier
+from ml_parlay_verifier import MLParlayVerifier
 from daily_results_summary import send_results_summary_for_date
 from db_helper import db_helper
 import logging
@@ -27,7 +27,7 @@ class SmartVerifier:
     def __init__(self):
         self.scraper = ResultsScraper()
         self.telegram = TelegramBroadcaster()
-        self.sgp_verifier = SGPVerifier()
+        self.parlay_verifier = MLParlayVerifier()
     
     def verify_recent_matches(self):
         """Verify matches that kicked off 95+ minutes ago - uses PostgreSQL-enabled ResultsScraper"""
@@ -54,14 +54,14 @@ class SmartVerifier:
         logger.info(f"🎯 Verified {verified_count}/{pending_count} exact score matches")
         logger.info(f"💾 Saved ~{pending_count * 3} API calls with smart caching")
         
-        # Also verify SGP predictions
+        # Also verify Parlay predictions
         logger.info("\n" + "="*80)
-        logger.info("🎲 VERIFYING SGP PARLAYS")
+        logger.info("🎲 VERIFYING PARLAYS")
         logger.info("="*80)
         try:
-            self.sgp_verifier.run_verification()
+            self.parlay_verifier.verify_pending_parlays()
         except Exception as e:
-            logger.error(f"❌ SGP verification error: {e}")
+            logger.error(f"❌ Parlay verification error: {e}")
         
         # Check if all matches from any day are finished and ready for summary
         self.check_and_send_daily_summaries()
