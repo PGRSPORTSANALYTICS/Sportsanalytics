@@ -28,18 +28,23 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # ============================================================
-# ML PARLAY CONFIGURATION CONSTANTS
+# ML PARLAY CONFIGURATION - NOVA v2.0 (Dec 9, 2025)
+# Retuned for production: generates parlays on most match days
 # ============================================================
 
 # Master switch
 ML_PARLAY_ENABLED = True
 
-# Odds filters per leg - TEST MODE: Wider range
-ML_PARLAY_MIN_ODDS = 1.20  # TEST MODE: Lowered from 1.40
-ML_PARLAY_MAX_ODDS = 3.00  # TEST MODE: Raised from 2.10
+# Odds filters per leg - PRODUCTION SETTINGS
+ML_PARLAY_MIN_ODDS = 1.30  # Minimum odds per leg
+ML_PARLAY_MAX_ODDS = 3.00  # Maximum odds per leg
 
-# Minimum EV per leg (0% edge for testing - raise to 4% for production)
-MIN_ML_PARLAY_LEG_EV = 0.00  # TEST MODE: 0% EV threshold - TESTING ONLY
+# Total parlay odds range
+ML_PARLAY_MIN_TOTAL_ODDS = 3.00   # Minimum combined odds
+ML_PARLAY_MAX_TOTAL_ODDS = 12.00  # Maximum combined odds
+
+# Minimum EV per leg (3% edge for production)
+MIN_ML_PARLAY_LEG_EV = 0.03  # 3% EV threshold - PRODUCTION
 
 # Parlay construction limits
 MAX_ML_PARLAYS_PER_DAY = 3

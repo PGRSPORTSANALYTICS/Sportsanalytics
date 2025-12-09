@@ -19,31 +19,32 @@ from monte_carlo_integration import run_monte_carlo, classify_trust_level, analy
 
 
 # ============================================================
-# VALUE SINGLES HARD FILTERS (Nov 30, 2025)
-# These filters ensure ONLY high-quality, low-variance bets
+# NOVA v2.0 BETTING FILTERS (Dec 9, 2025)
+# Retuned for higher daily volume while maintaining safety
+# Goal: 5-15 Value Singles on typical match days
 # ============================================================
 
 # ============================================================
-# VALUE SINGLES - NOW THE CORE PRODUCT (Dec 9, 2025 Pivot)
+# VALUE SINGLES - CORE PRODUCT (Dec 9, 2025 Pivot)
 # Lower bookmaker margins (4-8%) vs SGP (28-45%) = better ROI
 # ============================================================
 
-# Minimum Expected Value (EV) - balanced for volume + quality
-MIN_VALUE_SINGLE_EV = 0.05  # 5% edge - realistic threshold
+# Minimum Expected Value (EV) - 2% edge for volume
+MIN_VALUE_SINGLE_EV = 0.02  # 2% edge - increased volume
 
-# Odds range filter - sweet spot for value
-MIN_VALUE_SINGLE_ODDS = 1.55  # Slightly lower min for more supply
-MAX_VALUE_SINGLE_ODDS = 1.95  # Moderate range, lower variance
-MAX_LEARNING_ODDS = 2.50      # Still collect predictions up to 2.50 for AI training
+# Odds range filter - expanded for more opportunities
+MIN_VALUE_SINGLE_ODDS = 1.50  # Lower min for more supply
+MAX_VALUE_SINGLE_ODDS = 3.00  # Expanded range for higher odds value
+MAX_LEARNING_ODDS = 4.00      # Collect predictions up to 4.00 for AI training
 
 # Minimum model confidence/probability required
-MIN_VALUE_SINGLE_CONFIDENCE = 0.56  # Balanced threshold
+MIN_VALUE_SINGLE_CONFIDENCE = 0.52  # 52% - balanced threshold
 
-# Maximum number of value singles per day - THIS IS NOW CORE PRODUCT
-MAX_VALUE_SINGLES_PER_DAY = 10  # Increased - Value Singles are the focus now
+# Maximum number of value singles per day - CORE PRODUCT
+MAX_VALUE_SINGLES_PER_DAY = 15  # Increased for better daily coverage
 
-# Major league whitelist (using odds_api_key identifiers)
-# Only bet on leagues with reliable data and predictable outcomes
+# EXPANDED league whitelist (all supported leagues - approx 30)
+# Includes all leagues with reliable data and predictable outcomes
 VALUE_SINGLE_LEAGUE_WHITELIST = {
     # Top 5 European Leagues
     "soccer_epl",                    # Premier League
@@ -54,10 +55,33 @@ VALUE_SINGLE_LEAGUE_WHITELIST = {
     # European Cups
     "soccer_uefa_champs_league",     # Champions League
     "soccer_uefa_europa_league",     # Europa League
-    # Nordic
+    "soccer_uefa_europa_conf_league", # Conference League
+    # Second Tier European
+    "soccer_germany_bundesliga2",    # Bundesliga 2
+    "soccer_england_efl_champ",      # EFL Championship
+    "soccer_spain_segunda",          # La Liga 2
+    "soccer_italy_serie_b",          # Serie B
+    "soccer_france_ligue_two",       # Ligue 2
+    # Other Major European
+    "soccer_netherlands_eredivisie", # Eredivisie
+    "soccer_portugal_primeira_liga", # Primeira Liga
+    "soccer_belgium_first_div",      # Belgian First Division
+    "soccer_turkey_super_league",    # Turkish Super Lig
+    "soccer_greece_super_league",    # Greek Super League
+    "soccer_scotland_premiership",   # Scottish Premiership
+    # Nordic Leagues
     "soccer_sweden_allsvenskan",     # Allsvenskan
+    "soccer_norway_eliteserien",     # Eliteserien
+    "soccer_denmark_superliga",      # Danish Superliga
     # Americas
     "soccer_usa_mls",                # MLS
+    "soccer_brazil_serie_a",         # Brasileirao
+    "soccer_argentina_primera",      # Argentina Primera
+    "soccer_mexico_ligamx",          # Liga MX
+    # Other
+    "soccer_australia_aleague",      # A-League
+    "soccer_japan_j_league",         # J-League
+    "soccer_korea_kleague1",         # K-League 1
 }
 
 

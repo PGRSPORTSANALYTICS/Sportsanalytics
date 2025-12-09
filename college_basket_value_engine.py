@@ -297,18 +297,20 @@ def build_parlays(picks: List[BasketPick], legs: int = 3, min_parlay_ev: float =
 
 class CollegeBasketValueEngine:
     """
+    NOVA v2.0 - College Basketball Value Engine (Dec 9, 2025)
     Finds value singles in NCAAB using consensus fair odds.
+    Retuned for higher volume while maintaining quality.
     """
 
     def __init__(
         self,
         client: OddsAPIClient,
-        min_ev: float = 0.03,
-        min_conf: float = 0.50,
-        max_singles: int = 10,
+        min_ev: float = 0.015,      # 1.5% EV - increased volume
+        min_conf: float = 0.52,     # 52% confidence - aligned with football L2
+        max_singles: int = 12,      # Increased from 10
         max_parlays: int = 3,
-        min_odds: float = 1.40,
-        max_odds: float = 3.00,  # AI-learned: odds 3.0+ lose money (backtest Dec 7)
+        min_odds: float = 1.40,     # Kept at 1.40
+        max_odds: float = 3.00,     # Kept at 3.00 (AI-learned)
         allow_parlays: bool = False,  # DISABLED - parlays losing money
     ):
         self.client = client

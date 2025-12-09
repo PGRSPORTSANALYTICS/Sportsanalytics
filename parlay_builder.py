@@ -15,16 +15,17 @@ from itertools import combinations
 logger = logging.getLogger(__name__)
 
 # ============================================================
-# PARLAY CONFIGURATION
+# MULTI-MATCH PARLAY CONFIGURATION - NOVA v2.0 (Dec 9, 2025)
+# Retuned for controlled variance and daily production
 # ============================================================
 
 MIN_LEGS = 2
-MAX_LEGS = 4
-MIN_PARLAY_ODDS = 4.00
-MAX_PARLAY_ODDS = 20.00
-MIN_PARLAY_EV = 0.05  # 5% minimum EV
-MAX_PARLAYS_PER_DAY = 3
-ALLOWED_TRUST_LEVELS = {"L1", "L2"}  # Only high-trust bets
+MAX_LEGS = 3           # Reduced from 4 to control variance
+MIN_PARLAY_ODDS = 3.00  # Lowered from 4.00 for more opportunities
+MAX_PARLAY_ODDS = 10.00 # Reduced from 20.00 for controlled risk
+MIN_PARLAY_EV = 0.03    # 3% minimum EV (lowered from 5%)
+MAX_PARLAYS_PER_DAY = 2 # Reduced from 3 for quality over quantity
+ALLOWED_TRUST_LEVELS = {"L1", "L2", "L1_HIGH_TRUST", "L2_MEDIUM_TRUST"}  # Accept both formats
 
 # Stake configuration - 1.6% Kelly stake of bankroll
 KELLY_STAKE_PCT = 0.016  # 1.6% of bankroll

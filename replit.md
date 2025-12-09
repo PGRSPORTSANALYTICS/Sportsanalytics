@@ -44,9 +44,16 @@ The system employs advanced prediction features including:
 - **PostgreSQL SGP Settlement (Dec 8, 2025):** New `sgp_settlement.py` module handles automatic SGP bet settlement using team-name matching against `match_results_cache` table. Supports all common leg types (Over/Under goals, BTTS, 1H/2H goals, corners) with VOID fallback for unknown markets.
 - **Increased Bet Volume (Dec 8, 2025):** SGP daily limit raised to 20, min EV lowered to 3% (6% EPL), min odds lowered to 3.5x. Value Singles daily limit raised to 8, max odds expanded to 2.10, min EV lowered to 4%.
 - **Trust Level Learning (Dec 8, 2025):** Added `trust_level` field to training_data table. Data collector now captures L1/L2/L3 trust classifications from Monte Carlo simulations for future performance analysis.
-- **Strategic Product Pivot (Dec 9, 2025):** Value Singles now core subscription product due to lower bookmaker margins (4-8% vs SGP's 28-45%). Value Singles: EV 5%, confidence 56%, odds 1.55-1.95, daily limit 10 (core product). ML Parlays + College Basketball as secondary products. Target: 15-20% realistic ROI.
-- **Multi-Match Parlay System (Dec 9, 2025):** Replaced old SGP (same-game parlay) with new multi-match parlay builder. New system builds parlays from approved L1/L2 Value Singles across different matches. Rules: 2-4 legs, 1 leg per match, odds 4.00-20.00, EV >= 5%, max 3 parlays/day. Uses probability product from AI-calculated probabilities on each single bet.
+- **Strategic Product Pivot (Dec 9, 2025):** Value Singles now core subscription product due to lower bookmaker margins (4-8% vs SGP's 28-45%). ML Parlays + College Basketball as secondary products. Target: 15-20% realistic ROI.
+- **Multi-Match Parlay System (Dec 9, 2025):** Replaced old SGP (same-game parlay) with new multi-match parlay builder. New system builds parlays from approved L1/L2 Value Singles across different matches. Uses probability product from AI-calculated probabilities on each single bet.
 - **Exact Score Removal (Dec 9, 2025):** Exact Score product completely removed from platform due to poor December performance (0/29 cold streak, $4,700+ losses). Platform now focuses exclusively on Value Singles (core product), Multi-Match Parlays, and College Basketball.
+- **NOVA v2.0 Filter Retuning (Dec 9, 2025):** Complete filter overhaul for higher daily volume while maintaining safety. Changes:
+  - **Value Singles:** EV 2% (was 5%), confidence 52% (was 56%), odds 1.50-3.00 (was 1.55-1.95), max 15/day (was 10), expanded to 29 leagues (was 9).
+  - **3-Tier Trust System:** L1 (High Trust): EV >= 5%, confidence >= 55%, odds 1.50-3.00, max 3/day. L2 (Medium Trust): EV >= 2%, confidence >= 52%, disagreement <= 20%, odds 1.50-3.20. L3 (Soft Value): EV >= 0%, confidence >= 50%, disagreement <= 25%, odds 1.40-3.50, used only when < 5 total picks.
+  - **ML Parlays:** Per-leg EV 3% (was 0% test), leg odds 1.30-3.00, total odds 3.00-12.00, max 3/day.
+  - **Multi-Match Parlays:** 2-3 legs (was 2-4), total odds 3.00-10.00 (was 4.00-20.00), EV 3% (was 5%), max 2/day (was 3).
+  - **Basketball:** EV 1.5% (was 3%), confidence 52% (was 50%), max 12 singles (was 10).
+  - Target: 5-15 Value Singles on typical match days.
 
 ### System Design Choices
 - **Data Layer:** Migration from SQLite to PostgreSQL (Replit's Neon database) with connection pooling for concurrency.

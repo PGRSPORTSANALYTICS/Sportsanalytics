@@ -72,7 +72,8 @@ def classify_trust_level(
     odds: float
 ) -> str:
     """
-    Classify a bet into trust level (L1/L2/L3/REJECTED).
+    NOVA v2.0 - Classify a bet into trust level (L1/L2/L3/REJECTED).
+    Retuned Dec 9, 2025 for higher volume while maintaining safety.
     
     Args:
         ev_sim: EV from simulation
@@ -84,19 +85,31 @@ def classify_trust_level(
     
     Returns:
         Trust level string: "L1_HIGH_TRUST", "L2_MEDIUM_TRUST", "L3_SOFT_VALUE", or "REJECTED"
+    
+    Thresholds (NOVA v2.0):
+        L1: sim_approved + EV >= 5% + confidence >= 55% + odds 1.50-3.00
+        L2: EV >= 2% + confidence >= 52% + disagreement <= 20% + odds 1.50-3.20
+        L3: EV >= 0% + confidence >= 50% + disagreement <= 25% + odds 1.40-3.50
     """
-    if sim_approved and ev_sim >= 0.03:
+    # L1 - High Trust
+    if (sim_approved and 
+        ev_sim >= 0.05 and 
+        confidence >= 0.55 and
+        1.50 <= odds <= 3.00):
         return "L1_HIGH_TRUST"
     
-    if (ev_model >= 0 and 
-        confidence >= 0.60 and 
-        disagreement <= 0.15 and 
-        (1.50 <= odds <= 2.20 or 4.0 <= odds <= 6.0)):
+    # L2 - Medium Trust
+    if (ev_model >= 0.02 and 
+        confidence >= 0.52 and 
+        disagreement <= 0.20 and 
+        1.50 <= odds <= 3.20):
         return "L2_MEDIUM_TRUST"
     
+    # L3 - Soft Value (fallback)
     if (ev_model >= 0 and 
-        confidence >= 0.55 and 
-        disagreement <= 0.20):
+        confidence >= 0.50 and 
+        disagreement <= 0.25 and
+        1.40 <= odds <= 3.50):
         return "L3_SOFT_VALUE"
     
     return "REJECTED"
