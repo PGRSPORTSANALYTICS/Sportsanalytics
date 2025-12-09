@@ -3586,19 +3586,16 @@ class RealFootballChampion:
             return False
 
 def run_single_cycle():
-    """Run a single prediction cycle and return (non-blocking)"""
+    """Run a single prediction cycle - VALUE SINGLES ONLY (Exact Score removed)"""
     try:
         champion = RealFootballChampion()
         
-        print("🎯 EXACT SCORE PREDICTIONS MODE - Single Cycle")
+        print("💰 VALUE SINGLES ENGINE - Single Cycle")
         print("=" * 60)
         
-        exact_scores = champion.run_exact_score_analysis()
-        
         try:
-            print("\n💰 VALUE SINGLES ENGINE - Analyzing markets...")
             value_engine = ValueSinglesEngine(champion, ev_threshold=0.05, min_confidence=55)
-            value_singles = value_engine.generate_value_singles(max_picks=4)
+            value_singles = value_engine.generate_value_singles(max_picks=10)
             if value_singles:
                 saved = value_engine.save_value_singles(value_singles)
                 print(f"✅ Saved {saved} VALUE SINGLES predictions")
@@ -3606,59 +3603,31 @@ def run_single_cycle():
                 print("📊 No value singles found this cycle")
         except Exception as e:
             print(f"⚠️ Value Singles generation failed: {e}")
+            import traceback
+            traceback.print_exc()
         
-        # 🔄 REFILL: After Value Singles may have deleted some Exact Scores (EV comparison),
-        # refill from backup candidates to maintain TARGET_EXACT_SCORE_BETS
-        try:
-            refilled = champion.refill_exact_scores()
-            if refilled > 0:
-                print(f"🔄 Refilled {refilled} Exact Score prediction(s) from backups")
-        except Exception as e:
-            print(f"⚠️ Exact Score refill failed: {e}")
-        
-        print("\n🔄 CHECKING EXACT SCORE RESULTS...")
-        updated_bets = champion.results_scraper.update_bet_outcomes()
-        if updated_bets > 0:
-            print(f"✅ Updated {updated_bets} exact score outcomes")
-        else:
-            print("📊 No pending exact scores to update")
-        
-        try:
-            from milestone_tracker import check_500_milestone
-            check_500_milestone()
-        except Exception as e:
-            print(f"⚠️ Milestone check failed: {e}")
-        
-        print("✅ Football prediction cycle complete")
+        print("✅ Value Singles cycle complete")
         return True
         
     except Exception as e:
-        print(f"❌ Error in football prediction cycle: {e}")
+        print(f"❌ Error in Value Singles cycle: {e}")
         return False
 
 
 def main():
-    """Main execution function - EXACT SCORES ONLY"""
+    """Main execution function - VALUE SINGLES (Core Product)"""
     try:
         champion = RealFootballChampion()
-        last_results_check = 0
         
-        print("🎯 EXACT SCORE PREDICTIONS MODE")
-        print("📊 Regular betting tips DISABLED - focusing exclusively on exact scores")
+        print("💰 VALUE SINGLES ENGINE - Core Product")
+        print("📊 AI-powered picks: 1X2, Over/Under, BTTS, Double Chance")
         print("=" * 60)
         
         while True:
-            # DISABLED: Regular betting analysis (underperforming -29% ROI)
-            # opportunities = champion.run_analysis_cycle()
-            
-            # Run exact score analysis (proven +200% ROI)
-            exact_scores = champion.run_exact_score_analysis()
-            
-            # VALUE SINGLES - New market expansion
             try:
                 print("\n💰 VALUE SINGLES ENGINE - Analyzing markets...")
-                value_engine = ValueSinglesEngine(champion, ev_threshold=0.03, min_confidence=50)
-                value_singles = value_engine.generate_value_singles(max_picks=6)
+                value_engine = ValueSinglesEngine(champion, ev_threshold=0.05, min_confidence=55)
+                value_singles = value_engine.generate_value_singles(max_picks=10)
                 if value_singles:
                     saved = value_engine.save_value_singles(value_singles)
                     print(f"✅ Saved {saved} VALUE SINGLES predictions")
@@ -3667,40 +3636,13 @@ def main():
             except Exception as e:
                 print(f"⚠️ Value Singles generation failed: {e}")
             
-            # 🔄 REFILL: After Value Singles may have deleted some Exact Scores,
-            # refill from backup candidates to maintain TARGET_EXACT_SCORE_BETS
-            try:
-                refilled = champion.refill_exact_scores()
-                if refilled > 0:
-                    print(f"🔄 Refilled {refilled} Exact Score prediction(s) from backups")
-            except Exception as e:
-                print(f"⚠️ Exact Score refill failed: {e}")
-            
-            # Check if it's time for results update (every 5 minutes)
-            current_time = time.time()
-            if current_time - last_results_check >= 300:  # 5 minutes
-                print("\n🔄 CHECKING EXACT SCORE RESULTS...")
-                updated_bets = champion.results_scraper.update_bet_outcomes()
-                if updated_bets > 0:
-                    print(f"✅ Updated {updated_bets} exact score outcomes")
-                else:
-                    print("📊 No pending exact scores to update")
-                last_results_check = current_time
-                
-                # Check 500 prediction milestone (learning mode complete)
-                try:
-                    from milestone_tracker import check_500_milestone
-                    check_500_milestone()
-                except Exception as e:
-                    print(f"⚠️ Milestone check failed: {e}")
-            
-            # Wait 60 minutes between cycles (reduced API usage)
+            # Wait 60 minutes between cycles
             time.sleep(3600)
             
     except KeyboardInterrupt:
-        print("\n🛑 Exact Score Predictions Bot stopped by user")
+        print("\n🛑 Value Singles Engine stopped by user")
     except Exception as e:
-        print(f"❌ Error in Exact Score Predictions Bot: {e}")
+        print(f"❌ Error in Value Singles Engine: {e}")
 
 if __name__ == "__main__":
     main()

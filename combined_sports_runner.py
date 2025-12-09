@@ -19,21 +19,21 @@ logger = logging.getLogger(__name__)
 # ============================================================
 # PRODUCT ENABLE/DISABLE FLAGS - Set to False to pause product
 # ============================================================
-ENABLE_FOOTBALL_EXACT_SCORE = True   # ENABLED - lowered stake to $16
-ENABLE_PARLAYS = True                # NEW - Multi-match parlays from L1/L2 singles
+ENABLE_VALUE_SINGLES = True          # Core product - AI picks for 1X2, O/U, BTTS, etc.
+ENABLE_PARLAYS = True                # Multi-match parlays from L1/L2 singles
 ENABLE_COLLEGE_BASKETBALL = True     # ACTIVE - 63.3% hit rate, +$3,446 profit
 ENABLE_ML_PARLAY = True              # ENABLED - test mode (data collection only)
 
 
-def run_football_predictions():
-    """Run football exact score predictions"""
+def run_value_singles():
+    """Run Value Singles predictions (core product)"""
     try:
         import real_football_champion
-        logger.info("⚽ Starting Football Exact Score cycle...")
+        logger.info("💰 Starting Value Singles cycle...")
         real_football_champion.run_single_cycle()
-        logger.info("✅ Football Exact Score cycle complete")
+        logger.info("✅ Value Singles cycle complete")
     except Exception as e:
-        logger.error(f"❌ Football prediction error: {e}")
+        logger.error(f"❌ Value Singles prediction error: {e}")
 
 
 def run_parlay_builder():
@@ -165,13 +165,13 @@ def main():
     logger.info("="*80)
     logger.info("🚀 COMBINED SPORTS PREDICTION ENGINE")
     logger.info("="*80)
-    logger.info("⚽ Football Exact Score - Every 1 hour")
+    logger.info("💰 Value Singles - Every 1 hour (Core Product)")
     logger.info("🎲 Multi-Match Parlays - Every 2 hours (after Value Singles)")
     logger.info("🏀 College Basketball - Every 2 hours")
     logger.info("🎰 ML Parlay (TEST MODE) - Every 3 hours")
     logger.info("="*80)
     logger.info("🔍 FAST RESULT VERIFICATION (5-minute cycles):")
-    logger.info("⚽ Football Results - Every 5 minutes")
+    logger.info("💰 Value Singles Results - Every 5 minutes")
     logger.info("🎲 Parlay Results - Every 5 minutes")
     logger.info("🏀 Basketball Results - Every 5 minutes")
     logger.info("🎰 ML Parlay Results - Every 5 minutes")
@@ -184,11 +184,11 @@ def main():
     
     # Run enabled engines on startup
     logger.info("🎬 Running initial prediction cycles...")
-    if ENABLE_FOOTBALL_EXACT_SCORE:
-        run_football_predictions()
+    if ENABLE_VALUE_SINGLES:
+        run_value_singles()
         time.sleep(5)
     else:
-        logger.info("⏸️ Football Exact Score PAUSED")
+        logger.info("⏸️ Value Singles PAUSED")
     
     if ENABLE_PARLAYS:
         run_parlay_builder()
@@ -220,8 +220,8 @@ def main():
     logger.info("✅ Initial verification complete")
     
     # Schedule recurring prediction tasks (only enabled products)
-    if ENABLE_FOOTBALL_EXACT_SCORE:
-        schedule.every(1).hours.do(run_football_predictions)
+    if ENABLE_VALUE_SINGLES:
+        schedule.every(1).hours.do(run_value_singles)
     if ENABLE_PARLAYS:
         schedule.every(2).hours.do(run_parlay_builder)
     if ENABLE_COLLEGE_BASKETBALL:
