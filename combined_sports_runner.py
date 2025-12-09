@@ -95,12 +95,13 @@ def verify_football_results():
 
 
 def verify_parlay_results():
-    """Verify parlay results using PostgreSQL-based settlement"""
+    """Verify parlay results using ML parlay verifier"""
     try:
-        from sgp_settlement import settle_pending_sgp_bets
+        from ml_parlay_verifier import MLParlayVerifier
         logger.info("🎲 Verifying Parlay results...")
-        settled_count = settle_pending_sgp_bets()
-        logger.info(f"🎲 Parlay verification complete: {settled_count} bets settled")
+        verifier = MLParlayVerifier()
+        results = verifier.verify_pending_parlays()
+        logger.info(f"🎲 Parlay verification: {results['verified']} verified, {results['failed']} failed")
     except Exception as e:
         logger.error(f"❌ Parlay verification error: {e}")
         import traceback
