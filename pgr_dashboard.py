@@ -2080,10 +2080,10 @@ def render_basketball_tab(df: pd.DataFrame):
                 st.dataframe(parlays_settled[cols].head(15), use_container_width=True, hide_index=True)
 
 
-def render_sgp_parlays_tab():
-    """Specialized SGP Parlays tab with beautiful card layout."""
-    st.markdown("## Same Game Parlays")
-    st.caption("High-edge correlated parlays built within a single match.")
+def render_parlays_tab():
+    """Specialized Parlays tab with beautiful card layout."""
+    st.markdown("## Multi-Match Parlays")
+    st.caption("High-edge parlays built from approved L1/L2 single bets across multiple matches.")
 
     db_url = get_db_url()
     engine = create_engine(db_url)
@@ -2309,13 +2309,13 @@ def main():
     prod_bets, backtest_bets = split_bets_by_mode(all_bets)
 
     # Tabs for different products
-    daily_card_tab, overview_tab, exact_tab, singles_tab, sgp_tab, ml_parlay_tab, basket_tab, backtest_tab = st.tabs(
+    daily_card_tab, overview_tab, exact_tab, singles_tab, parlays_tab, ml_parlay_tab, basket_tab, backtest_tab = st.tabs(
         [
             "Daily Card",
             "Overview",
             "Exact Score",
             "Value Singles",
-            "SGP Parlays",
+            "Parlays",
             "ML Parlay",
             "College Basketball",
             "Backtests",
@@ -2344,8 +2344,8 @@ def main():
             description="High-edge single bets across 1X2, over/under, BTTS, corners and more.",
         )
 
-    with sgp_tab:
-        render_sgp_parlays_tab()
+    with parlays_tab:
+        render_parlays_tab()
 
     with ml_parlay_tab:
         render_ml_parlay_tab()

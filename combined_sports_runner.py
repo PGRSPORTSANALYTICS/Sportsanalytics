@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 # PRODUCT ENABLE/DISABLE FLAGS - Set to False to pause product
 # ============================================================
 ENABLE_FOOTBALL_EXACT_SCORE = True   # ENABLED - lowered stake to $16
-ENABLE_SGP = True                    # ACTIVE - 32% hit rate, +$13,352 profit!
+ENABLE_PARLAYS = True                # NEW - Multi-match parlays from L1/L2 singles
 ENABLE_COLLEGE_BASKETBALL = True     # ACTIVE - 63.3% hit rate, +$3,446 profit
 ENABLE_ML_PARLAY = True              # ENABLED - test mode (data collection only)
 
@@ -36,15 +36,17 @@ def run_football_predictions():
         logger.error(f"❌ Football prediction error: {e}")
 
 
-def run_sgp_predictions():
-    """Run SGP predictions"""
+def run_parlay_builder():
+    """Run multi-match parlay builder from approved singles"""
     try:
-        from sgp_champion import run_single_cycle
-        logger.info("🎲 Starting SGP cycle...")
-        run_single_cycle()
-        logger.info("✅ SGP cycle complete")
+        from parlay_builder import run_parlay_builder as build_parlays
+        logger.info("🎲 Starting Parlay Builder cycle...")
+        parlays = build_parlays()
+        logger.info(f"✅ Parlay Builder complete: {len(parlays)} parlays generated")
     except Exception as e:
-        logger.error(f"❌ SGP prediction error: {e}")
+        logger.error(f"❌ Parlay builder error: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 def run_college_basketball():
@@ -92,15 +94,15 @@ def verify_football_results():
         logger.error(f"❌ Football verification error: {e}")
 
 
-def verify_sgp_results():
-    """Verify SGP parlay results using PostgreSQL-based settlement"""
+def verify_parlay_results():
+    """Verify parlay results using PostgreSQL-based settlement"""
     try:
         from sgp_settlement import settle_pending_sgp_bets
-        logger.info("🎲 Verifying SGP results...")
+        logger.info("🎲 Verifying Parlay results...")
         settled_count = settle_pending_sgp_bets()
-        logger.info(f"🎲 SGP verification complete: {settled_count} bets settled")
+        logger.info(f"🎲 Parlay verification complete: {settled_count} bets settled")
     except Exception as e:
-        logger.error(f"❌ SGP verification error: {e}")
+        logger.error(f"❌ Parlay verification error: {e}")
         import traceback
         traceback.print_exc()
 
@@ -163,13 +165,13 @@ def main():
     logger.info("🚀 COMBINED SPORTS PREDICTION ENGINE")
     logger.info("="*80)
     logger.info("⚽ Football Exact Score - Every 1 hour")
-    logger.info("🎲 SGP Predictions - Every 2 hours")
+    logger.info("🎲 Multi-Match Parlays - Every 2 hours (after Value Singles)")
     logger.info("🏀 College Basketball - Every 2 hours")
     logger.info("🎰 ML Parlay (TEST MODE) - Every 3 hours")
     logger.info("="*80)
     logger.info("🔍 FAST RESULT VERIFICATION (5-minute cycles):")
     logger.info("⚽ Football Results - Every 5 minutes")
-    logger.info("🎲 SGP Results - Every 5 minutes")
+    logger.info("🎲 Parlay Results - Every 5 minutes")
     logger.info("🏀 Basketball Results - Every 5 minutes")
     logger.info("🎰 ML Parlay Results - Every 5 minutes")
     logger.info("="*80)
@@ -187,11 +189,11 @@ def main():
     else:
         logger.info("⏸️ Football Exact Score PAUSED")
     
-    if ENABLE_SGP:
-        run_sgp_predictions()
+    if ENABLE_PARLAYS:
+        run_parlay_builder()
         time.sleep(5)
     else:
-        logger.info("⏸️ SGP PAUSED")
+        logger.info("⏸️ Parlays PAUSED")
     
     if ENABLE_COLLEGE_BASKETBALL:
         run_college_basketball()
@@ -211,7 +213,7 @@ def main():
     # This ensures no bets drag for days waiting for scheduler
     logger.info("🔄 Running immediate result verification...")
     verify_football_results()
-    verify_sgp_results()
+    verify_parlay_results()
     verify_basketball_results()
     verify_ml_parlay_results()
     logger.info("✅ Initial verification complete")
@@ -219,8 +221,8 @@ def main():
     # Schedule recurring prediction tasks (only enabled products)
     if ENABLE_FOOTBALL_EXACT_SCORE:
         schedule.every(1).hours.do(run_football_predictions)
-    if ENABLE_SGP:
-        schedule.every(2).hours.do(run_sgp_predictions)
+    if ENABLE_PARLAYS:
+        schedule.every(2).hours.do(run_parlay_builder)
     if ENABLE_COLLEGE_BASKETBALL:
         schedule.every(2).hours.do(run_college_basketball)
     if ENABLE_ML_PARLAY:
@@ -228,7 +230,7 @@ def main():
     
     # Schedule result verification - Every 5 minutes for FAST results
     schedule.every(5).minutes.do(verify_football_results)
-    schedule.every(5).minutes.do(verify_sgp_results)
+    schedule.every(5).minutes.do(verify_parlay_results)
     schedule.every(5).minutes.do(verify_basketball_results)
     schedule.every(5).minutes.do(verify_ml_parlay_results)
     
