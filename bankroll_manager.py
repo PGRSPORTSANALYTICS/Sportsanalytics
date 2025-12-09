@@ -19,7 +19,7 @@ from sqlalchemy import create_engine, text
 class BankrollManager:
     """Manages bankroll and exposure limits across all betting systems."""
     
-    STARTING_BANKROLL = 10_800  # SEK (1,000 USD × 10.8)
+    STARTING_BANKROLL = 4_607  # SEK (adjusted to match actual: 13,294 - 8,687 profit)
     MAX_DAILY_EXPOSURE_PCT = 0.80  # Max 80% of bankroll can be at risk
     DAILY_LOSS_LIMIT_PCT = 0.20  # Stop betting if daily loss ≥ 20%
     
