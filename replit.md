@@ -101,6 +101,23 @@ The system employs advanced prediction features including:
   - **API Endpoints:** Added `/api/daily_card` and `/api/market_stats` for external access.
   - **New MarketTypes:** SHOTS_TEAM, SHOTS_PLAYER, CARDS_MATCH, CARDS_TEAM, CORNERS_HANDICAP.
   - **60+ new market mappings** in `multimarket_config.py` with labels and type classifications.
+- **Central Market Router v1.0 (Dec 9, 2025):** Portfolio balancing system to prevent single-market spam and ensure diversified daily cards.
+  - **Problem Solved:** Prevents scenarios where all picks are Over 2.5 Goals or all BTTS Yes.
+  - **Two-Pass Selection Algorithm:**
+    - Pass 1: Strictly enforce per-market caps (e.g., max 3 FT_OVER_2_5, max 4 HOME_WIN)
+    - Pass 2: Fill remaining slots while respecting product-level caps
+  - **Prioritization:** L1 (weight=3) > L2 (weight=2) > L3 (weight=1), then by EV descending.
+  - **Per-Market Caps (`market_router_config.py`):**
+    - TOTALS: max 10 (FT_OVER_2_5: 3, FT_UNDER_2_5: 3, FT_OVER_3_5: 2, etc.)
+    - BTTS: max 8 (BTTS_YES: 5, BTTS_NO: 3)
+    - ML_AH: max 15 (HOME_WIN: 4, AWAY_WIN: 4, DRAW: 2, AH_HOME: 3, AH_AWAY: 3, etc.)
+    - CORNERS_MATCH: max 6, CORNERS_TEAM: max 4, CORNERS_HANDICAP: max 6
+    - CARDS_MATCH: max 6, CARDS_TEAM: max 4, SHOTS_TEAM: max 6
+  - **Global Daily Cap:** 25 picks maximum across all products.
+  - **Balance Score:** 0-100 metric measuring portfolio diversification (100 = perfectly balanced).
+  - **New Files:** `market_router.py`, `market_router_config.py`.
+  - **Integration:** `central_router.py` now uses router in `build_daily_card()` flow.
+  - **API Updates:** `/api/daily_card` includes `routing_stats` and `markets_covered` fields.
 
 ### System Design Choices
 - **Data Layer:** Migration from SQLite to PostgreSQL (Replit's Neon database) with connection pooling for concurrency.
