@@ -49,8 +49,11 @@ The system employs advanced prediction features including:
 - **Exact Score Removal (Dec 9, 2025):** Exact Score product completely removed from platform due to poor December performance (0/29 cold streak, $4,700+ losses). Platform now focuses exclusively on Value Singles (core product), Multi-Match Parlays, and College Basketball.
 - **NOVA v2.0 Filter Retuning (Dec 9, 2025):** Complete filter overhaul for higher daily volume while maintaining safety. Changes:
   - **Value Singles:** EV 2% (was 5%), confidence 52% (was 56%), odds 1.50-3.00 (was 1.55-1.95), max 15/day (was 10), expanded to 29 leagues (was 9).
-  - **3-Tier Trust System:** L1 (High Trust): EV >= 5%, confidence >= 55%, odds 1.50-3.00, max 3/day. L2 (Medium Trust): EV >= 2%, confidence >= 52%, disagreement <= 20%, odds 1.50-3.20. L3 (Soft Value): EV >= 0%, confidence >= 50%, disagreement <= 25%, odds 1.40-3.50, used only when < 5 total picks.
-  - **ML Parlays:** Per-leg EV 3% (was 0% test), leg odds 1.30-3.00, total odds 3.00-12.00, max 3/day.
+  - **3-Tier Trust System with Safety Guardrails:**
+    - L1 (High Trust): Sim approved, EV >= 5%, confidence >= 55%, odds 1.50-3.00, max 3/day.
+    - L2 (Medium Trust): Sim approved (SAFETY), EV >= 2%, confidence >= 52%, disagreement <= 15% (SAFETY, was 20%), odds 1.50-3.20.
+    - L3 (Soft Value): EV >= 0%, confidence >= 50%, disagreement <= 25%, odds 1.40-3.50, used only when < 5 total picks.
+  - **ML Parlays:** Per-leg EV 3%, total parlay EV >= 5% (SAFETY), leg odds 1.30-3.00, total odds 3.00-12.00, max 3/day.
   - **Multi-Match Parlays:** 2-3 legs (was 2-4), total odds 3.00-10.00 (was 4.00-20.00), EV 3% (was 5%), max 2/day (was 3).
   - **Basketball:** EV 1.5% (was 3%), confidence 52% (was 50%), max 12 singles (was 10).
   - Target: 5-15 Value Singles on typical match days.

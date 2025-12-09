@@ -86,9 +86,9 @@ def classify_trust_level(
     Returns:
         Trust level string: "L1_HIGH_TRUST", "L2_MEDIUM_TRUST", "L3_SOFT_VALUE", or "REJECTED"
     
-    Thresholds (NOVA v2.0):
+    Thresholds (NOVA v2.0 + Safety Guardrails):
         L1: sim_approved + EV >= 5% + confidence >= 55% + odds 1.50-3.00
-        L2: EV >= 2% + confidence >= 52% + disagreement <= 20% + odds 1.50-3.20
+        L2: sim_approved + EV >= 2% + confidence >= 52% + disagreement <= 15% + odds 1.50-3.20
         L3: EV >= 0% + confidence >= 50% + disagreement <= 25% + odds 1.40-3.50
     """
     # L1 - High Trust
@@ -98,10 +98,11 @@ def classify_trust_level(
         1.50 <= odds <= 3.00):
         return "L1_HIGH_TRUST"
     
-    # L2 - Medium Trust
-    if (ev_model >= 0.02 and 
+    # L2 - Medium Trust (SAFETY: Now requires sim_approved + tighter disagreement)
+    if (sim_approved and  # SAFETY GUARDRAIL: Require Monte Carlo approval
+        ev_model >= 0.02 and 
         confidence >= 0.52 and 
-        disagreement <= 0.20 and 
+        disagreement <= 0.15 and  # SAFETY GUARDRAIL: 15% (was 20%)
         1.50 <= odds <= 3.20):
         return "L2_MEDIUM_TRUST"
     

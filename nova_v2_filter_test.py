@@ -11,7 +11,7 @@ from datetime import datetime
 def test_filter_config():
     """Test that all filter configurations are correctly loaded."""
     print("=" * 60)
-    print("NOVA v2.0 FILTER CONFIGURATION TEST")
+    print("NOVA v2.0 FILTER CONFIGURATION TEST (WITH SAFETY GUARDRAILS)")
     print(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
     
@@ -28,32 +28,34 @@ def test_filter_config():
     print(f"   Leagues:        {len(VALUE_SINGLE_LEAGUE_WHITELIST)} whitelisted")
     
     # Test Trust Levels
-    print("\n📊 TRUST LEVEL CONFIG (bet_filter.py):")
+    print("\n📊 TRUST LEVEL CONFIG (bet_filter.py) + SAFETY GUARDRAILS:")
     from bet_filter import (
         L1_MIN_EV, L1_MIN_CONFIDENCE, L1_MIN_ODDS, L1_MAX_ODDS, L1_MAX_PER_DAY,
-        L2_MIN_EV, L2_MIN_CONFIDENCE, L2_MAX_DISAGREEMENT, L2_MIN_ODDS, L2_MAX_ODDS,
+        L2_MIN_EV, L2_MIN_CONFIDENCE, L2_MAX_DISAGREEMENT, L2_MIN_ODDS, L2_MAX_ODDS, L2_REQUIRES_APPROVAL,
         L3_MIN_EV, L3_MIN_CONFIDENCE, L3_MAX_DISAGREEMENT, L3_MIN_ODDS, L3_MAX_ODDS, L3_MIN_DAILY_TARGET
     )
-    print(f"   L1 (High Trust):")
+    print(f"   L1 (High Trust): [Requires sim approval]")
     print(f"      EV >= {L1_MIN_EV:.0%}, Confidence >= {L1_MIN_CONFIDENCE:.0%}")
     print(f"      Odds: {L1_MIN_ODDS} - {L1_MAX_ODDS}, Max/Day: {L1_MAX_PER_DAY}")
-    print(f"   L2 (Medium Trust):")
+    print(f"   L2 (Medium Trust): [SAFETY: Requires sim approval = {L2_REQUIRES_APPROVAL}]")
     print(f"      EV >= {L2_MIN_EV:.0%}, Confidence >= {L2_MIN_CONFIDENCE:.0%}")
-    print(f"      Disagreement <= {L2_MAX_DISAGREEMENT:.0%}, Odds: {L2_MIN_ODDS} - {L2_MAX_ODDS}")
+    print(f"      Disagreement <= {L2_MAX_DISAGREEMENT:.0%} [SAFETY: was 20%], Odds: {L2_MIN_ODDS} - {L2_MAX_ODDS}")
     print(f"   L3 (Soft Value):")
     print(f"      EV >= {L3_MIN_EV:.0%}, Confidence >= {L3_MIN_CONFIDENCE:.0%}")
     print(f"      Disagreement <= {L3_MAX_DISAGREEMENT:.0%}, Odds: {L3_MIN_ODDS} - {L3_MAX_ODDS}")
     print(f"      Use only when total < {L3_MIN_DAILY_TARGET} picks")
     
     # Test ML Parlay
-    print("\n📊 ML PARLAY CONFIG:")
+    print("\n📊 ML PARLAY CONFIG + SAFETY GUARDRAIL:")
     from ml_parlay_engine import (
         ML_PARLAY_ENABLED, ML_PARLAY_MIN_ODDS, ML_PARLAY_MAX_ODDS,
-        MIN_ML_PARLAY_LEG_EV, MAX_ML_PARLAYS_PER_DAY, ML_PARLAY_MIN_LEGS, ML_PARLAY_MAX_LEGS
+        MIN_ML_PARLAY_LEG_EV, MAX_ML_PARLAYS_PER_DAY, ML_PARLAY_MIN_LEGS, ML_PARLAY_MAX_LEGS,
+        MIN_ML_PARLAY_TOTAL_EV
     )
     print(f"   Enabled:        {ML_PARLAY_ENABLED}")
     print(f"   Leg Odds:       {ML_PARLAY_MIN_ODDS} - {ML_PARLAY_MAX_ODDS}")
     print(f"   Min EV/Leg:     {MIN_ML_PARLAY_LEG_EV:.0%}")
+    print(f"   Min Total EV:   {MIN_ML_PARLAY_TOTAL_EV}% [SAFETY GUARDRAIL]")
     print(f"   Legs:           {ML_PARLAY_MIN_LEGS} - {ML_PARLAY_MAX_LEGS}")
     print(f"   Max Per Day:    {MAX_ML_PARLAYS_PER_DAY}")
     

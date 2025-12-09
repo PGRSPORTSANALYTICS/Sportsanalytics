@@ -6,7 +6,7 @@ Retuned for higher daily volume while maintaining safety.
 
 Tier Thresholds:
 - L1 (High Trust): Sim approved, EV >= 5%, Confidence >= 55%, Odds 1.50-3.00
-- L2 (Medium Trust): EV >= 2%, Confidence >= 52%, Disagreement <= 20%, Odds 1.50-3.20
+- L2 (Medium Trust): Sim approved, EV >= 2%, Confidence >= 52%, Disagreement <= 15%, Odds 1.50-3.20
 - L3 (Soft Value): EV >= 0%, Confidence >= 50%, Disagreement <= 25%, Odds 1.40-3.50
 
 Goal: 5-15 Value Singles on typical match days
@@ -26,10 +26,11 @@ L1_MIN_ODDS = 1.50
 L1_MAX_ODDS = 3.00
 L1_MAX_PER_DAY = 3        # Cap high trust to best 3
 
-# L2 - Medium Trust (bread and butter)
+# L2 - Medium Trust (bread and butter) - NOVA v2.0 Safety Guardrails
 L2_MIN_EV = 0.02          # 2% EV
 L2_MIN_CONFIDENCE = 0.52  # 52%
-L2_MAX_DISAGREEMENT = 0.20  # 20% disagreement allowed
+L2_MAX_DISAGREEMENT = 0.15  # 15% disagreement (tightened from 20% for safety)
+L2_REQUIRES_APPROVAL = True  # Must be Monte Carlo approved
 L2_MIN_ODDS = 1.50
 L2_MAX_ODDS = 3.20
 
@@ -82,15 +83,17 @@ def filter_level1_high_trust(candidates: List[BetCandidate]) -> List[BetCandidat
 
 def filter_level2_medium_trust(candidates: List[BetCandidate]) -> List[BetCandidate]:
     """
-    Level 2: MEDIUM TRUST (NOVA v2.0)
+    Level 2: MEDIUM TRUST (NOVA v2.0 + Safety Guardrails)
+    - Must be approved by simulation filter (Monte Carlo)
     - EV_model >= 2%
     - Confidence >= 52%
-    - Disagreement <= 20%
+    - Disagreement <= 15% (tightened for safety)
     - Odds 1.50 - 3.20
     """
     level2 = [
         b for b in candidates
-        if b.ev_model >= L2_MIN_EV
+        if b.approved  # SAFETY: Require Monte Carlo approval
+        and b.ev_model >= L2_MIN_EV
         and b.confidence >= L2_MIN_CONFIDENCE
         and b.disagreement <= L2_MAX_DISAGREEMENT
         and L2_MIN_ODDS <= b.odds <= L2_MAX_ODDS

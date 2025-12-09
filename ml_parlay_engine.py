@@ -46,6 +46,9 @@ ML_PARLAY_MAX_TOTAL_ODDS = 12.00  # Maximum combined odds
 # Minimum EV per leg (3% edge for production)
 MIN_ML_PARLAY_LEG_EV = 0.03  # 3% EV threshold - PRODUCTION
 
+# NOVA v2.0 Safety Guardrail: Minimum total parlay EV
+MIN_ML_PARLAY_TOTAL_EV = 5.0  # 5% total combined EV required
+
 # Parlay construction limits
 MAX_ML_PARLAYS_PER_DAY = 3
 ML_PARLAY_MIN_LEGS = 2
@@ -601,6 +604,13 @@ class MLParlayEngine:
                 if sig in existing_signatures:
                     logger.info(f"⏭️ Skipping duplicate parlay (already exists)")
                     # Still mark matches as used so we try different combinations
+                    used_matches.update(parlay_matches)
+                    continue
+                
+                # NOVA v2.0 Safety Guardrail: Check total parlay EV >= 5%
+                metrics = self._calculate_parlay_metrics(parlay_legs)
+                if metrics['combined_ev'] < MIN_ML_PARLAY_TOTAL_EV:
+                    logger.info(f"⏭️ Skipping parlay: combined EV {metrics['combined_ev']:.1f}% < {MIN_ML_PARLAY_TOTAL_EV}% minimum")
                     used_matches.update(parlay_matches)
                     continue
                 
