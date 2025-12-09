@@ -235,6 +235,37 @@ class ValueSinglesEngine:
         p_home_over15 = prob_total_over(lh, 0, 1.5)
         p_away_over05 = prob_total_over(0, la, 0.5)
         p_away_over15 = prob_total_over(0, la, 1.5)
+        
+        # Asian Handicap (from Monte Carlo simulation if available)
+        if use_monte_carlo:
+            from monte_carlo_simulator import simulate_match
+            sim = simulate_match(lh, la, n_sim=10000)
+            p_ah_home_m05 = sim.get("home_ah_-0.5", p_hw)
+            p_ah_home_m10 = sim.get("home_ah_-1.0", 0.30)
+            p_ah_home_m15 = sim.get("home_ah_-1.5", 0.20)
+            p_ah_home_p05 = sim.get("home_ah_+0.5", p_home_or_draw)
+            p_ah_home_p10 = sim.get("home_ah_+1.0", 0.80)
+            p_ah_home_p15 = sim.get("home_ah_+1.5", 0.85)
+            p_ah_away_m05 = sim.get("away_ah_-0.5", p_aw)
+            p_ah_away_m10 = sim.get("away_ah_-1.0", 0.25)
+            p_ah_away_m15 = sim.get("away_ah_-1.5", 0.15)
+            p_ah_away_p05 = sim.get("away_ah_+0.5", p_draw_or_away)
+            p_ah_away_p10 = sim.get("away_ah_+1.0", 0.75)
+            p_ah_away_p15 = sim.get("away_ah_+1.5", 0.82)
+        else:
+            # Basic approximations for AH without MC
+            p_ah_home_m05 = p_hw
+            p_ah_home_m10 = p_hw * 0.7
+            p_ah_home_m15 = p_hw * 0.5
+            p_ah_home_p05 = p_home_or_draw
+            p_ah_home_p10 = p_home_or_draw + p_aw * 0.3
+            p_ah_home_p15 = p_home_or_draw + p_aw * 0.5
+            p_ah_away_m05 = p_aw
+            p_ah_away_m10 = p_aw * 0.7
+            p_ah_away_m15 = p_aw * 0.5
+            p_ah_away_p05 = p_draw_or_away
+            p_ah_away_p10 = p_draw_or_away + p_hw * 0.3
+            p_ah_away_p15 = p_draw_or_away + p_hw * 0.5
 
         return {
             # Over/Under Goals
@@ -281,6 +312,22 @@ class ValueSinglesEngine:
             "HOME_OVER_1_5": p_home_over15,
             "AWAY_OVER_0_5": p_away_over05,
             "AWAY_OVER_1_5": p_away_over15,
+            
+            # Asian Handicap - Home
+            "AH_HOME_-0.5": p_ah_home_m05,
+            "AH_HOME_-1.0": p_ah_home_m10,
+            "AH_HOME_-1.5": p_ah_home_m15,
+            "AH_HOME_+0.5": p_ah_home_p05,
+            "AH_HOME_+1.0": p_ah_home_p10,
+            "AH_HOME_+1.5": p_ah_home_p15,
+            
+            # Asian Handicap - Away
+            "AH_AWAY_-0.5": p_ah_away_m05,
+            "AH_AWAY_-1.0": p_ah_away_m10,
+            "AH_AWAY_-1.5": p_ah_away_m15,
+            "AH_AWAY_+0.5": p_ah_away_p05,
+            "AH_AWAY_+1.0": p_ah_away_p10,
+            "AH_AWAY_+1.5": p_ah_away_p15,
         }
 
     def generate_value_singles(
@@ -475,6 +522,20 @@ class ValueSinglesEngine:
                     "HOME_OVER_1_5": f"{home_team} Over 1.5 Goals",
                     "AWAY_OVER_0_5": f"{away_team} Over 0.5 Goals",
                     "AWAY_OVER_1_5": f"{away_team} Over 1.5 Goals",
+                    # Asian Handicap - Home
+                    "AH_HOME_-0.5": f"{home_team} -0.5 (AH)",
+                    "AH_HOME_-1.0": f"{home_team} -1.0 (AH)",
+                    "AH_HOME_-1.5": f"{home_team} -1.5 (AH)",
+                    "AH_HOME_+0.5": f"{home_team} +0.5 (AH)",
+                    "AH_HOME_+1.0": f"{home_team} +1.0 (AH)",
+                    "AH_HOME_+1.5": f"{home_team} +1.5 (AH)",
+                    # Asian Handicap - Away
+                    "AH_AWAY_-0.5": f"{away_team} -0.5 (AH)",
+                    "AH_AWAY_-1.0": f"{away_team} -1.0 (AH)",
+                    "AH_AWAY_-1.5": f"{away_team} -1.5 (AH)",
+                    "AH_AWAY_+0.5": f"{away_team} +0.5 (AH)",
+                    "AH_AWAY_+1.0": f"{away_team} +1.0 (AH)",
+                    "AH_AWAY_+1.5": f"{away_team} +1.5 (AH)",
                 }.get(market_key, market_key)
 
                 # Extract match_date and kickoff_time from commence_time if not present

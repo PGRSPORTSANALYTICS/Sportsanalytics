@@ -47,18 +47,61 @@ def simulate_match(lambda_home: float, lambda_away: float, n_sim: int = 10000, m
     under_35 = float(((home_goals + away_goals) < 3.5).mean())
 
     total_goals = home_goals + away_goals
+    
+    over_05 = float((total_goals > 0.5).mean())
+    over_45 = float((total_goals > 4.5).mean())
+    under_15 = float((total_goals < 1.5).mean())
+    under_45 = float((total_goals < 4.5).mean())
+    
+    home_ah_minus05 = float((home_goals - away_goals > -0.5).mean())
+    home_ah_minus10 = float((home_goals - away_goals > -1.0).mean())
+    home_ah_minus15 = float((home_goals - away_goals > -1.5).mean())
+    home_ah_plus05 = float((home_goals - away_goals > 0.5).mean())
+    home_ah_plus10 = float((home_goals - away_goals > 1.0).mean())
+    home_ah_plus15 = float((home_goals - away_goals > 1.5).mean())
+    
+    away_ah_minus05 = float((away_goals - home_goals > -0.5).mean())
+    away_ah_minus10 = float((away_goals - home_goals > -1.0).mean())
+    away_ah_minus15 = float((away_goals - home_goals > -1.5).mean())
+    away_ah_plus05 = float((away_goals - home_goals > 0.5).mean())
+    away_ah_plus10 = float((away_goals - home_goals > 1.0).mean())
+    away_ah_plus15 = float((away_goals - home_goals > 1.5).mean())
+    
+    dc_1x = home_wins + draws
+    dc_12 = home_wins + away_wins
+    dc_x2 = draws + away_wins
 
     return {
         "scores": score_probs,
         "one_x_two": {"1": home_wins, "X": draws, "2": away_wins},
         "btts_yes": btts_yes,
         "btts_no": 1.0 - btts_yes,
+        "over_05": over_05,
         "over_15": over_15,
         "over_25": over_25,
         "over_35": over_35,
+        "over_45": over_45,
+        "under_05": 1.0 - over_05,
+        "under_15": under_15,
         "under_25": under_25,
         "under_35": under_35,
+        "under_45": under_45,
         "avg_total_goals": float(total_goals.mean()),
+        "home_ah_-0.5": home_ah_minus05,
+        "home_ah_-1.0": home_ah_minus10,
+        "home_ah_-1.5": home_ah_minus15,
+        "home_ah_+0.5": home_ah_plus05,
+        "home_ah_+1.0": home_ah_plus10,
+        "home_ah_+1.5": home_ah_plus15,
+        "away_ah_-0.5": away_ah_minus05,
+        "away_ah_-1.0": away_ah_minus10,
+        "away_ah_-1.5": away_ah_minus15,
+        "away_ah_+0.5": away_ah_plus05,
+        "away_ah_+1.0": away_ah_plus10,
+        "away_ah_+1.5": away_ah_plus15,
+        "double_chance_1X": dc_1x,
+        "double_chance_12": dc_12,
+        "double_chance_X2": dc_x2,
         "simulations": n_sim
     }
 

@@ -59,6 +59,13 @@ class BetCandidate:
     
     stake: float = 0.0
     tier: Optional[str] = None
+    
+    market_type: Optional[str] = None
+    product: Optional[str] = None
+    league: Optional[str] = None
+    home_team: Optional[str] = None
+    away_team: Optional[str] = None
+    match_date: Optional[str] = None
 
 
 def filter_level1_high_trust(candidates: List[BetCandidate]) -> List[BetCandidate]:
