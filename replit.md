@@ -1,7 +1,7 @@
-# Exact Score Predictions Platform
+# Sports Betting Analytics Platform
 
 ## Overview
-This project is an AI-powered platform for exact football score predictions, leveraging advanced machine learning and ensemble modeling for significant ROI. It aims for a 20-25% hit rate across 16 quality leagues with odds 7-14x and a 12%+ EV edge. The platform features a premium Streamlit dashboard and Telegram bot for prediction delivery, with automatic result verification. It uses data-driven AI analysis based on xG, form, H2H, injuries, and standings. The initial focus is on Exact Score predictions, with SGP features to be introduced after sufficient live-odds data collection.
+This project is an AI-powered sports betting analytics platform, leveraging Monte Carlo simulation and ensemble modeling for profitable predictions. The platform focuses on Value Singles as the core product (1X2, Over/Under, BTTS, Double Chance markets) with Multi-Match Parlays and College Basketball as secondary products. Features include a premium Streamlit dashboard and Telegram bot for prediction delivery, with automatic result verification. Uses data-driven AI analysis based on xG, form, H2H, injuries, and standings. Target: 15-20% realistic ROI with strict EV filtering (5%+ edge required).
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -46,6 +46,7 @@ The system employs advanced prediction features including:
 - **Trust Level Learning (Dec 8, 2025):** Added `trust_level` field to training_data table. Data collector now captures L1/L2/L3 trust classifications from Monte Carlo simulations for future performance analysis.
 - **Strategic Product Pivot (Dec 9, 2025):** Value Singles now core subscription product due to lower bookmaker margins (4-8% vs SGP's 28-45%). Value Singles: EV 5%, confidence 56%, odds 1.55-1.95, daily limit 10 (core product). ML Parlays + College Basketball as secondary products. Target: 15-20% realistic ROI.
 - **Multi-Match Parlay System (Dec 9, 2025):** Replaced old SGP (same-game parlay) with new multi-match parlay builder. New system builds parlays from approved L1/L2 Value Singles across different matches. Rules: 2-4 legs, 1 leg per match, odds 4.00-20.00, EV >= 5%, max 3 parlays/day. Uses probability product from AI-calculated probabilities on each single bet.
+- **Exact Score Removal (Dec 9, 2025):** Exact Score product completely removed from platform due to poor December performance (0/29 cold streak, $4,700+ losses). Platform now focuses exclusively on Value Singles (core product), Multi-Match Parlays, and College Basketball.
 
 ### System Design Choices
 - **Data Layer:** Migration from SQLite to PostgreSQL (Replit's Neon database) with connection pooling for concurrency.
