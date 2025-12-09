@@ -12,11 +12,118 @@ from sqlalchemy import create_engine, text
 # All internal calculations use USD. Display shows USD with SEK equivalent.
 USD_TO_SEK = 10.8  # Adjust manually when exchange rate changes
 
-# ============ DYNAMIC STAKING ============
-# 1.2% of bankroll per bet, 1 unit = 1% of bankroll
+# ============ ROI ANALYTICS MODE ============
+# Analytics now run in Unit ROI mode. All picks are evaluated using a flat 1 unit 
+# stake for performance tracking. This allows high bet volume without tying results 
+# to a specific bankroll size. Real-money stakes (if any) are tracked separately.
+ANALYTICS_STAKE_UNITS = 1.0  # Flat 1 unit per bet for analytics
+SIMULATED_STARTING_BANKROLL_UNITS = 100.0  # Starting simulated bankroll
+DYNAMIC_STAKING_ENABLED = False  # Disabled for analytics layer
+
+# Legacy staking (for real money tracker only)
 STAKE_PCT = 0.012  # 1.2% per bet
 BASE_UNIT_PCT = 0.01  # 1 unit = 1%
 STAKE_UNITS = STAKE_PCT / BASE_UNIT_PCT  # 1.2u
+
+
+def calculate_profit_units(odds: float, outcome: str) -> float:
+    """
+    Calculate profit in units for a single bet.
+    - Win: (odds - 1) * 1.0 units
+    - Loss: -1.0 unit
+    - Push/Void: 0.0 units
+    """
+    outcome_lower = str(outcome).lower().strip()
+    if outcome_lower in ('won', 'win', 'w', '1'):
+        return (float(odds) - 1.0) * ANALYTICS_STAKE_UNITS
+    elif outcome_lower in ('lost', 'loss', 'l', '0'):
+        return -ANALYTICS_STAKE_UNITS
+    return 0.0
+
+
+def compute_roi_units(df: pd.DataFrame) -> dict:
+    """
+    Compute units-based ROI metrics for analytics.
+    Every bet = 1 unit stake, profit = (odds-1) for wins, -1 for losses.
+    """
+    if df.empty:
+        return dict(
+            units_staked=0.0,
+            units_won=0.0,
+            roi=0.0,
+            bets=0,
+            wins=0,
+            losses=0,
+            pushes=0,
+            hit_rate=0.0,
+            simulated_bankroll=SIMULATED_STARTING_BANKROLL_UNITS,
+        )
+    
+    if "norm_result" not in df.columns:
+        df = df.copy()
+        if "result" in df.columns:
+            df["norm_result"] = df["result"].apply(normalize_result)
+        else:
+            df["norm_result"] = "PENDING"
+    
+    settled = df[df["norm_result"].isin(["WON", "LOST", "VOID"])].copy()
+    if settled.empty:
+        return dict(
+            units_staked=float(len(df)) * ANALYTICS_STAKE_UNITS,
+            units_won=0.0,
+            roi=0.0,
+            bets=len(df),
+            wins=0,
+            losses=0,
+            pushes=0,
+            hit_rate=0.0,
+            simulated_bankroll=SIMULATED_STARTING_BANKROLL_UNITS,
+        )
+    
+    wins = len(settled[settled["norm_result"] == "WON"])
+    losses = len(settled[settled["norm_result"] == "LOST"])
+    pushes = len(settled[settled["norm_result"] == "VOID"])
+    
+    if "odds" not in settled.columns:
+        settled["odds"] = 2.0
+    
+    settled["profit_units"] = settled.apply(
+        lambda row: calculate_profit_units(row.get("odds", 2.0), row["norm_result"]),
+        axis=1
+    )
+    
+    units_staked = float(len(settled)) * ANALYTICS_STAKE_UNITS
+    units_won = float(settled["profit_units"].sum())
+    roi = (units_won / units_staked * 100) if units_staked > 0 else 0.0
+    
+    non_void = settled[settled["norm_result"] != "VOID"]
+    hit_rate = (wins / len(non_void) * 100) if len(non_void) > 0 else 0.0
+    
+    simulated_bankroll = SIMULATED_STARTING_BANKROLL_UNITS + units_won
+    
+    return dict(
+        units_staked=units_staked,
+        units_won=units_won,
+        roi=roi,
+        bets=len(settled),
+        wins=wins,
+        losses=losses,
+        pushes=pushes,
+        hit_rate=hit_rate,
+        simulated_bankroll=simulated_bankroll,
+    )
+
+
+def format_units(units: float) -> str:
+    """Format units for display with + sign for positive values."""
+    sign = "+" if units >= 0 else ""
+    return f"{sign}{units:.1f} units"
+
+
+def format_roi(roi: float) -> str:
+    """Format ROI for display with + sign for positive values."""
+    sign = "+" if roi >= 0 else ""
+    return f"{sign}{roi:.1f}% ROI"
 
 
 def get_stake_display(stake_sek: float) -> str:
@@ -823,57 +930,51 @@ def render_overview(df: pd.DataFrame):
         unsafe_allow_html=True,
     )
     st.markdown(
-        '<div class="pgr-subtitle">Live performance across all products – football, parlays, women’s 1X2 and college basketball.</div>',
+        '<div class="pgr-subtitle">ROI + Units Performance Mode | Flat 1u stake per bet for analytics</div>',
         unsafe_allow_html=True,
     )
 
-    summary = compute_roi(df)
-    
-    STARTING_BANKROLL = 1000.0  # USD (≈10,800 SEK)
-    current_bankroll = STARTING_BANKROLL + summary["profit"]
-    bankroll_growth = ((current_bankroll / STARTING_BANKROLL) - 1) * 100
+    units_summary = compute_roi_units(df)
+    money_summary = compute_roi(df)
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         metric_card(
-            "Starting Bankroll",
-            format_money(STARTING_BANKROLL),
-            "Initial capital",
+            "Total ROI",
+            format_roi(units_summary["roi"]),
+            f"On {units_summary['units_staked']:.0f} units staked",
         )
     with col2:
         metric_card(
-            "Current Bankroll",
-            format_money(current_bankroll),
-            f"{bankroll_growth:+.1f}% growth",
+            "Total Profit",
+            format_units(units_summary["units_won"]),
+            "Based on 1u flat stake per bet",
         )
     with col3:
         metric_card(
-            "Total Profit",
-            format_money(summary["profit"]),
-            "All settled bets",
+            "Hit Rate",
+            format_pct(units_summary["hit_rate"]),
+            f"{units_summary['wins']}W / {units_summary['losses']}L / {units_summary['pushes']}P",
         )
-    
-    col4, col5, col6 = st.columns(3)
     with col4:
         metric_card(
-            "Total ROI",
-            format_pct(summary["roi"]),
-            f"On {format_money(summary['stake'])} staked",
-        )
-    with col5:
-        metric_card(
-            "Hit Rate",
-            format_pct(summary["hit_rate"]),
-            f"{summary['wins']} wins out of {summary['bets']} bets",
-        )
-    with col6:
-        metric_card(
             "Bets Tracked",
-            f"{len(df):,}",
-            "Including pending bets",
+            f"{units_summary['bets']:,}",
+            f"Simulated: {units_summary['simulated_bankroll']:.1f}u",
         )
 
-    st.markdown("### 📈 Equity Curve (Cumulative Profit)")
+    with st.expander("Real Money Tracker (Optional)", expanded=False):
+        st.caption("Legacy view showing actual USD/SEK stakes - for personal reference only")
+        rcol1, rcol2, rcol3 = st.columns(3)
+        with rcol1:
+            st.metric("Real Profit (USD)", f"${money_summary['profit']:,.0f}")
+        with rcol2:
+            st.metric("Real Stakes (USD)", f"${money_summary['stake']:,.0f}")
+        with rcol3:
+            st.metric("Money ROI", f"{money_summary['roi']:+.1f}%")
+
+
+    st.markdown("### 📈 Equity Curve (Units)")
 
     settled = df[df["profit"].notna()].copy()
     if not settled.empty:
@@ -881,19 +982,29 @@ def render_overview(df: pd.DataFrame):
         settled = settled.dropna(subset=["date"])
         settled["date"] = settled["date"].dt.date
         
+        if "odds" not in settled.columns:
+            settled["odds"] = 2.0
+        if "norm_result" not in settled.columns:
+            settled["norm_result"] = settled["result"].apply(normalize_result) if "result" in settled.columns else "PENDING"
+        
+        settled["profit_units"] = settled.apply(
+            lambda row: calculate_profit_units(row.get("odds", 2.0), row.get("norm_result", "PENDING")),
+            axis=1
+        )
+        
         curve = (
-            settled.groupby("date")["profit"]
+            settled.groupby("date")["profit_units"]
             .sum()
             .cumsum()
-            .reset_index(name="cumulative_profit")
+            .reset_index(name="cumulative_units")
         )
         curve["date"] = pd.to_datetime(curve["date"])
         
         fig = px.line(
             curve,
             x="date",
-            y="cumulative_profit",
-            labels={"date": "Date", "cumulative_profit": "Cumulative Profit (USD)"},
+            y="cumulative_units",
+            labels={"date": "Date", "cumulative_units": "Cumulative Profit (Units)"},
         )
         fig.update_layout(
             plot_bgcolor="rgba(0,0,0,0)",
@@ -910,19 +1021,26 @@ def render_overview(df: pd.DataFrame):
         fig.update_traces(line_color="#00F59D", line_width=3)
         st.plotly_chart(fig, use_container_width=True)
     else:
-        st.info("No settled bets yet – equity curve will appear once results are in.")
+        st.info("No settled bets yet - equity curve will appear once results are in.")
 
-    st.markdown("### 🧩 ROI by Product")
+    st.markdown("### 🧩 ROI by Product (Units)")
 
     if not df.empty:
         prod_settled = df[df["profit"].notna()].copy()
         if not prod_settled.empty:
             agg = (
                 prod_settled.groupby("product")
-                .apply(lambda x: compute_roi(x)["roi"])
+                .apply(lambda x: compute_roi_units(x)["roi"])
                 .reset_index(name="ROI")
             )
             agg = agg.sort_values("ROI", ascending=False)
+            
+            units_agg = (
+                prod_settled.groupby("product")
+                .apply(lambda x: compute_roi_units(x)["units_won"])
+                .reset_index(name="Units")
+            )
+            agg = agg.merge(units_agg, on="product")
             
             fig = px.bar(
                 agg,
@@ -931,6 +1049,7 @@ def render_overview(df: pd.DataFrame):
                 labels={"product": "Product", "ROI": "ROI (%)"},
                 color="ROI",
                 color_continuous_scale=["#FF4444", "#FFAA00", "#00F59D"],
+                hover_data={"Units": ":.1f"},
             )
             fig.update_layout(
                 plot_bgcolor="rgba(0,0,0,0)",
@@ -944,6 +1063,16 @@ def render_overview(df: pd.DataFrame):
                 coloraxis_showscale=False,
             )
             st.plotly_chart(fig, use_container_width=True)
+            
+            st.markdown("**Per-Product Summary (Units)**")
+            for _, row in agg.iterrows():
+                prod_stats = compute_roi_units(prod_settled[prod_settled["product"] == row["product"]])
+                st.markdown(
+                    f"**{row['product']}**: {format_roi(prod_stats['roi'])} | "
+                    f"{format_units(prod_stats['units_won'])} | "
+                    f"{prod_stats['bets']} bets | "
+                    f"{prod_stats['hit_rate']:.1f}% hit rate"
+                )
         else:
             st.info("Waiting for settled bets before we can show per-product ROI.")
     else:
