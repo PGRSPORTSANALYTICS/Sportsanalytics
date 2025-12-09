@@ -106,7 +106,7 @@ def get_training_data_stats() -> dict:
                     'exact_score_filtered': row[6] or 0,
                     'exact_score_skipped': row[7] or 0,
                     'value_singles_records': row[8] or 0,
-                    'sgp_records': row[9] or 0,
+                    'parlay_records': row[9] or 0,
                     'earliest_record': row[10],
                     'latest_record': row[11]
                 }
@@ -150,9 +150,9 @@ def get_value_singles(prod_bets: pd.DataFrame) -> pd.DataFrame:
     return filter_by_product(prod_bets, ["VALUE_SINGLE", "VALUE_SINGLES", "FOOTBALL_SINGLE"])
 
 
-def get_sgp_parlays(prod_bets: pd.DataFrame) -> pd.DataFrame:
-    """Get SGP Parlay bets."""
-    return filter_by_product(prod_bets, ["SGP", "SGP_PARLAY"])
+def get_parlays(prod_bets: pd.DataFrame) -> pd.DataFrame:
+    """Get Parlay bets."""
+    return filter_by_product(prod_bets, ["SGP", "SGP_PARLAY", "ML_PARLAY", "PARLAY"])
 
 
 def get_basket_bets(prod_bets: pd.DataFrame) -> pd.DataFrame:
@@ -823,7 +823,7 @@ def render_overview(df: pd.DataFrame):
         unsafe_allow_html=True,
     )
     st.markdown(
-        '<div class="pgr-subtitle">Live performance across all products – football, SGP, women’s 1X2 and college basketball.</div>',
+        '<div class="pgr-subtitle">Live performance across all products – football, parlays, women’s 1X2 and college basketball.</div>',
         unsafe_allow_html=True,
     )
 
@@ -1000,8 +1000,8 @@ def render_overview(df: pd.DataFrame):
                 st.markdown("**Value Singles Engine**")
                 st.write(f"- Records: {training_stats.get('value_singles_records', 0):,}")
             with col3:
-                st.markdown("**SGP Engine**")
-                st.write(f"- Records: {training_stats.get('sgp_records', 0):,}")
+                st.markdown("**Parlay Engine**")
+                st.write(f"- Records: {training_stats.get('parlay_records', 0):,}")
     else:
         st.info("AI training data collection starting - stats will appear after next prediction cycle.")
     
@@ -1222,7 +1222,7 @@ def render_product_tab(
     title: str,
     description: str,
 ):
-    """Render product tab with SGP-style card layout."""
+    """Render product tab with Parlay-style card layout."""
     data = product_filter(df, product_codes)
 
     st.markdown(f"## {title}")
@@ -1621,15 +1621,15 @@ def render_daily_card_tab():
         with cols[1]:
             st.metric("Value Singles", summary['value_singles_count'])
         with cols[2]:
-            st.metric("SGP Bets", summary['sgp_count'])
+            st.metric("Parlay Bets", summary.get('parlay_count', 0))
         with cols[3]:
             st.metric("Basketball", summary['basketball_count'])
         
         st.markdown("---")
         
-        if card['sgp']:
-            st.markdown("### SGP Bets")
-            for bet in card['sgp']:
+        if card.get('parlay', []):
+            st.markdown("### Parlay Bets")
+            for bet in card.get('parlay', []):
                 tier_color = "#10B981" if bet['tier'] == 'A' else "#F59E0B" if bet['tier'] == 'B' else "#6B7280"
                 ev_color = "#10B981" if bet['ev'] > 0.10 else "#F59E0B" if bet['ev'] > 0.05 else "#9CA3AF"
                 st.markdown(f"""
@@ -1691,11 +1691,11 @@ def render_daily_card_tab():
         st.markdown("### Average Stats")
         stats_cols = st.columns(3)
         with stats_cols[0]:
-            if summary['sgp_count'] > 0:
+            if summary.get('parlay_count', 0) > 0:
                 st.markdown(f"""
                 <div style="padding:12px;border-radius:10px;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);">
-                    <div style="font-size:12px;color:#9CA3AF;">SGP Average</div>
-                    <div style="font-size:16px;color:#6366F1;">EV: {summary['sgp_avg_ev']:.1f}% • Odds: {summary['sgp_avg_odds']:.2f}x</div>
+                    <div style="font-size:12px;color:#9CA3AF;">Parlay Average</div>
+                    <div style="font-size:16px;color:#6366F1;">EV: {summary.get('parlay_avg_ev', 0):.1f}% • Odds: {summary.get('parlay_avg_odds', 0):.2f}x</div>
                 </div>
                 """, unsafe_allow_html=True)
         with stats_cols[1]:
@@ -1807,8 +1807,8 @@ def render_backtest_analysis():
         col5, col6 = st.columns(2)
         
         with col5:
-            st.markdown("### SGP Odds Deep Dive")
-            st.caption("Fine-grained SGP odds analysis")
+            st.markdown("### Parlay Odds Deep Dive")
+            st.caption("Fine-grained parlay odds analysis")
             sgp_odds_df = analyzer.get_sgp_odds_analysis()
             if not sgp_odds_df.empty:
                 st.dataframe(sgp_odds_df, use_container_width=True, hide_index=True)
@@ -1854,7 +1854,7 @@ def render_backtest_analysis():
 
 
 def render_basketball_tab(df: pd.DataFrame):
-    """Render College Basketball tab with SGP-style card layout."""
+    """Render College Basketball tab with Parlay-style card layout."""
     st.markdown("## College Basketball")
     st.caption("NCAAB value singles and parlays from your basketball engine.")
 
@@ -2257,7 +2257,7 @@ def render_parlays_tab():
 </div>
 <div style="font-size:12px;color:#9CA3AF;margin-bottom:6px;">Kickoff: {match_str}</div>
 <div style="font-size:13px;color:#CBD5F5;margin-bottom:8px;">
-<span style="font-weight:600;color:#E5E7EB;">SGP legs:</span>
+<span style="font-weight:600;color:#E5E7EB;">Parlay legs:</span>
 {legs_html}
 </div>
 <div style="display:flex;gap:18px;align-items:baseline;margin-top:4px;">
@@ -2268,7 +2268,7 @@ def render_parlays_tab():
 
             st.markdown(card_html, unsafe_allow_html=True)
 
-            bet_string = f"{home_team} – {away_team} | SGP: {legs_text} | Odds {odds_val:.2f} | Stake ${stake_usd:.0f} ({STAKE_UNITS:.1f}u)"
+            bet_string = f"{home_team} – {away_team} | Parlay: {legs_text} | Odds {odds_val:.2f} | Stake ${stake_usd:.0f} ({STAKE_UNITS:.1f}u)"
             st.code(bet_string, language="text")
 
     st.markdown("---")
