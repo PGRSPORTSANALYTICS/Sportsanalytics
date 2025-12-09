@@ -822,6 +822,16 @@ class DailyCardBet(BaseModel):
     trust_tier: str
     drift_score: Optional[float]
 
+class RoutingStats(BaseModel):
+    total_picks: int = 0
+    by_product: Dict[str, int] = {}
+    by_market: Dict[str, int] = {}
+    by_trust_tier: Dict[str, int] = {}
+    average_ev: float = 0.0
+    products_covered: List[str] = []
+    market_diversity: int = 0
+    balance_score: float = 0.0
+
 class DailyCardResponse(BaseModel):
     date: str
     value_singles: List[DailyCardBet]
@@ -833,6 +843,8 @@ class DailyCardResponse(BaseModel):
     corner_handicaps: List[DailyCardBet]
     parlays: List[Dict]
     summary: DailyCardSummary
+    routing_stats: Optional[RoutingStats] = None
+    markets_covered: List[str] = []
 
 @app.get("/api/daily_card", response_model=DailyCardResponse)
 async def get_daily_card():
@@ -870,7 +882,7 @@ async def get_daily_card():
             LIMIT 30
         """
         
-        vs_rows = db_helper.execute(value_singles_query, (today,))
+        vs_rows = db_helper.execute(value_singles_query, (today,)) or []
         value_singles = []
         for row in vs_rows:
             value_singles.append({
@@ -922,6 +934,17 @@ async def get_daily_card():
             l3_count=by_trust.get("L3_SOFT_VALUE", 0)
         )
         
+        routing_stats = RoutingStats(
+            total_picks=total_bets,
+            by_product=by_product,
+            by_market=by_market,
+            by_trust_tier=by_trust,
+            average_ev=round(avg_ev, 1),
+            products_covered=list(by_product.keys()),
+            market_diversity=len(by_market),
+            balance_score=50.0
+        )
+        
         return DailyCardResponse(
             date=str(today),
             value_singles=[DailyCardBet(**b) for b in remaining_singles],
@@ -932,7 +955,9 @@ async def get_daily_card():
             cards=[],
             corner_handicaps=[],
             parlays=[],
-            summary=summary
+            summary=summary,
+            routing_stats=routing_stats,
+            markets_covered=list(by_product.keys())
         )
         
     except Exception as e:
@@ -960,7 +985,7 @@ async def get_market_stats():
             ORDER BY profit_units DESC
         """
         
-        rows = db_helper.execute(query)
+        rows = db_helper.execute(query) or []
         
         stats = []
         for row in rows:
