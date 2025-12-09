@@ -303,8 +303,7 @@ class TelegramBroadcaster:
         score = prediction['selection'].replace('Exact Score: ', '')
         odds = prediction['odds']
         confidence = prediction.get('confidence', 'N/A')
-        stake_sek = prediction.get('stake', 173)  # Dynamic stake in SEK
-        stake_usd = stake_sek / 10.8  # Convert to USD
+        stake_units = 1.0  # Flat 1 unit per bet
         
         analysis_text = ""
         if prediction.get('analysis_json'):
@@ -343,10 +342,10 @@ class TelegramBroadcaster:
 Predicted Score: {score}
 Odds: {odds}x
 Confidence: {confidence}/100
-💵 Stake: ${stake_usd:.0f} (1.2u)
+💵 Stake: {stake_units:.0f} unit
 
-Potential Return: ${int(stake_usd * odds)} (≈{int(stake_sek * odds)} SEK)
-Profit: ${int(stake_usd * (odds - 1))} (≈{int(stake_sek * (odds - 1))} SEK)
+Potential Return: {odds:.2f} units
+Profit if win: +{(odds - 1):.2f} units
 
 ⏰ KICKOFF: {match_time}
 🏆 League: {league}
@@ -355,8 +354,7 @@ Profit: ${int(stake_usd * (odds - 1))} (≈{int(stake_sek * (odds - 1))} SEK)
 
 📊 LIVE PERFORMANCE
 {stats['wins']}/{stats['total']} wins ({stats['win_rate']:.1f}%)
-Total Profit: ${stats['profit'] / 10.8:.0f} ({stats['roi']:.1f}% ROI)
-Target: 20-25% WR, +100-200% ROI
+ROI: {stats['roi']:.1f}%
 """
         return message
     
@@ -445,8 +443,7 @@ Target: 20-25% WR, +100-200% ROI
         
         odds = prediction.get('bookmaker_odds', prediction.get('odds', 0))
         ev = prediction.get('ev_percentage', 0)
-        stake_sek = prediction.get('stake', 173)  # Dynamic stake in SEK
-        stake_usd = stake_sek / 10.8  # Convert to USD
+        stake_units = 1.0  # Flat 1 unit per bet
         
         league = prediction.get('league', 'N/A')
         
@@ -472,10 +469,10 @@ Target: 20-25% WR, +100-200% ROI
 
 💰 Odds: {odds:.1f}x
 📈 Expected Value: {ev:+.1f}%
-💵 Stake: ${stake_usd:.0f} (1.2u)
+💵 Stake: {stake_units:.0f} unit
 
-Potential Return: ${int(stake_usd * odds)} (≈{int(stake_sek * odds)} SEK)
-Profit: ${int(stake_usd * (odds - 1))} (≈{int(stake_sek * (odds - 1))} SEK)
+Potential Return: {odds:.2f} units
+Profit if win: +{(odds - 1):.2f} units
 
 ⏰ KICKOFF: {match_time}
 🏆 League: {league}
@@ -491,9 +488,7 @@ Profit: ${int(stake_usd * (odds - 1))} (≈{int(stake_sek * (odds - 1))} SEK)
         predicted = result['predicted_score']
         actual = result['actual_score']
         outcome = result['outcome']
-        stake = result['stake']
         odds = result['odds']
-        profit = result.get('profit_loss', 0)
         
         # Get updated performance stats
         stats = self._get_live_stats()
@@ -501,11 +496,12 @@ Profit: ${int(stake_usd * (odds - 1))} (≈{int(stake_sek * (odds - 1))} SEK)
         if outcome in ('won', 'win'):
             emoji = "✅"
             status = "WIN!"
-            result_line = f"Profit: +{int(profit)} SEK"
+            profit_units = odds - 1
+            result_line = f"Profit: +{profit_units:.2f} units"
         else:
             emoji = "❌"
             status = "LOSS"
-            result_line = f"Loss: {int(profit)} SEK"
+            result_line = f"Loss: -1 unit"
         
         message = f"""{emoji} RESULT: {status}
 
@@ -513,7 +509,7 @@ Profit: ${int(stake_usd * (odds - 1))} (≈{int(stake_sek * (odds - 1))} SEK)
 Predicted: {predicted}
 Actual Score: {actual}
 
-Stake: {stake} SEK
+Stake: 1 unit
 Odds: {odds}x
 {result_line}
 
@@ -521,7 +517,7 @@ League: {result.get('league', 'N/A')}
 
 📊 UPDATED PERFORMANCE
 {stats['wins']}/{stats['total']} wins ({stats['win_rate']:.1f}%)
-Total Profit: {stats['profit']:.0f} SEK ({stats['roi']:.1f}% ROI)
+ROI: {stats['roi']:.1f}%
 """
         return message
     

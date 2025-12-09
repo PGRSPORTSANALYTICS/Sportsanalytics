@@ -94,13 +94,14 @@ def format_performance_message(stats, update_type):
     message += f"• Losses: {stats['losses']} ❌\n"
     message += f"• Hit Rate: {stats['hit_rate']:.1f}%\n\n"
     
-    message += f"💰 FINANCIAL\n"
-    message += f"• Total Staked: {stats['total_staked']:.0f} SEK\n"
+    message += f"💰 PERFORMANCE\n"
+    message += f"• Total Bets: {stats['total_bets']} units staked\n"
     
-    if stats['net_profit'] >= 0:
-        message += f"• Net Profit: +{stats['net_profit']:.0f} SEK 📈\n"
+    units_profit = stats['net_profit'] / 173 if stats['net_profit'] else 0
+    if units_profit >= 0:
+        message += f"• Net Profit: +{units_profit:.1f} units 📈\n"
     else:
-        message += f"• Net Profit: {stats['net_profit']:.0f} SEK 📉\n"
+        message += f"• Net Profit: {units_profit:.1f} units 📉\n"
     
     message += f"• ROI: {stats['roi']:+.1f}%\n\n"
     

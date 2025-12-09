@@ -76,8 +76,9 @@ def get_todays_results():
                 results[cat]['profit'] += profit
                 
                 if is_win:
+                    profit_units = odds - 1
                     results[cat]['details'].append(
-                        f"✅ {home} vs {away} | {selection} @ {odds:.2f} | +{profit:.0f} kr"
+                        f"✅ {home} vs {away} | {selection} @ {odds:.2f} | +{profit_units:.2f}u"
                     )
             
             cur.execute("""
@@ -101,8 +102,9 @@ def get_todays_results():
                 results['sgp']['profit'] += profit
                 
                 if is_win:
+                    profit_units = odds - 1
                     results['sgp']['details'].append(
-                        f"✅ {home} vs {away} | {parlay}... @ {odds:.2f} | +{profit:.0f} kr"
+                        f"✅ {home} vs {away} | {parlay}... @ {odds:.2f} | +{profit_units:.2f}u"
                     )
             
             cur.execute("""
@@ -114,21 +116,20 @@ def get_todays_results():
             """, (today,))
             rows = cur.fetchall()
             
-            stake = 173  # 16 USD × 10.8
             for row in rows:
                 match, selection, odds, status = row
                 is_win = status in ('won', 'WON')
-                profit = (odds - 1) * stake if is_win else -stake
+                profit_units = (odds - 1) if is_win else -1
                 
                 if is_win:
                     results['basketball']['won'] += 1
                 else:
                     results['basketball']['lost'] += 1
-                results['basketball']['profit'] += profit
+                results['basketball']['profit'] += profit_units
                 
                 if is_win:
                     results['basketball']['details'].append(
-                        f"✅ {match} | {selection} @ {odds:.2f} | +{profit:.0f} kr"
+                        f"✅ {match} | {selection} @ {odds:.2f} | +{profit_units:.2f}u"
                     )
     
     return results
@@ -142,6 +143,18 @@ def format_recap_message(results: dict) -> str:
     total_lost = sum(r['lost'] for r in results.values())
     total_profit = sum(r['profit'] for r in results.values())
     
+    def to_units(profit_val, count):
+        """Convert profit to units - 1 bet = 1 unit staked"""
+        if count == 0:
+            return 0
+        return profit_val / 173 if isinstance(profit_val, (int, float)) and profit_val != 0 else profit_val
+    
+    es_units = to_units(results['exact_score']['profit'], results['exact_score']['won'] + results['exact_score']['lost'])
+    vs_units = to_units(results['value_singles']['profit'], results['value_singles']['won'] + results['value_singles']['lost'])
+    sgp_units = to_units(results['sgp']['profit'], results['sgp']['won'] + results['sgp']['lost'])
+    bb_units = results['basketball']['profit']  # Already in units
+    total_units = es_units + vs_units + sgp_units + bb_units
+    
     msg = f"""
 <b>📊 DAILY RECAP - {today}</b>
 
@@ -149,7 +162,7 @@ def format_recap_message(results: dict) -> str:
 
 <b>⚽ EXACT SCORE</b>
 Won: {results['exact_score']['won']} | Lost: {results['exact_score']['lost']}
-Profit: <b>{results['exact_score']['profit']:+,.0f} kr</b>
+Profit: <b>{es_units:+.2f} units</b>
 """
     
     if results['exact_score']['details']:
@@ -159,7 +172,7 @@ Profit: <b>{results['exact_score']['profit']:+,.0f} kr</b>
 
 <b>📈 VALUE SINGLES</b>
 Won: {results['value_singles']['won']} | Lost: {results['value_singles']['lost']}
-Profit: <b>{results['value_singles']['profit']:+,.0f} kr</b>
+Profit: <b>{vs_units:+.2f} units</b>
 """
     
     if results['value_singles']['details']:
@@ -169,7 +182,7 @@ Profit: <b>{results['value_singles']['profit']:+,.0f} kr</b>
 
 <b>🎲 SGP PARLAYS</b>
 Won: {results['sgp']['won']} | Lost: {results['sgp']['lost']}
-Profit: <b>{results['sgp']['profit']:+,.0f} kr</b>
+Profit: <b>{sgp_units:+.2f} units</b>
 """
     
     if results['sgp']['details']:
@@ -179,13 +192,13 @@ Profit: <b>{results['sgp']['profit']:+,.0f} kr</b>
 
 <b>🏀 COLLEGE BASKETBALL</b>
 Won: {results['basketball']['won']} | Lost: {results['basketball']['lost']}
-Profit: <b>{results['basketball']['profit']:+,.0f} kr</b>
+Profit: <b>{bb_units:+.2f} units</b>
 """
     
     if results['basketball']['details']:
         msg += "\n" + "\n".join(results['basketball']['details'][:3])
     
-    profit_color = "🟢" if total_profit >= 0 else "🔴"
+    profit_color = "🟢" if total_units >= 0 else "🔴"
     
     msg += f"""
 
@@ -194,7 +207,7 @@ Profit: <b>{results['basketball']['profit']:+,.0f} kr</b>
 <b>{profit_color} DAILY TOTAL</b>
 Won: {total_won} | Lost: {total_lost}
 Hit Rate: {(total_won/(total_won+total_lost)*100) if (total_won+total_lost) > 0 else 0:.1f}%
-<b>Net Profit: {total_profit:+,.0f} kr</b>
+<b>Net Profit: {total_units:+.2f} units</b>
 
 ━━━━━━━━━━━━━━━━━━━━━━
 🤖 PGR AI Predictions
