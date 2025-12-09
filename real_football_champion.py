@@ -3120,7 +3120,9 @@ class RealFootballChampion:
                 
                 # 🎲 RUN MONTE CARLO SIMULATION for exact score (Dec 2025 upgrade)
                 try:
-                    mc_result = run_monte_carlo(xG_home, xG_away, n_sim=10000)
+                    home_xg_val = xg_data.get('home_xg', 1.5)
+                    away_xg_val = xg_data.get('away_xg', 1.2)
+                    mc_result = run_monte_carlo(home_xg_val, away_xg_val, n_sim=10000)
                     mc_prob = mc_result.score_probs.get(score_text, 0.0)
                     # Use MC probability directly (no floor - let MC drive the decision)
                     if mc_prob <= 0:
@@ -3159,8 +3161,8 @@ class RealFootballChampion:
                     start_time=match.get('commence_time', ''),
                     # Monte Carlo: use MC probability (not ensemble)
                     sim_probability=mc_prob,
-                    home_xg=xG_home,
-                    away_xg=xG_away
+                    home_xg=home_xg_val,
+                    away_xg=away_xg_val
                 )
                 
                 # Store disagreement in analysis for use in save function
