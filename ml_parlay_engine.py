@@ -47,7 +47,7 @@ ML_PARLAY_MIN_LEGS = 2
 ML_PARLAY_MAX_LEGS = 4
 
 # Stake as percentage of bankroll
-ML_PARLAY_STAKE_PCT = 0.008  # 0.8% of bankroll
+ML_PARLAY_STAKE_PCT = 0.016  # 1.6% Kelly stake of bankroll
 
 # League whitelist - major predictable leagues only
 ML_PARLAY_LEAGUE_WHITELIST = {
@@ -417,7 +417,7 @@ class MLParlayEngine:
         Returns:
             Dict with 'home', 'draw', 'away' odds correctly mapped to teams
         """
-        best = {'home': 0, 'draw': 0, 'away': 0}
+        best = {'home': 0.0, 'draw': 0.0, 'away': 0.0}
         
         for bm in bookmakers:
             markets = bm.get('markets', [])
