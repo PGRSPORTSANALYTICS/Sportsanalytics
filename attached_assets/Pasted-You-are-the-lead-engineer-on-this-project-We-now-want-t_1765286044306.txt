@@ -1,0 +1,189 @@
+You are the lead engineer on this project. We now want to switch the betting analytics system from a bankroll/stake-based view to a pure ROI + units tracking mode.
+
+The goal:
+- The AI can generate many bets per day without "breaking" a visible bankroll.
+- The dashboard should focus on ROI, hit rate and units, not real-money swings.
+- Real-money stakes are optional and only for my personal use, not for core analytics.
+
+Do NOT delete existing data. Migrate and extend.
+
+------------------------------------------------
+1. Core concept change: introduce "units" as base stake
+------------------------------------------------
+
+Define a standard analytics stake:
+
+- 1 unit = the base stake for *all* AI bets in the analytics layer.
+
+For future bets:
+
+- Every bet recorded by the AI (any product: Value Singles, Totals, BTTS, Corners, Parlays) should have:
+  - analytics_stake_units = 1.0
+- If a real money stake is used, store it separately:
+  - real_stake_amount (USD or SEK)
+  - BUT analytics should not depend on this.
+
+For historical bets:
+
+- Keep existing monetary stakes for history.
+- Add a derived field:
+  - analytics_stake_units = 1.0 for each bet (this can be virtual if needed).
+- Profit in units can be computed as:
+  - profit_units = (odds - 1) * analytics_stake_units for wins
+  - profit_units = -analytics_stake_units for losses
+
+This means:
+- Every win = (odds - 1) units
+- Every loss = -1 unit
+- This normalizes performance independent of money stakes.
+
+---------------------------------------------
+2. ROI and profit calculations in units only
+---------------------------------------------
+
+Update all ROI calculations to use units:
+
+- Total units staked = sum(analytics_stake_units) over all bets.
+- Total units won = sum(profit_units).
+- ROI = Total units won / Total units staked.
+
+Per product (Value Singles, Totals, BTTS, Corners, Parlays):
+
+- Track:
+  - bets_count
+  - units_staked
+  - units_won
+  - ROI_per_product
+  - hit_rate_per_product
+
+This should be the main basis for performance reporting.
+
+-----------------------------------------
+3. Dashboard UI: switch to "ROI mode"
+-----------------------------------------
+
+Change the main metrics at the top of the dashboard:
+
+Current top section shows something like:
+- Current Bankroll (USD, with ≈ SEK)
+- Total Profit (USD, ≈ SEK)
+- Total ROI
+- Hit Rate
+- Bets Tracked
+
+We want to change this to a **unit + ROI** view:
+
+New top metrics:
+
+1) "Total ROI"
+   - Use the units-based ROI.
+   - Format: "+11.5% ROI"
+
+2) "Total Profit (Units)"
+   - e.g. "+183.2 units"
+   - description: "Based on 1u flat stake per bet"
+
+3) "Hit Rate"
+   - Wins / Total bets
+
+4) "Bets Tracked"
+   - Total bets in the database
+
+Optionally:
+
+5) "Simulated Bankroll (Units)"
+   - Start at 100u by convention.
+   - simulated_bankroll = 100 + total_units_won
+   - but make sure this is clearly labeled as "Simulated" / "Analytics only".
+
+Remove or de-emphasize:
+
+- Display of "Current Bankroll" in USD/SEK as if it's a real wallet.
+- Display of "Total Profit" in USD/SEK as the main metric.
+
+Those can be moved to a secondary section called e.g.:
+- "Real Money Tracker (optional)"
+and only use real_stake_amount there if needed.
+
+----------------------------------------------------
+4. Per-product panels: show ROI + units, not money
+----------------------------------------------------
+
+For each product section (Value Singles, Totals, BTTS, Corners, Parlays), update the summary rows to show:
+
+- ROI: e.g. "+18.3% ROI"
+- Units won: "+54.2u"
+- Bets: "123 bets"
+- Hit Rate: "57.0%"
+
+Remove money references like:
+- "On 12,256 USD staked"
+- "≈ 132,370 SEK staked"
+
+If you still want to keep money info for me, put it in a smaller, clearly labeled line such as:
+- "Real stakes (if used): 12,256 USD total – informational only."
+
+But the main eye-catching numbers must be ROI and Units, not currency.
+
+-----------------------------------------------------------
+5. Decouple bet volume from bankroll and staking strategies
+-----------------------------------------------------------
+
+Right now, the system may adjust stake size based on bankroll (Kelly, percentage of bankroll, etc.). We want to disable this behavior for analytics.
+
+Changes:
+
+1) For AI-generated bets, set:
+   - analytics_stake_units = 1.0 flat
+   - Do NOT scale this based on bankroll or previous wins/losses.
+
+2) If there is any "dynamic staking" logic:
+   - Move it behind a config flag, e.g. DYNAMIC_STAKING_ENABLED = False by default.
+   - When disabled, all bets use flat 1-unit stake in the analytics layer.
+
+3) Daily volume (number of bets) should NOT depend on bankroll.
+   - Volume should only depend on filters: EV, confidence, trust tier, daily limits per product.
+   - So even with small or big bankroll, the engine still generates the same set of qualified picks.
+
+----------------------------------------------
+6. Historical data migration & consistency
+----------------------------------------------
+
+For existing historical bets:
+
+- Backfill analytics_stake_units = 1.0 for every bet.
+- Compute profit_units:
+  - If we already store whether the bet was a win/loss/push and the odds, we can derive units-based profit:
+    - win: (odds - 1) * 1.0
+    - loss: -1.0
+    - push/void: 0.0
+- Recompute historical ROI using these units and display it in the dashboard.
+
+Keep existing monetary profit/ROI fields if they exist, but mark them as "legacy" or "real money" and do not use them in the primary UI.
+
+-------------------------------------------------
+7. Labeling & documentation in the codebase
+-------------------------------------------------
+
+In the config/docs, add a short explanation, for example:
+
+> "Analytics now run in Unit ROI mode. All picks are evaluated using a flat 1 unit stake for performance tracking. This allows high bet volume without tying results to a specific bankroll size. Real-money stakes (if any) are tracked separately."
+
+-------------------------------------------------
+8. Final check and output
+-------------------------------------------------
+
+After you implement this ROI/unit mode:
+
+1. Rebuild the dashboard stats.
+2. Print a summary in the logs showing:
+   - Total units staked
+   - Total units won
+   - Overall ROI
+   - Per-product ROI (Value, Totals, BTTS, Corners, Parlays)
+   - Hit rate
+   - Example of how the new top panel looks (text description is fine).
+
+Confirm in the logs that:
+- No part of the system is still using bankroll to limit volume or adjust stake for AI bets.
+- Money amounts (USD/SEK) are now secondary and clearly labeled as optional/real money, not primary analytics.
