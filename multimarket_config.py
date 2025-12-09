@@ -63,10 +63,10 @@ class ProductConfig:
 PRODUCT_CONFIGS: Dict[str, ProductConfig] = {
     "VALUE_SINGLES": ProductConfig(
         name="Value Singles",
-        max_per_day=15,
+        max_per_day=20,
         min_ev=0.02,
-        min_odds=1.50,
-        max_odds=3.00,
+        min_odds=1.40,
+        max_odds=2.20,
         min_confidence=0.52,
         market_types=["ML", "AH", "DC", "DNB"],
         l1_min_ev=0.05,

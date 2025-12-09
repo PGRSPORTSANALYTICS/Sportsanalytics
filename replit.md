@@ -56,16 +56,17 @@ The system employs advanced prediction features including:
 - **Strategic Product Pivot (Dec 9, 2025):** Value Singles now core subscription product due to lower bookmaker margins (4-8% vs SGP's 28-45%). ML Parlays + College Basketball as secondary products. Target: 15-20% realistic ROI.
 - **Multi-Match Parlay System (Dec 9, 2025):** Replaced old SGP (same-game parlay) with new multi-match parlay builder. New system builds parlays from approved L1/L2 Value Singles across different matches. Uses probability product from AI-calculated probabilities on each single bet.
 - **Exact Score Removal (Dec 9, 2025):** Exact Score product completely removed from platform due to poor December performance (0/29 cold streak, $4,700+ losses). Platform now focuses exclusively on Value Singles (core product), Multi-Match Parlays, and College Basketball.
-- **NOVA v2.0 Filter Retuning (Dec 9, 2025):** Complete filter overhaul for higher daily volume while maintaining safety. Changes:
-  - **Value Singles:** EV 2% (was 5%), confidence 52% (was 56%), odds 1.50-3.00 (was 1.55-1.95), max 15/day (was 10), expanded to 29 leagues (was 9).
-  - **3-Tier Trust System with Safety Guardrails:**
-    - L1 (High Trust): Sim approved, EV >= 5%, confidence >= 55%, odds 1.50-3.00, max 3/day.
-    - L2 (Medium Trust): Sim approved (SAFETY), EV >= 2%, confidence >= 52%, disagreement <= 15% (SAFETY, was 20%), odds 1.50-3.20.
-    - L3 (Soft Value): EV >= 0%, confidence >= 50%, disagreement <= 25%, odds 1.40-3.50, used only when < 5 total picks.
-  - **ML Parlays:** Per-leg EV 3%, total parlay EV >= 5% (SAFETY), leg odds 1.30-3.00, total odds 3.00-12.00, max 3/day.
-  - **Multi-Match Parlays:** 2-3 legs (was 2-4), total odds 3.00-10.00 (was 4.00-20.00), EV 3% (was 5%), max 2/day (was 3).
-  - **Basketball:** EV 1.5% (was 3%), confidence 52% (was 50%), max 12 singles (was 10).
-  - Target: 5-15 Value Singles on typical match days.
+- **NOVA v2.1 Filter Retuning (Dec 9, 2025):** Filter relaxation for higher daily volume. Changes:
+  - **Value Singles:** EV 2%, confidence 52%, odds 1.40-2.20, max 20/day, ALL leagues allowed (whitelist disabled).
+  - **Tournament Mode (UCL/UEL/UECL):** Relaxed thresholds (EV 1.5%, confidence 50%) since less H2H data available.
+  - **3-Tier Trust System:**
+    - L1 (High Trust): Sim approved, EV >= 5%, confidence >= 55%, odds 1.40-2.20.
+    - L2 (Medium Trust): Sim approved, EV >= 2%, confidence >= 52%, disagreement <= 15%.
+    - L3 (Soft Value): EV >= 0%, confidence >= 50%, disagreement <= 25%, odds 1.40-2.50.
+  - **ML Parlays:** Per-leg EV 3%, total parlay EV >= 5%, leg odds 1.30-3.00, total odds 3.00-12.00, max 5/day.
+  - **Multi-Match Parlays:** 2-3 legs, total odds 3.00-10.00, EV 3%, max 2/day.
+  - **Basketball:** EV 1.5%, confidence 52%, max 12 singles.
+  - Target: 10-20 Value Singles on typical match days.
 - **MultiMarket Expansion v1.0 (Dec 9, 2025):** Significantly increased daily volume with dedicated product engines:
   - **New Product Architecture:** Separate engines for each market type with independent daily limits.
   - **Asian Handicap Support:** Added AH -0.5, -1.0, -1.5, +0.5, +1.0, +1.5 for home/away teams to Value Singles.

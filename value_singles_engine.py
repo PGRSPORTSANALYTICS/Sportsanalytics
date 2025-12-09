@@ -32,16 +32,28 @@ from monte_carlo_integration import run_monte_carlo, classify_trust_level, analy
 # Minimum Expected Value (EV) - 2% edge for volume
 MIN_VALUE_SINGLE_EV = 0.02  # 2% edge - increased volume
 
-# Odds range filter - expanded for more opportunities
-MIN_VALUE_SINGLE_ODDS = 1.50  # Lower min for more supply
-MAX_VALUE_SINGLE_ODDS = 3.00  # Expanded range for higher odds value
+# Odds range filter - tighter range for consistency (Dec 9, 2025)
+MIN_VALUE_SINGLE_ODDS = 1.40  # Lower min for safer bets
+MAX_VALUE_SINGLE_ODDS = 2.20  # Tighter max for consistency
 MAX_LEARNING_ODDS = 4.00      # Collect predictions up to 4.00 for AI training
 
 # Minimum model confidence/probability required
 MIN_VALUE_SINGLE_CONFIDENCE = 0.52  # 52% - balanced threshold
 
 # Maximum number of value singles per day - CORE PRODUCT
-MAX_VALUE_SINGLES_PER_DAY = 15  # Increased for better daily coverage
+MAX_VALUE_SINGLES_PER_DAY = 20  # Increased for better daily coverage
+
+# Tournament filter mode: relaxed thresholds for UCL/UEL
+TOURNAMENT_LEAGUES = {
+    "soccer_uefa_champs_league",
+    "soccer_uefa_europa_league", 
+    "soccer_uefa_europa_conf_league",
+}
+TOURNAMENT_MIN_EV = 0.015  # 1.5% EV for tournaments (less H2H data)
+TOURNAMENT_MIN_CONFIDENCE = 0.50  # 50% confidence for tournaments
+
+# League filtering mode: False = allow ALL leagues
+LEAGUE_WHITELIST_ENABLED = False  # Disable whitelist - allow all leagues
 
 # EXPANDED league whitelist (all supported leagues - approx 30)
 # Includes all leagues with reliable data and predictable outcomes
@@ -383,11 +395,19 @@ class ValueSinglesEngine:
                 print(f"⏭️ Skipping {home_team} vs {away_team} - plays on {match_date}, not today ({today_str})")
                 continue
             
-            # LEAGUE WHITELIST FILTER: Only major leagues for lower variance
+            # LEAGUE FILTER: Check whitelist if enabled, otherwise allow all leagues
             league_key = match.get('sport_key') or match.get('league_key') or match.get('odds_api_key') or ''
-            if league_key and league_key not in VALUE_SINGLE_LEAGUE_WHITELIST:
+            is_tournament = league_key in TOURNAMENT_LEAGUES
+            
+            if LEAGUE_WHITELIST_ENABLED and league_key and league_key not in VALUE_SINGLE_LEAGUE_WHITELIST:
                 print(f"⏭️ Skipping {home_team} vs {away_team} - league '{league_key}' not in whitelist")
                 continue
+            
+            # Dynamic thresholds for tournament matches (less H2H data available)
+            match_ev_threshold = TOURNAMENT_MIN_EV if is_tournament else MIN_VALUE_SINGLE_EV
+            match_confidence_threshold = TOURNAMENT_MIN_CONFIDENCE if is_tournament else MIN_VALUE_SINGLE_CONFIDENCE
+            if is_tournament:
+                print(f"🏆 Tournament match: {home_team} vs {away_team} - using relaxed thresholds (EV: {match_ev_threshold:.1%}, Conf: {match_confidence_threshold:.0%})")
 
             # 2) Odds
             if not hasattr(self.champion, "get_odds_for_match"):
@@ -437,12 +457,12 @@ class ValueSinglesEngine:
                 if odds is None:
                     continue
                 
-                # ODDS FILTER: Generate predictions for 1.60-2.50 (learning), bet only 1.60-1.79
+                # ODDS FILTER: Allow bets in configured range, learning extends to MAX_LEARNING_ODDS
                 if not (MIN_VALUE_SINGLE_ODDS <= odds <= MAX_LEARNING_ODDS):
                     continue  # Skip bets outside learning range
                 
-                # HARD FILTER: Model probability >= 58% for high confidence
-                if p_model < MIN_VALUE_SINGLE_CONFIDENCE:
+                # HARD FILTER: Model probability >= threshold (dynamic for tournaments)
+                if p_model < match_confidence_threshold:
                     continue  # Skip low-confidence predictions
 
                 # Check for conflict with exact score prediction (1X2 markets only)
@@ -452,8 +472,8 @@ class ValueSinglesEngine:
 
                 ev = self._calc_ev(p_model, odds)
                 
-                # HARD FILTER: Minimum 8% EV
-                if ev < MIN_VALUE_SINGLE_EV:
+                # HARD FILTER: Minimum EV (dynamic for tournaments)
+                if ev < match_ev_threshold:
                     continue
                 
                 # Smart conflict resolution for Over/Under goals vs Exact Score
