@@ -1,13 +1,18 @@
 """
 Bankroll Manager - Centralized exposure control for all betting systems.
 
+ANALYTICS MODE (December 2025):
+Analytics now run in Unit ROI mode. All picks are evaluated using a flat 1 unit 
+stake for performance tracking. This allows high bet volume without tying results 
+to a specific bankroll size. Real-money stakes (if any) are tracked separately.
+
 Features:
-1. Dynamic staking: 1.2% of current bankroll per bet
-2. Unit system: 1 unit = 1% of bankroll (each bet = 1.2u)
-3. Daily loss protection: Stop betting if daily loss ≥ 20% of bankroll
+1. ANALYTICS MODE: Flat 1 unit stake per bet for ROI tracking
+2. Real Money Mode (optional): Dynamic staking 1.2% of current bankroll
+3. Daily loss protection: Stop betting if daily loss >= 20% of bankroll
 4. Exposure limits: Max 80% of bankroll at risk
 
-Ensures smart money management and protects the bankroll.
+The default mode is ANALYTICS (flat 1u stakes). Real money staking is optional.
 """
 
 import os
@@ -19,9 +24,13 @@ from sqlalchemy import create_engine, text
 class BankrollManager:
     """Manages bankroll and exposure limits across all betting systems."""
     
+    ANALYTICS_MODE = True
+    ANALYTICS_STAKE_UNITS = 1.0
+    SIMULATED_STARTING_BANKROLL_UNITS = 100.0
+    
     STARTING_BANKROLL = 4_607  # SEK (adjusted to match actual: 13,294 - 8,687 profit)
     MAX_DAILY_EXPOSURE_PCT = 0.80  # Max 80% of bankroll can be at risk
-    DAILY_LOSS_LIMIT_PCT = 0.20  # Stop betting if daily loss ≥ 20%
+    DAILY_LOSS_LIMIT_PCT = 0.20  # Stop betting if daily loss >= 20%
     
     STAKE_PCT = 0.012  # 1.2% of bankroll per bet (standard)
     EXACT_SCORE_STAKE_PCT = 0.006  # 0.6% for exact score (higher variance)

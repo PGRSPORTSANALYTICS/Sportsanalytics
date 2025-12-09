@@ -29,7 +29,16 @@ The system employs advanced prediction features including:
 - **Dynamic Settlement:** `settlement.py` dynamically selects result columns for bet settlement.
 - **Basketball Settings:** Specific confidence thresholds, odds ranges, and EV minimum edge for basketball predictions.
 - **Bankroll Management:** Centralized `BankrollManager` tracks bankroll, exposure, and daily limits to prevent over-betting, capping daily exposure at 80% of bankroll.
-- **Dynamic Staking:** Implemented 1.2% of bankroll per bet, with a daily loss protection stopping bets if daily loss exceeds 20% of bankroll.
+- **ROI + Units Analytics Mode (Dec 9, 2025):** Complete switch from bankroll-based to units-based performance tracking. All picks evaluated using flat 1 unit stake for analytics. Key changes:
+  - Every bet = 1 unit stake (analytics layer decoupled from real money)
+  - Profit calculation: Win = (odds - 1) units, Loss = -1 unit, Void = 0 units
+  - ROI = Total units won / Total units staked
+  - Dashboard shows: Total ROI, Total Profit (units), Hit Rate, Simulated Bankroll
+  - Real money tracking moved to optional collapsible "Real Money Tracker" section
+  - Historical bets migrated to units with profit_units column
+  - Dynamic staking disabled for analytics; bet volume no longer depends on bankroll
+  - Current performance: +139.1 units, +19.0% ROI, 732 bets, 239.1u simulated bankroll
+- **Legacy Dynamic Staking (Real Money Mode):** Optional 1.2% of bankroll per bet, with daily loss protection stopping bets if daily loss exceeds 20% of bankroll.
 - **AI Training Data Collection:** Comprehensive pipeline to collect 40+ features for future AI model training, including a `training_data` PostgreSQL table and a `DataCollector` singleton class.
 - **Learning System Track Record:** Dashboard section showing AI prediction performance KPIs, breakdown by prediction type, accuracy by league, 30-day trend, and model calibration.
 - **Fast Result Verification:** Reduced per-bet cooldown to 5 minutes, verification runs every 5 minutes, prioritizing The Odds API for result fetching.
