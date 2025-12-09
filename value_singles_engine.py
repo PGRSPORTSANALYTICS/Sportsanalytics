@@ -114,233 +114,32 @@ def prob_1x2(lh: float, la: float, max_goals: int = 8) -> Tuple[float, float, fl
 
 class ValueSinglesEngine:
     """
-    champion: your RealFootballChampion instance
-    It must provide:
-      - get_todays_fixtures() -> List[Dict]  (or similar)
-      - get_odds_for_match(match) -> Dict[str, float]
-      - get_expected_goals(match) -> Tuple[float, float]
-      - save_opportunity(dict_or_object) OR save_exact_score_opportunity for dicts
-    If some are missing, the engine will skip gracefully.
+    Value Singles Engine - Core Prediction Product (Dec 2025)
+    
+    Generates AI-powered single bet recommendations across multiple markets:
+    - Match Result (1X2): Home Win, Draw, Away Win
+    - Goals Markets: Over/Under 0.5 to 4.5
+    - BTTS: Both Teams to Score Yes/No
+    - Double Chance: Home/Draw, Draw/Away
+    - Corners: Over/Under various lines
+    
+    Uses Monte Carlo simulation for probability calculation and
+    strict EV filtering (5%+ edge required).
     """
 
     def __init__(self, champion, ev_threshold: float = None, min_confidence: int = None):
         self.champion = champion
         # Use hard-coded constants for strict filtering (Nov 30, 2025)
-        self.ev_threshold = MIN_VALUE_SINGLE_EV  # 8% EV requirement
+        self.ev_threshold = MIN_VALUE_SINGLE_EV  # 5% EV requirement (core product)
         self.min_confidence = 50  # Base confidence threshold (probability filter is separate)
-        self._exact_score_cache = {}  # Cache for exact score predictions
-    
-    def _get_exact_score_outcome(self, home_team: str, away_team: str) -> Optional[str]:
-        """
-        Check if there's an existing exact score prediction for this match.
-        Returns 'HOME_WIN', 'DRAW', 'AWAY_WIN' or None if no prediction exists.
-        """
-        from db_helper import db_helper
-        
-        cache_key = f"{home_team}_{away_team}"
-        if cache_key in self._exact_score_cache:
-            return self._exact_score_cache[cache_key]
-        
-        try:
-            query = """
-                SELECT selection FROM football_opportunities 
-                WHERE home_team = %s AND away_team = %s 
-                  AND market = 'exact_score'
-                  AND outcome IS NULL
-                LIMIT 1
-            """
-            rows = db_helper.execute(query, (home_team, away_team), fetch='all')
-            
-            if rows and rows[0][0]:
-                selection = rows[0][0]  # e.g., "Exact Score: 2-1"
-                # Parse the score to determine outcome
-                import re
-                match = re.search(r'(\d+)-(\d+)', selection)
-                if match:
-                    home_goals = int(match.group(1))
-                    away_goals = int(match.group(2))
-                    if home_goals > away_goals:
-                        result = 'HOME_WIN'
-                    elif away_goals > home_goals:
-                        result = 'AWAY_WIN'
-                    else:
-                        result = 'DRAW'
-                    self._exact_score_cache[cache_key] = result
-                    return result
-            
-            self._exact_score_cache[cache_key] = None
-            return None
-        except Exception as e:
-            print(f"⚠️ Error checking exact score: {e}")
-            return None
-    
-    def _get_exact_score_goals(self, home_team: str, away_team: str) -> Optional[tuple]:
-        """
-        Get the exact score prediction goals for this match.
-        Returns tuple of (home_goals, away_goals) or None if no prediction.
-        """
-        from db_helper import db_helper
-        
-        cache_key = f"{home_team}_{away_team}_goals"
-        if cache_key in self._exact_score_cache:
-            return self._exact_score_cache[cache_key]
-        
-        try:
-            query = """
-                SELECT selection FROM football_opportunities 
-                WHERE home_team = %s AND away_team = %s 
-                  AND market = 'exact_score'
-                  AND outcome IS NULL
-                LIMIT 1
-            """
-            rows = db_helper.execute(query, (home_team, away_team), fetch='all')
-            
-            if rows and rows[0][0]:
-                selection = rows[0][0]
-                import re
-                match = re.search(r'(\d+)-(\d+)', selection)
-                if match:
-                    result = (int(match.group(1)), int(match.group(2)))
-                    self._exact_score_cache[cache_key] = result
-                    return result
-            
-            self._exact_score_cache[cache_key] = None
-            return None
-        except Exception as e:
-            print(f"⚠️ Error getting exact score goals: {e}")
-            return None
-    
-    def _is_1x2_conflicting(self, home_team: str, away_team: str, market_key: str) -> bool:
-        """
-        Check if a 1X2 selection conflicts with existing exact score prediction.
-        Returns True if conflicting (should skip), False if OK to proceed.
-        """
-        if market_key not in ('HOME_WIN', 'AWAY_WIN', 'DRAW'):
-            return False  # Only check 1X2 markets
-        
-        existing_outcome = self._get_exact_score_outcome(home_team, away_team)
-        if existing_outcome is None:
-            return False  # No exact score prediction, OK to proceed
-        
-        # Conflict if exact score says one outcome but singles says another
-        if existing_outcome != market_key:
-            print(f"⚠️ CONFLICT BLOCKED: {home_team} vs {away_team} has exact score predicting {existing_outcome}, but value single would be {market_key}")
-            return True
-        
-        return False  # Same prediction, OK
-    
-    def _get_exact_score_ev(self, home_team: str, away_team: str) -> Optional[tuple]:
-        """
-        Get the exact score prediction's EV and ID for this match.
-        Returns tuple of (ev_percentage, prediction_id) or None if no prediction.
-        """
-        from db_helper import db_helper
-        
-        try:
-            query = """
-                SELECT id, edge_percentage FROM football_opportunities 
-                WHERE home_team = %s AND away_team = %s 
-                  AND market = 'exact_score'
-                  AND status = 'pending'
-                ORDER BY timestamp DESC
-                LIMIT 1
-            """
-            rows = db_helper.execute(query, (home_team, away_team), fetch='all')
-            
-            if rows and rows[0]:
-                return (float(rows[0][1] or 0), rows[0][0])  # (ev, id)
-            return None
-        except Exception as e:
-            print(f"⚠️ Error getting exact score EV: {e}")
-            return None
-    
-    def _delete_exact_score_prediction(self, prediction_id: int, home_team: str, away_team: str, reason: str):
-        """Delete an exact score prediction when Value Single has better EV."""
-        from db_helper import db_helper
-        
-        try:
-            db_helper.execute(
-                "DELETE FROM football_opportunities WHERE id = %s AND status = 'pending'",
-                (prediction_id,)
-            )
-            print(f"🔄 REPLACED: Deleted Exact Score #{prediction_id} for {home_team} vs {away_team} - {reason}")
-        except Exception as e:
-            print(f"⚠️ Error deleting exact score: {e}")
     
     def _check_conflict_with_ev_comparison(self, home_team: str, away_team: str, market_key: str, 
                                             value_single_ev: float) -> str:
         """
-        Smart conflict resolution: Compare EVs and decide which prediction to keep.
-        
-        Returns:
-            'skip' - Skip Value Single (Exact Score has better EV)
-            'replace' - Replace Exact Score with Value Single (Value Single has better EV)
-            'ok' - No conflict, proceed normally
+        No longer needed - Exact Score product removed Dec 2025.
+        Always returns 'ok' to proceed with Value Singles.
         """
-        # Check if this is a goals market that could conflict
-        if not market_key.startswith('FT_OVER_') and not market_key.startswith('FT_UNDER_'):
-            return 'ok'  # Not a goals market, no conflict possible
-        
-        exact_goals = self._get_exact_score_goals(home_team, away_team)
-        if exact_goals is None:
-            return 'ok'  # No exact score prediction
-        
-        total_goals = exact_goals[0] + exact_goals[1]
-        
-        # Parse the line (e.g., "FT_OVER_2_5" -> line = 2.5)
-        parts = market_key.split('_')
-        if len(parts) >= 4:
-            try:
-                line = float(f"{parts[2]}.{parts[3]}")
-            except ValueError:
-                return 'ok'
-        else:
-            return 'ok'
-        
-        is_over = 'OVER' in market_key
-        
-        # Check if there's a conflict
-        has_conflict = False
-        if is_over and total_goals <= line:
-            has_conflict = True
-        elif not is_over and total_goals >= line:
-            has_conflict = True
-        
-        if not has_conflict:
-            return 'ok'
-        
-        # There's a conflict - compare EVs
-        exact_score_data = self._get_exact_score_ev(home_team, away_team)
-        if exact_score_data is None:
-            return 'ok'
-        
-        exact_score_ev, exact_score_id = exact_score_data
-        
-        # Convert Value Single EV to percentage for comparison (it's already decimal like 0.05 for 5%)
-        value_single_ev_pct = value_single_ev * 100
-        
-        print(f"⚖️  EV COMPARISON: {home_team} vs {away_team}")
-        print(f"   Value Single ({market_key}): {value_single_ev_pct:.1f}% EV")
-        print(f"   Exact Score ({exact_goals[0]}-{exact_goals[1]}): {exact_score_ev:.1f}% EV")
-        
-        if value_single_ev_pct > exact_score_ev:
-            # Value Single is better - delete exact score and use value single
-            self._delete_exact_score_prediction(
-                exact_score_id, home_team, away_team,
-                f"Value Single EV ({value_single_ev_pct:.1f}%) > Exact Score EV ({exact_score_ev:.1f}%)"
-            )
-            return 'replace'
-        else:
-            # Exact Score is better - skip value single
-            print(f"   ➡️  Keeping Exact Score (better EV)")
-            return 'skip'
-    
-    def _is_goals_conflicting(self, home_team: str, away_team: str, market_key: str) -> bool:
-        """
-        DEPRECATED: Use _check_conflict_with_ev_comparison instead.
-        Kept for backward compatibility but now just returns False.
-        """
-        return False  # Now handled by _check_conflict_with_ev_comparison
+        return 'ok'
 
     def _calc_ev(self, p_model: float, odds: float) -> float:
         # Expected value = p*odds - 1
