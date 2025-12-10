@@ -13,13 +13,14 @@ Features:
 - P&L calculation with real odds
 """
 
-import sqlite3
 import logging
 import requests
 import trafilatura
 import re
 import os
 import json
+import psycopg2
+from psycopg2.extras import RealDictCursor
 from datetime import datetime, timedelta, date
 import time
 import sys
@@ -45,6 +46,7 @@ class RealResultVerifier:
     
     def __init__(self, db_path='data/real_football.db'):
         self.db_path = db_path
+        self.database_url = os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL")
         self.verified_count = 0
         self.failed_count = 0
         self.api_failures = 0
@@ -97,21 +99,26 @@ class RealResultVerifier:
     def _get_pending_tips(self) -> List[Dict]:
         """Get all tips that need result verification"""
         try:
-            conn = sqlite3.connect(self.db_path)
-            conn.row_factory = sqlite3.Row
+            if not self.database_url:
+                logger.warning("No DATABASE_URL found, skipping verification")
+                return []
             
-            cursor = conn.cursor()
+            conn = psycopg2.connect(self.database_url)
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            
             cursor.execute("""
                 SELECT id, home_team, away_team, match_date, market, selection, 
-                       odds, stake, status, outcome, profit_loss
+                       odds, stake, outcome, profit_loss, match_id
                 FROM football_opportunities 
-                WHERE (outcome IS NULL OR outcome = '' OR outcome = 'unknown')
-                AND date(match_date) <= date('now')
+                WHERE bet_placed = true
+                  AND (outcome IS NULL OR outcome = '' OR LOWER(outcome) = 'pending')
+                  AND DATE(match_date) <= CURRENT_DATE
                 ORDER BY match_date DESC
                 LIMIT 50
             """)
             
             tips = [dict(row) for row in cursor.fetchall()]
+            cursor.close()
             conn.close()
             
             logger.info(f"📋 Retrieved {len(tips)} pending tips for verification")
@@ -481,12 +488,29 @@ class RealResultVerifier:
                 elif 'no' in selection:
                     return 'won' if not both_scored else 'lost'
             
-            # Then check for Over/Under goals
-            elif 'over/under' in market or 'total goals' in market or 'goals' in market:
+            # Check for Over/Under goals (in market OR selection)
+            elif ('over/under' in market or 'total goals' in market or 'goals' in market or 
+                  'over' in selection or 'under' in selection):
+                # Over/Under 2.5
                 if 'over 2.5' in selection or 'over2.5' in selection.replace(' ', ''):
                     return 'won' if total_goals > 2.5 else 'lost'
                 elif 'under 2.5' in selection or 'under2.5' in selection.replace(' ', ''):
                     return 'won' if total_goals < 2.5 else 'lost'
+                # Over/Under 1.5
+                elif 'over 1.5' in selection or 'over1.5' in selection.replace(' ', ''):
+                    return 'won' if total_goals > 1.5 else 'lost'
+                elif 'under 1.5' in selection or 'under1.5' in selection.replace(' ', ''):
+                    return 'won' if total_goals < 1.5 else 'lost'
+                # Over/Under 3.5
+                elif 'over 3.5' in selection or 'over3.5' in selection.replace(' ', ''):
+                    return 'won' if total_goals > 3.5 else 'lost'
+                elif 'under 3.5' in selection or 'under3.5' in selection.replace(' ', ''):
+                    return 'won' if total_goals < 3.5 else 'lost'
+                # Over/Under 0.5
+                elif 'over 0.5' in selection or 'over0.5' in selection.replace(' ', ''):
+                    return 'won' if total_goals > 0.5 else 'lost'
+                elif 'under 0.5' in selection or 'under0.5' in selection.replace(' ', ''):
+                    return 'won' if total_goals < 0.5 else 'lost'
             
             # Check for BTTS in market name
             elif 'both teams to score' in market or 'btts' in market:
@@ -523,33 +547,41 @@ class RealResultVerifier:
     def _update_tip_result(self, tip_id: int, outcome: str, profit_loss: float, match_result: Dict):
         """Update database with real verification results"""
         try:
-            conn = sqlite3.connect(self.db_path)
+            if not self.database_url:
+                logger.warning("No DATABASE_URL found, skipping update")
+                return
+            
+            conn = psycopg2.connect(self.database_url)
             cursor = conn.cursor()
             
             # Get tip details before updating
             cursor.execute("""
                 SELECT home_team, away_team, selection, odds, stake, league
                 FROM football_opportunities
-                WHERE id = ?
+                WHERE id = %s
             """, (tip_id,))
             tip_data = cursor.fetchone()
             
+            settled_ts = int(datetime.now().timestamp())
             cursor.execute("""
                 UPDATE football_opportunities 
-                SET outcome = ?, 
-                    profit_loss = ?,
-                    actual_score = ?,
-                    updated_at = ?
-                WHERE id = ?
+                SET outcome = %s, 
+                    profit_loss = %s,
+                    actual_score = %s,
+                    updated_at = %s,
+                    settled_timestamp = %s
+                WHERE id = %s
             """, (
                 outcome,
                 profit_loss,
                 f"{match_result['home_goals']}-{match_result['away_goals']}",
                 datetime.now().isoformat(),
+                settled_ts,
                 tip_id
             ))
             
             conn.commit()
+            cursor.close()
             conn.close()
             
             logger.info(f"💾 Updated tip {tip_id} with real result")
@@ -560,7 +592,7 @@ class RealResultVerifier:
                     result_data = {
                         'home_team': tip_data[0],
                         'away_team': tip_data[1],
-                        'predicted_score': tip_data[2].replace('Exact Score: ', ''),
+                        'predicted_score': tip_data[2].replace('Exact Score: ', '') if tip_data[2] else '',
                         'actual_score': f"{match_result['home_goals']}-{match_result['away_goals']}",
                         'outcome': outcome,
                         'odds': tip_data[3],

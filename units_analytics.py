@@ -186,10 +186,10 @@ def get_overall_units_roi() -> OverallROI:
                     odds, 
                     outcome,
                     'Value Singles' as product
-                FROM bets 
+                FROM football_opportunities 
                 WHERE LOWER(outcome) IN ('won', 'win', 'lost', 'loss', 'void', 'push')
-                  AND bet_type NOT LIKE '%exact%'
-                  AND bet_type NOT LIKE '%parlay%'
+                  AND market NOT LIKE '%exact%'
+                  AND market NOT LIKE '%parlay%'
             """))
             vs_rows = result.fetchall()
             

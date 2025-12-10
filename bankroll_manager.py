@@ -49,7 +49,7 @@ class BankrollManager:
         with self.engine.connect() as conn:
             result = conn.execute(text("""
                 SELECT COALESCE(SUM(profit_loss), 0) as total_profit
-                FROM bets
+                FROM football_opportunities
                 WHERE LOWER(outcome) IN ('won', 'win', 'lost', 'loss', 'void', 'push')
             """))
             row = result.fetchone()
@@ -80,7 +80,7 @@ class BankrollManager:
         with self.engine.connect() as conn:
             result = conn.execute(text("""
                 SELECT COALESCE(SUM(stake), 0) as pending_stakes
-                FROM bets
+                FROM football_opportunities
                 WHERE LOWER(COALESCE(outcome, '')) IN ('', 'pending', 'open')
                    OR outcome IS NULL
             """))
@@ -142,7 +142,7 @@ class BankrollManager:
         with self.engine.connect() as conn:
             result = conn.execute(text("""
                 SELECT COALESCE(SUM(profit_loss), 0) as today_pl
-                FROM bets
+                FROM football_opportunities
                 WHERE DATE(created_at) = CURRENT_DATE
                   AND LOWER(outcome) IN ('won', 'win', 'lost', 'loss')
             """))

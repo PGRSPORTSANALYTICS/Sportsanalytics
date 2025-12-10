@@ -176,6 +176,13 @@ class ValueSinglesEngine:
         Always returns 'ok' to proceed with Value Singles.
         """
         return 'ok'
+    
+    def _is_1x2_conflicting(self, home_team: str, away_team: str, market_key: str) -> bool:
+        """
+        No longer needed - Exact Score product removed Dec 2025.
+        Always returns False (no conflict) to proceed with 1X2 selections.
+        """
+        return False
 
     def _calc_ev(self, p_model: float, odds: float) -> float:
         # Expected value = p*odds - 1
