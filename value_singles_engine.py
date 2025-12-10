@@ -250,6 +250,13 @@ class ValueSinglesEngine:
         p_corners_over105 = prob_total_over(corners_lambda / 2, corners_lambda / 2, 10.5)
         p_corners_over115 = prob_total_over(corners_lambda / 2, corners_lambda / 2, 11.5)
         
+        # Cards (model: ~3.5 cards average, higher in intense/derby matches)
+        cards_lambda = 3.5 + (total_xg - 2.8) * 0.3  # Slightly more cards in higher-xG matches
+        p_cards_over25 = prob_total_over(cards_lambda / 2, cards_lambda / 2, 2.5)
+        p_cards_over35 = prob_total_over(cards_lambda / 2, cards_lambda / 2, 3.5)
+        p_cards_over45 = prob_total_over(cards_lambda / 2, cards_lambda / 2, 4.5)
+        p_cards_over55 = prob_total_over(cards_lambda / 2, cards_lambda / 2, 5.5)
+        
         # Team Totals (individual team over/under)
         p_home_over05 = prob_total_over(lh, 0, 0.5)
         p_home_over15 = prob_total_over(lh, 0, 1.5)
@@ -326,6 +333,12 @@ class ValueSinglesEngine:
             "CORNERS_OVER_9_5": p_corners_over95,
             "CORNERS_OVER_10_5": p_corners_over105,
             "CORNERS_OVER_11_5": p_corners_over115,
+            
+            # Cards
+            "CARDS_OVER_2_5": p_cards_over25,
+            "CARDS_OVER_3_5": p_cards_over35,
+            "CARDS_OVER_4_5": p_cards_over45,
+            "CARDS_OVER_5_5": p_cards_over55,
             
             # Team Totals
             "HOME_OVER_0_5": p_home_over05,
@@ -545,6 +558,11 @@ class ValueSinglesEngine:
                     "CORNERS_OVER_9_5": "Corners Over 9.5",
                     "CORNERS_OVER_10_5": "Corners Over 10.5",
                     "CORNERS_OVER_11_5": "Corners Over 11.5",
+                    # Cards
+                    "CARDS_OVER_2_5": "Cards Over 2.5",
+                    "CARDS_OVER_3_5": "Cards Over 3.5",
+                    "CARDS_OVER_4_5": "Cards Over 4.5",
+                    "CARDS_OVER_5_5": "Cards Over 5.5",
                     # Team Totals
                     "HOME_OVER_0_5": f"{home_team} Over 0.5 Goals",
                     "HOME_OVER_1_5": f"{home_team} Over 1.5 Goals",
