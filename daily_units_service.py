@@ -34,58 +34,59 @@ def get_daily_units(days_back: int = 30) -> Dict:
         query = """
         WITH all_settled_bets AS (
             -- Football opportunities (exact score, value singles)
+            -- Group by match_date (when game was played), not settled_timestamp
             SELECT 
-                DATE(TO_TIMESTAMP(settled_timestamp)) as settled_date,
+                DATE(match_date) as match_day,
                 CASE 
                     WHEN outcome IN ('won', 'win') THEN (odds - 1)
                     WHEN outcome IN ('lost', 'loss') THEN -1.0
                     ELSE 0.0
                 END as profit_units
             FROM football_opportunities
-            WHERE settled_timestamp IS NOT NULL
-              AND outcome IS NOT NULL
+            WHERE outcome IS NOT NULL
               AND outcome NOT IN ('pending', 'live', '')
+              AND match_date IS NOT NULL
               
             UNION ALL
             
             -- SGP predictions
             SELECT 
-                DATE(TO_TIMESTAMP(settled_timestamp)) as settled_date,
+                DATE(match_date) as match_day,
                 CASE 
                     WHEN outcome IN ('won', 'win') THEN (bookmaker_odds - 1)
                     WHEN outcome IN ('lost', 'loss') THEN -1.0
                     ELSE 0.0
                 END as profit_units
             FROM sgp_predictions
-            WHERE settled_timestamp IS NOT NULL
-              AND outcome IS NOT NULL
+            WHERE outcome IS NOT NULL
               AND outcome NOT IN ('pending', 'live', '')
+              AND match_date IS NOT NULL
               
             UNION ALL
             
             -- Basketball predictions
             SELECT 
-                DATE(verified_at) as settled_date,
+                DATE(commence_time) as match_day,
                 CASE 
                     WHEN status IN ('won', 'win', 'WON', 'WIN') THEN (odds - 1)
                     WHEN status IN ('lost', 'loss', 'LOST', 'LOSS') THEN -1.0
                     ELSE 0.0
                 END as profit_units
             FROM basketball_predictions
-            WHERE verified_at IS NOT NULL
-              AND status IS NOT NULL
+            WHERE status IS NOT NULL
               AND status NOT IN ('pending', 'live', '')
+              AND commence_time IS NOT NULL
               
         )
         SELECT 
-            settled_date as date,
+            match_day as date,
             ROUND(SUM(profit_units)::numeric, 2) as units,
             COUNT(*) as bet_count
         FROM all_settled_bets
-        WHERE settled_date IS NOT NULL
-          AND settled_date >= CURRENT_DATE - INTERVAL '%s days'
-        GROUP BY settled_date
-        ORDER BY settled_date DESC
+        WHERE match_day IS NOT NULL
+          AND match_day >= CURRENT_DATE - INTERVAL '%s days'
+        GROUP BY match_day
+        ORDER BY match_day DESC
         """
         
         cur.execute(query, (days_back,))
