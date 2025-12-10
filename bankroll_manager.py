@@ -94,10 +94,10 @@ class BankrollManager:
         total = 0.0
         with self.engine.connect() as conn:
             queries = [
-                "SELECT COALESCE(SUM(stake), 0) FROM football_opportunities WHERE DATE(created_at) = CURRENT_DATE",
-                "SELECT COALESCE(SUM(stake), 0) FROM sgp_predictions WHERE DATE(created_at) = CURRENT_DATE",
+                "SELECT COALESCE(SUM(stake), 0) FROM football_opportunities WHERE match_date = CURRENT_DATE::text",
+                "SELECT COALESCE(SUM(stake), 0) FROM sgp_predictions WHERE DATE(timestamp) = CURRENT_DATE",
                 "SELECT COALESCE(SUM(stake), 0) FROM ml_parlay_predictions WHERE DATE(timestamp) = CURRENT_DATE",
-                "SELECT COALESCE(SUM(CASE WHEN bet_placed THEN 160 ELSE 0 END), 0) FROM basketball_predictions WHERE DATE(created_at) = CURRENT_DATE",
+                "SELECT COALESCE(SUM(CASE WHEN bet_placed THEN 160 ELSE 0 END), 0) FROM basketball_predictions WHERE DATE(commence_time) = CURRENT_DATE",
             ]
             for q in queries:
                 try:
@@ -119,11 +119,11 @@ class BankrollManager:
         }
         with self.engine.connect() as conn:
             try:
-                result = conn.execute(text("SELECT COALESCE(SUM(stake), 0) FROM football_opportunities WHERE DATE(created_at) = CURRENT_DATE"))
+                result = conn.execute(text("SELECT COALESCE(SUM(stake), 0) FROM football_opportunities WHERE match_date = CURRENT_DATE::text"))
                 breakdown['value_singles'] = float(result.fetchone()[0] or 0)
             except: pass
             try:
-                result = conn.execute(text("SELECT COALESCE(SUM(stake), 0) FROM sgp_predictions WHERE DATE(created_at) = CURRENT_DATE"))
+                result = conn.execute(text("SELECT COALESCE(SUM(stake), 0) FROM sgp_predictions WHERE DATE(timestamp) = CURRENT_DATE"))
                 breakdown['parlays'] = float(result.fetchone()[0] or 0)
             except: pass
             try:
@@ -131,7 +131,7 @@ class BankrollManager:
                 breakdown['ml_parlays'] = float(result.fetchone()[0] or 0)
             except: pass
             try:
-                result = conn.execute(text("SELECT COALESCE(SUM(CASE WHEN bet_placed THEN 160 ELSE 0 END), 0) FROM basketball_predictions WHERE DATE(created_at) = CURRENT_DATE"))
+                result = conn.execute(text("SELECT COALESCE(SUM(CASE WHEN bet_placed THEN 160 ELSE 0 END), 0) FROM basketball_predictions WHERE DATE(commence_time) = CURRENT_DATE"))
                 breakdown['basketball'] = float(result.fetchone()[0] or 0)
             except: pass
         breakdown['total'] = sum([breakdown['value_singles'], breakdown['parlays'], breakdown['ml_parlays'], breakdown['basketball']])
@@ -143,7 +143,7 @@ class BankrollManager:
             result = conn.execute(text("""
                 SELECT COALESCE(SUM(profit_loss), 0) as today_pl
                 FROM football_opportunities
-                WHERE DATE(created_at) = CURRENT_DATE
+                WHERE match_date = CURRENT_DATE::text
                   AND LOWER(outcome) IN ('won', 'win', 'lost', 'loss')
             """))
             row = result.fetchone()
