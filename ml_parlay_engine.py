@@ -772,17 +772,22 @@ class MLParlayEngine:
             if parlay_id:
                 created_ids.append(parlay_id)
                 try:
-                    leg_teams = [f"{leg['home_team']} vs {leg['away_team']}" for leg in parlay['legs'][:2]]
                     send_bet_to_discord({
-                        'league': 'ML Parlay',
-                        'home_team': leg_teams[0] if leg_teams else '',
-                        'away_team': f"+{len(parlay['legs'])-1} more" if len(parlay['legs']) > 1 else '',
-                        'match_date': parlay['legs'][0].get('match_date', '') if parlay['legs'] else '',
                         'product': 'ML_PARLAY',
-                        'selection': metrics.get('description', f"{len(parlay['legs'])}-leg parlay"),
+                        'match_date': parlay['legs'][0].get('match_date', '') if parlay['legs'] else '',
                         'odds': metrics.get('total_odds', 1.0),
-                        'ev': metrics.get('combined_ev', 0) * 100,
-                        'stake': metrics.get('stake', 0)
+                        'ev': metrics.get('combined_ev', 0),
+                        'trust_level': parlay.get('trust_level', 'L2'),
+                        'num_legs': len(parlay['legs']),
+                        'legs': [
+                            {
+                                'home_team': leg.get('home_team', ''),
+                                'away_team': leg.get('away_team', ''),
+                                'selection': leg.get('selection', ''),
+                                'odds': leg.get('odds', 0)
+                            }
+                            for leg in parlay['legs']
+                        ]
                     }, product_type='ML_PARLAY')
                 except Exception as e:
                     logger.warning(f"Discord notification failed: {e}")

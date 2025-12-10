@@ -12,59 +12,139 @@ PRODUCT_WEBHOOKS = {
     "BASKET_PARLAY": os.getenv("WEB_HOOK_College_basket"),
 }
 
-def format_bet_message(bet) -> str:
-    """Format bet details for Discord message."""
+
+def format_parlay_message(bet) -> str:
+    """Format ML Parlay bet with clear leg-by-leg breakdown."""
+    if isinstance(bet, dict):
+        legs = bet.get('legs', [])
+        kickoff = bet.get('match_date', bet.get('kickoff', ''))
+        odds = bet.get('odds', 0)
+        ev = bet.get('ev', None)
+        trust_level = bet.get('trust_level', 'L2')
+        num_legs = bet.get('num_legs', len(legs))
+    else:
+        legs = getattr(bet, 'legs', [])
+        kickoff = getattr(bet, 'match_date', getattr(bet, 'kickoff', ''))
+        odds = getattr(bet, 'odds', 0)
+        ev = getattr(bet, 'ev', None)
+        trust_level = getattr(bet, 'trust_level', 'L2')
+        num_legs = getattr(bet, 'num_legs', len(legs))
+    
+    lines = [
+        ":ticket: **ML PARLAY**",
+        f"Kickoff: `{kickoff}`",
+        ""
+    ]
+    
+    if legs:
+        lines.append("**PICKS:**")
+        for i, leg in enumerate(legs, 1):
+            home = leg.get('home_team', '')
+            away = leg.get('away_team', '')
+            selection = leg.get('selection', '')
+            leg_odds = leg.get('odds', 0)
+            lines.append(f"{i}. **{home}** vs {away}")
+            lines.append(f"   :dart: {selection} @ {float(leg_odds):.2f}")
+        lines.append("")
+    
+    lines.append(f":moneybag: **Combined Odds:** {float(odds):.2f}")
+    
+    if ev is not None:
+        try:
+            ev_val = float(ev)
+            if ev_val > 100:
+                ev_val = ev_val / 100
+            if ev_val < 1:
+                ev_val = ev_val * 100
+            lines.append(f":chart_with_upwards_trend: **EV:** {ev_val:.1f}%")
+        except:
+            pass
+    
+    lines.append(f":pushpin: **Trust:** {trust_level}")
+    lines.append(f":coin: **Stake:** 1 unit")
+    lines.append("")
+    lines.append("_PGR Sports Analytics – AI-powered betting_")
+    
+    return "\n".join(lines)
+
+
+def format_value_single_message(bet) -> str:
+    """Format Value Single bet with clear actionable info."""
     if isinstance(bet, dict):
         league = bet.get('league', 'Unknown League')
         home_team = bet.get('home_team', '')
         away_team = bet.get('away_team', '')
         kickoff = bet.get('match_date', bet.get('kickoff', ''))
-        product_type = bet.get('product', bet.get('product_type', ''))
-        market = bet.get('selection', bet.get('market', ''))
+        market = bet.get('market', '')
         selection = bet.get('selection', '')
         odds = bet.get('odds', 0)
         ev = bet.get('ev', None)
-        stake = bet.get('stake', None)
+        trust_level = bet.get('trust_level', 'L2')
+        confidence = bet.get('confidence', None)
     else:
         league = getattr(bet, 'league', 'Unknown League')
         home_team = getattr(bet, 'home_team', '')
         away_team = getattr(bet, 'away_team', '')
         kickoff = getattr(bet, 'match_date', getattr(bet, 'kickoff', ''))
-        product_type = getattr(bet, 'product', getattr(bet, 'product_type', ''))
         market = getattr(bet, 'market', '')
         selection = getattr(bet, 'selection', '')
         odds = getattr(bet, 'odds', 0)
         ev = getattr(bet, 'ev', None)
-        stake = getattr(bet, 'stake', None)
-
+        trust_level = getattr(bet, 'trust_level', 'L2')
+        confidence = getattr(bet, 'confidence', None)
+    
     lines = [
-        f"**{league}** – {home_team} vs {away_team}",
+        f":soccer: **{league}**",
+        f"**{home_team}** vs **{away_team}**",
         f"Kickoff: `{kickoff}`",
         "",
-        f"**Product:** {product_type}",
-        f"**Bet:** {market if market != selection else selection}",
-        f"**Odds:** {float(odds):.2f}" if odds else "",
+        f":dart: **PICK:** {selection}",
+        f":moneybag: **Odds:** {float(odds):.2f}" if odds else "",
     ]
-
+    
     if ev is not None:
         try:
             ev_val = float(ev)
+            if ev_val > 100:
+                ev_val = ev_val / 100
             if ev_val < 1:
                 ev_val = ev_val * 100
-            lines.append(f"**EV:** {ev_val:.1f}%")
+            lines.append(f":chart_with_upwards_trend: **EV:** {ev_val:.1f}%")
         except:
             pass
-
-    if stake is not None:
+    
+    if confidence is not None:
         try:
-            lines.append(f"**Stake:** ${float(stake)/10.8:.0f}")
+            conf_val = float(confidence)
+            if conf_val < 1:
+                conf_val = conf_val * 100
+            lines.append(f":bar_chart: **Confidence:** {conf_val:.0f}%")
         except:
             pass
-
+    
+    lines.append(f":pushpin: **Trust:** {trust_level}")
+    lines.append(f":coin: **Stake:** 1 unit")
     lines.append("")
     lines.append("_PGR Sports Analytics – AI-powered betting_")
-
+    
     return "\n".join([l for l in lines if l or l == ""])
+
+
+def format_bet_message(bet) -> str:
+    """Format bet details for Discord message based on product type."""
+    if isinstance(bet, dict):
+        product_type = bet.get('product', bet.get('product_type', '')).upper()
+        legs = bet.get('legs', [])
+    else:
+        product_type = getattr(bet, 'product', getattr(bet, 'product_type', '')).upper()
+        legs = getattr(bet, 'legs', [])
+    
+    if product_type == 'ML_PARLAY' or legs:
+        return format_parlay_message(bet)
+    elif product_type in ['VALUE_SINGLE', 'BASKET_SINGLE', 'BASKETBALL_SINGLE']:
+        return format_value_single_message(bet)
+    else:
+        return format_value_single_message(bet)
 
 
 def send_bet_to_discord(bet, product_type=None):
@@ -119,7 +199,6 @@ def format_result_message(bet_info: dict) -> str:
     league = bet_info.get('league', '')
     product_type = bet_info.get('product_type', bet_info.get('product', ''))
     
-    # Determine status emoji
     if outcome == 'WIN':
         emoji = ":white_check_mark:"
         status = "WON"
@@ -133,8 +212,12 @@ def format_result_message(bet_info: dict) -> str:
         status = "LOST"
         color_bar = ":red_circle:"
     
-    # Calculate USD
-    profit_usd = profit_loss / 10.8 if profit_loss else 0
+    try:
+        profit_units = (float(odds) - 1) if outcome == 'WIN' else -1.0
+        if outcome in ['VOID', 'PUSH']:
+            profit_units = 0.0
+    except:
+        profit_units = 0.0
     
     lines = [
         f"{emoji} **RESULT: {status}**",
@@ -144,7 +227,7 @@ def format_result_message(bet_info: dict) -> str:
         f":dart: Our Pick: {selection}",
         f":moneybag: Odds: {float(odds):.2f}" if odds else "",
         "",
-        f"{color_bar} **P/L: ${profit_usd:+.0f} ({profit_loss:+.0f} SEK)**",
+        f"{color_bar} **P/L: {profit_units:+.2f} units**",
         "",
         "_PGR Sports Analytics_"
     ]
@@ -160,7 +243,6 @@ def send_result_to_discord(bet_info: dict, product_type: str = None):
     if product_type is None:
         product_type = bet_info.get('product_type', bet_info.get('product', ''))
     
-    # Normalize product type mapping
     type_map = {
         'exact_score': 'EXACT_SCORE',
         'EXACT_SCORE': 'EXACT_SCORE',
@@ -204,7 +286,7 @@ def send_daily_summary_to_discord(product_type: str, stats: dict):
     """
     Send end-of-day summary to a product channel.
     
-    stats should contain: wins, losses, total, hit_rate, profit
+    stats should contain: wins, losses, total, hit_rate, profit_units
     """
     webhook_url = PRODUCT_WEBHOOKS.get(product_type)
     if not webhook_url:
@@ -214,10 +296,9 @@ def send_daily_summary_to_discord(product_type: str, stats: dict):
     losses = stats.get('losses', 0)
     total = stats.get('total', wins + losses)
     hit_rate = stats.get('hit_rate', 0)
-    profit = stats.get('profit', 0)
-    profit_usd = profit / 10.8 if profit else 0
+    profit_units = stats.get('profit_units', stats.get('profit', 0))
     
-    profit_emoji = ":chart_with_upwards_trend:" if profit > 0 else ":chart_with_downwards_trend:"
+    profit_emoji = ":chart_with_upwards_trend:" if profit_units > 0 else ":chart_with_downwards_trend:"
     
     message = f"""
 :bar_chart: **DAILY SUMMARY**
@@ -226,7 +307,7 @@ def send_daily_summary_to_discord(product_type: str, stats: dict):
 :x: Losses: **{losses}**
 :dart: Hit Rate: **{hit_rate:.1f}%**
 
-{profit_emoji} **Day P/L: ${profit_usd:+.0f} ({profit:+.0f} SEK)**
+{profit_emoji} **Day P/L: {profit_units:+.2f} units**
 
 _PGR Sports Analytics – AI-powered betting_
 """
