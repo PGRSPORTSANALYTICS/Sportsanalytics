@@ -128,19 +128,16 @@ def format_roi(roi: float) -> str:
 
 def get_stake_display(stake_sek: float) -> str:
     """
-    Format stake for display with units.
-    Converts SEK stake to USD and shows units (1.2u).
+    Format stake for display - UNITS ONLY (no money references).
     """
-    stake_usd = stake_sek / USD_TO_SEK
-    return f"${stake_usd:.0f} ({STAKE_UNITS:.1f}u)"
+    return "1 unit"
 
 
 def get_stake_display_full(stake_sek: float) -> str:
     """
-    Format stake for display with units and SEK equivalent.
+    Format stake for display - UNITS ONLY (no money references).
     """
-    stake_usd = stake_sek / USD_TO_SEK
-    return f"${stake_usd:.0f} ({STAKE_UNITS:.1f}u) <span style='font-size:11px;color:#9CA3AF;'>≈{stake_sek:.0f} SEK</span>"
+    return "1 unit"
 
 
 def split_bets_by_mode(df: pd.DataFrame):
@@ -1599,11 +1596,11 @@ def render_product_tab(
 <div style="font-size:22px;font-weight:700;color:#00FFA6;margin:8px 0;letter-spacing:0.02em;">{bet_display}</div>
 <div style="display:flex;gap:18px;align-items:baseline;margin-top:4px;">
 <div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Odds</div><div style="font-size:20px;font-weight:600;color:#00FFA6;">{odds_val:.2f}</div></div>
-<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">${stake_usd:.0f} ({STAKE_UNITS:.1f}u)<span style="font-size:11px;color:#9CA3AF;"> ≈{stake_sek:.0f} SEK</span></div></div>
+<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">1 unit</div></div>
 </div>
 </div>"""
                 st.markdown(card_html, unsafe_allow_html=True)
-                st.code(f"{fixture} | {bet_display} | Odds {odds_val:.2f} | Stake ${stake_usd:.0f} ({STAKE_UNITS:.1f}u)", language="text")
+                st.code(f"{fixture} | {bet_display} | Odds {odds_val:.2f} | Stake: 1 unit", language="text")
         
         render_bet_cards(todays_picks, "Today's Picks", "🔥")
         st.markdown("")
@@ -1789,7 +1786,7 @@ def render_ml_parlay_tab():
                     <div style="font-size:16px;color:#E5E7EB;margin-bottom:10px;">{desc}</div>
                     <div style="display:flex;gap:20px;">
                         <div><span style="font-size:11px;color:#9CA3AF;">ODDS</span><br/><span style="font-size:18px;font-weight:600;color:#A855F7;">{odds:.2f}x</span></div>
-                        <div><span style="font-size:11px;color:#9CA3AF;">STAKE</span><br/><span style="font-size:18px;font-weight:600;color:#E5E7EB;">${stake_usd:.0f}</span></div>
+                        <div><span style="font-size:11px;color:#9CA3AF;">STAKE</span><br/><span style="font-size:18px;font-weight:600;color:#E5E7EB;">1 unit</span></div>
                     </div>
                 </div>
                 """
@@ -2213,11 +2210,11 @@ def render_basketball_tab(df: pd.DataFrame):
 <div style="font-size:22px;font-weight:700;color:#3B82F6;margin:8px 0;letter-spacing:0.02em;">📍 {pick_display}</div>
 <div style="display:flex;gap:18px;align-items:baseline;margin-top:4px;">
 <div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Odds</div><div style="font-size:20px;font-weight:600;color:#3B82F6;">{odds_val:.2f}</div></div>
-<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">${stake_usd:.0f} ({STAKE_UNITS:.1f}u)<span style="font-size:11px;color:#9CA3AF;"> ≈{stake_sek:.0f} SEK</span></div></div>
+<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">1 unit</div></div>
 </div>
 </div>"""
             st.markdown(card_html, unsafe_allow_html=True)
-            st.code(f"{match_name} | {pick_display} | Odds {odds_val:.2f} | Stake ${stake_usd:.0f} ({STAKE_UNITS:.1f}u)", language="text")
+            st.code(f"{match_name} | {pick_display} | Odds {odds_val:.2f} | Stake: 1 unit", language="text")
 
     st.markdown("---")
 
@@ -2262,11 +2259,11 @@ def render_basketball_tab(df: pd.DataFrame):
 <div style="font-size:22px;font-weight:700;color:#A855F7;margin:8px 0;letter-spacing:0.02em;">📍 {pick_display}</div>
 <div style="display:flex;gap:18px;align-items:baseline;margin-top:4px;">
 <div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Odds</div><div style="font-size:20px;font-weight:600;color:#A855F7;">{odds_val:.2f}</div></div>
-<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">${stake_usd:.0f} ({STAKE_UNITS:.1f}u)<span style="font-size:11px;color:#9CA3AF;"> ≈{stake_sek:.0f} SEK</span></div></div>
+<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">1 unit</div></div>
 </div>
 </div>"""
             st.markdown(card_html, unsafe_allow_html=True)
-            st.code(f"{match_name} | {pick_display} | Odds {odds_val:.2f} | Stake ${stake_usd:.0f} ({STAKE_UNITS:.1f}u)", language="text")
+            st.code(f"{match_name} | {pick_display} | Odds {odds_val:.2f} | Stake: 1 unit", language="text")
 
     st.markdown("---")
     st.markdown("### Bet History")
@@ -2483,13 +2480,13 @@ def render_parlays_tab():
 </div>
 <div style="display:flex;gap:18px;align-items:baseline;margin-top:4px;">
 <div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Odds</div><div style="font-size:20px;font-weight:600;color:#00FFA6;">{odds_val:.2f}</div></div>
-<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">${stake_usd:.0f} ({STAKE_UNITS:.1f}u)<span style="font-size:11px;color:#9CA3AF;"> ≈{stake_sek:.0f} SEK</span></div></div>
+<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">1 unit</div></div>
 </div>
 </div>"""
 
             st.markdown(card_html, unsafe_allow_html=True)
 
-            bet_string = f"{home_team} – {away_team} | Parlay: {legs_text} | Odds {odds_val:.2f} | Stake ${stake_usd:.0f} ({STAKE_UNITS:.1f}u)"
+            bet_string = f"{home_team} – {away_team} | Parlay: {legs_text} | Odds {odds_val:.2f} | Stake: 1 unit"
             st.code(bet_string, language="text")
 
     st.markdown("---")
