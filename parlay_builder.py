@@ -30,6 +30,22 @@ ALLOWED_TRUST_LEVELS = {"L1", "L2", "L1_HIGH_TRUST", "L2_MEDIUM_TRUST"}  # Accep
 # Stake configuration - 1.6% Kelly stake of bankroll
 KELLY_STAKE_PCT = 0.016  # 1.6% of bankroll
 
+# Market short name mapping for parlay descriptions
+MARKET_SHORT_NAMES = {
+    'Value Single': 'ML',
+    'Over/Under': 'O/U',
+    'BTTS': 'BTTS',
+    'Corners': 'COR',
+    'Cards': 'CARD',
+    'Double Chance': 'DC',
+    'Asian Handicap': 'AH',
+}
+
+
+def _get_market_short_name(market: str) -> str:
+    """Get short display name for market type."""
+    return MARKET_SHORT_NAMES.get(market, market[:3].upper())
+
 
 def build_parlays_from_singles(singles: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
@@ -147,6 +163,7 @@ def _evaluate_parlay(legs: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
             'away_team': leg.get('away_team'),
             'league': leg.get('league'),
             'selection': leg.get('selection'),
+            'market': leg.get('market', 'Value Single'),
             'odds': odds,
             'probability': prob,
             'trust_level': leg.get('trust_level'),
@@ -209,22 +226,25 @@ def save_parlays_to_db(parlays: List[Dict[str, Any]]) -> int:
                 if not legs:
                     continue
                 
-                # Build description from legs
+                # Build description from legs - include market type for diverse parlays
                 description_parts = []
                 for leg in legs:
-                    desc = f"{leg.get('home_team', '?')} vs {leg.get('away_team', '?')}: {leg.get('selection', '?')}"
+                    market = leg.get('market', 'Value Single')
+                    market_short = _get_market_short_name(market)
+                    desc = f"{leg.get('home_team', '?')} vs {leg.get('away_team', '?')}: {leg.get('selection', '?')} ({market_short})"
                     description_parts.append(desc)
                 description = " | ".join(description_parts)
                 
                 # Get match info from first leg
                 first_leg = legs[0]
                 
-                # Build legs string in format expected by settlement (match_id|selection|odds)
+                # Build legs string in format expected by settlement (match_id|selection|odds|market)
                 legs_str = json.dumps([{
                     'match_id': leg.get('match_id'),
                     'home_team': leg.get('home_team'),
                     'away_team': leg.get('away_team'),
                     'selection': leg.get('selection'),
+                    'market': leg.get('market', 'Value Single'),
                     'odds': leg.get('odds'),
                     'probability': leg.get('probability'),
                     'trust_level': leg.get('trust_level')
@@ -264,7 +284,7 @@ def save_parlays_to_db(parlays: List[Dict[str, Any]]) -> int:
                     True,  # bet_placed
                     avg_trust,  # trust_level
                     parlay.get('total_probability'),  # sim_probability
-                    parlay.get('ev') * 100 if parlay.get('ev') else 0  # ev_sim
+                    (parlay.get('ev') or 0) * 100  # ev_sim
                 ))
                 
                 saved += 1
@@ -300,23 +320,32 @@ def run_parlay_builder() -> List[Dict[str, Any]]:
         
         today = datetime.now().strftime('%Y-%m-%d')
         
-        # Get today's value singles that are still pending from football_opportunities table
-        # Value Singles have market = 'Value Single'
+        # Get today's pending bets from all markets (corners, over/under, BTTS, cards, etc.)
+        # Multi-Match Parlay uses diverse markets - not just moneyline
+        allowed_markets = (
+            'Value Single',  # Moneyline/1X2
+            'Over/Under',    # Totals
+            'BTTS',          # Both Teams To Score
+            'Corners',       # Corner markets
+            'Cards',         # Card markets
+            'Double Chance', # DC markets
+            'Asian Handicap', # AH markets
+        )
         rows = DatabaseHelper.execute("""
             SELECT 
                 id, match_id, home_team, away_team, league,
                 selection, odds, stake, match_date, kickoff_time,
                 edge_percentage, confidence, analysis, trust_level,
-                sim_probability, ev_sim
+                sim_probability, ev_sim, market
             FROM football_opportunities
             WHERE match_date = %s
-            AND market = 'Value Single'
+            AND market IN %s
             AND (result = 'PENDING' OR result IS NULL)
             AND bet_placed = true
             ORDER BY edge_percentage DESC
-        """, (today,), fetch='all') or []
+        """, (today, allowed_markets), fetch='all') or []
         
-        print(f"📊 Found {len(rows)} pending value singles for {today}")
+        print(f"📊 Found {len(rows)} pending bets across all markets for {today}")
         
         if not rows:
             print("   No singles available for parlay building")
@@ -341,9 +370,17 @@ def run_parlay_builder() -> List[Dict[str, Any]]:
                 'analysis': row[12] or '{}',
                 'trust_level': row[13] or 'L3',
                 'sim_probability': float(row[14]) if row[14] else 0,
-                'ev_sim': float(row[15]) if row[15] else 0
+                'ev_sim': float(row[15]) if row[15] else 0,
+                'market': row[16] if len(row) > 16 else 'Value Single'
             }
             singles.append(single)
+        
+        # Log market distribution
+        market_counts = {}
+        for s in singles:
+            m = s.get('market', 'Unknown')
+            market_counts[m] = market_counts.get(m, 0) + 1
+        print(f"   Markets: {market_counts}")
         
         # Build parlays
         parlays = build_parlays_from_singles(singles)
