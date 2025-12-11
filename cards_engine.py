@@ -43,6 +43,24 @@ class CardsCandidate:
     confidence: float
     trust_tier: str
     metadata: Dict[str, Any]
+    match_date: str = ""
+    league: str = "Unknown"
+    
+    @property
+    def match(self) -> str:
+        return f"{self.home_team} vs {self.away_team}"
+    
+    @property
+    def odds(self) -> float:
+        return self.book_odds
+    
+    @property
+    def ev_sim(self) -> float:
+        return self.ev
+    
+    @property
+    def tier(self) -> str:
+        return self.trust_tier
 
 
 CARDS_LINES = {
@@ -518,7 +536,9 @@ class CardsEngine:
                             "std_value": float(np.std(sims[sim_key])),
                             "avg_total_cards": float(np.mean(sims["total_cards"])),
                             "avg_booking_pts": float(np.mean(sims["total_booking_pts"])),
-                        }
+                        },
+                        match_date=fixture.get("match_date", datetime.now().strftime('%Y-%m-%d')),
+                        league=fixture.get("league", "Unknown")
                     )
                     candidates.append(candidate)
                     
