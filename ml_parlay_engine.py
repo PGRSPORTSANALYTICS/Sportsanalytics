@@ -531,23 +531,29 @@ class MLParlayEngine:
         
         return signatures
     
-    def _get_matches_in_pending_parlays(self) -> set:
-        """Get match IDs already used in pending parlays to avoid correlated risk"""
+    def _get_bets_in_pending_parlays(self) -> set:
+        """Get match_id + market combinations already used in pending parlays.
+        
+        Same game can have different markets (1X2, Corners, Over/Under, etc.)
+        so we only block the exact same bet, not the entire game.
+        """
         result = db_helper.execute(
-            """SELECT DISTINCT match_id FROM ml_parlay_legs l
+            """SELECT DISTINCT match_id, market_type, selection FROM ml_parlay_legs l
                JOIN ml_parlay_predictions p ON l.parlay_id = p.parlay_id
                WHERE p.status = 'pending'""",
             fetch='all'
         )
         
-        match_ids = set()
+        bet_keys = set()
         if result:
             for row in result:
                 if row[0]:
-                    match_ids.add(row[0])
+                    # Create unique key: match_id:market:selection
+                    bet_key = f"{row[0]}:{row[1]}:{row[2]}"
+                    bet_keys.add(bet_key)
         
-        logger.info(f"🔒 Found {len(match_ids)} matches already in pending parlays")
-        return match_ids
+        logger.info(f"🔒 Found {len(bet_keys)} specific bets already in pending parlays")
+        return bet_keys
     
     def _parlay_signature(self, legs: List[Dict]) -> tuple:
         """Create a unique signature for a parlay based on its legs"""
@@ -580,15 +586,17 @@ class MLParlayEngine:
         existing_signatures = self._get_existing_parlay_signatures()
         logger.info(f"📋 Found {len(existing_signatures)} existing parlay signatures")
         
-        # Get matches already in pending parlays to avoid correlated risk
-        matches_in_pending = self._get_matches_in_pending_parlays()
+        # Get specific bets already in pending parlays to avoid duplicate bets
+        # Same game can have different markets (1X2, Corners, Over/Under)
+        bets_in_pending = self._get_bets_in_pending_parlays()
         
-        # Filter out candidates that are already in pending parlays
+        # Filter out candidates that are already in pending parlays (same game + market + selection)
         original_count = len(candidates)
-        candidates = [c for c in candidates if c['match_id'] not in matches_in_pending]
+        candidates = [c for c in candidates 
+                     if f"{c['match_id']}:{c.get('market_type', 'h2h')}:{c['selection']}" not in bets_in_pending]
         filtered_count = original_count - len(candidates)
         if filtered_count > 0:
-            logger.info(f"🚫 Filtered {filtered_count} candidates (games already in pending parlays)")
+            logger.info(f"🚫 Filtered {filtered_count} candidates (same bet already in pending parlays)")
         
         if len(candidates) < ML_PARLAY_MIN_LEGS:
             logger.info(f"⏭️ Only {len(candidates)} candidates after filtering, need at least {ML_PARLAY_MIN_LEGS}")
