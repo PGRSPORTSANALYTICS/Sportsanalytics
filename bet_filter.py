@@ -12,8 +12,8 @@ Tier Thresholds:
 Goal: 5-15 Value Singles on typical match days
 """
 
-from dataclasses import dataclass
-from typing import List, Optional
+from dataclasses import dataclass, field
+from typing import List, Optional, Dict, Any
 
 # ============================================================
 # NOVA v2.0 TRUST LEVEL THRESHOLDS
@@ -66,6 +66,7 @@ class BetCandidate:
     home_team: Optional[str] = None
     away_team: Optional[str] = None
     match_date: Optional[str] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 def filter_level1_high_trust(candidates: List[BetCandidate]) -> List[BetCandidate]:
