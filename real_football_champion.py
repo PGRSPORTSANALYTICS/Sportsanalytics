@@ -3415,15 +3415,17 @@ class RealFootballChampion:
             # Get bet_placed flag from value singles engine
             bet_placed = opp_dict.get('bet_placed', True)
             
-            # Insert prediction with CLV tracking fields
+            # Insert prediction with CLV tracking fields and trust level
             odds_value = float(opp_dict.get('odds', 0))
+            trust_level = opp_dict.get('trust_level', 'L2_MEDIUM_TRUST')
+            
             db_helper.execute('''
                 INSERT INTO football_opportunities 
                 (timestamp, match_id, home_team, away_team, league, market, selection, 
                  odds, edge_percentage, confidence, analysis, stake, match_date, kickoff_time,
                  quality_score, recommended_date, recommended_tier, daily_rank, mode, bet_placed,
-                 open_odds, odds_source)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 open_odds, odds_source, trust_level)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ''', (
                 opp_dict.get('timestamp', int(time.time())),
                 opp_dict.get('match_id'),
@@ -3446,7 +3448,8 @@ class RealFootballChampion:
                 'PROD',  # Production mode
                 bet_placed,
                 odds_value,  # open_odds = odds at bet creation
-                opp_dict.get('odds_source', 'the_odds_api')
+                opp_dict.get('odds_source', 'the_odds_api'),
+                trust_level
             ))
             
             return True

@@ -388,8 +388,10 @@ class ValueSinglesEngine:
             print("⚠️ ValueSinglesEngine: No fixtures today")
             return picks
 
-        from datetime import datetime, timezone
-        today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        from datetime import datetime, timezone, timedelta
+        today = datetime.now(timezone.utc).date()
+        max_lookahead_days = 3  # Generate picks for today + next 2 days
+        max_date = today + timedelta(days=max_lookahead_days)
         
         for match in fixtures:
             match_id = match.get("match_id") or match.get("id") or f"{match.get('home_team')}_vs_{match.get('away_team')}"
@@ -401,7 +403,7 @@ class ValueSinglesEngine:
             if not home_team or not away_team:
                 continue
             
-            # SAME-DAY FILTER: Only generate predictions for matches playing TODAY
+            # LOOKAHEAD FILTER: Generate predictions for matches in the next few days
             commence_time = match.get('commence_time', '')
             match_date = match.get('formatted_date') or match.get('match_date')
             
@@ -412,9 +414,14 @@ class ValueSinglesEngine:
                 except:
                     match_date = commence_time[:10] if len(commence_time) > 10 else ""
             
-            if match_date and match_date != today_str:
-                print(f"⏭️ Skipping {home_team} vs {away_team} - plays on {match_date}, not today ({today_str})")
-                continue
+            # Check if match is within our lookahead window
+            if match_date:
+                try:
+                    match_dt = datetime.strptime(match_date, "%Y-%m-%d").date()
+                    if match_dt > max_date:
+                        continue  # Too far in the future, skip silently
+                except:
+                    pass  # Couldn't parse, allow it through
             
             # LEAGUE FILTER: Check whitelist if enabled, otherwise allow all leagues
             league_key = match.get('sport_key') or match.get('league_key') or match.get('odds_api_key') or ''
