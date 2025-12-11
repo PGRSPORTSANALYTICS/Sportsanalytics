@@ -375,6 +375,8 @@ class CollegeBasketValueEngine:
             if h2h_books and best_home and best_away:
                 fair_p_home, fair_p_away = fair_prob_from_books(h2h_books)
 
+                # Evaluate both sides but only pick the BETTER one (conflict prevention)
+                h2h_candidates = []
                 for side, fair_p, best in [
                     ("Home Win", fair_p_home, best_home),
                     ("Away Win", fair_p_away, best_away),
@@ -386,7 +388,7 @@ class CollegeBasketValueEngine:
                     conf = clamp(fair_p, 0.05, 0.95)
 
                     if ev >= self.min_ev and conf >= self.min_conf:
-                        all_picks.append(
+                        h2h_candidates.append(
                             BasketPick(
                                 match=match_name,
                                 market="1X2 Moneyline",
@@ -398,6 +400,11 @@ class CollegeBasketValueEngine:
                                 meta={"book": book, "commence_time": commence_time},
                             )
                         )
+                
+                # Only add the BEST pick per game (highest EV wins)
+                if h2h_candidates:
+                    best_pick = max(h2h_candidates, key=lambda p: p.ev)
+                    all_picks.append(best_pick)
 
             # ---------------- SPREADS
             spread_books: Dict[float, List[Tuple[float, float]]] = {}
