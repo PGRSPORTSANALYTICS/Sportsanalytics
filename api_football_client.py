@@ -902,3 +902,147 @@ class APIFootballClient:
         
         logger.info(f"✅ Retrieved {len(leagues)} leagues from API-Football (cached)")
         return leagues
+
+    def get_fixture_odds(self, fixture_id: int, bookmaker_id: int = None) -> Dict:
+        """
+        Get betting odds for a specific fixture from API-Football
+        
+        Supported markets:
+        - Match Winner (1X2)
+        - Goals Over/Under
+        - Both Teams Score (BTTS)
+        - Asian Handicap
+        - Double Chance
+        
+        Args:
+            fixture_id: API-Football fixture ID
+            bookmaker_id: Optional specific bookmaker (default: all bookmakers)
+            
+        Returns:
+            Dict with odds data by market type
+        """
+        cache_key = f"odds_fixture_{fixture_id}"
+        if bookmaker_id:
+            cache_key += f"_bookie_{bookmaker_id}"
+        
+        cached = self.cache_manager.get_cached_response(cache_key, 'odds')
+        if cached is not None:
+            return cached
+        
+        params = {'fixture': fixture_id}
+        if bookmaker_id:
+            params['bookmaker'] = bookmaker_id
+        
+        odds_data = self._fetch_with_cache('odds', params, cache_key, ttl_hours=2)
+        
+        if not odds_data:
+            logger.warning(f"⚠️ No odds data for fixture {fixture_id}")
+            return {}
+        
+        parsed_odds = self._parse_odds_response(odds_data)
+        return parsed_odds
+    
+    def _parse_odds_response(self, odds_data: List) -> Dict:
+        """
+        Parse API-Football odds response into standardized format
+        
+        Returns dict with keys like:
+        - HOME_WIN, DRAW, AWAY_WIN (1X2)
+        - FT_OVER_2_5, FT_UNDER_2_5 (Totals)
+        - BTTS_YES, BTTS_NO
+        - HOME_DNB, AWAY_DNB (Draw No Bet)
+        - DOUBLE_CHANCE_1X, DOUBLE_CHANCE_12, DOUBLE_CHANCE_X2
+        """
+        result = {
+            'markets': {},
+            'bookmakers': [],
+            'raw_bets': []
+        }
+        
+        if not odds_data:
+            return result
+        
+        market_mapping = {
+            'Match Winner': {'Home': 'HOME_WIN', 'Draw': 'DRAW', 'Away': 'AWAY_WIN'},
+            'Home/Away': {'Home': 'HOME_WIN', 'Away': 'AWAY_WIN'},
+            'Double Chance': {'Home/Draw': 'DOUBLE_CHANCE_1X', 'Home/Away': 'DOUBLE_CHANCE_12', 'Draw/Away': 'DOUBLE_CHANCE_X2'},
+            'Both Teams Score': {'Yes': 'BTTS_YES', 'No': 'BTTS_NO'},
+            'Draw No Bet': {'Home': 'HOME_DNB', 'Away': 'AWAY_DNB'},
+        }
+        
+        totals_markets = {
+            'Goals Over/Under': 'FT',
+            'Goals Over/Under First Half': 'HT',
+            'Goals Over/Under - Second Half': '2H',
+        }
+        
+        for fixture_odds in odds_data:
+            bookmakers = fixture_odds.get('bookmakers', [])
+            
+            for bookmaker in bookmakers:
+                bookie_name = bookmaker.get('name', 'Unknown')
+                if bookie_name not in result['bookmakers']:
+                    result['bookmakers'].append(bookie_name)
+                
+                for bet in bookmaker.get('bets', []):
+                    bet_name = bet.get('name', '')
+                    values = bet.get('values', [])
+                    
+                    if bet_name in market_mapping:
+                        for value in values:
+                            selection = value.get('value', '')
+                            odds = float(value.get('odd', 0))
+                            
+                            if selection in market_mapping[bet_name]:
+                                market_key = market_mapping[bet_name][selection]
+                                if market_key not in result['markets'] or odds > result['markets'][market_key]:
+                                    result['markets'][market_key] = odds
+                    
+                    elif bet_name in totals_markets:
+                        prefix = totals_markets[bet_name]
+                        for value in values:
+                            selection = value.get('value', '')
+                            odds = float(value.get('odd', 0))
+                            
+                            if 'Over' in selection:
+                                line = selection.replace('Over ', '')
+                                market_key = f"{prefix}_OVER_{line.replace('.', '_')}"
+                                if market_key not in result['markets'] or odds > result['markets'][market_key]:
+                                    result['markets'][market_key] = odds
+                            elif 'Under' in selection:
+                                line = selection.replace('Under ', '')
+                                market_key = f"{prefix}_UNDER_{line.replace('.', '_')}"
+                                if market_key not in result['markets'] or odds > result['markets'][market_key]:
+                                    result['markets'][market_key] = odds
+                    
+                    result['raw_bets'].append({
+                        'bookmaker': bookie_name,
+                        'market': bet_name,
+                        'values': values
+                    })
+        
+        logger.info(f"📊 Parsed {len(result['markets'])} market odds from {len(result['bookmakers'])} bookmakers")
+        return result
+    
+    def get_odds_for_matches(self, fixture_ids: List[int]) -> Dict[int, Dict]:
+        """
+        Batch fetch odds for multiple fixtures
+        
+        Args:
+            fixture_ids: List of API-Football fixture IDs
+            
+        Returns:
+            Dict mapping fixture_id -> odds data
+        """
+        all_odds = {}
+        
+        for fixture_id in fixture_ids:
+            try:
+                odds = self.get_fixture_odds(fixture_id)
+                if odds and odds.get('markets'):
+                    all_odds[fixture_id] = odds
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to get odds for fixture {fixture_id}: {e}")
+        
+        logger.info(f"📊 Retrieved odds for {len(all_odds)}/{len(fixture_ids)} fixtures")
+        return all_odds
