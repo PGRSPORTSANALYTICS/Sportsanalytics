@@ -24,6 +24,13 @@ ENABLE_PARLAYS = True                # Multi-match parlays from L1/L2 singles
 ENABLE_COLLEGE_BASKETBALL = True     # ACTIVE - 63.3% hit rate, +$3,446 profit
 ENABLE_ML_PARLAY = True              # ENABLED - test mode (data collection only)
 
+# ============================================================
+# LIVE LEARNING MODE - Full Data Capture Enabled
+# ============================================================
+LIVE_LEARNING_MODE = True            # Capture ALL picks for maximum learning
+LIVE_LEARNING_SAVE_ALL_TIERS = True  # Save L1, L2, L3, and Hidden Value picks
+LIVE_LEARNING_CLV_TRACKING = True    # Track opening/closing odds for every pick
+
 
 def run_value_singles():
     """Run Value Singles predictions (core product)"""
@@ -140,6 +147,25 @@ def run_clv_update_cycle():
         traceback.print_exc()
 
 
+def run_live_learning_enrichment():
+    """Run LIVE LEARNING pick enrichment - adds syndicate engine data to pending picks"""
+    if not LIVE_LEARNING_MODE:
+        return
+    
+    try:
+        from live_learning_tracker import enrich_pending_picks_with_syndicate_data
+        logger.info("🔬 Running LIVE LEARNING enrichment cycle...")
+        result = enrich_pending_picks_with_syndicate_data()
+        if result.get('enriched', 0) > 0:
+            logger.info(f"🔬 LIVE LEARNING: Enriched {result['enriched']} picks with syndicate data")
+        else:
+            logger.info("🔬 LIVE LEARNING: No picks to enrich")
+    except Exception as e:
+        logger.error(f"❌ LIVE LEARNING enrichment error: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 def print_daily_stake_summary():
     """Print today's staking summary"""
     try:
@@ -209,6 +235,20 @@ def main():
     logger.info("="*80)
     logger.info("🚀 COMBINED SPORTS PREDICTION ENGINE")
     logger.info("="*80)
+    
+    if LIVE_LEARNING_MODE:
+        logger.info("="*80)
+        logger.info("🔬 LIVE LEARNING MODE - ACTIVE")
+        logger.info("="*80)
+        logger.info("📊 Full Data Capture Enabled:")
+        logger.info("   • All trust tiers captured (L1, L2, L3, Hidden Value)")
+        logger.info("   • CLV tracking enabled (opening/closing odds)")
+        logger.info("   • Syndicate engines running (Profile Boost, Market Weight, Hidden Value)")
+        logger.info("   • Unit-based P/L tracking (no monetary staking)")
+        logger.info("   • Market Weight Engine learning from live results")
+        logger.info("   • No EV filtering - capturing everything for learning")
+        logger.info("="*80)
+    
     logger.info("💰 Value Singles - Every 1 hour (Core Product)")
     logger.info("🎲 Multi-Match Parlays - Every 2 hours (after Value Singles)")
     logger.info("🏀 College Basketball - Every 2 hours")
@@ -285,6 +325,12 @@ def main():
     
     # Schedule CLV update - Every 10 minutes to capture closing odds
     schedule.every(10).minutes.do(run_clv_update_cycle)
+    
+    # Schedule LIVE LEARNING enrichment - Every 10 minutes to add syndicate data
+    if LIVE_LEARNING_MODE:
+        schedule.every(10).minutes.do(run_live_learning_enrichment)
+        run_live_learning_enrichment()  # Run immediately on startup
+        logger.info("🔬 LIVE LEARNING enrichment scheduled (every 10 minutes)")
     
     # Print stake summary every hour
     schedule.every(1).hours.do(print_daily_stake_summary)

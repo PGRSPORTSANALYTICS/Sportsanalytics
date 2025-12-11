@@ -41,6 +41,8 @@ class LiveLearningConfig:
     min_ev_threshold: float = -1.0
     min_confidence_threshold: float = 0.0
     
+    ev_near_miss_range: tuple = (-0.01, 0.02)
+    
     unit_based_tracking: bool = True
     default_stake_units: float = 1.0
     

@@ -32,6 +32,15 @@ The system employs advanced prediction features including:
   - **Market Weight Engine:** Learns from 30-day rolling historical ROI data to bias towards high-performing markets. Weights range 0.6-1.4 with shrinkage for small samples. Config: `market_weight_config.py`.
   - **Hidden Value Scanner:** Identifies "soft edge" picks with EV between -1% and +2% using composite scoring (EV proximity, confidence, boost score, market weight). Max 5 picks/day, min score 40/100. Config: `hidden_value_config.py`.
   - API endpoints: `/api/syndicate/status`, `/api/syndicate/boost`, `/api/syndicate/market_weights`
+- **LIVE LEARNING MODE (v1.0 - ACTIVE):** Full data capture system for model calibration:
+  - Captures ALL trust tiers (L1, L2, L3, Hidden Value) without filtering
+  - CLV tracking: stores opening_odds, closing_odds, clv_delta for every pick
+  - Unit-based P/L tracking (no monetary staking applied)
+  - Stores raw_ev, boosted_ev, weighted_ev for every pick
+  - Profile boost details and market weight saved with each pick
+  - Market Weight Engine learns from live results automatically
+  - API endpoints: `/api/live_learning/status`, `/api/live_learning/progress`, `/api/live_learning/picks`, `/api/live_learning/settle`
+  - Config: `live_learning_config.py`, Tracker: `live_learning_tracker.py`
 
 ### System Design Choices
 - **Data Layer:** PostgreSQL (Replit's Neon database) with connection pooling, TCP keepalives, and retry logic for stability.

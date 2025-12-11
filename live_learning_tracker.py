@@ -175,7 +175,9 @@ class LiveLearningTracker:
         hv_score = None
         hv_status = "NOT_APPLICABLE"
         
-        if weighted_ev < 0.02:
+        ev_min, ev_max = self.config.ev_near_miss_range if hasattr(self.config, 'ev_near_miss_range') else (-0.01, 0.02)
+        
+        if ev_min <= weighted_ev <= ev_max:
             candidate = RejectedCandidate(
                 match_id=match_id,
                 home_team=home_team,
@@ -202,6 +204,10 @@ class LiveLearningTracker:
                     trust_tier = "HIDDEN_VALUE"
             else:
                 hv_status = "SCANNED_NOT_SELECTED"
+        elif weighted_ev >= 0.02:
+            hv_status = "ABOVE_THRESHOLD"
+        else:
+            hv_status = "BELOW_THRESHOLD"
         
         pick = LiveLearningPick(
             match_id=match_id,
@@ -241,14 +247,19 @@ class LiveLearningTracker:
         return pick
     
     def save_pick_to_db(self, pick: LiveLearningPick) -> bool:
-        """Save a processed pick to the database."""
+        """Save a processed pick to the database with proper column mapping."""
         try:
+            open_prob = 1 / pick.opening_odds if pick.opening_odds > 0 else 0
+            close_prob = 1 / pick.current_odds if pick.current_odds > 0 else 0
+            clv_pct = (close_prob - open_prob) * 100 if pick.closing_odds else 0
+            
             query = """
                 INSERT INTO football_opportunities (
                     timestamp, match_id, home_team, away_team, league,
                     market, selection, odds, edge_percentage, confidence,
                     status, match_date, kickoff_time, mode, trust_level,
-                    model_prob, sim_probability, open_odds,
+                    model_prob, sim_probability, 
+                    open_odds, close_odds, clv_pct,
                     raw_ev, boosted_ev, weighted_ev,
                     profile_boost_score, profile_boost_factors,
                     market_weight, hidden_value_score, hidden_value_status
@@ -256,6 +267,7 @@ class LiveLearningTracker:
                     %s, %s, %s, %s, %s,
                     %s, %s, %s, %s, %s,
                     %s, %s, %s, %s, %s,
+                    %s, %s, 
                     %s, %s, %s,
                     %s, %s, %s,
                     %s, %s,
@@ -265,6 +277,9 @@ class LiveLearningTracker:
                 DO UPDATE SET
                     odds = EXCLUDED.odds,
                     edge_percentage = EXCLUDED.edge_percentage,
+                    open_odds = COALESCE(football_opportunities.open_odds, EXCLUDED.open_odds),
+                    close_odds = EXCLUDED.close_odds,
+                    clv_pct = EXCLUDED.clv_pct,
                     raw_ev = EXCLUDED.raw_ev,
                     boosted_ev = EXCLUDED.boosted_ev,
                     weighted_ev = EXCLUDED.weighted_ev,
@@ -296,6 +311,8 @@ class LiveLearningTracker:
                 pick.model_prob,
                 pick.sim_prob,
                 pick.opening_odds,
+                pick.closing_odds if pick.closing_odds else pick.current_odds,
+                clv_pct,
                 pick.raw_ev,
                 pick.boosted_ev,
                 pick.weighted_ev,
@@ -553,3 +570,80 @@ def save_live_pick(pick: LiveLearningPick) -> bool:
     """Convenience function to save a pick."""
     tracker = get_live_learning_tracker()
     return tracker.save_pick_to_db(pick)
+
+
+def enrich_pending_picks_with_syndicate_data() -> Dict[str, Any]:
+    """
+    Post-process pending picks to add syndicate engine data.
+    Called periodically to enrich picks that were saved without syndicate data.
+    """
+    tracker = get_live_learning_tracker()
+    
+    try:
+        pending_picks = db_helper.execute("""
+            SELECT match_id, home_team, away_team, league, match_date, kickoff_time,
+                   market, selection, odds, edge_percentage, confidence, model_prob,
+                   sim_probability, trust_level
+            FROM football_opportunities
+            WHERE status = 'pending' 
+            AND mode != 'LIVE_LEARNING'
+            AND raw_ev IS NULL
+            LIMIT 50
+        """)
+        
+        if not pending_picks:
+            return {"enriched": 0, "message": "No picks to enrich"}
+        
+        enriched = 0
+        for row in pending_picks:
+            try:
+                raw_ev = float(row.get("edge_percentage", 0) or 0) / 100.0
+                confidence = float(row.get("confidence", 0) or 0) / 100.0
+                model_prob = float(row.get("model_prob", 0) or 0)
+                sim_prob = float(row.get("sim_probability", 0) or 0)
+                odds = float(row.get("odds", 0) or 0)
+                market = row.get("market", "")
+                
+                boost_result = tracker.pb_engine.calculate_boost(
+                    base_ev=raw_ev,
+                    base_confidence=confidence,
+                    market_type=market,
+                    context={}
+                )
+                
+                weight_result = tracker.mw_engine.get_market_weight(market)
+                weighted_ev = boost_result.boosted_ev * weight_result.weight
+                
+                db_helper.execute("""
+                    UPDATE football_opportunities
+                    SET raw_ev = %s,
+                        boosted_ev = %s,
+                        weighted_ev = %s,
+                        profile_boost_score = %s,
+                        profile_boost_factors = %s,
+                        market_weight = %s,
+                        mode = 'LIVE_LEARNING'
+                    WHERE match_id = %s AND market = %s AND selection = %s
+                """, (
+                    raw_ev,
+                    boost_result.boosted_ev,
+                    weighted_ev,
+                    boost_result.boost_score,
+                    json.dumps([{"f": f[0], "s": round(f[1], 3)} for f in boost_result.contributing_factors]),
+                    weight_result.weight,
+                    row.get("match_id"),
+                    row.get("market"),
+                    row.get("selection"),
+                ))
+                enriched += 1
+                
+            except Exception as e:
+                logger.error(f"[LIVE_LEARNING] Failed to enrich pick: {e}")
+                continue
+        
+        logger.info(f"[LIVE_LEARNING] Enriched {enriched} picks with syndicate data")
+        return {"enriched": enriched, "message": f"Enriched {enriched} picks"}
+        
+    except Exception as e:
+        logger.error(f"[LIVE_LEARNING] Enrichment failed: {e}")
+        return {"enriched": 0, "error": str(e)}

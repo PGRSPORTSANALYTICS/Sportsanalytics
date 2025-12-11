@@ -1330,6 +1330,196 @@ async def get_market_weights():
 
 
 # =============================================================================
+# LIVE LEARNING MODE Endpoints
+# =============================================================================
+
+@app.get("/api/live_learning/status")
+async def get_live_learning_status():
+    """
+    Get current LIVE LEARNING MODE status and configuration.
+    """
+    try:
+        from live_learning_config import get_live_learning_config, is_live_learning_active
+        from live_learning_tracker import get_live_learning_tracker
+        
+        config = get_live_learning_config()
+        tracker = get_live_learning_tracker()
+        session_stats = tracker.get_session_stats()
+        
+        return {
+            "mode": "LIVE_LEARNING",
+            "active": is_live_learning_active(),
+            "version": config.version,
+            "activated_at": config.activated_at.isoformat() if config.activated_at else None,
+            "session_stats": session_stats,
+            "config": {
+                "capture_all_picks": config.capture_all_picks,
+                "capture_trust_tiers": config.capture_trust_tiers,
+                "enable_clv_tracking": config.enable_clv_tracking,
+                "ev_filter_enabled": config.ev_filter_enabled,
+                "unit_based_tracking": config.unit_based_tracking,
+                "market_weight_learning_enabled": config.market_weight_learning_enabled,
+            },
+            "syndicate_engines": {
+                "profile_boost": config.enable_profile_boost,
+                "market_weight": config.enable_market_weight,
+                "hidden_value_scanner": config.enable_hidden_value_scanner,
+            },
+            "generated_at": datetime.utcnow().isoformat(),
+        }
+    except Exception as e:
+        logger.error(f"Error getting live learning status: {e}")
+        return {
+            "mode": "LIVE_LEARNING",
+            "active": True,
+            "error": str(e),
+            "generated_at": datetime.utcnow().isoformat(),
+        }
+
+
+@app.get("/api/live_learning/progress")
+async def get_live_learning_progress():
+    """
+    Get LIVE LEARNING MODE progress with results by trust tier.
+    """
+    try:
+        from live_learning_tracker import get_live_learning_tracker
+        
+        tracker = get_live_learning_tracker()
+        progress = tracker.get_learning_progress()
+        
+        return progress
+        
+    except Exception as e:
+        logger.error(f"Error getting live learning progress: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/live_learning/picks")
+async def get_live_learning_picks(
+    trust_tier: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = 50
+):
+    """
+    Get picks captured in LIVE LEARNING MODE.
+    
+    Optional filters:
+    - trust_tier: L1_HIGH_TRUST, L2_MEDIUM_TRUST, L3_SOFT_VALUE, HIDDEN_VALUE
+    - status: pending, won, lost
+    - limit: max number of picks to return
+    """
+    try:
+        query = """
+            SELECT 
+                match_id, home_team, away_team, league, match_date, kickoff_time,
+                market, selection, odds, trust_level,
+                open_odds, close_odds, clv_pct,
+                raw_ev, boosted_ev, weighted_ev,
+                profile_boost_score, profile_boost_factors, market_weight,
+                hidden_value_score, hidden_value_status,
+                status, profit_loss, model_prob, confidence
+            FROM football_opportunities
+            WHERE mode = 'LIVE_LEARNING'
+        """
+        params = []
+        
+        if trust_tier:
+            query += " AND trust_level = %s"
+            params.append(trust_tier)
+        
+        if status:
+            query += " AND status = %s"
+            params.append(status)
+        
+        query += " ORDER BY timestamp DESC LIMIT %s"
+        params.append(limit)
+        
+        rows = db_helper.execute(query, tuple(params)) or []
+        
+        picks = []
+        for row in rows:
+            picks.append({
+                "match_id": row.get("match_id"),
+                "match": f"{row.get('home_team')} vs {row.get('away_team')}",
+                "league": row.get("league"),
+                "match_date": row.get("match_date"),
+                "market": row.get("market"),
+                "selection": row.get("selection"),
+                "odds": float(row.get("odds", 0)),
+                "trust_tier": row.get("trust_level"),
+                "clv": {
+                    "open_odds": float(row.get("open_odds", 0) or 0),
+                    "close_odds": float(row.get("close_odds", 0) or 0),
+                    "clv_pct": float(row.get("clv_pct", 0) or 0),
+                },
+                "ev": {
+                    "raw": float(row.get("raw_ev", 0) or 0) * 100,
+                    "boosted": float(row.get("boosted_ev", 0) or 0) * 100,
+                    "weighted": float(row.get("weighted_ev", 0) or 0) * 100,
+                },
+                "syndicate": {
+                    "profile_boost_score": float(row.get("profile_boost_score", 0) or 0),
+                    "market_weight": float(row.get("market_weight", 1) or 1),
+                    "hidden_value_score": float(row.get("hidden_value_score", 0) or 0) if row.get("hidden_value_score") else None,
+                    "hidden_value_status": row.get("hidden_value_status"),
+                },
+                "status": row.get("status"),
+                "profit_units": float(row.get("profit_loss", 0) or 0),
+                "model_prob": float(row.get("model_prob", 0) or 0) * 100,
+                "confidence": float(row.get("confidence", 0) or 0),
+            })
+        
+        return {
+            "mode": "LIVE_LEARNING",
+            "picks": picks,
+            "count": len(picks),
+            "filters": {
+                "trust_tier": trust_tier,
+                "status": status,
+                "limit": limit,
+            },
+            "generated_at": datetime.utcnow().isoformat(),
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting live learning picks: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/live_learning/settle")
+async def settle_live_learning_pick(
+    match_id: str,
+    market: str,
+    selection: str,
+    won: bool,
+    closing_odds: Optional[float] = None
+):
+    """
+    Settle a LIVE LEARNING pick result.
+    
+    - Calculates units profit/loss
+    - Updates CLV if closing_odds provided
+    - Triggers market weight learning
+    """
+    try:
+        from live_learning_tracker import get_live_learning_tracker
+        
+        tracker = get_live_learning_tracker()
+        
+        if closing_odds:
+            tracker.update_clv(match_id, market, selection, closing_odds)
+        
+        result = tracker.settle_result(match_id, market, selection, won, closing_odds)
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error settling pick: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
 # Run with: uvicorn api:app --host 0.0.0.0 --port 8000
 # =============================================================================
 
