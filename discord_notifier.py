@@ -81,6 +81,7 @@ def format_value_single_message(bet) -> str:
         ev = bet.get('ev', None)
         trust_level = bet.get('trust_level', 'L2')
         confidence = bet.get('confidence', None)
+        product_type = bet.get('product', bet.get('product_type', '')).upper()
     else:
         league = getattr(bet, 'league', 'Unknown League')
         home_team = getattr(bet, 'home_team', '')
@@ -92,9 +93,13 @@ def format_value_single_message(bet) -> str:
         ev = getattr(bet, 'ev', None)
         trust_level = getattr(bet, 'trust_level', 'L2')
         confidence = getattr(bet, 'confidence', None)
+        product_type = getattr(bet, 'product', getattr(bet, 'product_type', '')).upper()
+    
+    is_basketball = 'BASKET' in product_type or 'NCAAB' in league.upper() or 'NCAA' in league.upper()
+    sport_emoji = ":basketball:" if is_basketball else ":soccer:"
     
     lines = [
-        f":soccer: **{league}**",
+        f"{sport_emoji} **{league}**",
         f"**{home_team}** vs **{away_team}**",
         f"Kickoff: `{kickoff}`",
         "",
@@ -197,7 +202,10 @@ def format_result_message(bet_info: dict) -> str:
     odds = bet_info.get('odds', bet_info.get('bookmaker_odds', 0))
     profit_loss = bet_info.get('profit_loss', 0)
     league = bet_info.get('league', '')
-    product_type = bet_info.get('product_type', bet_info.get('product', ''))
+    product_type = bet_info.get('product_type', bet_info.get('product', '')).upper()
+    
+    is_basketball = 'BASKET' in product_type or 'NCAAB' in league.upper() or 'NCAA' in league.upper()
+    sport_emoji = ":basketball:" if is_basketball else ":soccer:"
     
     if outcome == 'WIN':
         emoji = ":white_check_mark:"
@@ -223,7 +231,7 @@ def format_result_message(bet_info: dict) -> str:
         f"{emoji} **RESULT: {status}**",
         "",
         f"**{league}** – {home_team} vs {away_team}",
-        f":soccer: Final Score: **{actual_score}**",
+        f"{sport_emoji} Final Score: **{actual_score}**",
         f":dart: Our Pick: {selection}",
         f":moneybag: Odds: {float(odds):.2f}" if odds else "",
         "",
