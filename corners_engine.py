@@ -1,10 +1,34 @@
 """
-Corners Engine v2.0 - Syndicate-Style Advanced Corners Model
+Corners Engine v3.0 - Syndicate-Style Advanced Corners Model
 =============================================================
 Uses advanced factors: Pace, Wing Play, Referee Bias, Weather, Corner Pressure Index
 All factors degrade gracefully with sensible defaults when data is missing.
 
-Markets:
+INPUTS:
+- Team statistics: corners_for_pg, corners_against_pg, crosses_pg, attacks_pg
+- Referee data: corners_per_match, fouls_near_box_per_match
+- Weather conditions: wind_speed, is_rain, pitch_condition
+- Match context: importance_index, comeback_frequency
+
+FEATURES (via build_corner_features):
+- team_corner_for_per90, team_corner_against_per90
+- recent_form_corner_delta
+- tempo_index (from passes_per_minute, attacks_per_90)
+- wing_play_index (crosses, wide_zone_touches, flank_attack_pct)
+- referee_corner_bias
+- weather_corner_modifier
+- corner_pressure_index (xG from corners, comeback rate, late intensity)
+
+EV CALCULATION:
+EV = (model_probability * book_odds) - 1
+Picks must pass minimum EV threshold per trust tier.
+
+TRUST TIERS:
+- L1_HIGH_TRUST: EV >= 5%, confidence >= 55%, simulation approved
+- L2_MEDIUM_TRUST: EV >= 2%, confidence >= 52%
+- L3_SOFT_VALUE: EV >= 0%, confidence >= 50%
+
+MARKETS:
 - Match Total Corners: Over/Under 8.5, 9.5, 10.5, 11.5
 - Team Corners: Home/Away Over X corners
 - Corner Handicaps: Home/Away -1.5, -2.5, etc.
@@ -22,6 +46,106 @@ from bet_filter import BetCandidate
 from multimarket_config import PRODUCT_CONFIGS, get_market_label, MarketType
 
 logger = logging.getLogger(__name__)
+
+_DEFAULT_HOME_CORNERS = 5.2
+_DEFAULT_AWAY_CORNERS = 4.8
+_DEFAULT_REFEREE_CORNERS = 10.0
+
+
+def build_corner_features(match_row: Dict) -> Dict[str, float]:
+    """
+    Build feature dict for corner prediction from match data.
+    All features gracefully degrade to sensible defaults when data is missing.
+    
+    Args:
+        match_row: Dict with home_stats, away_stats, referee_stats, weather subdicts
+    
+    Returns:
+        Dict of computed features for corner prediction
+    """
+    home_stats = match_row.get("home_stats", {})
+    away_stats = match_row.get("away_stats", {})
+    referee_stats = match_row.get("referee_stats", {})
+    weather = match_row.get("weather", {})
+    
+    features = {
+        "team_corner_for_per90_home": home_stats.get("corners_for_per90", _DEFAULT_HOME_CORNERS),
+        "team_corner_against_per90_home": home_stats.get("corners_against_per90", _DEFAULT_AWAY_CORNERS),
+        "team_corner_for_per90_away": away_stats.get("corners_for_per90", _DEFAULT_AWAY_CORNERS),
+        "team_corner_against_per90_away": away_stats.get("corners_against_per90", _DEFAULT_HOME_CORNERS),
+        
+        "recent_form_corner_delta_home": home_stats.get("recent_corner_form", 0),
+        "recent_form_corner_delta_away": away_stats.get("recent_corner_form", 0),
+        
+        "passes_per_minute_home": home_stats.get("passes_per_minute", 8.0),
+        "passes_per_minute_away": away_stats.get("passes_per_minute", 8.0),
+        "attacks_per_90_home": home_stats.get("attacks_per_90", 100),
+        "attacks_per_90_away": away_stats.get("attacks_per_90", 100),
+        "dangerous_attacks_per_90_home": home_stats.get("dangerous_attacks_per_90", 50),
+        "dangerous_attacks_per_90_away": away_stats.get("dangerous_attacks_per_90", 50),
+        
+        "crosses_per_90_home": home_stats.get("crosses_per_90", 15),
+        "crosses_per_90_away": away_stats.get("crosses_per_90", 15),
+        "wide_zone_touches_home": home_stats.get("wide_zone_touches", 40),
+        "wide_zone_touches_away": away_stats.get("wide_zone_touches", 40),
+        "flank_attack_pct_home": home_stats.get("flank_attack_pct", 0.35),
+        "flank_attack_pct_away": away_stats.get("flank_attack_pct", 0.35),
+        
+        "referee_corners_per_match": referee_stats.get("corners_per_match", _DEFAULT_REFEREE_CORNERS),
+        "referee_fouls_near_box": referee_stats.get("fouls_near_box_per_match", 5),
+        
+        "wind_speed": weather.get("wind_speed", 0),
+        "is_rain": weather.get("is_rain", False),
+        "pitch_condition": weather.get("pitch_condition", "good"),
+        
+        "xg_from_corners_home": home_stats.get("xg_from_corners", 0.3),
+        "xg_from_corners_away": away_stats.get("xg_from_corners", 0.3),
+        "comeback_frequency_home": home_stats.get("comeback_frequency", 0.15),
+        "comeback_frequency_away": away_stats.get("comeback_frequency", 0.15),
+        "late_game_intensity_home": home_stats.get("late_game_attack_intensity", 1.0),
+        "late_game_intensity_away": away_stats.get("late_game_attack_intensity", 1.0),
+        
+        "match_importance": match_row.get("match_importance", 1.0),
+    }
+    
+    avg_passes = (features["passes_per_minute_home"] + features["passes_per_minute_away"]) / 2
+    avg_attacks = (features["attacks_per_90_home"] + features["attacks_per_90_away"]) / 2
+    avg_dangerous = (features["dangerous_attacks_per_90_home"] + features["dangerous_attacks_per_90_away"]) / 2
+    features["tempo_index"] = round(
+        (avg_passes / 8.0) * 0.3 + (avg_attacks / 100) * 0.35 + (avg_dangerous / 50) * 0.35,
+        3
+    )
+    
+    avg_crosses = (features["crosses_per_90_home"] + features["crosses_per_90_away"]) / 2
+    avg_wide = (features["wide_zone_touches_home"] + features["wide_zone_touches_away"]) / 2
+    avg_flank = (features["flank_attack_pct_home"] + features["flank_attack_pct_away"]) / 2
+    features["wing_play_index"] = round(
+        (avg_crosses / 15) * 0.45 + (avg_wide / 40) * 0.30 + (avg_flank / 0.35) * 0.25,
+        3
+    )
+    
+    features["referee_corner_bias"] = round(
+        features["referee_corners_per_match"] / _DEFAULT_REFEREE_CORNERS,
+        3
+    )
+    
+    wind_mod = 1.0
+    if features["wind_speed"] > 40:
+        wind_mod = 1.12
+    elif features["wind_speed"] > 25:
+        wind_mod = 1.06
+    rain_mod = 1.05 if features["is_rain"] else 1.0
+    features["weather_corner_modifier"] = round(wind_mod * rain_mod, 3)
+    
+    avg_xg_corners = (features["xg_from_corners_home"] + features["xg_from_corners_away"]) / 2
+    avg_comeback = (features["comeback_frequency_home"] + features["comeback_frequency_away"]) / 2
+    avg_late = (features["late_game_intensity_home"] + features["late_game_intensity_away"]) / 2
+    features["corner_pressure_index"] = round(
+        (avg_xg_corners / 0.3) * 0.35 + (1 + (avg_comeback - 0.15) * 2) * 0.35 + avg_late * 0.30,
+        3
+    )
+    
+    return features
 
 MATCH_CORNERS_CONFIG = PRODUCT_CONFIGS["CORNERS_MATCH"]
 TEAM_CORNERS_CONFIG = PRODUCT_CONFIGS["CORNERS_TEAM"]

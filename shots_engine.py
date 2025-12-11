@@ -1,6 +1,33 @@
 """
-Shots Engine - Team and Match Shots Over/Under Predictions
-Uses Monte Carlo simulation with xG/xShots-derived distributions
+Shots (Team) Engine v1.0 - Syndicate-Style Team Shots Model
+============================================================
+Predicts team-specific shots using available API-Football data.
+Uses: shots_for, shots_against, xG, dangerous_attacks, possession, tempo.
+
+INPUTS:
+- Team statistics: shots_for_pg, shots_against_pg, shots_on_target_pg
+- xG data: xg_for_pg, xg_against_pg (where available)
+- Attack metrics: dangerous_attacks_pg, possession_avg
+- Recent form modifiers
+
+FEATURES (via build_shots_features):
+- team_shots_for_per90, team_shots_against_per90
+- expected_shots_vs_defence (attack vs opponent defence)
+- tempo_index (pace proxy from dangerous attacks)
+- xg_per_shot (shot quality indicator)
+- home_away_modifier
+- recent_form_modifier
+
+EV CALCULATION:
+EV = (model_probability * book_odds) - 1
+Picks must pass minimum EV threshold per trust tier.
+
+TRUST TIERS:
+- L1_HIGH_TRUST: EV >= 5%, confidence >= 55%, simulation approved
+- L2_MEDIUM_TRUST: EV >= 2%, confidence >= 52%
+- L3_SOFT_VALUE: EV >= 0%, confidence >= 50%
+
+Daily Limits: 6 total shots picks (balanced between home/away)
 """
 
 import logging
@@ -18,6 +45,68 @@ from multimarket_config import (
 
 logger = logging.getLogger(__name__)
 
+
+def build_shots_features(match_row: Dict) -> Dict[str, float]:
+    """
+    Build feature dict for shots prediction from match data.
+    All features gracefully degrade to sensible defaults when data is missing.
+    
+    Args:
+        match_row: Dict with home_stats, away_stats subdicts
+    
+    Returns:
+        Dict of computed features for shots prediction
+    """
+    home_stats = match_row.get("home_stats", {})
+    away_stats = match_row.get("away_stats", {})
+    
+    features = {
+        "home_shots_for_pg": home_stats.get("shots_pg", DEFAULT_TEAM_STATS["shots_pg"]),
+        "home_shots_against_pg": home_stats.get("shots_against_pg", DEFAULT_TEAM_STATS["shots_against_pg"]),
+        "away_shots_for_pg": away_stats.get("shots_pg", DEFAULT_TEAM_STATS["shots_pg"]),
+        "away_shots_against_pg": away_stats.get("shots_against_pg", DEFAULT_TEAM_STATS["shots_against_pg"]),
+        
+        "home_sot_for_pg": home_stats.get("sot_pg", DEFAULT_TEAM_STATS["sot_pg"]),
+        "home_sot_against_pg": home_stats.get("sot_against_pg", DEFAULT_TEAM_STATS["sot_against_pg"]),
+        "away_sot_for_pg": away_stats.get("sot_pg", DEFAULT_TEAM_STATS["sot_pg"]),
+        "away_sot_against_pg": away_stats.get("sot_against_pg", DEFAULT_TEAM_STATS["sot_against_pg"]),
+        
+        "home_xg_for_pg": home_stats.get("xg_pg", DEFAULT_TEAM_STATS["xg_pg"]),
+        "away_xg_for_pg": away_stats.get("xg_pg", DEFAULT_TEAM_STATS["xg_pg"]),
+        
+        "home_dangerous_attacks": home_stats.get("dangerous_attacks_pg", 45.0),
+        "away_dangerous_attacks": away_stats.get("dangerous_attacks_pg", 45.0),
+        
+        "home_possession": home_stats.get("possession_avg", 50.0),
+        "away_possession": away_stats.get("possession_avg", 50.0),
+        
+        "home_recent_form": home_stats.get("recent_form_modifier", 1.0),
+        "away_recent_form": away_stats.get("recent_form_modifier", 1.0),
+    }
+    
+    home_xg_per_shot = features["home_xg_for_pg"] / max(1, features["home_shots_for_pg"])
+    away_xg_per_shot = features["away_xg_for_pg"] / max(1, features["away_shots_for_pg"])
+    features["home_xg_per_shot"] = round(home_xg_per_shot, 4)
+    features["away_xg_per_shot"] = round(away_xg_per_shot, 4)
+    
+    features["expected_home_shots_vs_defence"] = (
+        features["home_shots_for_pg"] * 0.6 + 
+        features["away_shots_against_pg"] * 0.4
+    )
+    features["expected_away_shots_vs_defence"] = (
+        features["away_shots_for_pg"] * 0.6 + 
+        features["home_shots_against_pg"] * 0.4
+    )
+    
+    avg_attacks = (features["home_dangerous_attacks"] + features["away_dangerous_attacks"]) / 2
+    features["tempo_index"] = round(avg_attacks / 45.0, 3)
+    
+    features["home_away_modifier_home"] = 1.05
+    features["home_away_modifier_away"] = 0.95
+    
+    return features
+
+
 @dataclass
 class ShotsCandidate:
     fixture_id: str
@@ -32,6 +121,25 @@ class ShotsCandidate:
     confidence: float
     trust_tier: str
     metadata: Dict[str, Any]
+    match_date: str = ""
+    league: str = "Unknown"
+    product: str = "SHOTS_TEAM"
+    
+    @property
+    def match(self) -> str:
+        return f"{self.home_team} vs {self.away_team}"
+    
+    @property
+    def odds(self) -> float:
+        return self.book_odds
+    
+    @property
+    def ev_sim(self) -> float:
+        return self.ev
+    
+    @property
+    def tier(self) -> str:
+        return self.trust_tier
 
 
 SHOTS_LINES = {

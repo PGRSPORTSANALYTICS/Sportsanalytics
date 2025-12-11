@@ -1,0 +1,249 @@
+You are the engineering assistant for the PGR Sports Analytics system.
+
+Goal: Finish a full “syndicate-style” upgrade using ONLY the existing APIs (API-Football + The Odds API + the current database). You must NOT add new paid APIs. You should:
+
+1. Finalize and document:
+   - Corners Engine v3
+   - Cards Engine v2
+2. Implement:
+   - Shots (Team) Engine v1
+3. Add and tune:
+   - EV filters and Trust Tiers for ALL new markets
+4. Upgrade:
+   - Dashboard / API presentation for the new products (units only, no bankroll)
+
+Use the existing architecture:
+- Combined Sports Engine
+- 3-tier Trust System (L1/L2/L3)
+- Monte Carlo simulation framework
+- Central Market Router (market_router.py + market_router_config.py)
+- Unified Odds Service (unified_odds_service.py)
+- /api/daily_card and /api/market_stats
+- CLV tracking and Daily Units view
+
+Work in small, well-logged steps and keep all existing functionality working.
+
+----------------------------------------------------
+PART A – Corners Engine v3 (finalize + document)
+----------------------------------------------------
+
+1. Inspect the current Corners Engine implementation.
+   - Confirm which file(s) contain the logic (e.g. corners_engine.py or similar).
+   - Confirm that these factors are implemented or add them if missing:
+     - Pace
+     - Wing Play
+     - Referee Bias
+     - Weather
+     - Corner Pressure Index
+   - If anything is only partially implemented, complete it.
+
+2. Make the feature engineering explicit:
+   - Create a clear function like:
+     - build_corner_features(match_row) -> dict
+   - The features should include at minimum:
+     - team_corner_for_per90, team_corner_against_per90
+     - recent_form_corner_delta
+     - tempo_index
+     - wing_play_index
+     - referee_corner_bias
+     - weather_corner_modifier
+     - corner_pressure_index (big games / must-win factor)
+   - All features must gracefully degrade to sensible defaults when data is missing (no crashes).
+
+3. Prediction model:
+   - Use a Poisson-based model or your current Monte Carlo framework to predict:
+     - total corners
+     - team corners (home/away)
+   - Return probabilities for:
+     - key total lines (8.5, 9.5, 10.5, 11.5, etc.)
+     - team handicap lines (e.g. Home -1.5 corners)
+
+4. Odds & EV:
+   - Use the Unified Odds Service to pull odds for:
+     - Total Corners Over/Under lines
+     - Corner Handicap lines (HOME/ AWAY)
+   - Calculate EV for each candidate pick with the existing EV formula.
+
+5. Integration:
+   - Ensure the Corners Engine sends its picks through the Central Market Router.
+   - Markets to support (as a minimum):
+     - CORNERS_TOTAL_OVER / UNDER (8.5, 9.5, 10.5…)
+     - CORNERS_HC_HOME_-1_5, CORNERS_HC_AWAY_-1_5, etc.
+   - Add or update caps in market_router_config.py for these markets.
+   - Make sure they are included in /api/daily_card and /api/market_stats.
+
+6. Documentation:
+   - Add a short “Corners Engine v3” explanation comment at the top of the engine file describing:
+     - inputs
+     - key features
+     - how EV is calculated
+     - how Trust Tiers are assigned.
+
+----------------------------------------------------
+PART B – Cards Engine v2 (finalize + document)
+----------------------------------------------------
+
+1. Inspect the current Cards Engine implementation.
+   - Confirm/ensure that these factors are implemented:
+     - Referee Profile (cards per match, strict vs lenient)
+     - Rivalry Index (derby / high-tension matches)
+     - Formation Aggression (e.g. 4-3-3 vs 5-4-1)
+     - Tempo / Pressing (PPDA or similar)
+     - Team Aggression (fouls, tackles, historical cards)
+
+2. Feature engineering:
+   - Create a function like:
+     - build_cards_features(match_row) -> dict
+   - Include at least:
+     - referee_cards_per_match
+     - rivalry_index
+     - team_aggression_home / away
+     - pressing_index_home / away
+     - formation_aggression_home / away
+     - game_state_risk_factor (relegation battle, title race, etc. if possible)
+
+3. Prediction:
+   - Predict:
+     - Total cards
+     - Team cards (home / away)
+   - Use Poisson / Monte Carlo consistent with the rest of the system.
+
+4. Odds & EV:
+   - From Unified Odds Service, use any available cards markets (if present), otherwise keep the engine “simulation only” but still compute implied probabilities and EV stubs for future integration.
+
+5. Integration:
+   - Make sure cards picks (totals + team cards) flow through:
+     - Combined Sports Engine
+     - Trust Tiers
+     - Central Market Router
+   - Add market tags like:
+     - CARDS_TOTAL_OVER_X_Y
+     - CARDS_TEAM_HOME_OVER_X_Y, etc.
+
+6. Documentation:
+   - Add a “Cards Engine v2” description similar to the corners engine:
+     - features used
+     - EV method
+     - Trust tier criteria
+
+----------------------------------------------------
+PART C – Shots (Team) Engine v1
+----------------------------------------------------
+
+1. Create a new engine file if needed, e.g. shots_engine.py.
+
+2. Data & features:
+   - Use ONLY existing API-Football data:
+     - shots_for / shots_against
+     - shots_on_target
+     - xG (where available)
+     - dangerous_attacks
+     - possession
+     - tempo / pace proxies
+   - Build features like:
+     - team_shots_for_per90, team_shots_against_per90
+     - expected_shots_vs_defence (team attack vs opponent defence)
+     - tempo_index
+     - xG_per_shot
+     - home_away_modifier
+     - recent_form_modifier
+
+3. Targets:
+   - Predict team shots totals:
+     - HOME_TEAM_SHOTS
+     - AWAY_TEAM_SHOTS
+   - Provide probabilities for key alt lines where odds are available:
+     - e.g. Over/Under 9.5, 11.5, 13.5 shots (team-specific)
+
+4. Odds & EV:
+   - Try to map The Odds API markets to team shots props if they exist.
+   - If there is no direct mapping, keep this as a “ready” module that can immediately plug into a future prop API.
+   - Still calculate model probabilities and an EV placeholder, so that once odds are present the engine is ready.
+
+5. Integration:
+   - Add a product type like SHOTS_TEAM.
+   - Include it in the Combined Sports Engine and Market Router with conservative caps (e.g. 2–4 picks per day).
+   - Attach CLV tracking support once odds are actually used for live bets.
+
+----------------------------------------------------
+PART D – EV Filters & Trust Tiers for ALL Markets
+----------------------------------------------------
+
+Update the filtering logic so that each product/market has clear minimum requirements.
+
+1. Maintain the existing 3-tier Trust System:
+   - L1 – High Trust
+   - L2 – Medium Trust
+   - L3 – Soft Value
+
+2. For EACH product (Value Singles, Totals, BTTS, Corners, Cards, Shots, ML/AH):
+   - Define:
+     - Min EV for L1, L2, L3
+     - Min model confidence (probability)
+     - Max model vs market disagreement
+     - Allowed odds range
+
+   Example guideline (adapt to current live performance):
+   - L1: EV ≥ 5%, confidence ≥ 60%, disagreement ≤ 12%
+   - L2: EV ≥ 3%, confidence ≥ 57%, disagreement ≤ 15%
+   - L3: EV ≥ 0%, confidence ≥ 55%, disagreement ≤ 20%
+
+3. Ensure:
+   - All engines call a shared filter function so rules are consistent.
+   - Daily caps per product are enforced BEFORE the Market Router runs.
+   - The Market Router then balances across markets and products as it does now.
+
+4. Logging:
+   - For debugging, log how many picks are rejected at each filter level per product and per trust tier.
+
+----------------------------------------------------
+PART E – Dashboard & API Presentation (units only)
+----------------------------------------------------
+
+1. Extend /api/daily_card to include:
+   - New products: Corners, Cards, Shots (team)
+   - For each pick, include:
+     - product_type (e.g. TOTALS, CORNERS, CARDS, SHOTS_TEAM)
+     - market_type (e.g. FT_OVER_2_5, CORNERS_HC_HOME_-1_5)
+     - trust_tier (L1 / L2 / L3)
+     - EV
+     - implied_probability
+     - units_to_stake (if your staking engine suggests it) – but do NOT compute bankroll, just units.
+
+2. Extend /api/market_stats (if present) or create a similar endpoint to show:
+   - Count of picks per product and per trust tier
+   - Average EV per product
+   - Balance Score from the Market Router
+
+3. Frontend / dashboard:
+   - Add a “Props & Specials” or “Advanced Markets” section that lists:
+     - Corners picks
+     - Cards picks
+     - Shots (team) picks
+   - Sort by trust tier first (L1 → L2 → L3), then by EV descending.
+   - Display ONLY in units and EV – do NOT show bankroll or monetary amounts.
+
+4. Consistency:
+   - Ensure new picks appear correctly in:
+     - Daily Units view (per day units won/lost)
+     - CLV tracking (if odds and closing odds are available for that market)
+
+----------------------------------------------------
+GENERAL REQUIREMENTS
+----------------------------------------------------
+
+- DO NOT remove or break existing functionality.
+- Keep everything in English in code comments and API responses.
+- Use clear, descriptive logging so it is easy to see:
+  - how many picks each engine generated,
+  - how many survived filters,
+  - what the Market Router finally selected.
+- When changes are complete, print a concise summary:
+  - Which files were modified/created
+  - New markets/products added
+  - Any default thresholds chosen per product
+
+When you are done, confirm that:
+- All tests pass
+- Combined Sports Engine runs without errors
+- /api/daily_card returns a diversified card including the new markets when available.

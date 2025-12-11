@@ -5,7 +5,30 @@ Uses advanced factors: Referee Profile, Rivalry Index, Formation Aggression,
 Tempo/Pressing, Team Aggression Score.
 All factors degrade gracefully with sensible defaults when data is missing.
 
-Markets:
+INPUTS:
+- Referee data: cards_per_match, foul_to_card_conversion, early_card_rate
+- Team statistics: fouls_pg, cards_pg, tackles_pg, duels_pg, aerial_duels_pg
+- Match context: importance_index, is_knockout, is_relegation_battle
+- Formations: home_formation, away_formation
+
+FEATURES (via build_cards_features):
+- referee_cards_per_match, referee_foul_to_card_conversion
+- rivalry_index (derby detection, H2H cards history)
+- team_aggression_home / team_aggression_away
+- pressing_index_home / pressing_index_away (from PPDA)
+- formation_aggression_home / formation_aggression_away
+- game_state_risk_factor (relegation battle, title race)
+
+EV CALCULATION:
+EV = (model_probability * book_odds) - 1
+Picks must pass minimum EV threshold per trust tier.
+
+TRUST TIERS:
+- L1_HIGH_TRUST: EV >= 5%, confidence >= 55%, simulation approved
+- L2_MEDIUM_TRUST: EV >= 2%, confidence >= 52%
+- L3_SOFT_VALUE: EV >= 0%, confidence >= 50%
+
+MARKETS:
 - Match Total Cards: Over/Under 2.5, 3.5, 4.5, 5.5, 6.5
 - Booking Points: Over/Under 30.5, 40.5, 50.5, 60.5
 - Team Cards: Home/Away Over X cards
@@ -27,6 +50,102 @@ from multimarket_config import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def build_cards_features(match_row: Dict) -> Dict[str, Any]:
+    """
+    Build feature dict for cards prediction from match data.
+    All features gracefully degrade to sensible defaults when data is missing.
+    
+    Args:
+        match_row: Dict with home_stats, away_stats, referee_stats, h2h_stats, match_context subdicts
+    
+    Returns:
+        Dict of computed features for cards prediction
+    """
+    home_stats = match_row.get("home_stats", {})
+    away_stats = match_row.get("away_stats", {})
+    referee_stats = match_row.get("referee_stats", {})
+    h2h_stats = match_row.get("h2h_stats", {})
+    match_context = match_row.get("match_context", {})
+    
+    features = {
+        "referee_cards_per_match": referee_stats.get("cards_per_match", DEFAULT_DISCIPLINE_STATS["referee_avg_cards"]),
+        "referee_foul_to_card_conversion": referee_stats.get("foul_to_card_conversion", 0.35),
+        "referee_early_card_rate": referee_stats.get("early_card_rate", 0.25),
+        "referee_big_match_intensity": referee_stats.get("big_match_intensity", 1.0),
+        
+        "fouls_pg_home": home_stats.get("fouls_pg", DEFAULT_DISCIPLINE_STATS["fouls_pg"]),
+        "fouls_pg_away": away_stats.get("fouls_pg", DEFAULT_DISCIPLINE_STATS["fouls_pg"]),
+        "cards_pg_home": home_stats.get("cards_pg", DEFAULT_DISCIPLINE_STATS["cards_pg"]),
+        "cards_pg_away": away_stats.get("cards_pg", DEFAULT_DISCIPLINE_STATS["cards_pg"]),
+        "tackles_pg_home": home_stats.get("tackles_pg", DEFAULT_DISCIPLINE_STATS["tackles_pg"]),
+        "tackles_pg_away": away_stats.get("tackles_pg", DEFAULT_DISCIPLINE_STATS["tackles_pg"]),
+        "duels_pg_home": home_stats.get("duels_pg", DEFAULT_DISCIPLINE_STATS["duels_pg"]),
+        "duels_pg_away": away_stats.get("duels_pg", DEFAULT_DISCIPLINE_STATS["duels_pg"]),
+        "aerial_duels_pg_home": home_stats.get("aerial_duels_pg", DEFAULT_DISCIPLINE_STATS["aerial_duels_pg"]),
+        "aerial_duels_pg_away": away_stats.get("aerial_duels_pg", DEFAULT_DISCIPLINE_STATS["aerial_duels_pg"]),
+        
+        "ppda_home": home_stats.get("ppda", 10.0),
+        "ppda_away": away_stats.get("ppda", 10.0),
+        "interceptions_pg_home": home_stats.get("interceptions_pg", 12),
+        "interceptions_pg_away": away_stats.get("interceptions_pg", 12),
+        
+        "formation_home": match_row.get("home_formation", "4-4-2"),
+        "formation_away": match_row.get("away_formation", "4-4-2"),
+        
+        "h2h_avg_cards": h2h_stats.get("avg_cards_h2h", 4.5),
+        "is_derby": h2h_stats.get("is_derby", False),
+        
+        "match_importance": match_context.get("importance_index", 1.0),
+        "is_knockout": match_context.get("is_knockout", False),
+        "is_relegation_battle": match_context.get("is_relegation_battle", False),
+        "is_title_race": match_context.get("is_title_race", False),
+    }
+    
+    cards_factor = features["referee_cards_per_match"] / DEFAULT_DISCIPLINE_STATS["referee_avg_cards"]
+    foul_factor = features["referee_foul_to_card_conversion"] / 0.35
+    features["referee_profile_index"] = round(cards_factor * 0.6 + foul_factor * 0.4, 3)
+    
+    base_rivalry = 1.20 if features["is_derby"] else 1.0
+    h2h_mod = features["h2h_avg_cards"] / 4.5
+    features["rivalry_index"] = round(base_rivalry * (h2h_mod * 0.3 + 0.7), 3)
+    
+    features["team_aggression_home"] = round(
+        (features["fouls_pg_home"] / DEFAULT_DISCIPLINE_STATS["fouls_pg"]) * 0.30 +
+        (features["cards_pg_home"] / DEFAULT_DISCIPLINE_STATS["cards_pg"]) * 0.35 +
+        ((features["aerial_duels_pg_home"] + features["duels_pg_home"] - 15) / 50) * 0.35,
+        3
+    )
+    features["team_aggression_away"] = round(
+        (features["fouls_pg_away"] / DEFAULT_DISCIPLINE_STATS["fouls_pg"]) * 0.30 +
+        (features["cards_pg_away"] / DEFAULT_DISCIPLINE_STATS["cards_pg"]) * 0.35 +
+        ((features["aerial_duels_pg_away"] + features["duels_pg_away"] - 15) / 50) * 0.35,
+        3
+    )
+    
+    avg_ppda = (features["ppda_home"] + features["ppda_away"]) / 2
+    ppda_factor = 10.0 / avg_ppda if avg_ppda > 0 else 1.0
+    features["pressing_index_home"] = round(min(1.15, max(0.85, ppda_factor)), 3)
+    features["pressing_index_away"] = round(min(1.15, max(0.85, ppda_factor)), 3)
+    
+    features["formation_aggression_home"] = FORMATION_AGGRESSION.get(
+        features["formation_home"], FORMATION_AGGRESSION["default"]
+    )
+    features["formation_aggression_away"] = FORMATION_AGGRESSION.get(
+        features["formation_away"], FORMATION_AGGRESSION["default"]
+    )
+    
+    game_risk = 1.0
+    if features["is_knockout"]:
+        game_risk *= 1.10
+    if features["is_relegation_battle"]:
+        game_risk *= 1.08
+    if features["is_title_race"]:
+        game_risk *= 1.05
+    features["game_state_risk_factor"] = round(game_risk * features["match_importance"], 3)
+    
+    return features
 
 
 @dataclass
