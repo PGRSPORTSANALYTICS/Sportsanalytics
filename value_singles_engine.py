@@ -497,6 +497,10 @@ class ValueSinglesEngine:
                 if ev < match_ev_threshold:
                     continue
                 
+                # REDUCED PRIORITY: Under bets require higher EV (harder to hit consistently)
+                if 'UNDER' in market_key and ev < 0.08:  # 8% EV minimum for Unders
+                    continue
+                
                 # Smart conflict resolution for Over/Under goals vs Exact Score
                 conflict_result = self._check_conflict_with_ev_comparison(home_team, away_team, market_key, ev)
                 if conflict_result == 'skip':
