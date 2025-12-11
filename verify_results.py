@@ -169,6 +169,7 @@ class RealResultVerifier:
         NO simulated or fake data - only authentic results.
         """
         sources = [
+            self._get_the_odds_api_result,  # Primary - reliable and already paid for
             self._get_api_football_result,
             self._get_sofascore_result,
             self._get_flashscore_result
@@ -187,6 +188,107 @@ class RealResultVerifier:
         
         logger.warning(f"❌ No real result found from any source for {home_team} vs {away_team}")
         return None
+    
+    def _get_the_odds_api_result(self, home_team: str, away_team: str, match_date: str) -> Optional[Dict]:
+        """Get real result from The Odds API scores endpoint"""
+        try:
+            api_key = os.getenv('THE_ODDS_API_KEY')
+            if not api_key:
+                logger.warning("❌ No THE_ODDS_API_KEY found in environment")
+                raise Exception("THE_ODDS_API_KEY not configured")
+            
+            logger.info(f"🔍 Fetching result from The Odds API: {home_team} vs {away_team} on {match_date}")
+            
+            # Clean date
+            clean_date = match_date.split('T')[0] if 'T' in match_date else match_date[:10]
+            
+            # The Odds API scores endpoint - check multiple sports
+            sports_to_check = [
+                'soccer_uefa_europa_league',
+                'soccer_uefa_europa_conf_league', 
+                'soccer_uefa_champs_league',
+                'soccer_epl',
+                'soccer_spain_la_liga',
+                'soccer_italy_serie_a',
+                'soccer_germany_bundesliga',
+                'soccer_france_ligue_one',
+                'soccer_netherlands_eredivisie',
+                'soccer_portugal_primeira_liga',
+                'soccer_belgium_first_div'
+            ]
+            
+            for sport in sports_to_check:
+                try:
+                    url = f"https://api.the-odds-api.com/v4/sports/{sport}/scores/"
+                    params = {
+                        'apiKey': api_key,
+                        'daysFrom': 3,  # Look back 3 days
+                        'dateFormat': 'iso'
+                    }
+                    
+                    response = requests.get(url, params=params, timeout=10)
+                    if response.status_code != 200:
+                        continue
+                    
+                    matches = response.json()
+                    
+                    for match in matches:
+                        if not match.get('completed'):
+                            continue
+                        
+                        api_home = match.get('home_team', '').lower()
+                        api_away = match.get('away_team', '').lower()
+                        
+                        # Fuzzy match team names
+                        home_match = self._fuzzy_team_match(home_team, api_home)
+                        away_match = self._fuzzy_team_match(away_team, api_away)
+                        
+                        if home_match and away_match:
+                            scores = match.get('scores', [])
+                            if scores and len(scores) >= 2:
+                                home_score = None
+                                away_score = None
+                                for score in scores:
+                                    if score.get('name', '').lower() == api_home:
+                                        home_score = int(score.get('score', 0))
+                                    elif score.get('name', '').lower() == api_away:
+                                        away_score = int(score.get('score', 0))
+                                
+                                if home_score is not None and away_score is not None:
+                                    logger.info(f"✅ The Odds API result: {home_team} {home_score}-{away_score} {away_team}")
+                                    return {
+                                        'home_goals': home_score,
+                                        'away_goals': away_score,
+                                        'source': 'the-odds-api'
+                                    }
+                except Exception as e:
+                    continue  # Try next sport
+            
+            logger.warning(f"⚠️ No matching result in The Odds API for {home_team} vs {away_team}")
+            return None
+            
+        except Exception as e:
+            logger.warning(f"The Odds API failed: {e}")
+            raise
+    
+    def _fuzzy_team_match(self, team1: str, team2: str) -> bool:
+        """Fuzzy match team names (handles variations)"""
+        t1 = team1.lower().replace('fc ', '').replace(' fc', '').replace('cf ', '').strip()
+        t2 = team2.lower().replace('fc ', '').replace(' fc', '').replace('cf ', '').strip()
+        
+        # Exact match
+        if t1 == t2:
+            return True
+        
+        # One contains the other
+        if t1 in t2 or t2 in t1:
+            return True
+        
+        # First word match (e.g., "Feyenoord Rotterdam" vs "Feyenoord")
+        if t1.split()[0] == t2.split()[0]:
+            return True
+        
+        return False
     
     def _get_flashscore_result(self, home_team: str, away_team: str, match_date: str) -> Optional[Dict]:
         """Get real result from Flashscore"""
@@ -519,6 +621,36 @@ class RealResultVerifier:
                     return 'won' if both_scored else 'lost'
                 elif 'no' in selection:
                     return 'won' if not both_scored else 'lost'
+            
+            # 1X2 / Moneyline / Match Winner markets
+            elif ('1x2' in market or 'value single' in market or 'moneyline' in market or 
+                  'match winner' in market or 'full time result' in market or
+                  selection in ['home win', 'away win', 'draw', 'home', 'away']):
+                if selection in ['home win', 'home']:
+                    return 'won' if home_goals > away_goals else 'lost'
+                elif selection in ['away win', 'away']:
+                    return 'won' if away_goals > home_goals else 'lost'
+                elif selection == 'draw':
+                    return 'won' if home_goals == away_goals else 'lost'
+            
+            # Double Chance markets
+            elif 'double chance' in market or selection in ['home or draw', 'away or draw', 'home or away']:
+                if selection == 'home or draw':
+                    return 'won' if home_goals >= away_goals else 'lost'
+                elif selection == 'away or draw':
+                    return 'won' if away_goals >= home_goals else 'lost'
+                elif selection == 'home or away':
+                    return 'won' if home_goals != away_goals else 'lost'
+            
+            # Corners markets - need corner stats (not available from The Odds API)
+            elif 'corner' in market:
+                logger.warning(f"⚠️ Corners market needs corner stats: {selection}")
+                return 'unknown'
+            
+            # Cards markets - need card stats (not available from The Odds API)
+            elif 'card' in market:
+                logger.warning(f"⚠️ Cards market needs card stats: {selection}")
+                return 'unknown'
             
             logger.warning(f"⚠️ Unknown market/selection: {market}/{selection}")
             return 'unknown'
