@@ -531,6 +531,24 @@ class MLParlayEngine:
         
         return signatures
     
+    def _get_matches_in_pending_parlays(self) -> set:
+        """Get match IDs already used in pending parlays to avoid correlated risk"""
+        result = db_helper.execute(
+            """SELECT DISTINCT match_id FROM ml_parlay_legs l
+               JOIN ml_parlay_predictions p ON l.parlay_id = p.parlay_id
+               WHERE p.status = 'pending'""",
+            fetch='all'
+        )
+        
+        match_ids = set()
+        if result:
+            for row in result:
+                if row[0]:
+                    match_ids.add(row[0])
+        
+        logger.info(f"🔒 Found {len(match_ids)} matches already in pending parlays")
+        return match_ids
+    
     def _parlay_signature(self, legs: List[Dict]) -> tuple:
         """Create a unique signature for a parlay based on its legs"""
         return tuple(sorted([f"{l.get('match_id')}:{l.get('selection')}" for l in legs]))
@@ -542,8 +560,9 @@ class MLParlayEngine:
         Rules:
         - 2-4 legs per parlay
         - No duplicate matches within a parlay
+        - No matches already in pending parlays (avoid correlated risk)
         - Prioritize highest EV combinations
-        - Max 3 parlays per day
+        - Max 5 parlays per day
         - No duplicate parlays (same legs as existing)
         """
         existing = self._get_existing_parlays_today()
@@ -560,6 +579,20 @@ class MLParlayEngine:
         # Get existing parlay signatures to avoid duplicates
         existing_signatures = self._get_existing_parlay_signatures()
         logger.info(f"📋 Found {len(existing_signatures)} existing parlay signatures")
+        
+        # Get matches already in pending parlays to avoid correlated risk
+        matches_in_pending = self._get_matches_in_pending_parlays()
+        
+        # Filter out candidates that are already in pending parlays
+        original_count = len(candidates)
+        candidates = [c for c in candidates if c['match_id'] not in matches_in_pending]
+        filtered_count = original_count - len(candidates)
+        if filtered_count > 0:
+            logger.info(f"🚫 Filtered {filtered_count} candidates (games already in pending parlays)")
+        
+        if len(candidates) < ML_PARLAY_MIN_LEGS:
+            logger.info(f"⏭️ Only {len(candidates)} candidates after filtering, need at least {ML_PARLAY_MIN_LEGS}")
+            return []
         
         parlays = []
         used_matches = set()
