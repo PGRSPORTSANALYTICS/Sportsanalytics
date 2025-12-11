@@ -27,6 +27,11 @@ The system employs advanced prediction features including:
 - **3-Tier Trust Level Classification:** Predictions classified into High (L1), Medium (L2), and Soft (L3) Trust levels based on simulation approval, EV, confidence, and disagreement.
 - **Central Market Router:** Portfolio balancing system using a two-pass selection algorithm with per-market caps, prioritization by trust level and EV, and a global daily pick cap to ensure diversified daily cards.
 - **Odds Drift Module:** Real-time odds movement tracking and drift scoring to indicate market agreement with the model and block bets if drift is unfavorable.
+- **Syndicate Engine Suite (v1.0):** Three specialized engines that work in sequence to enhance prediction quality:
+  - **Profile Boost Engine:** Adjusts EV (alpha=0.15) and confidence (beta=0.12) based on contextual factors: tempo, rivalry, referee profile, wing play, formation aggression, weather, and form momentum. Config: `profile_boost_config.py`.
+  - **Market Weight Engine:** Learns from 30-day rolling historical ROI data to bias towards high-performing markets. Weights range 0.6-1.4 with shrinkage for small samples. Config: `market_weight_config.py`.
+  - **Hidden Value Scanner:** Identifies "soft edge" picks with EV between -1% and +2% using composite scoring (EV proximity, confidence, boost score, market weight). Max 5 picks/day, min score 40/100. Config: `hidden_value_config.py`.
+  - API endpoints: `/api/syndicate/status`, `/api/syndicate/boost`, `/api/syndicate/market_weights`
 
 ### System Design Choices
 - **Data Layer:** PostgreSQL (Replit's Neon database) with connection pooling, TCP keepalives, and retry logic for stability.
