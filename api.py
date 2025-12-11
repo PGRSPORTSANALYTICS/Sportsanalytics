@@ -929,6 +929,23 @@ class DailyCardSummary(BaseModel):
     l2_count: int
     l3_count: int
 
+class ProfileBoostDetails(BaseModel):
+    """Details from Profile Boost Engine."""
+    raw_ev: Optional[float] = None
+    boosted_ev: Optional[float] = None
+    raw_confidence: Optional[float] = None
+    boosted_confidence: Optional[float] = None
+    boost_score: Optional[float] = None
+    top_factors: Optional[List[Dict[str, Any]]] = None
+
+
+class MarketWeightDetails(BaseModel):
+    """Details from Market Weight Engine."""
+    market_weight: Optional[float] = None
+    final_ev: Optional[float] = None
+    confidence_factor: Optional[float] = None
+
+
 class DailyCardBet(BaseModel):
     fixture_id: str
     match: str
@@ -944,6 +961,31 @@ class DailyCardBet(BaseModel):
     confidence: float
     trust_tier: str
     drift_score: Optional[float]
+    profile_boost: Optional[ProfileBoostDetails] = None
+    market_weight: Optional[MarketWeightDetails] = None
+
+
+class HiddenValueBet(BaseModel):
+    """A hidden value / soft edge pick."""
+    fixture_id: str
+    match: str
+    home_team: str
+    away_team: str
+    market_key: str
+    selection: str
+    odds: float
+    raw_ev: float
+    boosted_ev: float
+    final_ev: float
+    raw_confidence: float
+    boosted_confidence: float
+    boost_score: float
+    market_weight: float
+    soft_edge_score: float
+    category: str
+    trust_tier: str
+    reason: str
+    profile_boost_factors: Optional[List[Dict[str, Any]]] = None
 
 class RoutingStats(BaseModel):
     total_picks: int = 0
@@ -955,6 +997,14 @@ class RoutingStats(BaseModel):
     market_diversity: int = 0
     balance_score: float = 0.0
 
+class SyndicateEngineStatus(BaseModel):
+    """Status of the syndicate engines."""
+    profile_boost_engine: bool = True
+    market_weight_engine: bool = True
+    hidden_value_scanner: bool = True
+    version: str = "1.0"
+
+
 class DailyCardResponse(BaseModel):
     date: str
     value_singles: List[DailyCardBet]
@@ -965,9 +1015,11 @@ class DailyCardResponse(BaseModel):
     cards: List[DailyCardBet]
     corner_handicaps: List[DailyCardBet]
     parlays: List[Dict]
+    hidden_value_picks: List[HiddenValueBet] = []
     summary: DailyCardSummary
     routing_stats: Optional[RoutingStats] = None
     markets_covered: List[str] = []
+    syndicate_engines: Optional[SyndicateEngineStatus] = None
 
 @app.get("/api/daily_card", response_model=DailyCardResponse)
 async def get_daily_card():
@@ -1078,9 +1130,11 @@ async def get_daily_card():
             cards=[],
             corner_handicaps=[],
             parlays=[],
+            hidden_value_picks=[],
             summary=summary,
             routing_stats=routing_stats,
-            markets_covered=list(by_product.keys())
+            markets_covered=list(by_product.keys()),
+            syndicate_engines=SyndicateEngineStatus()
         )
         
     except Exception as e:
@@ -1131,6 +1185,147 @@ async def get_market_stats():
         
     except Exception as e:
         logger.error(f"Error getting market stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# Syndicate Engines Endpoints
+# =============================================================================
+
+@app.get("/api/syndicate/status")
+async def get_syndicate_status():
+    """
+    Get status of all syndicate engines:
+    - Profile Boost Engine
+    - Market Weight Engine
+    - Hidden Value Scanner
+    """
+    try:
+        from profile_boost_engine import ProfileBoostEngine
+        from market_weight_engine import MarketWeightEngine
+        from hidden_value_scanner import HiddenValueScanner
+        from profile_boost_config import get_profile_boost_config
+        from market_weight_config import get_market_weight_config
+        from hidden_value_config import get_hidden_value_config
+        
+        pb_config = get_profile_boost_config()
+        mw_config = get_market_weight_config()
+        hv_config = get_hidden_value_config()
+        
+        return {
+            "status": "operational",
+            "version": "1.0",
+            "engines": {
+                "profile_boost": {
+                    "active": True,
+                    "alpha_ev": pb_config.alpha_ev,
+                    "beta_confidence": pb_config.beta_confidence,
+                    "features": list(pb_config.feature_weights.keys()),
+                },
+                "market_weight": {
+                    "active": True,
+                    "window_days": mw_config.rolling_window_days,
+                    "weight_range": [mw_config.min_weight, mw_config.max_weight],
+                    "markets_tracked": len(mw_config.market_group_mapping),
+                },
+                "hidden_value": {
+                    "active": True,
+                    "ev_range": hv_config.ev_near_miss_range,
+                    "max_picks_per_day": hv_config.max_picks_per_day,
+                    "min_score": hv_config.min_soft_edge_score,
+                },
+            },
+            "generated_at": datetime.utcnow().isoformat(),
+        }
+    except Exception as e:
+        logger.error(f"Error getting syndicate status: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "generated_at": datetime.utcnow().isoformat(),
+        }
+
+
+@app.post("/api/syndicate/boost")
+async def calculate_profile_boost(
+    base_ev: float,
+    base_confidence: float,
+    market_type: str,
+    tempo_index: float = 1.0,
+    is_derby: bool = False,
+    referee_cards_pg: float = 3.5,
+):
+    """
+    Calculate profile boost for a pick (for testing/debugging).
+    
+    Returns the boosted EV and confidence with explanation.
+    """
+    try:
+        from profile_boost_engine import ProfileBoostEngine
+        
+        engine = ProfileBoostEngine()
+        
+        context = {
+            "tempo_index": tempo_index,
+            "is_derby": is_derby,
+            "referee_stats": {"cards_per_match": referee_cards_pg},
+            "wing_play_index": 1.0,
+            "formation_aggression": 1.0,
+            "pressure_index": 1.0,
+            "form_momentum": 0,
+        }
+        
+        result = engine.calculate_boost(base_ev, base_confidence, market_type, context)
+        
+        return {
+            "market_type": market_type,
+            "raw_ev": round(result.raw_ev * 100, 2),
+            "boosted_ev": round(result.boosted_ev * 100, 2),
+            "raw_confidence": round(result.raw_confidence * 100, 1),
+            "boosted_confidence": round(result.boosted_confidence * 100, 1),
+            "boost_score": round(result.boost_score, 3),
+            "top_factors": [
+                {"factor": f[0], "score": round(f[1], 3)}
+                for f in result.contributing_factors
+            ],
+        }
+    except Exception as e:
+        logger.error(f"Error calculating profile boost: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/syndicate/market_weights")
+async def get_market_weights():
+    """
+    Get current market weights based on historical performance.
+    """
+    try:
+        from market_weight_engine import MarketWeightEngine
+        
+        engine = MarketWeightEngine()
+        weights = engine.get_all_weights()
+        
+        result = {}
+        for market_key, wr in weights.items():
+            result[market_key] = {
+                "weight": round(wr.weight, 3),
+                "confidence_factor": round(wr.confidence_factor, 2),
+                "group": wr.market_group,
+                "stats": None,
+            }
+            if wr.stats:
+                result[market_key]["stats"] = {
+                    "total_bets": wr.stats.total_bets,
+                    "roi": round(wr.stats.roi * 100, 1),
+                    "win_rate": round(wr.stats.win_rate * 100, 1),
+                }
+        
+        return {
+            "market_weights": result,
+            "generated_at": datetime.utcnow().isoformat(),
+        }
+    except Exception as e:
+        logger.error(f"Error getting market weights: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
