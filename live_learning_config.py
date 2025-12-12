@@ -18,8 +18,17 @@ class LiveLearningConfig:
     """Configuration for Live Learning Mode."""
     
     mode: str = "LIVE_LEARNING"
-    version: str = "1.0"
+    version: str = "1.1"
     activated_at: Optional[datetime] = None
+    
+    # ROI TARGETS
+    target_roi_min: float = 20.0  # 20% minimum target ROI
+    target_roi_max: float = 25.0  # 25% stretch goal ROI
+    target_hit_rate_min: float = 52.0  # Minimum hit rate for profitability
+    
+    # Learning phase settings
+    learning_phase_weeks: int = 4  # Weeks before full optimization kicks in
+    min_bets_before_optimization: int = 200  # Min settled bets before auto-adjustments
     
     capture_all_picks: bool = True
     capture_trust_tiers: List[str] = field(default_factory=lambda: [
@@ -79,6 +88,10 @@ class LiveLearningConfig:
             "mode": self.mode,
             "version": self.version,
             "activated_at": self.activated_at.isoformat() if self.activated_at else None,
+            "target_roi": {"min": self.target_roi_min, "max": self.target_roi_max},
+            "target_hit_rate_min": self.target_hit_rate_min,
+            "learning_phase_weeks": self.learning_phase_weeks,
+            "min_bets_before_optimization": self.min_bets_before_optimization,
             "capture_all_picks": self.capture_all_picks,
             "capture_trust_tiers": self.capture_trust_tiers,
             "enable_clv_tracking": self.enable_clv_tracking,
@@ -87,6 +100,30 @@ class LiveLearningConfig:
             "market_weight_learning_enabled": self.market_weight_learning_enabled,
             "pick_markets": self.pick_markets,
             "logging_mode": self.logging_mode,
+        }
+    
+    def check_roi_target(self, current_roi: float) -> Dict:
+        """Check if current ROI meets target."""
+        if current_roi >= self.target_roi_max:
+            status = "EXCEEDS_TARGET"
+            message = f"ROI {current_roi:.1f}% exceeds stretch goal of {self.target_roi_max}%"
+        elif current_roi >= self.target_roi_min:
+            status = "ON_TARGET"
+            message = f"ROI {current_roi:.1f}% meets minimum target of {self.target_roi_min}%"
+        elif current_roi > 0:
+            status = "BELOW_TARGET"
+            gap = self.target_roi_min - current_roi
+            message = f"ROI {current_roi:.1f}% is {gap:.1f}% below target"
+        else:
+            status = "NEGATIVE"
+            message = f"ROI {current_roi:.1f}% - focus on reducing losses"
+        
+        return {
+            "current_roi": current_roi,
+            "target_min": self.target_roi_min,
+            "target_max": self.target_roi_max,
+            "status": status,
+            "message": message
         }
 
 
