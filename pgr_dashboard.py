@@ -2516,7 +2516,7 @@ def load_props_bets() -> pd.DataFrame:
                 odds, edge_percentage as ev, confidence, trust_level,
                 match_date, kickoff_time, status, result, profit_loss,
                 mode, raw_ev, boosted_ev, weighted_ev,
-                profile_boost_score, market_weight
+                profile_boost_score, market_weight, outcome
             FROM football_opportunities
             WHERE market IN ('Cards', 'Corners', 'Shots')
             ORDER BY match_date DESC, id DESC
@@ -2541,17 +2541,24 @@ def load_props_bets() -> pd.DataFrame:
 def compute_props_roi(df: pd.DataFrame) -> dict:
     """Compute ROI metrics for props bets."""
     if df.empty:
-        return {"bets": 0, "wins": 0, "losses": 0, "pending": 0, "units_won": 0.0, "roi": 0.0, "hit_rate": 0.0}
+        return {"bets": 0, "wins": 0, "losses": 0, "pending": 0, "needs_verification": 0, "units_won": 0.0, "roi": 0.0, "hit_rate": 0.0}
     
     result_col = df["result"].fillna("").str.lower() if "result" in df.columns else pd.Series([""] * len(df))
+    status_col = df["status"].fillna("").str.lower() if "status" in df.columns else pd.Series([""] * len(df))
     
     wins = result_col.str.contains("won|win", na=False).sum()
     losses = result_col.str.contains("lost|loss", na=False).sum()
+    
+    needs_verification = status_col.str.contains("needs_verification|needs verification", na=False).sum()
+    if "outcome" in df.columns:
+        outcome_col = df["outcome"].fillna("").str.lower()
+        needs_verification = max(needs_verification, outcome_col.str.contains("needs_verification|needs verification", na=False).sum())
+    
     pending = len(df) - wins - losses
     
     settled = wins + losses
     if settled == 0:
-        return {"bets": len(df), "wins": 0, "losses": 0, "pending": pending, "units_won": 0.0, "roi": 0.0, "hit_rate": 0.0}
+        return {"bets": len(df), "wins": 0, "losses": 0, "pending": pending, "needs_verification": needs_verification, "units_won": 0.0, "roi": 0.0, "hit_rate": 0.0}
     
     if "profit_loss" in df.columns:
         units_won = df["profit_loss"].fillna(0).sum()
@@ -2568,7 +2575,7 @@ def compute_props_roi(df: pd.DataFrame) -> dict:
     roi = (units_won / settled * 100) if settled > 0 else 0.0
     hit_rate = (wins / settled * 100) if settled > 0 else 0.0
     
-    return {"bets": len(df), "wins": wins, "losses": losses, "pending": pending, "units_won": units_won, "roi": roi, "hit_rate": hit_rate}
+    return {"bets": len(df), "wins": wins, "losses": losses, "pending": pending, "needs_verification": needs_verification, "units_won": units_won, "roi": roi, "hit_rate": hit_rate}
 
 
 def render_props_tab():
@@ -2579,6 +2586,13 @@ def render_props_tab():
     props_df = load_props_bets()
     
     if not props_df.empty:
+        needs_verif_count = 0
+        if "outcome" in props_df.columns:
+            needs_verif_count = props_df["outcome"].fillna("").str.contains("needs_verification", na=False).sum()
+        
+        if needs_verif_count > 0:
+            st.warning(f"{needs_verif_count} bets need manual verification. Corner/Card statistics require match statistics API which has reached its daily limit. Results will be verified when API access is restored.")
+        
         st.markdown("### Performance Summary")
         
         corners_df = props_df[props_df["market"] == "Corners"]
