@@ -46,6 +46,9 @@ class LiveLearningConfig:
     enable_market_weight: bool = True
     enable_hidden_value_scanner: bool = True
     
+    # DISABLED MARKETS (historically unprofitable)
+    enable_exact_score: bool = False  # -111 units, 2% hit rate - DISABLED
+    
     ev_filter_enabled: bool = False
     min_ev_threshold: float = -1.0
     min_confidence_threshold: float = 0.0

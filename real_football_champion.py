@@ -1493,6 +1493,16 @@ class RealFootballChampion:
     
     def create_exact_score_predictions(self, target_matches: List[str]) -> List[Dict]:
         """Create exact score predictions for specific matches"""
+        # Check if exact score is disabled in config
+        try:
+            from live_learning_config import get_live_learning_config
+            config = get_live_learning_config()
+            if not config.enable_exact_score:
+                print("\n⏹️ EXACT SCORE DISABLED - Skipping (historically -111 units)")
+                return []
+        except:
+            pass
+        
         print("\n🎯 GENERATING EXACT SCORE PREDICTIONS")
         print("=" * 50)
         
