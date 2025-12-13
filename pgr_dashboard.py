@@ -2503,10 +2503,139 @@ def render_parlays_tab():
 
 # ------------- PROPS & SPECIALS TAB ------------- #
 
+@st.cache_data(ttl=120, show_spinner="Loading props bets...")
+def load_props_bets() -> pd.DataFrame:
+    """Load Cards, Corners, and Shots bets from football_opportunities table."""
+    try:
+        db_url = get_db_url()
+        engine = create_engine(db_url)
+        
+        query = text("""
+            SELECT 
+                id, match_id, home_team, away_team, league, market, selection,
+                odds, edge_percentage as ev, confidence, trust_level,
+                match_date, kickoff_time, status, result, profit_loss,
+                mode, raw_ev, boosted_ev, weighted_ev,
+                profile_boost_score, market_weight
+            FROM football_opportunities
+            WHERE market IN ('Cards', 'Corners', 'Shots')
+            ORDER BY match_date DESC, id DESC
+        """)
+        
+        with engine.connect() as conn:
+            df = pd.read_sql(query, conn)
+        
+        for col in ["odds", "ev", "confidence", "profit_loss", "raw_ev", "boosted_ev", "weighted_ev"]:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+        
+        if "match_date" in df.columns:
+            df["match_date"] = pd.to_datetime(df["match_date"], errors="coerce")
+        
+        return df
+    except Exception as e:
+        st.warning(f"Could not load props bets: {e}")
+        return pd.DataFrame()
+
+
+def compute_props_roi(df: pd.DataFrame) -> dict:
+    """Compute ROI metrics for props bets."""
+    if df.empty:
+        return {"bets": 0, "wins": 0, "losses": 0, "pending": 0, "units_won": 0.0, "roi": 0.0, "hit_rate": 0.0}
+    
+    result_col = df["result"].fillna("").str.lower() if "result" in df.columns else pd.Series([""] * len(df))
+    
+    wins = result_col.str.contains("won|win", na=False).sum()
+    losses = result_col.str.contains("lost|loss", na=False).sum()
+    pending = len(df) - wins - losses
+    
+    settled = wins + losses
+    if settled == 0:
+        return {"bets": len(df), "wins": 0, "losses": 0, "pending": pending, "units_won": 0.0, "roi": 0.0, "hit_rate": 0.0}
+    
+    if "profit_loss" in df.columns:
+        units_won = df["profit_loss"].fillna(0).sum()
+    else:
+        units_won = 0.0
+        for _, row in df.iterrows():
+            res = str(row.get("result", "")).lower()
+            odds = float(row.get("odds", 2.0) or 2.0)
+            if "won" in res or "win" in res:
+                units_won += (odds - 1)
+            elif "lost" in res or "loss" in res:
+                units_won -= 1
+    
+    roi = (units_won / settled * 100) if settled > 0 else 0.0
+    hit_rate = (wins / settled * 100) if settled > 0 else 0.0
+    
+    return {"bets": len(df), "wins": wins, "losses": losses, "pending": pending, "units_won": units_won, "roi": roi, "hit_rate": hit_rate}
+
+
 def render_props_tab():
     """Render the Props & Specials tab with Corners, Cards, and Shots predictions."""
     st.markdown("## Props & Specials")
     st.caption("Advanced markets: Corners, Cards, and Team Shots predictions using Monte Carlo simulation.")
+    
+    props_df = load_props_bets()
+    
+    if not props_df.empty:
+        st.markdown("### Performance Summary")
+        
+        corners_df = props_df[props_df["market"] == "Corners"]
+        cards_df = props_df[props_df["market"] == "Cards"]
+        shots_df = props_df[props_df["market"] == "Shots"]
+        
+        corners_stats = compute_props_roi(corners_df)
+        cards_stats = compute_props_roi(cards_df)
+        shots_stats = compute_props_roi(shots_df)
+        total_stats = compute_props_roi(props_df)
+        
+        cols = st.columns(4)
+        stats_data = [
+            ("Corners", corners_stats, "#10B981"),
+            ("Cards", cards_stats, "#F59E0B"),
+            ("Shots", shots_stats, "#6366F1"),
+            ("Total Props", total_stats, "#00FFC2"),
+        ]
+        
+        for i, (name, stats, color) in enumerate(stats_data):
+            with cols[i]:
+                roi_color = color if stats["roi"] >= 0 else "#EF4444"
+                st.markdown(f"""
+                <div style="padding:16px;border-radius:12px;background:linear-gradient(135deg, {color}22, rgba(15,23,42,0.95));border:1px solid {color}55;">
+                    <div style="font-size:15px;font-weight:600;color:{color};margin-bottom:8px;">{name}</div>
+                    <div style="font-size:24px;font-weight:700;color:{roi_color};">{stats['roi']:+.1f}%</div>
+                    <div style="font-size:12px;color:#9CA3AF;">ROI</div>
+                    <div style="display:flex;gap:12px;margin-top:8px;">
+                        <div><span style="color:#10B981;font-weight:600;">{stats['wins']}</span><span style="color:#6B7280;"> W</span></div>
+                        <div><span style="color:#EF4444;font-weight:600;">{stats['losses']}</span><span style="color:#6B7280;"> L</span></div>
+                        <div><span style="color:#F59E0B;font-weight:600;">{stats['pending']}</span><span style="color:#6B7280;"> P</span></div>
+                    </div>
+                    <div style="font-size:11px;color:#9CA3AF;margin-top:4px;">
+                        {stats['units_won']:+.2f} units | {stats['hit_rate']:.0f}% hit
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        st.markdown("---")
+        st.markdown("### Recent Props Bets")
+        
+        market_filter = st.selectbox("Filter by market:", ["All", "Corners", "Cards", "Shots"])
+        if market_filter != "All":
+            display_df = props_df[props_df["market"] == market_filter].copy()
+        else:
+            display_df = props_df.copy()
+        
+        display_cols = ["match_date", "home_team", "away_team", "market", "selection", "odds", "trust_level", "result", "profit_loss"]
+        display_cols = [c for c in display_cols if c in display_df.columns]
+        
+        st.dataframe(
+            display_df[display_cols].head(100),
+            use_container_width=True,
+            hide_index=True,
+        )
+        
+        st.markdown("---")
     
     try:
         from corners_engine import CornersEngine, run_corners_cycle
