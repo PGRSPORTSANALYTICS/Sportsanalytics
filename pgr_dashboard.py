@@ -2793,9 +2793,9 @@ def main():
     with singles_tab:
         render_product_tab(
             prod_bets,
-            product_codes=["VALUE_SINGLE", "VALUE_SINGLES", "FOOTBALL_SINGLE"],
+            product_codes=["VALUE_SINGLE", "VALUE_SINGLES", "FOOTBALL_SINGLE", "CORNERS", "CARDS"],
             title="Value Singles",
-            description="High-edge single bets across 1X2, over/under, BTTS, corners and more.",
+            description="High-edge single bets across 1X2, over/under, BTTS, corners and cards.",
         )
 
     with props_tab:
