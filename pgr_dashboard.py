@@ -1596,8 +1596,6 @@ def render_product_tab(
                     market_badge = '<span style="font-size:11px;padding:2px 8px;border-radius:4px;background:rgba(245,158,11,0.2);color:#F59E0B;margin-right:8px;">🟨 CARDS</span>'
                     if 'card' not in bet_display.lower():
                         bet_display = f"{bet_display} Cards" if bet_display else "Cards"
-                elif product == 'EXACT_SCORE':
-                    market_badge = '<span style="font-size:11px;padding:2px 8px;border-radius:4px;background:rgba(139,92,246,0.2);color:#8B5CF6;margin-right:8px;">🎯 EXACT SCORE</span>'
                 else:
                     market_badge = ''
 
@@ -2807,7 +2805,7 @@ def main():
     with singles_tab:
         render_product_tab(
             prod_bets,
-            product_codes=["VALUE_SINGLE", "VALUE_SINGLES", "FOOTBALL_SINGLE", "CORNERS", "CARDS"],
+            product_codes=["VALUE_SINGLE", "VALUE_SINGLES", "FOOTBALL_SINGLE", "CORNERS", "CARDS"],  # EXACT_SCORE removed
             title="Value Singles",
             description="High-edge single bets across 1X2, over/under, BTTS, corners and cards.",
         )
