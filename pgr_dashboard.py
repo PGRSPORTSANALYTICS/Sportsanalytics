@@ -1586,6 +1586,20 @@ def render_product_tab(
                 if not selection or selection.lower() == 'none':
                     selection = ""
                 bet_display = selection.replace("Exact Score: ", "").replace("Value Single: ", "") if selection else ""
+                
+                product = str(row.get('product', '')).upper()
+                if product == 'CORNERS':
+                    market_badge = '<span style="font-size:11px;padding:2px 8px;border-radius:4px;background:rgba(16,185,129,0.2);color:#10B981;margin-right:8px;">🔢 CORNERS</span>'
+                    if 'corner' not in bet_display.lower():
+                        bet_display = f"{bet_display} Corners" if bet_display else "Corners"
+                elif product == 'CARDS':
+                    market_badge = '<span style="font-size:11px;padding:2px 8px;border-radius:4px;background:rgba(245,158,11,0.2);color:#F59E0B;margin-right:8px;">🟨 CARDS</span>'
+                    if 'card' not in bet_display.lower():
+                        bet_display = f"{bet_display} Cards" if bet_display else "Cards"
+                elif product == 'EXACT_SCORE':
+                    market_badge = '<span style="font-size:11px;padding:2px 8px;border-radius:4px;background:rgba(139,92,246,0.2);color:#8B5CF6;margin-right:8px;">🎯 EXACT SCORE</span>'
+                else:
+                    market_badge = ''
 
                 card_html = f"""<div style="padding:18px;margin:10px 0;border-radius:16px;background:radial-gradient(circle at top left, rgba(0,255,166,0.14), rgba(15,23,42,0.96));border:1px solid rgba(0,255,166,0.35);box-shadow:0 0 20px rgba(0,255,166,0.25);">
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
@@ -1593,7 +1607,7 @@ def render_product_tab(
 <div style="font-size:11px;padding:4px 9px;border-radius:999px;background:{ev_bg};border:1px solid {ev_border};color:#E5E7EB;text-transform:uppercase;letter-spacing:0.06em;">EV {ev:+.1f}%</div>
 </div>
 <div style="font-size:12px;color:#9CA3AF;margin-bottom:6px;">Kickoff: {match_str}</div>
-<div style="font-size:22px;font-weight:700;color:#00FFA6;margin:8px 0;letter-spacing:0.02em;">{bet_display}</div>
+{market_badge}<div style="font-size:22px;font-weight:700;color:#00FFA6;margin:8px 0;letter-spacing:0.02em;display:inline;">{bet_display}</div>
 <div style="display:flex;gap:18px;align-items:baseline;margin-top:4px;">
 <div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Odds</div><div style="font-size:20px;font-weight:600;color:#00FFA6;">{odds_val:.2f}</div></div>
 <div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">1 unit</div></div>
