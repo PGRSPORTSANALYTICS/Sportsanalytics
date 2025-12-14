@@ -429,15 +429,26 @@ class RealResultVerifier:
                         away_goals = goals.get('away')
                         
                         if home_goals is not None and away_goals is not None:
+                            fixture_id = fixture.get('fixture', {}).get('id')
                             logger.info(f"✅ Found match: {home_api} {home_goals}-{away_goals} {away_api}")
-                            return {
+                            
+                            result = {
                                 'home_goals': int(home_goals),
                                 'away_goals': int(away_goals),
                                 'source': 'api-football',
-                                'fixture_id': fixture.get('fixture', {}).get('id'),
+                                'fixture_id': fixture_id,
                                 'api_home_team': home_api,
                                 'api_away_team': away_api
                             }
+                            
+                            # Fetch fixture statistics (corners, cards) if fixture_id available
+                            if fixture_id:
+                                stats = self._get_fixture_statistics(fixture_id)
+                                if stats:
+                                    result.update(stats)
+                                    logger.info(f"📊 Added stats: corners H{stats.get('home_corners', 0)}-A{stats.get('away_corners', 0)}, cards H{stats.get('home_cards', 0)}-A{stats.get('away_cards', 0)}")
+                            
+                            return result
                         else:
                             logger.warning(f"⚠️ Found match but missing scores: {home_api} vs {away_api}")
                             
@@ -449,6 +460,75 @@ class RealResultVerifier:
             
         except Exception as e:
             logger.error(f"❌ Error finding matching fixture: {e}")
+            return None
+    
+    def _get_fixture_statistics(self, fixture_id: int) -> Optional[Dict]:
+        """Fetch fixture statistics (corners, cards) from API-Football"""
+        try:
+            api_key = os.getenv('API_FOOTBALL_KEY')
+            if not api_key:
+                return None
+            
+            url = "https://v3.football.api-sports.io/fixtures/statistics"
+            headers = {
+                'X-RapidAPI-Key': api_key,
+                'X-RapidAPI-Host': 'v3.football.api-sports.io'
+            }
+            params = {'fixture': fixture_id}
+            
+            response = requests.get(url, headers=headers, params=params, timeout=15)
+            if response.status_code != 200:
+                logger.warning(f"⚠️ Statistics API error: {response.status_code}")
+                return None
+            
+            data = response.json()
+            stats_list = data.get('response', [])
+            
+            if len(stats_list) < 2:
+                logger.warning(f"⚠️ Incomplete statistics for fixture {fixture_id}")
+                return None
+            
+            result = {
+                'home_corners': 0,
+                'away_corners': 0,
+                'home_cards': 0,
+                'away_cards': 0,
+                'home_yellow_cards': 0,
+                'away_yellow_cards': 0,
+                'home_red_cards': 0,
+                'away_red_cards': 0
+            }
+            
+            for i, team_stats in enumerate(stats_list):
+                team_key = 'home' if i == 0 else 'away'
+                statistics = team_stats.get('statistics', [])
+                
+                for stat in statistics:
+                    stat_type = stat.get('type', '').lower()
+                    value = stat.get('value')
+                    
+                    if value is None:
+                        value = 0
+                    elif isinstance(value, str):
+                        value = int(value) if value.isdigit() else 0
+                    
+                    if stat_type == 'corner kicks':
+                        result[f'{team_key}_corners'] = value
+                    elif stat_type == 'yellow cards':
+                        result[f'{team_key}_yellow_cards'] = value
+                        result[f'{team_key}_cards'] += value
+                    elif stat_type == 'red cards':
+                        result[f'{team_key}_red_cards'] = value
+                        result[f'{team_key}_cards'] += value
+            
+            result['total_corners'] = result['home_corners'] + result['away_corners']
+            result['total_cards'] = result['home_cards'] + result['away_cards']
+            
+            logger.info(f"📊 Fixture {fixture_id} stats fetched: {result['total_corners']} corners, {result['total_cards']} cards")
+            return result
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to get fixture statistics: {e}")
             return None
     
     def _team_similarity_match(self, team1: str, team2: str) -> bool:
@@ -590,7 +670,104 @@ class RealResultVerifier:
                 elif 'no' in selection:
                     return 'won' if not both_scored else 'lost'
             
-            # Check for Over/Under goals (in market OR selection)
+            # Corners markets - MUST check before generic Over/Under (uses corner stats from API-Football)
+            elif 'corner' in market or 'corner' in selection:
+                home_corners = match_result.get('home_corners')
+                away_corners = match_result.get('away_corners')
+                total_corners = match_result.get('total_corners')
+                
+                if total_corners is None or home_corners is None or away_corners is None:
+                    logger.warning(f"⚠️ Corners market but no corner stats available: {selection}")
+                    return 'unknown'
+                
+                logger.info(f"📊 Corner stats: Home={home_corners}, Away={away_corners}, Total={total_corners}")
+                
+                # Parse the line from selection (e.g., "Over 9.5 Corners", "Corners Over 9.5")
+                line_match = re.search(r'(over|under)\s*(\d+\.?\d*)', selection)
+                if line_match:
+                    direction = line_match.group(1)
+                    line = float(line_match.group(2))
+                    
+                    # Determine which team or total
+                    if 'home' in selection or tip.get('home_team', '').lower() in selection:
+                        actual = home_corners
+                        logger.info(f"📊 Home corners: {actual} vs line {line}")
+                    elif 'away' in selection or tip.get('away_team', '').lower() in selection:
+                        actual = away_corners
+                        logger.info(f"📊 Away corners: {actual} vs line {line}")
+                    else:
+                        actual = total_corners
+                        logger.info(f"📊 Total corners: {actual} vs line {line}")
+                    
+                    if direction == 'over':
+                        return 'won' if actual > line else 'lost'
+                    else:
+                        return 'won' if actual < line else 'lost'
+                
+                # Handicap corners (e.g., "Home +2.5 Corners", "Villarreal Corners +1.5")
+                handicap_match = re.search(r'([+-]\d+\.?\d*)', selection)
+                if handicap_match:
+                    handicap = float(handicap_match.group(1))
+                    
+                    # Determine which team has the handicap
+                    if 'home' in selection or tip.get('home_team', '').lower() in selection:
+                        adjusted = home_corners + handicap
+                        if adjusted > away_corners:
+                            return 'won'
+                        elif adjusted == away_corners:
+                            return 'push'  # Tie = void/push
+                        else:
+                            return 'lost'
+                    elif 'away' in selection or tip.get('away_team', '').lower() in selection:
+                        adjusted = away_corners + handicap
+                        if adjusted > home_corners:
+                            return 'won'
+                        elif adjusted == home_corners:
+                            return 'push'  # Tie = void/push
+                        else:
+                            return 'lost'
+                
+                logger.warning(f"⚠️ Could not parse corners selection: {selection}")
+                return 'unknown'
+            
+            # Cards markets - MUST check before generic Over/Under (uses card stats from API-Football)
+            elif 'card' in market:
+                home_cards = match_result.get('home_cards')
+                away_cards = match_result.get('away_cards')
+                total_cards = match_result.get('total_cards')
+                
+                if total_cards is None or home_cards is None or away_cards is None:
+                    logger.warning(f"⚠️ Cards market but no card stats available: {selection}")
+                    return 'unknown'
+                
+                logger.info(f"📊 Card stats: Home={home_cards}, Away={away_cards}, Total={total_cards}")
+                
+                # Parse the line from selection (e.g., "Over 3.5 Cards", "Over 1.5")
+                line_match = re.search(r'(over|under)\s*(\d+\.?\d*)', selection)
+                if line_match:
+                    direction = line_match.group(1)
+                    line = float(line_match.group(2))
+                    
+                    # Determine which team or total
+                    if 'home' in selection or tip.get('home_team', '').lower() in selection:
+                        actual = home_cards
+                        logger.info(f"📊 Home cards: {actual} vs line {line}")
+                    elif 'away' in selection or tip.get('away_team', '').lower() in selection:
+                        actual = away_cards
+                        logger.info(f"📊 Away cards: {actual} vs line {line}")
+                    else:
+                        actual = total_cards
+                        logger.info(f"📊 Total cards: {actual} vs line {line}")
+                    
+                    if direction == 'over':
+                        return 'won' if actual > line else 'lost'
+                    else:
+                        return 'won' if actual < line else 'lost'
+                
+                logger.warning(f"⚠️ Could not parse cards selection: {selection}")
+                return 'unknown'
+            
+            # Check for Over/Under goals (in market OR selection) - AFTER corners/cards check
             elif ('over/under' in market or 'total goals' in market or 'goals' in market or 
                   'over' in selection or 'under' in selection):
                 # Over/Under 2.5
@@ -642,16 +819,6 @@ class RealResultVerifier:
                 elif selection == 'home or away':
                     return 'won' if home_goals != away_goals else 'lost'
             
-            # Corners markets - need corner stats (not available from The Odds API)
-            elif 'corner' in market:
-                logger.warning(f"⚠️ Corners market needs corner stats: {selection}")
-                return 'unknown'
-            
-            # Cards markets - need card stats (not available from The Odds API)
-            elif 'card' in market:
-                logger.warning(f"⚠️ Cards market needs card stats: {selection}")
-                return 'unknown'
-            
             logger.warning(f"⚠️ Unknown market/selection: {market}/{selection}")
             return 'unknown'
             
@@ -669,6 +836,8 @@ class RealResultVerifier:
                 return stake * (odds - 1)  # Profit
             elif outcome == 'lost':
                 return -stake  # Loss
+            elif outcome == 'push':
+                return 0.0  # Push/void - stake returned, no profit or loss
             else:
                 return 0.0  # Unknown/error
                 
