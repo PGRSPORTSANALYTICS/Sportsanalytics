@@ -1043,7 +1043,7 @@ async def get_daily_card():
     - Odds drift score (when available)
     """
     try:
-        today = datetime.utcnow().date()
+        today = datetime.utcnow().strftime("%Y-%m-%d")
         
         all_bets = []
         
@@ -1051,13 +1051,13 @@ async def get_daily_card():
             SELECT match_id, home_team, away_team, market, selection,
                    odds, edge_percentage as ev, confidence, model_prob, trust_level
             FROM football_opportunities
-            WHERE match_date = %s AND mode != 'TEST'
+            WHERE match_date LIKE %s AND mode != 'TEST'
             AND status = 'pending'
             ORDER BY edge_percentage DESC
-            LIMIT 30
+            LIMIT 50
         """
         
-        vs_rows = db_helper.execute(value_singles_query, (today,)) or []
+        vs_rows = db_helper.execute(value_singles_query, (f"{today}%",)) or []
         value_singles = []
         for row in vs_rows:
             value_singles.append({
@@ -1077,15 +1077,16 @@ async def get_daily_card():
                 "drift_score": None
             })
         
-        totals = [b for b in value_singles if "OVER" in b.get("market", "") or "UNDER" in b.get("market", "")]
-        btts = [b for b in value_singles if "BTTS" in b.get("market", "")]
-        corners = [b for b in value_singles if "CORNER" in b.get("market", "")]
-        remaining_singles = [b for b in value_singles if b not in totals + btts + corners]
+        totals = [b for b in value_singles if "OVER" in b.get("market", "").upper() or "UNDER" in b.get("market", "").upper()]
+        btts = [b for b in value_singles if "BTTS" in b.get("market", "").upper()]
+        corners = [b for b in value_singles if "CORNER" in b.get("market", "").upper()]
+        cards = [b for b in value_singles if "CARD" in b.get("market", "").upper()]
+        remaining_singles = [b for b in value_singles if b not in totals + btts + corners + cards]
         
         by_trust = {"L1_HIGH_TRUST": 0, "L2_MEDIUM_TRUST": 0, "L3_SOFT_VALUE": 0}
         by_market = {}
         by_product = {"VALUE_SINGLES": len(remaining_singles), "TOTALS": len(totals), 
-                      "BTTS": len(btts), "CORNERS": len(corners)}
+                      "BTTS": len(btts), "CORNERS": len(corners), "CARDS": len(cards)}
         
         for bet in value_singles:
             tier = bet.get("trust_tier", "L3_SOFT_VALUE")
@@ -1127,7 +1128,7 @@ async def get_daily_card():
             btts=[DailyCardBet(**b) for b in btts],
             corners=[DailyCardBet(**b) for b in corners],
             shots=[],
-            cards=[],
+            cards=[DailyCardBet(**b) for b in cards],
             corner_handicaps=[],
             parlays=[],
             hidden_value_picks=[],
