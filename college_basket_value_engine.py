@@ -697,6 +697,22 @@ class CollegeBasketValueEngine:
                         print(f"⏭️ DUPLICATE: Skipping {p.match} {p.selection} (already saved today)")
                         continue
                     
+                    # CONFLICT CHECK: For H2H/Moneyline markets, don't bet on both sides of the same game
+                    if p.market in ("1X2 Moneyline", "Moneyline", "H2H"):
+                        cursor.execute(
+                            """
+                            SELECT selection FROM basketball_predictions
+                            WHERE match = %s AND market = %s
+                            AND DATE(created_at) = CURRENT_DATE
+                            AND status = 'pending'
+                            """,
+                            (p.match, p.market)
+                        )
+                        existing = cursor.fetchone()
+                        if existing:
+                            print(f"⛔ CONFLICT: Already have {existing[0]} on {p.match}, skipping {p.selection}")
+                            continue
+                    
                     cursor.execute(
                         """
                         INSERT INTO basketball_predictions
