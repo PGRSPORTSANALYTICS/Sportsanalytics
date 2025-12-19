@@ -2400,15 +2400,20 @@ def render_parlays_tab():
     # Past unsettled parlays (matches already played but not yet verified)
     past_unsettled = df[~settled_mask & ~today_mask].copy()
 
-    # ROI / PROFIT / HIT RATE for settled (UNITS MODE)
+    # ROI / PROFIT / HIT RATE for settled (UNITS MODE) - EXCLUDE VOIDs
     if not settled_bets.empty:
-        units_staked = len(settled_bets)
-        won_mask = settled_bets["result"].isin(["WON", "WIN"]) | settled_bets["outcome"].isin(["won", "win", "WON", "WIN"])
+        # Filter out VOIDs from stats calculations
+        void_mask = settled_bets["result"].isin(["VOID", "void"]) | settled_bets["outcome"].isin(["void", "VOID"])
+        non_void_bets = settled_bets[~void_mask]
+        void_count = void_mask.sum()
+        
+        won_mask = non_void_bets["result"].isin(["WON", "WIN"]) | non_void_bets["outcome"].isin(["won", "win", "WON", "WIN"])
         won_count = won_mask.sum()
-        lost_count = len(settled_bets) - won_count
+        lost_count = len(non_void_bets) - won_count
+        units_staked = len(non_void_bets)  # Only count non-void bets
         
         profit_units = 0.0
-        for idx, bet in settled_bets.iterrows():
+        for idx, bet in non_void_bets.iterrows():
             is_won = bet["result"] in ["WON", "WIN"] or bet["outcome"] in ["won", "win", "WON", "WIN"]
             if is_won:
                 odds = float(bet.get("odds", 2.0) or 2.0)
@@ -2417,7 +2422,7 @@ def render_parlays_tab():
                 profit_units -= 1
         
         roi = (profit_units / units_staked * 100) if units_staked > 0 else 0.0
-        hit_rate = (won_count / len(settled_bets) * 100) if len(settled_bets) > 0 else 0.0
+        hit_rate = (won_count / len(non_void_bets) * 100) if len(non_void_bets) > 0 else 0.0
 
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -2464,7 +2469,7 @@ def render_parlays_tab():
                         {hit_rate:.1f}%
                     </div>
                     <div style="font-size:12px;color:#9CA3AF;">
-                        {won_count}/{len(settled_bets)} won
+                        {won_count}/{len(non_void_bets)} won{f' ({void_count} void)' if void_count > 0 else ''}
                     </div>
                 </div>
                 """,
