@@ -402,6 +402,28 @@ class RealResultVerifier:
             logger.error(f"❌ API-Football failed: {e}")
             raise
     
+    def _is_youth_or_reserve_match(self, fixture: Dict) -> bool:
+        """Check if fixture is a youth/reserve team match"""
+        youth_markers = ['u19', 'u21', 'u23', 'u17', 'u18', 'u20', 'youth', 'reserve', 
+                         'reserves', 'ii', ' b ', ' b$', 'juniors', 'primavera', 'juvenil',
+                         'academy', 'women', 'w ', 'feminin']
+        
+        # Check league name
+        league_name = fixture.get('league', {}).get('name', '').lower()
+        for marker in youth_markers:
+            if marker in league_name:
+                return True
+        
+        # Check team names
+        home_name = fixture.get('teams', {}).get('home', {}).get('name', '').lower()
+        away_name = fixture.get('teams', {}).get('away', {}).get('name', '').lower()
+        
+        for marker in youth_markers:
+            if marker in home_name or marker in away_name:
+                return True
+        
+        return False
+    
     def _find_matching_fixture(self, fixtures: List[Dict], home_team: str, away_team: str) -> Optional[Dict]:
         """Find matching fixture from API-Football response"""
         try:
@@ -409,6 +431,9 @@ class RealResultVerifier:
             away_normalized = self._normalize_team_name(away_team)
             
             for fixture in fixtures:
+                # Skip youth/reserve team matches
+                if self._is_youth_or_reserve_match(fixture):
+                    continue
                 try:
                     teams = fixture.get('teams', {})
                     home_api = teams.get('home', {}).get('name', '')
@@ -662,16 +687,24 @@ class RealResultVerifier:
             'inter milano': 'inter',
             'ac milan': 'milan',
             'hellas verona': 'verona',
+            'atalanta bc': 'atalanta',
+            'atalanta bergamo': 'atalanta',
             # Dutch
             'twente': 'twente',
             'twente enschede': 'twente',
-            'go ahead eagles': 'go ahead eagles',
+            'go ahead eagles': 'go ahead',
             'az alkmaar': 'az',
+            'psv eindhoven': 'psv',
+            'groningen': 'groningen',
+            'volendam': 'volendam',
+            'sparta rotterdam': 'sparta',
             # Belgian
-            'club brugge': 'club brugge',
-            'club brugge kv': 'club brugge',
-            'union saintgilloise': 'union st gilloise',
-            'union saint gilloise': 'union st gilloise',
+            'club brugge': 'brugge',
+            'club brugge kv': 'brugge',
+            'union saintgilloise': 'union sg',
+            'union saint gilloise': 'union sg',
+            'r union sg': 'union sg',
+            'royale union': 'union sg',
             'zultewaregem': 'zulte waregem',
             # Portuguese
             'rio ave': 'rio ave',
@@ -679,22 +712,71 @@ class RealResultVerifier:
             'vitoria guimaraes': 'vitoria',
             'sporting cp': 'sporting',
             'sporting lisbon': 'sporting',
+            'avs futebol sad': 'avs',
+            'nacional': 'nacional',
+            'braga': 'braga',
+            'sc braga': 'braga',
             # Spanish
             'atletico madrid': 'atletico',
             'athletic bilbao': 'athletic',
             'athletic club': 'athletic',
             'celta vigo': 'celta',
             'real sociedad': 'sociedad',
+            'real betis': 'betis',
+            'real betis balompie': 'betis',
+            'elche cf': 'elche',
+            'rayo vallecano': 'rayo',
             # German
             'rb leipzig': 'leipzig',
             'bayern munich': 'bayern',
             'borussia dortmund': 'dortmund',
+            'bor dortmund': 'dortmund',
+            'fsv mainz 05': 'mainz',
+            'fsv mainz': 'mainz',
+            'fc st pauli': 'st pauli',
+            'st pauli': 'st pauli',
+            'vfl wolfsburg': 'wolfsburg',
+            'sc freiburg': 'freiburg',
+            'hamburger sv': 'hamburg',
+            'hsv': 'hamburg',
+            'eintracht frankfurt': 'frankfurt',
             # French
             'paris saint germain': 'psg',
             'paris sg': 'psg',
             'olympique marseille': 'marseille',
             'olympique lyon': 'lyon',
             'as monaco': 'monaco',
+            'ogc nice': 'nice',
+            # Greek
+            'paok': 'paok',
+            'paok thessaloniki': 'paok',
+            # Bulgarian
+            'ludogorets': 'ludogorets',
+            'pfc ludogorets razgrad': 'ludogorets',
+            'ludogorets razgrad': 'ludogorets',
+            # Croatian
+            'dinamo zagreb': 'dinamo zagreb',
+            'gnk dinamo zagreb': 'dinamo zagreb',
+            'nk dinamo': 'dinamo zagreb',
+            # Serbian
+            'red star belgrade': 'red star',
+            'crvena zvezda': 'red star',
+            # Austrian
+            'sturm graz': 'sturm graz',
+            'sk sturm graz': 'sturm graz',
+            # Norwegian
+            'brann': 'brann',
+            'sk brann': 'brann',
+            # Turkish
+            'fenerbahce': 'fenerbahce',
+            'fenerbahce sk': 'fenerbahce',
+            # Scottish
+            'celtic': 'celtic',
+            'celtic fc': 'celtic',
+            # Other
+            'as roma': 'roma',
+            'chelsea': 'chelsea',
+            'chelsea fc': 'chelsea',
         }
         
         # Check if normalized name matches any mapping
