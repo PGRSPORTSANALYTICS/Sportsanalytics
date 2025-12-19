@@ -2622,19 +2622,39 @@ def load_bookmaker_odds() -> pd.DataFrame:
 def render_bookmaker_odds_card(row: pd.Series):
     """Render a single bookmaker odds comparison card."""
     import json as json_module
+    import math
     
-    home_team = str(row.get('home_team', '')).replace('"', '&quot;')
-    away_team = str(row.get('away_team', '')).replace('"', '&quot;')
+    def safe_float(val, default=0.0):
+        """Safely convert to float, handling NaN and None."""
+        if val is None:
+            return default
+        try:
+            f = float(val)
+            return default if math.isnan(f) else f
+        except (ValueError, TypeError):
+            return default
+    
+    def safe_str(val, default=''):
+        """Safely convert to string, handling NaN and None."""
+        if val is None:
+            return default
+        if isinstance(val, float) and math.isnan(val):
+            return default
+        s = str(val)
+        return default if s.lower() in ['nan', 'none', ''] else s
+    
+    home_team = safe_str(row.get('home_team', '')).replace('"', '&quot;')
+    away_team = safe_str(row.get('away_team', '')).replace('"', '&quot;')
     fixture = f"{home_team} vs {away_team}"
     
-    selection = str(row.get('selection', ''))
-    market = str(row.get('market', ''))
-    current_odds = float(row.get('odds', 0) or 0)
-    best_odds = float(row.get('best_odds_value', 0) or 0)
-    best_bookmaker = str(row.get('best_odds_bookmaker', '') or '')
-    avg_odds = float(row.get('avg_odds', 0) or 0)
-    fair_odds = float(row.get('fair_odds', 0) or 0)
-    ev = float(row.get('ev', 0) or 0)
+    selection = safe_str(row.get('selection', ''))
+    market = safe_str(row.get('market', ''))
+    current_odds = safe_float(row.get('odds', 0))
+    best_odds = safe_float(row.get('best_odds_value', 0))
+    best_bookmaker = safe_str(row.get('best_odds_bookmaker', ''))
+    avg_odds = safe_float(row.get('avg_odds', 0))
+    fair_odds = safe_float(row.get('fair_odds', 0))
+    ev = safe_float(row.get('ev', 0))
     
     odds_by_bookmaker = row.get('odds_by_bookmaker', {})
     if isinstance(odds_by_bookmaker, str):
@@ -2717,7 +2737,7 @@ def render_bookmaker_odds_card(row: pd.Series):
             </div>
         </div>
         <div style="font-size:12px;color:#9CA3AF;margin-bottom:10px;">
-            Comparing {len(odds_by_bookmaker)} bookmakers | Best: <span style="color:#22C55E;font-weight:600;">{best_bookmaker}</span> @ <span style="color:#22C55E;font-weight:600;">{best_odds:.2f}</span>
+            {f'Comparing {len(odds_by_bookmaker)} bookmakers | Best: <span style="color:#22C55E;font-weight:600;">{best_bookmaker}</span> @ <span style="color:#22C55E;font-weight:600;">{best_odds:.2f}</span>' if odds_by_bookmaker and best_bookmaker else 'Odds data pending...'}
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:4px;">
             {bookmaker_html}
