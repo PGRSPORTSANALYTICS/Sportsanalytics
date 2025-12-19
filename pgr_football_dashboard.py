@@ -1709,7 +1709,7 @@ def render_ml_parlay_tab():
                       potential_payout, status, outcome, profit_loss, profit_units, mode, created_at
                FROM ml_parlay_predictions 
                ORDER BY created_at DESC 
-               LIMIT 50""",
+               LIMIT 200""",
             fetch='all'
         )
         
