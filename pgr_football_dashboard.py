@@ -1728,7 +1728,8 @@ def render_ml_parlay_tab():
         won = len(settled[settled['outcome'] == 'won']) if not settled.empty else 0
         lost = len(settled[settled['outcome'] == 'lost']) if not settled.empty else 0
         push = len(settled[settled['outcome'] == 'push']) if not settled.empty else 0
-        units_staked = won + lost  # Don't count pushes
+        void = len(settled[settled['outcome'].isin(['void', 'VOID'])]) if not settled.empty else 0
+        units_staked = won + lost  # Don't count pushes or voids
         
         profit_units = 0.0
         if not settled.empty:
@@ -1739,7 +1740,7 @@ def render_ml_parlay_tab():
                     profit_units += (odds - 1)
                 elif bet['outcome'] == 'lost':
                     profit_units -= 1
-                # push = 0, no change
+                # push/void = 0, no change
         
         roi = (profit_units / units_staked * 100) if units_staked > 0 else 0
         hit_rate = (won / units_staked * 100) if units_staked > 0 else 0
@@ -1753,7 +1754,12 @@ def render_ml_parlay_tab():
         with col3:
             st.metric("Hit Rate", f"{hit_rate:.0f}%")
         with col4:
-            st.metric("Record", f"{won}-{lost}")
+            record_str = f"{won}-{lost}"
+            if push > 0:
+                record_str += f"-{push}P"
+            if void > 0:
+                record_str += f"-{void}V"
+            st.metric("Record", record_str)
         with col5:
             st.metric("Pending", len(pending))
         
