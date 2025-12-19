@@ -1,3062 +1,380 @@
-import os
-from datetime import datetime
-from typing import List, Optional, Dict
+"""
+PGR Sports Analytics Dashboard
+Combined Football and College Basketball Dashboard
+"""
 
-import pandas as pd
-import plotly.express as px
 import streamlit as st
-from streamlit_autorefresh import st_autorefresh
-from sqlalchemy import create_engine, text
-
-# ============ CURRENCY CONFIGURATION ============
-# All internal calculations use USD. Display shows USD with SEK equivalent.
-USD_TO_SEK = 10.8  # Adjust manually when exchange rate changes
-
-# ============ ROI ANALYTICS MODE ============
-# Analytics now run in Unit ROI mode. All picks are evaluated using a flat 1 unit 
-# stake for performance tracking. This allows high bet volume without tying results 
-# to a specific bankroll size. Real-money stakes (if any) are tracked separately.
-ANALYTICS_STAKE_UNITS = 1.0  # Flat 1 unit per bet for analytics
-SIMULATED_STARTING_BANKROLL_UNITS = 100.0  # Starting simulated bankroll
-DYNAMIC_STAKING_ENABLED = False  # Disabled for analytics layer
-
-# Legacy staking (for real money tracker only)
-STAKE_PCT = 0.012  # 1.2% per bet
-BASE_UNIT_PCT = 0.01  # 1 unit = 1%
-STAKE_UNITS = STAKE_PCT / BASE_UNIT_PCT  # 1.2u
-
-
-def calculate_profit_units(odds: float, outcome: str) -> float:
-    """
-    Calculate profit in units for a single bet.
-    - Win: (odds - 1) * 1.0 units
-    - Loss: -1.0 unit
-    - Push/Void: 0.0 units
-    """
-    outcome_lower = str(outcome).lower().strip()
-    if outcome_lower in ('won', 'win', 'w', '1'):
-        return (float(odds) - 1.0) * ANALYTICS_STAKE_UNITS
-    elif outcome_lower in ('lost', 'loss', 'l', '0'):
-        return -ANALYTICS_STAKE_UNITS
-    return 0.0
-
-
-def compute_roi_units(df: pd.DataFrame) -> dict:
-    """
-    Compute units-based ROI metrics for analytics.
-    Every bet = 1 unit stake, profit = (odds-1) for wins, -1 for losses.
-    """
-    if df.empty:
-        return dict(
-            units_staked=0.0,
-            units_won=0.0,
-            roi=0.0,
-            bets=0,
-            wins=0,
-            losses=0,
-            pushes=0,
-            hit_rate=0.0,
-            simulated_bankroll=SIMULATED_STARTING_BANKROLL_UNITS,
-        )
-    
-    if "norm_result" not in df.columns:
-        df = df.copy()
-        if "result" in df.columns:
-            df["norm_result"] = df["result"].apply(normalize_result)
-        else:
-            df["norm_result"] = "PENDING"
-    
-    settled = df[df["norm_result"].isin(["WON", "LOST", "VOID"])].copy()
-    if settled.empty:
-        return dict(
-            units_staked=float(len(df)) * ANALYTICS_STAKE_UNITS,
-            units_won=0.0,
-            roi=0.0,
-            bets=len(df),
-            wins=0,
-            losses=0,
-            pushes=0,
-            hit_rate=0.0,
-            simulated_bankroll=SIMULATED_STARTING_BANKROLL_UNITS,
-        )
-    
-    wins = len(settled[settled["norm_result"] == "WON"])
-    losses = len(settled[settled["norm_result"] == "LOST"])
-    pushes = len(settled[settled["norm_result"] == "VOID"])
-    
-    if "odds" not in settled.columns:
-        settled["odds"] = 2.0
-    
-    settled["profit_units"] = settled.apply(
-        lambda row: calculate_profit_units(row.get("odds", 2.0), row["norm_result"]),
-        axis=1
-    )
-    
-    units_staked = float(len(settled)) * ANALYTICS_STAKE_UNITS
-    units_won = float(settled["profit_units"].sum())
-    roi = (units_won / units_staked * 100) if units_staked > 0 else 0.0
-    
-    non_void = settled[settled["norm_result"] != "VOID"]
-    hit_rate = (wins / len(non_void) * 100) if len(non_void) > 0 else 0.0
-    
-    simulated_bankroll = SIMULATED_STARTING_BANKROLL_UNITS + units_won
-    
-    return dict(
-        units_staked=units_staked,
-        units_won=units_won,
-        roi=roi,
-        bets=len(settled),
-        wins=wins,
-        losses=losses,
-        pushes=pushes,
-        hit_rate=hit_rate,
-        simulated_bankroll=simulated_bankroll,
-    )
-
-
-def format_units(units: float) -> str:
-    """Format units for display with + sign for positive values."""
-    sign = "+" if units >= 0 else ""
-    return f"{sign}{units:.1f} units"
-
-
-def format_roi(roi: float) -> str:
-    """Format ROI for display with + sign for positive values."""
-    sign = "+" if roi >= 0 else ""
-    return f"{sign}{roi:.1f}% ROI"
-
-
-def get_stake_display(stake_sek: float) -> str:
-    """
-    Format stake for display - UNITS ONLY (no money references).
-    """
-    return "1 unit"
-
-
-def get_stake_display_full(stake_sek: float) -> str:
-    """
-    Format stake for display - UNITS ONLY (no money references).
-    """
-    return "1 unit"
-
-
-def split_bets_by_mode(df: pd.DataFrame):
-    """
-    Splits raw bets into:
-    - prod_bets: real bets (mode='PROD' or null)
-    - test_bets: backtests/simulated (mode in ['TEST', 'BACKTEST'])
-    """
-    if "mode" not in df.columns:
-        return df.copy(), df.iloc[0:0].copy()
-
-    mode_col = df["mode"].fillna("PROD").str.upper()
-
-    prod_bets = df[mode_col == "PROD"].copy()
-    test_bets = df[mode_col.isin(["TEST", "BACKTEST"])].copy()
-
-    return prod_bets, test_bets
-
-
-def get_prod_bets(df: pd.DataFrame) -> pd.DataFrame:
-    """Get only production bets (mode='PROD' or null)."""
-    if "mode" not in df.columns:
-        return df.copy()
-    mode_col = df["mode"].fillna("PROD").str.upper()
-    return df[mode_col == "PROD"].copy()
-
-
-def get_backtest_bets(df: pd.DataFrame) -> pd.DataFrame:
-    """Get only backtest bets (mode='BACKTEST' or 'TEST')."""
-    if "mode" not in df.columns:
-        return df.iloc[0:0].copy()
-    mode_col = df["mode"].fillna("PROD").str.upper()
-    return df[mode_col.isin(["TEST", "BACKTEST"])].copy()
-
-
-def get_training_data_stats() -> dict:
-    """Get statistics from training_data table for AI model improvement."""
-    try:
-        db_url = os.getenv("DATABASE_URL")
-        if not db_url:
-            return {}
-        
-        engine = create_engine(db_url)
-        with engine.connect() as conn:
-            result = conn.execute(text("""
-                SELECT 
-                    COUNT(*) as total_records,
-                    COUNT(CASE WHEN bet_placed = true THEN 1 END) as bets_placed,
-                    COUNT(CASE WHEN bet_placed = false THEN 1 END) as predictions_only,
-                    COUNT(DISTINCT home_team || ' vs ' || away_team) as unique_matches,
-                    COUNT(DISTINCT league) as unique_leagues,
-                    COUNT(CASE WHEN analysis_type = 'exact_score_bet' THEN 1 END) as exact_score_bets,
-                    COUNT(CASE WHEN analysis_type = 'exact_score_filtered' THEN 1 END) as exact_score_filtered,
-                    COUNT(CASE WHEN analysis_type = 'exact_score_skipped' THEN 1 END) as exact_score_skipped,
-                    COUNT(CASE WHEN data_source = 'value_singles_engine' THEN 1 END) as value_singles_records,
-                    COUNT(CASE WHEN data_source = 'sgp_engine' THEN 1 END) as sgp_records,
-                    MIN(created_at) as earliest_record,
-                    MAX(created_at) as latest_record
-                FROM training_data
-            """))
-            row = result.fetchone()
-            if row:
-                return {
-                    'total_records': row[0] or 0,
-                    'bets_placed': row[1] or 0,
-                    'predictions_only': row[2] or 0,
-                    'unique_matches': row[3] or 0,
-                    'unique_leagues': row[4] or 0,
-                    'exact_score_bets': row[5] or 0,
-                    'exact_score_filtered': row[6] or 0,
-                    'exact_score_skipped': row[7] or 0,
-                    'value_singles_records': row[8] or 0,
-                    'parlay_records': row[9] or 0,
-                    'earliest_record': row[10],
-                    'latest_record': row[11]
-                }
-    except Exception as e:
-        st.sidebar.warning(f"AI training data stats unavailable: {e}")
-    return {}
-
-
-def calculate_roi(bets: pd.DataFrame) -> float:
-    """Calculate ROI percentage from bets dataframe."""
-    summary = compute_roi(bets)
-    return summary["roi"]
-
-
-def calculate_hit_rate(bets: pd.DataFrame) -> float:
-    """Calculate hit rate percentage from bets dataframe."""
-    summary = compute_roi(bets)
-    return summary["hit_rate"]
-
-
-def calculate_profit(bets: pd.DataFrame) -> float:
-    """Calculate total profit from bets dataframe."""
-    summary = compute_roi(bets)
-    return summary["profit"]
-
-
-def filter_by_product(bets: pd.DataFrame, product_codes: list) -> pd.DataFrame:
-    """Filter bets by product code(s)."""
-    if "product" not in bets.columns:
-        return bets.iloc[0:0].copy()
-    return bets[bets["product"].str.upper().isin([p.upper() for p in product_codes])].copy()
-
-
-def get_exact_score_bets(prod_bets: pd.DataFrame) -> pd.DataFrame:
-    """Get Exact Score / Final Score bets."""
-    return filter_by_product(prod_bets, ["EXACT_SCORE", "FINAL_SCORE"])
-
-
-def get_value_singles(prod_bets: pd.DataFrame) -> pd.DataFrame:
-    """Get Value Singles bets."""
-    return filter_by_product(prod_bets, ["VALUE_SINGLE", "VALUE_SINGLES", "FOOTBALL_SINGLE"])
-
-
-def get_parlays(prod_bets: pd.DataFrame) -> pd.DataFrame:
-    """Get Parlay bets."""
-    return filter_by_product(prod_bets, ["SGP", "SGP_PARLAY", "ML_PARLAY", "PARLAY"])
-
-
-def get_basket_bets(prod_bets: pd.DataFrame) -> pd.DataFrame:
-    """Get College Basketball bets."""
-    return filter_by_product(prod_bets, ["COLLEGE_BASKET", "BASKET_SINGLE", "BASKET_PARLAY", "NCAAB"])
-
-
-def get_women_1x2(prod_bets: pd.DataFrame) -> pd.DataFrame:
-    """Get Women's 1X2 bets."""
-    return filter_by_product(prod_bets, ["WOMEN_1X2", "WOMENS_1X2", "W1X2"])
-
-
-def weighted_roi(df: pd.DataFrame) -> float:
-    """
-    Calculate ROI with sample weights.
-    Useful for blended PROD/BACKTEST metrics where PROD has higher weight.
-    """
-    if "weight" not in df.columns:
-        df = df.assign(weight=1.0)
-    stake = (df["stake"] * df["weight"]).sum()
-    profit = ((df["payout"] - df["stake"]) * df["weight"]).sum()
-    return 100 * profit / stake if stake > 0 else 0.0
-
-
-def run_backtest(start_date: str, end_date: str, algorithm_fn, load_fixtures_fn, save_bets_fn) -> dict:
-    """
-    Run backtest on historical fixtures and save results with mode='BACKTEST'.
-    
-    Args:
-        start_date: Start date (YYYY-MM-DD)
-        end_date: End date (YYYY-MM-DD)
-        algorithm_fn: Function that takes a match and returns bets
-        load_fixtures_fn: Function that loads fixtures for date range
-        save_bets_fn: Function that saves bets to database
-    
-    Returns:
-        dict with status and count of bets generated
-    """
-    fixtures = load_fixtures_fn(start_date, end_date)
-    total_bets = 0
-    
-    for match in fixtures:
-        bets = algorithm_fn(match)
-        if bets:
-            save_bets_fn(bets, mode="BACKTEST")
-            total_bets += len(bets) if isinstance(bets, list) else 1
-    
-    return {"status": "done", "bets_generated": total_bets, "matches_processed": len(fixtures)}
-
-
-def build_training_data(all_bets: pd.DataFrame, backtest_weight: float = 0.3) -> pd.DataFrame:
-    """
-    Build training dataset combining PROD and BACKTEST data.
-    Adds 'source' column to identify origin and 'weight' for sample weighting.
-    
-    Args:
-        all_bets: All bets from database
-        backtest_weight: Weight for backtest samples (default 0.3, PROD always 1.0)
-    
-    Returns:
-        DataFrame with 'source' and 'weight' columns for ML training
-    """
-    prod_bets, backtest_bets = split_bets_by_mode(all_bets)
-
-    prod_bets = prod_bets.assign(source="PROD")
-    backtest_bets = backtest_bets.assign(source="BACKTEST")
-
-    train_df = pd.concat([prod_bets, backtest_bets], ignore_index=True)
-    
-    train_df["weight"] = train_df["source"].map({
-        "PROD": 1.0,
-        "BACKTEST": backtest_weight,
-    })
-    
-    return train_df
-
-
-def format_kickoff(date_val) -> str:
-    """
-    Format match date for display, handling NaT/None/invalid values gracefully.
-    Returns formatted string like '25 Nov 20:00' or '25 Nov' for date-only.
-    """
-    if date_val is None:
-        return "TBD"
-    
-    try:
-        if pd.isna(date_val):
-            return "TBD"
-    except (TypeError, ValueError):
-        pass
-    
-    try:
-        if isinstance(date_val, pd.Timestamp):
-            if date_val.hour == 0 and date_val.minute == 0:
-                return date_val.strftime("%d %b")
-            return date_val.strftime("%d %b %H:%M")
-        
-        from datetime import datetime as dt_module
-        if isinstance(date_val, dt_module):
-            if date_val.hour == 0 and date_val.minute == 0:
-                return date_val.strftime("%d %b")
-            return date_val.strftime("%d %b %H:%M")
-        
-        date_str = str(date_val).strip()
-        
-        if date_str.upper() in ["NAT", "NONE", "NULL", "", "NATTYPE"]:
-            return "TBD"
-        
-        if 'T' in date_str:
-            clean = date_str.replace('Z', '').replace('+00:00', '')
-            date_part, time_part = clean.split('T')
-            time_short = time_part[:5]
-            parsed = dt_module.strptime(f"{date_part} {time_short}", "%Y-%m-%d %H:%M")
-            return parsed.strftime("%d %b %H:%M")
-        
-        import re
-        date_only_match = re.match(r'^(\d{4}-\d{2}-\d{2})', date_str)
-        if date_only_match:
-            date_part = date_only_match.group(1)
-            if ' ' in date_str and ':' in date_str:
-                try:
-                    time_match = re.search(r'(\d{2}:\d{2})', date_str)
-                    if time_match:
-                        time_part = time_match.group(1)
-                        if time_part != "00:00":
-                            parsed = dt_module.strptime(f"{date_part} {time_part}", "%Y-%m-%d %H:%M")
-                            return parsed.strftime("%d %b %H:%M")
-                except:
-                    pass
-            parsed = dt_module.strptime(date_part, "%Y-%m-%d")
-            return parsed.strftime("%d %b")
-        
-        parsed = pd.to_datetime(date_val, errors="coerce")
-        if pd.isna(parsed):
-            return "TBD"
-        if parsed.hour == 0 and parsed.minute == 0:
-            return parsed.strftime("%d %b")
-        return parsed.strftime("%d %b %H:%M")
-    except Exception:
-        return "TBD"
-
-
-def normalize_result(raw_result: Optional[str]) -> str:
-    """
-    Normalize all possible result variants to: WON, LOST, PENDING, VOID.
-    Supports English and Swedish terminology.
-    """
-    if raw_result is None:
-        return "PENDING"
-
-    s = str(raw_result).strip().lower()
-
-    win_keywords = [
-        "won", "win", "wins", "winner",
-        "vinst", "vunnit", "vinna", "green",
-        "success"
-    ]
-
-    loss_keywords = [
-        "lost", "loss", "förlust",
-        "förlorat", "red"
-    ]
-
-    void_keywords = [
-        "void", "push", "refunded",
-        "money back", "pushed", "voided",
-        "tie", "draw", "oavgjort"
-    ]
-
-    if any(k in s for k in win_keywords):
-        return "WON"
-    if any(k in s for k in loss_keywords):
-        return "LOST"
-    if any(k in s for k in void_keywords):
-        return "VOID"
-
-    if s in ["pending", "open", "not settled", "running", "live", ""]:
-        return "PENDING"
-
-    return "PENDING"
-
-
-# ------------- CONFIG & THEME ------------- #
+import pandas as pd
+from datetime import datetime, timedelta
+import plotly.graph_objects as go
+import plotly.express as px
+from db_connection import DatabaseConnection
 
 st.set_page_config(
-    page_title="PGR Sports Analytics – Performance Dashboard",
-    page_icon="📊",
+    page_title="PGR Sports Analytics",
+    page_icon="🏆",
     layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-st_autorefresh(interval=300000, limit=None, key="dashboard_autorefresh")  # 5 min refresh
+st.sidebar.title("🏆 PGR Sports")
+page = st.sidebar.radio("Select Sport", ["⚽ Football", "🏀 College Basketball"])
 
-PGR_PRIMARY = "#00FFC2"
-PGR_DARK_BG = "#050A10"
-PGR_CARD_BG = "#0D141F"
-PGR_TEXT_MUTED = "#9BA3B5"
-
-
-def inject_pgr_global_background():
+if page == "⚽ Football":
+    st.info("📌 Football Dashboard is loading from the original file...")
+    with open("pgr_football_dashboard.py", "r") as f:
+        code = f.read()
+    exec(compile(code, "pgr_football_dashboard.py", "exec"), globals())
+else:
     st.markdown("""
     <style>
-    .stApp {
-        background: radial-gradient(circle at 20% 20%, rgba(0,255,166,0.08) 0%, rgba(0,0,0,1) 60%),
-                    radial-gradient(circle at 80% 80%, rgba(0,255,166,0.05) 0%, rgba(0,0,0,1) 70%),
-                    #000;
-        background-attachment: fixed;
-        color: #d7fff3 !important;
-        font-family: 'Inter', sans-serif !important;
-    }
-    @keyframes floatDust {
-        0% { transform: translateY(0px) translateX(0px); opacity: .2; }
-        50% { transform: translateY(-20px) translateX(10px); opacity: .5; }
-        100% { transform: translateY(0px) translateX(0px); opacity: .2; }
-    }
-    .neon-dust {
-        position: fixed;
-        top: 0; left: 0;
-        width: 100vw; height: 100vh;
-        pointer-events: none;
-        z-index: -1;
-        background-image:
-          radial-gradient(circle, rgba(0,255,166,0.18) 2px, transparent 3px),
-          radial-gradient(circle, rgba(0,255,166,0.12) 1.6px, transparent 3px),
-          radial-gradient(circle, rgba(0,255,166,0.06) 2px, transparent 2.8px);
-        background-size: 120px 120px, 90px 90px, 160px 160px;
-        animation: floatDust 8s infinite ease-in-out;
-        opacity: 0.10;
-    }
-    .neon-grid::before {
-        content: "";
-        position: fixed;
-        bottom: -10vh;
-        left: 0;
-        width: 100vw;
-        height: 60vh;
-        background:
-          linear-gradient(transparent, rgba(0,255,166,0.08)),
-          repeating-linear-gradient(
-             to right,
-             rgba(0,255,166,0.10) 0px,
-             rgba(0,255,166,0.10) 1px,
-             transparent 1px,
-             transparent 40px
-          ),
-          repeating-linear-gradient(
-             to top,
-             rgba(0,255,166,0.10) 0px,
-             rgba(0,255,166,0.10) 1px,
-             transparent 1px,
-             transparent 40px
-          );
-        background-blend-mode: overlay;
-        pointer-events: none;
-        z-index: -2;
-    }
-    ::-webkit-scrollbar { width: 8px; }
-    ::-webkit-scrollbar-track { background: rgba(255,255,255,0.04); }
-    ::-webkit-scrollbar-thumb { background: rgba(0,255,166,0.45); border-radius: 10px; }
-    ::-webkit-scrollbar-thumb:hover { background: rgba(0,255,166,0.80); }
-    h1, h2, h3, h4, h5 {
-        color: #aaffea !important;
-        text-shadow: 0 0 12px rgba(0,255,166,0.35), 0 0 24px rgba(0,255,166,0.15);
-    }
-    .block-container { padding-top: 1.8rem; }
+        .main-header {
+            text-align: center;
+            color: #FF6B35;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+        .sub-header {
+            text-align: center;
+            color: #888;
+            font-size: 1rem;
+            margin-bottom: 2rem;
+        }
+        .metric-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 1.5rem;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+        }
+        .metric-card-green {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            padding: 1.5rem;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+        }
+        .metric-card-red {
+            background: linear-gradient(135deg, #ee0979 0%, #ff6a00 100%);
+            padding: 1.5rem;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+        }
+        .metric-value {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+        .metric-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        .pick-card {
+            background: #f8f9fa;
+            border-left: 4px solid #FF6B35;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 5px;
+        }
+        .parlay-card {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 5px;
+        }
+        .win-card {
+            background: #e8f5e9;
+            border-left: 4px solid #4CAF50;
+            padding: 0.8rem;
+            margin-bottom: 0.5rem;
+            border-radius: 5px;
+        }
+        .loss-card {
+            background: #ffebee;
+            border-left: 4px solid #f44336;
+            padding: 0.8rem;
+            margin-bottom: 0.5rem;
+            border-radius: 5px;
+        }
     </style>
-    <div class="neon-dust"></div>
-    <div class="neon-grid"></div>
     """, unsafe_allow_html=True)
 
+    st.markdown('<div class="main-header">🏀 College Basketball Value Picks</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-header">NCAAB • Consensus-Based Value Detection • Live Performance Tracking</div>', unsafe_allow_html=True)
 
-CUSTOM_CSS = f"""
-<style>
-    .stApp {{
-        background: radial-gradient(circle at top, #0b1724 0, #02050A 55%, #000000 100%);
-        color: white;
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
-                     "Segoe UI", sans-serif;
-    }}
-    .pgr-header {{
-        font-size: 2.2rem;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: {PGR_PRIMARY};
-    }}
-    .pgr-subtitle {{
-        font-size: 0.9rem;
-        color: {PGR_TEXT_MUTED};
-    }}
-    .pgr-card {{
-        padding: 1.1rem 1.25rem;
-        border-radius: 0.9rem;
-        background: linear-gradient(135deg, #0A111C 0%, #05070C 100%);
-        border: 1px solid rgba(255, 255, 255, 0.04);
-        box-shadow: 0 18px 45px rgba(0, 0, 0, 0.5);
-    }}
-    .pgr-metric-label {{
-        font-size: 0.75rem;
-        color: {PGR_TEXT_MUTED};
-        text-transform: uppercase;
-        letter-spacing: 0.12em;
-        margin-bottom: 0.32rem;
-    }}
-    .pgr-metric-value {{
-        font-size: 1.4rem;
-        font-weight: 650;
-    }}
-    .pgr-badge {{
-        display: inline-flex;
-        align-items: center;
-        gap: 0.4rem;
-        padding: 0.12rem 0.55rem;
-        border-radius: 999px;
-        font-size: 0.72rem;
-        text-transform: uppercase;
-        letter-spacing: 0.12em;
-        border: 1px solid rgba(255,255,255,0.08);
-        background: radial-gradient(circle at top, rgba(0,255,194,0.12),
-                                    transparent 60%);
-        color: {PGR_PRIMARY};
-    }}
-    .pgr-table thead tr th {{
-        background: #050A10 !important;
-        color: #E5EAF5 !important;
-        border-bottom: 1px solid rgba(255,255,255,0.08);
-        font-size: 0.75rem;
-        text-transform: uppercase;
-        letter-spacing: 0.11em;
-    }}
-    .pgr-table tbody tr td {{
-        font-size: 0.84rem;
-        color: #D6DEEC;
-    }}
-</style>
-"""
-st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
+    @st.cache_data(ttl=120)
+    def get_basketball_stats():
+        try:
+            with DatabaseConnection.get_connection() as conn:
+                query = """
+                    SELECT 
+                        COUNT(*) as total_bets,
+                        COUNT(*) FILTER (WHERE status = 'won') as wins,
+                        COUNT(*) FILTER (WHERE status = 'lost') as losses,
+                        COUNT(*) FILTER (WHERE status = 'pending') as pending,
+                        COALESCE(SUM(profit_units), 0) as net_profit,
+                        AVG(odds) as avg_odds,
+                        AVG(ev_percentage) as avg_ev
+                    FROM basketball_predictions
+                """
+                result = pd.read_sql(query, conn)
+                return result.iloc[0] if not result.empty else None
+        except Exception as e:
+            st.error(f"Error loading stats: {e}")
+            return None
 
+    @st.cache_data(ttl=120)
+    def get_basketball_picks():
+        try:
+            with DatabaseConnection.get_connection() as conn:
+                query = """
+                    SELECT 
+                        match, market, selection, odds, probability,
+                        ev_percentage, confidence, bookmaker, is_parlay,
+                        parlay_legs, commence_time, created_at
+                    FROM basketball_predictions
+                    WHERE status = 'pending'
+                    ORDER BY ev_percentage DESC, confidence DESC
+                """
+                return pd.read_sql(query, conn)
+        except Exception as e:
+            st.error(f"Error loading picks: {e}")
+            return pd.DataFrame()
 
-# ------------- DATABASE CONNECTION ------------- #
+    @st.cache_data(ttl=120)
+    def get_basketball_results():
+        try:
+            with DatabaseConnection.get_connection() as conn:
+                query = """
+                    SELECT 
+                        match, market, selection, odds, status,
+                        profit_units, verified_at, is_parlay
+                    FROM basketball_predictions
+                    WHERE status IN ('won', 'lost')
+                    ORDER BY verified_at DESC NULLS LAST, created_at DESC
+                    LIMIT 30
+                """
+                return pd.read_sql(query, conn)
+        except Exception as e:
+            return pd.DataFrame()
 
-def get_db_url() -> str:
-    """Try a few common env vars for the Postgres connection string."""
-    candidates = [
-        "DATABASE_URL",
-        "POSTGRES_URL",
-        "PGDATABASE_URL",
-        "SUPABASE_DB_URL",
-    ]
-    for key in candidates:
-        url = os.getenv(key)
-        if url:
-            return url
-    raise RuntimeError(
-        "No database URL found. Please set DATABASE_URL (or POSTGRES_URL) "
-        "in your Replit / Railway environment."
-    )
+    @st.cache_data(ttl=120)
+    def get_basketball_daily():
+        try:
+            with DatabaseConnection.get_connection() as conn:
+                query = """
+                    SELECT 
+                        DATE(created_at) as date,
+                        COUNT(*) as bets,
+                        COUNT(*) FILTER (WHERE status = 'won') as wins,
+                        COUNT(*) FILTER (WHERE status = 'lost') as losses,
+                        COALESCE(SUM(profit_units), 0) as daily_profit
+                    FROM basketball_predictions
+                    WHERE status IN ('won', 'lost')
+                    GROUP BY DATE(created_at)
+                    ORDER BY date DESC
+                    LIMIT 14
+                """
+                return pd.read_sql(query, conn)
+        except Exception as e:
+            return pd.DataFrame()
 
+    stats = get_basketball_stats()
+    picks_df = get_basketball_picks()
+    results_df = get_basketball_results()
 
-@st.cache_data(ttl=120, show_spinner="Loading bets from database…")
-def load_all_bets_from_db() -> pd.DataFrame:
-    """
-    Load all bets from the `all_bets` view.
-    We do NOT filter on mode here so that active / test bets also show up.
-    ROI is still only based on settled bets (where profit is not null).
-    """
-    db_url = get_db_url()
-    engine = create_engine(db_url)
+    if stats is not None:
+        wins = int(stats['wins'] or 0)
+        losses = int(stats['losses'] or 0)
+        pending = int(stats['pending'] or 0)
+        total = wins + losses
+        hit_rate = (wins / total * 100) if total > 0 else 0
+        net_profit = float(stats['net_profit'] or 0)
+        avg_odds = float(stats['avg_odds'] or 0)
 
-    query = text(
-        """
-        SELECT
-            id,
-            product,
-            stake,
-            odds,
-            payout,
-            result,
-            norm_result,
-            mode,
-            created_at,
-            settled_at,
-            home_team,
-            away_team,
-            match_date,
-            legs,
-            parlay_description,
-            ev,
-            selection,
-            clv_pct
-        FROM normalized_bets
-        ORDER BY created_at DESC
-        """
-    )
+        st.subheader("📊 Performance Overview")
 
-    with engine.connect() as conn:
-        df = pd.read_sql(query, conn)
+        col1, col2, col3, col4, col5, col6 = st.columns(6)
 
-    if df.empty:
-        st.info("No parlays in the database yet.")
-        return df
+        with col1:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-value">{wins}</div>
+                <div class="metric-label">Wins</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-    # Find any columns that look like "legs" / selections
-    leg_cols = [
-        c for c in df.columns
-        if c.lower() in ("leg_summary", "bet_legs", "markets", "selections", "description")
-        or c.lower().startswith("leg_")
-        or c.lower().endswith("_legs")
-    ]
+        with col2:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-value">{losses}</div>
+                <div class="metric-label">Losses</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-    # numeric cleanup
-    for col in ["stake", "odds", "payout"]:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
+        with col3:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-value">{hit_rate:.1f}%</div>
+                <div class="metric-label">Hit Rate</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-    for col in ["created_at", "settled_at"]:
-        if col in df.columns:
-            df[col] = pd.to_datetime(df[col], errors="coerce")
-    
-    if "match_date" in df.columns:
-        def convert_match_date(val):
-            if pd.isna(val) or val is None:
-                return pd.NaT
-            s = str(val).strip()
-            if not s or s.upper() in ['NAT', 'NONE', 'NULL']:
-                return pd.NaT
-            try:
-                return pd.to_datetime(s, utc=True)
-            except:
-                try:
-                    return pd.to_datetime(s)
-                except:
-                    return pd.NaT
-        df["match_date"] = df["match_date"].apply(convert_match_date)
+        with col4:
+            profit_class = "metric-card-green" if net_profit >= 0 else "metric-card-red"
+            st.markdown(f"""
+            <div class="{profit_class}">
+                <div class="metric-value">{net_profit:+.1f}u</div>
+                <div class="metric-label">Net Profit</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-    # profit only for settled bets (WON, LOST, VOID) - norm_result comes from database view
-    df["profit"] = None
-    settled_mask = df["norm_result"].isin(["WON", "LOST", "VOID"])
-    
-    # Calculate profit: WON gets payout - stake, LOST gets -stake, VOID gets 0
-    df.loc[settled_mask & (df["norm_result"] == "WON"), "profit"] = (
-        df.loc[settled_mask & (df["norm_result"] == "WON"), "payout"].fillna(0) - 
-        df.loc[settled_mask & (df["norm_result"] == "WON"), "stake"]
-    )
-    df.loc[settled_mask & (df["norm_result"] == "LOST"), "profit"] = (
-        -df.loc[settled_mask & (df["norm_result"] == "LOST"), "stake"]
-    )
-    df.loc[settled_mask & (df["norm_result"] == "VOID"), "profit"] = 0.0
+        with col5:
+            roi = (net_profit / total * 100) if total > 0 else 0
+            roi_class = "metric-card-green" if roi >= 0 else "metric-card-red"
+            st.markdown(f"""
+            <div class="{roi_class}">
+                <div class="metric-value">{roi:+.1f}%</div>
+                <div class="metric-label">ROI</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-    return df
+        with col6:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-value">{avg_odds:.2f}x</div>
+                <div class="metric-label">Avg Odds</div>
+            </div>
+            """, unsafe_allow_html=True)
 
+    st.markdown("---")
 
-# ------------- METRICS HELPERS ------------- #
+    tab1, tab2, tab3, tab4 = st.tabs(["📈 Today's Picks", "🏆 Recent Results", "📊 Performance Chart", "📋 All Data"])
 
-def compute_roi(df: pd.DataFrame) -> dict:
-    """Compute stake, payout, profit, ROI and hit-rate for a given slice using normalized results.
-    
-    Note: Database stores values in SEK. We convert to USD for display using USD_TO_SEK rate.
-    ROI percentage remains the same regardless of currency.
-    """
-    if df.empty:
-        return dict(
-            stake=0.0,
-            payout=0.0,
-            profit=0.0,
-            roi=0.0,
-            bets=0,
-            wins=0,
-            hit_rate=0.0,
-        )
-
-    # Ensure norm_result exists
-    if "norm_result" not in df.columns:
-        df = df.copy()
-        df["norm_result"] = df["result"].apply(normalize_result)
-
-    # settled only (WON, LOST, VOID)
-    settled = df[df["norm_result"].isin(["WON", "LOST", "VOID"])].copy()
-    if settled.empty:
-        # Convert SEK to USD
-        stake_sek = float(df["stake"].sum())
-        return dict(
-            stake=stake_sek / USD_TO_SEK,
-            payout=0.0,
-            profit=0.0,
-            roi=0.0,
-            bets=len(df),
-            wins=0,
-            hit_rate=0.0,
-        )
-
-    # Database values are in SEK - convert to USD
-    total_stake_sek = float(settled["stake"].sum())
-    
-    # Only count WON payouts for total payout
-    won_mask = settled["norm_result"] == "WON"
-    total_payout_sek = float(settled.loc[won_mask, "payout"].fillna(0).sum())
-    
-    profit_sek = total_payout_sek - total_stake_sek
-    roi = (profit_sek / total_stake_sek * 100) if total_stake_sek > 0 else 0.0
-
-    # Count wins (only WON, not VOID)
-    wins_count = won_mask.sum()
-    # Hit rate excludes VOID from denominator
-    non_void = settled[settled["norm_result"] != "VOID"]
-    hit_rate = (wins_count / len(non_void) * 100) if len(non_void) > 0 else 0.0
-
-    # Return values converted to USD
-    return dict(
-        stake=total_stake_sek / USD_TO_SEK,
-        payout=total_payout_sek / USD_TO_SEK,
-        profit=profit_sek / USD_TO_SEK,
-        roi=roi,  # ROI is currency-independent
-        bets=len(settled),
-        wins=int(wins_count),
-        hit_rate=hit_rate,
-    )
-
-
-def format_money(x: float) -> str:
-    """Format money in USD with SEK equivalent: '1,234 USD (≈ 13,327 SEK)'"""
-    sek = x * USD_TO_SEK
-    if abs(x) >= 1000:
-        return f"{x:,.0f} USD (≈ {sek:,.0f} SEK)"
-    else:
-        return f"{x:,.2f} USD (≈ {sek:,.0f} SEK)"
-
-
-def format_money_short(x: float) -> str:
-    """Short format for inline use: '1,234 USD'"""
-    if abs(x) >= 1000:
-        return f"{x:,.0f} USD"
-    else:
-        return f"{x:,.2f} USD"
-
-
-def format_money_inline(x: float) -> str:
-    """Inline format with both currencies for cards/UI: '1,234 USD (≈13,327 SEK)'"""
-    sek = x * USD_TO_SEK
-    return f"{x:,.0f} USD (≈{sek:,.0f} SEK)"
-
-
-def format_pct(x: float) -> str:
-    sign = "+" if x > 0 else ""
-    return f"{sign}{x:.1f}%"
-
-
-def product_filter(df: pd.DataFrame, product_codes: List[str]) -> pd.DataFrame:
-    return df[df["product"].isin(product_codes)].copy()
-
-
-def as_fixture(r):
-    ht = str(r.get("home_team", "")).strip()
-    at = str(r.get("away_team", "")).strip()
-    return f"{ht} – {at}".strip(" –")
-
-
-def build_legs_display(row, leg_cols):
-    """Build legs text from available leg columns."""
-    legs_parts = []
-    for col in leg_cols:
-        val = row.get(col)
-        if val is None:
-            continue
-        val_str = str(val).strip()
-        if not val_str or val_str.lower() == 'none':
-            continue
-        legs_parts.append(val_str)
-    
-    legs_text = " | ".join(legs_parts)
-    legs_html = "<br>".join([f"• {p}" for p in legs_parts]) if legs_parts else ""
-    return legs_text, legs_html
-
-
-def roi_series(settled: pd.DataFrame):
-    """Build cumulative profit series for equity curve (converted to USD)."""
-    if settled.empty:
-        return pd.DataFrame({"when": [], "bank": []})
-    s = settled.copy()
-    s = s.sort_values(["settled_at", "match_date", "created_at"], na_position="last")
-    s["stake"] = s["stake"].astype(float)
-    s["profit"] = s["profit"].astype(float)
-    settled_ts = pd.to_datetime(s["settled_at"], utc=True, errors="coerce")
-    match_ts = pd.to_datetime(s["match_date"], utc=True, errors="coerce")
-    s["when"] = settled_ts.fillna(match_ts).dt.tz_localize(None)
-    # Convert SEK to USD for display
-    s["bank"] = s["profit"].cumsum() / USD_TO_SEK
-    return s[["when", "bank"]]
-
-
-def rolling_hit_rate(settled: pd.DataFrame, window=50):
-    if settled.empty:
-        return pd.DataFrame({"when": [], "roll": []})
-    s = settled.copy()
-    s["when"] = pd.to_datetime(s["settled_at"], utc=True, errors="coerce").dt.tz_localize(None)
-    s = s.sort_values("when")
-    s["hit"] = (s["profit"] > 0).astype(int)
-    s["roll"] = s["hit"].rolling(window, min_periods=1).mean() * 100
-    return s[["when", "roll"]]
-
-
-def style_bet_table(df: pd.DataFrame) -> pd.DataFrame:
-    """Prepare a pretty table with decimal odds (2 decimals). Converts SEK to USD."""
-    if df.empty:
-        return df
-
-    display_cols = [
-        "match_date",
-        "home_team",
-        "away_team",
-        "product",
-        "stake",
-        "odds",
-        "payout",
-        "profit",
-        "result",
-    ]
-    display_cols = [c for c in display_cols if c in df.columns]
-
-    out = df[display_cols].copy()
-
-    # dates
-    for col in ["match_date"]:
-        if col in out.columns:
-            out[col] = out[col].dt.strftime("%Y-%m-%d")
-
-    # Convert SEK to USD and format
-    for col in ["stake", "payout", "profit"]:
-        if col in out.columns:
-            out[col] = (out[col].astype(float) / USD_TO_SEK).round(2)
-
-    if "odds" in out.columns:
-        out["odds"] = out["odds"].astype(float).round(2)
-
-    # Rename headers (with USD indicator)
-    rename_map = {
-        "match_date": "Match Date",
-        "home_team": "Home",
-        "away_team": "Away",
-        "product": "Product",
-        "stake": "Stake (USD)",
-        "odds": "Odds",
-        "payout": "Payout (USD)",
-        "profit": "Profit (USD)",
-        "result": "Result",
-    }
-    out = out.rename(columns=rename_map)
-
-    return out
-
-
-# ------------- UI COMPONENTS ------------- #
-
-def metric_card(label: str, value: str, sublabel: str = ""):
-    st.markdown(
-        f"""
-        <div class="pgr-card">
-            <div class="pgr-metric-label">{label}</div>
-            <div class="pgr-metric-value">{value}</div>
-            <div class="pgr-subtitle">{sublabel}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def get_clv_stats_for_dashboard() -> dict:
-    """Fetch CLV stats for dashboard display."""
-    try:
-        from clv_service import get_clv_stats
-        return get_clv_stats()
-    except Exception as e:
-        return {'avg_clv_all': None, 'avg_clv_last_100': None, 'positive_share': None, 'total_with_clv': 0}
-
-
-def render_overview(df: pd.DataFrame):
-    st.markdown(
-        '<div class="pgr-header">PGR Sports Analytics</div>',
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        '<div class="pgr-subtitle">ROI + Units Performance Mode | Flat 1u stake per bet for analytics</div>',
-        unsafe_allow_html=True,
-    )
-
-    units_summary = compute_roi_units(df)
-    money_summary = compute_roi(df)
-    clv_stats = get_clv_stats_for_dashboard()
-
-    col1, col2, col3, col4, col5 = st.columns(5)
-    with col1:
-        metric_card(
-            "Total ROI",
-            format_roi(units_summary["roi"]),
-            f"On {units_summary['units_staked']:.0f} units staked",
-        )
-    with col2:
-        metric_card(
-            "Total Profit",
-            format_units(units_summary["units_won"]),
-            "Based on 1u flat stake per bet",
-        )
-    with col3:
-        metric_card(
-            "Hit Rate",
-            format_pct(units_summary["hit_rate"]),
-            f"{units_summary['wins']}W / {units_summary['losses']}L / {units_summary['pushes']}P",
-        )
-    with col4:
-        clv_value = clv_stats.get('avg_clv_last_100')
-        clv_display = f"{clv_value:+.1f}%" if clv_value is not None else "N/A"
-        clv_positive = clv_stats.get('positive_share')
-        clv_sub = f"{clv_positive:.0f}% positive CLV" if clv_positive is not None else "Collecting closing odds..."
-        metric_card(
-            "Average CLV",
-            clv_display,
-            clv_sub,
-        )
-    with col5:
-        metric_card(
-            "Bets Tracked",
-            f"{units_summary['bets']:,}",
-            f"Simulated: {units_summary['simulated_bankroll']:.1f}u",
-        )
-
-    with st.expander("Real Money Tracker (Optional)", expanded=False):
-        st.caption("Legacy view showing actual USD/SEK stakes - for personal reference only")
-        rcol1, rcol2, rcol3 = st.columns(3)
-        with rcol1:
-            st.metric("Real Profit (USD)", f"${money_summary['profit']:,.0f}")
-        with rcol2:
-            st.metric("Real Stakes (USD)", f"${money_summary['stake']:,.0f}")
-        with rcol3:
-            st.metric("Money ROI", f"{money_summary['roi']:+.1f}%")
-
-    st.markdown("### 📅 Daily Units")
-    
-    try:
-        from daily_units_service import get_daily_units
-        daily_data = get_daily_units(days_back=14)
-        
-        if daily_data.get('daily_units'):
-            dcol1, dcol2, dcol3 = st.columns(3)
-            with dcol1:
-                month_units = daily_data['month_summary']['total_units']
-                month_sign = "+" if month_units >= 0 else ""
-                month_color = "#00F59D" if month_units >= 0 else "#FF4444"
-                st.markdown(f"""
-                    <div style="text-align: center; padding: 10px;">
-                        <div style="font-size: 0.9rem; color: #888;">This Month</div>
-                        <div style="font-size: 1.8rem; font-weight: bold; color: {month_color};">{month_sign}{month_units:.1f}u</div>
-                    </div>
-                """, unsafe_allow_html=True)
-            with dcol2:
-                if daily_data.get('best_day'):
-                    best = daily_data['best_day']
-                    st.markdown(f"""
-                        <div style="text-align: center; padding: 10px;">
-                            <div style="font-size: 0.9rem; color: #888;">Best Day</div>
-                            <div style="font-size: 1.4rem; font-weight: bold; color: #00F59D;">+{best['units']:.1f}u</div>
-                            <div style="font-size: 0.8rem; color: #666;">{best['date']}</div>
-                        </div>
-                    """, unsafe_allow_html=True)
-            with dcol3:
-                if daily_data.get('worst_day'):
-                    worst = daily_data['worst_day']
-                    st.markdown(f"""
-                        <div style="text-align: center; padding: 10px;">
-                            <div style="font-size: 0.9rem; color: #888;">Worst Day</div>
-                            <div style="font-size: 1.4rem; font-weight: bold; color: #FF4444;">{worst['units']:.1f}u</div>
-                            <div style="font-size: 0.8rem; color: #666;">{worst['date']}</div>
-                        </div>
-                    """, unsafe_allow_html=True)
-            
-            st.markdown("**Recent Days:**")
-            for day in daily_data['daily_units'][:7]:
-                units = day['units']
-                sign = "+" if units >= 0 else ""
-                color = "#00F59D" if units > 0 else ("#FF4444" if units < 0 else "#888888")
-                st.markdown(
-                    f"<span style='color: #888;'>{day['date']}</span> &nbsp; "
-                    f"<span style='color: {color}; font-weight: bold;'>{sign}{units:.2f} units</span> "
-                    f"<span style='color: #666;'>({day['bet_count']} bets)</span>",
-                    unsafe_allow_html=True
-                )
+    with tab1:
+        if picks_df.empty:
+            st.info("🏀 No pending picks right now. The engine generates picks every 2 hours when games are available.")
         else:
-            st.info("No settled bets yet - daily units will appear once results are in.")
-    except Exception as e:
-        st.warning(f"Daily units unavailable")
+            singles = picks_df[~picks_df['is_parlay']]
+            parlays = picks_df[picks_df['is_parlay']]
 
-    st.markdown("### 📈 Equity Curve (Units)")
+            if not singles.empty:
+                st.subheader(f"🎯 Value Singles ({len(singles)})")
+                for idx, row in singles.head(15).iterrows():
+                    st.markdown(f"""
+                    <div class="pick-card">
+                        <strong>{row['match']}</strong><br>
+                        <span style="color: #FF6B35; font-weight: 600;">{row['market']}: {row['selection']}</span><br>
+                        <small>
+                            Odds: {row['odds']:.2f} | EV: <strong>{row['ev_percentage']:.1f}%</strong> | 
+                            Confidence: {row['confidence']:.1f}% | Book: {row['bookmaker']}
+                        </small>
+                    </div>
+                    """, unsafe_allow_html=True)
 
-    settled = df[df["profit"].notna()].copy()
-    if not settled.empty:
-        settled["date"] = pd.to_datetime(settled["match_date"], errors="coerce")
-        settled = settled.dropna(subset=["date"])
-        settled["date"] = settled["date"].dt.date
-        
-        if "odds" not in settled.columns:
-            settled["odds"] = 2.0
-        if "norm_result" not in settled.columns:
-            settled["norm_result"] = settled["result"].apply(normalize_result) if "result" in settled.columns else "PENDING"
-        
-        settled["profit_units"] = settled.apply(
-            lambda row: calculate_profit_units(row.get("odds", 2.0), row.get("norm_result", "PENDING")),
-            axis=1
-        )
-        
-        curve = (
-            settled.groupby("date")["profit_units"]
-            .sum()
-            .cumsum()
-            .reset_index(name="cumulative_units")
-        )
-        curve["date"] = pd.to_datetime(curve["date"])
-        
-        fig = px.line(
-            curve,
-            x="date",
-            y="cumulative_units",
-            labels={"date": "Date", "cumulative_units": "Cumulative Profit (Units)"},
-        )
-        fig.update_layout(
-            plot_bgcolor="rgba(0,0,0,0)",
-            paper_bgcolor="rgba(0,0,0,0)",
-            font_color="#FFFFFF",
-            xaxis=dict(
-                tickformat="%b %d",
-                gridcolor="rgba(255,255,255,0.1)",
-            ),
-            yaxis=dict(gridcolor="rgba(255,255,255,0.1)"),
-            height=300,
-            margin=dict(l=0, r=0, t=10, b=0),
-        )
-        fig.update_traces(line_color="#00F59D", line_width=3)
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("No settled bets yet - equity curve will appear once results are in.")
+            if not parlays.empty:
+                st.subheader(f"🔥 Multi-Game Parlays ({len(parlays)})")
+                for idx, row in parlays.head(10).iterrows():
+                    st.markdown(f"""
+                    <div class="parlay-card">
+                        <strong>{row['match']}</strong><br>
+                        <span style="color: #ff9800; font-weight: 600;">{row['market']}</span><br>
+                        <span style="font-size: 0.9rem;">{row['selection']}</span><br>
+                        <small>
+                            Combined Odds: {row['odds']:.2f} | EV: <strong>{row['ev_percentage']:.1f}%</strong> | 
+                            Min Confidence: {row['confidence']:.1f}%
+                        </small>
+                    </div>
+                    """, unsafe_allow_html=True)
 
-    st.markdown("### 🧩 ROI by Product (Units)")
+    with tab2:
+        if results_df.empty:
+            st.info("No results yet")
+        else:
+            st.subheader("🏆 Recent Results")
+            for idx, row in results_df.head(20).iterrows():
+                is_win = row['status'] == 'won'
+                card_class = "win-card" if is_win else "loss-card"
+                emoji = "✅" if is_win else "❌"
+                profit = float(row['profit_units'] or 0)
+                profit_str = f"+{profit:.2f}u" if profit >= 0 else f"{profit:.2f}u"
+                parlay_badge = "🎲 " if row['is_parlay'] else ""
+                st.markdown(f"""
+                <div class="{card_class}">
+                    {emoji} {parlay_badge}<strong>{row['match']}</strong><br>
+                    <span>{row['selection']} @ {row['odds']:.2f}x</span>
+                    <span style="float: right; font-weight: 600;">{profit_str}</span>
+                </div>
+                """, unsafe_allow_html=True)
 
-    if not df.empty:
-        prod_settled = df[df["profit"].notna()].copy()
-        if not prod_settled.empty:
-            agg = (
-                prod_settled.groupby("product")
-                .apply(lambda x: compute_roi_units(x)["roi"])
-                .reset_index(name="ROI")
-            )
-            agg = agg.sort_values("ROI", ascending=False)
-            
-            units_agg = (
-                prod_settled.groupby("product")
-                .apply(lambda x: compute_roi_units(x)["units_won"])
-                .reset_index(name="Units")
-            )
-            agg = agg.merge(units_agg, on="product")
-            
-            fig = px.bar(
-                agg,
-                x="product",
-                y="ROI",
-                labels={"product": "Product", "ROI": "ROI (%)"},
-                color="ROI",
-                color_continuous_scale=["#FF4444", "#FFAA00", "#00F59D"],
-                hover_data={"Units": ":.1f"},
-            )
+    with tab3:
+        daily_df = get_basketball_daily()
+        if daily_df.empty:
+            st.info("Not enough data for chart yet")
+        else:
+            daily_df = daily_df.sort_values('date')
+            daily_df['cumulative_profit'] = daily_df['daily_profit'].cumsum()
+
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=daily_df['date'],
+                y=daily_df['cumulative_profit'],
+                mode='lines+markers',
+                name='Cumulative Profit',
+                line=dict(color='#11998e', width=3),
+                fill='tozeroy',
+                fillcolor='rgba(17, 153, 142, 0.2)'
+            ))
             fig.update_layout(
-                plot_bgcolor="rgba(0,0,0,0)",
-                paper_bgcolor="rgba(0,0,0,0)",
-                font_color="#FFFFFF",
-                xaxis=dict(gridcolor="rgba(255,255,255,0.1)"),
-                yaxis=dict(gridcolor="rgba(255,255,255,0.1)"),
-                height=300,
-                margin=dict(l=0, r=0, t=10, b=0),
-                showlegend=False,
-                coloraxis_showscale=False,
+                title="Cumulative Profit (Units)",
+                xaxis_title="Date",
+                yaxis_title="Profit (Units)",
+                template="plotly_white",
+                height=400
             )
             st.plotly_chart(fig, use_container_width=True)
-            
-            st.markdown("**Per-Product Summary (Units)**")
-            for _, row in agg.iterrows():
-                prod_stats = compute_roi_units(prod_settled[prod_settled["product"] == row["product"]])
-                st.markdown(
-                    f"**{row['product']}**: {format_roi(prod_stats['roi'])} | "
-                    f"{format_units(prod_stats['units_won'])} | "
-                    f"{prod_stats['bets']} bets | "
-                    f"{prod_stats['hit_rate']:.1f}% hit rate"
-                )
-        else:
-            st.info("Waiting for settled bets before we can show per-product ROI.")
-    else:
-        st.info("No bets found in the database yet.")
 
-    st.markdown("### 🕒 Latest 50 Bets")
-    latest = df.sort_values("created_at", ascending=False).head(50)
-    table = style_bet_table(latest)
-    st.dataframe(
-        table,
-        use_container_width=True,
-        height=380,
-        column_config=None,
-    )
-    
-    # AI Training Data Stats
-    st.markdown("### 🤖 AI Training Data Collection")
-    training_stats = get_training_data_stats()
-    if training_stats and training_stats.get('total_records', 0) > 0:
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            metric_card(
-                "Total Records",
-                f"{training_stats['total_records']:,}",
-                f"Training data points"
-            )
-        with col2:
-            metric_card(
-                "Bets Placed",
-                f"{training_stats['bets_placed']:,}",
-                "With actual stakes"
-            )
-        with col3:
-            metric_card(
-                "Predictions Only",
-                f"{training_stats['predictions_only']:,}",
-                "AI analysis captured"
-            )
-        with col4:
-            metric_card(
-                "Unique Matches",
-                f"{training_stats['unique_matches']:,}",
-                f"Across {training_stats['unique_leagues']} leagues"
-            )
-        
-        with st.expander("View Data Collection Breakdown"):
             col1, col2 = st.columns(2)
             with col1:
-                st.markdown("**Value Singles Engine**")
-                st.write(f"- Records: {training_stats.get('value_singles_records', 0):,}")
+                fig2 = go.Figure(data=[
+                    go.Bar(name='Wins', x=daily_df['date'], y=daily_df['wins'], marker_color='#4CAF50'),
+                    go.Bar(name='Losses', x=daily_df['date'], y=daily_df['losses'], marker_color='#f44336')
+                ])
+                fig2.update_layout(title="Daily Wins vs Losses", barmode='group', template="plotly_white", height=300)
+                st.plotly_chart(fig2, use_container_width=True)
+
             with col2:
-                st.markdown("**Parlay Engine**")
-                st.write(f"- Records: {training_stats.get('parlay_records', 0):,}")
-    else:
-        st.info("AI training data collection starting - stats will appear after next prediction cycle.")
-    
-    # Learning Track Record Section
-    render_learning_track_record()
-
-
-def render_learning_track_record():
-    """Render the Learning Track Record section showing AI prediction performance."""
-    from data_collector import get_collector
-    
-    st.markdown("### 📊 Learning System Track Record")
-    
-    collector = get_collector()
-    summary = collector.get_track_record_summary()
-    
-    if summary.get('error') or summary.get('settled', 0) == 0:
-        st.info("Track record will appear once predictions are settled and verified. Currently collecting data...")
-        return
-    
-    # Top-level KPI Cards
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.markdown(
-            f"""
-            <div style="padding:14px 16px;border-radius:12px;
-                background:rgba(0,245,157,0.08);border:1px solid rgba(0,245,157,0.3);">
-                <div style="font-size:11px;text-transform:uppercase;color:#00F59D;">Overall Accuracy</div>
-                <div style="font-size:28px;font-weight:700;color:#00F59D;">
-                    {summary['accuracy_pct']:.1f}%
-                </div>
-                <div style="font-size:12px;color:#9CA3AF;">
-                    {summary['correct']}/{summary['settled']} correct
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    
-    with col2:
-        st.markdown(
-            f"""
-            <div style="padding:14px 16px;border-radius:12px;
-                background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.3);">
-                <div style="font-size:11px;text-transform:uppercase;color:#3B82F6;">Bets Accuracy</div>
-                <div style="font-size:28px;font-weight:700;color:#3B82F6;">
-                    {summary['bets_accuracy_pct']:.1f}%
-                </div>
-                <div style="font-size:12px;color:#9CA3AF;">
-                    {summary['bets_correct']}/{summary['bets_settled']} bets won
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    
-    with col3:
-        st.markdown(
-            f"""
-            <div style="padding:14px 16px;border-radius:12px;
-                background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.3);">
-                <div style="font-size:11px;text-transform:uppercase;color:#A855F7;">Predictions Accuracy</div>
-                <div style="font-size:28px;font-weight:700;color:#A855F7;">
-                    {summary['predictions_accuracy_pct']:.1f}%
-                </div>
-                <div style="font-size:12px;color:#9CA3AF;">
-                    {summary['predictions_correct']}/{summary['predictions_settled']} correct (no bet)
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    
-    with col4:
-        st.markdown(
-            f"""
-            <div style="padding:14px 16px;border-radius:12px;
-                background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.2);">
-                <div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Total Data Points</div>
-                <div style="font-size:28px;font-weight:700;color:#FFFFFF;">
-                    {summary['total_records']:,}
-                </div>
-                <div style="font-size:12px;color:#9CA3AF;">
-                    {summary['settled']} settled
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    
-    # Expandable sections for detailed breakdown
-    with st.expander("📈 Performance by Prediction Type", expanded=False):
-        by_type = collector.get_accuracy_by_type()
-        if by_type:
-            import pandas as pd
-            type_df = pd.DataFrame(by_type)
-            type_df.columns = ['Type', 'Total', 'Settled', 'Correct', 'Accuracy %', 'Avg Prob %', 'Avg Edge %']
-            type_df['Accuracy %'] = type_df['Accuracy %'].apply(lambda x: f"{x:.1f}%")
-            type_df['Avg Prob %'] = type_df['Avg Prob %'].apply(lambda x: f"{x*100:.1f}%" if x else "N/A")
-            type_df['Avg Edge %'] = type_df['Avg Edge %'].apply(lambda x: f"{x:.1f}%" if x else "N/A")
-            st.dataframe(type_df, use_container_width=True, hide_index=True)
-        else:
-            st.info("No data by type yet.")
-    
-    with st.expander("🏆 Performance by League", expanded=False):
-        by_league = collector.get_accuracy_by_league(min_samples=3)
-        if by_league:
-            import pandas as pd
-            league_df = pd.DataFrame(by_league)
-            league_df.columns = ['League', 'Total', 'Settled', 'Correct', 'Accuracy %']
-            league_df['Accuracy %'] = league_df['Accuracy %'].apply(lambda x: f"{x:.1f}%")
-            st.dataframe(league_df, use_container_width=True, hide_index=True)
-        else:
-            st.info("Need more settled predictions per league (min 3) to show breakdown.")
-    
-    # Accuracy Trend Chart
-    daily_data = collector.get_daily_accuracy(days=30)
-    if daily_data and len(daily_data) >= 2:
-        import pandas as pd
-        import plotly.graph_objects as go
-        
-        daily_df = pd.DataFrame(daily_data)
-        daily_df['date'] = pd.to_datetime(daily_df['date'])
-        
-        # Calculate 7-day rolling accuracy
-        daily_df['rolling_correct'] = daily_df['correct'].rolling(window=7, min_periods=1).sum()
-        daily_df['rolling_settled'] = daily_df['settled'].rolling(window=7, min_periods=1).sum()
-        daily_df['rolling_accuracy'] = (daily_df['rolling_correct'] / daily_df['rolling_settled'] * 100).fillna(0)
-        
-        fig = go.Figure()
-        
-        # Daily accuracy bars
-        fig.add_trace(go.Bar(
-            x=daily_df['date'],
-            y=daily_df['accuracy_pct'],
-            name='Daily Accuracy',
-            marker_color='rgba(0,245,157,0.4)',
-            hovertemplate='%{x}<br>Accuracy: %{y:.1f}%<extra></extra>'
-        ))
-        
-        # 7-day rolling average line
-        fig.add_trace(go.Scatter(
-            x=daily_df['date'],
-            y=daily_df['rolling_accuracy'],
-            mode='lines',
-            name='7-Day Average',
-            line=dict(color='#00F59D', width=3),
-            hovertemplate='%{x}<br>7-Day Avg: %{y:.1f}%<extra></extra>'
-        ))
-        
-        fig.update_layout(
-            title='Prediction Accuracy Over Time',
-            plot_bgcolor="rgba(0,0,0,0)",
-            paper_bgcolor="rgba(0,0,0,0)",
-            font_color="#FFFFFF",
-            xaxis=dict(gridcolor="rgba(255,255,255,0.1)", title="Date"),
-            yaxis=dict(gridcolor="rgba(255,255,255,0.1)", title="Accuracy %", range=[0, 100]),
-            height=300,
-            margin=dict(l=0, r=0, t=40, b=0),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            hovermode="x unified"
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
-    
-    # Model Calibration Chart
-    calibration_data = collector.get_calibration_data(bins=10)
-    if calibration_data and len(calibration_data) >= 2:
-        with st.expander("🎯 Model Calibration (Predicted vs Actual)", expanded=False):
-            import pandas as pd
-            import plotly.graph_objects as go
-            
-            cal_df = pd.DataFrame(calibration_data)
-            
-            fig = go.Figure()
-            
-            # Perfect calibration line
-            fig.add_trace(go.Scatter(
-                x=[0, 100],
-                y=[0, 100],
-                mode='lines',
-                name='Perfect Calibration',
-                line=dict(color='rgba(255,255,255,0.3)', dash='dash'),
-            ))
-            
-            # Actual calibration
-            fig.add_trace(go.Scatter(
-                x=cal_df['predicted_rate'],
-                y=cal_df['actual_rate'],
-                mode='markers+lines',
-                name='Model Calibration',
-                marker=dict(size=10, color='#00F59D'),
-                line=dict(color='#00F59D', width=2),
-                text=cal_df['probability_bin'],
-                hovertemplate='Bin: %{text}<br>Predicted: %{x:.1f}%<br>Actual: %{y:.1f}%<extra></extra>'
-            ))
-            
-            fig.update_layout(
-                title='Model Calibration: Predicted Probability vs Actual Hit Rate',
-                plot_bgcolor="rgba(0,0,0,0)",
-                paper_bgcolor="rgba(0,0,0,0)",
-                font_color="#FFFFFF",
-                xaxis=dict(gridcolor="rgba(255,255,255,0.1)", title="Predicted Probability %", range=[0, 100]),
-                yaxis=dict(gridcolor="rgba(255,255,255,0.1)", title="Actual Hit Rate %", range=[0, 100]),
-                height=300,
-                margin=dict(l=0, r=0, t=40, b=0),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            )
-            
-            st.plotly_chart(fig, use_container_width=True)
-            st.caption("A well-calibrated model follows the diagonal line. Points above = model underestimates, below = overestimates.")
-
-
-def render_product_tab(
-    df: pd.DataFrame,
-    product_codes: List[str],
-    title: str,
-    description: str,
-):
-    """Render product tab with Parlay-style card layout."""
-    data = product_filter(df, product_codes)
-
-    st.markdown(f"## {title}")
-    st.caption(description)
-    
-    # Add odds warning for Exact Score products
-    if "EXACT_SCORE" in product_codes or "FINAL_SCORE" in product_codes:
-        st.markdown(
-            """<div style="padding:8px 12px;border-radius:8px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.4);margin-bottom:16px;">
-                <span style="color:#FBBF24;">⚠️</span> <span style="color:#E5E7EB;font-size:13px;">Odds may differ from your bookmaker. Our odds are calculated from statistical models.</span>
-            </div>""",
-            unsafe_allow_html=True
-        )
-
-    if data.empty:
-        st.info("No bets for this product yet. Once your engine starts saving picks here, this tab will update automatically.")
-        return
-
-    for c in ["odds", "stake", "payout"]:
-        if c in data.columns:
-            data[c] = pd.to_numeric(data[c], errors="coerce")
-    
-    data["profit"] = data["payout"].fillna(0) - data["stake"].fillna(100)
-    
-    # Use norm_result for filtering (normalized to WON/LOST/PENDING/VOID)
-    result_col = "norm_result" if "norm_result" in data.columns else "result"
-    data.loc[~data[result_col].isin(["WON", "LOST"]), "profit"] = pd.NA
-
-    active = data[~data[result_col].isin(["WON", "LOST", "VOID"])].copy()
-    settled = data[data[result_col].isin(["WON", "LOST"])].copy()
-
-    if not settled.empty:
-        units_staked = len(settled)
-        won_count = (settled[result_col] == "WON").sum()
-        lost_count = (settled[result_col] == "LOST").sum()
-        
-        won_bets = settled[settled[result_col] == "WON"]
-        profit_units = 0.0
-        for _, bet in won_bets.iterrows():
-            odds = float(bet.get("odds", 2.0) or 2.0)
-            profit_units += (odds - 1)
-        profit_units -= lost_count
-        
-        roi = (profit_units / units_staked * 100) if units_staked > 0 else 0.0
-        hit_rate = (won_count / len(settled) * 100) if len(settled) > 0 else 0.0
-
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            roi_color = "#00FFA6" if roi >= 0 else "#F97373"
-            st.markdown(
-                f"""
-                <div style="padding:14px 16px;border-radius:12px;
-                    background:rgba(0,255,166,0.06);border:1px solid rgba(0,255,166,0.3);">
-                    <div style="font-size:11px;text-transform:uppercase;color:#7EF3C9;">ROI</div>
-                    <div style="font-size:26px;font-weight:700;color:{roi_color};">
-                        {roi:+.1f}%
-                    </div>
-                    <div style="font-size:12px;color:#9CA3AF;">
-                        On {units_staked} units
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-        with col2:
-            color = "#00FFA6" if profit_units >= 0 else "#F97373"
-            st.markdown(
-                f"""
-                <div style="padding:14px 16px;border-radius:12px;
-                    background:rgba(15,23,42,0.9);border:1px solid rgba(148,163,184,0.4);">
-                    <div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Profit</div>
-                    <div style="font-size:26px;font-weight:700;color:{color};">
-                        {profit_units:+.1f} units
-                    </div>
-                    <div style="font-size:12px;color:#9CA3AF;">
-                        All settled bets
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-        with col3:
-            st.markdown(
-                f"""
-                <div style="padding:14px 16px;border-radius:12px;
-                    background:rgba(15,23,42,0.9);border:1px solid rgba(148,163,184,0.4);">
-                    <div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Hit rate</div>
-                    <div style="font-size:26px;font-weight:700;color:#E5E7EB;">
-                        {hit_rate:.1f}%
-                    </div>
-                    <div style="font-size:12px;color:#9CA3AF;">
-                        {won_count}/{len(settled)} won
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-    st.markdown("---")
-
-    if active.empty:
-        st.info("No active bets right now.")
-    else:
-        from datetime import datetime, timedelta
-        import pytz
-        
-        now_utc = datetime.now(pytz.UTC)
-        today = now_utc.date()
-        tomorrow = today + timedelta(days=1)
-        
-        def parse_match_date(val):
-            if pd.isna(val) or val is None or str(val).strip() == '':
-                return pd.NaT
-            s = str(val).strip()
-            if len(s) == 10 and '-' in s:
-                s = s + "T00:00:00Z"
-            try:
-                return pd.to_datetime(s, utc=True)
-            except:
-                return pd.NaT
-        
-        active["match_date_parsed"] = active["match_date"].apply(parse_match_date)
-        active["match_day"] = active["match_date_parsed"].dt.date
-        
-        todays_picks = active[active["match_day"] == today].copy()
-        tomorrows_picks = active[active["match_day"] == tomorrow].copy()
-        # Only show future matches (after tomorrow) in Upcoming - not past unsettled matches
-        upcoming_picks = active[active["match_day"] > tomorrow].copy()
-        # Past unsettled matches (awaiting settlement)
-        past_unsettled = active[active["match_day"] < today].copy()
-        
-        def render_bet_cards(bets_df, section_title, section_emoji):
-            st.markdown(f"### {section_emoji} {section_title}")
-            if bets_df.empty:
-                st.caption(f"No {section_title.lower()} available.")
-                return
-            
-            for _, row in bets_df.iterrows():
-                ev = row.get("ev", 0.0) or 0.0
-                try:
-                    ev = float(ev)
-                except Exception:
-                    ev = 0.0
-
-                if ev >= 15:
-                    ev_bg, ev_border = "rgba(34,197,94,0.18)", "rgba(34,197,94,0.8)"
-                elif ev >= 8:
-                    ev_bg, ev_border = "rgba(250,204,21,0.14)", "rgba(250,204,21,0.9)"
-                elif ev >= 3:
-                    ev_bg, ev_border = "rgba(59,130,246,0.14)", "rgba(59,130,246,0.7)"
-                else:
-                    ev_bg, ev_border = "rgba(148,163,184,0.10)", "rgba(148,163,184,0.6)"
-
-                raw_match_date = row["match_date"] if "match_date" in row.index else None
-                match_str = format_kickoff(raw_match_date)
-                
-                home_team = str(row.get('home_team', '')).replace('"', '&quot;')
-                away_team = str(row.get('away_team', '')).replace('"', '&quot;')
-                fixture = f"{home_team} vs {away_team}" if away_team else home_team
-                odds_val = float(row.get('odds', 0))
-                stake_sek = float(row.get('stake', 173))  # Stored in SEK
-                stake_usd = stake_sek / USD_TO_SEK
-                
-                selection = str(row.get('selection', '')).replace('"', '&quot;')
-                if not selection or selection.lower() == 'none':
-                    selection = ""
-                bet_display = selection.replace("Exact Score: ", "").replace("Value Single: ", "") if selection else ""
-                
-                product = str(row.get('product', '')).upper()
-                if product == 'CORNERS':
-                    market_badge = '<span style="font-size:11px;padding:2px 8px;border-radius:4px;background:rgba(16,185,129,0.2);color:#10B981;margin-right:8px;">🔢 CORNERS</span>'
-                    if 'corner' not in bet_display.lower():
-                        bet_display = f"{bet_display} Corners" if bet_display else "Corners"
-                elif product == 'CARDS':
-                    market_badge = '<span style="font-size:11px;padding:2px 8px;border-radius:4px;background:rgba(245,158,11,0.2);color:#F59E0B;margin-right:8px;">🟨 CARDS</span>'
-                    if 'card' not in bet_display.lower():
-                        bet_display = f"{bet_display} Cards" if bet_display else "Cards"
-                else:
-                    market_badge = ''
-
-                card_html = f"""<div style="padding:18px;margin:10px 0;border-radius:16px;background:radial-gradient(circle at top left, rgba(0,255,166,0.14), rgba(15,23,42,0.96));border:1px solid rgba(0,255,166,0.35);box-shadow:0 0 20px rgba(0,255,166,0.25);">
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-<div style="font-size:18px;font-weight:600;color:#E5E7EB;">⚽ {fixture}</div>
-<div style="font-size:11px;padding:4px 9px;border-radius:999px;background:{ev_bg};border:1px solid {ev_border};color:#E5E7EB;text-transform:uppercase;letter-spacing:0.06em;">EV {ev:+.1f}%</div>
-</div>
-<div style="font-size:12px;color:#9CA3AF;margin-bottom:6px;">Kickoff: {match_str}</div>
-{market_badge}<div style="font-size:22px;font-weight:700;color:#00FFA6;margin:8px 0;letter-spacing:0.02em;display:inline;">{bet_display}</div>
-<div style="display:flex;gap:18px;align-items:baseline;margin-top:4px;">
-<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Odds</div><div style="font-size:20px;font-weight:600;color:#00FFA6;">{odds_val:.2f}</div></div>
-<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">1 unit</div></div>
-</div>
-</div>"""
-                st.markdown(card_html, unsafe_allow_html=True)
-                st.code(f"{fixture} | {bet_display} | Odds {odds_val:.2f} | Stake: 1 unit", language="text")
-        
-        render_bet_cards(todays_picks, "Today's Picks", "🔥")
-        st.markdown("")
-        render_bet_cards(tomorrows_picks, "Tomorrow's Picks", "📅")
-        
-        if not upcoming_picks.empty:
-            st.markdown("")
-            render_bet_cards(upcoming_picks, "Upcoming Picks", "🗓️")
-        
-        if not past_unsettled.empty:
-            st.markdown("")
-            st.markdown(f"### ⏳ Awaiting Results ({len(past_unsettled)} bets)")
-            st.caption("These matches have finished but results haven't been verified yet.")
-            for _, row in past_unsettled.iterrows():
-                home_team = str(row.get('home_team', '')).replace('"', '&quot;')
-                away_team = str(row.get('away_team', '')).replace('"', '&quot;')
-                fixture = f"{home_team} vs {away_team}" if away_team else home_team
-                selection = str(row.get('selection', '')).replace('"', '&quot;')
-                bet_display = selection.replace("Exact Score: ", "").replace("Value Single: ", "") if selection else ""
-                odds_val = float(row.get('odds', 0))
-                match_str = format_kickoff(row.get("match_date"))
-                st.markdown(
-                    f"""<div style="padding:12px;margin:6px 0;border-radius:10px;background:rgba(148,163,184,0.08);border:1px solid rgba(148,163,184,0.3);">
-                    <div style="color:#9CA3AF;font-size:14px;">⏳ {fixture} - <span style="color:#E5E7EB;">{bet_display}</span> @ {odds_val:.2f}</div>
-                    <div style="font-size:11px;color:#6B7280;">Played: {match_str}</div>
-                    </div>""",
-                    unsafe_allow_html=True
-                )
-
-    st.markdown("---")
-
-    st.markdown("### Performance")
-    r1, r2 = st.columns((2, 1))
-    with r1:
-        roi_df = roi_series(settled)
-        if not roi_df.empty:
-            st.line_chart(roi_df.set_index("when"), height=220)
-        else:
-            st.caption("No settled bets yet.")
-        st.caption("Cumulative profit (USD)")
-    with r2:
-        hit_df = rolling_hit_rate(settled)
-        if not hit_df.empty:
-            st.line_chart(hit_df, x="when", y="roll", height=220)
-        else:
-            st.caption("No data yet.")
-        st.caption("Rolling hit rate (last 50)")
-
-    st.markdown("---")
-    st.markdown("### Bet History")
-    if settled.empty:
-        st.caption("No settled bets yet.")
-    else:
-        if "settled_at" in settled.columns:
-            dt_settled = pd.to_datetime(settled["settled_at"], errors="coerce")
-            if hasattr(dt_settled.dt, 'tz') and dt_settled.dt.tz is not None:
-                dt_settled = dt_settled.dt.tz_localize(None)
-            settled["settled"] = dt_settled.dt.strftime("%d %b %H:%M").fillna("")
-        if "match_date" in settled.columns:
-            dt_match = pd.to_datetime(settled["match_date"], errors="coerce")
-            if hasattr(dt_match.dt, 'tz') and dt_match.dt.tz is not None:
-                dt_match = dt_match.dt.tz_localize(None)
-            settled["match"] = dt_match.dt.strftime("%d %b %H:%M").fillna("")
-        settled["fixture"] = settled.apply(as_fixture, axis=1)
-        
-        if "clv_pct" in settled.columns:
-            settled["CLV"] = settled["clv_pct"].apply(
-                lambda x: f"{x:+.1f}%" if pd.notna(x) else "–"
-            )
-            cols_hist = [c for c in ["settled", "match", "fixture", "odds", "CLV", "stake", "payout", "profit", "result"] if c in settled.columns and not settled[c].isna().all()]
-        else:
-            cols_hist = [c for c in ["settled", "match", "fixture", "odds", "stake", "payout", "profit", "result"] if c in settled.columns and not settled[c].isna().all()]
-        
-        st.dataframe(
-            settled.sort_values("settled_at", ascending=False)[cols_hist],
-            use_container_width=True,
-            hide_index=True,
-        )
-
-
-def render_ml_parlay_tab():
-    """Render ML Parlay tab showing moneyline parlays (TEST MODE)."""
-    st.markdown("## ML Parlay (Moneyline Parlays)")
-    st.caption("LOW/MEDIUM risk parlays from 1X2/Moneyline/DNB markets. **INTERNAL TEST MODE**")
-    
-    try:
-        from db_helper import db_helper
-        
-        parlays = db_helper.execute(
-            """SELECT parlay_id, match_date, num_legs, parlay_description, 
-                      total_odds, combined_ev, confidence_score, stake, 
-                      potential_payout, status, outcome, profit_loss, mode
-               FROM ml_parlay_predictions 
-               ORDER BY timestamp DESC 
-               LIMIT 50""",
-            fetch='all'
-        )
-        
-        if not parlays:
-            st.info("No ML Parlays yet. The engine runs every 3 hours and creates parlays when matches meet the strict filters (1.40-2.10 odds, 4%+ EV per leg).")
-            return
-        
-        columns = ['parlay_id', 'match_date', 'num_legs', 'parlay_description', 
-                   'total_odds', 'combined_ev', 'confidence_score', 'stake',
-                   'potential_payout', 'status', 'outcome', 'profit_loss', 'mode']
-        df = pd.DataFrame(parlays, columns=columns)
-        
-        settled = df[df['status'] == 'settled'].copy()
-        pending = df[df['status'] == 'pending'].copy()
-        
-        if not settled.empty:
-            settled['total_odds'] = pd.to_numeric(settled['total_odds'], errors='coerce').fillna(2.0)
-            
-            units_staked = len(settled)
-            won = len(settled[settled['outcome'] == 'won'])
-            lost = len(settled) - won
-            
-            profit_units = 0.0
-            for _, bet in settled.iterrows():
-                if bet['outcome'] == 'won':
-                    odds = float(bet.get('total_odds', 2.0) or 2.0)
-                    profit_units += (odds - 1)
-                else:
-                    profit_units -= 1
-            
-            roi = (profit_units / units_staked * 100) if units_staked > 0 else 0
-            hit_rate = (won / len(settled) * 100) if len(settled) > 0 else 0
-            
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                color = "#00FFA6" if roi >= 0 else "#F97373"
-                st.markdown(f"""
-                    <div style="padding:12px;border-radius:10px;background:rgba(15,23,42,0.9);border:1px solid {color};">
-                        <div style="font-size:11px;color:#9CA3AF;">ROI</div>
-                        <div style="font-size:22px;font-weight:700;color:{color};">{roi:+.1f}%</div>
-                    </div>
-                """, unsafe_allow_html=True)
-            with col2:
-                color = "#00FFA6" if profit_units >= 0 else "#F97373"
-                st.markdown(f"""
-                    <div style="padding:12px;border-radius:10px;background:rgba(15,23,42,0.9);border:1px solid rgba(148,163,184,0.4);">
-                        <div style="font-size:11px;color:#9CA3AF;">Profit</div>
-                        <div style="font-size:22px;font-weight:700;color:{color};">{profit_units:+.1f}u</div>
-                    </div>
-                """, unsafe_allow_html=True)
-            with col3:
-                st.markdown(f"""
-                    <div style="padding:12px;border-radius:10px;background:rgba(15,23,42,0.9);border:1px solid rgba(148,163,184,0.4);">
-                        <div style="font-size:11px;color:#9CA3AF;">Hit Rate</div>
-                        <div style="font-size:22px;font-weight:700;color:#E5E7EB;">{hit_rate:.1f}%</div>
-                    </div>
-                """, unsafe_allow_html=True)
-            with col4:
-                st.markdown(f"""
-                    <div style="padding:12px;border-radius:10px;background:rgba(15,23,42,0.9);border:1px solid rgba(148,163,184,0.4);">
-                        <div style="font-size:11px;color:#9CA3AF;">Settled</div>
-                        <div style="font-size:22px;font-weight:700;color:#E5E7EB;">{won}/{len(settled)}</div>
-                    </div>
-                """, unsafe_allow_html=True)
-        
-        st.markdown("---")
-        
-        st.markdown("### 🎰 Pending ML Parlays")
-        if pending.empty:
-            st.info("No pending ML parlays. Next batch generates when matches meet the filters.")
-        else:
-            for _, row in pending.iterrows():
-                ev = float(row.get('combined_ev', 0) or 0)
-                odds = float(row.get('total_odds', 0) or 0)
-                stake_sek = float(row.get('stake', 0) or 0)
-                stake_usd = stake_sek / USD_TO_SEK
-                desc = str(row.get('parlay_description', ''))
-                legs = int(row.get('num_legs', 0) or 0)
-                
-                ev_color = "#00FFA6" if ev >= 10 else "#FBBF24" if ev >= 5 else "#9CA3AF"
-                
-                card_html = f"""
-                <div style="padding:16px;margin:10px 0;border-radius:14px;background:radial-gradient(circle at top left, rgba(168,85,247,0.12), rgba(15,23,42,0.96));border:1px solid rgba(168,85,247,0.4);">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                        <div style="font-size:11px;padding:3px 8px;border-radius:999px;background:rgba(168,85,247,0.2);color:#A855F7;">TEST MODE • {legs} LEGS</div>
-                        <div style="font-size:11px;padding:3px 8px;border-radius:999px;background:rgba(0,255,166,0.1);color:{ev_color};">EV {ev:+.1f}%</div>
-                    </div>
-                    <div style="font-size:16px;color:#E5E7EB;margin-bottom:10px;">{desc}</div>
-                    <div style="display:flex;gap:20px;">
-                        <div><span style="font-size:11px;color:#9CA3AF;">ODDS</span><br/><span style="font-size:18px;font-weight:600;color:#A855F7;">{odds:.2f}x</span></div>
-                        <div><span style="font-size:11px;color:#9CA3AF;">STAKE</span><br/><span style="font-size:18px;font-weight:600;color:#E5E7EB;">1 unit</span></div>
-                    </div>
-                </div>
-                """
-                st.markdown(card_html, unsafe_allow_html=True)
-        
-        st.markdown("---")
-        st.markdown("### 📜 ML Parlay History")
-        if settled.empty:
-            st.info("No settled ML parlays yet.")
-        else:
-            display_df = settled[['parlay_id', 'match_date', 'num_legs', 'parlay_description', 'total_odds', 'combined_ev', 'outcome', 'profit_loss']].copy()
-            display_df.columns = ['ID', 'Date', 'Legs', 'Description', 'Odds', 'EV%', 'Result', 'P/L']
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
-            
-    except Exception as e:
-        st.error(f"Error loading ML Parlay data: {e}")
-
-
-def render_daily_card_tab():
-    """Render the Daily Betting Card tab with EV-filtered selections."""
-    from daily_card_selector import DailyCardSelector
-    
-    st.markdown("## Today's Betting Card")
-    st.caption("AI-curated daily picks based on EV tiers and optimal odds ranges.")
-    
-    if st.button("Refresh Daily Card", key="refresh_daily_card"):
-        st.rerun()
-    
-    try:
-        selector = DailyCardSelector()
-        card = selector.generate_daily_card()
-        
-        if card['error']:
-            st.error(f"Error loading data: {card['error']}")
-            return
-        
-        if card['summary'] and card['summary'].get('total_bets', 0) == 0:
-            st.info("No official value plays today based on current EV filters. Check back later!")
-            return
-        
-        summary = card['summary']
-        st.markdown("### Card Summary")
-        cols = st.columns(4)
-        with cols[0]:
-            st.metric("Total Picks", summary['total_bets'])
-        with cols[1]:
-            st.metric("Value Singles", summary['value_singles_count'])
-        with cols[2]:
-            st.metric("Parlay Bets", summary.get('parlay_count', 0))
-        with cols[3]:
-            st.metric("Basketball", summary['basketball_count'])
-        
-        st.markdown("---")
-        
-        if card.get('parlay', []):
-            st.markdown("### Parlay Bets")
-            for bet in card.get('parlay', []):
-                tier_color = "#10B981" if bet['tier'] == 'A' else "#F59E0B" if bet['tier'] == 'B' else "#6B7280"
-                ev_color = "#10B981" if bet['ev'] > 0.10 else "#F59E0B" if bet['ev'] > 0.05 else "#9CA3AF"
-                st.markdown(f"""
-                <div style="padding:16px;margin:10px 0;border-radius:14px;background:radial-gradient(circle at top left, rgba(99,102,241,0.15), rgba(15,23,42,0.96));border:1px solid rgba(99,102,241,0.4);">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                        <div style="font-size:11px;padding:3px 8px;border-radius:999px;background:{tier_color}33;color:{tier_color};">TIER {bet['tier']}</div>
-                        <div style="font-size:11px;padding:3px 8px;border-radius:999px;background:{ev_color}22;color:{ev_color};">EV +{bet['ev']*100:.1f}%</div>
-                    </div>
-                    <div style="font-size:13px;color:#9CA3AF;margin-bottom:4px;">{bet['league']}</div>
-                    <div style="font-size:16px;color:#E5E7EB;font-weight:600;margin-bottom:6px;">{bet['matchup']}</div>
-                    <div style="font-size:14px;color:#A5B4FC;margin-bottom:10px;">{bet['selection']}</div>
-                    <div style="display:flex;gap:24px;">
-                        <div><span style="font-size:11px;color:#9CA3AF;">ODDS</span><br/><span style="font-size:20px;font-weight:600;color:#6366F1;">{bet['odds']:.2f}x</span></div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-        
-        if card['basketball']:
-            st.markdown("### Basketball")
-            for bet in card['basketball']:
-                tier_color = "#10B981" if bet['tier'] == 'A' else "#F59E0B" if bet['tier'] == 'B' else "#6B7280"
-                ev_color = "#10B981" if bet['ev'] > 0.10 else "#F59E0B" if bet['ev'] > 0.05 else "#9CA3AF"
-                st.markdown(f"""
-                <div style="padding:16px;margin:10px 0;border-radius:14px;background:radial-gradient(circle at top left, rgba(249,115,22,0.15), rgba(15,23,42,0.96));border:1px solid rgba(249,115,22,0.4);">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                        <div style="font-size:11px;padding:3px 8px;border-radius:999px;background:{tier_color}33;color:{tier_color};">TIER {bet['tier']}</div>
-                        <div style="font-size:11px;padding:3px 8px;border-radius:999px;background:{ev_color}22;color:{ev_color};">EV +{bet['ev']*100:.1f}%</div>
-                    </div>
-                    <div style="font-size:13px;color:#9CA3AF;margin-bottom:4px;">{bet['league']} • {bet['market']}</div>
-                    <div style="font-size:16px;color:#E5E7EB;font-weight:600;margin-bottom:6px;">{bet['matchup']}</div>
-                    <div style="font-size:14px;color:#FDBA74;margin-bottom:10px;">{bet['selection']}</div>
-                    <div style="display:flex;gap:24px;">
-                        <div><span style="font-size:11px;color:#9CA3AF;">ODDS</span><br/><span style="font-size:20px;font-weight:600;color:#F97316;">{bet['odds']:.2f}x</span></div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-        
-        if card['value_singles']:
-            st.markdown("### Value Singles")
-            for bet in card['value_singles']:
-                tier_color = "#10B981" if bet['tier'] == 'A' else "#F59E0B" if bet['tier'] == 'B' else "#6B7280"
-                ev_color = "#10B981" if bet['ev'] > 0.10 else "#F59E0B" if bet['ev'] > 0.05 else "#9CA3AF"
-                
-                bookmaker_html = ""
-                odds_by_bookmaker = bet.get('odds_by_bookmaker', {})
-                best_bookmaker = bet.get('best_odds_bookmaker', '')
-                best_odds = bet.get('best_odds_value', bet['odds'])
-                
-                if odds_by_bookmaker and isinstance(odds_by_bookmaker, dict):
-                    sorted_books = sorted(odds_by_bookmaker.items(), key=lambda x: float(x[1]) if x[1] else 0, reverse=True)
-                    book_items = []
-                    for book, odds_val in sorted_books[:5]:
-                        if odds_val:
-                            is_best = (book == best_bookmaker)
-                            star = "⭐ " if is_best else ""
-                            style = "font-weight:700;color:#00FFA6;" if is_best else "color:#9CA3AF;"
-                            book_items.append(f'<span style="{style}">{star}{book} {float(odds_val):.2f}</span>')
-                    if book_items:
-                        bookmaker_html = f'<div style="font-size:11px;margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;">{" • ".join(book_items)}</div>'
-                
-                st.markdown(f"""
-                <div style="padding:16px;margin:10px 0;border-radius:14px;background:radial-gradient(circle at top left, rgba(16,185,129,0.15), rgba(15,23,42,0.96));border:1px solid rgba(16,185,129,0.4);">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                        <div style="font-size:11px;padding:3px 8px;border-radius:999px;background:{tier_color}33;color:{tier_color};">TIER {bet['tier']}</div>
-                        <div style="font-size:11px;padding:3px 8px;border-radius:999px;background:{ev_color}22;color:{ev_color};">EV +{bet['ev']*100:.1f}%</div>
-                    </div>
-                    <div style="font-size:13px;color:#9CA3AF;margin-bottom:4px;">{bet['league']} • {bet['market']}</div>
-                    <div style="font-size:16px;color:#E5E7EB;font-weight:600;margin-bottom:6px;">{bet['matchup']}</div>
-                    <div style="font-size:14px;color:#6EE7B7;margin-bottom:10px;">{bet['selection']}</div>
-                    <div style="display:flex;gap:24px;">
-                        <div><span style="font-size:11px;color:#9CA3AF;">BEST ODDS</span><br/><span style="font-size:20px;font-weight:600;color:#10B981;">{best_odds:.2f}x</span></div>
-                    </div>
-                    {bookmaker_html}
-                </div>
-                """, unsafe_allow_html=True)
-        
-        st.markdown("---")
-        st.markdown("### Average Stats")
-        stats_cols = st.columns(3)
-        with stats_cols[0]:
-            if summary.get('parlay_count', 0) > 0:
-                st.markdown(f"""
-                <div style="padding:12px;border-radius:10px;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);">
-                    <div style="font-size:12px;color:#9CA3AF;">Parlay Average</div>
-                    <div style="font-size:16px;color:#6366F1;">EV: {summary.get('parlay_avg_ev', 0):.1f}% • Odds: {summary.get('parlay_avg_odds', 0):.2f}x</div>
-                </div>
-                """, unsafe_allow_html=True)
-        with stats_cols[1]:
-            if summary['basketball_count'] > 0:
-                st.markdown(f"""
-                <div style="padding:12px;border-radius:10px;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);">
-                    <div style="font-size:12px;color:#9CA3AF;">Basketball Average</div>
-                    <div style="font-size:16px;color:#F97316;">EV: {summary['basketball_avg_ev']:.1f}% • Odds: {summary['basketball_avg_odds']:.2f}x</div>
-                </div>
-                """, unsafe_allow_html=True)
-        with stats_cols[2]:
-            if summary['value_singles_count'] > 0:
-                st.markdown(f"""
-                <div style="padding:12px;border-radius:10px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);">
-                    <div style="font-size:12px;color:#9CA3AF;">Value Singles Average</div>
-                    <div style="font-size:16px;color:#10B981;">EV: {summary['value_singles_avg_ev']:.1f}% • Odds: {summary['value_singles_avg_odds']:.2f}x</div>
-                </div>
-                """, unsafe_allow_html=True)
-        
-    except Exception as e:
-        st.error(f"Error generating daily card: {e}")
-
-
-def render_backtest_analysis():
-    """Render comprehensive backtest analysis tab with EV, odds, and league breakdowns."""
-    from backtest_analyzer import BacktestAnalyzer
-    
-    st.markdown("## Historical Performance Analysis")
-    st.caption("Data-driven analysis of what actually works based on all settled bets.")
-    
-    try:
-        analyzer = BacktestAnalyzer()
-        
-        if analyzer.load_error:
-            st.warning(f"Could not load backtest data: {analyzer.load_error}")
-            return
-        
-        stats = analyzer.get_summary_stats()
-        
-        if not stats:
-            st.info("No settled bets available for analysis yet. Place some bets and wait for results!")
-            return
-        
-        st.markdown("### Summary by Product")
-        cols = st.columns(len(stats))
-        for i, (product, data) in enumerate(stats.items()):
-            with cols[i]:
-                product_name = product.replace('_', ' ').title()
-                roi_color = "#10B981" if data['roi'] > 0 else "#EF4444"
-                st.markdown(f"""
-                <div style="padding:16px;border-radius:12px;background:linear-gradient(135deg, rgba(30,41,59,0.9), rgba(15,23,42,0.95));border:1px solid rgba(99,102,241,0.3);">
-                    <div style="font-size:14px;color:#9CA3AF;margin-bottom:8px;">{product_name}</div>
-                    <div style="font-size:28px;font-weight:600;color:{roi_color};">{data['roi']:+.1f}%</div>
-                    <div style="font-size:12px;color:#6B7280;margin-top:4px;">
-                        {data['wins']}/{data['total_bets']} wins ({data['hit_rate']:.1f}% HR)
-                    </div>
-                    <div style="font-size:12px;color:#6B7280;">
-                        {data['total_profit']:+,.0f} SEK profit
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-        
-        st.markdown("---")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("### EV Threshold Analysis")
-            st.caption("Which EV ranges generate the best returns?")
-            ev_df = analyzer.analyze_ev_thresholds()
-            if not ev_df.empty:
-                st.dataframe(ev_df, use_container_width=True, hide_index=True)
-                
-                best_ev = ev_df.iloc[0]['EV Range']
-                best_roi = ev_df.iloc[0]['ROI']
-                st.success(f"Best performer: **{best_ev}** EV range with **{best_roi}** ROI")
-        
-        with col2:
-            st.markdown("### Odds Range Analysis")
-            st.caption("Which odds ranges are most profitable?")
-            odds_df = analyzer.analyze_odds_ranges()
-            if not odds_df.empty:
-                st.dataframe(odds_df, use_container_width=True, hide_index=True)
-                
-                best_odds = odds_df.iloc[0]['Odds Range']
-                best_roi = odds_df.iloc[0]['ROI']
-                st.success(f"Best performer: **{best_odds}** odds with **{best_roi}** ROI")
-        
-        st.markdown("---")
-        
-        col3, col4 = st.columns(2)
-        
-        with col3:
-            st.markdown("### League Performance")
-            st.caption("Which leagues predict best?")
-            league_df = analyzer.analyze_by_league()
-            if not league_df.empty:
-                st.dataframe(league_df, use_container_width=True, hide_index=True)
-        
-        with col4:
-            st.markdown("### Basketball Market Analysis")
-            st.caption("Which basketball markets are most accurate?")
-            market_df = analyzer.analyze_by_market()
-            if not market_df.empty:
-                st.dataframe(market_df, use_container_width=True, hide_index=True)
-        
-        st.markdown("---")
-        
-        col5, col6 = st.columns(2)
-        
-        with col5:
-            st.markdown("### Parlay Odds Deep Dive")
-            st.caption("Fine-grained parlay odds analysis")
-            sgp_odds_df = analyzer.get_sgp_odds_analysis()
-            if not sgp_odds_df.empty:
-                st.dataframe(sgp_odds_df, use_container_width=True, hide_index=True)
-        
-        with col6:
-            st.markdown("### Basketball Confidence Levels")
-            st.caption("How confidence correlates with accuracy")
-            conf_df = analyzer.analyze_confidence_thresholds()
-            if not conf_df.empty:
-                st.dataframe(conf_df, use_container_width=True, hide_index=True)
-        
-        st.markdown("---")
-        st.markdown("### Key Insights")
-        
-        insights = []
-        
-        if not odds_df.empty:
-            profitable_odds = odds_df[odds_df['ROI'].str.contains(r'\+')]
-            if not profitable_odds.empty:
-                ranges = profitable_odds['Odds Range'].tolist()
-                insights.append(f"Profitable odds ranges: **{', '.join(ranges)}**")
-        
-        if not ev_df.empty:
-            best_ev_row = ev_df.iloc[0]
-            insights.append(f"Optimal EV threshold: **{best_ev_row['EV Range']}** ({best_ev_row['ROI']} ROI)")
-        
-        if not league_df.empty:
-            profitable_leagues = league_df[league_df['ROI'].str.contains(r'\+')]
-            if not profitable_leagues.empty:
-                top_leagues = profitable_leagues.head(3)['League'].tolist()
-                insights.append(f"Top performing leagues: **{', '.join(top_leagues)}**")
-        
-        if insights:
-            for insight in insights:
-                st.markdown(f"- {insight}")
-        else:
-            st.info("More data needed for actionable insights.")
-            
-    except Exception as e:
-        st.error(f"Error loading backtest analysis: {e}")
-        import traceback
-        st.code(traceback.format_exc())
-
-
-def render_basketball_tab(df: pd.DataFrame):
-    """Render College Basketball tab with Parlay-style card layout."""
-    st.markdown("## College Basketball")
-    st.caption("NCAAB value singles and parlays from your basketball engine.")
-
-    singles = product_filter(df, ["BASKET_SINGLE"])
-    parlays = product_filter(df, ["BASKET_PARLAY"])
-    all_data = product_filter(df, ["BASKET_SINGLE", "BASKET_PARLAY"])
-
-    if all_data.empty:
-        st.info("No basketball bets yet. Once your engine starts saving picks here, this tab will update automatically.")
-        return
-
-    for c in ["odds", "stake", "payout"]:
-        if c in all_data.columns:
-            all_data[c] = pd.to_numeric(all_data[c], errors="coerce")
-        if c in singles.columns:
-            singles[c] = pd.to_numeric(singles[c], errors="coerce")
-        if c in parlays.columns:
-            parlays[c] = pd.to_numeric(parlays[c], errors="coerce")
-
-    for df_item in [all_data, singles, parlays]:
-        df_item["profit"] = df_item["payout"].fillna(0) - df_item["stake"].fillna(100)
-        df_item.loc[~df_item["result"].isin(["WON", "LOST", "WIN", "LOSS"]), "profit"] = pd.NA
-    
-    settled_data = all_data[all_data["result"].isin(["WON", "LOST", "WIN", "LOSS"])].copy()
-    active_data = all_data[~all_data["result"].isin(["WON", "LOST", "WIN", "LOSS", "VOID"])].copy()
-
-    if not settled_data.empty:
-        units_staked = len(settled_data)
-        won_count = (settled_data["result"].isin(["WON", "WIN"])).sum()
-        lost_count = len(settled_data) - won_count
-        
-        won_bets = settled_data[settled_data["result"].isin(["WON", "WIN"])]
-        profit_units = 0.0
-        for _, bet in won_bets.iterrows():
-            odds = float(bet.get("odds", 2.0) or 2.0)
-            profit_units += (odds - 1)
-        profit_units -= lost_count
-        
-        roi = (profit_units / units_staked * 100) if units_staked > 0 else 0.0
-        hit_rate = (won_count / len(settled_data) * 100) if len(settled_data) > 0 else 0.0
-
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            roi_color = "#00FFA6" if roi >= 0 else "#F97373"
-            st.markdown(
-                f"""
-                <div style="padding:14px 16px;border-radius:12px;
-                    background:rgba(0,255,166,0.06);border:1px solid rgba(0,255,166,0.3);">
-                    <div style="font-size:11px;text-transform:uppercase;color:#7EF3C9;">ROI</div>
-                    <div style="font-size:26px;font-weight:700;color:{roi_color};">
-                        {roi:+.1f}%
-                    </div>
-                    <div style="font-size:12px;color:#9CA3AF;">
-                        On {units_staked} units
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-        with col2:
-            color = "#00FFA6" if profit_units >= 0 else "#F97373"
-            st.markdown(
-                f"""
-                <div style="padding:14px 16px;border-radius:12px;
-                    background:rgba(15,23,42,0.9);border:1px solid rgba(148,163,184,0.4);">
-                    <div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Profit</div>
-                    <div style="font-size:26px;font-weight:700;color:{color};">
-                        {profit_units:+.1f} units
-                    </div>
-                    <div style="font-size:12px;color:#9CA3AF;">
-                        All settled bets
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-        with col3:
-            st.markdown(
-                f"""
-                <div style="padding:14px 16px;border-radius:12px;
-                    background:rgba(15,23,42,0.9);border:1px solid rgba(148,163,184,0.4);">
-                    <div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Hit rate</div>
-                    <div style="font-size:26px;font-weight:700;color:#E5E7EB;">
-                        {hit_rate:.1f}%
-                    </div>
-                    <div style="font-size:12px;color:#9CA3AF;">
-                        {won_count}/{len(settled_data)} won
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-    st.markdown("---")
-
-    singles_active = singles[~singles["result"].isin(["WON", "LOST", "WIN", "LOSS", "VOID"])].copy()
-    parlays_active = parlays[~parlays["result"].isin(["WON", "LOST", "WIN", "LOSS", "VOID"])].copy()
-
-    st.markdown("### 🎯 Active Singles")
-    if singles_active.empty:
-        st.info("No active singles right now.")
-    else:
-        for _, row in singles_active.iterrows():
-            ev = row.get("ev", 0.0) or 0.0
-            try:
-                ev = float(ev)
-            except Exception:
-                ev = 0.0
-
-            if ev >= 15:
-                ev_bg, ev_border = "rgba(34,197,94,0.18)", "rgba(34,197,94,0.8)"
-            elif ev >= 8:
-                ev_bg, ev_border = "rgba(250,204,21,0.14)", "rgba(250,204,21,0.9)"
-            elif ev >= 3:
-                ev_bg, ev_border = "rgba(59,130,246,0.14)", "rgba(59,130,246,0.7)"
-            else:
-                ev_bg, ev_border = "rgba(148,163,184,0.10)", "rgba(148,163,184,0.6)"
-
-            match_str = format_kickoff(row.get("match_date"))
-            
-            home_team = str(row.get('home_team', '')).replace('"', '&quot;')
-            away_team = str(row.get('away_team', '')).replace('"', '&quot;')
-            match_name = f"{home_team} vs {away_team}" if away_team else home_team
-            odds_val = float(row.get('odds', 0))
-            stake_sek = float(row.get('stake', 173))  # Stored in SEK
-            stake_usd = stake_sek / USD_TO_SEK
-            
-            selection = str(row.get('selection', '')).replace('"', '&quot;')
-            if not selection or selection.lower() == 'none':
-                selection = "Home Win"
-            pick_display = selection
-
-            card_html = f"""<div style="padding:18px;margin:10px 0;border-radius:16px;background:radial-gradient(circle at top left, rgba(59,130,246,0.14), rgba(15,23,42,0.96));border:1px solid rgba(59,130,246,0.35);box-shadow:0 0 20px rgba(59,130,246,0.25);">
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-<div style="font-size:18px;font-weight:600;color:#E5E7EB;">🏀 {match_name}</div>
-<div style="font-size:11px;padding:4px 9px;border-radius:999px;background:{ev_bg};border:1px solid {ev_border};color:#E5E7EB;text-transform:uppercase;letter-spacing:0.06em;">EV {ev:+.1f}%</div>
-</div>
-<div style="font-size:12px;color:#9CA3AF;margin-bottom:6px;">Kickoff: {match_str}</div>
-<div style="font-size:22px;font-weight:700;color:#3B82F6;margin:8px 0;letter-spacing:0.02em;">📍 {pick_display}</div>
-<div style="display:flex;gap:18px;align-items:baseline;margin-top:4px;">
-<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Odds</div><div style="font-size:20px;font-weight:600;color:#3B82F6;">{odds_val:.2f}</div></div>
-<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">1 unit</div></div>
-</div>
-</div>"""
-            st.markdown(card_html, unsafe_allow_html=True)
-            st.code(f"{match_name} | {pick_display} | Odds {odds_val:.2f} | Stake: 1 unit", language="text")
-
-    st.markdown("---")
-
-    st.markdown("### 🎲 Active Parlays")
-    if parlays_active.empty:
-        st.info("No active parlays right now.")
-    else:
-        for _, row in parlays_active.iterrows():
-            ev = row.get("ev", 0.0) or 0.0
-            try:
-                ev = float(ev)
-            except Exception:
-                ev = 0.0
-
-            if ev >= 15:
-                ev_bg, ev_border = "rgba(34,197,94,0.18)", "rgba(34,197,94,0.8)"
-            elif ev >= 8:
-                ev_bg, ev_border = "rgba(250,204,21,0.14)", "rgba(250,204,21,0.9)"
-            else:
-                ev_bg, ev_border = "rgba(148,163,184,0.10)", "rgba(148,163,184,0.6)"
-
-            match_str = format_kickoff(row.get("match_date"))
-            
-            home_team = str(row.get('home_team', '')).replace('"', '&quot;')
-            away_team = str(row.get('away_team', '')).replace('"', '&quot;')
-            match_name = f"{home_team} vs {away_team}" if away_team else home_team
-            odds_val = float(row.get('odds', 0))
-            stake_sek = float(row.get('stake', 173))  # Stored in SEK
-            stake_usd = stake_sek / USD_TO_SEK
-            
-            selection = str(row.get('selection', '')).replace('"', '&quot;')
-            if not selection or selection.lower() == 'none':
-                selection = "Parlay"
-            pick_display = selection
-
-            card_html = f"""<div style="padding:18px;margin:10px 0;border-radius:16px;background:radial-gradient(circle at top left, rgba(168,85,247,0.14), rgba(15,23,42,0.96));border:1px solid rgba(168,85,247,0.35);box-shadow:0 0 20px rgba(168,85,247,0.25);">
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-<div style="font-size:18px;font-weight:600;color:#E5E7EB;">🏀 {match_name}</div>
-<div style="font-size:11px;padding:4px 9px;border-radius:999px;background:{ev_bg};border:1px solid {ev_border};color:#E5E7EB;text-transform:uppercase;letter-spacing:0.06em;">EV {ev:+.1f}%</div>
-</div>
-<div style="font-size:12px;color:#9CA3AF;margin-bottom:6px;">Kickoff: {match_str}</div>
-<div style="font-size:22px;font-weight:700;color:#A855F7;margin:8px 0;letter-spacing:0.02em;">📍 {pick_display}</div>
-<div style="display:flex;gap:18px;align-items:baseline;margin-top:4px;">
-<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Odds</div><div style="font-size:20px;font-weight:600;color:#A855F7;">{odds_val:.2f}</div></div>
-<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">1 unit</div></div>
-</div>
-</div>"""
-            st.markdown(card_html, unsafe_allow_html=True)
-            st.code(f"{match_name} | {pick_display} | Odds {odds_val:.2f} | Stake: 1 unit", language="text")
-
-    st.markdown("---")
-    st.markdown("### Bet History")
-
-    singles_settled = singles[singles["result"].isin(["WON", "LOST", "WIN", "LOSS"])].copy()
-    parlays_settled = parlays[parlays["result"].isin(["WON", "LOST", "WIN", "LOSS"])].copy()
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.markdown("##### Singles")
-        if singles_settled.empty:
-            st.caption("No settled singles yet.")
-        else:
-            s_summary = compute_roi(singles)
-            st.markdown(f"**{len(singles_settled)} settled** | ROI: {s_summary['roi']:.1f}% | Profit: {s_summary['profit']:.0f} USD (≈{s_summary['profit'] * USD_TO_SEK:.0f} SEK)")
-            singles_settled["fixture"] = singles_settled.apply(as_fixture, axis=1)
-            cols = [c for c in ["fixture", "odds", "result", "profit"] if c in singles_settled.columns]
-            if cols:
-                st.dataframe(singles_settled[cols].head(15), use_container_width=True, hide_index=True)
-
-    with col2:
-        st.markdown("##### Parlays")
-        if parlays_settled.empty:
-            st.caption("No settled parlays yet.")
-        else:
-            p_summary = compute_roi(parlays)
-            st.markdown(f"**{len(parlays_settled)} settled** | ROI: {p_summary['roi']:.1f}% | Profit: {p_summary['profit']:.0f} USD (≈{p_summary['profit'] * USD_TO_SEK:.0f} SEK)")
-            parlays_settled["fixture"] = parlays_settled.apply(as_fixture, axis=1)
-            cols = [c for c in ["fixture", "odds", "result", "profit"] if c in parlays_settled.columns]
-            if cols:
-                st.dataframe(parlays_settled[cols].head(15), use_container_width=True, hide_index=True)
-
-
-def render_parlays_tab():
-    """Specialized Parlays tab with beautiful card layout."""
-    st.markdown("## Multi-Match Parlays")
-    st.caption("High-edge parlays built from approved L1/L2 single bets across multiple matches.")
-
-    db_url = get_db_url()
-    engine = create_engine(db_url)
-    
-    from datetime import datetime as dt_module, timedelta as td_module
-    today = dt_module.utcnow().date()
-    
-    query = text("""
-        SELECT
-            id,
-            home_team,
-            away_team,
-            legs,
-            parlay_description,
-            bookmaker_odds as odds,
-            stake,
-            ev_percentage as ev,
-            result,
-            outcome,
-            match_date,
-            payout,
-            profit_loss
-        FROM sgp_predictions
-        WHERE mode = 'PROD'
-        ORDER BY match_date DESC, id DESC
-    """)
-    
-    with engine.connect() as conn:
-        df = pd.read_sql(query, conn)
-
-    if df.empty:
-        st.info("No parlays in the database yet.")
-        return
-
-    # Split active vs settled - check BOTH result and outcome columns
-    # Settled = has result (WON/LOSS/VOID) OR has outcome (won/loss/win/lost/void)
-    outcome_settled = df["outcome"].isin(["won", "win", "loss", "lost", "WON", "WIN", "LOSS", "LOST", "void", "VOID"])
-    result_settled = df["result"].isin(["WON", "WIN", "LOSS", "LOST", "VOID", "void"])
-    settled_mask = outcome_settled | result_settled
-    
-    # Only show today's and future unsettled parlays as "active"
-    df["match_date"] = pd.to_datetime(df["match_date"], errors="coerce")
-    today_mask = df["match_date"].dt.date >= today
-    
-    active_bets = df[~settled_mask & today_mask].copy()
-    settled_bets = df[settled_mask].copy()
-    
-    # Past unsettled parlays (matches already played but not yet verified)
-    past_unsettled = df[~settled_mask & ~today_mask].copy()
-
-    # ROI / PROFIT / HIT RATE for settled (UNITS MODE)
-    if not settled_bets.empty:
-        units_staked = len(settled_bets)
-        won_mask = settled_bets["result"].isin(["WON", "WIN"]) | settled_bets["outcome"].isin(["won", "win", "WON", "WIN"])
-        won_count = won_mask.sum()
-        lost_count = len(settled_bets) - won_count
-        
-        profit_units = 0.0
-        for idx, bet in settled_bets.iterrows():
-            is_won = bet["result"] in ["WON", "WIN"] or bet["outcome"] in ["won", "win", "WON", "WIN"]
-            if is_won:
-                odds = float(bet.get("odds", 2.0) or 2.0)
-                profit_units += (odds - 1)
-            else:
-                profit_units -= 1
-        
-        roi = (profit_units / units_staked * 100) if units_staked > 0 else 0.0
-        hit_rate = (won_count / len(settled_bets) * 100) if len(settled_bets) > 0 else 0.0
-
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            roi_color = "#00FFA6" if roi >= 0 else "#F97373"
-            st.markdown(
-                f"""
-                <div style="padding:14px 16px;border-radius:12px;
-                    background:rgba(0,255,166,0.06);border:1px solid rgba(0,255,166,0.3);">
-                    <div style="font-size:11px;text-transform:uppercase;color:#7EF3C9;">ROI</div>
-                    <div style="font-size:26px;font-weight:700;color:{roi_color};">
-                        {roi:+.1f}%
-                    </div>
-                    <div style="font-size:12px;color:#9CA3AF;">
-                        On {units_staked} units
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-        with col2:
-            color = "#00FFA6" if profit_units >= 0 else "#F97373"
-            st.markdown(
-                f"""
-                <div style="padding:14px 16px;border-radius:12px;
-                    background:rgba(15,23,42,0.9);border:1px solid rgba(148,163,184,0.4);">
-                    <div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Profit</div>
-                    <div style="font-size:26px;font-weight:700;color:{color};">
-                        {profit_units:+.1f} units
-                    </div>
-                    <div style="font-size:12px;color:#9CA3AF;">
-                        All settled parlays
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-        with col3:
-            st.markdown(
-                f"""
-                <div style="padding:14px 16px;border-radius:12px;
-                    background:rgba(15,23,42,0.9);border:1px solid rgba(148,163,184,0.4);">
-                    <div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Hit rate</div>
-                    <div style="font-size:26px;font-weight:700;color:#E5E7EB;">
-                        {hit_rate:.1f}%
-                    </div>
-                    <div style="font-size:12px;color:#9CA3AF;">
-                        {won_count}/{len(settled_bets)} won
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-    st.markdown("---")
-
-    # ACTIVE PARLAYS
-    st.markdown("### Active Parlays (Ready to bet)")
-
-    if active_bets.empty:
-        st.info("No active parlays right now.")
-    else:
-        for _, row in active_bets.iterrows():
-            ev = row.get("ev", 0.0) or 0.0
-            try:
-                ev = float(ev)
-            except Exception:
-                ev = 0.0
-
-            # EV-badge color
-            if ev >= 15:
-                ev_bg = "rgba(34,197,94,0.18)"
-                ev_border = "rgba(34,197,94,0.8)"
-            elif ev >= 8:
-                ev_bg = "rgba(250,204,21,0.14)"
-                ev_border = "rgba(250,204,21,0.9)"
-            elif ev >= 3:
-                ev_bg = "rgba(59,130,246,0.14)"
-                ev_border = "rgba(59,130,246,0.7)"
-            else:
-                ev_bg = "rgba(148,163,184,0.10)"
-                ev_border = "rgba(148,163,184,0.6)"
-
-            # Build legs text from whatever columns we found
-            leg_cols = ["parlay_description", "legs", "leg_summary", "bet_legs", "markets", "selections", "description"]
-            legs_parts = []
-            for col in leg_cols:
-                val = row.get(col)
-                if val is None:
-                    continue
-                val_str = str(val).strip()
-                if not val_str or val_str.lower() == 'none':
-                    continue
-                legs_parts.append(val_str)
-                break  # Use first non-empty column found
-
-            legs_text = legs_parts[0] if legs_parts else ""
-            legs_list = [p.strip() for p in legs_text.split(",") if p.strip()]
-            legs_html = "".join([f"<div style='margin:2px 0;'>• {p}</div>" for p in legs_list]) if legs_list else "<i>No leg details stored</i>"
-
-            # Format match date
-            match_str = format_kickoff(row.get("match_date"))
-
-            home_team = str(row.get('home_team', '')).replace('"', '&quot;')
-            away_team = str(row.get('away_team', '')).replace('"', '&quot;')
-            odds_val = float(row.get('odds', 0))
-            stake_sek = float(row.get('stake', 173))  # Stored in SEK
-            stake_usd = stake_sek / USD_TO_SEK
-
-            card_html = f"""<div style="padding:18px;margin:10px 0;border-radius:16px;background:radial-gradient(circle at top left, rgba(0,255,166,0.14), rgba(15,23,42,0.96));border:1px solid rgba(0,255,166,0.35);box-shadow:0 0 20px rgba(0,255,166,0.25);">
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-<div style="font-size:18px;font-weight:600;color:#E5E7EB;">{home_team} – {away_team}</div>
-<div style="font-size:11px;padding:4px 9px;border-radius:999px;background:{ev_bg};border:1px solid {ev_border};color:#E5E7EB;text-transform:uppercase;letter-spacing:0.06em;">EV {ev:+.1f}%</div>
-</div>
-<div style="font-size:12px;color:#9CA3AF;margin-bottom:6px;">Kickoff: {match_str}</div>
-<div style="font-size:13px;color:#CBD5F5;margin-bottom:8px;">
-<span style="font-weight:600;color:#E5E7EB;">Parlay legs:</span>
-{legs_html}
-</div>
-<div style="display:flex;gap:18px;align-items:baseline;margin-top:4px;">
-<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Odds</div><div style="font-size:20px;font-weight:600;color:#00FFA6;">{odds_val:.2f}</div></div>
-<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">1 unit</div></div>
-</div>
-</div>"""
-
-            st.markdown(card_html, unsafe_allow_html=True)
-
-            bet_string = f"{home_team} – {away_team} | Parlay: {legs_text} | Odds {odds_val:.2f} | Stake: 1 unit"
-            st.code(bet_string, language="text")
-
-    st.markdown("---")
-    st.markdown("### Parlay history")
-
-    history_df = df.sort_values("match_date", ascending=False).head(100)
-    display_cols = [c for c in ["match_date", "home_team", "away_team", "parlay_description", "odds", "stake", "ev", "result", "payout"] if c in history_df.columns]
-    st.dataframe(
-        history_df[display_cols],
-        use_container_width=True,
-        hide_index=True,
-    )
-
-
-# ------------- PROPS & SPECIALS TAB ------------- #
-
-@st.cache_data(ttl=120, show_spinner="Loading props bets...")
-def load_props_bets() -> pd.DataFrame:
-    """Load Cards, Corners, and Shots bets from football_opportunities table."""
-    try:
-        db_url = get_db_url()
-        engine = create_engine(db_url)
-        
-        query = text("""
-            SELECT 
-                id, match_id, home_team, away_team, league, market, selection,
-                odds, edge_percentage as ev, confidence, trust_level,
-                match_date, kickoff_time, status, result, profit_loss,
-                mode, raw_ev, boosted_ev, weighted_ev,
-                profile_boost_score, market_weight, outcome
-            FROM football_opportunities
-            WHERE market IN ('Cards', 'Corners', 'Shots')
-            ORDER BY match_date DESC, id DESC
-        """)
-        
-        with engine.connect() as conn:
-            df = pd.read_sql(query, conn)
-        
-        for col in ["odds", "ev", "confidence", "profit_loss", "raw_ev", "boosted_ev", "weighted_ev"]:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors="coerce")
-        
-        if "match_date" in df.columns:
-            df["match_date"] = pd.to_datetime(df["match_date"], errors="coerce")
-        
-        return df
-    except Exception as e:
-        st.warning(f"Could not load props bets: {e}")
-        return pd.DataFrame()
-
-
-@st.cache_data(ttl=120, show_spinner="Loading bookmaker odds...")
-def load_bookmaker_odds() -> pd.DataFrame:
-    """Load bookmaker odds comparison data from football_opportunities table."""
-    try:
-        db_url = get_db_url()
-        engine = create_engine(db_url)
-        
-        from datetime import datetime, timedelta
-        today = datetime.utcnow().date()
-        tomorrow = today + timedelta(days=1)
-        
-        query = text("""
-            SELECT 
-                id, match_id, home_team, away_team, league, market, selection,
-                odds, edge_percentage as ev, confidence, model_prob,
-                match_date, kickoff_time,
-                odds_by_bookmaker, best_odds_value, best_odds_bookmaker, avg_odds, fair_odds
-            FROM football_opportunities
-            WHERE match_date >= :today AND match_date <= :tomorrow
-            AND mode != 'TEST'
-            AND market IN ('Value Single', 'over_under', 'btts', '1x2')
-            ORDER BY edge_percentage DESC NULLS LAST
-        """)
-        
-        with engine.connect() as conn:
-            df = pd.read_sql(query, conn, params={"today": str(today), "tomorrow": str(tomorrow)})
-        
-        for col in ["odds", "ev", "confidence", "model_prob", "best_odds_value", "avg_odds", "fair_odds"]:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors="coerce")
-        
-        if "match_date" in df.columns:
-            df["match_date"] = pd.to_datetime(df["match_date"], errors="coerce")
-        
-        return df
-    except Exception as e:
-        st.warning(f"Could not load bookmaker odds: {e}")
-        return pd.DataFrame()
-
-
-def render_bookmaker_odds_card(row: pd.Series):
-    """Render a single bookmaker odds comparison card."""
-    import json as json_module
-    
-    home_team = str(row.get('home_team', '')).replace('"', '&quot;')
-    away_team = str(row.get('away_team', '')).replace('"', '&quot;')
-    fixture = f"{home_team} vs {away_team}"
-    
-    selection = str(row.get('selection', ''))
-    market = str(row.get('market', ''))
-    current_odds = float(row.get('odds', 0) or 0)
-    best_odds = float(row.get('best_odds_value', 0) or 0)
-    best_bookmaker = str(row.get('best_odds_bookmaker', '') or '')
-    avg_odds = float(row.get('avg_odds', 0) or 0)
-    fair_odds = float(row.get('fair_odds', 0) or 0)
-    ev = float(row.get('ev', 0) or 0)
-    
-    odds_by_bookmaker = row.get('odds_by_bookmaker', {})
-    if isinstance(odds_by_bookmaker, str):
+                fig3 = go.Figure(data=[
+                    go.Bar(x=daily_df['date'], y=daily_df['daily_profit'],
+                           marker_color=['#4CAF50' if x >= 0 else '#f44336' for x in daily_df['daily_profit']])
+                ])
+                fig3.update_layout(title="Daily Profit/Loss", template="plotly_white", height=300)
+                st.plotly_chart(fig3, use_container_width=True)
+
+    with tab4:
         try:
-            odds_by_bookmaker = json_module.loads(odds_by_bookmaker)
-        except:
-            odds_by_bookmaker = {}
-    elif not isinstance(odds_by_bookmaker, dict):
-        odds_by_bookmaker = {}
-    
-    if ev >= 10:
-        ev_bg, ev_border = "rgba(34,197,94,0.18)", "rgba(34,197,94,0.8)"
-    elif ev >= 5:
-        ev_bg, ev_border = "rgba(250,204,21,0.14)", "rgba(250,204,21,0.9)"
-    else:
-        ev_bg, ev_border = "rgba(59,130,246,0.14)", "rgba(59,130,246,0.7)"
-    
-    sorted_bookmakers = sorted(odds_by_bookmaker.items(), key=lambda x: x[1], reverse=True) if odds_by_bookmaker else []
-    top_bookmakers = sorted_bookmakers[:8]
-    
-    bookmaker_html = ""
-    for book_name, book_odds in top_bookmakers:
-        is_best = book_name == best_bookmaker
-        
-        if fair_odds > 0:
-            edge_pct = ((book_odds / fair_odds) - 1) * 100
-            if edge_pct >= 5:
-                color = "#22C55E"
-            elif edge_pct >= 0:
-                color = "#10B981"
-            elif edge_pct >= -3:
-                color = "#F59E0B"
-            else:
-                color = "#EF4444"
-        else:
-            color = "#E5E7EB"
-        
-        bg_style = "background:rgba(34,197,94,0.25);border:1px solid rgba(34,197,94,0.6);" if is_best else "background:rgba(55,65,81,0.3);"
-        star = " *" if is_best else ""
-        
-        bookmaker_html += f"""
-        <div style="display:inline-block;padding:6px 10px;margin:3px;border-radius:8px;{bg_style}">
-            <div style="font-size:11px;color:#9CA3AF;">{book_name}{star}</div>
-            <div style="font-size:16px;font-weight:600;color:{color};">{book_odds:.2f}</div>
-        </div>
-        """
-    
-    fair_vs_best = ""
-    if fair_odds > 0 and best_odds > 0:
-        edge_vs_fair = ((best_odds / fair_odds) - 1) * 100
-        edge_color = "#22C55E" if edge_vs_fair >= 0 else "#EF4444"
-        fair_vs_best = f"""
-        <div style="margin-top:8px;padding:8px;background:rgba(99,102,241,0.1);border-radius:8px;border:1px solid rgba(99,102,241,0.3);">
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-                <div>
-                    <span style="font-size:11px;color:#9CA3AF;">Model Fair Odds:</span>
-                    <span style="font-size:14px;color:#A5B4FC;font-weight:500;margin-left:6px;">{fair_odds:.2f}</span>
-                </div>
-                <div>
-                    <span style="font-size:11px;color:#9CA3AF;">Edge vs Fair:</span>
-                    <span style="font-size:14px;color:{edge_color};font-weight:600;margin-left:6px;">{edge_vs_fair:+.1f}%</span>
-                </div>
-                <div>
-                    <span style="font-size:11px;color:#9CA3AF;">Avg Odds:</span>
-                    <span style="font-size:14px;color:#E5E7EB;margin-left:6px;">{avg_odds:.2f}</span>
-                </div>
-            </div>
-        </div>
-        """
-    
-    card_html = f"""
-    <div style="padding:16px;margin:10px 0;border-radius:14px;background:rgba(30,41,59,0.95);border:1px solid rgba(148,163,184,0.2);">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-            <div>
-                <div style="font-size:16px;font-weight:600;color:#E5E7EB;">{fixture}</div>
-                <div style="font-size:20px;font-weight:700;color:#00FFA6;margin-top:4px;">{selection}</div>
-            </div>
-            <div style="text-align:right;">
-                <div style="font-size:11px;padding:4px 9px;border-radius:999px;background:{ev_bg};border:1px solid {ev_border};color:#E5E7EB;">EV {ev:+.1f}%</div>
-            </div>
-        </div>
-        <div style="font-size:12px;color:#9CA3AF;margin-bottom:10px;">
-            Comparing {len(odds_by_bookmaker)} bookmakers | Best: <span style="color:#22C55E;font-weight:600;">{best_bookmaker}</span> @ <span style="color:#22C55E;font-weight:600;">{best_odds:.2f}</span>
-        </div>
-        <div style="display:flex;flex-wrap:wrap;gap:4px;">
-            {bookmaker_html}
-        </div>
-        {fair_vs_best}
-    </div>
-    """
-    st.markdown(card_html, unsafe_allow_html=True)
+            with DatabaseConnection.get_connection() as conn:
+                all_query = """
+                    SELECT 
+                        created_at::date as date, match, market, selection,
+                        odds, ev_percentage, status, profit_units
+                    FROM basketball_predictions
+                    ORDER BY created_at DESC
+                    LIMIT 100
+                """
+                all_df = pd.read_sql(all_query, conn)
+                if not all_df.empty:
+                    st.dataframe(all_df, use_container_width=True, hide_index=True)
+                else:
+                    st.info("No data available")
+        except Exception as e:
+            st.error(f"Error: {e}")
 
-
-def render_bookmaker_odds_section():
-    """Render the bookmaker odds comparison section."""
-    st.markdown("## Bookmaker Odds Comparison")
-    st.caption("Compare odds across bookmakers to find the best value. Green = above fair odds, Red = below fair odds.")
-    
-    odds_df = load_bookmaker_odds()
-    
-    if odds_df.empty:
-        st.info("No bookmaker odds data available for today's picks yet. Odds are collected when predictions are generated.")
-        return
-    
-    has_odds_data = odds_df['odds_by_bookmaker'].apply(
-        lambda x: bool(x) if isinstance(x, dict) else (
-            bool(x) if x and str(x) not in ['{}', 'None', 'null', ''] else False
-        )
-    ).any()
-    
-    if not has_odds_data:
-        st.info("Bookmaker odds comparison data is being collected. Check back after the next prediction run.")
-        return
-    
-    import json as json_module
-    
-    def count_bookmakers(x):
-        if isinstance(x, dict):
-            return len(x)
-        if isinstance(x, str) and x not in ['{}', 'None', 'null', '']:
-            try:
-                parsed = json_module.loads(x)
-                return len(parsed) if isinstance(parsed, dict) else 0
-            except:
-                return 0
-        return 0
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        avg_books = odds_df['odds_by_bookmaker'].apply(count_bookmakers).mean()
-        st.metric("Avg Bookmakers", f"{avg_books:.1f}")
-    with col2:
-        st.metric("Total Selections", len(odds_df))
-    with col3:
-        with_best = odds_df['best_odds_bookmaker'].notna().sum()
-        st.metric("With Best Odds", with_best)
-    
     st.markdown("---")
-    
-    for _, row in odds_df.iterrows():
-        render_bookmaker_odds_card(row)
+    st.caption("🏀 Data updates every 2 hours | Powered by The Odds API consensus devigging")
 
-
-def compute_props_roi(df: pd.DataFrame) -> dict:
-    """Compute ROI metrics for props bets."""
-    if df.empty:
-        return {"bets": 0, "wins": 0, "losses": 0, "pending": 0, "needs_verification": 0, "units_won": 0.0, "roi": 0.0, "hit_rate": 0.0}
-    
-    result_col = df["result"].fillna("").str.lower() if "result" in df.columns else pd.Series([""] * len(df))
-    status_col = df["status"].fillna("").str.lower() if "status" in df.columns else pd.Series([""] * len(df))
-    
-    wins = result_col.str.contains("won|win", na=False).sum()
-    losses = result_col.str.contains("lost|loss", na=False).sum()
-    
-    needs_verification = status_col.str.contains("needs_verification|needs verification", na=False).sum()
-    if "outcome" in df.columns:
-        outcome_col = df["outcome"].fillna("").str.lower()
-        needs_verification = max(needs_verification, outcome_col.str.contains("needs_verification|needs verification", na=False).sum())
-    
-    pending = len(df) - wins - losses
-    
-    settled = wins + losses
-    if settled == 0:
-        return {"bets": len(df), "wins": 0, "losses": 0, "pending": pending, "needs_verification": needs_verification, "units_won": 0.0, "roi": 0.0, "hit_rate": 0.0}
-    
-    if "profit_loss" in df.columns:
-        units_won = df["profit_loss"].fillna(0).sum()
-    else:
-        units_won = 0.0
-        for _, row in df.iterrows():
-            res = str(row.get("result", "")).lower()
-            odds = float(row.get("odds", 2.0) or 2.0)
-            if "won" in res or "win" in res:
-                units_won += (odds - 1)
-            elif "lost" in res or "loss" in res:
-                units_won -= 1
-    
-    roi = (units_won / settled * 100) if settled > 0 else 0.0
-    hit_rate = (wins / settled * 100) if settled > 0 else 0.0
-    
-    return {"bets": len(df), "wins": wins, "losses": losses, "pending": pending, "needs_verification": needs_verification, "units_won": units_won, "roi": roi, "hit_rate": hit_rate}
-
-
-def render_props_tab():
-    """Render the Props & Specials tab with Corners, Cards, and Shots predictions."""
-    st.markdown("## Props & Specials")
-    st.caption("Advanced markets: Corners, Cards, and Team Shots predictions using Monte Carlo simulation.")
-    
-    props_df = load_props_bets()
-    
-    if not props_df.empty:
-        needs_verif_count = 0
-        if "outcome" in props_df.columns:
-            needs_verif_count = props_df["outcome"].fillna("").str.contains("needs_verification", na=False).sum()
-        
-        if needs_verif_count > 0:
-            st.warning(f"{needs_verif_count} bets need manual verification. Corner/Card statistics require match statistics API which has reached its daily limit. Results will be verified when API access is restored.")
-        
-        st.markdown("### Performance Summary")
-        
-        corners_df = props_df[props_df["market"] == "Corners"]
-        cards_df = props_df[props_df["market"] == "Cards"]
-        shots_df = props_df[props_df["market"] == "Shots"]
-        
-        corners_stats = compute_props_roi(corners_df)
-        cards_stats = compute_props_roi(cards_df)
-        shots_stats = compute_props_roi(shots_df)
-        total_stats = compute_props_roi(props_df)
-        
-        cols = st.columns(4)
-        stats_data = [
-            ("Corners", corners_stats, "#10B981"),
-            ("Cards", cards_stats, "#F59E0B"),
-            ("Shots", shots_stats, "#6366F1"),
-            ("Total Props", total_stats, "#00FFC2"),
-        ]
-        
-        for i, (name, stats, color) in enumerate(stats_data):
-            with cols[i]:
-                roi_color = color if stats["roi"] >= 0 else "#EF4444"
-                st.markdown(f"""
-                <div style="padding:16px;border-radius:12px;background:linear-gradient(135deg, {color}22, rgba(15,23,42,0.95));border:1px solid {color}55;">
-                    <div style="font-size:15px;font-weight:600;color:{color};margin-bottom:8px;">{name}</div>
-                    <div style="font-size:24px;font-weight:700;color:{roi_color};">{stats['roi']:+.1f}%</div>
-                    <div style="font-size:12px;color:#9CA3AF;">ROI</div>
-                    <div style="display:flex;gap:12px;margin-top:8px;">
-                        <div><span style="color:#10B981;font-weight:600;">{stats['wins']}</span><span style="color:#6B7280;"> W</span></div>
-                        <div><span style="color:#EF4444;font-weight:600;">{stats['losses']}</span><span style="color:#6B7280;"> L</span></div>
-                        <div><span style="color:#F59E0B;font-weight:600;">{stats['pending']}</span><span style="color:#6B7280;"> P</span></div>
-                    </div>
-                    <div style="font-size:11px;color:#9CA3AF;margin-top:4px;">
-                        {stats['units_won']:+.2f} units | {stats['hit_rate']:.0f}% hit
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-        
-        st.markdown("---")
-        st.markdown("### Recent Props Bets")
-        
-        market_filter = st.selectbox("Filter by market:", ["All", "Corners", "Cards", "Shots"])
-        if market_filter != "All":
-            display_df = props_df[props_df["market"] == market_filter].copy()
-        else:
-            display_df = props_df.copy()
-        
-        display_cols = ["match_date", "home_team", "away_team", "market", "selection", "odds", "trust_level", "result", "profit_loss"]
-        display_cols = [c for c in display_cols if c in display_df.columns]
-        
-        st.dataframe(
-            display_df[display_cols].head(100),
-            use_container_width=True,
-            hide_index=True,
-        )
-        
-        st.markdown("---")
-    
-    try:
-        from corners_engine import CornersEngine, run_corners_cycle
-        from cards_engine import CardsEngine, run_cards_cycle
-        from shots_engine import ShotsEngine, run_shots_cycle
-        from unified_ev_filter import get_filter_stats, PRODUCT_FILTER_CONFIGS
-        
-        st.markdown("### Engine Configuration")
-        
-        props_config = {
-            "CORNERS_MATCH": {"max_day": 6, "markets": ["Over/Under 8.5, 9.5, 10.5, 11.5 Corners"]},
-            "CORNERS_TEAM": {"max_day": 4, "markets": ["Home/Away Team Corners Over X"]},
-            "CORNERS_HANDICAP": {"max_day": 6, "markets": ["Corner Handicaps -2.5, -1.5, +0.5"]},
-            "CARDS_MATCH": {"max_day": 6, "markets": ["Total Cards Over/Under, Booking Points"]},
-            "CARDS_TEAM": {"max_day": 4, "markets": ["Home/Away Team Cards Over X"]},
-            "SHOTS_TEAM": {"max_day": 6, "markets": ["Team Shots Over, SOT Over"]},
-        }
-        
-        cols = st.columns(3)
-        for i, (product, config) in enumerate(props_config.items()):
-            with cols[i % 3]:
-                filter_cfg = PRODUCT_FILTER_CONFIGS.get(product, {})
-                l1_ev = getattr(filter_cfg, 'l1_min_ev', 0.05) * 100
-                l2_ev = getattr(filter_cfg, 'l2_min_ev', 0.02) * 100
-                
-                st.markdown(f"""
-                <div style="padding:12px;border-radius:10px;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);margin-bottom:10px;">
-                    <div style="font-size:14px;font-weight:600;color:#A5B4FC;">{product.replace('_', ' ')}</div>
-                    <div style="font-size:11px;color:#9CA3AF;">Max: {config['max_day']}/day</div>
-                    <div style="font-size:11px;color:#9CA3AF;">L1: EV≥{l1_ev:.0f}% | L2: EV≥{l2_ev:.0f}%</div>
-                    <div style="font-size:10px;color:#6B7280;margin-top:4px;">{config['markets'][0]}</div>
-                </div>
-                """, unsafe_allow_html=True)
-        
-        st.markdown("---")
-        st.markdown("### Trust Tier Filter Summary")
-        
-        tier_info = [
-            ("L1 HIGH TRUST", "#10B981", "EV ≥ 5%, Confidence ≥ 55%, Sim Approved"),
-            ("L2 MEDIUM TRUST", "#F59E0B", "EV ≥ 2%, Confidence ≥ 52%, Sim Approved"),
-            ("L3 SOFT VALUE", "#6B7280", "EV ≥ 0%, Confidence ≥ 50%"),
-        ]
-        
-        cols = st.columns(3)
-        for i, (tier, color, desc) in enumerate(tier_info):
-            with cols[i]:
-                st.markdown(f"""
-                <div style="padding:12px;border-radius:10px;background:{color}22;border:1px solid {color}55;">
-                    <div style="font-size:13px;font-weight:600;color:{color};">{tier}</div>
-                    <div style="font-size:10px;color:#9CA3AF;">{desc}</div>
-                </div>
-                """, unsafe_allow_html=True)
-        
-        st.markdown("---")
-        st.markdown("### Recent Props Predictions")
-        st.info("Props predictions are generated by the Combined Sports Engine. "
-                "Check the Daily Card tab for today's picks, sorted by trust tier and EV.")
-        
-        st.markdown("### Engine Status")
-        status_cols = st.columns(3)
-        
-        with status_cols[0]:
-            st.markdown("""
-            <div style="padding:16px;border-radius:12px;background:linear-gradient(135deg, rgba(16,185,129,0.15), rgba(15,23,42,0.95));border:1px solid rgba(16,185,129,0.3);">
-                <div style="font-size:20px;margin-bottom:8px;">🔢</div>
-                <div style="font-size:16px;font-weight:600;color:#10B981;">Corners v3.0</div>
-                <div style="font-size:12px;color:#9CA3AF;">Pace • Wing Play • Referee • Weather</div>
-                <div style="font-size:11px;color:#6EE7B7;margin-top:8px;">✅ Active</div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with status_cols[1]:
-            st.markdown("""
-            <div style="padding:16px;border-radius:12px;background:linear-gradient(135deg, rgba(245,158,11,0.15), rgba(15,23,42,0.95));border:1px solid rgba(245,158,11,0.3);">
-                <div style="font-size:20px;margin-bottom:8px;">🟨</div>
-                <div style="font-size:16px;font-weight:600;color:#F59E0B;">Cards v2.0</div>
-                <div style="font-size:12px;color:#9CA3AF;">Referee • Rivalry • Formation • Tempo</div>
-                <div style="font-size:11px;color:#FCD34D;margin-top:8px;">✅ Active</div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with status_cols[2]:
-            st.markdown("""
-            <div style="padding:16px;border-radius:12px;background:linear-gradient(135deg, rgba(99,102,241,0.15), rgba(15,23,42,0.95));border:1px solid rgba(99,102,241,0.3);">
-                <div style="font-size:20px;margin-bottom:8px;">🎯</div>
-                <div style="font-size:16px;font-weight:600;color:#6366F1;">Shots v1.0</div>
-                <div style="font-size:12px;color:#9CA3AF;">Attack Power • Defence • xG • Tempo</div>
-                <div style="font-size:11px;color:#A5B4FC;margin-top:8px;">✅ Active</div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-    except Exception as e:
-        st.error(f"Error loading Props tab: {e}")
-
-
-# ------------- MAIN APP ------------- #
-
-def main():
-    inject_pgr_global_background()
-
-    try:
-        all_bets = load_all_bets_from_db()
-    except Exception as e:
-        st.error(
-            "Could not load data from the database. "
-            "Check your DATABASE_URL and that the `all_bets` view exists."
-        )
-        st.exception(e)
-        return
-
-    with st.expander("Debug: last 20 raw bets"):
-        st.dataframe(
-            all_bets[["created_at", "match_date", "product", "home_team", "away_team", "result", "mode", "stake", "odds"]]
-            .head(20),
-            use_container_width=True,
-        )
-
-    # Split PROD vs BACKTEST data
-    prod_bets, backtest_bets = split_bets_by_mode(all_bets)
-
-    # Tabs for different products
-    daily_card_tab, overview_tab, singles_tab, odds_compare_tab, props_tab, parlays_tab, ml_parlay_tab, basket_tab, backtest_tab = st.tabs(
-        [
-            "Daily Card",
-            "Overview",
-            "Value Singles",
-            "Odds Compare",
-            "Props & Specials",
-            "Parlays",
-            "ML Parlay",
-            "College Basketball",
-            "Backtests",
-        ]
-    )
-
-    with daily_card_tab:
-        render_daily_card_tab()
-
-    with overview_tab:
-        render_overview(prod_bets)
-
-    with singles_tab:
-        render_product_tab(
-            prod_bets,
-            product_codes=["VALUE_SINGLE", "VALUE_SINGLES", "FOOTBALL_SINGLE", "CORNERS", "CARDS"],  # EXACT_SCORE removed
-            title="Value Singles",
-            description="High-edge single bets across 1X2, over/under, BTTS, corners and cards.",
-        )
-
-    with odds_compare_tab:
-        render_bookmaker_odds_section()
-
-    with props_tab:
-        render_props_tab()
-
-    with parlays_tab:
-        render_parlays_tab()
-
-    with ml_parlay_tab:
-        render_ml_parlay_tab()
-
-    with basket_tab:
-        render_basketball_tab(prod_bets)
-
-    with backtest_tab:
-        render_backtest_analysis()
-
-
-if __name__ == "__main__":
-    main()
+    if st.button("🔄 Refresh Data"):
+        st.cache_data.clear()
+        st.rerun()
