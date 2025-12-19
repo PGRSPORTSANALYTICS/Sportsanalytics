@@ -171,11 +171,11 @@ class DailyCardSelector:
                 for row in football_rows:
                     base_ev = row[6] if row[6] else 0
                     odds = row[5] if row[5] else 0
-                    best_odds = float(row[12]) if row[12] else odds
-                    fair_odds = float(row[14]) if row[14] else None
+                    best_odds = float(row[11]) if row[11] else odds
+                    fair_odds_val = float(row[13]) if row[13] else None
                     
-                    if fair_odds and fair_odds > 0 and best_odds > 0:
-                        ev = (best_odds / fair_odds) - 1
+                    if fair_odds_val and fair_odds_val > 0 and best_odds > 0:
+                        ev = (best_odds / fair_odds_val) - 1
                     else:
                         ev = base_ev
                     
@@ -184,7 +184,7 @@ class DailyCardSelector:
                     if best_odds < 1.40 and ev < 0.10:
                         continue
                     
-                    odds_by_bookmaker = row[11] if row[11] else {}
+                    odds_by_bookmaker = row[10] if row[10] else {}
                     if isinstance(odds_by_bookmaker, str):
                         import json
                         try:
@@ -205,7 +205,7 @@ class DailyCardSelector:
                         'tier': self._get_ev_tier(ev),
                         'odds_by_bookmaker': odds_by_bookmaker,
                         'best_odds_value': best_odds,
-                        'best_odds_bookmaker': row[13] or ''
+                        'best_odds_bookmaker': row[12] or ''
                     })
             
             return True
