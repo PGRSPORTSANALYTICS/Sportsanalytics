@@ -1694,124 +1694,241 @@ def render_product_tab(
 
 
 def render_ml_parlay_tab():
-    """Render ML Parlay tab showing moneyline parlays (TEST MODE)."""
-    st.markdown("## ML Parlay (Moneyline Parlays)")
-    st.caption("LOW/MEDIUM risk parlays from 1X2/Moneyline/DNB markets. **INTERNAL TEST MODE**")
+    """Render ML Parlay tab showing moneyline parlays with premium styling."""
+    import json
+    
+    st.markdown("""
+    <div style="text-align:center;margin-bottom:24px;">
+        <h1 style="font-size:2.2rem;font-weight:800;background:linear-gradient(135deg,#A855F7 0%,#6366F1 50%,#22D3EE 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:8px;">
+            ML Parlay Engine
+        </h1>
+        <p style="color:#94A3B8;font-size:14px;margin:0;">Low/Medium Risk Multi-Match Parlays | 1X2 + DNB Markets</p>
+    </div>
+    """, unsafe_allow_html=True)
     
     try:
         from db_helper import db_helper
         
         parlays = db_helper.execute(
-            """SELECT parlay_id, match_date, num_legs, parlay_description, 
+            """SELECT parlay_id, match_date, num_legs, legs, parlay_description, 
                       total_odds, combined_ev, confidence_score, stake, 
-                      potential_payout, status, outcome, profit_loss, mode
+                      potential_payout, status, outcome, profit_loss, profit_units, mode, created_at
                FROM ml_parlay_predictions 
-               ORDER BY timestamp DESC 
+               ORDER BY created_at DESC 
                LIMIT 50""",
             fetch='all'
         )
         
         if not parlays:
-            st.info("No ML Parlays yet. The engine runs every 3 hours and creates parlays when matches meet the strict filters (1.40-2.10 odds, 4%+ EV per leg).")
+            st.markdown("""
+            <div style="padding:40px;text-align:center;border-radius:16px;background:linear-gradient(135deg,rgba(99,102,241,0.1),rgba(168,85,247,0.05));border:1px dashed rgba(148,163,184,0.3);">
+                <div style="font-size:48px;margin-bottom:16px;">🎰</div>
+                <div style="font-size:18px;color:#E5E7EB;font-weight:600;margin-bottom:8px;">No ML Parlays Yet</div>
+                <div style="font-size:14px;color:#94A3B8;">The engine runs every 3 hours and creates parlays when matches meet the filters.</div>
+            </div>
+            """, unsafe_allow_html=True)
             return
         
-        columns = ['parlay_id', 'match_date', 'num_legs', 'parlay_description', 
+        columns = ['parlay_id', 'match_date', 'num_legs', 'legs', 'parlay_description', 
                    'total_odds', 'combined_ev', 'confidence_score', 'stake',
-                   'potential_payout', 'status', 'outcome', 'profit_loss', 'mode']
+                   'potential_payout', 'status', 'outcome', 'profit_loss', 'profit_units', 'mode', 'created_at']
         df = pd.DataFrame(parlays, columns=columns)
         
         settled = df[df['status'] == 'settled'].copy()
         pending = df[df['status'] == 'pending'].copy()
         
+        units_staked = len(settled)
+        won = len(settled[settled['outcome'] == 'won']) if not settled.empty else 0
+        lost = units_staked - won
+        
+        profit_units = 0.0
         if not settled.empty:
             settled['total_odds'] = pd.to_numeric(settled['total_odds'], errors='coerce').fillna(2.0)
-            
-            units_staked = len(settled)
-            won = len(settled[settled['outcome'] == 'won'])
-            lost = len(settled) - won
-            
-            profit_units = 0.0
             for _, bet in settled.iterrows():
                 if bet['outcome'] == 'won':
                     odds = float(bet.get('total_odds', 2.0) or 2.0)
                     profit_units += (odds - 1)
                 else:
                     profit_units -= 1
-            
-            roi = (profit_units / units_staked * 100) if units_staked > 0 else 0
-            hit_rate = (won / len(settled) * 100) if len(settled) > 0 else 0
-            
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                color = "#00FFA6" if roi >= 0 else "#F97373"
-                st.markdown(f"""
-                    <div style="padding:12px;border-radius:10px;background:rgba(15,23,42,0.9);border:1px solid {color};">
-                        <div style="font-size:11px;color:#9CA3AF;">ROI</div>
-                        <div style="font-size:22px;font-weight:700;color:{color};">{roi:+.1f}%</div>
-                    </div>
-                """, unsafe_allow_html=True)
-            with col2:
-                color = "#00FFA6" if profit_units >= 0 else "#F97373"
-                st.markdown(f"""
-                    <div style="padding:12px;border-radius:10px;background:rgba(15,23,42,0.9);border:1px solid rgba(148,163,184,0.4);">
-                        <div style="font-size:11px;color:#9CA3AF;">Profit</div>
-                        <div style="font-size:22px;font-weight:700;color:{color};">{profit_units:+.1f}u</div>
-                    </div>
-                """, unsafe_allow_html=True)
-            with col3:
-                st.markdown(f"""
-                    <div style="padding:12px;border-radius:10px;background:rgba(15,23,42,0.9);border:1px solid rgba(148,163,184,0.4);">
-                        <div style="font-size:11px;color:#9CA3AF;">Hit Rate</div>
-                        <div style="font-size:22px;font-weight:700;color:#E5E7EB;">{hit_rate:.1f}%</div>
-                    </div>
-                """, unsafe_allow_html=True)
-            with col4:
-                st.markdown(f"""
-                    <div style="padding:12px;border-radius:10px;background:rgba(15,23,42,0.9);border:1px solid rgba(148,163,184,0.4);">
-                        <div style="font-size:11px;color:#9CA3AF;">Settled</div>
-                        <div style="font-size:22px;font-weight:700;color:#E5E7EB;">{won}/{len(settled)}</div>
-                    </div>
-                """, unsafe_allow_html=True)
         
-        st.markdown("---")
+        roi = (profit_units / units_staked * 100) if units_staked > 0 else 0
+        hit_rate = (won / units_staked * 100) if units_staked > 0 else 0
+        avg_odds = settled['total_odds'].mean() if not settled.empty else 0
         
-        st.markdown("### 🎰 Pending ML Parlays")
+        roi_color = "#10B981" if roi >= 0 else "#EF4444"
+        profit_color = "#10B981" if profit_units >= 0 else "#EF4444"
+        
+        st.markdown(f"""
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:24px;">
+            <div style="padding:20px;border-radius:16px;background:linear-gradient(135deg,rgba(16,185,129,0.15),rgba(16,185,129,0.05));border:1px solid rgba(16,185,129,0.3);text-align:center;">
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#6EE7B7;margin-bottom:8px;">ROI</div>
+                <div style="font-size:28px;font-weight:800;color:{roi_color};">{roi:+.1f}%</div>
+            </div>
+            <div style="padding:20px;border-radius:16px;background:linear-gradient(135deg,rgba(99,102,241,0.15),rgba(99,102,241,0.05));border:1px solid rgba(99,102,241,0.3);text-align:center;">
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#A5B4FC;margin-bottom:8px;">Profit</div>
+                <div style="font-size:28px;font-weight:800;color:{profit_color};">{profit_units:+.1f}u</div>
+            </div>
+            <div style="padding:20px;border-radius:16px;background:linear-gradient(135deg,rgba(251,191,36,0.15),rgba(251,191,36,0.05));border:1px solid rgba(251,191,36,0.3);text-align:center;">
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#FCD34D;margin-bottom:8px;">Hit Rate</div>
+                <div style="font-size:28px;font-weight:800;color:#FCD34D;">{hit_rate:.0f}%</div>
+            </div>
+            <div style="padding:20px;border-radius:16px;background:linear-gradient(135deg,rgba(168,85,247,0.15),rgba(168,85,247,0.05));border:1px solid rgba(168,85,247,0.3);text-align:center;">
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#C4B5FD;margin-bottom:8px;">Record</div>
+                <div style="font-size:28px;font-weight:800;color:#A855F7;">{won}-{lost}</div>
+            </div>
+            <div style="padding:20px;border-radius:16px;background:linear-gradient(135deg,rgba(34,211,238,0.15),rgba(34,211,238,0.05));border:1px solid rgba(34,211,238,0.3);text-align:center;">
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#67E8F9;margin-bottom:8px;">Pending</div>
+                <div style="font-size:28px;font-weight:800;color:#22D3EE;">{len(pending)}</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("""
+        <div style="display:flex;align-items:center;gap:12px;margin:32px 0 16px 0;">
+            <div style="font-size:24px;">🎯</div>
+            <h3 style="margin:0;font-size:1.3rem;font-weight:700;color:#E5E7EB;">Active Parlays</h3>
+            <div style="flex:1;height:1px;background:linear-gradient(90deg,rgba(168,85,247,0.5),transparent);"></div>
+        </div>
+        """, unsafe_allow_html=True)
+        
         if pending.empty:
-            st.info("No pending ML parlays. Next batch generates when matches meet the filters.")
+            st.markdown("""
+            <div style="padding:24px;text-align:center;border-radius:12px;background:rgba(30,41,59,0.5);border:1px dashed rgba(148,163,184,0.2);">
+                <div style="color:#94A3B8;font-size:14px;">No active parlays. Next batch generates when matches meet the filters.</div>
+            </div>
+            """, unsafe_allow_html=True)
         else:
-            for _, row in pending.iterrows():
+            for idx, row in pending.iterrows():
                 ev = float(row.get('combined_ev', 0) or 0)
                 odds = float(row.get('total_odds', 0) or 0)
-                stake_sek = float(row.get('stake', 0) or 0)
-                stake_usd = stake_sek / USD_TO_SEK
                 desc = str(row.get('parlay_description', ''))
                 legs = int(row.get('num_legs', 0) or 0)
+                confidence = float(row.get('confidence_score', 0) or 0)
+                parlay_id = str(row.get('parlay_id', ''))[:12]
+                match_date = str(row.get('match_date', ''))
                 
-                ev_color = "#00FFA6" if ev >= 10 else "#FBBF24" if ev >= 5 else "#9CA3AF"
+                legs_data = row.get('legs', '[]')
+                if isinstance(legs_data, str):
+                    try:
+                        legs_list = json.loads(legs_data)
+                    except:
+                        legs_list = []
+                else:
+                    legs_list = legs_data if legs_data else []
+                
+                ev_tier = "ELITE" if ev >= 50 else "STRONG" if ev >= 20 else "SOLID" if ev >= 10 else "VALUE"
+                ev_colors = {"ELITE": "#10B981", "STRONG": "#22D3EE", "SOLID": "#A855F7", "VALUE": "#FBBF24"}
+                ev_color = ev_colors.get(ev_tier, "#FBBF24")
+                
+                legs_html = ""
+                for i, leg in enumerate(legs_list):
+                    home = leg.get('home_team', 'Home')
+                    away = leg.get('away_team', 'Away')
+                    league = leg.get('league', '')
+                    selection = leg.get('selection', '')
+                    leg_odds = float(leg.get('odds', 1.0))
+                    edge = float(leg.get('edge_percentage', 0))
+                    
+                    selection_display = selection.replace('_', ' ').replace('HOME', home).replace('AWAY', away)
+                    if 'DNB' in selection:
+                        selection_display = selection_display.replace('DNB', '(Draw No Bet)')
+                    
+                    legs_html += f"""
+                    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:rgba(15,23,42,0.6);border-radius:8px;margin-bottom:6px;">
+                        <div style="flex:1;">
+                            <div style="font-size:12px;color:#94A3B8;margin-bottom:2px;">{league}</div>
+                            <div style="font-size:14px;color:#E5E7EB;font-weight:500;">{home} vs {away}</div>
+                            <div style="font-size:13px;color:#A855F7;margin-top:2px;">{selection_display}</div>
+                        </div>
+                        <div style="text-align:right;">
+                            <div style="font-size:16px;font-weight:700;color:#22D3EE;">{leg_odds:.2f}</div>
+                            <div style="font-size:11px;color:#6EE7B7;">+{edge:.1f}% edge</div>
+                        </div>
+                    </div>
+                    """
                 
                 card_html = f"""
-                <div style="padding:16px;margin:10px 0;border-radius:14px;background:radial-gradient(circle at top left, rgba(168,85,247,0.12), rgba(15,23,42,0.96));border:1px solid rgba(168,85,247,0.4);">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                        <div style="font-size:11px;padding:3px 8px;border-radius:999px;background:rgba(168,85,247,0.2);color:#A855F7;">TEST MODE • {legs} LEGS</div>
-                        <div style="font-size:11px;padding:3px 8px;border-radius:999px;background:rgba(0,255,166,0.1);color:{ev_color};">EV {ev:+.1f}%</div>
+                <div style="padding:20px;margin:12px 0;border-radius:16px;background:linear-gradient(145deg,rgba(30,41,59,0.95),rgba(15,23,42,0.98));border:1px solid rgba(168,85,247,0.3);box-shadow:0 4px 24px rgba(0,0,0,0.2);">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            <div style="font-size:11px;padding:4px 10px;border-radius:6px;background:rgba(168,85,247,0.2);color:#C4B5FD;font-weight:600;">{legs} LEGS</div>
+                            <div style="font-size:11px;color:#64748B;">{parlay_id}</div>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <div style="font-size:11px;padding:4px 10px;border-radius:6px;background:{ev_color}22;color:{ev_color};font-weight:600;">{ev_tier}</div>
+                            <div style="font-size:13px;padding:4px 10px;border-radius:6px;background:rgba(16,185,129,0.15);color:#6EE7B7;font-weight:700;">EV +{ev:.1f}%</div>
+                        </div>
                     </div>
-                    <div style="font-size:16px;color:#E5E7EB;margin-bottom:10px;">{desc}</div>
-                    <div style="display:flex;gap:20px;">
-                        <div><span style="font-size:11px;color:#9CA3AF;">ODDS</span><br/><span style="font-size:18px;font-weight:600;color:#A855F7;">{odds:.2f}x</span></div>
-                        <div><span style="font-size:11px;color:#9CA3AF;">STAKE</span><br/><span style="font-size:18px;font-weight:600;color:#E5E7EB;">1 unit</span></div>
+                    
+                    <div style="margin-bottom:16px;">
+                        {legs_html}
+                    </div>
+                    
+                    <div style="display:flex;justify-content:space-between;align-items:center;padding-top:12px;border-top:1px solid rgba(148,163,184,0.1);">
+                        <div style="display:flex;gap:24px;">
+                            <div>
+                                <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#64748B;">Combined Odds</div>
+                                <div style="font-size:22px;font-weight:800;color:#A855F7;">{odds:.2f}x</div>
+                            </div>
+                            <div>
+                                <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#64748B;">Confidence</div>
+                                <div style="font-size:22px;font-weight:800;color:#22D3EE;">{confidence:.0%}</div>
+                            </div>
+                        </div>
+                        <div style="padding:8px 16px;border-radius:8px;background:linear-gradient(135deg,#A855F7,#6366F1);color:white;font-weight:700;font-size:14px;">
+                            1 UNIT
+                        </div>
                     </div>
                 </div>
                 """
                 st.markdown(card_html, unsafe_allow_html=True)
         
-        st.markdown("---")
-        st.markdown("### 📜 ML Parlay History")
+        st.markdown("""
+        <div style="display:flex;align-items:center;gap:12px;margin:40px 0 16px 0;">
+            <div style="font-size:24px;">📜</div>
+            <h3 style="margin:0;font-size:1.3rem;font-weight:700;color:#E5E7EB;">Settled History</h3>
+            <div style="flex:1;height:1px;background:linear-gradient(90deg,rgba(99,102,241,0.5),transparent);"></div>
+        </div>
+        """, unsafe_allow_html=True)
+        
         if settled.empty:
-            st.info("No settled ML parlays yet.")
+            st.markdown("""
+            <div style="padding:24px;text-align:center;border-radius:12px;background:rgba(30,41,59,0.5);border:1px dashed rgba(148,163,184,0.2);">
+                <div style="color:#94A3B8;font-size:14px;">No settled parlays yet. Results will appear here after verification.</div>
+            </div>
+            """, unsafe_allow_html=True)
         else:
-            display_df = settled[['parlay_id', 'match_date', 'num_legs', 'parlay_description', 'total_odds', 'combined_ev', 'outcome', 'profit_loss']].copy()
-            display_df.columns = ['ID', 'Date', 'Legs', 'Description', 'Odds', 'EV%', 'Result', 'P/L']
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
+            for _, row in settled.head(10).iterrows():
+                outcome = row.get('outcome', '')
+                ev = float(row.get('combined_ev', 0) or 0)
+                odds = float(row.get('total_odds', 0) or 0)
+                legs = int(row.get('num_legs', 0) or 0)
+                match_date = str(row.get('match_date', ''))
+                desc = str(row.get('parlay_description', ''))
+                
+                if outcome == 'won':
+                    pl_display = f"+{odds - 1:.2f}u"
+                    result_icon = "✅"
+                    result_color = "#10B981"
+                    border_color = "rgba(16,185,129,0.4)"
+                    bg_gradient = "rgba(16,185,129,0.08)"
+                else:
+                    pl_display = "-1.00u"
+                    result_icon = "❌"
+                    result_color = "#EF4444"
+                    border_color = "rgba(239,68,68,0.4)"
+                    bg_gradient = "rgba(239,68,68,0.08)"
+                
+                st.markdown(f"""
+                <div style="display:flex;align-items:center;gap:16px;padding:14px 18px;margin:8px 0;border-radius:12px;background:linear-gradient(135deg,{bg_gradient},rgba(15,23,42,0.9));border:1px solid {border_color};">
+                    <div style="font-size:24px;">{result_icon}</div>
+                    <div style="flex:1;">
+                        <div style="font-size:14px;color:#E5E7EB;font-weight:500;">{desc}</div>
+                        <div style="font-size:12px;color:#64748B;margin-top:2px;">{match_date} | {legs} legs @ {odds:.2f}x | EV +{ev:.1f}%</div>
+                    </div>
+                    <div style="font-size:18px;font-weight:700;color:{result_color};">{pl_display}</div>
+                </div>
+                """, unsafe_allow_html=True)
             
     except Exception as e:
         st.error(f"Error loading ML Parlay data: {e}")
