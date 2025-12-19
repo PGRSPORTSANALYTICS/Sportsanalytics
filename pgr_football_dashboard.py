@@ -1725,9 +1725,10 @@ def render_ml_parlay_tab():
         settled = df[df['status'] == 'settled'].copy()
         pending = df[df['status'] == 'pending'].copy()
         
-        units_staked = len(settled)
         won = len(settled[settled['outcome'] == 'won']) if not settled.empty else 0
-        lost = units_staked - won
+        lost = len(settled[settled['outcome'] == 'lost']) if not settled.empty else 0
+        push = len(settled[settled['outcome'] == 'push']) if not settled.empty else 0
+        units_staked = won + lost  # Don't count pushes
         
         profit_units = 0.0
         if not settled.empty:
@@ -1736,8 +1737,9 @@ def render_ml_parlay_tab():
                 if bet['outcome'] == 'won':
                     odds = float(bet.get('total_odds', 2.0) or 2.0)
                     profit_units += (odds - 1)
-                else:
+                elif bet['outcome'] == 'lost':
                     profit_units -= 1
+                # push = 0, no change
         
         roi = (profit_units / units_staked * 100) if units_staked > 0 else 0
         hit_rate = (won / units_staked * 100) if units_staked > 0 else 0
