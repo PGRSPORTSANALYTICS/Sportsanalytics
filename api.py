@@ -577,6 +577,179 @@ async def get_match_details(match_id: str):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@app.get("/api/bookmaker-odds/{match_id}", tags=["Odds"])
+async def get_bookmaker_odds(match_id: str):
+    """
+    Get bookmaker odds comparison for a specific match.
+    
+    Returns odds from all bookmakers for each available market/selection,
+    highlighting the best odds and comparing to model fair odds.
+    
+    Parameters:
+    - match_id: The match ID or home_away format
+    
+    Returns:
+    - selections: List of selections with all bookmaker odds
+    - Each selection includes: market, selection, odds_by_bookmaker, best_odds, avg_odds, fair_odds
+    """
+    try:
+        rows = db_helper.execute("""
+            SELECT 
+                match_id, home_team, away_team, league, match_date, kickoff_time,
+                market, selection, odds, model_prob,
+                odds_by_bookmaker, best_odds_value, best_odds_bookmaker, avg_odds, fair_odds
+            FROM football_opportunities
+            WHERE (match_id = %s OR (home_team || '_' || away_team) = %s)
+            AND mode != 'TEST'
+            ORDER BY timestamp DESC
+        """, (match_id, match_id), fetch='all') or []
+        
+        if not rows:
+            raise HTTPException(
+                status_code=404,
+                detail={"error": "match_not_found", "message": "No odds data found for this match"}
+            )
+        
+        match_info = {
+            'match_id': rows[0][0] or match_id,
+            'home_team': rows[0][1],
+            'away_team': rows[0][2],
+            'league': rows[0][3] or 'Unknown',
+            'match_date': str(rows[0][4]) if rows[0][4] else None,
+            'kickoff_time': rows[0][5]
+        }
+        
+        selections = []
+        seen = set()
+        
+        for row in rows:
+            market = row[6]
+            selection = row[7]
+            key = f"{market}_{selection}"
+            
+            if key in seen:
+                continue
+            seen.add(key)
+            
+            odds_by_bookmaker = {}
+            if row[10]:
+                if isinstance(row[10], str):
+                    try:
+                        odds_by_bookmaker = json.loads(row[10])
+                    except:
+                        odds_by_bookmaker = {}
+                elif isinstance(row[10], dict):
+                    odds_by_bookmaker = row[10]
+            
+            fair_odds_val = float(row[14]) if row[14] else None
+            if not fair_odds_val and row[9] and float(row[9]) > 0:
+                fair_odds_val = round(1.0 / float(row[9]), 3)
+            
+            selection_data = {
+                'market': market,
+                'selection': selection,
+                'current_odds': float(row[8]) if row[8] else None,
+                'model_probability': round(float(row[9]) * 100, 1) if row[9] else None,
+                'odds_by_bookmaker': odds_by_bookmaker,
+                'best_odds': {
+                    'value': float(row[11]) if row[11] else None,
+                    'bookmaker': row[12]
+                } if row[11] else None,
+                'avg_odds': float(row[13]) if row[13] else None,
+                'fair_odds': fair_odds_val,
+                'bookmaker_count': len(odds_by_bookmaker)
+            }
+            
+            if fair_odds_val and row[11]:
+                edge_vs_fair = ((float(row[11]) / fair_odds_val) - 1) * 100
+                selection_data['edge_vs_fair_pct'] = round(edge_vs_fair, 2)
+            
+            selections.append(selection_data)
+        
+        return {
+            'match': match_info,
+            'selections': selections,
+            'total_selections': len(selections),
+            'generated_at': datetime.utcnow().isoformat() + "Z"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in get_bookmaker_odds for {match_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/best-odds/today", tags=["Odds"])
+async def get_today_best_odds():
+    """
+    Get all today's selections with best odds comparison.
+    
+    Returns a summary of all Value Singles for today with their best bookmaker odds,
+    useful for line shopping and value identification.
+    """
+    try:
+        today = datetime.utcnow().date()
+        tomorrow = today + timedelta(days=1)
+        
+        rows = db_helper.execute("""
+            SELECT 
+                match_id, home_team, away_team, league, kickoff_time,
+                market, selection, odds, model_prob, edge_percentage,
+                odds_by_bookmaker, best_odds_value, best_odds_bookmaker, avg_odds, fair_odds
+            FROM football_opportunities
+            WHERE match_date >= %s AND match_date <= %s
+            AND mode != 'TEST'
+            AND market IN ('Value Single', 'over_under', 'btts', '1x2')
+            ORDER BY edge_percentage DESC NULLS LAST
+        """, (str(today), str(tomorrow)), fetch='all') or []
+        
+        picks = []
+        for row in rows:
+            odds_by_bookmaker = {}
+            if row[10]:
+                if isinstance(row[10], str):
+                    try:
+                        odds_by_bookmaker = json.loads(row[10])
+                    except:
+                        odds_by_bookmaker = {}
+                elif isinstance(row[10], dict):
+                    odds_by_bookmaker = row[10]
+            
+            top_bookmakers = []
+            if odds_by_bookmaker:
+                sorted_books = sorted(odds_by_bookmaker.items(), key=lambda x: x[1], reverse=True)
+                top_bookmakers = [{'bookmaker': b, 'odds': o} for b, o in sorted_books[:5]]
+            
+            picks.append({
+                'match_id': row[0],
+                'match': f"{row[1]} vs {row[2]}",
+                'league': row[3] or 'Unknown',
+                'kickoff': row[4],
+                'market': row[5],
+                'selection': row[6],
+                'current_odds': float(row[7]) if row[7] else None,
+                'model_prob_pct': round(float(row[8]) * 100, 1) if row[8] else None,
+                'ev_pct': round(float(row[9]), 2) if row[9] else None,
+                'best_odds': float(row[11]) if row[11] else None,
+                'best_bookmaker': row[12],
+                'avg_odds': float(row[13]) if row[13] else None,
+                'fair_odds': float(row[14]) if row[14] else None,
+                'top_bookmakers': top_bookmakers
+            })
+        
+        return {
+            'picks': picks,
+            'total_picks': len(picks),
+            'date': str(today),
+            'generated_at': datetime.utcnow().isoformat() + "Z"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in get_today_best_odds: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
 @app.get("/api/performance", tags=["Analytics"])
 async def get_performance_summary():
     """

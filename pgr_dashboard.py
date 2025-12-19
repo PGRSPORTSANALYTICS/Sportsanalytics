@@ -2550,6 +2550,205 @@ def load_props_bets() -> pd.DataFrame:
         return pd.DataFrame()
 
 
+@st.cache_data(ttl=120, show_spinner="Loading bookmaker odds...")
+def load_bookmaker_odds() -> pd.DataFrame:
+    """Load bookmaker odds comparison data from football_opportunities table."""
+    try:
+        db_url = get_db_url()
+        engine = create_engine(db_url)
+        
+        from datetime import datetime, timedelta
+        today = datetime.utcnow().date()
+        tomorrow = today + timedelta(days=1)
+        
+        query = text("""
+            SELECT 
+                id, match_id, home_team, away_team, league, market, selection,
+                odds, edge_percentage as ev, confidence, model_prob,
+                match_date, kickoff_time,
+                odds_by_bookmaker, best_odds_value, best_odds_bookmaker, avg_odds, fair_odds
+            FROM football_opportunities
+            WHERE match_date >= :today AND match_date <= :tomorrow
+            AND mode != 'TEST'
+            AND market IN ('Value Single', 'over_under', 'btts', '1x2')
+            ORDER BY edge_percentage DESC NULLS LAST
+        """)
+        
+        with engine.connect() as conn:
+            df = pd.read_sql(query, conn, params={"today": str(today), "tomorrow": str(tomorrow)})
+        
+        for col in ["odds", "ev", "confidence", "model_prob", "best_odds_value", "avg_odds", "fair_odds"]:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+        
+        if "match_date" in df.columns:
+            df["match_date"] = pd.to_datetime(df["match_date"], errors="coerce")
+        
+        return df
+    except Exception as e:
+        st.warning(f"Could not load bookmaker odds: {e}")
+        return pd.DataFrame()
+
+
+def render_bookmaker_odds_card(row: pd.Series):
+    """Render a single bookmaker odds comparison card."""
+    import json as json_module
+    
+    home_team = str(row.get('home_team', '')).replace('"', '&quot;')
+    away_team = str(row.get('away_team', '')).replace('"', '&quot;')
+    fixture = f"{home_team} vs {away_team}"
+    
+    selection = str(row.get('selection', ''))
+    market = str(row.get('market', ''))
+    current_odds = float(row.get('odds', 0) or 0)
+    best_odds = float(row.get('best_odds_value', 0) or 0)
+    best_bookmaker = str(row.get('best_odds_bookmaker', '') or '')
+    avg_odds = float(row.get('avg_odds', 0) or 0)
+    fair_odds = float(row.get('fair_odds', 0) or 0)
+    ev = float(row.get('ev', 0) or 0)
+    
+    odds_by_bookmaker = row.get('odds_by_bookmaker', {})
+    if isinstance(odds_by_bookmaker, str):
+        try:
+            odds_by_bookmaker = json_module.loads(odds_by_bookmaker)
+        except:
+            odds_by_bookmaker = {}
+    elif not isinstance(odds_by_bookmaker, dict):
+        odds_by_bookmaker = {}
+    
+    if ev >= 10:
+        ev_bg, ev_border = "rgba(34,197,94,0.18)", "rgba(34,197,94,0.8)"
+    elif ev >= 5:
+        ev_bg, ev_border = "rgba(250,204,21,0.14)", "rgba(250,204,21,0.9)"
+    else:
+        ev_bg, ev_border = "rgba(59,130,246,0.14)", "rgba(59,130,246,0.7)"
+    
+    sorted_bookmakers = sorted(odds_by_bookmaker.items(), key=lambda x: x[1], reverse=True) if odds_by_bookmaker else []
+    top_bookmakers = sorted_bookmakers[:8]
+    
+    bookmaker_html = ""
+    for book_name, book_odds in top_bookmakers:
+        is_best = book_name == best_bookmaker
+        
+        if fair_odds > 0:
+            edge_pct = ((book_odds / fair_odds) - 1) * 100
+            if edge_pct >= 5:
+                color = "#22C55E"
+            elif edge_pct >= 0:
+                color = "#10B981"
+            elif edge_pct >= -3:
+                color = "#F59E0B"
+            else:
+                color = "#EF4444"
+        else:
+            color = "#E5E7EB"
+        
+        bg_style = "background:rgba(34,197,94,0.25);border:1px solid rgba(34,197,94,0.6);" if is_best else "background:rgba(55,65,81,0.3);"
+        star = " *" if is_best else ""
+        
+        bookmaker_html += f"""
+        <div style="display:inline-block;padding:6px 10px;margin:3px;border-radius:8px;{bg_style}">
+            <div style="font-size:11px;color:#9CA3AF;">{book_name}{star}</div>
+            <div style="font-size:16px;font-weight:600;color:{color};">{book_odds:.2f}</div>
+        </div>
+        """
+    
+    fair_vs_best = ""
+    if fair_odds > 0 and best_odds > 0:
+        edge_vs_fair = ((best_odds / fair_odds) - 1) * 100
+        edge_color = "#22C55E" if edge_vs_fair >= 0 else "#EF4444"
+        fair_vs_best = f"""
+        <div style="margin-top:8px;padding:8px;background:rgba(99,102,241,0.1);border-radius:8px;border:1px solid rgba(99,102,241,0.3);">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <span style="font-size:11px;color:#9CA3AF;">Model Fair Odds:</span>
+                    <span style="font-size:14px;color:#A5B4FC;font-weight:500;margin-left:6px;">{fair_odds:.2f}</span>
+                </div>
+                <div>
+                    <span style="font-size:11px;color:#9CA3AF;">Edge vs Fair:</span>
+                    <span style="font-size:14px;color:{edge_color};font-weight:600;margin-left:6px;">{edge_vs_fair:+.1f}%</span>
+                </div>
+                <div>
+                    <span style="font-size:11px;color:#9CA3AF;">Avg Odds:</span>
+                    <span style="font-size:14px;color:#E5E7EB;margin-left:6px;">{avg_odds:.2f}</span>
+                </div>
+            </div>
+        </div>
+        """
+    
+    card_html = f"""
+    <div style="padding:16px;margin:10px 0;border-radius:14px;background:rgba(30,41,59,0.95);border:1px solid rgba(148,163,184,0.2);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div>
+                <div style="font-size:16px;font-weight:600;color:#E5E7EB;">{fixture}</div>
+                <div style="font-size:20px;font-weight:700;color:#00FFA6;margin-top:4px;">{selection}</div>
+            </div>
+            <div style="text-align:right;">
+                <div style="font-size:11px;padding:4px 9px;border-radius:999px;background:{ev_bg};border:1px solid {ev_border};color:#E5E7EB;">EV {ev:+.1f}%</div>
+            </div>
+        </div>
+        <div style="font-size:12px;color:#9CA3AF;margin-bottom:10px;">
+            Comparing {len(odds_by_bookmaker)} bookmakers | Best: <span style="color:#22C55E;font-weight:600;">{best_bookmaker}</span> @ <span style="color:#22C55E;font-weight:600;">{best_odds:.2f}</span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;">
+            {bookmaker_html}
+        </div>
+        {fair_vs_best}
+    </div>
+    """
+    st.markdown(card_html, unsafe_allow_html=True)
+
+
+def render_bookmaker_odds_section():
+    """Render the bookmaker odds comparison section."""
+    st.markdown("## Bookmaker Odds Comparison")
+    st.caption("Compare odds across bookmakers to find the best value. Green = above fair odds, Red = below fair odds.")
+    
+    odds_df = load_bookmaker_odds()
+    
+    if odds_df.empty:
+        st.info("No bookmaker odds data available for today's picks yet. Odds are collected when predictions are generated.")
+        return
+    
+    has_odds_data = odds_df['odds_by_bookmaker'].apply(
+        lambda x: bool(x) if isinstance(x, dict) else (
+            bool(x) if x and str(x) not in ['{}', 'None', 'null', ''] else False
+        )
+    ).any()
+    
+    if not has_odds_data:
+        st.info("Bookmaker odds comparison data is being collected. Check back after the next prediction run.")
+        return
+    
+    import json as json_module
+    
+    def count_bookmakers(x):
+        if isinstance(x, dict):
+            return len(x)
+        if isinstance(x, str) and x not in ['{}', 'None', 'null', '']:
+            try:
+                parsed = json_module.loads(x)
+                return len(parsed) if isinstance(parsed, dict) else 0
+            except:
+                return 0
+        return 0
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        avg_books = odds_df['odds_by_bookmaker'].apply(count_bookmakers).mean()
+        st.metric("Avg Bookmakers", f"{avg_books:.1f}")
+    with col2:
+        st.metric("Total Selections", len(odds_df))
+    with col3:
+        with_best = odds_df['best_odds_bookmaker'].notna().sum()
+        st.metric("With Best Odds", with_best)
+    
+    st.markdown("---")
+    
+    for _, row in odds_df.iterrows():
+        render_bookmaker_odds_card(row)
+
+
 def compute_props_roi(df: pd.DataFrame) -> dict:
     """Compute ROI metrics for props bets."""
     if df.empty:
@@ -2783,11 +2982,12 @@ def main():
     prod_bets, backtest_bets = split_bets_by_mode(all_bets)
 
     # Tabs for different products
-    daily_card_tab, overview_tab, singles_tab, props_tab, parlays_tab, ml_parlay_tab, basket_tab, backtest_tab = st.tabs(
+    daily_card_tab, overview_tab, singles_tab, odds_compare_tab, props_tab, parlays_tab, ml_parlay_tab, basket_tab, backtest_tab = st.tabs(
         [
             "Daily Card",
             "Overview",
             "Value Singles",
+            "Odds Compare",
             "Props & Specials",
             "Parlays",
             "ML Parlay",
@@ -2809,6 +3009,9 @@ def main():
             title="Value Singles",
             description="High-edge single bets across 1X2, over/under, BTTS, corners and cards.",
         )
+
+    with odds_compare_tab:
+        render_bookmaker_odds_section()
 
     with props_tab:
         render_props_tab()
