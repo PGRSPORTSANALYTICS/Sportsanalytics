@@ -2318,6 +2318,9 @@ def render_parlays_tab():
     db_url = get_db_url()
     engine = create_engine(db_url)
     
+    from datetime import datetime as dt_module, timedelta as td_module
+    today = dt_module.utcnow().date()
+    
     query = text("""
         SELECT
             id,
@@ -2335,7 +2338,7 @@ def render_parlays_tab():
             profit_loss
         FROM sgp_predictions
         WHERE mode = 'PROD'
-        ORDER BY match_date ASC, id ASC
+        ORDER BY match_date DESC, id DESC
     """)
     
     with engine.connect() as conn:
@@ -2351,8 +2354,15 @@ def render_parlays_tab():
     result_settled = df["result"].isin(["WON", "WIN", "LOSS", "LOST", "VOID", "void"])
     settled_mask = outcome_settled | result_settled
     
-    active_bets = df[~settled_mask].copy()
+    # Only show today's and future unsettled parlays as "active"
+    df["match_date"] = pd.to_datetime(df["match_date"], errors="coerce")
+    today_mask = df["match_date"].dt.date >= today
+    
+    active_bets = df[~settled_mask & today_mask].copy()
     settled_bets = df[settled_mask].copy()
+    
+    # Past unsettled parlays (matches already played but not yet verified)
+    past_unsettled = df[~settled_mask & ~today_mask].copy()
 
     # ROI / PROFIT / HIT RATE for settled (UNITS MODE)
     if not settled_bets.empty:
