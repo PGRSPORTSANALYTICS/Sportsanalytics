@@ -15,6 +15,7 @@ from typing import Dict, Any, List, Optional
 from db_helper import db_helper
 from bankroll_manager import get_bankroll_manager
 from discord_notifier import send_result_to_discord
+from verify_results import RealResultVerifier
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -26,7 +27,25 @@ class MLParlayVerifier:
     def __init__(self):
         self.api_key = os.environ.get('THE_ODDS_API_KEY')
         self._scores_cache = {}
+        self._result_verifier = RealResultVerifier()
         logger.info("✅ ML Parlay Verifier initialized")
+    
+    def _fetch_from_api_football(self, home_team: str, away_team: str, match_date: str) -> Optional[Dict]:
+        """Fetch result from API-Football using the main verifier"""
+        try:
+            result = self._result_verifier._get_api_football_result(home_team, away_team, match_date)
+            if result:
+                return {
+                    'home_team': home_team,
+                    'away_team': away_team,
+                    'home_score': result['home_goals'],
+                    'away_score': result['away_goals'],
+                    'completed': True
+                }
+            return None
+        except Exception as e:
+            logger.debug(f"API-Football lookup failed: {e}")
+            return None
     
     def _fetch_scores(self, sport_key: str) -> Dict[str, Dict]:
         """Fetch completed match scores from The Odds API"""
@@ -299,6 +318,20 @@ class MLParlayVerifier:
                     # Fallback: Check match_results_cache table
                     if not match_result:
                         match_result = self._fetch_from_cache(home_team, away_team)
+                    
+                    # Fallback: Use API-Football (with improved team matching)
+                    if not match_result:
+                        match_date = leg.get('match_date', leg.get('kickoff', ''))
+                        if not match_date:
+                            # Try to get date from parlay
+                            parlay_info = db_helper.execute(
+                                "SELECT match_date FROM ml_parlay_predictions WHERE parlay_id = %s",
+                                (parlay_id,), fetch='one'
+                            )
+                            if parlay_info:
+                                match_date = str(parlay_info[0])
+                        if match_date:
+                            match_result = self._fetch_from_api_football(home_team, away_team, str(match_date))
                     
                     if match_result and match_result.get('completed'):
                         result = self._determine_leg_result(leg, match_result)
