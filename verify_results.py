@@ -538,21 +538,33 @@ class RealResultVerifier:
     def _team_similarity_match(self, team1: str, team2: str) -> bool:
         """Check if team names are similar enough to be considered a match"""
         try:
-            # Split team names into words and check for common words
-            words1 = set(team1.split())
-            words2 = set(team2.split())
+            # Quick check: first word match (most distinctive part of team name)
+            words1 = team1.split()
+            words2 = team2.split()
+            
+            if words1 and words2 and words1[0] == words2[0] and len(words1[0]) >= 3:
+                return True
+            
+            # Quick check: last word match (for cases like "Go Ahead Eagles" vs "GO Ahead Eagles")
+            if words1 and words2 and words1[-1] == words2[-1] and len(words1[-1]) >= 4:
+                return True
+            
+            # Split team names into words sets
+            set_words1 = set(words1)
+            set_words2 = set(words2)
             
             # Remove common filler words
-            filler_words = {'fc', 'afc', 'united', 'city', 'town', 'athletic', 'wanderers', 'rovers', 'albion', 'county'}
-            words1_significant = words1 - filler_words
-            words2_significant = words2 - filler_words
+            filler_words = {'fc', 'afc', 'sc', 'sv', 'kv', 'united', 'city', 'town', 'athletic', 
+                           'wanderers', 'rovers', 'albion', 'county', 'sporting', 'real', 'club'}
+            words1_significant = set_words1 - filler_words
+            words2_significant = set_words2 - filler_words
             
             # If at least 2 words match
-            common_words = words1.intersection(words2)
+            common_words = set_words1.intersection(set_words2)
             if len(common_words) >= 2:
                 return True
             
-            # If significant words match (excluding filler words)
+            # If ANY significant word matches (the distinctive part of the name)
             if words1_significant and words2_significant:
                 common_significant = words1_significant.intersection(words2_significant)
                 if common_significant:
@@ -607,8 +619,22 @@ class RealResultVerifier:
         """Normalize team names for matching with common abbreviations"""
         normalized = re.sub(r'[^\w\s]', '', team_name.lower().strip())
         
+        # Remove common prefixes/suffixes that vary between sources
+        remove_patterns = [
+            r'\bfc\b', r'\bafc\b', r'\bsc\b', r'\bsv\b', r'\bkv\b', r'\bcf\b',
+            r'\bsporting\b', r'\bclubul\b', r'\bsk\b', r'\bfk\b', r'\brb\b',
+            r'\breal\b', r'\batletico\b', r'\bac\b', r'\bas\b', r'\bss\b',
+            r'\benshede\b', r'\benchede\b', r'\benschede\b',  # Twente variations
+        ]
+        for pattern in remove_patterns:
+            normalized = re.sub(pattern, '', normalized)
+        
+        # Clean up extra spaces
+        normalized = ' '.join(normalized.split())
+        
         # Common team name mappings for better matching
         team_mappings = {
+            # English
             'man united': 'manchester united',
             'man utd': 'manchester united',
             'man city': 'manchester city',
@@ -627,12 +653,56 @@ class RealResultVerifier:
             'hull': 'hull city',
             'stoke': 'stoke city',
             'crystal palace': 'palace',
-            'bournemouth': 'afc bournemouth',
+            'bournemouth': 'bournemouth',
+            'sheff utd': 'sheffield utd',
+            'sheffield united': 'sheffield utd',
+            # Italian
+            'inter milan': 'inter',
+            'internazionale': 'inter',
+            'inter milano': 'inter',
+            'ac milan': 'milan',
+            'hellas verona': 'verona',
+            # Dutch
+            'twente': 'twente',
+            'twente enschede': 'twente',
+            'go ahead eagles': 'go ahead eagles',
+            'az alkmaar': 'az',
+            # Belgian
+            'club brugge': 'club brugge',
+            'club brugge kv': 'club brugge',
+            'union saintgilloise': 'union st gilloise',
+            'union saint gilloise': 'union st gilloise',
+            'zultewaregem': 'zulte waregem',
+            # Portuguese
+            'rio ave': 'rio ave',
+            'vitoria sc': 'vitoria',
+            'vitoria guimaraes': 'vitoria',
+            'sporting cp': 'sporting',
+            'sporting lisbon': 'sporting',
+            # Spanish
+            'atletico madrid': 'atletico',
+            'athletic bilbao': 'athletic',
+            'athletic club': 'athletic',
+            'celta vigo': 'celta',
+            'real sociedad': 'sociedad',
+            # German
+            'rb leipzig': 'leipzig',
+            'bayern munich': 'bayern',
+            'borussia dortmund': 'dortmund',
+            # French
+            'paris saint germain': 'psg',
+            'paris sg': 'psg',
+            'olympique marseille': 'marseille',
+            'olympique lyon': 'lyon',
+            'as monaco': 'monaco',
         }
         
         # Check if normalized name matches any mapping
         for abbrev, full_name in team_mappings.items():
             if normalized == abbrev or normalized == full_name:
+                return full_name
+            # Also check if the key is contained in normalized
+            if abbrev in normalized:
                 return full_name
         
         return normalized
