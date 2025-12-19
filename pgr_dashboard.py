@@ -1898,6 +1898,24 @@ def render_daily_card_tab():
             for bet in card['value_singles']:
                 tier_color = "#10B981" if bet['tier'] == 'A' else "#F59E0B" if bet['tier'] == 'B' else "#6B7280"
                 ev_color = "#10B981" if bet['ev'] > 0.10 else "#F59E0B" if bet['ev'] > 0.05 else "#9CA3AF"
+                
+                bookmaker_html = ""
+                odds_by_bookmaker = bet.get('odds_by_bookmaker', {})
+                best_bookmaker = bet.get('best_odds_bookmaker', '')
+                best_odds = bet.get('best_odds_value', bet['odds'])
+                
+                if odds_by_bookmaker and isinstance(odds_by_bookmaker, dict):
+                    sorted_books = sorted(odds_by_bookmaker.items(), key=lambda x: float(x[1]) if x[1] else 0, reverse=True)
+                    book_items = []
+                    for book, odds_val in sorted_books[:5]:
+                        if odds_val:
+                            is_best = (book == best_bookmaker)
+                            star = "⭐ " if is_best else ""
+                            style = "font-weight:700;color:#00FFA6;" if is_best else "color:#9CA3AF;"
+                            book_items.append(f'<span style="{style}">{star}{book} {float(odds_val):.2f}</span>')
+                    if book_items:
+                        bookmaker_html = f'<div style="font-size:11px;margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;">{" • ".join(book_items)}</div>'
+                
                 st.markdown(f"""
                 <div style="padding:16px;margin:10px 0;border-radius:14px;background:radial-gradient(circle at top left, rgba(16,185,129,0.15), rgba(15,23,42,0.96));border:1px solid rgba(16,185,129,0.4);">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
@@ -1908,8 +1926,9 @@ def render_daily_card_tab():
                     <div style="font-size:16px;color:#E5E7EB;font-weight:600;margin-bottom:6px;">{bet['matchup']}</div>
                     <div style="font-size:14px;color:#6EE7B7;margin-bottom:10px;">{bet['selection']}</div>
                     <div style="display:flex;gap:24px;">
-                        <div><span style="font-size:11px;color:#9CA3AF;">ODDS</span><br/><span style="font-size:20px;font-weight:600;color:#10B981;">{bet['odds']:.2f}x</span></div>
+                        <div><span style="font-size:11px;color:#9CA3AF;">BEST ODDS</span><br/><span style="font-size:20px;font-weight:600;color:#10B981;">{best_odds:.2f}x</span></div>
                     </div>
+                    {bookmaker_html}
                 </div>
                 """, unsafe_allow_html=True)
         

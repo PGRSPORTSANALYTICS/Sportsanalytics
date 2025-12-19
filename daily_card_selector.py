@@ -156,7 +156,11 @@ class DailyCardSelector:
                     edge_percentage / 100.0 as ev,
                     confidence::float / 100.0 as confidence,
                     kickoff_time as start_time,
-                    status
+                    status,
+                    odds_by_bookmaker,
+                    best_odds_value,
+                    best_odds_bookmaker,
+                    fair_odds
                 FROM football_opportunities 
                 WHERE status = 'pending'
                 AND market NOT IN ('exact_score', 'correct_score')
@@ -165,13 +169,28 @@ class DailyCardSelector:
             
             if football_rows:
                 for row in football_rows:
-                    ev = row[6] if row[6] else 0
+                    base_ev = row[6] if row[6] else 0
                     odds = row[5] if row[5] else 0
+                    best_odds = float(row[12]) if row[12] else odds
+                    fair_odds = float(row[14]) if row[14] else None
+                    
+                    if fair_odds and fair_odds > 0 and best_odds > 0:
+                        ev = (best_odds / fair_odds) - 1
+                    else:
+                        ev = base_ev
                     
                     if ev < 0:
                         continue
-                    if odds < 1.40 and ev < 0.10:
+                    if best_odds < 1.40 and ev < 0.10:
                         continue
+                    
+                    odds_by_bookmaker = row[11] if row[11] else {}
+                    if isinstance(odds_by_bookmaker, str):
+                        import json
+                        try:
+                            odds_by_bookmaker = json.loads(odds_by_bookmaker)
+                        except:
+                            odds_by_bookmaker = {}
                     
                     self.value_singles.append({
                         'sport': 'Football',
@@ -183,7 +202,10 @@ class DailyCardSelector:
                         'ev': ev,
                         'confidence': row[7] if row[7] else 0,
                         'start_time': row[8] or '',
-                        'tier': self._get_ev_tier(ev)
+                        'tier': self._get_ev_tier(ev),
+                        'odds_by_bookmaker': odds_by_bookmaker,
+                        'best_odds_value': best_odds,
+                        'best_odds_bookmaker': row[13] or ''
                     })
             
             return True
