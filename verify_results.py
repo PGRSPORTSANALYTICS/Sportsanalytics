@@ -112,9 +112,9 @@ class RealResultVerifier:
                 FROM football_opportunities 
                 WHERE bet_placed = true
                   AND (outcome IS NULL OR outcome = '' OR LOWER(outcome) = 'pending')
-                  AND DATE(match_date) <= CURRENT_DATE
-                ORDER BY match_date DESC
-                LIMIT 50
+                  AND DATE(match_date) < CURRENT_DATE
+                ORDER BY match_date ASC
+                LIMIT 100
             """)
             
             tips = [dict(row) for row in cursor.fetchall()]
@@ -295,7 +295,10 @@ class RealResultVerifier:
         try:
             # Extract just the date part (handles timestamps)
             clean_date = match_date.split('T')[0] if 'T' in match_date else match_date[:10]
-            url = f"https://www.flashscore.com/football/fixtures/?date={clean_date}"
+            # Convert YYYY-MM-DD to YYYYMMDD for Flashscore URL
+            date_compact = clean_date.replace('-', '')
+            # Flashscore results URL format
+            url = f"https://www.flashscore.com/football/?d=1&{date_compact}"
             
             downloaded = trafilatura.fetch_url(url)
             if not downloaded:
@@ -317,7 +320,8 @@ class RealResultVerifier:
         try:
             # Extract just the date part (handles timestamps)
             clean_date = match_date.split('T')[0] if 'T' in match_date else match_date[:10]
-            url = f"https://www.sofascore.com/football//{clean_date}"
+            # Sofascore date page URL format
+            url = f"https://www.sofascore.com/football/{clean_date}"
             
             downloaded = trafilatura.fetch_url(url)
             if not downloaded:
