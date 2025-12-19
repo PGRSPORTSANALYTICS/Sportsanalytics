@@ -617,6 +617,35 @@ class ValueSinglesEngine:
                 current_bankroll = bankroll_mgr.get_current_bankroll()
                 VALUE_SINGLES_STAKE = round(current_bankroll * 0.016, 2)  # 1.6% Kelly
                 
+                # Collect bookmaker odds for this selection
+                bookmaker_data = {}
+                if hasattr(self.champion, 'collect_bookmaker_odds'):
+                    # Map internal market_key to Odds API market format
+                    api_market_key = None
+                    point_val = None
+                    
+                    if market_key in ('HOME_WIN', 'AWAY_WIN', 'DRAW'):
+                        api_market_key = 'h2h'
+                    elif 'OVER' in market_key or 'UNDER' in market_key:
+                        api_market_key = 'totals'
+                        # Extract point from market_key (e.g., FT_OVER_2_5 -> 2.5)
+                        parts = market_key.split('_')
+                        if len(parts) >= 3:
+                            try:
+                                point_val = float(f"{parts[-2]}.{parts[-1]}")
+                            except:
+                                point_val = 2.5
+                    elif 'BTTS' in market_key:
+                        api_market_key = 'btts'
+                    
+                    if api_market_key:
+                        bookmaker_data = self.champion.collect_bookmaker_odds(
+                            match, selection_text, api_market_key, point_val
+                        )
+                
+                # Calculate fair_odds based on model probability
+                fair_odds = round(1.0 / p_model, 3) if p_model > 0 else None
+                
                 opportunity = {
                     "timestamp": int(time.time()),
                     "match_id": match_id,
@@ -645,7 +674,13 @@ class ValueSinglesEngine:
                     "trust_level": trust_level,
                     "sim_probability": float(sim_prob),
                     "ev_sim": float(ev_sim),
-                    "disagreement": float(disagreement)
+                    "disagreement": float(disagreement),
+                    # Bookmaker odds breakdown
+                    "odds_by_bookmaker": bookmaker_data.get('odds_by_bookmaker'),
+                    "best_odds_value": bookmaker_data.get('best_odds_value'),
+                    "best_odds_bookmaker": bookmaker_data.get('best_odds_bookmaker'),
+                    "avg_odds": bookmaker_data.get('avg_odds'),
+                    "fair_odds": fair_odds
                 }
 
                 picks.append(opportunity)
