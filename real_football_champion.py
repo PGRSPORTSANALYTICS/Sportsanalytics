@@ -79,6 +79,12 @@ class FootballOpportunity:
     sim_probability: float = 0.0
     home_xg: float = 0.0
     away_xg: float = 0.0
+    # Bookmaker odds comparison fields (Dec 2025)
+    odds_by_bookmaker: Dict = None
+    best_odds_value: float = None
+    best_odds_bookmaker: str = None
+    avg_odds: float = None
+    fair_odds: float = None
 
 class RealFootballChampion:
     """🏆 Advanced Real Football Betting Champion"""
@@ -1857,9 +1863,10 @@ class RealFootballChampion:
                             edge = (true_prob - implied_prob) * 100
                             
                             if edge >= self.min_edge:
+                                bm_odds = self.collect_bookmaker_odds(match, 'Over 2.5', 'totals', 2.5)
                                 opportunity = self.create_opportunity(
                                     match, 'Over 2.5', odds, edge, 
-                                    home_form, away_form, h2h, xg_analysis
+                                    home_form, away_form, h2h, xg_analysis, bm_odds
                                 )
                                 # 🔧 CRITICAL: Enforce confidence filtering
                                 if opportunity.confidence >= self.min_confidence:
@@ -1876,9 +1883,10 @@ class RealFootballChampion:
                             if edge >= self.min_edge_under:  # 16% minimum
                                 # Check Under-specific rejection filters
                                 if self.passes_under_filters(home_form, away_form, h2h, xg_analysis):
+                                    bm_odds = self.collect_bookmaker_odds(match, 'Under 2.5', 'totals', 2.5)
                                     opportunity = self.create_opportunity(
                                         match, 'Under 2.5', odds, edge,
-                                        home_form, away_form, h2h, xg_analysis
+                                        home_form, away_form, h2h, xg_analysis, bm_odds
                                     )
                                     # 🚨 CRISIS FIX: Higher confidence threshold
                                     if opportunity.confidence >= self.min_confidence_under:  # 75% minimum
@@ -1910,9 +1918,10 @@ class RealFootballChampion:
                                 selection = 'Away Win'
                             
                             if edge >= self.min_edge:
+                                bm_odds = self.collect_bookmaker_odds(match, selection, 'h2h')
                                 opportunity = self.create_opportunity(
                                     match, selection, odds, edge,
-                                    home_form, away_form, h2h, xg_analysis
+                                    home_form, away_form, h2h, xg_analysis, bm_odds
                                 )
                                 # 🔧 CRITICAL: Enforce confidence filtering
                                 if opportunity.confidence >= self.min_confidence:
@@ -1941,9 +1950,10 @@ class RealFootballChampion:
                                 selection = f'{name} {point}'
                             
                             if edge >= self.min_edge:
+                                bm_odds = self.collect_bookmaker_odds(match, selection, 'spreads', point)
                                 opportunity = self.create_opportunity(
                                     match, selection, odds, edge,
-                                    home_form, away_form, h2h, xg_analysis
+                                    home_form, away_form, h2h, xg_analysis, bm_odds
                                 )
                                 # 🔧 CRITICAL: Enforce confidence filtering
                                 if opportunity.confidence >= self.min_confidence:
@@ -1963,9 +1973,10 @@ class RealFootballChampion:
                             edge = (true_prob - implied_prob) * 100
                             
                             if edge >= self.min_edge:
+                                bm_odds = self.collect_bookmaker_odds(match, 'BTTS Yes', 'btts')
                                 opportunity = self.create_opportunity(
                                     match, 'BTTS Yes', odds, edge,
-                                    home_form, away_form, h2h, xg_analysis
+                                    home_form, away_form, h2h, xg_analysis, bm_odds
                                 )
                                 # 🔧 CRITICAL: Enforce confidence filtering
                                 if opportunity.confidence >= self.min_confidence:
@@ -1986,7 +1997,7 @@ class RealFootballChampion:
                 if edge >= self.min_edge and 1.55 <= estimated_odds['over_2_5'] <= 2.50:
                     opportunity = self.create_opportunity(
                         match, 'Over 2.5', estimated_odds['over_2_5'], edge,
-                        home_form, away_form, h2h, xg_analysis
+                        home_form, away_form, h2h, xg_analysis, None
                     )
                     # 🔧 CRITICAL: Enforce confidence filtering
                     if opportunity.confidence >= self.min_confidence:
@@ -2004,7 +2015,7 @@ class RealFootballChampion:
                     if self.passes_under_filters(home_form, away_form, h2h, xg_analysis):
                         opportunity = self.create_opportunity(
                             match, 'Under 2.5', estimated_odds['under_2_5'], edge,
-                            home_form, away_form, h2h, xg_analysis
+                            home_form, away_form, h2h, xg_analysis, None
                         )
                         # 🚨 CRISIS FIX: Higher confidence threshold
                         if opportunity.confidence >= self.min_confidence_under:
@@ -2023,7 +2034,7 @@ class RealFootballChampion:
                 if edge >= self.min_edge and 1.55 <= estimated_odds['btts_yes'] <= 2.50:
                     opportunity = self.create_opportunity(
                         match, 'BTTS Yes', estimated_odds['btts_yes'], edge,
-                        home_form, away_form, h2h, xg_analysis
+                        home_form, away_form, h2h, xg_analysis, None
                     )
                     # 🔧 CRITICAL: Enforce confidence filtering
                     if opportunity.confidence >= self.min_confidence:
@@ -2038,9 +2049,83 @@ class RealFootballChampion:
         
         return []
     
+    def collect_bookmaker_odds(self, match: Dict, selection: str, market_key: str, point: float = None) -> Dict:
+        """
+        Collect odds from all bookmakers for a specific selection.
+        Returns: {odds_by_bookmaker: {...}, best_odds_value, best_odds_bookmaker, avg_odds, fair_odds}
+        """
+        odds_by_bookmaker = {}
+        bookmakers = match.get('bookmakers', [])
+        
+        for bookmaker in bookmakers:
+            book_name = bookmaker.get('title', bookmaker.get('key', 'Unknown'))
+            markets = bookmaker.get('markets', [])
+            
+            for market in markets:
+                if market.get('key') != market_key:
+                    continue
+                    
+                for outcome in market.get('outcomes', []):
+                    outcome_name = outcome.get('name', '')
+                    outcome_point = outcome.get('point')
+                    price = outcome.get('price', 0)
+                    
+                    # Match based on selection type
+                    matched = False
+                    
+                    if market_key == 'h2h':
+                        # Home Win / Away Win / Draw
+                        if selection == 'Home Win' and outcome_name == match['home_team']:
+                            matched = True
+                        elif selection == 'Away Win' and outcome_name == match['away_team']:
+                            matched = True
+                        elif selection == 'Draw' and outcome_name.lower() == 'draw':
+                            matched = True
+                    
+                    elif market_key == 'totals':
+                        # Over/Under with point
+                        if 'Over' in selection and 'Over' in outcome_name:
+                            if point is None or outcome_point == point:
+                                matched = True
+                        elif 'Under' in selection and 'Under' in outcome_name:
+                            if point is None or outcome_point == point:
+                                matched = True
+                    
+                    elif market_key == 'btts':
+                        if 'Yes' in selection and outcome_name == 'Yes':
+                            matched = True
+                        elif 'No' in selection and outcome_name == 'No':
+                            matched = True
+                    
+                    elif market_key == 'spreads':
+                        # Match by team name in selection
+                        if outcome_name in selection and (point is None or outcome_point == point):
+                            matched = True
+                    
+                    if matched and price > 0:
+                        odds_by_bookmaker[book_name] = round(price, 3)
+        
+        # Compute aggregated values
+        if odds_by_bookmaker:
+            odds_values = list(odds_by_bookmaker.values())
+            best_odds_value = max(odds_values)
+            best_odds_bookmaker = [k for k, v in odds_by_bookmaker.items() if v == best_odds_value][0]
+            avg_odds = round(sum(odds_values) / len(odds_values), 3)
+        else:
+            best_odds_value = None
+            best_odds_bookmaker = None
+            avg_odds = None
+        
+        return {
+            'odds_by_bookmaker': odds_by_bookmaker,
+            'best_odds_value': best_odds_value,
+            'best_odds_bookmaker': best_odds_bookmaker,
+            'avg_odds': avg_odds
+        }
+    
     def create_opportunity(self, match: Dict, selection: str, odds: float, edge: float,
                           home_form: TeamForm, away_form: TeamForm, h2h: HeadToHead, 
-                          xg_analysis: Dict) -> FootballOpportunity:
+                          xg_analysis: Dict, bookmaker_odds: Dict = None) -> FootballOpportunity:
         """Create a football betting opportunity with simple analysis"""
         
         # Calculate confidence based on standard factors
@@ -2131,6 +2216,27 @@ class RealFootballChampion:
         sport_key = match.get('sport', '')
         league_name = self.sport_to_league.get(sport_key, match.get('league_name', sport_key or 'Unknown'))
         
+        # Calculate fair_odds based on model probability
+        model_prob = None
+        if selection == 'Over 2.5':
+            model_prob = xg_analysis.get('over_2_5_prob', 0)
+        elif selection == 'Under 2.5':
+            model_prob = 1.0 - xg_analysis.get('over_2_5_prob', 1.0)
+        elif selection == 'BTTS Yes':
+            model_prob = xg_analysis.get('btts_prob', 0)
+        elif selection == 'Home Win':
+            model_prob = xg_analysis.get('home_win_prob', 0)
+        elif selection == 'Away Win':
+            model_prob = xg_analysis.get('away_win_prob', 0)
+        
+        fair_odds = round(1.0 / model_prob, 3) if model_prob and model_prob > 0 else None
+        
+        # Extract bookmaker odds data
+        bm_odds = bookmaker_odds.get('odds_by_bookmaker', {}) if bookmaker_odds else {}
+        best_val = bookmaker_odds.get('best_odds_value') if bookmaker_odds else None
+        best_book = bookmaker_odds.get('best_odds_bookmaker') if bookmaker_odds else None
+        avg_val = bookmaker_odds.get('avg_odds') if bookmaker_odds else None
+        
         return FootballOpportunity(
             match_id=f"{match['home_team']}_vs_{match['away_team']}_{int(time.time())}",
             home_team=match['home_team'],
@@ -2145,7 +2251,12 @@ class RealFootballChampion:
             analysis=analysis,
             stake=stake,
             match_date=match_date,
-            kickoff_time=kickoff_time
+            kickoff_time=kickoff_time,
+            odds_by_bookmaker=bm_odds if bm_odds else None,
+            best_odds_value=best_val,
+            best_odds_bookmaker=best_book,
+            avg_odds=avg_val,
+            fair_odds=fair_odds
         )
     
     def get_todays_count(self):
@@ -3429,13 +3540,18 @@ class RealFootballChampion:
             odds_value = float(opp_dict.get('odds', 0))
             trust_level = opp_dict.get('trust_level', 'L2_MEDIUM_TRUST')
             
+            # Prepare bookmaker odds data
+            odds_by_bookmaker = opp_dict.get('odds_by_bookmaker')
+            odds_by_bookmaker_json = json.dumps(odds_by_bookmaker) if odds_by_bookmaker else None
+            
             db_helper.execute('''
                 INSERT INTO football_opportunities 
                 (timestamp, match_id, home_team, away_team, league, market, selection, 
                  odds, edge_percentage, confidence, analysis, stake, match_date, kickoff_time,
                  quality_score, recommended_date, recommended_tier, daily_rank, mode, bet_placed,
-                 open_odds, odds_source, trust_level)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 open_odds, odds_source, trust_level,
+                 odds_by_bookmaker, best_odds_value, best_odds_bookmaker, avg_odds, fair_odds)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ''', (
                 opp_dict.get('timestamp', int(time.time())),
                 opp_dict.get('match_id'),
@@ -3459,7 +3575,12 @@ class RealFootballChampion:
                 bet_placed,
                 odds_value,  # open_odds = odds at bet creation
                 opp_dict.get('odds_source', 'the_odds_api'),
-                trust_level
+                trust_level,
+                odds_by_bookmaker_json,
+                opp_dict.get('best_odds_value'),
+                opp_dict.get('best_odds_bookmaker'),
+                opp_dict.get('avg_odds'),
+                opp_dict.get('fair_odds')
             ))
             
             return True
@@ -3520,13 +3641,17 @@ class RealFootballChampion:
         print(f"   🏷️ Trust Level: {trust_level} (MC disagree: {mc_disagreement:.1%})")
         
         try:
+            # Prepare bookmaker odds data
+            odds_by_bookmaker_json = json.dumps(opportunity.odds_by_bookmaker) if opportunity.odds_by_bookmaker else None
+            
             result = db_helper.execute('''
                 INSERT INTO football_opportunities 
                 (timestamp, match_id, home_team, away_team, league, market, selection, 
                  odds, edge_percentage, confidence, analysis, stake, match_date, kickoff_time,
                  quality_score, recommended_date, recommended_tier, daily_rank, mode, bet_placed,
-                 trust_level, sim_probability, ev_sim, disagreement)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 trust_level, sim_probability, ev_sim, disagreement,
+                 odds_by_bookmaker, best_odds_value, best_odds_bookmaker, avg_odds, fair_odds)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
             ''', (
                 int(time.time()),
@@ -3552,7 +3677,12 @@ class RealFootballChampion:
                 trust_level,
                 opportunity.sim_probability if opportunity.sim_probability > 0 else opportunity.confidence / 100.0,  # sim_probability from Monte Carlo
                 ev_sim,
-                mc_disagreement  # Monte Carlo vs ensemble disagreement
+                mc_disagreement,  # Monte Carlo vs ensemble disagreement
+                odds_by_bookmaker_json,
+                opportunity.best_odds_value,
+                opportunity.best_odds_bookmaker,
+                opportunity.avg_odds,
+                opportunity.fair_odds
             ), fetch='one')
             
             # Get the actual prediction ID from the database
