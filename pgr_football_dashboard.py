@@ -2725,6 +2725,10 @@ def render_bookmaker_odds_card(row: pd.Series):
         </div>
         """
     
+    bookmaker_section = ""
+    if bookmaker_html:
+        bookmaker_section = f'<div style="display:flex;flex-wrap:wrap;gap:4px;">{bookmaker_html}</div>'
+    
     card_html = f"""
     <div style="padding:16px;margin:10px 0;border-radius:14px;background:rgba(30,41,59,0.95);border:1px solid rgba(148,163,184,0.2);">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
@@ -2739,9 +2743,7 @@ def render_bookmaker_odds_card(row: pd.Series):
         <div style="font-size:12px;color:#9CA3AF;margin-bottom:10px;">
             {f'Comparing {len(odds_by_bookmaker)} bookmakers | Best: <span style="color:#22C55E;font-weight:600;">{best_bookmaker}</span> @ <span style="color:#22C55E;font-weight:600;">{best_odds:.2f}</span>' if odds_by_bookmaker and best_bookmaker else 'Odds data pending...'}
         </div>
-        <div style="display:flex;flex-wrap:wrap;gap:4px;">
-            {bookmaker_html}
-        </div>
+        {bookmaker_section}
         {fair_vs_best}
     </div>
     """
