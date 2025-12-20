@@ -2049,13 +2049,87 @@ class RealFootballChampion:
         
         return []
     
+    def _fetch_bookmaker_odds_for_match(self, home_team: str, away_team: str, sport_key: str = None, market_key: str = 'h2h') -> List[Dict]:
+        """
+        Fetch bookmaker odds from The Odds API for a specific match.
+        Used as fallback when match data doesn't have bookmakers field.
+        Returns list of bookmaker dicts in The Odds API format.
+        """
+        from league_registry import get_odds_api_keys
+        
+        if not self.odds_api_key:
+            return []
+        
+        try:
+            # Determine which leagues to search
+            if sport_key and not sport_key.startswith('league_'):
+                sport_keys = [sport_key]
+            else:
+                sport_keys = get_odds_api_keys()[:10]
+            
+            # Map market_key to Odds API market parameter
+            market_param = 'h2h'
+            if market_key in ('totals', 'totals'):
+                market_param = 'h2h,totals'
+            elif market_key == 'spreads':
+                market_param = 'h2h,spreads'
+            
+            for sk in sport_keys:
+                url = f"{self.odds_base_url}/sports/{sk}/odds"
+                params = {
+                    'apiKey': self.odds_api_key,
+                    'regions': 'uk,eu,us',
+                    'markets': market_param,
+                    'oddsFormat': 'decimal',
+                    'dateFormat': 'iso'
+                }
+                
+                try:
+                    response = requests.get(url, params=params, timeout=8)
+                    if response.status_code == 200:
+                        data = response.json()
+                        for event in data:
+                            event_home = event.get('home_team', '')
+                            event_away = event.get('away_team', '')
+                            
+                            # Fuzzy match by checking if team names are similar
+                            home_match = (home_team.lower() in event_home.lower() or 
+                                         event_home.lower() in home_team.lower())
+                            away_match = (away_team.lower() in event_away.lower() or 
+                                         event_away.lower() in away_team.lower())
+                            
+                            if home_match and away_match:
+                                print(f"📊 Found bookmaker odds for {home_team} vs {away_team} via The Odds API")
+                                return event.get('bookmakers', [])
+                    elif response.status_code == 429:
+                        print("⚠️ Odds API quota exhausted during bookmaker fetch")
+                        return []
+                except Exception as e:
+                    continue
+            
+            return []
+        except Exception as e:
+            print(f"⚠️ Error fetching bookmaker odds: {e}")
+            return []
+    
     def collect_bookmaker_odds(self, match: Dict, selection: str, market_key: str, point: float = None) -> Dict:
         """
         Collect odds from all bookmakers for a specific selection.
         Returns: {odds_by_bookmaker: {...}, best_odds_value, best_odds_bookmaker, avg_odds, fair_odds}
+        
+        If match doesn't have bookmakers data, fetches directly from The Odds API.
         """
         odds_by_bookmaker = {}
         bookmakers = match.get('bookmakers', [])
+        
+        # FALLBACK: Fetch bookmaker odds from The Odds API if not in match
+        if not bookmakers and self.odds_api_key:
+            home_team = match.get('home_team', '')
+            away_team = match.get('away_team', '')
+            sport_key = match.get('sport_key') or match.get('league_key') or match.get('odds_api_key')
+            
+            if home_team and away_team:
+                bookmakers = self._fetch_bookmaker_odds_for_match(home_team, away_team, sport_key, market_key)
         
         for bookmaker in bookmakers:
             book_name = bookmaker.get('title', bookmaker.get('key', 'Unknown'))
@@ -2072,12 +2146,24 @@ class RealFootballChampion:
                     
                     # Match based on selection type
                     matched = False
+                    home_team = match.get('home_team', '')
+                    away_team = match.get('away_team', '')
+                    
+                    # Helper for fuzzy team name matching
+                    def team_matches(outcome_nm, team_nm):
+                        if not outcome_nm or not team_nm:
+                            return False
+                        o_lower = outcome_nm.lower()
+                        t_lower = team_nm.lower()
+                        return (o_lower == t_lower or 
+                                o_lower in t_lower or 
+                                t_lower in o_lower)
                     
                     if market_key == 'h2h':
-                        # Home Win / Away Win / Draw
-                        if selection == 'Home Win' and outcome_name == match['home_team']:
+                        # Home Win / Away Win / Draw - use fuzzy matching
+                        if selection == 'Home Win' and team_matches(outcome_name, home_team):
                             matched = True
-                        elif selection == 'Away Win' and outcome_name == match['away_team']:
+                        elif selection == 'Away Win' and team_matches(outcome_name, away_team):
                             matched = True
                         elif selection == 'Draw' and outcome_name.lower() == 'draw':
                             matched = True

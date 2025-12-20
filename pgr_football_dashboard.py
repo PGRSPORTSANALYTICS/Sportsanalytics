@@ -1599,6 +1599,43 @@ def render_product_tab(
                 else:
                     market_badge = ''
 
+                MAJOR_BOOKMAKERS = ['Pinnacle', 'Bet365', 'Betfair', 'Unibet', 'Betway', 'William Hill', 'Ladbrokes', 'Paddy Power', 'Coral', 'Sky Bet', 'BetMGM', 'DraftKings', 'FanDuel', 'Betsson', '1xBet', 'Bovada', 'BetOnline.ag', 'Marathon Bet']
+                
+                odds_by_bookmaker = row.get('odds_by_bookmaker', {})
+                if isinstance(odds_by_bookmaker, str):
+                    import json as json_mod
+                    try:
+                        odds_by_bookmaker = json_mod.loads(odds_by_bookmaker)
+                    except:
+                        odds_by_bookmaker = {}
+                elif not isinstance(odds_by_bookmaker, dict):
+                    odds_by_bookmaker = {}
+                
+                bookmaker_html = ""
+                if odds_by_bookmaker and len(odds_by_bookmaker) > 0:
+                    sorted_books = sorted(odds_by_bookmaker.items(), key=lambda x: float(x[1]) if x[1] else 0, reverse=True)
+                    best_book = sorted_books[0] if len(sorted_books) > 0 else None
+                    second_best = sorted_books[1] if len(sorted_books) > 1 else None
+                    third_best = sorted_books[2] if len(sorted_books) > 2 else None
+                    
+                    bookmaker_html = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid rgba(0,255,166,0.2);">'
+                    if best_book:
+                        bookmaker_html += f'<div style="padding:6px 12px;border-radius:8px;background:linear-gradient(135deg, rgba(34,197,94,0.35), rgba(16,185,129,0.25));border:2px solid rgba(34,197,94,0.8);"><div style="font-size:9px;color:#22C55E;font-weight:600;">BEST</div><div style="font-size:11px;color:#E5E7EB;">{best_book[0]}</div><div style="font-size:16px;font-weight:700;color:#22C55E;">{float(best_book[1]):.2f}</div></div>'
+                    if second_best:
+                        bookmaker_html += f'<div style="padding:6px 12px;border-radius:8px;background:linear-gradient(135deg, rgba(59,130,246,0.3), rgba(99,102,241,0.2));border:2px solid rgba(59,130,246,0.7);"><div style="font-size:9px;color:#60A5FA;font-weight:600;">2ND</div><div style="font-size:11px;color:#E5E7EB;">{second_best[0]}</div><div style="font-size:16px;font-weight:700;color:#60A5FA;">{float(second_best[1]):.2f}</div></div>'
+                    if third_best:
+                        bookmaker_html += f'<div style="padding:6px 12px;border-radius:8px;background:rgba(148,163,184,0.15);border:1px solid rgba(148,163,184,0.4);"><div style="font-size:9px;color:#94A3B8;font-weight:600;">3RD</div><div style="font-size:11px;color:#CBD5E1;">{third_best[0]}</div><div style="font-size:14px;font-weight:600;color:#94A3B8;">{float(third_best[1]):.2f}</div></div>'
+                    bookmaker_html += '</div>'
+                    
+                    shown = set([best_book[0] if best_book else '', second_best[0] if second_best else '', third_best[0] if third_best else ''])
+                    major_odds = [(k, float(v)) for k, v in odds_by_bookmaker.items() if k not in shown and any(m.lower() in k.lower() for m in MAJOR_BOOKMAKERS)]
+                    major_sorted = sorted(major_odds, key=lambda x: x[1], reverse=True)[:4]
+                    if major_sorted:
+                        bookmaker_html += '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;"><span style="font-size:9px;color:#6B7280;width:100%;">MAJOR BOOKMAKERS:</span>'
+                        for bk, od in major_sorted:
+                            bookmaker_html += f'<span style="font-size:10px;color:#9CA3AF;padding:3px 8px;background:rgba(55,65,81,0.4);border-radius:4px;">{bk} {od:.2f}</span>'
+                        bookmaker_html += '</div>'
+
                 card_html = f"""<div style="padding:18px;margin:10px 0;border-radius:16px;background:radial-gradient(circle at top left, rgba(0,255,166,0.14), rgba(15,23,42,0.96));border:1px solid rgba(0,255,166,0.35);box-shadow:0 0 20px rgba(0,255,166,0.25);">
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
 <div style="font-size:18px;font-weight:600;color:#E5E7EB;">⚽ {fixture}</div>
@@ -1610,6 +1647,7 @@ def render_product_tab(
 <div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Odds</div><div style="font-size:20px;font-weight:600;color:#00FFA6;">{odds_val:.2f}</div></div>
 <div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">1 unit</div></div>
 </div>
+{bookmaker_html}
 </div>"""
                 st.markdown(card_html, unsafe_allow_html=True)
                 st.code(f"{fixture} | {bet_display} | Odds {odds_val:.2f} | Stake: 1 unit", language="text")
