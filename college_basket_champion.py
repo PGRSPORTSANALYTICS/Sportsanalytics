@@ -30,10 +30,10 @@ def run_prediction_cycle():
             min_ev=0.03,  # 3% EV minimum
             min_conf=0.30,  # 30% confidence (balanced - allows moderate underdogs)
             max_singles=15,  # 15 singles max
-            max_parlays=3,  # 3 parlays max
+            max_parlays=0,  # DISABLED - parlays losing money (16.4% hit rate)
             min_odds=1.40,  # 1.40 min odds
             max_odds=12.00,  # 12.00 max odds
-            allow_parlays=True
+            allow_parlays=False  # DISABLED - parlays losing money
         )
         
         logger.info("📊 Fetching NCAAB games and analyzing value...")
