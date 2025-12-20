@@ -645,7 +645,10 @@ def load_all_bets_from_db() -> pd.DataFrame:
             parlay_description,
             ev,
             selection,
-            clv_pct
+            clv_pct,
+            odds_by_bookmaker,
+            best_odds_value,
+            best_odds_bookmaker
         FROM normalized_bets
         ORDER BY created_at DESC
         """
