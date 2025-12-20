@@ -1551,9 +1551,11 @@ def render_product_tab(
         past_unsettled = active[active["match_day"] < today].copy()
         
         def render_bet_cards(bets_df, section_title, section_emoji):
-            st.markdown(f"### {section_emoji} {section_title}")
+            if section_title:
+                st.markdown(f"### {section_emoji} {section_title}")
             if bets_df.empty:
-                st.caption(f"No {section_title.lower()} available.")
+                if section_title:
+                    st.caption(f"No {section_title.lower()} available.")
                 return
             
             for _, row in bets_df.iterrows():
@@ -1652,13 +1654,60 @@ def render_product_tab(
                 st.markdown(card_html, unsafe_allow_html=True)
                 st.code(f"{fixture} | {bet_display} | Odds {odds_val:.2f} | Stake: 1 unit", language="text")
         
-        render_bet_cards(todays_picks, "Today's Picks", "🔥")
+        # Categorize predictions into 3 sections
+        def categorize_picks(df):
+            """Split predictions into Match Result, Goals/BTTS, and Cards/Corners"""
+            if df.empty:
+                return df, df, df
+            
+            # Match Result: Home Win, Away Win, Draw
+            match_result_mask = df['selection'].str.contains('Home Win|Away Win|Draw', case=False, na=False)
+            match_result = df[match_result_mask]
+            
+            # Goals & BTTS: Over, Under, BTTS
+            goals_btts_mask = df['selection'].str.contains('Over|Under|BTTS|Both Teams', case=False, na=False)
+            goals_btts = df[goals_btts_mask]
+            
+            # Cards & Corners: Everything else (corners, cards)
+            cards_corners_mask = ~match_result_mask & ~goals_btts_mask
+            cards_corners = df[cards_corners_mask]
+            
+            return match_result, goals_btts, cards_corners
+        
+        def render_categorized_picks(df, day_label):
+            """Render picks split into 3 categories"""
+            if df.empty:
+                st.caption(f"No {day_label.lower()} picks available.")
+                return
+            
+            match_result, goals_btts, cards_corners = categorize_picks(df)
+            
+            # Section 1: Match Result (1X2)
+            if not match_result.empty:
+                st.markdown(f"#### 🏆 Match Result ({len(match_result)})")
+                render_bet_cards(match_result, "", "")
+            
+            # Section 2: Goals & BTTS
+            if not goals_btts.empty:
+                st.markdown(f"#### ⚽ Goals & BTTS ({len(goals_btts)})")
+                render_bet_cards(goals_btts, "", "")
+            
+            # Section 3: Cards & Corners
+            if not cards_corners.empty:
+                st.markdown(f"#### 🔢 Cards & Corners ({len(cards_corners)})")
+                render_bet_cards(cards_corners, "", "")
+        
+        st.markdown("### 🔥 Today's Picks")
+        render_categorized_picks(todays_picks, "today's")
+        
         st.markdown("")
-        render_bet_cards(tomorrows_picks, "Tomorrow's Picks", "📅")
+        st.markdown("### 📅 Tomorrow's Picks")
+        render_categorized_picks(tomorrows_picks, "tomorrow's")
         
         if not upcoming_picks.empty:
             st.markdown("")
-            render_bet_cards(upcoming_picks, "Upcoming Picks", "🗓️")
+            st.markdown("### 🗓️ Upcoming Picks")
+            render_categorized_picks(upcoming_picks, "upcoming")
         
         if not past_unsettled.empty:
             st.markdown("")
