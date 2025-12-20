@@ -75,3 +75,27 @@ The system employs advanced prediction features including:
 ### External APIs
 - **The Odds API**: Real-time odds and match availability.
 - **API-Football**: Injuries, lineups, and match statistics.
+
+## Recent Changes (December 20, 2025)
+
+### Dashboard Updates
+- **Value Singles Categorization Fix:** The dashboard now correctly categorizes picks by checking BOTH the `product` column (CARDS/CORNERS) AND the `selection` text. Previously, bets like "Over 1.5 Cards" were incorrectly appearing under "Goals & BTTS" because the categorization only checked selection text.
+- **Bookmaker Odds Display:** Added bookmaker odds columns (odds_by_bookmaker, best_odds_value, best_odds_bookmaker) to database views and dashboard queries.
+
+### Dashboard Categories
+The Value Singles tab now displays picks in 3 sections:
+1. **Match Result (1X2)** - Home Win, Away Win, Draw
+2. **Goals & BTTS** - Over/Under goals, Both Teams To Score
+3. **Cards & Corners** - All cards and corners markets (identified by product='CARDS' or product='CORNERS')
+
+### Current Performance (7-day rolling)
+- **Total Bets:** 682
+- **Settled:** 279 (164 Won, 115 Lost)
+- **Hit Rate:** 58.8%
+- **Pending:** 403 bets awaiting results
+
+### Active Workflows
+- **Real Football Dashboard** (port 5000) - Main UI
+- **Combined Sports Engine** - Prediction engine with 1-hour Value Singles cycles
+- **PGR API Server** (port 8000) - REST API
+- **College Basketball Dashboard** (port 6000) - Basketball predictions
