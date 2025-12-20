@@ -1663,17 +1663,17 @@ def render_product_tab(
             if df.empty:
                 return df, df, df
             
-            # Match Result: Home Win, Away Win, Draw
-            match_result_mask = df['selection'].str.contains('Home Win|Away Win|Draw', case=False, na=False)
+            # Check Cards & Corners FIRST (before Over/Under check catches "Over 1.5 Cards")
+            cards_corners_mask = df['selection'].str.contains('Corner|Card', case=False, na=False)
+            cards_corners = df[cards_corners_mask]
+            
+            # Match Result: Home Win, Away Win, Draw (excluding cards/corners)
+            match_result_mask = df['selection'].str.contains('Home Win|Away Win|Draw', case=False, na=False) & ~cards_corners_mask
             match_result = df[match_result_mask]
             
-            # Goals & BTTS: Over, Under, BTTS
-            goals_btts_mask = df['selection'].str.contains('Over|Under|BTTS|Both Teams', case=False, na=False)
+            # Goals & BTTS: Over, Under, BTTS (excluding cards/corners)
+            goals_btts_mask = df['selection'].str.contains('Over|Under|BTTS|Both Teams', case=False, na=False) & ~cards_corners_mask & ~match_result_mask
             goals_btts = df[goals_btts_mask]
-            
-            # Cards & Corners: Everything else (corners, cards)
-            cards_corners_mask = ~match_result_mask & ~goals_btts_mask
-            cards_corners = df[cards_corners_mask]
             
             return match_result, goals_btts, cards_corners
         
