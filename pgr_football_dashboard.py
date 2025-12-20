@@ -1663,8 +1663,11 @@ def render_product_tab(
             if df.empty:
                 return df, df, df
             
-            # Check Cards & Corners FIRST (before Over/Under check catches "Over 1.5 Cards")
-            cards_corners_mask = df['selection'].str.contains('Corner|Card', case=False, na=False)
+            # Check Cards & Corners FIRST - check BOTH product column AND selection text
+            # Product column contains 'CARDS' or 'CORNERS' for these bet types
+            product_cards_corners = df['product'].str.upper().isin(['CARDS', 'CORNERS']) if 'product' in df.columns else pd.Series([False] * len(df), index=df.index)
+            selection_cards_corners = df['selection'].str.contains('Corner|Card', case=False, na=False)
+            cards_corners_mask = product_cards_corners | selection_cards_corners
             cards_corners = df[cards_corners_mask]
             
             # Match Result: Home Win, Away Win, Draw (excluding cards/corners)
