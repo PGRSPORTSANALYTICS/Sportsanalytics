@@ -1927,8 +1927,9 @@ def render_daily_card_tab():
                 odds_by_bookmaker = bet.get('odds_by_bookmaker', {})
                 best_odds_val = bet.get('best_odds_value', bet['odds'])
                 
+                base_odds = float(bet.get('odds', 0) or 0)
                 bookmaker_html = ""
-                if odds_by_bookmaker and isinstance(odds_by_bookmaker, dict):
+                if odds_by_bookmaker and isinstance(odds_by_bookmaker, dict) and len(odds_by_bookmaker) > 0:
                     sorted_books = sorted(odds_by_bookmaker.items(), key=lambda x: float(x[1]) if x[1] else 0, reverse=True)
                     best_book = sorted_books[0] if len(sorted_books) > 0 else None
                     second_best = sorted_books[1] if len(sorted_books) > 1 else None
@@ -1951,6 +1952,8 @@ def render_daily_card_tab():
                         for bk, od in major_sorted:
                             bookmaker_html += f'<span style="font-size:10px;color:#9CA3AF;padding:2px 6px;background:rgba(55,65,81,0.4);border-radius:4px;">{bk} {od:.2f}</span>'
                         bookmaker_html += '</div>'
+                elif base_odds > 0:
+                    bookmaker_html = f'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;"><div style="padding:6px 12px;border-radius:8px;background:linear-gradient(135deg, rgba(34,197,94,0.35), rgba(16,185,129,0.25));border:2px solid rgba(34,197,94,0.8);"><div style="font-size:9px;color:#22C55E;font-weight:600;">ODDS</div><div style="font-size:16px;font-weight:700;color:#22C55E;">{base_odds:.2f}</div></div><div style="padding:6px 12px;border-radius:8px;background:rgba(55,65,81,0.3);"><div style="font-size:9px;color:#9CA3AF;">Bookmaker comparison not available for this league</div></div></div>'
                 
                 st.markdown(f"""
                 <div style="padding:16px;margin:10px 0;border-radius:14px;background:radial-gradient(circle at top left, rgba(16,185,129,0.15), rgba(15,23,42,0.96));border:1px solid rgba(16,185,129,0.4);">
