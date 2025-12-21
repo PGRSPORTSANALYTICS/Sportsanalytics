@@ -2977,13 +2977,14 @@ def compute_props_roi(df: pd.DataFrame) -> dict:
     
     wins = result_col.str.contains("won|win", na=False).sum()
     losses = result_col.str.contains("lost|loss", na=False).sum()
+    voids = result_col.str.contains("void", na=False).sum()
     
     needs_verification = status_col.str.contains("needs_verification|needs verification", na=False).sum()
     if "outcome" in df.columns:
         outcome_col = df["outcome"].fillna("").str.lower()
         needs_verification = max(needs_verification, outcome_col.str.contains("needs_verification|needs verification", na=False).sum())
     
-    pending = len(df) - wins - losses
+    pending = len(df) - wins - losses - voids
     
     settled = wins + losses
     if settled == 0:
