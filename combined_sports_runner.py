@@ -101,6 +101,20 @@ def verify_football_results():
         logger.error(f"❌ Football verification error: {e}")
 
 
+def verify_all_bets_corners_cards():
+    """Verify Corners, Cards, and Value Singles from all_bets table"""
+    try:
+        from verify_results import RealResultVerifier
+        logger.info("🔢 Verifying Corners & Cards from all_bets...")
+        verifier = RealResultVerifier()
+        results = verifier.verify_all_bets_pending()
+        logger.info(f"🔢 Corners/Cards verification: {results['verified']} verified, {results['failed']} failed")
+    except Exception as e:
+        logger.error(f"❌ Corners/Cards verification error: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 def verify_parlay_results():
     """Verify parlay results using ML parlay verifier"""
     try:
@@ -305,6 +319,7 @@ def main():
     verify_parlay_results()
     verify_basketball_results()
     verify_ml_parlay_results()
+    verify_all_bets_corners_cards()  # NEW: Corners & Cards from all_bets
     logger.info("✅ Initial verification complete")
     
     # Schedule recurring prediction tasks (only enabled products)
@@ -322,6 +337,7 @@ def main():
     schedule.every(5).minutes.do(verify_parlay_results)
     schedule.every(5).minutes.do(verify_basketball_results)
     schedule.every(5).minutes.do(verify_ml_parlay_results)
+    schedule.every(5).minutes.do(verify_all_bets_corners_cards)  # NEW: Corners & Cards
     
     # Schedule CLV update - Every 10 minutes to capture closing odds
     schedule.every(10).minutes.do(run_clv_update_cycle)

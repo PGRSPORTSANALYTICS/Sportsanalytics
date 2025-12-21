@@ -1094,6 +1094,197 @@ class RealResultVerifier:
             logger.error(f"❌ Database update error: {e}")
             raise
 
+    def verify_all_bets_pending(self) -> Dict[str, int]:
+        """
+        Verify pending bets from all_bets table (CORNERS, CARDS, VALUE_SINGLE).
+        Uses match_results table for corner/card statistics.
+        """
+        logger.info("🔍 Starting all_bets verification (CORNERS, CARDS, VALUE_SINGLE)")
+        
+        verified = 0
+        failed = 0
+        
+        try:
+            if not self.database_url:
+                logger.warning("No DATABASE_URL found, skipping all_bets verification")
+                return {"verified": 0, "failed": 0}
+            
+            conn = psycopg2.connect(self.database_url)
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            
+            cursor.execute("""
+                SELECT id, home_team, away_team, match_date, product, selection, 
+                       odds, stake, result
+                FROM all_bets 
+                WHERE (result IS NULL OR result = 'PENDING')
+                  AND match_date::date < CURRENT_DATE
+                  AND product IN ('CORNERS', 'CARDS', 'VALUE_SINGLE')
+                ORDER BY match_date ASC
+                LIMIT 200
+            """)
+            
+            pending_bets = [dict(row) for row in cursor.fetchall()]
+            logger.info(f"📋 Found {len(pending_bets)} pending bets in all_bets table")
+            
+            for bet in pending_bets:
+                try:
+                    result = self._verify_all_bets_single(cursor, bet)
+                    if result:
+                        verified += 1
+                    else:
+                        failed += 1
+                    time.sleep(0.5)
+                except Exception as e:
+                    logger.error(f"❌ Error verifying bet {bet['id']}: {e}")
+                    failed += 1
+            
+            conn.commit()
+            cursor.close()
+            conn.close()
+            
+            logger.info(f"✅ all_bets verification complete: {verified} verified, {failed} failed")
+            return {"verified": verified, "failed": failed}
+            
+        except Exception as e:
+            logger.error(f"❌ Critical error in all_bets verification: {e}")
+            return {"verified": verified, "failed": failed}
+    
+    def _verify_all_bets_single(self, cursor, bet: Dict) -> bool:
+        """Verify a single bet from all_bets table using API sources."""
+        home_team = bet['home_team']
+        away_team = bet['away_team']
+        match_date = bet['match_date']
+        product = bet['product']
+        selection = bet['selection'].lower() if bet['selection'] else ''
+        
+        logger.info(f"🔍 Verifying: {home_team} vs {away_team} | {product} | {selection}")
+        
+        # Use existing API-based result fetching (same as football_opportunities verification)
+        match_result = self._get_real_match_result(home_team, away_team, match_date)
+        
+        if not match_result:
+            logger.warning(f"⚠️ No match result found for {home_team} vs {away_team}")
+            return False
+        
+        home_goals = match_result.get('home_goals', 0)
+        away_goals = match_result.get('away_goals', 0)
+        total_goals = home_goals + away_goals
+        home_corners = match_result.get('home_corners')
+        away_corners = match_result.get('away_corners')
+        total_corners = match_result.get('total_corners')
+        home_cards = match_result.get('home_cards')
+        away_cards = match_result.get('away_cards')
+        total_cards = match_result.get('total_cards')
+        
+        outcome = None
+        
+        if product == 'CORNERS':
+            if total_corners is None:
+                logger.warning(f"⚠️ No corner stats for {home_team} vs {away_team}")
+                return False
+            
+            line_match = re.search(r'(over|under)\s*(\d+\.?\d*)', selection)
+            if line_match:
+                direction = line_match.group(1)
+                line = float(line_match.group(2))
+                
+                if 'home' in selection:
+                    actual = home_corners
+                elif 'away' in selection:
+                    actual = away_corners
+                else:
+                    actual = total_corners
+                
+                if direction == 'over':
+                    outcome = 'WON' if actual > line else 'LOST'
+                else:
+                    outcome = 'WON' if actual < line else 'LOST'
+                logger.info(f"📊 Corners: {actual} vs line {line} ({direction}) = {outcome}")
+            
+            handicap_match = re.search(r'([+-]\d+\.?\d*)', selection)
+            if not outcome and handicap_match:
+                handicap = float(handicap_match.group(1))
+                if 'home' in selection or home_team.lower()[:5] in selection:
+                    adjusted = home_corners + handicap
+                    outcome = 'WON' if adjusted > away_corners else 'LOST'
+                else:
+                    adjusted = away_corners + handicap
+                    outcome = 'WON' if adjusted > home_corners else 'LOST'
+                logger.info(f"📊 Corners Handicap: adjusted={adjusted} = {outcome}")
+        
+        elif product == 'CARDS':
+            if total_cards is None:
+                logger.warning(f"⚠️ No card stats for {home_team} vs {away_team}")
+                return False
+            
+            line_match = re.search(r'(over|under)\s*(\d+\.?\d*)', selection)
+            if line_match:
+                direction = line_match.group(1)
+                line = float(line_match.group(2))
+                
+                if 'home' in selection:
+                    actual = home_cards
+                elif 'away' in selection:
+                    actual = away_cards
+                else:
+                    actual = total_cards
+                
+                if direction == 'over':
+                    outcome = 'WON' if actual > line else 'LOST'
+                else:
+                    outcome = 'WON' if actual < line else 'LOST'
+                logger.info(f"📊 Cards: {actual} vs line {line} ({direction}) = {outcome}")
+        
+        elif product == 'VALUE_SINGLE':
+            if 'over' in selection or 'under' in selection:
+                line_match = re.search(r'(over|under)\s*(\d+\.?\d*)', selection)
+                if line_match:
+                    direction = line_match.group(1)
+                    line = float(line_match.group(2))
+                    if direction == 'over':
+                        outcome = 'WON' if total_goals > line else 'LOST'
+                    else:
+                        outcome = 'WON' if total_goals < line else 'LOST'
+                    logger.info(f"📊 Goals: {total_goals} vs line {line} ({direction}) = {outcome}")
+            elif 'btts' in selection or 'both teams' in selection:
+                both_scored = home_goals > 0 and away_goals > 0
+                if 'yes' in selection:
+                    outcome = 'WON' if both_scored else 'LOST'
+                else:
+                    outcome = 'WON' if not both_scored else 'LOST'
+                logger.info(f"📊 BTTS: {home_goals}-{away_goals}, both scored={both_scored} = {outcome}")
+            elif 'home win' in selection or 'home' == selection:
+                outcome = 'WON' if home_goals > away_goals else 'LOST'
+                logger.info(f"📊 1X2: {home_goals}-{away_goals}, Home Win = {outcome}")
+            elif 'away win' in selection or 'away' == selection:
+                outcome = 'WON' if away_goals > home_goals else 'LOST'
+                logger.info(f"📊 1X2: {home_goals}-{away_goals}, Away Win = {outcome}")
+            elif 'draw' in selection:
+                outcome = 'WON' if home_goals == away_goals else 'LOST'
+                logger.info(f"📊 1X2: {home_goals}-{away_goals}, Draw = {outcome}")
+        
+        if outcome:
+            stake = float(bet.get('stake', 0) or 0)
+            odds = float(bet.get('odds', 1) or 1)
+            payout = stake * odds if outcome == 'WON' else 0
+            profit_loss = payout - stake if outcome == 'WON' else -stake
+            
+            # Update the underlying football_opportunities table (not the view)
+            outcome_lower = 'won' if outcome == 'WON' else 'lost' if outcome == 'LOST' else outcome.lower()
+            cursor.execute("""
+                UPDATE football_opportunities 
+                SET outcome = %s, 
+                    profit_loss = %s,
+                    settled_timestamp = EXTRACT(EPOCH FROM NOW())::bigint
+                WHERE id = %s
+            """, (outcome_lower, profit_loss, bet['id']))
+            
+            logger.info(f"✅ Settled bet {bet['id']}: {outcome} (P/L: {profit_loss:.2f})")
+            return True
+        
+        logger.warning(f"⚠️ Could not determine outcome for: {selection}")
+        return False
+
 def test_verification_failures():
     """Test system behavior under various failure scenarios"""
     logger.info("🧪 TESTING VERIFICATION FAILURES...")
