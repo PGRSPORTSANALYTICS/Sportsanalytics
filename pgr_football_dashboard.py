@@ -92,8 +92,10 @@ def compute_roi_units(df: pd.DataFrame) -> dict:
         axis=1
     )
     
-    units_staked = float(len(settled)) * ANALYTICS_STAKE_UNITS
-    units_won = float(settled["profit_units"].sum())
+    # Exclude VOID bets from stake/ROI calculation - only count WON and LOST
+    non_void = settled[settled["norm_result"] != "VOID"]
+    units_staked = float(len(non_void)) * ANALYTICS_STAKE_UNITS
+    units_won = float(non_void["profit_units"].sum())
     roi = (units_won / units_staked * 100) if units_staked > 0 else 0.0
     
     non_void = settled[settled["norm_result"] != "VOID"]
@@ -750,12 +752,13 @@ def compute_roi(df: pd.DataFrame) -> dict:
             hit_rate=0.0,
         )
 
-    # Database values are in SEK - convert to USD
-    total_stake_sek = float(settled["stake"].sum())
+    # Exclude VOID bets from stake/ROI calculation - only count WON and LOST
+    non_void = settled[settled["norm_result"] != "VOID"]
+    total_stake_sek = float(non_void["stake"].sum())
     
     # Only count WON payouts for total payout
-    won_mask = settled["norm_result"] == "WON"
-    total_payout_sek = float(settled.loc[won_mask, "payout"].fillna(0).sum())
+    won_mask = non_void["norm_result"] == "WON"
+    total_payout_sek = float(non_void.loc[won_mask, "payout"].fillna(0).sum())
     
     profit_sek = total_payout_sek - total_stake_sek
     roi = (profit_sek / total_stake_sek * 100) if total_stake_sek > 0 else 0.0
