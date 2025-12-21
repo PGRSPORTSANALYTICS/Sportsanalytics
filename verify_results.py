@@ -1143,11 +1143,69 @@ class RealResultVerifier:
             conn.close()
             
             logger.info(f"✅ all_bets verification complete: {verified} verified, {failed} failed")
-            return {"verified": verified, "failed": failed}
+            
+            # Auto-void old pending bets (older than 3 days) that couldn't be verified
+            voided = self._auto_void_old_pending()
+            
+            return {"verified": verified, "failed": failed, "voided": voided}
             
         except Exception as e:
             logger.error(f"❌ Critical error in all_bets verification: {e}")
             return {"verified": verified, "failed": failed}
+    
+    def _auto_void_old_pending(self) -> int:
+        """Auto-void pending bets older than 3 days that couldn't be settled."""
+        try:
+            conn = psycopg2.connect(self.database_url)
+            cursor = conn.cursor()
+            
+            # Void football_opportunities older than 3 days
+            cursor.execute("""
+                UPDATE football_opportunities 
+                SET status = 'settled', 
+                    outcome = 'void', 
+                    result = 'VOID',
+                    settled_timestamp = EXTRACT(EPOCH FROM NOW())::bigint
+                WHERE status = 'pending' 
+                    AND match_date::date < CURRENT_DATE - INTERVAL '3 days'
+            """)
+            football_voided = cursor.rowcount
+            
+            # Void SGP older than 3 days
+            cursor.execute("""
+                UPDATE sgp_predictions 
+                SET status = 'SETTLED', 
+                    outcome = 'void', 
+                    result = 'VOID',
+                    profit_loss = 0,
+                    settled_timestamp = EXTRACT(EPOCH FROM NOW())::bigint
+                WHERE status = 'PENDING'
+                    AND match_date::date < CURRENT_DATE - INTERVAL '3 days'
+            """)
+            sgp_voided = cursor.rowcount
+            
+            # Void basketball older than 3 days
+            cursor.execute("""
+                UPDATE basketball_predictions 
+                SET status = 'void'
+                WHERE status = 'pending' 
+                    AND commence_time::date < CURRENT_DATE - INTERVAL '3 days'
+            """)
+            basketball_voided = cursor.rowcount
+            
+            conn.commit()
+            cursor.close()
+            conn.close()
+            
+            total_voided = football_voided + sgp_voided + basketball_voided
+            if total_voided > 0:
+                logger.info(f"🗑️ Auto-voided {total_voided} old pending bets (football: {football_voided}, sgp: {sgp_voided}, basketball: {basketball_voided})")
+            
+            return total_voided
+            
+        except Exception as e:
+            logger.error(f"❌ Error in auto-void: {e}")
+            return 0
     
     def _verify_all_bets_single(self, cursor, bet: Dict) -> bool:
         """Verify a single bet from all_bets table using API sources."""
