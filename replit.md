@@ -76,7 +76,7 @@ The system employs advanced prediction features including:
 - **The Odds API**: Real-time odds and match availability.
 - **API-Football**: Injuries, lineups, and match statistics.
 
-## Recent Changes (December 20, 2025)
+## Recent Changes (December 21, 2025)
 
 ### Dashboard Updates
 - **Value Singles Categorization Fix:** The dashboard now correctly categorizes picks by checking BOTH the `product` column (CARDS/CORNERS) AND the `selection` text. Previously, bets like "Over 1.5 Cards" were incorrectly appearing under "Goals & BTTS" because the categorization only checked selection text.
@@ -88,11 +88,15 @@ The Value Singles tab now displays picks in 3 sections:
 2. **Goals & BTTS** - Over/Under goals, Both Teams To Score
 3. **Cards & Corners** - All cards and corners markets (identified by product='CARDS' or product='CORNERS')
 
-### Current Performance (7-day rolling)
-- **Total Bets:** 682
-- **Settled:** 279 (164 Won, 115 Lost)
-- **Hit Rate:** 58.8%
-- **Pending:** 403 bets awaiting results
+### Result Verification Status
+- **Verification system working correctly** - Multi-source fallback (The Odds API, API-Football, Sofascore, Flashscore) settling bets automatically every 5 minutes
+- **31 remaining pending** - Mostly older SGP parlays from late November/early December that may be from leagues not well-covered by the APIs
+
+### Current Performance (All-Time)
+- **Total Settled:** 1,290 bets
+- **Won:** 519 | **Lost:** 771
+- **Hit Rate:** 40.2%
+- **Pending:** 31 bets (older SGP parlays)
 
 ### Active Workflows
 - **Real Football Dashboard** (port 5000) - Main UI
