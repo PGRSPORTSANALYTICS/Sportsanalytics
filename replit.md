@@ -88,15 +88,30 @@ The Value Singles tab now displays picks in 3 sections:
 2. **Goals & BTTS** - Over/Under goals, Both Teams To Score
 3. **Cards & Corners** - All cards and corners markets (identified by product='CARDS' or product='CORNERS')
 
+### Settlement & Data Integrity Policy (December 22, 2025)
+**Objective:** Ensure full transparency, statistical integrity, and professional-grade reporting.
+
+**Policy:**
+- All bets are settled only when official match data is available via verified data providers (API-Football, Odds API, or equivalent)
+- For Corners and Cards markets, historical data from smaller competitions or matches older than 2 days may not be retrievable
+- Any bet that cannot be verified after the cutoff period is automatically marked as **VOID (Data Unavailable)**
+- Cutoff periods: Corners/Cards = 2 days, Other Football/SGP = 3 days
+
+**Key Principles:**
+- No assumptions, estimations, or inferred results are ever used
+- Unverifiable data is excluded rather than guessed
+- ROI, hit rate, and profit calculations include only verified results (VOID bets excluded from stats)
+- This approach ensures all published results are honest, reproducible, and auditable
+
 ### Result Verification Status
 - **Verification system working correctly** - Multi-source fallback (The Odds API, API-Football, Sofascore, Flashscore) settling bets automatically every 5 minutes
-- **31 remaining pending** - Mostly older SGP parlays from late November/early December that may be from leagues not well-covered by the APIs
+- **Auto-void enabled** - Old unverifiable bets are automatically voided with "Data Unavailable" reason
+- **335 old corners/cards voided** - December 22, 2025 cleanup of older unverifiable bets
 
 ### Current Performance (All-Time)
-- **Total Settled:** 1,290 bets
-- **Won:** 519 | **Lost:** 771
-- **Hit Rate:** 40.2%
-- **Pending:** 31 bets (older SGP parlays)
+- **Total Settled:** 1,290+ bets (excluding voided)
+- Performance metrics exclude VOID bets for statistical accuracy
+- **Pending:** Only recent bets (< 2-3 days old) remain pending until matches complete
 
 ### Active Workflows
 - **Real Football Dashboard** (port 5000) - Main UI
