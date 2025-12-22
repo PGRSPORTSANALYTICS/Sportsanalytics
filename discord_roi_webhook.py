@@ -106,11 +106,11 @@ def get_roi_stats() -> Dict[str, Any]:
             pending = conn.execute(pending_query).fetchone()
             
             recent_query = text("""
-                SELECT home_team, away_team, selection, odds, result
+                SELECT home_team, away_team, selection, odds, result, product, settled_at
                 FROM all_bets
                 WHERE result IN ('WON', 'WIN', 'LOST', 'LOSS')
-                ORDER BY match_date DESC, id DESC
-                LIMIT 5
+                ORDER BY settled_at DESC NULLS LAST, id DESC
+                LIMIT 10
             """)
             recent = conn.execute(recent_query).fetchall()
         
@@ -173,10 +173,11 @@ def get_roi_stats() -> Dict[str, Any]:
             "pending": pending[0] if pending else 0,
             "recent": [
                 {
-                    "match": f"{r[0]} vs {r[1]}",
+                    "match": f"{r[0]} vs {r[1]}" if r[1] and not str(r[0]).startswith('PARLAY') else str(r[0]),
                     "pick": r[2],
                     "odds": float(r[3]) if r[3] else 0,
-                    "result": r[4]
+                    "result": r[4],
+                    "product": r[5] if len(r) > 5 else "BET"
                 } for r in recent
             ]
         }
@@ -250,12 +251,15 @@ def build_discord_embed(stats: Dict[str, Any]) -> Dict[str, Any]:
     
     if recent:
         recent_lines = []
-        for r in recent[:5]:
+        for r in recent[:10]:
             emoji = "✅" if r["result"] in ["WON", "WIN"] else "❌"
-            match_name = f"{r['match'][:25]}" if len(r['match']) > 25 else r['match']
-            recent_lines.append(f"{emoji} {match_name}: {r['pick']} @ {r['odds']:.2f}")
+            product = r.get("product", "BET")
+            product_emoji = {"CORNERS": "🔢", "CARDS": "🟨", "VALUE_SINGLE": "⚽", "BASKET_SINGLE": "🏀", "BASKET_PARLAY": "🏀", "SGP": "🎲", "EXACT_SCORE": "🎯"}.get(product, "📊")
+            match_short = r['match'][:20] + "..." if len(r['match']) > 20 else r['match']
+            pick_short = r['pick'][:15] + "..." if len(r['pick']) > 15 else r['pick']
+            recent_lines.append(f"{emoji}{product_emoji} {match_short} - {pick_short} @ {r['odds']:.2f}")
         fields.append({
-            "name": "🔄 Recent Results",
+            "name": "🔄 Last 10 Results",
             "value": "\n".join(recent_lines),
             "inline": False
         })
