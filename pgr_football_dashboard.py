@@ -2831,31 +2831,13 @@ def render_bookmaker_odds_card(row: pd.Series):
     bookmaker_html = ""
     
     if best_book:
-        bookmaker_html += f"""
-        <div style="display:inline-block;padding:8px 14px;margin:4px;border-radius:10px;background:linear-gradient(135deg, rgba(34,197,94,0.35), rgba(16,185,129,0.25));border:2px solid rgba(34,197,94,0.8);">
-            <div style="font-size:10px;color:#22C55E;font-weight:600;text-transform:uppercase;">BEST</div>
-            <div style="font-size:12px;color:#E5E7EB;margin-top:2px;">{best_book[0]}</div>
-            <div style="font-size:20px;font-weight:700;color:#22C55E;">{float(best_book[1]):.2f}</div>
-        </div>
-        """
+        bookmaker_html += f'<div style="display:inline-block;padding:8px 14px;margin:4px;border-radius:10px;background:linear-gradient(135deg, rgba(34,197,94,0.35), rgba(16,185,129,0.25));border:2px solid rgba(34,197,94,0.8);"><div style="font-size:10px;color:#22C55E;font-weight:600;text-transform:uppercase;">BEST</div><div style="font-size:12px;color:#E5E7EB;margin-top:2px;">{best_book[0]}</div><div style="font-size:20px;font-weight:700;color:#22C55E;">{float(best_book[1]):.2f}</div></div>'
     
     if second_best_book:
-        bookmaker_html += f"""
-        <div style="display:inline-block;padding:8px 14px;margin:4px;border-radius:10px;background:linear-gradient(135deg, rgba(59,130,246,0.3), rgba(99,102,241,0.2));border:2px solid rgba(59,130,246,0.7);">
-            <div style="font-size:10px;color:#60A5FA;font-weight:600;text-transform:uppercase;">2ND BEST</div>
-            <div style="font-size:12px;color:#E5E7EB;margin-top:2px;">{second_best_book[0]}</div>
-            <div style="font-size:20px;font-weight:700;color:#60A5FA;">{float(second_best_book[1]):.2f}</div>
-        </div>
-        """
+        bookmaker_html += f'<div style="display:inline-block;padding:8px 14px;margin:4px;border-radius:10px;background:linear-gradient(135deg, rgba(59,130,246,0.3), rgba(99,102,241,0.2));border:2px solid rgba(59,130,246,0.7);"><div style="font-size:10px;color:#60A5FA;font-weight:600;text-transform:uppercase;">2ND</div><div style="font-size:12px;color:#E5E7EB;margin-top:2px;">{second_best_book[0]}</div><div style="font-size:20px;font-weight:700;color:#60A5FA;">{float(second_best_book[1]):.2f}</div></div>'
     
     if third_best_book:
-        bookmaker_html += f"""
-        <div style="display:inline-block;padding:8px 14px;margin:4px;border-radius:10px;background:rgba(148,163,184,0.15);border:1px solid rgba(148,163,184,0.4);">
-            <div style="font-size:10px;color:#94A3B8;font-weight:600;text-transform:uppercase;">3RD</div>
-            <div style="font-size:12px;color:#CBD5E1;margin-top:2px;">{third_best_book[0]}</div>
-            <div style="font-size:18px;font-weight:600;color:#94A3B8;">{float(third_best_book[1]):.2f}</div>
-        </div>
-        """
+        bookmaker_html += f'<div style="display:inline-block;padding:8px 14px;margin:4px;border-radius:10px;background:rgba(148,163,184,0.15);border:1px solid rgba(148,163,184,0.4);"><div style="font-size:10px;color:#94A3B8;font-weight:600;text-transform:uppercase;">3RD</div><div style="font-size:12px;color:#CBD5E1;margin-top:2px;">{third_best_book[0]}</div><div style="font-size:18px;font-weight:600;color:#94A3B8;">{float(third_best_book[1]):.2f}</div></div>'
     
     shown_books = set([best_book[0] if best_book else '', second_best_book[0] if second_best_book else '', third_best_book[0] if third_best_book else ''])
     major_sorted = sorted([(k, v) for k, v in major_odds.items() if k not in shown_books], key=lambda x: x[1], reverse=True)[:4]
@@ -2864,12 +2846,7 @@ def render_bookmaker_odds_card(row: pd.Series):
         bookmaker_html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(148,163,184,0.2);">'
         bookmaker_html += '<div style="width:100%;font-size:10px;color:#6B7280;margin-bottom:4px;">MAJOR BOOKMAKERS:</div>'
         for book_name, book_odds in major_sorted:
-            bookmaker_html += f"""
-            <div style="display:inline-block;padding:6px 10px;border-radius:8px;background:rgba(55,65,81,0.4);border:1px solid rgba(75,85,99,0.5);">
-                <div style="font-size:11px;color:#9CA3AF;">{book_name}</div>
-                <div style="font-size:15px;font-weight:600;color:#E5E7EB;">{book_odds:.2f}</div>
-            </div>
-            """
+            bookmaker_html += f'<div style="display:inline-block;padding:6px 10px;border-radius:8px;background:rgba(55,65,81,0.4);border:1px solid rgba(75,85,99,0.5);"><div style="font-size:11px;color:#9CA3AF;">{book_name}</div><div style="font-size:15px;font-weight:600;color:#E5E7EB;">{book_odds:.2f}</div></div>'
         bookmaker_html += '</div>'
     
     fair_vs_best = ""
