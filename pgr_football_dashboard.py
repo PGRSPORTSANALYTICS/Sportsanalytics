@@ -1556,6 +1556,39 @@ def render_product_tab(
         # Past unsettled matches (awaiting settlement)
         past_unsettled = active[active["match_day"] < today].copy()
         
+        def generate_why_bullets(row, ev, model_prob, fair_odds, best_odds, avg_odds, num_bookmakers):
+            """Generate 2-3 insight bullets based on pick data. Max 3, structured, no hype."""
+            bullets = []
+            
+            market_implied = 1 / best_odds if best_odds > 1 else 0.5
+            model_pct = model_prob * 100 if model_prob else 50
+            market_pct = market_implied * 100
+            
+            if model_prob and model_prob > market_implied + 0.03:
+                bullets.append(f'<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:12px;opacity:0.7;">📊</span><span>Model probability: {model_pct:.0f}% vs market implied {market_pct:.0f}%</span></div>')
+            
+            if best_odds > fair_odds * 1.01:
+                bullets.append(f'<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:12px;opacity:0.7;">💰</span><span>Best price {best_odds:.2f} vs fair odds {fair_odds:.2f}</span></div>')
+            
+            if num_bookmakers >= 5:
+                bullets.append(f'<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:12px;opacity:0.7;">🧮</span><span>Edge confirmed across {num_bookmakers} bookmakers</span></div>')
+            
+            if best_odds > avg_odds * 1.02 and avg_odds > 0:
+                pct_above = ((best_odds / avg_odds) - 1) * 100
+                bullets.append(f'<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:12px;opacity:0.7;">📈</span><span>Best odds {pct_above:.1f}% above market average</span></div>')
+            
+            product = str(row.get('product', '')).upper()
+            if product == 'CORNERS':
+                bullets.append(f'<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:12px;opacity:0.7;">⚽</span><span>Corner patterns favor this line based on team styles</span></div>')
+            elif product == 'CARDS':
+                bullets.append(f'<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:12px;opacity:0.7;">⚽</span><span>Card frequency supports selection based on referee profile</span></div>')
+            
+            if ev < 5 and len(bullets) > 1:
+                bullets.append(f'<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:12px;opacity:0.7;">🧠</span><span>Lower edge, tighter margin market</span></div>')
+            
+            max_bullets = 3 if ev >= 5 else 2
+            return bullets[:max_bullets]
+        
         def render_bet_cards(bets_df, section_title, section_emoji):
             if section_title:
                 st.markdown(f"### {section_emoji} {section_title}")
@@ -1663,7 +1696,14 @@ def render_product_tab(
                 edge_color = "#00FFA6" if edge_vs_fair >= 5 else "#22C55E" if edge_vs_fair >= 0 else "#F87171"
                 model_line = f'<div style="display:flex;gap:16px;font-size:11px;color:#6B7280;margin-top:10px;padding-top:10px;border-top:1px solid rgba(100,116,139,0.2);"><span>Fair <span style="color:#9CA3AF;font-weight:500;">{fair_odds:.2f}</span></span><span>Edge <span style="color:{edge_color};font-weight:600;">{edge_vs_fair:+.1f}%</span></span><span>Avg <span style="color:#9CA3AF;font-weight:500;">{avg_odds:.2f}</span></span></div>'
                 
-                card_html = f'<div style="padding:20px;margin:16px 0;border-radius:16px;background:linear-gradient(145deg, rgba(15,23,42,0.98), rgba(30,41,59,0.95));border:1px solid rgba(0,255,166,0.35);box-shadow:0 8px 32px rgba(0,255,166,0.2), 0 4px 16px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.03);"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;"><div><div style="font-size:12px;color:#6B7280;margin-bottom:4px;">{match_str}</div><div style="font-size:17px;font-weight:600;color:#E5E7EB;letter-spacing:0.01em;">{fixture}</div></div><div style="padding:6px 12px;border-radius:8px;background:{ev_bg};border:1px solid {ev_border};box-shadow:{ev_glow};"><div style="font-size:10px;color:{ev_color};font-weight:700;letter-spacing:0.1em;">EV</div><div style="font-size:18px;font-weight:800;color:{ev_color};">{ev:+.1f}%</div></div></div><div style="display:flex;align-items:center;gap:10px;margin:12px 0;">{market_badge}<div style="font-size:22px;font-weight:700;color:#F8FAFC;letter-spacing:0.01em;">{bet_display}</div></div>{odds_section}{major_html}{model_line}</div>'
+                model_prob = row.get('model_prob', 0.5) or 0.5
+                num_bookmakers = len(odds_by_bookmaker)
+                why_bullets = generate_why_bullets(row, ev, model_prob, fair_odds, best_odds, avg_odds, num_bookmakers)
+                why_glow = "rgba(0,255,166,0.08)" if ev >= 8 else "rgba(59,130,246,0.06)"
+                why_bullets_html = ''.join(why_bullets) if why_bullets else '<div style="color:#6B7280;font-size:12px;">No additional insights available</div>'
+                why_section = f'''<details style="margin-top:12px;"><summary style="cursor:pointer;font-size:12px;color:#6B7280;padding:6px 0;user-select:none;list-style:none;display:flex;align-items:center;gap:6px;"><span style="color:#9CA3AF;">Why this pick</span><span style="font-size:10px;transition:transform 0.2s;">▾</span></summary><div style="margin-top:8px;padding:12px;border-radius:10px;background:linear-gradient(135deg, rgba(10,18,35,0.95), rgba(20,30,50,0.9));box-shadow:inset 0 0 20px {why_glow};font-size:12px;color:#CBD5E1;display:flex;flex-direction:column;gap:6px;">{why_bullets_html}</div></details>'''
+                
+                card_html = f'<div style="padding:20px;margin:16px 0;border-radius:16px;background:linear-gradient(145deg, rgba(15,23,42,0.98), rgba(30,41,59,0.95));border:1px solid rgba(0,255,166,0.35);box-shadow:0 8px 32px rgba(0,255,166,0.2), 0 4px 16px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.03);"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;"><div><div style="font-size:12px;color:#6B7280;margin-bottom:4px;">{match_str}</div><div style="font-size:17px;font-weight:600;color:#E5E7EB;letter-spacing:0.01em;">{fixture}</div></div><div style="padding:6px 12px;border-radius:8px;background:{ev_bg};border:1px solid {ev_border};box-shadow:{ev_glow};"><div style="font-size:10px;color:{ev_color};font-weight:700;letter-spacing:0.1em;">EV</div><div style="font-size:18px;font-weight:800;color:{ev_color};">{ev:+.1f}%</div></div></div><div style="display:flex;align-items:center;gap:10px;margin:12px 0;">{market_badge}<div style="font-size:22px;font-weight:700;color:#F8FAFC;letter-spacing:0.01em;">{bet_display}</div></div>{odds_section}{major_html}{model_line}{why_section}</div>'
                 st.markdown(card_html, unsafe_allow_html=True)
                 st.code(f"{fixture} | {bet_display} | Odds {best_odds:.2f} | 1 unit", language="text")
         
@@ -2367,7 +2407,21 @@ def render_basketball_tab(df: pd.DataFrame):
                 selection = "Home Win"
             pick_display = selection
 
-            card_html = f'<div style="padding:20px;margin:16px 0;border-radius:16px;background:linear-gradient(145deg, rgba(15,23,42,0.98), rgba(30,41,59,0.95));border:1px solid rgba(0,255,166,0.35);box-shadow:0 8px 32px rgba(0,255,166,0.2), 0 4px 16px rgba(0,0,0,0.4);"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;"><div><div style="font-size:12px;color:#6B7280;margin-bottom:4px;">{match_str}</div><div style="font-size:17px;font-weight:600;color:#E5E7EB;">🏀 {match_name}</div></div><div style="padding:6px 12px;border-radius:8px;background:{ev_bg};border:1px solid {ev_border};box-shadow:{ev_glow};"><div style="font-size:10px;color:{ev_color};font-weight:700;letter-spacing:0.1em;">EV</div><div style="font-size:18px;font-weight:800;color:{ev_color};">{ev:+.1f}%</div></div></div><div style="font-size:22px;font-weight:700;color:#F8FAFC;margin:12px 0;">{pick_display}</div><div style="display:flex;gap:8px;"><div style="padding:8px 14px;border-radius:10px;background:linear-gradient(135deg, rgba(0,255,166,0.25), rgba(34,197,94,0.15));border:2px solid rgba(0,255,166,0.7);box-shadow:0 0 16px rgba(0,255,166,0.3);"><div style="font-size:9px;color:#00FFA6;font-weight:700;">ODDS</div><div style="font-size:20px;font-weight:800;color:#00FFA6;">{odds_val:.2f}</div></div></div></div>'
+            bball_bullets = []
+            implied_prob = 1 / odds_val if odds_val > 1 else 0.5
+            if ev >= 5:
+                bball_bullets.append(f'<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:12px;opacity:0.7;">📊</span><span>Model edge: +{ev:.1f}% above market price</span></div>')
+            if odds_val >= 1.6 and odds_val <= 2.5:
+                bball_bullets.append(f'<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:12px;opacity:0.7;">💰</span><span>Optimal odds range for +EV basketball</span></div>')
+            if implied_prob < 0.6:
+                bball_bullets.append(f'<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:12px;opacity:0.7;">🧠</span><span>Market undervaluing outcome at {implied_prob*100:.0f}% implied</span></div>')
+            bball_max = 3 if ev >= 5 else 2
+            bball_bullets = bball_bullets[:bball_max]
+            bball_why_html = ''.join(bball_bullets) if bball_bullets else '<div style="color:#6B7280;font-size:12px;">Edge identified via line analysis</div>'
+            bball_glow = "rgba(0,255,166,0.08)" if ev >= 8 else "rgba(59,130,246,0.06)"
+            bball_why_section = f'''<details style="margin-top:12px;"><summary style="cursor:pointer;font-size:12px;color:#6B7280;padding:6px 0;user-select:none;list-style:none;display:flex;align-items:center;gap:6px;"><span style="color:#9CA3AF;">Why this pick</span><span style="font-size:10px;">▾</span></summary><div style="margin-top:8px;padding:12px;border-radius:10px;background:linear-gradient(135deg, rgba(10,18,35,0.95), rgba(20,30,50,0.9));box-shadow:inset 0 0 20px {bball_glow};font-size:12px;color:#CBD5E1;display:flex;flex-direction:column;gap:6px;">{bball_why_html}</div></details>'''
+
+            card_html = f'<div style="padding:20px;margin:16px 0;border-radius:16px;background:linear-gradient(145deg, rgba(15,23,42,0.98), rgba(30,41,59,0.95));border:1px solid rgba(0,255,166,0.35);box-shadow:0 8px 32px rgba(0,255,166,0.2), 0 4px 16px rgba(0,0,0,0.4);"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;"><div><div style="font-size:12px;color:#6B7280;margin-bottom:4px;">{match_str}</div><div style="font-size:17px;font-weight:600;color:#E5E7EB;">🏀 {match_name}</div></div><div style="padding:6px 12px;border-radius:8px;background:{ev_bg};border:1px solid {ev_border};box-shadow:{ev_glow};"><div style="font-size:10px;color:{ev_color};font-weight:700;letter-spacing:0.1em;">EV</div><div style="font-size:18px;font-weight:800;color:{ev_color};">{ev:+.1f}%</div></div></div><div style="font-size:22px;font-weight:700;color:#F8FAFC;margin:12px 0;">{pick_display}</div><div style="display:flex;gap:8px;"><div style="padding:8px 14px;border-radius:10px;background:linear-gradient(135deg, rgba(0,255,166,0.25), rgba(34,197,94,0.15));border:2px solid rgba(0,255,166,0.7);box-shadow:0 0 16px rgba(0,255,166,0.3);"><div style="font-size:9px;color:#00FFA6;font-weight:700;">ODDS</div><div style="font-size:20px;font-weight:800;color:#00FFA6;">{odds_val:.2f}</div></div></div>{bball_why_section}</div>'
             st.markdown(card_html, unsafe_allow_html=True)
             st.code(f"{match_name} | {pick_display} | Odds {odds_val:.2f} | 1 unit", language="text")
 
@@ -2401,7 +2455,19 @@ def render_basketball_tab(df: pd.DataFrame):
                 selection = "Parlay"
             pick_display = selection
 
-            card_html = f'<div style="padding:20px;margin:16px 0;border-radius:16px;background:linear-gradient(145deg, rgba(15,23,42,0.98), rgba(30,41,59,0.95));border:1px solid rgba(0,255,166,0.35);box-shadow:0 8px 32px rgba(0,255,166,0.2), 0 4px 16px rgba(0,0,0,0.4);"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;"><div><div style="font-size:12px;color:#6B7280;margin-bottom:4px;">{match_str}</div><div style="font-size:17px;font-weight:600;color:#E5E7EB;">🏀 {match_name}</div></div><div style="padding:6px 12px;border-radius:8px;background:{ev_bg};border:1px solid {ev_border};box-shadow:{ev_glow};"><div style="font-size:10px;color:{ev_color};font-weight:700;letter-spacing:0.1em;">EV</div><div style="font-size:18px;font-weight:800;color:{ev_color};">{ev:+.1f}%</div></div></div><div style="font-size:22px;font-weight:700;color:#F8FAFC;margin:12px 0;">{pick_display}</div><div style="display:flex;gap:8px;"><div style="padding:8px 14px;border-radius:10px;background:linear-gradient(135deg, rgba(0,255,166,0.25), rgba(34,197,94,0.15));border:2px solid rgba(0,255,166,0.7);box-shadow:0 0 16px rgba(0,255,166,0.3);"><div style="font-size:9px;color:#00FFA6;font-weight:700;">ODDS</div><div style="font-size:20px;font-weight:800;color:#00FFA6;">{odds_val:.2f}</div></div></div></div>'
+            parlay_bullets = []
+            if ev >= 5:
+                parlay_bullets.append(f'<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:12px;opacity:0.7;">📊</span><span>Combined EV: +{ev:.1f}% across all legs</span></div>')
+            if odds_val >= 2.5:
+                parlay_bullets.append(f'<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:12px;opacity:0.7;">💰</span><span>Parlay odds {odds_val:.2f}x in target range</span></div>')
+            parlay_bullets.append(f'<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:12px;opacity:0.7;">🧮</span><span>Individual legs meet minimum edge threshold</span></div>')
+            parlay_max = 3 if ev >= 5 else 2
+            parlay_bullets = parlay_bullets[:parlay_max]
+            parlay_why_html = ''.join(parlay_bullets)
+            parlay_glow = "rgba(0,255,166,0.08)" if ev >= 8 else "rgba(59,130,246,0.06)"
+            parlay_why_section = f'''<details style="margin-top:12px;"><summary style="cursor:pointer;font-size:12px;color:#6B7280;padding:6px 0;user-select:none;list-style:none;display:flex;align-items:center;gap:6px;"><span style="color:#9CA3AF;">Why this pick</span><span style="font-size:10px;">▾</span></summary><div style="margin-top:8px;padding:12px;border-radius:10px;background:linear-gradient(135deg, rgba(10,18,35,0.95), rgba(20,30,50,0.9));box-shadow:inset 0 0 20px {parlay_glow};font-size:12px;color:#CBD5E1;display:flex;flex-direction:column;gap:6px;">{parlay_why_html}</div></details>'''
+
+            card_html = f'<div style="padding:20px;margin:16px 0;border-radius:16px;background:linear-gradient(145deg, rgba(15,23,42,0.98), rgba(30,41,59,0.95));border:1px solid rgba(0,255,166,0.35);box-shadow:0 8px 32px rgba(0,255,166,0.2), 0 4px 16px rgba(0,0,0,0.4);"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;"><div><div style="font-size:12px;color:#6B7280;margin-bottom:4px;">{match_str}</div><div style="font-size:17px;font-weight:600;color:#E5E7EB;">🏀 {match_name}</div></div><div style="padding:6px 12px;border-radius:8px;background:{ev_bg};border:1px solid {ev_border};box-shadow:{ev_glow};"><div style="font-size:10px;color:{ev_color};font-weight:700;letter-spacing:0.1em;">EV</div><div style="font-size:18px;font-weight:800;color:{ev_color};">{ev:+.1f}%</div></div></div><div style="font-size:22px;font-weight:700;color:#F8FAFC;margin:12px 0;">{pick_display}</div><div style="display:flex;gap:8px;"><div style="padding:8px 14px;border-radius:10px;background:linear-gradient(135deg, rgba(0,255,166,0.25), rgba(34,197,94,0.15));border:2px solid rgba(0,255,166,0.7);box-shadow:0 0 16px rgba(0,255,166,0.3);"><div style="font-size:9px;color:#00FFA6;font-weight:700;">ODDS</div><div style="font-size:20px;font-weight:800;color:#00FFA6;">{odds_val:.2f}</div></div></div>{parlay_why_section}</div>'
             st.markdown(card_html, unsafe_allow_html=True)
             st.code(f"{match_name} | {pick_display} | Odds {odds_val:.2f} | 1 unit", language="text")
 
@@ -2614,7 +2680,22 @@ def render_parlays_tab():
             odds_val = float(row.get('odds', 0))
             num_legs = len(legs_list)
 
-            card_html = f'<div style="padding:20px;margin:16px 0;border-radius:16px;background:linear-gradient(145deg, rgba(15,23,42,0.98), rgba(30,41,59,0.95));border:1px solid rgba(0,255,166,0.35);box-shadow:0 8px 32px rgba(0,255,166,0.2), 0 4px 16px rgba(0,0,0,0.4);"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;"><div><div style="font-size:12px;color:#6B7280;margin-bottom:4px;">{match_str}</div><div style="font-size:17px;font-weight:600;color:#E5E7EB;">{home_team} vs {away_team}</div></div><div style="padding:6px 12px;border-radius:8px;background:{ev_bg};border:1px solid {ev_border};box-shadow:{ev_glow};"><div style="font-size:10px;color:{ev_color};font-weight:700;letter-spacing:0.1em;">EV</div><div style="font-size:18px;font-weight:800;color:{ev_color};">{ev:+.1f}%</div></div></div><div style="margin:12px 0;"><span style="font-size:10px;padding:3px 10px;border-radius:6px;background:rgba(168,85,247,0.15);color:#A855F7;font-weight:600;letter-spacing:0.04em;">{num_legs}-LEG PARLAY</span></div><div style="margin:8px 0;">{legs_html}</div><div style="display:flex;gap:8px;margin-top:12px;"><div style="padding:8px 14px;border-radius:10px;background:linear-gradient(135deg, rgba(0,255,166,0.25), rgba(34,197,94,0.15));border:2px solid rgba(0,255,166,0.7);box-shadow:0 0 16px rgba(0,255,166,0.3);"><div style="font-size:9px;color:#00FFA6;font-weight:700;">COMBINED</div><div style="font-size:20px;font-weight:800;color:#00FFA6;">{odds_val:.2f}</div></div></div></div>'
+            mm_bullets = []
+            if ev >= 10:
+                mm_bullets.append(f'<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:12px;opacity:0.7;">📊</span><span>Combined EV: +{ev:.1f}% exceeds threshold</span></div>')
+            if num_legs >= 2:
+                mm_bullets.append(f'<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:12px;opacity:0.7;">🧮</span><span>{num_legs} legs selected from L1/L2 approved singles</span></div>')
+            if odds_val >= 3.0:
+                mm_bullets.append(f'<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:12px;opacity:0.7;">💰</span><span>Combined odds {odds_val:.2f}x in target range</span></div>')
+            else:
+                mm_bullets.append(f'<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:12px;opacity:0.7;">⚽</span><span>Cross-match diversification reduces correlation</span></div>')
+            mm_max = 3 if ev >= 5 else 2
+            mm_bullets = mm_bullets[:mm_max]
+            mm_why_html = ''.join(mm_bullets) if mm_bullets else '<div style="color:#6B7280;font-size:12px;">Built from approved value singles</div>'
+            mm_glow = "rgba(0,255,166,0.08)" if ev >= 8 else "rgba(59,130,246,0.06)"
+            mm_why_section = f'''<details style="margin-top:12px;"><summary style="cursor:pointer;font-size:12px;color:#6B7280;padding:6px 0;user-select:none;list-style:none;display:flex;align-items:center;gap:6px;"><span style="color:#9CA3AF;">Why this pick</span><span style="font-size:10px;">▾</span></summary><div style="margin-top:8px;padding:12px;border-radius:10px;background:linear-gradient(135deg, rgba(10,18,35,0.95), rgba(20,30,50,0.9));box-shadow:inset 0 0 20px {mm_glow};font-size:12px;color:#CBD5E1;display:flex;flex-direction:column;gap:6px;">{mm_why_html}</div></details>'''
+
+            card_html = f'<div style="padding:20px;margin:16px 0;border-radius:16px;background:linear-gradient(145deg, rgba(15,23,42,0.98), rgba(30,41,59,0.95));border:1px solid rgba(0,255,166,0.35);box-shadow:0 8px 32px rgba(0,255,166,0.2), 0 4px 16px rgba(0,0,0,0.4);"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;"><div><div style="font-size:12px;color:#6B7280;margin-bottom:4px;">{match_str}</div><div style="font-size:17px;font-weight:600;color:#E5E7EB;">{home_team} vs {away_team}</div></div><div style="padding:6px 12px;border-radius:8px;background:{ev_bg};border:1px solid {ev_border};box-shadow:{ev_glow};"><div style="font-size:10px;color:{ev_color};font-weight:700;letter-spacing:0.1em;">EV</div><div style="font-size:18px;font-weight:800;color:{ev_color};">{ev:+.1f}%</div></div></div><div style="margin:12px 0;"><span style="font-size:10px;padding:3px 10px;border-radius:6px;background:rgba(168,85,247,0.15);color:#A855F7;font-weight:600;letter-spacing:0.04em;">{num_legs}-LEG PARLAY</span></div><div style="margin:8px 0;">{legs_html}</div><div style="display:flex;gap:8px;margin-top:12px;"><div style="padding:8px 14px;border-radius:10px;background:linear-gradient(135deg, rgba(0,255,166,0.25), rgba(34,197,94,0.15));border:2px solid rgba(0,255,166,0.7);box-shadow:0 0 16px rgba(0,255,166,0.3);"><div style="font-size:9px;color:#00FFA6;font-weight:700;">COMBINED</div><div style="font-size:20px;font-weight:800;color:#00FFA6;">{odds_val:.2f}</div></div></div>{mm_why_section}</div>'
             st.markdown(card_html, unsafe_allow_html=True)
             st.code(f"{home_team} vs {away_team} | {num_legs}-leg @ {odds_val:.2f} | 1 unit", language="text")
 
