@@ -61,9 +61,9 @@ def get_roi_stats() -> Dict[str, Any]:
                     END), 0) as units_profit
                 FROM all_bets
                 WHERE result IN ('WON', 'WIN', 'LOST', 'LOSS')
-                AND DATE(match_date) = :today
+                AND DATE(settled_at) = CURRENT_DATE
             """)
-            today_stats = conn.execute(today_query, {"today": str(today)}).fetchone()
+            today_stats = conn.execute(today_query).fetchone()
             
             week_query = text("""
                 SELECT 
@@ -77,9 +77,9 @@ def get_roi_stats() -> Dict[str, Any]:
                     END), 0) as units_profit
                 FROM all_bets
                 WHERE result IN ('WON', 'WIN', 'LOST', 'LOSS')
-                AND DATE(match_date) >= :week_ago
+                AND DATE(settled_at) >= CURRENT_DATE - INTERVAL '7 days'
             """)
-            week_stats = conn.execute(week_query, {"week_ago": str(week_ago)}).fetchone()
+            week_stats = conn.execute(week_query).fetchone()
             
             month_query = text("""
                 SELECT 
@@ -93,9 +93,9 @@ def get_roi_stats() -> Dict[str, Any]:
                     END), 0) as units_profit
                 FROM all_bets
                 WHERE result IN ('WON', 'WIN', 'LOST', 'LOSS')
-                AND DATE(match_date) >= :month_start
+                AND DATE(settled_at) >= DATE_TRUNC('month', CURRENT_DATE)
             """)
-            month_stats = conn.execute(month_query, {"month_start": str(month_start)}).fetchone()
+            month_stats = conn.execute(month_query).fetchone()
             
             pending_query = text("""
                 SELECT 
@@ -238,8 +238,8 @@ def build_discord_embed(stats: Dict[str, Any]) -> Dict[str, Any]:
             "inline": True
         },
         {
-            "name": "🎯 Today",
-            "value": f"**Units:** {today.get('units', 0):+.1f}u\n**Record:** {today.get('wins', 0)}W / {today.get('total', 0)} bets",
+            "name": "🎯 Settled Today",
+            "value": f"**Units:** {today.get('units', 0):+.1f}u\n**Record:** {today.get('wins', 0)}W-{today.get('total', 0) - today.get('wins', 0)}L ({today.get('total', 0)} bets)",
             "inline": True
         },
         {
