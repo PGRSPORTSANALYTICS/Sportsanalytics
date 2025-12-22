@@ -3636,8 +3636,8 @@ class RealFootballChampion:
                  odds, edge_percentage, confidence, analysis, stake, match_date, kickoff_time,
                  quality_score, recommended_date, recommended_tier, daily_rank, mode, bet_placed,
                  open_odds, odds_source, trust_level,
-                 odds_by_bookmaker, best_odds_value, best_odds_bookmaker, avg_odds, fair_odds)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 odds_by_bookmaker, best_odds_value, best_odds_bookmaker, avg_odds, fair_odds, fixture_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ''', (
                 opp_dict.get('timestamp', int(time.time())),
                 opp_dict.get('match_id'),
@@ -3666,7 +3666,8 @@ class RealFootballChampion:
                 opp_dict.get('best_odds_value'),
                 opp_dict.get('best_odds_bookmaker'),
                 opp_dict.get('avg_odds'),
-                opp_dict.get('fair_odds')
+                opp_dict.get('fair_odds'),
+                opp_dict.get('fixture_id')  # API-Football fixture ID for result verification
             ))
             
             try:

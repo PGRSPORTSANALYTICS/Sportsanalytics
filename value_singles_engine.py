@@ -680,7 +680,9 @@ class ValueSinglesEngine:
                     "best_odds_value": bookmaker_data.get('best_odds_value'),
                     "best_odds_bookmaker": bookmaker_data.get('best_odds_bookmaker'),
                     "avg_odds": bookmaker_data.get('avg_odds'),
-                    "fair_odds": fair_odds
+                    "fair_odds": fair_odds,
+                    # API-Football fixture ID for result verification
+                    "fixture_id": match.get("fixture_id")
                 }
 
                 picks.append(opportunity)
