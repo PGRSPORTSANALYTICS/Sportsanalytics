@@ -2853,47 +2853,14 @@ def render_bookmaker_odds_card(row: pd.Series):
     if fair_odds > 0 and best_odds > 0:
         edge_vs_fair = ((best_odds / fair_odds) - 1) * 100
         edge_color = "#22C55E" if edge_vs_fair >= 0 else "#EF4444"
-        fair_vs_best = f"""
-        <div style="margin-top:8px;padding:8px;background:rgba(99,102,241,0.1);border-radius:8px;border:1px solid rgba(99,102,241,0.3);">
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-                <div>
-                    <span style="font-size:11px;color:#9CA3AF;">Model Fair Odds:</span>
-                    <span style="font-size:14px;color:#A5B4FC;font-weight:500;margin-left:6px;">{fair_odds:.2f}</span>
-                </div>
-                <div>
-                    <span style="font-size:11px;color:#9CA3AF;">Edge vs Fair:</span>
-                    <span style="font-size:14px;color:{edge_color};font-weight:600;margin-left:6px;">{edge_vs_fair:+.1f}%</span>
-                </div>
-                <div>
-                    <span style="font-size:11px;color:#9CA3AF;">Avg Odds:</span>
-                    <span style="font-size:14px;color:#E5E7EB;margin-left:6px;">{avg_odds:.2f}</span>
-                </div>
-            </div>
-        </div>
-        """
+        fair_vs_best = f'<div style="margin-top:8px;padding:8px;background:rgba(99,102,241,0.1);border-radius:8px;border:1px solid rgba(99,102,241,0.3);"><div style="display:flex;justify-content:space-between;align-items:center;"><div><span style="font-size:11px;color:#9CA3AF;">Model Fair Odds:</span><span style="font-size:14px;color:#A5B4FC;font-weight:500;margin-left:6px;">{fair_odds:.2f}</span></div><div><span style="font-size:11px;color:#9CA3AF;">Edge vs Fair:</span><span style="font-size:14px;color:{edge_color};font-weight:600;margin-left:6px;">{edge_vs_fair:+.1f}%</span></div><div><span style="font-size:11px;color:#9CA3AF;">Avg Odds:</span><span style="font-size:14px;color:#E5E7EB;margin-left:6px;">{avg_odds:.2f}</span></div></div></div>'
     
     bookmaker_section = ""
     if bookmaker_html:
         bookmaker_section = f'<div style="display:flex;flex-wrap:wrap;gap:4px;">{bookmaker_html}</div>'
     
-    card_html = f"""
-    <div style="padding:16px;margin:10px 0;border-radius:14px;background:rgba(30,41,59,0.95);border:1px solid rgba(148,163,184,0.2);">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-            <div>
-                <div style="font-size:16px;font-weight:600;color:#E5E7EB;">{fixture}</div>
-                <div style="font-size:20px;font-weight:700;color:#00FFA6;margin-top:4px;">{selection}</div>
-            </div>
-            <div style="text-align:right;">
-                <div style="font-size:11px;padding:4px 9px;border-radius:999px;background:{ev_bg};border:1px solid {ev_border};color:#E5E7EB;">EV {ev:+.1f}%</div>
-            </div>
-        </div>
-        <div style="font-size:12px;color:#9CA3AF;margin-bottom:10px;">
-            {f'Comparing {len(odds_by_bookmaker)} bookmakers | Best: <span style="color:#22C55E;font-weight:600;">{best_bookmaker}</span> @ <span style="color:#22C55E;font-weight:600;">{best_odds:.2f}</span>' if odds_by_bookmaker and best_bookmaker else 'Odds data pending...'}
-        </div>
-        {bookmaker_section}
-        {fair_vs_best}
-    </div>
-    """
+    comparing_text = f'Comparing {len(odds_by_bookmaker)} bookmakers | Best: <span style="color:#22C55E;font-weight:600;">{best_bookmaker}</span> @ <span style="color:#22C55E;font-weight:600;">{best_odds:.2f}</span>' if odds_by_bookmaker and best_bookmaker else 'Odds data pending...'
+    card_html = f'<div style="padding:16px;margin:10px 0;border-radius:14px;background:rgba(30,41,59,0.95);border:1px solid rgba(148,163,184,0.2);"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><div><div style="font-size:16px;font-weight:600;color:#E5E7EB;">{fixture}</div><div style="font-size:20px;font-weight:700;color:#00FFA6;margin-top:4px;">{selection}</div></div><div style="text-align:right;"><div style="font-size:11px;padding:4px 9px;border-radius:999px;background:{ev_bg};border:1px solid {ev_border};color:#E5E7EB;">EV {ev:+.1f}%</div></div></div><div style="font-size:12px;color:#9CA3AF;margin-bottom:10px;">{comparing_text}</div>{bookmaker_section}{fair_vs_best}</div>'
     st.markdown(card_html, unsafe_allow_html=True)
 
 
