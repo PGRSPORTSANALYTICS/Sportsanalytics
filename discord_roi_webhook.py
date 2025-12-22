@@ -104,7 +104,7 @@ def get_roi_stats() -> Dict[str, Any]:
             pending_query = text("""
                 SELECT COUNT(*) as pending
                 FROM football_opportunities
-                WHERE status = 'pending'
+                WHERE UPPER(status) IN ('PENDING', 'IN_PROGRESS')
                 AND mode != 'TEST'
             """)
             pending = conn.execute(pending_query).fetchone()
