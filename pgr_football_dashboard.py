@@ -1644,19 +1644,7 @@ def render_product_tab(
                             bookmaker_html += f'<span style="font-size:10px;color:#9CA3AF;padding:3px 8px;background:rgba(55,65,81,0.4);border-radius:4px;">{bk} {od:.2f}</span>'
                         bookmaker_html += '</div>'
 
-                card_html = f"""<div style="padding:18px;margin:10px 0;border-radius:16px;background:radial-gradient(circle at top left, rgba(0,255,166,0.14), rgba(15,23,42,0.96));border:1px solid rgba(0,255,166,0.35);box-shadow:0 0 20px rgba(0,255,166,0.25);">
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-<div style="font-size:18px;font-weight:600;color:#E5E7EB;">⚽ {fixture}</div>
-<div style="font-size:11px;padding:4px 9px;border-radius:999px;background:{ev_bg};border:1px solid {ev_border};color:#E5E7EB;text-transform:uppercase;letter-spacing:0.06em;">EV {ev:+.1f}%</div>
-</div>
-<div style="font-size:12px;color:#9CA3AF;margin-bottom:6px;">Kickoff: {match_str}</div>
-{market_badge}<div style="font-size:22px;font-weight:700;color:#00FFA6;margin:8px 0;letter-spacing:0.02em;display:inline;">{bet_display}</div>
-<div style="display:flex;gap:18px;align-items:baseline;margin-top:4px;">
-<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Odds</div><div style="font-size:20px;font-weight:600;color:#00FFA6;">{odds_val:.2f}</div></div>
-<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">1 unit</div></div>
-</div>
-{bookmaker_html}
-</div>"""
+                card_html = f"""<div style="padding:18px;margin:14px 0;border-radius:16px;background:radial-gradient(circle at top left, rgba(0,255,166,0.12), rgba(15,23,42,0.98));border:1px solid rgba(0,255,166,0.4);box-shadow:0 8px 32px rgba(0,255,166,0.25), 0 4px 16px rgba(0,255,166,0.15), 0 0 0 1px rgba(0,255,166,0.1);transform:translateY(-2px);"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><div style="font-size:18px;font-weight:600;color:#E5E7EB;">⚽ {fixture}</div><div style="font-size:11px;padding:4px 9px;border-radius:999px;background:{ev_bg};border:1px solid {ev_border};color:#E5E7EB;text-transform:uppercase;letter-spacing:0.06em;">EV {ev:+.1f}%</div></div><div style="font-size:12px;color:#9CA3AF;margin-bottom:6px;">Kickoff: {match_str}</div>{market_badge}<div style="font-size:22px;font-weight:700;color:#00FFA6;margin:8px 0;letter-spacing:0.02em;display:inline;">{bet_display}</div><div style="display:flex;gap:18px;align-items:baseline;margin-top:4px;"><div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Odds</div><div style="font-size:20px;font-weight:600;color:#00FFA6;">{odds_val:.2f}</div></div><div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">1 unit</div></div></div>{bookmaker_html}</div>"""
                 st.markdown(card_html, unsafe_allow_html=True)
                 st.code(f"{fixture} | {bet_display} | Odds {odds_val:.2f} | Stake: 1 unit", language="text")
         
@@ -2364,18 +2352,7 @@ def render_basketball_tab(df: pd.DataFrame):
                 selection = "Home Win"
             pick_display = selection
 
-            card_html = f"""<div style="padding:18px;margin:10px 0;border-radius:16px;background:radial-gradient(circle at top left, rgba(59,130,246,0.14), rgba(15,23,42,0.96));border:1px solid rgba(59,130,246,0.35);box-shadow:0 0 20px rgba(59,130,246,0.25);">
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-<div style="font-size:18px;font-weight:600;color:#E5E7EB;">🏀 {match_name}</div>
-<div style="font-size:11px;padding:4px 9px;border-radius:999px;background:{ev_bg};border:1px solid {ev_border};color:#E5E7EB;text-transform:uppercase;letter-spacing:0.06em;">EV {ev:+.1f}%</div>
-</div>
-<div style="font-size:12px;color:#9CA3AF;margin-bottom:6px;">Kickoff: {match_str}</div>
-<div style="font-size:22px;font-weight:700;color:#3B82F6;margin:8px 0;letter-spacing:0.02em;">📍 {pick_display}</div>
-<div style="display:flex;gap:18px;align-items:baseline;margin-top:4px;">
-<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Odds</div><div style="font-size:20px;font-weight:600;color:#3B82F6;">{odds_val:.2f}</div></div>
-<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">1 unit</div></div>
-</div>
-</div>"""
+            card_html = f"""<div style="padding:18px;margin:14px 0;border-radius:16px;background:radial-gradient(circle at top left, rgba(0,255,166,0.12), rgba(15,23,42,0.98));border:1px solid rgba(0,255,166,0.4);box-shadow:0 8px 32px rgba(0,255,166,0.25), 0 4px 16px rgba(0,255,166,0.15), 0 0 0 1px rgba(0,255,166,0.1);transform:translateY(-2px);"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><div style="font-size:18px;font-weight:600;color:#E5E7EB;">🏀 {match_name}</div><div style="font-size:11px;padding:4px 9px;border-radius:999px;background:{ev_bg};border:1px solid {ev_border};color:#E5E7EB;text-transform:uppercase;letter-spacing:0.06em;">EV {ev:+.1f}%</div></div><div style="font-size:12px;color:#9CA3AF;margin-bottom:6px;">Kickoff: {match_str}</div><div style="font-size:22px;font-weight:700;color:#00FFA6;margin:8px 0;letter-spacing:0.02em;">📍 {pick_display}</div><div style="display:flex;gap:18px;align-items:baseline;margin-top:4px;"><div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Odds</div><div style="font-size:20px;font-weight:600;color:#00FFA6;">{odds_val:.2f}</div></div><div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">1 unit</div></div></div></div>"""
             st.markdown(card_html, unsafe_allow_html=True)
             st.code(f"{match_name} | {pick_display} | Odds {odds_val:.2f} | Stake: 1 unit", language="text")
 
@@ -2413,18 +2390,7 @@ def render_basketball_tab(df: pd.DataFrame):
                 selection = "Parlay"
             pick_display = selection
 
-            card_html = f"""<div style="padding:18px;margin:10px 0;border-radius:16px;background:radial-gradient(circle at top left, rgba(168,85,247,0.14), rgba(15,23,42,0.96));border:1px solid rgba(168,85,247,0.35);box-shadow:0 0 20px rgba(168,85,247,0.25);">
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-<div style="font-size:18px;font-weight:600;color:#E5E7EB;">🏀 {match_name}</div>
-<div style="font-size:11px;padding:4px 9px;border-radius:999px;background:{ev_bg};border:1px solid {ev_border};color:#E5E7EB;text-transform:uppercase;letter-spacing:0.06em;">EV {ev:+.1f}%</div>
-</div>
-<div style="font-size:12px;color:#9CA3AF;margin-bottom:6px;">Kickoff: {match_str}</div>
-<div style="font-size:22px;font-weight:700;color:#A855F7;margin:8px 0;letter-spacing:0.02em;">📍 {pick_display}</div>
-<div style="display:flex;gap:18px;align-items:baseline;margin-top:4px;">
-<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Odds</div><div style="font-size:20px;font-weight:600;color:#A855F7;">{odds_val:.2f}</div></div>
-<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">1 unit</div></div>
-</div>
-</div>"""
+            card_html = f"""<div style="padding:18px;margin:14px 0;border-radius:16px;background:radial-gradient(circle at top left, rgba(0,255,166,0.12), rgba(15,23,42,0.98));border:1px solid rgba(0,255,166,0.4);box-shadow:0 8px 32px rgba(0,255,166,0.25), 0 4px 16px rgba(0,255,166,0.15), 0 0 0 1px rgba(0,255,166,0.1);transform:translateY(-2px);"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><div style="font-size:18px;font-weight:600;color:#E5E7EB;">🏀 {match_name}</div><div style="font-size:11px;padding:4px 9px;border-radius:999px;background:{ev_bg};border:1px solid {ev_border};color:#E5E7EB;text-transform:uppercase;letter-spacing:0.06em;">EV {ev:+.1f}%</div></div><div style="font-size:12px;color:#9CA3AF;margin-bottom:6px;">Kickoff: {match_str}</div><div style="font-size:22px;font-weight:700;color:#00FFA6;margin:8px 0;letter-spacing:0.02em;">📍 {pick_display}</div><div style="display:flex;gap:18px;align-items:baseline;margin-top:4px;"><div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Odds</div><div style="font-size:20px;font-weight:600;color:#00FFA6;">{odds_val:.2f}</div></div><div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">1 unit</div></div></div></div>"""
             st.markdown(card_html, unsafe_allow_html=True)
             st.code(f"{match_name} | {pick_display} | Odds {odds_val:.2f} | Stake: 1 unit", language="text")
 
@@ -2646,21 +2612,7 @@ def render_parlays_tab():
             stake_sek = float(row.get('stake', 173))  # Stored in SEK
             stake_usd = stake_sek / USD_TO_SEK
 
-            card_html = f"""<div style="padding:18px;margin:10px 0;border-radius:16px;background:radial-gradient(circle at top left, rgba(0,255,166,0.14), rgba(15,23,42,0.96));border:1px solid rgba(0,255,166,0.35);box-shadow:0 0 20px rgba(0,255,166,0.25);">
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-<div style="font-size:18px;font-weight:600;color:#E5E7EB;">{home_team} – {away_team}</div>
-<div style="font-size:11px;padding:4px 9px;border-radius:999px;background:{ev_bg};border:1px solid {ev_border};color:#E5E7EB;text-transform:uppercase;letter-spacing:0.06em;">EV {ev:+.1f}%</div>
-</div>
-<div style="font-size:12px;color:#9CA3AF;margin-bottom:6px;">Kickoff: {match_str}</div>
-<div style="font-size:13px;color:#CBD5F5;margin-bottom:8px;">
-<span style="font-weight:600;color:#E5E7EB;">Parlay legs:</span>
-{legs_html}
-</div>
-<div style="display:flex;gap:18px;align-items:baseline;margin-top:4px;">
-<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Odds</div><div style="font-size:20px;font-weight:600;color:#00FFA6;">{odds_val:.2f}</div></div>
-<div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">1 unit</div></div>
-</div>
-</div>"""
+            card_html = f"""<div style="padding:18px;margin:14px 0;border-radius:16px;background:radial-gradient(circle at top left, rgba(0,255,166,0.12), rgba(15,23,42,0.98));border:1px solid rgba(0,255,166,0.4);box-shadow:0 8px 32px rgba(0,255,166,0.25), 0 4px 16px rgba(0,255,166,0.15), 0 0 0 1px rgba(0,255,166,0.1);transform:translateY(-2px);"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><div style="font-size:18px;font-weight:600;color:#E5E7EB;">{home_team} – {away_team}</div><div style="font-size:11px;padding:4px 9px;border-radius:999px;background:{ev_bg};border:1px solid {ev_border};color:#E5E7EB;text-transform:uppercase;letter-spacing:0.06em;">EV {ev:+.1f}%</div></div><div style="font-size:12px;color:#9CA3AF;margin-bottom:6px;">Kickoff: {match_str}</div><div style="font-size:13px;color:#CBD5F5;margin-bottom:8px;"><span style="font-weight:600;color:#E5E7EB;">Parlay legs:</span>{legs_html}</div><div style="display:flex;gap:18px;align-items:baseline;margin-top:4px;"><div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Odds</div><div style="font-size:20px;font-weight:600;color:#00FFA6;">{odds_val:.2f}</div></div><div><div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Stake</div><div style="font-size:18px;font-weight:500;color:#E5E7EB;">1 unit</div></div></div></div>"""
 
             st.markdown(card_html, unsafe_allow_html=True)
 
