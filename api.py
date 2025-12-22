@@ -1694,6 +1694,56 @@ async def settle_live_learning_pick(
 
 
 # =============================================================================
+# Discord ROI/Stats Webhook
+# =============================================================================
+
+@app.get("/api/discord/stats")
+async def send_discord_stats_endpoint():
+    """
+    Manually trigger Discord ROI/stats update.
+    Sends current performance metrics to Discord webhook.
+    """
+    try:
+        from discord_roi_webhook import send_discord_stats, get_roi_stats
+        
+        stats = get_roi_stats()
+        success = send_discord_stats("📊 Manual stats update requested")
+        
+        return {
+            "success": success,
+            "stats_preview": {
+                "all_time_roi": stats.get("all_time", {}).get("roi", 0),
+                "all_time_units": stats.get("all_time", {}).get("units", 0),
+                "pending": stats.get("pending", 0)
+            },
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error sending Discord stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/stats/roi")
+async def get_roi_stats_endpoint():
+    """
+    Get current ROI and performance statistics.
+    Returns all-time, monthly, weekly, and daily stats.
+    """
+    try:
+        from discord_roi_webhook import get_roi_stats
+        
+        stats = get_roi_stats()
+        stats["timestamp"] = datetime.utcnow().isoformat()
+        
+        return stats
+        
+    except Exception as e:
+        logger.error(f"Error getting ROI stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
 # Run with: uvicorn api:app --host 0.0.0.0 --port 8000
 # =============================================================================
 
