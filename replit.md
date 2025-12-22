@@ -113,6 +113,14 @@ The Value Singles tab now displays picks in 3 sections:
 - Performance metrics exclude VOID bets for statistical accuracy
 - **Pending:** Only recent bets (< 2-3 days old) remain pending until matches complete
 
+### Discord Integration (December 22, 2025)
+- **Discord ROI Webhook** - Automated performance updates to Discord channel
+- **Trigger:** Auto-sends after football verification settles any bets
+- **Manual Trigger:** GET /api/discord/stats
+- **Stats Endpoint:** GET /api/stats/roi returns all-time, monthly, weekly, daily stats as JSON
+- **Embed Format:** Color-coded by ROI (green positive, orange warning, red negative)
+- **Metrics Included:** ROI%, units profit, hit rate, record, pending bets, recent results
+
 ### Active Workflows
 - **Real Football Dashboard** (port 5000) - Main UI
 - **Combined Sports Engine** - Prediction engine with 1-hour Value Singles cycles
