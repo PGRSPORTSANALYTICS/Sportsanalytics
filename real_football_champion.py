@@ -3669,6 +3669,24 @@ class RealFootballChampion:
                 opp_dict.get('fair_odds')
             ))
             
+            try:
+                send_bet_to_discord({
+                    'league': opp_dict.get('league', ''),
+                    'home_team': opp_dict.get('home_team'),
+                    'away_team': opp_dict.get('away_team'),
+                    'match_date': opp_dict.get('match_date'),
+                    'product': 'VALUE_SINGLE',
+                    'market': opp_dict.get('market'),
+                    'selection': opp_dict.get('selection'),
+                    'odds': odds_value,
+                    'ev': float(opp_dict.get('edge_percentage', 0)),
+                    'confidence': opp_dict.get('confidence'),
+                    'trust_level': trust_level
+                }, product_type='VALUE_SINGLE')
+                print(f"📤 Discord: Sent {opp_dict.get('home_team')} vs {opp_dict.get('away_team')} - {opp_dict.get('selection')}")
+            except Exception as discord_err:
+                print(f"⚠️ Discord notification failed: {discord_err}")
+            
             return True
         except Exception as e:
             print(f"❌ Save opportunity error: {e}")
