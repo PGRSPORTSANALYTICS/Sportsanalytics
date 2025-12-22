@@ -49,11 +49,26 @@ def get_roi_stats() -> Dict[str, Any]:
             """)
             all_time = conn.execute(all_time_query).fetchone()
             
-            today_query = text("""
+            today_placed_query = text("""
                 SELECT 
                     COUNT(*) as total_bets,
                     COUNT(CASE WHEN result IN ('WON', 'WIN') THEN 1 END) as wins,
                     COUNT(CASE WHEN result IN ('LOST', 'LOSS') THEN 1 END) as losses,
+                    COALESCE(SUM(CASE 
+                        WHEN result IN ('WON', 'WIN') THEN (odds - 1) 
+                        WHEN result IN ('LOST', 'LOSS') THEN -1 
+                        ELSE 0 
+                    END), 0) as units_profit,
+                    COUNT(CASE WHEN result IS NULL OR result = '' THEN 1 END) as pending
+                FROM all_bets
+                WHERE DATE(created_at) = CURRENT_DATE
+            """)
+            today_stats = conn.execute(today_placed_query).fetchone()
+            
+            today_settled_query = text("""
+                SELECT 
+                    COUNT(*) as total_bets,
+                    COUNT(CASE WHEN result IN ('WON', 'WIN') THEN 1 END) as wins,
                     COALESCE(SUM(CASE 
                         WHEN result IN ('WON', 'WIN') THEN (odds - 1) 
                         WHEN result IN ('LOST', 'LOSS') THEN -1 
@@ -63,7 +78,7 @@ def get_roi_stats() -> Dict[str, Any]:
                 WHERE result IN ('WON', 'WIN', 'LOST', 'LOSS')
                 AND DATE(settled_at) = CURRENT_DATE
             """)
-            today_stats = conn.execute(today_query).fetchone()
+            today_settled = conn.execute(today_settled_query).fetchone()
             
             week_query = text("""
                 SELECT 
@@ -131,7 +146,13 @@ def get_roi_stats() -> Dict[str, Any]:
         
         today_total = today_stats[0] or 0
         today_wins = today_stats[1] or 0
+        today_losses = today_stats[2] or 0
         today_units = float(today_stats[3] or 0)
+        today_pending = today_stats[4] or 0 if len(today_stats) > 4 else 0
+        
+        settled_today_total = today_settled[0] or 0 if today_settled else 0
+        settled_today_wins = today_settled[1] or 0 if today_settled else 0
+        settled_today_units = float(today_settled[2] or 0) if today_settled else 0
         
         week_total = week_stats[0] or 0
         week_wins = week_stats[1] or 0
@@ -153,8 +174,15 @@ def get_roi_stats() -> Dict[str, Any]:
             "today": {
                 "total": today_total,
                 "wins": today_wins,
-                "hit_rate": calc_roi(today_wins, today_total),
+                "losses": today_losses,
+                "pending": today_pending,
+                "hit_rate": calc_roi(today_wins, today_total - today_pending) if (today_total - today_pending) > 0 else 0,
                 "units": today_units
+            },
+            "settled_today": {
+                "total": settled_today_total,
+                "wins": settled_today_wins,
+                "units": settled_today_units
             },
             "week": {
                 "total": week_total,
@@ -200,6 +228,7 @@ def build_discord_embed(stats: Dict[str, Any]) -> Dict[str, Any]:
     
     all_time = stats.get("all_time", {})
     today = stats.get("today", {})
+    settled_today = stats.get("settled_today", {})
     week = stats.get("week", {})
     month = stats.get("month", {})
     pending = stats.get("pending", 0)
@@ -238,13 +267,13 @@ def build_discord_embed(stats: Dict[str, Any]) -> Dict[str, Any]:
             "inline": True
         },
         {
-            "name": "🎯 Settled Today",
-            "value": f"**Units:** {today.get('units', 0):+.1f}u\n**Record:** {today.get('wins', 0)}W-{today.get('total', 0) - today.get('wins', 0)}L ({today.get('total', 0)} bets)",
+            "name": "🎯 Picks Today",
+            "value": f"**Placed:** {today.get('total', 0)} bets\n**Settled:** {today.get('wins', 0)}W-{today.get('losses', 0)}L\n**Pending:** {today.get('pending', 0)}",
             "inline": True
         },
         {
-            "name": "⏳ Pending",
-            "value": f"**{pending}** bets awaiting results",
+            "name": "✅ Settled Today",
+            "value": f"**Bets:** {settled_today.get('total', 0)}\n**Units:** {settled_today.get('units', 0):+.1f}u\n**Wins:** {settled_today.get('wins', 0)}",
             "inline": True
         }
     ]
