@@ -1154,19 +1154,60 @@ class RealResultVerifier:
             return {"verified": verified, "failed": failed}
     
     def _auto_void_old_pending(self) -> int:
-        """Auto-void pending bets older than 3 days that couldn't be settled."""
+        """
+        Auto-void pending bets that couldn't be settled after cutoff period.
+        
+        Settlement & Data Integrity Policy:
+        - All bets are settled only when official match data is available
+        - For Corners and Cards markets, historical data may not always be retrievable
+        - Any bet that cannot be verified after the cutoff period is marked as VOID (Data Unavailable)
+        - No assumptions, estimations, or inferred results are ever used
+        - VOID bets are excluded from performance metrics to maintain statistical integrity
+        
+        Cutoff periods:
+        - Corners/Cards: 2 days (limited API coverage for detailed statistics)
+        - Other football/SGP: 3 days
+        - Basketball: 3 days
+        """
         try:
             conn = psycopg2.connect(self.database_url)
             cursor = conn.cursor()
             
-            # Void football_opportunities older than 3 days
+            # Void Corners bets older than 2 days (API coverage is limited for corner stats)
             cursor.execute("""
                 UPDATE football_opportunities 
                 SET status = 'settled', 
                     outcome = 'void', 
-                    result = 'VOID',
+                    result = 'VOID - Data Unavailable',
                     settled_timestamp = EXTRACT(EPOCH FROM NOW())::bigint
                 WHERE status = 'pending' 
+                    AND market = 'Corners'
+                    AND match_date::date < CURRENT_DATE - INTERVAL '2 days'
+            """)
+            corners_voided = cursor.rowcount
+            
+            # Void Cards bets older than 2 days (API coverage is limited for card stats)
+            cursor.execute("""
+                UPDATE football_opportunities 
+                SET status = 'settled', 
+                    outcome = 'void', 
+                    result = 'VOID - Data Unavailable',
+                    settled_timestamp = EXTRACT(EPOCH FROM NOW())::bigint
+                WHERE status = 'pending' 
+                    AND market = 'Cards'
+                    AND match_date::date < CURRENT_DATE - INTERVAL '2 days'
+            """)
+            cards_voided = cursor.rowcount
+            
+            # Void other football_opportunities older than 3 days
+            cursor.execute("""
+                UPDATE football_opportunities 
+                SET status = 'settled', 
+                    outcome = 'void', 
+                    result = 'VOID - Data Unavailable',
+                    settled_timestamp = EXTRACT(EPOCH FROM NOW())::bigint
+                WHERE status = 'pending' 
+                    AND market NOT IN ('Corners', 'Cards')
                     AND match_date::date < CURRENT_DATE - INTERVAL '3 days'
             """)
             football_voided = cursor.rowcount
@@ -1176,10 +1217,10 @@ class RealResultVerifier:
                 UPDATE sgp_predictions 
                 SET status = 'SETTLED', 
                     outcome = 'void', 
-                    result = 'VOID',
+                    result = 'VOID - Data Unavailable',
                     profit_loss = 0,
                     settled_timestamp = EXTRACT(EPOCH FROM NOW())::bigint
-                WHERE status = 'PENDING'
+                WHERE UPPER(status) = 'PENDING'
                     AND match_date::date < CURRENT_DATE - INTERVAL '3 days'
             """)
             sgp_voided = cursor.rowcount
@@ -1197,9 +1238,10 @@ class RealResultVerifier:
             cursor.close()
             conn.close()
             
-            total_voided = football_voided + sgp_voided + basketball_voided
+            total_voided = corners_voided + cards_voided + football_voided + sgp_voided + basketball_voided
             if total_voided > 0:
-                logger.info(f"🗑️ Auto-voided {total_voided} old pending bets (football: {football_voided}, sgp: {sgp_voided}, basketball: {basketball_voided})")
+                logger.info(f"🗑️ Auto-voided {total_voided} old pending bets (Data Unavailable)")
+                logger.info(f"   Corners: {corners_voided}, Cards: {cards_voided}, Football: {football_voided}, SGP: {sgp_voided}, Basketball: {basketball_voided}")
             
             return total_voided
             
