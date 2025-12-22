@@ -44,9 +44,8 @@ def get_roi_stats() -> Dict[str, Any]:
                         WHEN result IN ('LOST', 'LOSS') THEN -1 
                         ELSE 0 
                     END), 0) as units_profit
-                FROM football_opportunities
+                FROM all_bets
                 WHERE result IN ('WON', 'WIN', 'LOST', 'LOSS')
-                AND mode != 'TEST'
             """)
             all_time = conn.execute(all_time_query).fetchone()
             
@@ -60,10 +59,9 @@ def get_roi_stats() -> Dict[str, Any]:
                         WHEN result IN ('LOST', 'LOSS') THEN -1 
                         ELSE 0 
                     END), 0) as units_profit
-                FROM football_opportunities
+                FROM all_bets
                 WHERE result IN ('WON', 'WIN', 'LOST', 'LOSS')
                 AND DATE(match_date) = :today
-                AND mode != 'TEST'
             """)
             today_stats = conn.execute(today_query, {"today": str(today)}).fetchone()
             
@@ -77,10 +75,9 @@ def get_roi_stats() -> Dict[str, Any]:
                         WHEN result IN ('LOST', 'LOSS') THEN -1 
                         ELSE 0 
                     END), 0) as units_profit
-                FROM football_opportunities
+                FROM all_bets
                 WHERE result IN ('WON', 'WIN', 'LOST', 'LOSS')
                 AND DATE(match_date) >= :week_ago
-                AND mode != 'TEST'
             """)
             week_stats = conn.execute(week_query, {"week_ago": str(week_ago)}).fetchone()
             
@@ -94,26 +91,24 @@ def get_roi_stats() -> Dict[str, Any]:
                         WHEN result IN ('LOST', 'LOSS') THEN -1 
                         ELSE 0 
                     END), 0) as units_profit
-                FROM football_opportunities
+                FROM all_bets
                 WHERE result IN ('WON', 'WIN', 'LOST', 'LOSS')
                 AND DATE(match_date) >= :month_start
-                AND mode != 'TEST'
             """)
             month_stats = conn.execute(month_query, {"month_start": str(month_start)}).fetchone()
             
             pending_query = text("""
-                SELECT COUNT(*) as pending
-                FROM football_opportunities
-                WHERE UPPER(status) IN ('PENDING', 'IN_PROGRESS')
-                AND mode != 'TEST'
+                SELECT 
+                    (SELECT COUNT(*) FROM all_bets WHERE result IS NULL OR result = '') +
+                    (SELECT COUNT(*) FROM football_opportunities WHERE UPPER(status) IN ('PENDING', 'IN_PROGRESS') AND mode != 'TEST')
+                as pending
             """)
             pending = conn.execute(pending_query).fetchone()
             
             recent_query = text("""
                 SELECT home_team, away_team, selection, odds, result
-                FROM football_opportunities
+                FROM all_bets
                 WHERE result IN ('WON', 'WIN', 'LOST', 'LOSS')
-                AND mode != 'TEST'
                 ORDER BY match_date DESC, id DESC
                 LIMIT 5
             """)
@@ -257,7 +252,8 @@ def build_discord_embed(stats: Dict[str, Any]) -> Dict[str, Any]:
         recent_lines = []
         for r in recent[:5]:
             emoji = "✅" if r["result"] in ["WON", "WIN"] else "❌"
-            recent_lines.append(f"{emoji} {r['pick']} @ {r['odds']:.2f}")
+            match_name = f"{r['match'][:25]}" if len(r['match']) > 25 else r['match']
+            recent_lines.append(f"{emoji} {match_name}: {r['pick']} @ {r['odds']:.2f}")
         fields.append({
             "name": "🔄 Recent Results",
             "value": "\n".join(recent_lines),
