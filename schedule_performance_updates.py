@@ -20,20 +20,19 @@ def run_monthly():
     print(f"[{datetime.now()}] Running monthly performance update...")
     send_monthly_update()
 
-# Schedule weekly updates: Every Sunday at 20:00
-schedule.every().sunday.at("20:00").do(run_weekly)
+def update_performance_metrics():
+    """Setup performance update schedules (non-blocking)"""
+    schedule.every().sunday.at("20:00").do(run_weekly)
+    schedule.every().day.at("12:00").do(lambda: run_monthly() if datetime.now().day == 1 else None)
+    print("📅 Performance Update Scheduler Started")
+    print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    print("⏰ Weekly Updates: Every Sunday at 20:00 CET")
+    print("⏰ Monthly Updates: 1st of month at 12:00 CET")
+    print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
-# Schedule monthly updates: 1st of month at 12:00
-schedule.every().day.at("12:00").do(lambda: run_monthly() if datetime.now().day == 1 else None)
-
-print("📅 Performance Update Scheduler Started")
-print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-print("⏰ Weekly Updates: Every Sunday at 20:00 CET")
-print("⏰ Monthly Updates: 1st of month at 12:00 CET")
-print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-print("Running... Press Ctrl+C to stop\n")
-
-# Keep running
-while True:
-    schedule.run_pending()
-    time.sleep(60)  # Check every minute
+if __name__ == "__main__":
+    update_performance_metrics()
+    print("Running... Press Ctrl+C to stop\n")
+    while True:
+        schedule.run_pending()
+        time.sleep(60)
