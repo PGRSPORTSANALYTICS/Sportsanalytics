@@ -1119,7 +1119,7 @@ class RealResultVerifier:
                 WHERE (result IS NULL OR result = 'PENDING')
                   AND match_date::date < CURRENT_DATE
                   AND product IN ('CORNERS', 'CARDS', 'VALUE_SINGLE')
-                ORDER BY match_date ASC
+                ORDER BY match_date DESC
                 LIMIT 200
             """)
             
