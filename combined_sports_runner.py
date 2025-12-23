@@ -89,6 +89,19 @@ def verify_basketball_results():
         logger.error(f"❌ Basketball verification error: {e}")
 
 
+def run_results_engine():
+    """Run unified Results Engine for ALL bet types"""
+    try:
+        from results_engine import run_results_engine as engine_cycle
+        logger.info("🔄 Running Results Engine (unified settlement)...")
+        stats = engine_cycle()
+        logger.info(f"🔄 Results Engine: {stats['settled']} settled, {stats['voided']} voided, {stats['failed']} failed")
+    except Exception as e:
+        logger.error(f"❌ Results Engine error: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 def verify_football_results():
     """Verify Football Exact Score and Value Singles results"""
     try:
@@ -320,14 +333,11 @@ def main():
     
     run_performance_updates()
     
-    # CRITICAL: Run all verifications immediately on startup
+    # CRITICAL: Run Results Engine immediately on startup
     # This ensures no bets drag for days waiting for scheduler
-    logger.info("🔄 Running immediate result verification...")
-    verify_football_results()
-    verify_parlay_results()
-    verify_basketball_results()
-    verify_ml_parlay_results()
-    verify_all_bets_corners_cards()  # NEW: Corners & Cards from all_bets
+    logger.info("🔄 Running immediate Results Engine...")
+    run_results_engine()  # Unified settlement for ALL bet types
+    verify_basketball_results()  # Basketball has separate verifier
     logger.info("✅ Initial verification complete")
     
     # Schedule recurring prediction tasks (only enabled products)
@@ -341,11 +351,8 @@ def main():
         schedule.every(3).hours.do(run_ml_parlay)
     
     # Schedule result verification - Every 5 minutes for FAST results
-    schedule.every(5).minutes.do(verify_football_results)
-    schedule.every(5).minutes.do(verify_parlay_results)
-    schedule.every(5).minutes.do(verify_basketball_results)
-    schedule.every(5).minutes.do(verify_ml_parlay_results)
-    schedule.every(5).minutes.do(verify_all_bets_corners_cards)  # NEW: Corners & Cards
+    schedule.every(5).minutes.do(run_results_engine)  # Unified Results Engine
+    schedule.every(5).minutes.do(verify_basketball_results)  # Basketball separate
     
     # Schedule CLV update - Every 10 minutes to capture closing odds
     schedule.every(10).minutes.do(run_clv_update_cycle)
