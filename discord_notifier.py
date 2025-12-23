@@ -1,5 +1,6 @@
 import os
 import requests
+from datetime import datetime
 
 PRODUCT_WEBHOOKS = {
     "EXACT_SCORE": os.getenv("WEBHOOK_Final_score"),
@@ -10,6 +11,9 @@ PRODUCT_WEBHOOKS = {
     "BASKETBALL": os.getenv("WEB_HOOK_College_basket"),
     "BASKET_SINGLE": os.getenv("WEB_HOOK_College_basket"),
     "BASKET_PARLAY": os.getenv("WEB_HOOK_College_basket"),
+    "CORNERS": os.getenv("DISCORD_PROPS_WEBHOOK_URL"),
+    "CARDS": os.getenv("DISCORD_PROPS_WEBHOOK_URL"),
+    "SHOTS": os.getenv("DISCORD_PROPS_WEBHOOK_URL"),
 }
 
 
@@ -152,26 +156,132 @@ def format_bet_message(bet) -> str:
         return format_value_single_message(bet)
 
 
+def create_bet_embed(bet, product_type=None) -> dict:
+    """Create a clean Discord embed for any bet type."""
+    if isinstance(bet, dict):
+        home_team = bet.get('home_team', 'TBD')
+        away_team = bet.get('away_team', 'TBD')
+        selection = bet.get('selection', '')
+        odds = bet.get('odds', 0)
+        ev = bet.get('ev', bet.get('edge_percentage', 0))
+        confidence = bet.get('confidence', 0)
+        kickoff = bet.get('match_date', bet.get('kickoff', ''))
+        league = bet.get('league', '')
+        trust_level = bet.get('trust_level', 'L2')
+        market = bet.get('market', product_type or '')
+        legs = bet.get('legs', [])
+    else:
+        home_team = getattr(bet, 'home_team', 'TBD')
+        away_team = getattr(bet, 'away_team', 'TBD')
+        selection = getattr(bet, 'selection', '')
+        odds = getattr(bet, 'odds', 0)
+        ev = getattr(bet, 'ev', getattr(bet, 'edge_percentage', 0))
+        confidence = getattr(bet, 'confidence', 0)
+        kickoff = getattr(bet, 'match_date', getattr(bet, 'kickoff', ''))
+        league = getattr(bet, 'league', '')
+        trust_level = getattr(bet, 'trust_level', 'L2')
+        market = getattr(bet, 'market', product_type or '')
+        legs = getattr(bet, 'legs', [])
+    
+    market_upper = (market or product_type or '').upper()
+    
+    if 'CORNER' in market_upper:
+        emoji = "🔷"
+        color = 0x3498db
+    elif 'CARD' in market_upper:
+        emoji = "🟨"
+        color = 0xf1c40f
+    elif 'SHOT' in market_upper:
+        emoji = "🎯"
+        color = 0xe74c3c
+    elif 'PARLAY' in market_upper or 'SGP' in market_upper or legs:
+        emoji = "🎲"
+        color = 0x9b59b6
+    elif 'BASKET' in market_upper:
+        emoji = "🏀"
+        color = 0xe67e22
+    elif 'BTTS' in selection.upper():
+        emoji = "⚽"
+        color = 0x2ecc71
+    elif 'OVER' in selection.upper() or 'UNDER' in selection.upper():
+        emoji = "📊"
+        color = 0x3498db
+    else:
+        emoji = "💰"
+        color = 0x2ecc71
+    
+    try:
+        ev_val = float(ev or 0)
+        if ev_val > 100:
+            ev_val = ev_val / 100
+        if ev_val < 1 and ev_val > 0:
+            ev_val = ev_val * 100
+    except:
+        ev_val = 0
+    
+    ev_bullets = "🔥🔥🔥" if ev_val >= 8 else "🔥🔥" if ev_val >= 5 else "🔥" if ev_val >= 3 else ""
+    
+    if legs and len(legs) > 0:
+        legs_text = "\n".join([f"• {l.get('selection', l.get('home_team', ''))} @ {l.get('odds', 0):.2f}" for l in legs[:5]])
+        description = f"**{home_team}** vs **{away_team}**\n\n{legs_text}"
+    else:
+        description = f"**{home_team}** vs **{away_team}**"
+    
+    try:
+        conf_val = float(confidence or 0)
+        if conf_val < 1 and conf_val > 0:
+            conf_val = conf_val * 100
+    except:
+        conf_val = 0
+    
+    fields = [
+        {"name": "📊 Odds", "value": f"`{float(odds or 0):.2f}`", "inline": True},
+        {"name": "💎 EV", "value": f"`+{ev_val:.1f}%` {ev_bullets}", "inline": True},
+    ]
+    
+    if conf_val > 0:
+        fields.append({"name": "🎯 Confidence", "value": f"`{conf_val:.0f}%`", "inline": True})
+    
+    if trust_level:
+        trust_emoji = "🔥" if trust_level == 'L1' else "💎" if trust_level == 'L2' else "📊"
+        fields.append({"name": "🏆 Trust", "value": f"`{trust_level}` {trust_emoji}", "inline": True})
+    
+    embed = {
+        "title": f"{emoji} {market_upper} | {selection}",
+        "description": description,
+        "color": color,
+        "fields": fields,
+        "footer": {"text": f"{league} • {str(kickoff)[:16] if kickoff else 'TBD'}"},
+        "timestamp": datetime.utcnow().isoformat()
+    }
+    
+    return embed
+
+
 def send_bet_to_discord(bet, product_type=None):
     """
-    Send a bet to the appropriate Discord channel based on product type.
+    Send a bet to the appropriate Discord channel using clean embeds.
     Silently skips if no webhook is configured (won't crash the engine).
     """
     if product_type is None:
         if isinstance(bet, dict):
-            product_type = bet.get('product', bet.get('product_type', ''))
+            product_type = bet.get('product', bet.get('product_type', bet.get('market', '')))
         else:
-            product_type = getattr(bet, 'product', getattr(bet, 'product_type', ''))
+            product_type = getattr(bet, 'product', getattr(bet, 'product_type', getattr(bet, 'market', '')))
     
-    webhook_url = PRODUCT_WEBHOOKS.get(product_type)
+    webhook_url = PRODUCT_WEBHOOKS.get(product_type.upper() if product_type else '')
     if not webhook_url:
         return False
 
-    payload = {"content": format_bet_message(bet)}
+    embed = create_bet_embed(bet, product_type)
+    payload = {
+        "username": "PGR Picks Bot",
+        "embeds": [embed]
+    }
 
     try:
         response = requests.post(webhook_url, json=payload, timeout=5)
-        return response.status_code == 204
+        return response.status_code in [200, 204]
     except Exception as e:
         bet_id = bet.get('id', '?') if isinstance(bet, dict) else getattr(bet, 'id', '?')
         print(f"[DISCORD] Failed to post bet {bet_id}: {e}")
@@ -192,60 +302,86 @@ def send_custom_message(product_type: str, message: str):
         return False
 
 
-def format_result_message(bet_info: dict) -> str:
-    """Format a settled bet result for Discord."""
+def create_result_embed(bet_info: dict) -> dict:
+    """Create a clean Discord embed for settled bet result."""
     outcome = bet_info.get('outcome', '').upper()
     home_team = bet_info.get('home_team', 'Unknown')
     away_team = bet_info.get('away_team', 'Unknown')
     selection = bet_info.get('selection', bet_info.get('parlay_description', ''))
     actual_score = bet_info.get('actual_score', bet_info.get('result', '?-?'))
     odds = bet_info.get('odds', bet_info.get('bookmaker_odds', 0))
-    profit_loss = bet_info.get('profit_loss', 0)
     league = bet_info.get('league', '')
     product_type = bet_info.get('product_type', bet_info.get('product', '')).upper()
     
-    is_basketball = 'BASKET' in product_type or 'NCAAB' in league.upper() or 'NCAA' in league.upper()
-    sport_emoji = ":basketball:" if is_basketball else ":soccer:"
-    
-    if outcome == 'WIN':
-        emoji = ":white_check_mark:"
+    if outcome in ['WIN', 'WON']:
+        emoji = "✅"
         status = "WON"
-        color_bar = ":green_circle:"
+        color = 0x2ecc71
     elif outcome in ['VOID', 'PUSH']:
-        emoji = ":leftwards_arrow_with_hook:"
+        emoji = "↩️"
         status = "VOID"
-        color_bar = ":white_circle:"
+        color = 0x95a5a6
     else:
-        emoji = ":x:"
+        emoji = "❌"
         status = "LOST"
-        color_bar = ":red_circle:"
+        color = 0xe74c3c
     
     try:
-        profit_units = (float(odds) - 1) if outcome == 'WIN' else -1.0
+        profit_units = (float(odds) - 1) if outcome in ['WIN', 'WON'] else -1.0
         if outcome in ['VOID', 'PUSH']:
             profit_units = 0.0
     except:
         profit_units = 0.0
     
-    lines = [
-        f"{emoji} **RESULT: {status}**",
-        "",
-        f"**{league}** – {home_team} vs {away_team}",
-        f"{sport_emoji} Final Score: **{actual_score}**",
-        f":dart: Our Pick: {selection}",
-        f":moneybag: Odds: {float(odds):.2f}" if odds else "",
-        "",
-        f"{color_bar} **P/L: {profit_units:+.2f} units**",
-        "",
-        "_PGR Sports Analytics_"
-    ]
+    embed = {
+        "title": f"{emoji} {status} | {selection}",
+        "description": f"**{home_team}** vs **{away_team}**",
+        "color": color,
+        "fields": [
+            {"name": "⚽ Score", "value": f"`{actual_score}`", "inline": True},
+            {"name": "📊 Odds", "value": f"`{float(odds or 0):.2f}`", "inline": True},
+            {"name": "💰 P/L", "value": f"`{profit_units:+.2f}u`", "inline": True},
+        ],
+        "footer": {"text": f"{league} • {product_type}"},
+        "timestamp": datetime.utcnow().isoformat()
+    }
     
-    return "\n".join([l for l in lines if l or l == ""])
+    return embed
+
+
+def format_result_message(bet_info: dict) -> str:
+    """Format a settled bet result for Discord (legacy text format)."""
+    outcome = bet_info.get('outcome', '').upper()
+    home_team = bet_info.get('home_team', 'Unknown')
+    away_team = bet_info.get('away_team', 'Unknown')
+    selection = bet_info.get('selection', bet_info.get('parlay_description', ''))
+    actual_score = bet_info.get('actual_score', bet_info.get('result', '?-?'))
+    odds = bet_info.get('odds', bet_info.get('bookmaker_odds', 0))
+    league = bet_info.get('league', '')
+    
+    if outcome in ['WIN', 'WON']:
+        emoji = "✅"
+        status = "WON"
+    elif outcome in ['VOID', 'PUSH']:
+        emoji = "↩️"
+        status = "VOID"
+    else:
+        emoji = "❌"
+        status = "LOST"
+    
+    try:
+        profit_units = (float(odds) - 1) if outcome in ['WIN', 'WON'] else -1.0
+        if outcome in ['VOID', 'PUSH']:
+            profit_units = 0.0
+    except:
+        profit_units = 0.0
+    
+    return f"{emoji} **{status}** | {home_team} vs {away_team} | {selection} @ {float(odds or 0):.2f} | P/L: `{profit_units:+.2f}u`"
 
 
 def send_result_to_discord(bet_info: dict, product_type: str = None):
     """
-    Send a settled bet result to the appropriate Discord channel.
+    Send a settled bet result to the appropriate Discord channel using clean embeds.
     Maps product types to the correct webhooks.
     """
     if product_type is None:
@@ -266,6 +402,10 @@ def send_result_to_discord(bet_info: dict, product_type: str = None):
         'BASKET_SINGLE': 'BASKET_SINGLE',
         'basket_parlay': 'BASKET_PARLAY',
         'BASKET_PARLAY': 'BASKET_PARLAY',
+        'corners': 'CORNERS',
+        'CORNERS': 'CORNERS',
+        'cards': 'CARDS',
+        'CARDS': 'CARDS',
     }
     
     normalized_type = type_map.get(product_type, product_type.upper() if product_type else 'EXACT_SCORE')
@@ -275,11 +415,15 @@ def send_result_to_discord(bet_info: dict, product_type: str = None):
         print(f"[DISCORD] No webhook for product type: {product_type} (normalized: {normalized_type})")
         return False
     
-    message = format_result_message(bet_info)
+    embed = create_result_embed(bet_info)
+    payload = {
+        "username": "PGR Results Bot",
+        "embeds": [embed]
+    }
     
     try:
-        response = requests.post(webhook_url, json={"content": message}, timeout=5)
-        if response.status_code == 204:
+        response = requests.post(webhook_url, json=payload, timeout=5)
+        if response.status_code in [200, 204]:
             print(f"[DISCORD] Sent result: {bet_info.get('home_team', '?')} vs {bet_info.get('away_team', '?')} = {bet_info.get('outcome', '?')}")
             return True
         else:
