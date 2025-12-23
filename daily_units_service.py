@@ -49,21 +49,6 @@ def get_daily_units(days_back: int = 30) -> Dict:
               
             UNION ALL
             
-            -- SGP predictions
-            SELECT 
-                DATE(match_date) as match_day,
-                CASE 
-                    WHEN outcome IN ('won', 'win') THEN (bookmaker_odds - 1)
-                    WHEN outcome IN ('lost', 'loss') THEN -1.0
-                    ELSE 0.0
-                END as profit_units
-            FROM sgp_predictions
-            WHERE outcome IS NOT NULL
-              AND outcome NOT IN ('pending', 'live', '')
-              AND match_date IS NOT NULL
-              
-            UNION ALL
-            
             -- Basketball predictions
             SELECT 
                 DATE(commence_time) as match_day,
