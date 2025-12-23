@@ -4,7 +4,8 @@ from datetime import datetime
 
 PRODUCT_WEBHOOKS = {
     "EXACT_SCORE": os.getenv("WEBHOOK_Final_score"),
-    "ML_PARLAY": os.getenv("WEBHOOK_PARLAYS"),
+    "ML_PARLAY": os.getenv("WEBHOOK_ML_PARLAYS"),
+    "MULTI_MATCH_PARLAY": os.getenv("WEBHOOK_PARLAYS"),
     "PARLAY": os.getenv("WEBHOOK_PARLAYS"),
     "VALUE_SINGLE": os.getenv("WEBHOOK_Value_singles"),
     "BASKETBALL_SINGLE": os.getenv("WEB_HOOK_College_basket"),
@@ -194,10 +195,14 @@ def create_bet_embed(bet, product_type=None) -> dict:
     elif 'SHOT' in market_upper:
         emoji = "🎯"
         color = 0xe74c3c
-    elif 'PARLAY' in market_upper or legs:
+    elif 'ML_PARLAY' in market_upper:
+        emoji = "🎰"
+        color = 0x9b59b6
+        market_upper = "ML PARLAY"
+    elif 'PARLAY' in market_upper or 'MULTI' in market_upper or legs:
         emoji = "🎟️"
         color = 0x9b59b6
-        market_upper = "MULTI-MATCH PARLAY"
+        market_upper = "MULTI-MARKET PARLAY"
     elif 'BASKET' in market_upper:
         emoji = "🏀"
         color = 0xe67e22
