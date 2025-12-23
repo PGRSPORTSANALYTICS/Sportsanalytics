@@ -8,6 +8,8 @@ import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 from sqlalchemy import create_engine, text
 
+from kelly_engine import KellyEngine, suggest_stake, StakeConfig
+
 # ============ CURRENCY CONFIGURATION ============
 # All internal calculations use USD. Display shows USD with SEK equivalent.
 USD_TO_SEK = 10.8  # Adjust manually when exchange rate changes
@@ -3342,6 +3344,164 @@ def render_props_tab():
         st.error(f"Error loading Props tab: {e}")
 
 
+# ------------- KELLY STAKE CALCULATOR ------------- #
+
+def render_kelly_calculator():
+    """Render the Kelly Criterion stake calculator."""
+    st.markdown("""
+    <div style="text-align:center;padding:20px 0;">
+        <h2 style="color:#10B981;margin-bottom:5px;">Stake Calculator</h2>
+        <p style="color:#9CA3AF;font-size:14px;">Kelly Criterion-based bankroll management</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2 = st.columns([1, 1])
+    
+    with col1:
+        st.markdown("### Input Parameters")
+        
+        bankroll = st.number_input(
+            "Bankroll (SEK)",
+            min_value=100.0,
+            max_value=1000000.0,
+            value=10000.0,
+            step=1000.0,
+            help="Your total betting bankroll"
+        )
+        
+        odds = st.number_input(
+            "Decimal Odds",
+            min_value=1.01,
+            max_value=100.0,
+            value=2.00,
+            step=0.05,
+            help="The decimal odds offered by the bookmaker"
+        )
+        
+        model_prob = st.slider(
+            "Win Probability (%)",
+            min_value=1,
+            max_value=99,
+            value=55,
+            help="Your estimated probability of winning"
+        ) / 100.0
+        
+        market_type = st.selectbox(
+            "Market Type",
+            options=["single", "parlay", "sgp"],
+            index=0,
+            help="Single bet or accumulator"
+        )
+        
+        risk_profile = st.selectbox(
+            "Risk Profile",
+            options=["conservative", "balanced", "aggressive"],
+            index=1,
+            help="Conservative (10% Kelly), Balanced (25% Kelly), Aggressive (50% Kelly)"
+        )
+        
+        unit_value = st.number_input(
+            "Unit Value (SEK)",
+            min_value=10.0,
+            max_value=10000.0,
+            value=100.0,
+            step=10.0,
+            help="How much 1 unit is worth"
+        )
+    
+    with col2:
+        st.markdown("### Recommendation")
+        
+        cfg = StakeConfig(unit_value_sek=unit_value)
+        result = suggest_stake(
+            bankroll=bankroll,
+            odds_decimal=odds,
+            model_prob=model_prob,
+            market_type=market_type,
+            risk_profile=risk_profile,
+            cfg=cfg
+        )
+        
+        implied_prob = 1 / odds
+        edge_pct = (model_prob - implied_prob) * 100
+        ev_pct = result.get('ev', 0) * 100
+        
+        if result.get('ok', False):
+            stake_units = result.get('stake_units', 0)
+            stake_amount = result.get('stake_amount', 0)
+            potential_win = stake_amount * (odds - 1)
+            
+            st.markdown(f"""
+            <div style="background:linear-gradient(135deg, rgba(16,185,129,0.2), rgba(15,23,42,0.95));
+                        border:2px solid #10B981;border-radius:16px;padding:24px;margin-bottom:16px;">
+                <div style="text-align:center;">
+                    <div style="font-size:14px;color:#9CA3AF;margin-bottom:8px;">RECOMMENDED STAKE</div>
+                    <div style="font-size:48px;font-weight:700;color:#10B981;">{stake_units:.2f}u</div>
+                    <div style="font-size:20px;color:#6EE7B7;">{stake_amount:,.0f} SEK</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            m1, m2, m3 = st.columns(3)
+            with m1:
+                st.metric("Edge", f"{edge_pct:.1f}%")
+            with m2:
+                st.metric("EV", f"{ev_pct:.1f}%")
+            with m3:
+                st.metric("Potential Win", f"{potential_win:,.0f} SEK")
+            
+            st.markdown(f"""
+            <div style="background:rgba(30,41,59,0.8);border-radius:12px;padding:16px;margin-top:16px;">
+                <div style="font-size:12px;color:#9CA3AF;margin-bottom:8px;">CALCULATION DETAILS</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;">
+                    <div><span style="color:#6B7280;">Implied Prob:</span> <span style="color:#E5E7EB;">{implied_prob*100:.1f}%</span></div>
+                    <div><span style="color:#6B7280;">Model Prob:</span> <span style="color:#E5E7EB;">{model_prob*100:.1f}%</span></div>
+                    <div><span style="color:#6B7280;">Full Kelly:</span> <span style="color:#E5E7EB;">{result.get('kelly_full_fraction', 0)*100:.2f}%</span></div>
+                    <div><span style="color:#6B7280;">Fractional Kelly:</span> <span style="color:#E5E7EB;">{result.get('kelly_fractional_fraction', 0)*100:.2f}%</span></div>
+                    <div><span style="color:#6B7280;">Risk Profile:</span> <span style="color:#E5E7EB;">{risk_profile.title()}</span></div>
+                    <div><span style="color:#6B7280;">Market Type:</span> <span style="color:#E5E7EB;">{market_type.upper()}</span></div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            reason = result.get('reason', 'unknown')
+            st.markdown(f"""
+            <div style="background:linear-gradient(135deg, rgba(239,68,68,0.2), rgba(15,23,42,0.95));
+                        border:2px solid #EF4444;border-radius:16px;padding:24px;text-align:center;">
+                <div style="font-size:32px;margin-bottom:8px;">⚠️</div>
+                <div style="font-size:18px;font-weight:600;color:#EF4444;">No Bet Recommended</div>
+                <div style="font-size:14px;color:#FCA5A5;margin-top:8px;">{reason.replace('_', ' ').title()}</div>
+                <div style="font-size:13px;color:#9CA3AF;margin-top:12px;">
+                    Edge: {edge_pct:.1f}% | EV: {ev_pct:.1f}%
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    st.markdown("### Kelly Criterion Explained")
+    with st.expander("How it works"):
+        st.markdown("""
+        **Kelly Criterion** calculates the optimal bet size to maximize long-term growth while minimizing risk of ruin.
+        
+        **Formula:** f* = (bp - q) / b
+        - f* = fraction of bankroll to bet
+        - b = decimal odds - 1
+        - p = probability of winning
+        - q = probability of losing (1 - p)
+        
+        **Risk Profiles:**
+        - **Conservative (10%)**: Slower growth, lower variance
+        - **Balanced (25%)**: Good balance of growth and safety
+        - **Aggressive (50%)**: Faster growth, higher volatility
+        
+        **Caps Applied:**
+        - Max 2% of bankroll per bet
+        - Max 2 units per bet
+        - Parlays use reduced sizing due to higher variance
+        """)
+
+
 # ------------- MAIN APP ------------- #
 
 def main():
@@ -3368,7 +3528,7 @@ def main():
     prod_bets, backtest_bets = split_bets_by_mode(all_bets)
 
     # Tabs for different products
-    free_tab, daily_card_tab, overview_tab, singles_tab, odds_compare_tab, props_tab, parlays_tab, ml_parlay_tab, basket_tab, backtest_tab = st.tabs(
+    free_tab, daily_card_tab, overview_tab, singles_tab, odds_compare_tab, props_tab, parlays_tab, ml_parlay_tab, basket_tab, kelly_tab, backtest_tab = st.tabs(
         [
             "Free Picks",
             "Daily Card",
@@ -3379,6 +3539,7 @@ def main():
             "Parlays",
             "ML Parlay",
             "College Basketball",
+            "Stake Calculator",
             "Backtests",
         ]
     )
@@ -3414,6 +3575,9 @@ def main():
 
     with basket_tab:
         render_basketball_tab(prod_bets)
+
+    with kelly_tab:
+        render_kelly_calculator()
 
     with backtest_tab:
         render_backtest_analysis()
