@@ -1,0 +1,215 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Literal, Optional, Dict, Any
+import math
+
+RiskProfile = Literal["conservative", "balanced", "aggressive"]
+MarketType = Literal["single", "parlay", "sgp"]
+
+
+@dataclass
+class StakeConfig:
+    # Money-to-unit conversion
+    unit_value_sek: float = 100.0  # 1 unit = 100 SEK
+
+    # Fractional Kelly multipliers (risk profiles)
+    frac_kelly_map: Dict[RiskProfile, float] = None
+
+    # Caps (safety)
+    max_bankroll_fraction_per_bet: float = 0.02   # 2% of bankroll per bet
+    max_units_per_bet: float = 2.0                # cap in units
+    min_edge: float = 0.0                         # require positive edge
+
+    # Parlay/SGP special handling (safer than pure Kelly)
+    parlay_max_units: float = 0.50
+    parlay_min_edge: float = 0.01                 # require at least 1% edge
+    parlay_unit_scale: float = 0.35               # scales stake by edge & odds
+
+    # Optional: odds range
+    min_odds: float = 1.01
+    max_odds: float = 1000.0
+
+    def __post_init__(self):
+        if self.frac_kelly_map is None:
+            self.frac_kelly_map = {
+                "conservative": 0.10,
+                "balanced": 0.25,
+                "aggressive": 0.50,
+            }
+
+
+def clamp(x: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, x))
+
+
+def implied_prob_from_decimal_odds(odds: float) -> float:
+    if odds <= 1.0:
+        return 1.0
+    return 1.0 / odds
+
+
+def kelly_fraction(decimal_odds: float, p_win: float) -> float:
+    """
+    Kelly fraction for a single bet with decimal odds.
+    f* = (b*p - q)/b  where b = odds-1, q = 1-p
+    """
+    if decimal_odds <= 1.0:
+        return 0.0
+    b = decimal_odds - 1.0
+    p = clamp(p_win, 0.0, 1.0)
+    q = 1.0 - p
+    f = (b * p - q) / b
+    return max(0.0, f)
+
+
+def edge(decimal_odds: float, p_win: float) -> float:
+    """
+    Expected value per 1 kr staked:
+      EV = p*(odds) - 1
+    Example: odds=2.0, p=0.55 => EV = 0.10 (+10%)
+    """
+    p = clamp(p_win, 0.0, 1.0)
+    return (p * decimal_odds) - 1.0
+
+
+def money_to_units(amount_sek: float, cfg: StakeConfig) -> float:
+    return amount_sek / cfg.unit_value_sek
+
+
+def units_to_money(units: float, cfg: StakeConfig) -> float:
+    return units * cfg.unit_value_sek
+
+
+def parlay_stake_units(
+    bankroll_sek: float,
+    decimal_odds: float,
+    ev: float,
+    cfg: StakeConfig,
+) -> float:
+    """
+    Safe parlay/SGP sizing:
+    - Require small positive edge
+    - Scale by edge and tame by odds (higher odds => smaller)
+    """
+    if bankroll_sek <= 0:
+        return 0.0
+    if ev < cfg.parlay_min_edge:
+        return 0.0
+
+    odds_tame = 1.0 / math.sqrt(max(decimal_odds, 1.01))  # odds=9 => 1/3
+    raw_units = cfg.parlay_unit_scale * (ev * 100.0) * odds_tame / 10.0
+    raw_units = max(0.0, raw_units)
+
+    # Caps
+    cap_by_bankroll_sek = cfg.max_bankroll_fraction_per_bet * bankroll_sek
+    cap_by_bankroll_units = money_to_units(cap_by_bankroll_sek, cfg)
+
+    units = min(raw_units, cfg.parlay_max_units, cfg.max_units_per_bet, cap_by_bankroll_units)
+    return round(units, 2)
+
+
+def suggest_stake(
+    bankroll_sek: float,
+    odds_decimal: float,
+    model_prob: float,
+    market_type: MarketType = "single",
+    risk_profile: RiskProfile = "balanced",
+    cfg: Optional[StakeConfig] = None,
+) -> Dict[str, Any]:
+    """
+    Inputs:
+      bankroll_sek: bankroll in SEK
+      odds_decimal: decimal odds
+      model_prob: model probability (0..1)
+    Output:
+      stake_units: stake in units (1u = 100 SEK)
+      stake_amount_sek: stake in SEK
+    """
+    cfg = cfg or StakeConfig()
+
+    if bankroll_sek <= 0:
+        return {"ok": False, "reason": "bankroll_must_be_positive", "stake_units": 0.0, "stake_amount_sek": 0.0}
+
+    if not (cfg.min_odds <= odds_decimal <= cfg.max_odds):
+        return {
+            "ok": False,
+            "reason": "odds_out_of_range",
+            "stake_units": 0.0,
+            "stake_amount_sek": 0.0,
+            "odds": odds_decimal,
+        }
+
+    p = clamp(model_prob, 0.0, 1.0)
+    ev = edge(odds_decimal, p)
+    imp = implied_prob_from_decimal_odds(odds_decimal)
+
+    if ev <= cfg.min_edge:
+        return {
+            "ok": False,
+            "reason": "no_positive_edge",
+            "stake_units": 0.0,
+            "stake_amount_sek": 0.0,
+            "ev": round(ev, 4),
+            "model_prob": round(p, 4),
+            "implied_prob": round(imp, 4),
+        }
+
+    # Parlay/SGP
+    if market_type in ("parlay", "sgp"):
+        units = parlay_stake_units(bankroll_sek, odds_decimal, ev, cfg)
+        amount_sek = round(units_to_money(units, cfg), 2)
+        ok = units > 0
+        return {
+            "ok": ok,
+            "reason": "parlay_sizing" if ok else "parlay_edge_too_low",
+            "market_type": market_type,
+            "risk_profile": risk_profile,
+            "stake_units": units,
+            "stake_amount_sek": amount_sek,
+            "ev": round(ev, 4),
+            "model_prob": round(p, 4),
+            "implied_prob": round(imp, 4),
+            "unit_value_sek": cfg.unit_value_sek,
+            "caps": {
+                "max_units_per_bet": cfg.max_units_per_bet,
+                "max_bankroll_fraction_per_bet": cfg.max_bankroll_fraction_per_bet,
+                "parlay_max_units": cfg.parlay_max_units,
+            },
+        }
+
+    # Single bet Kelly
+    base_kelly = kelly_fraction(odds_decimal, p)
+    frac = cfg.frac_kelly_map.get(risk_profile, cfg.frac_kelly_map["balanced"])
+    f = base_kelly * frac  # fractional kelly
+
+    raw_amount_sek = bankroll_sek * f
+    raw_units = money_to_units(raw_amount_sek, cfg)
+
+    # Caps
+    cap_by_bankroll_sek = cfg.max_bankroll_fraction_per_bet * bankroll_sek
+    cap_by_bankroll_units = money_to_units(cap_by_bankroll_sek, cfg)
+
+    units = min(raw_units, cfg.max_units_per_bet, cap_by_bankroll_units)
+    units = round(max(0.0, units), 2)
+    amount_sek = round(units_to_money(units, cfg), 2)
+
+    ok = units > 0
+    return {
+        "ok": ok,
+        "reason": "kelly_sizing" if ok else "kelly_zero",
+        "market_type": market_type,
+        "risk_profile": risk_profile,
+        "stake_units": units,
+        "stake_amount_sek": amount_sek,
+        "kelly_full_fraction": round(base_kelly, 6),
+        "kelly_fractional_fraction": round(f, 6),
+        "ev": round(ev, 4),
+        "model_prob": round(p, 4),
+        "implied_prob": round(imp, 4),
+        "unit_value_sek": cfg.unit_value_sek,
+        "caps": {
+            "max_units_per_bet": cfg.max_units_per_bet,
+            "max_bankroll_fraction_per_bet": cfg.max_bankroll_fraction_per_bet,
+        },
+    }
