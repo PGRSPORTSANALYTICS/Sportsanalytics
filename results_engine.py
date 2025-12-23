@@ -118,7 +118,8 @@ class ResultsEngine:
             
             cursor.execute("""
                 UPDATE basketball_predictions 
-                SET status = 'void'
+                SET status = 'void',
+                    verified_at = NOW()
                 WHERE status = 'pending' 
                     AND commence_time::date < CURRENT_DATE - INTERVAL '3 days'
             """)
@@ -280,22 +281,68 @@ class ResultsEngine:
         return 'won' if all_won else None
     
     def _settle_single_match_sgp(self, cursor, bet: Dict) -> Optional[str]:
-        """Settle a single-match SGP by checking if match has result."""
+        """Settle a single-match SGP by checking settled legs in football_opportunities."""
         home_team = bet['home_team']
         away_team = bet['away_team']
         match_date = bet['match_date']
+        legs = bet.get('legs', '') or bet.get('parlay_description', '')
         
-        result = self._get_match_result(home_team, away_team, match_date, None)
-        if not result:
+        if not legs:
             return None
         
-        return 'lost'
+        cursor.execute("""
+            SELECT selection, outcome FROM football_opportunities 
+            WHERE home_team = %s AND away_team = %s 
+            AND DATE(match_date) = %s
+            AND outcome IN ('won', 'lost', 'void')
+        """, (home_team, away_team, match_date))
+        
+        settled_legs = {row['selection'].lower(): row['outcome'] for row in cursor.fetchall()}
+        
+        if not settled_legs:
+            return None
+        
+        all_won = True
+        any_lost = False
+        any_void = False
+        
+        for leg in legs.split(' | '):
+            leg_clean = leg.strip().lower()
+            
+            matched = False
+            for sel, outcome in settled_legs.items():
+                if leg_clean in sel or sel in leg_clean:
+                    matched = True
+                    if outcome == 'lost':
+                        any_lost = True
+                    elif outcome == 'void':
+                        any_void = True
+                    elif outcome != 'won':
+                        all_won = False
+                    break
+            
+            if not matched:
+                all_won = False
+        
+        if any_lost:
+            return 'lost'
+        if any_void:
+            return 'void'
+        if all_won:
+            return 'won'
+        
+        return None
     
     def _get_match_result(self, home_team: str, away_team: str, match_date: str, match_id: Optional[int]) -> Optional[Dict]:
         """Get match result with multi-source fallback."""
         cache_key = f"{home_team}_{away_team}_{match_date}"
         if cache_key in self._match_cache:
             return self._match_cache[cache_key]
+        
+        result = self._check_database_for_result(home_team, away_team, match_date)
+        if result:
+            self._match_cache[cache_key] = result
+            return result
         
         if self.api_football_key:
             result = self._get_api_football_result(home_team, away_team, match_date, match_id)
@@ -304,6 +351,54 @@ class ResultsEngine:
                 return result
         
         return None
+    
+    def _check_database_for_result(self, home_team: str, away_team: str, match_date: str) -> Optional[Dict]:
+        """Check if we already have settled results in database for this match."""
+        try:
+            conn = psycopg2.connect(self.database_url)
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            
+            cursor.execute("""
+                SELECT home_corners, away_corners, home_cards, away_cards, actual_score
+                FROM football_opportunities 
+                WHERE home_team = %s AND away_team = %s 
+                AND DATE(match_date) = %s
+                AND outcome IN ('won', 'lost')
+                AND (home_corners IS NOT NULL OR actual_score IS NOT NULL)
+                LIMIT 1
+            """, (home_team, away_team, match_date[:10] if match_date else None))
+            
+            row = cursor.fetchone()
+            cursor.close()
+            conn.close()
+            
+            if row:
+                result = {}
+                if row.get('actual_score'):
+                    score_parts = row['actual_score'].split('-')
+                    if len(score_parts) == 2:
+                        result['home_goals'] = int(score_parts[0])
+                        result['away_goals'] = int(score_parts[1])
+                
+                if row.get('home_corners') is not None:
+                    result['home_corners'] = row['home_corners']
+                    result['away_corners'] = row.get('away_corners', 0)
+                    result['total_corners'] = result['home_corners'] + result['away_corners']
+                
+                if row.get('home_cards') is not None:
+                    result['home_cards'] = row['home_cards']
+                    result['away_cards'] = row.get('away_cards', 0)
+                    result['total_cards'] = result['home_cards'] + result['away_cards']
+                
+                if result:
+                    result['source'] = 'database'
+                    return result
+            
+            return None
+            
+        except Exception as e:
+            logger.warning(f"Database result check error: {e}")
+            return None
     
     def _get_api_football_result(self, home_team: str, away_team: str, match_date: str, match_id: Optional[int]) -> Optional[Dict]:
         """Get result from API-Football."""
