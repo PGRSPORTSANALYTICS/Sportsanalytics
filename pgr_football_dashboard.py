@@ -3350,8 +3350,8 @@ def render_kelly_calculator():
     """Render the Kelly Criterion stake calculator."""
     st.markdown("""
     <div style="text-align:center;padding:20px 0;">
-        <h2 style="color:#10B981;margin-bottom:5px;">Stake Calculator</h2>
-        <p style="color:#9CA3AF;font-size:14px;">Kelly Criterion-based bankroll management</p>
+        <h2 style="color:#10B981;margin-bottom:5px;">Smart Stake Assistant</h2>
+        <p style="color:#9CA3AF;font-size:14px;">Kelly-based bankroll management</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -3539,7 +3539,7 @@ def main():
             "Parlays",
             "ML Parlay",
             "College Basketball",
-            "Stake Calculator",
+            "Smart Stake",
             "Backtests",
         ]
     )
