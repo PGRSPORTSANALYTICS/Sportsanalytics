@@ -32,6 +32,7 @@ from pydantic import BaseModel
 
 from db_helper import db_helper
 from auth_discord import router as discord_auth_router
+from kelly_api import router as kelly_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -59,6 +60,9 @@ app.add_middleware(
 
 # Include Discord OAuth router
 app.include_router(discord_auth_router)
+
+# Include Kelly staking router
+app.include_router(kelly_router)
 
 # =============================================================================
 # Response Models
