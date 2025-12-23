@@ -2552,7 +2552,7 @@ def render_parlays_tab():
     df["match_date"] = pd.to_datetime(df["match_date"], errors="coerce")
     today_mask = df["match_date"].dt.date >= today
     
-    active_bets = df[~settled_mask & today_mask].copy()
+    active_bets = df[~settled_mask & today_mask].drop_duplicates(subset=['home_team', 'away_team', 'parlay_description']).copy()
     settled_bets = df[settled_mask].copy()
     
     # Past unsettled parlays (matches already played but not yet verified)
@@ -2658,20 +2658,15 @@ def render_parlays_tab():
             else:
                 ev_bg, ev_border, ev_color, ev_glow = "rgba(148,163,184,0.10)", "rgba(148,163,184,0.5)", "#94A3B8", "none"
 
-            leg_cols = ["parlay_description", "legs", "leg_summary", "bet_legs", "markets", "selections", "description"]
-            legs_parts = []
-            for col in leg_cols:
-                val = row.get(col)
-                if val is None:
-                    continue
-                val_str = str(val).strip()
-                if not val_str or val_str.lower() == 'none':
-                    continue
-                legs_parts.append(val_str)
-                break
-
-            legs_text = legs_parts[0] if legs_parts else ""
-            legs_list = [p.strip() for p in legs_text.split(",") if p.strip()]
+            parlay_desc = str(row.get("parlay_description", "") or "")
+            
+            if "|" in parlay_desc:
+                legs_list = [p.strip() for p in parlay_desc.split("|") if p.strip()]
+            elif "+" in parlay_desc:
+                legs_list = [p.strip() for p in parlay_desc.split("+") if p.strip()]
+            else:
+                legs_list = [parlay_desc] if parlay_desc else []
+            
             legs_html = "".join([f"<div style='margin:3px 0;font-size:13px;color:#CBD5E1;'>• {p}</div>" for p in legs_list]) if legs_list else ""
 
             match_str = format_kickoff(row.get("match_date"))
@@ -2697,7 +2692,6 @@ def render_parlays_tab():
 
             card_html = f'<div style="padding:20px;margin:16px 0;border-radius:16px;background:linear-gradient(145deg, rgba(15,23,42,0.98), rgba(30,41,59,0.95));border:1px solid rgba(0,255,166,0.35);box-shadow:0 8px 32px rgba(0,255,166,0.2), 0 4px 16px rgba(0,0,0,0.4);"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;"><div><div style="font-size:12px;color:#6B7280;margin-bottom:4px;">{match_str}</div><div style="font-size:17px;font-weight:600;color:#E5E7EB;">{home_team} vs {away_team}</div></div><div style="padding:6px 12px;border-radius:8px;background:{ev_bg};border:1px solid {ev_border};box-shadow:{ev_glow};"><div style="font-size:10px;color:{ev_color};font-weight:700;letter-spacing:0.1em;">EV</div><div style="font-size:18px;font-weight:800;color:{ev_color};">{ev:+.1f}%</div></div></div><div style="margin:12px 0;"><span style="font-size:10px;padding:3px 10px;border-radius:6px;background:rgba(168,85,247,0.15);color:#A855F7;font-weight:600;letter-spacing:0.04em;">{num_legs}-LEG PARLAY</span></div><div style="margin:8px 0;">{legs_html}</div><div style="display:flex;gap:8px;margin-top:12px;"><div style="padding:8px 14px;border-radius:10px;background:linear-gradient(135deg, rgba(0,255,166,0.25), rgba(34,197,94,0.15));border:2px solid rgba(0,255,166,0.7);box-shadow:0 0 16px rgba(0,255,166,0.3);"><div style="font-size:9px;color:#00FFA6;font-weight:700;">COMBINED</div><div style="font-size:20px;font-weight:800;color:#00FFA6;">{odds_val:.2f}</div></div></div>{mm_why_section}</div>'
             st.markdown(card_html, unsafe_allow_html=True)
-            st.code(f"{home_team} vs {away_team} | {num_legs}-leg @ {odds_val:.2f} | 1 unit", language="text")
 
     st.markdown("---")
     st.markdown("### Parlay history")
