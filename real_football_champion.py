@@ -3837,6 +3837,28 @@ class RealFootballChampion:
             print(f"❌ EXACT SCORE SAVE ERROR: {e}")
             return False
 
+def get_pending_match_ids() -> set:
+    """Get match IDs that already have pending picks to avoid duplicates/contradictions."""
+    try:
+        rows = db_helper.execute('''
+            SELECT DISTINCT home_team, away_team 
+            FROM football_opportunities 
+            WHERE LOWER(status) = 'pending'
+        ''', fetch='all')
+        match_ids = set()
+        if rows:
+            for row in rows:
+                home = row.get('home_team', '') or ''
+                away = row.get('away_team', '') or ''
+                if home and away:
+                    match_ids.add(f"{home}_vs_{away}")
+        print(f"📋 Found {len(match_ids)} pending matches to avoid duplicates")
+        return match_ids
+    except Exception as e:
+        print(f"⚠️ Could not fetch pending match IDs: {e}")
+        return set()
+
+
 def run_single_cycle():
     """Run a single prediction cycle - VALUE SINGLES + ALL MARKETS"""
     try:
@@ -3846,10 +3868,13 @@ def run_single_cycle():
         print("📊 Markets: 1X2, O/U, BTTS, Corners, Cards, Double Chance")
         print("=" * 60)
         
+        # Get existing pending matches to avoid contradictory picks
+        pending_matches = get_pending_match_ids()
+        
         # 1. Core Value Singles (1X2, O/U, BTTS, DC)
         try:
             value_engine = ValueSinglesEngine(champion, ev_threshold=0.05, min_confidence=55)
-            value_singles = value_engine.generate_value_singles(max_picks=10)
+            value_singles = value_engine.generate_value_singles(avoid_match_ids=pending_matches, max_picks=10)
             if value_singles:
                 saved = value_engine.save_value_singles(value_singles)
                 print(f"✅ Saved {saved} VALUE SINGLES (1X2/O/U/BTTS)")
@@ -4128,8 +4153,10 @@ def main():
         while True:
             try:
                 print("\n💰 VALUE SINGLES ENGINE - Analyzing markets...")
+                # Get existing pending matches to avoid contradictory picks
+                pending_matches = get_pending_match_ids()
                 value_engine = ValueSinglesEngine(champion, ev_threshold=0.05, min_confidence=55)
-                value_singles = value_engine.generate_value_singles(max_picks=10)
+                value_singles = value_engine.generate_value_singles(avoid_match_ids=pending_matches, max_picks=10)
                 if value_singles:
                     saved = value_engine.save_value_singles(value_singles)
                     print(f"✅ Saved {saved} VALUE SINGLES predictions")
