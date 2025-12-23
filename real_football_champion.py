@@ -3947,6 +3947,15 @@ def _run_corners_cards_cycle(champion):
             print(f"   ✅ Saved {saved} CARDS predictions")
     except Exception as e:
         print(f"   ⚠️ Cards engine error: {e}")
+    
+    # Send props picks to Discord
+    try:
+        from discord_props_webhook import send_new_props_picks
+        result = send_new_props_picks()
+        if result.get('sent', 0) > 0:
+            print(f"   📤 Sent {result['sent']} props picks to Discord")
+    except Exception as e:
+        print(f"   ⚠️ Discord props webhook error: {e}")
 
 
 def _generate_corners_odds() -> Dict:
