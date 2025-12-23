@@ -228,8 +228,11 @@ def create_bet_embed(bet, product_type=None) -> dict:
     ev_bullets = "🔥🔥🔥" if ev_val >= 8 else "🔥🔥" if ev_val >= 5 else "🔥" if ev_val >= 3 else ""
     
     if legs and len(legs) > 0:
-        legs_text = "\n".join([f"• {l.get('selection', l.get('home_team', ''))} @ {l.get('odds', 0):.2f}" for l in legs[:5]])
-        description = f"**{home_team}** vs **{away_team}**\n\n{legs_text}"
+        if 'ML_PARLAY' in (market or product_type or '').upper():
+            legs_text = "\n".join([f"• {l.get('selection', '')} @ {l.get('odds', 0):.2f}" for l in legs[:5]])
+            description = legs_text
+        else:
+            description = f"**{home_team}** vs **{away_team}**"
     else:
         description = f"**{home_team}** vs **{away_team}**"
     
