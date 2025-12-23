@@ -194,9 +194,10 @@ def create_bet_embed(bet, product_type=None) -> dict:
     elif 'SHOT' in market_upper:
         emoji = "🎯"
         color = 0xe74c3c
-    elif 'PARLAY' in market_upper or 'SGP' in market_upper or legs:
-        emoji = "🎲"
+    elif 'PARLAY' in market_upper or legs:
+        emoji = "🎟️"
         color = 0x9b59b6
+        market_upper = "PARLAY"
     elif 'BASKET' in market_upper:
         emoji = "🏀"
         color = 0xe67e22
