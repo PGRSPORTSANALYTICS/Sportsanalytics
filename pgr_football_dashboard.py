@@ -851,7 +851,7 @@ def get_free_predictions() -> list:
     try:
         with engine.connect() as conn:
             result = conn.execute(query, {
-                'min_ev': FREE_PICKS_CONFIG['min_ev'] * 100,  # DB stores as percentage
+                'min_ev': FREE_PICKS_CONFIG['min_ev'] * 100,  # Config is 0.06 -> 6.0 for DB
                 'min_odds': FREE_PICKS_CONFIG['min_odds'],
                 'max_odds': FREE_PICKS_CONFIG['max_odds'],
                 'max_picks': FREE_PICKS_CONFIG['max_picks']
