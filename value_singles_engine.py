@@ -651,7 +651,7 @@ class ValueSinglesEngine:
                     "match_id": match_id,
                     "home_team": match.get("home_team"),
                     "away_team": match.get("away_team"),
-                    "league": match.get("league"),
+                    "league": match.get("league_name") or match.get("league") or match.get("sport_title") or "Unknown League",
                     "market": "Value Single",
                     "selection": selection_text,
                     "odds": float(odds),
