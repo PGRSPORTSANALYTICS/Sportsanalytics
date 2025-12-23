@@ -813,6 +813,198 @@ def product_filter(df: pd.DataFrame, product_codes: List[str]) -> pd.DataFrame:
     return df[df["product"].isin(product_codes)].copy()
 
 
+# ------------- FREE PREDICTIONS (TEASER) ------------- #
+
+FREE_PICKS_CONFIG = {
+    'max_picks': 3,
+    'min_ev': 0.06,  # 6% minimum EV
+    'preferred_ev': 0.08,  # 8%+ preferred
+    'min_odds': 1.80,
+    'max_odds': 3.50,
+    'product_codes': ['VALUE_SINGLE', 'VALUE_SINGLES', 'FOOTBALL_SINGLE']
+}
+
+def get_free_predictions() -> list:
+    """
+    Select 1-3 free predictions for teaser display.
+    Criteria: EV >= 6%, odds 1.80-3.50, sorted by EV descending.
+    """
+    db_url = get_db_url()
+    engine = create_engine(db_url)
+    
+    query = text("""
+        SELECT 
+            id, home_team, away_team, selection, market, odds, 
+            edge_percentage as ev, confidence, league, match_date,
+            odds_by_bookmaker, best_odds_value, best_odds_bookmaker,
+            product
+        FROM football_opportunities
+        WHERE LOWER(status) = 'pending'
+          AND edge_percentage >= :min_ev
+          AND odds >= :min_odds
+          AND odds <= :max_odds
+          AND product IN ('VALUE_SINGLE', 'VALUE_SINGLES', 'FOOTBALL_SINGLE')
+        ORDER BY edge_percentage DESC
+        LIMIT :max_picks
+    """)
+    
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(query, {
+                'min_ev': FREE_PICKS_CONFIG['min_ev'] * 100,  # DB stores as percentage
+                'min_odds': FREE_PICKS_CONFIG['min_odds'],
+                'max_odds': FREE_PICKS_CONFIG['max_odds'],
+                'max_picks': FREE_PICKS_CONFIG['max_picks']
+            })
+            rows = result.fetchall()
+            columns = result.keys()
+            picks = [dict(zip(columns, row)) for row in rows]
+            return picks
+    except Exception as e:
+        print(f"Error fetching free predictions: {e}")
+        return []
+
+
+def generate_why_bullets(pick: dict) -> list:
+    """Generate 2 'Why this pick' bullets based on the pick data."""
+    bullets = []
+    
+    ev = float(pick.get('ev', 0) or 0)
+    odds = float(pick.get('odds', 0) or 0)
+    confidence = float(pick.get('confidence', 0) or 0)
+    best_odds = float(pick.get('best_odds_value', odds) or odds)
+    
+    # Bullet 1: Model probability vs market implied
+    if odds > 0:
+        implied_prob = 1 / odds * 100
+        model_prob = implied_prob + (ev / 100 * implied_prob) if ev > 0 else implied_prob
+        bullets.append(f"Model probability {model_prob:.0f}% vs market implied {implied_prob:.0f}%")
+    
+    # Bullet 2: Best odds above fair price OR confidence level
+    if best_odds > odds:
+        edge = ((best_odds / odds) - 1) * 100
+        bullets.append(f"Best available odds {edge:.1f}% above average market price")
+    elif confidence >= 70:
+        bullets.append(f"High confidence pick backed by strong historical patterns")
+    elif ev >= 8:
+        bullets.append(f"Strong edge detected with +{ev:.1f}% expected value")
+    else:
+        bullets.append(f"Value opportunity identified through statistical modeling")
+    
+    return bullets[:2]
+
+
+def render_free_predictions_tab():
+    """Render the Free Predictions teaser tab."""
+    st.markdown("## Free Predictions")
+    st.caption("A sample of our AI-powered predictions. Quality preview of what the full system delivers.")
+    
+    # Legal disclaimer
+    st.markdown("""
+    <div style="padding:10px 14px;border-radius:8px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);margin-bottom:20px;">
+        <span style="color:#FBBF24;font-size:12px;">For informational purposes only. Not betting advice. No guarantees.</span>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    picks = get_free_predictions()
+    
+    if not picks:
+        st.info("No free predictions available right now. Check back later for quality picks meeting our strict EV criteria.")
+        return
+    
+    st.markdown(f"### Today's Free Picks ({len(picks)})")
+    
+    for pick in picks:
+        ev = float(pick.get('ev', 0) or 0)
+        odds = float(pick.get('odds', 0) or 0)
+        best_odds = float(pick.get('best_odds_value', odds) or odds)
+        home_team = pick.get('home_team', '')
+        away_team = pick.get('away_team', '')
+        selection = pick.get('selection', '')
+        league = pick.get('league', '')
+        market = pick.get('market', 'Value Single')
+        
+        # EV badge color
+        if ev >= 10:
+            ev_color = "#10B981"  # Green for strong
+        elif ev >= 6:
+            ev_color = "#F59E0B"  # Amber for solid
+        else:
+            ev_color = "#6B7280"  # Gray
+        
+        # Parse odds by bookmaker for top 2
+        odds_by_bookmaker = pick.get('odds_by_bookmaker', {})
+        if isinstance(odds_by_bookmaker, str):
+            try:
+                import json
+                odds_by_bookmaker = json.loads(odds_by_bookmaker) if odds_by_bookmaker else {}
+            except:
+                odds_by_bookmaker = {}
+        
+        # Get best and 2nd best odds
+        bookmaker_html = ""
+        if odds_by_bookmaker and isinstance(odds_by_bookmaker, dict):
+            sorted_books = sorted(odds_by_bookmaker.items(), key=lambda x: float(x[1]) if x[1] else 0, reverse=True)
+            best_book = sorted_books[0] if len(sorted_books) > 0 else None
+            second_best = sorted_books[1] if len(sorted_books) > 1 else None
+            
+            bookmaker_html = '<div style="display:flex;gap:8px;margin-top:12px;">'
+            if best_book:
+                bookmaker_html += f'''
+                <div style="padding:8px 14px;border-radius:8px;background:linear-gradient(135deg, rgba(34,197,94,0.3), rgba(16,185,129,0.2));border:1px solid rgba(34,197,94,0.6);">
+                    <div style="font-size:9px;color:#22C55E;font-weight:600;">BEST</div>
+                    <div style="font-size:11px;color:#E5E7EB;">{best_book[0]}</div>
+                    <div style="font-size:18px;font-weight:700;color:#22C55E;">{float(best_book[1]):.2f}</div>
+                </div>'''
+            if second_best:
+                bookmaker_html += f'''
+                <div style="padding:8px 14px;border-radius:8px;background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.4);">
+                    <div style="font-size:9px;color:#60A5FA;font-weight:600;">2ND</div>
+                    <div style="font-size:11px;color:#E5E7EB;">{second_best[0]}</div>
+                    <div style="font-size:18px;font-weight:700;color:#60A5FA;">{float(second_best[1]):.2f}</div>
+                </div>'''
+            bookmaker_html += '</div>'
+        elif odds > 0:
+            bookmaker_html = f'''
+            <div style="display:flex;gap:8px;margin-top:12px;">
+                <div style="padding:8px 14px;border-radius:8px;background:linear-gradient(135deg, rgba(34,197,94,0.3), rgba(16,185,129,0.2));border:1px solid rgba(34,197,94,0.6);">
+                    <div style="font-size:9px;color:#22C55E;font-weight:600;">ODDS</div>
+                    <div style="font-size:18px;font-weight:700;color:#22C55E;">{odds:.2f}</div>
+                </div>
+            </div>'''
+        
+        # Generate why bullets
+        bullets = generate_why_bullets(pick)
+        bullets_html = ""
+        for bullet in bullets:
+            bullets_html += f'<div style="font-size:12px;color:#9CA3AF;margin-top:4px;">• {bullet}</div>'
+        
+        # Main card
+        st.markdown(f"""
+        <div style="padding:18px;margin:12px 0;border-radius:14px;background:radial-gradient(circle at top left, rgba(16,185,129,0.12), rgba(15,23,42,0.95));border:1px solid rgba(16,185,129,0.35);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                <div style="font-size:12px;color:#9CA3AF;">{league}</div>
+                <div style="font-size:12px;padding:4px 10px;border-radius:999px;background:{ev_color}22;color:{ev_color};font-weight:600;">EV +{ev:.1f}%</div>
+            </div>
+            <div style="font-size:17px;color:#E5E7EB;font-weight:600;margin-bottom:6px;">{home_team} vs {away_team}</div>
+            <div style="font-size:15px;color:#6EE7B7;margin-bottom:8px;">{selection}</div>
+            {bookmaker_html}
+            <div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(148,163,184,0.15);">
+                <div style="font-size:11px;color:#6B7280;text-transform:uppercase;margin-bottom:6px;">Why this pick</div>
+                {bullets_html}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Positioning copy
+    st.markdown("""
+    <div style="margin-top:24px;padding:16px;border-radius:10px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);text-align:center;">
+        <div style="font-size:13px;color:#A5B4FC;">This is a sample from PGR Sports Analytics.</div>
+        <div style="font-size:12px;color:#9CA3AF;margin-top:4px;">Full access includes more picks, advanced tools, and market comparison.</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
 def as_fixture(r):
     ht = str(r.get("home_team", "")).strip()
     at = str(r.get("away_team", "")).strip()
@@ -3176,8 +3368,9 @@ def main():
     prod_bets, backtest_bets = split_bets_by_mode(all_bets)
 
     # Tabs for different products
-    daily_card_tab, overview_tab, singles_tab, odds_compare_tab, props_tab, parlays_tab, ml_parlay_tab, basket_tab, backtest_tab = st.tabs(
+    free_tab, daily_card_tab, overview_tab, singles_tab, odds_compare_tab, props_tab, parlays_tab, ml_parlay_tab, basket_tab, backtest_tab = st.tabs(
         [
+            "Free Picks",
             "Daily Card",
             "Overview",
             "Value Singles",
@@ -3189,6 +3382,9 @@ def main():
             "Backtests",
         ]
     )
+
+    with free_tab:
+        render_free_predictions_tab()
 
     with daily_card_tab:
         render_daily_card_tab()

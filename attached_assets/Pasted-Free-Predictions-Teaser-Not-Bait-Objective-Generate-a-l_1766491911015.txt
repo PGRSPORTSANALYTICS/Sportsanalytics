@@ -1,0 +1,69 @@
+Free Predictions (Teaser, Not Bait)
+Objective:
+Generate a limited set of free predictions that demonstrate real value and edge, while clearly differentiating from paid access in depth, volume and tooling.
+1. Purpose of Free Predictions
+Free predictions are not marketing hype
+They are a sample of system quality
+Users should think:
+“If this is free… what does paid look like?”
+2. Quantity & Frequency
+Maximum:
+1–3 free picks per day
+Never more than:
+10–15% of total daily picks
+This ensures:
+Value without saturation
+Curiosity without cannibalization
+3. Quality Requirements (IMPORTANT)
+Free predictions must:
+Have positive and solid EV
+Be selected from:
+Strong or High EV tier only
+Never be “leftovers” or low-quality picks
+EV Guidelines (example):
+Minimum EV: +6%
+Preferably +8%+
+Odds range:
+Typically 1.80 – 3.50
+Avoid extreme longshots for free tier
+4. What Free Predictions SHOW
+Free users should see:
+Match & market
+Odds (BEST + 2ND)
+EV badge (color-coded)
+Short expandable:
+“Why this pick” (max 2 bullets)
+Example bullets:
+📊 Model probability vs market implied
+💰 Best odds above fair price
+This shows analysis exists, without giving everything away.
+5. What Free Predictions DO NOT SHOW
+Free users should NOT see:
+Full odds shopping (all bookmakers)
+Kelly / bankroll tools
+Advanced filters
+Historical performance per market
+CLV data
+Those remain Premium / Premium Pro only.
+6. Positioning Copy (Important)
+Each free pick should include subtle copy such as:
+“This is a sample prediction from PGR Sports Analytics.
+Full access includes more picks, advanced tools and market comparison.”
+No hype. No CTA spam.
+7. Legal & Ethical Safeguards
+Clearly mark:
+“Informational purposes only”
+“No betting advice”
+Free predictions follow the same disclaimer as paid picks.
+No guarantees, no suggested stake.
+8. Consistency Rule
+Free predictions must follow the exact same model logic as paid picks.
+No manual selection.
+No cherry-picking after results.
+This protects:
+credibility
+trust
+long-term brand value
+9. Key Principle
+Free = quality preview
+Paid = control, depth, volume
