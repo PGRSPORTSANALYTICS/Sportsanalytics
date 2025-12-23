@@ -4,8 +4,8 @@ from datetime import datetime
 
 PRODUCT_WEBHOOKS = {
     "EXACT_SCORE": os.getenv("WEBHOOK_Final_score"),
-    "SGP": os.getenv("WEBHOOK_SGP"),
-    "ML_PARLAY": os.getenv("WEBHOOK_ML_PARLAYS"),
+    "ML_PARLAY": os.getenv("WEBHOOK_PARLAYS"),
+    "PARLAY": os.getenv("WEBHOOK_PARLAYS"),
     "VALUE_SINGLE": os.getenv("WEBHOOK_Value_singles"),
     "BASKETBALL_SINGLE": os.getenv("WEB_HOOK_College_basket"),
     "BASKETBALL": os.getenv("WEB_HOOK_College_basket"),
