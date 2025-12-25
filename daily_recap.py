@@ -1,24 +1,57 @@
 #!/usr/bin/env python3
 """
-Daily Recap - Sends a summary of all day's results at 22:30
-Covers: Exact Score, Value Singles, SGP, and College Basketball
+Daily & Weekly Recap - Discord ROI Notifications
+Daily: Every night at 22:30 - summarizes the day
+Weekly: Every Sunday at 22:30 - summarizes Monday to Sunday
 """
 
 import os
 import logging
 import requests
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from db_connection import DatabaseConnection
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+DISCORD_WEBHOOK_URL = os.getenv('DISCORD_WEBHOOK_URL')
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '-1003269011722')
 
 
+def send_discord_embed(title: str, description: str, color: int, fields: list = None):
+    """Send a rich embed to Discord"""
+    if not DISCORD_WEBHOOK_URL:
+        logger.warning("No DISCORD_WEBHOOK_URL set")
+        return False
+    
+    try:
+        embed = {
+            "title": title,
+            "description": description,
+            "color": color,
+            "timestamp": datetime.utcnow().isoformat(),
+            "footer": {"text": "PGR Sports Analytics"}
+        }
+        
+        if fields:
+            embed["fields"] = fields
+        
+        payload = {"embeds": [embed]}
+        response = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=10)
+        response.raise_for_status()
+        logger.info("✅ Discord embed sent successfully")
+        return True
+    except Exception as e:
+        logger.error(f"❌ Discord send error: {e}")
+        return False
+
+
 def send_telegram_message(message: str):
     """Send message to Telegram channel via HTTP API"""
+    if not TELEGRAM_BOT_TOKEN:
+        logger.warning("No TELEGRAM_BOT_TOKEN set")
+        return False
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         payload = {
@@ -35,205 +68,260 @@ def send_telegram_message(message: str):
         return False
 
 
-def get_todays_results():
-    """Get all results for today from all products"""
-    today = date.today().isoformat()
+def get_results_for_date_range(start_date: date, end_date: date):
+    """Get all results for a date range from all products"""
     
     db = DatabaseConnection()
     results = {
-        'exact_score': {'won': 0, 'lost': 0, 'profit': 0, 'details': []},
-        'value_singles': {'won': 0, 'lost': 0, 'profit': 0, 'details': []},
-        'sgp': {'won': 0, 'lost': 0, 'profit': 0, 'details': []},
-        'basketball': {'won': 0, 'lost': 0, 'profit': 0, 'details': []}
+        'value_singles': {'won': 0, 'lost': 0, 'profit': 0},
+        'corners_cards': {'won': 0, 'lost': 0, 'profit': 0},
+        'parlays': {'won': 0, 'lost': 0, 'profit': 0},
+        'basketball': {'won': 0, 'lost': 0, 'profit': 0}
     }
     
     with db.get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT home_team, away_team, selection, odds, stake, outcome, actual_score, market
+                SELECT selection, odds, outcome, market
                 FROM football_opportunities
-                WHERE match_date::date = %s
-                AND status = 'settled'
-                ORDER BY updated_at DESC
-            """, (today,))
+                WHERE match_date::date BETWEEN %s AND %s
+                AND outcome IN ('won', 'lost', 'WON', 'LOST')
+            """, (start_date, end_date))
             rows = cur.fetchall()
             
             for row in rows:
-                home, away, selection, odds, stake, outcome, score, market = row
-                is_win = outcome in ('won', 'win', 'WON', 'WIN')
-                profit = (odds - 1) * stake if is_win else -stake
+                selection, odds, outcome, market = row
+                is_win = outcome.lower() == 'won'
+                profit_units = (float(odds) - 1) if is_win else -1
                 
-                is_exact = selection and 'Exact Score' in str(selection)
-                if is_exact or (market and 'exact' in str(market).lower()):
-                    cat = 'exact_score'
-                else:
-                    cat = 'value_singles'
+                is_corners_cards = any(x in str(selection).lower() for x in ['corner', 'card'])
+                cat = 'corners_cards' if is_corners_cards else 'value_singles'
                 
                 if is_win:
                     results[cat]['won'] += 1
                 else:
                     results[cat]['lost'] += 1
-                results[cat]['profit'] += profit
-                
-                if is_win:
-                    profit_units = odds - 1
-                    results[cat]['details'].append(
-                        f"✅ {home} vs {away} | {selection} @ {odds:.2f} | +{profit_units:.2f}u"
-                    )
+                results[cat]['profit'] += profit_units
             
             cur.execute("""
-                SELECT home_team, away_team, LEFT(parlay_description, 30), bookmaker_odds, stake, result
-                FROM sgp_predictions
-                WHERE match_date::date = %s
-                AND result IS NOT NULL
-                ORDER BY settled_timestamp DESC
-            """, (today,))
+                SELECT total_odds, result
+                FROM ml_parlay_predictions
+                WHERE match_date::date BETWEEN %s AND %s
+                AND result IN ('WON', 'LOST')
+            """, (start_date, end_date))
             rows = cur.fetchall()
             
             for row in rows:
-                home, away, parlay, odds, stake, result = row
-                is_win = result in ('WON', 'WIN')
-                profit = (odds - 1) * stake if is_win else -stake
+                odds, result = row
+                is_win = result == 'WON'
+                profit_units = (float(odds) - 1) if is_win else -1
                 
                 if is_win:
-                    results['sgp']['won'] += 1
+                    results['parlays']['won'] += 1
                 else:
-                    results['sgp']['lost'] += 1
-                results['sgp']['profit'] += profit
-                
-                if is_win:
-                    profit_units = odds - 1
-                    results['sgp']['details'].append(
-                        f"✅ {home} vs {away} | {parlay}... @ {odds:.2f} | +{profit_units:.2f}u"
-                    )
+                    results['parlays']['lost'] += 1
+                results['parlays']['profit'] += profit_units
             
             cur.execute("""
-                SELECT match, selection, odds, status
+                SELECT odds, status
                 FROM basketball_predictions
-                WHERE commence_time::date = %s
+                WHERE commence_time::date BETWEEN %s AND %s
                 AND status IN ('won', 'lost', 'WON', 'LOST')
-                ORDER BY verified_at DESC
-            """, (today,))
+            """, (start_date, end_date))
             rows = cur.fetchall()
             
             for row in rows:
-                match, selection, odds, status = row
-                is_win = status in ('won', 'WON')
-                profit_units = (odds - 1) if is_win else -1
+                odds, status = row
+                is_win = status.lower() == 'won'
+                profit_units = (float(odds) - 1) if is_win else -1
                 
                 if is_win:
                     results['basketball']['won'] += 1
                 else:
                     results['basketball']['lost'] += 1
                 results['basketball']['profit'] += profit_units
-                
-                if is_win:
-                    results['basketball']['details'].append(
-                        f"✅ {match} | {selection} @ {odds:.2f} | +{profit_units:.2f}u"
-                    )
     
     return results
 
 
-def format_recap_message(results: dict) -> str:
-    """Format the daily recap message"""
-    today = datetime.now().strftime("%A, %B %d")
+def send_daily_discord_recap():
+    """Send daily recap to Discord at 22:30"""
+    logger.info("📊 Generating daily Discord recap...")
+    
+    today = date.today()
+    results = get_results_for_date_range(today, today)
     
     total_won = sum(r['won'] for r in results.values())
     total_lost = sum(r['lost'] for r in results.values())
     total_profit = sum(r['profit'] for r in results.values())
+    total_bets = total_won + total_lost
     
-    def to_units(profit_val, count):
-        """Convert profit to units - 1 bet = 1 unit staked"""
-        if count == 0:
-            return 0
-        return profit_val / 173 if isinstance(profit_val, (int, float)) and profit_val != 0 else profit_val
+    if total_bets == 0:
+        logger.info("No settled bets today, skipping daily recap")
+        return
     
-    es_units = to_units(results['exact_score']['profit'], results['exact_score']['won'] + results['exact_score']['lost'])
-    vs_units = to_units(results['value_singles']['profit'], results['value_singles']['won'] + results['value_singles']['lost'])
-    sgp_units = to_units(results['sgp']['profit'], results['sgp']['won'] + results['sgp']['lost'])
-    bb_units = results['basketball']['profit']  # Already in units
-    total_units = es_units + vs_units + sgp_units + bb_units
+    hit_rate = (total_won / total_bets * 100) if total_bets > 0 else 0
     
-    msg = f"""
-<b>📊 DAILY RECAP - {today}</b>
-
-━━━━━━━━━━━━━━━━━━━━━━
-
-<b>⚽ EXACT SCORE</b>
-Won: {results['exact_score']['won']} | Lost: {results['exact_score']['lost']}
-Profit: <b>{es_units:+.2f} units</b>
+    if total_profit >= 5:
+        color = 0x10B981  # Green
+    elif total_profit >= 0:
+        color = 0xF59E0B  # Orange
+    else:
+        color = 0xEF4444  # Red
+    
+    profit_emoji = "🟢" if total_profit >= 0 else "🔴"
+    today_str = today.strftime("%A, %B %d")
+    
+    description = f"""
+**Record:** {total_won}-{total_lost} ({hit_rate:.1f}%)
+**Net Profit:** {profit_emoji} {total_profit:+.2f} units
 """
     
-    if results['exact_score']['details']:
-        msg += "\n" + "\n".join(results['exact_score']['details'][:3])
+    fields = []
     
-    msg += f"""
+    if results['value_singles']['won'] + results['value_singles']['lost'] > 0:
+        vs = results['value_singles']
+        fields.append({
+            "name": "⚽ Value Singles",
+            "value": f"{vs['won']}-{vs['lost']} | {vs['profit']:+.2f}u",
+            "inline": True
+        })
+    
+    if results['corners_cards']['won'] + results['corners_cards']['lost'] > 0:
+        cc = results['corners_cards']
+        fields.append({
+            "name": "🔢 Corners & Cards",
+            "value": f"{cc['won']}-{cc['lost']} | {cc['profit']:+.2f}u",
+            "inline": True
+        })
+    
+    if results['parlays']['won'] + results['parlays']['lost'] > 0:
+        p = results['parlays']
+        fields.append({
+            "name": "🎲 Parlays",
+            "value": f"{p['won']}-{p['lost']} | {p['profit']:+.2f}u",
+            "inline": True
+        })
+    
+    if results['basketball']['won'] + results['basketball']['lost'] > 0:
+        bb = results['basketball']
+        fields.append({
+            "name": "🏀 Basketball",
+            "value": f"{bb['won']}-{bb['lost']} | {bb['profit']:+.2f}u",
+            "inline": True
+        })
+    
+    send_discord_embed(
+        title=f"📊 Daily Recap - {today_str}",
+        description=description,
+        color=color,
+        fields=fields
+    )
+    
+    logger.info(f"📊 Daily recap sent: {total_bets} bets, {total_profit:+.2f} units")
 
-<b>📈 VALUE SINGLES</b>
-Won: {results['value_singles']['won']} | Lost: {results['value_singles']['lost']}
-Profit: <b>{vs_units:+.2f} units</b>
+
+def send_weekly_discord_recap():
+    """Send weekly recap to Discord on Sunday at 22:30 (Mon-Sun)"""
+    logger.info("📊 Generating weekly Discord recap...")
+    
+    today = date.today()
+    
+    days_since_monday = today.weekday()
+    monday = today - timedelta(days=days_since_monday)
+    sunday = today
+    
+    results = get_results_for_date_range(monday, sunday)
+    
+    total_won = sum(r['won'] for r in results.values())
+    total_lost = sum(r['lost'] for r in results.values())
+    total_profit = sum(r['profit'] for r in results.values())
+    total_bets = total_won + total_lost
+    
+    if total_bets == 0:
+        logger.info("No settled bets this week, skipping weekly recap")
+        return
+    
+    hit_rate = (total_won / total_bets * 100) if total_bets > 0 else 0
+    roi = (total_profit / total_bets * 100) if total_bets > 0 else 0
+    
+    if total_profit >= 10:
+        color = 0x10B981  # Green
+    elif total_profit >= 0:
+        color = 0xF59E0B  # Orange
+    else:
+        color = 0xEF4444  # Red
+    
+    profit_emoji = "🟢" if total_profit >= 0 else "🔴"
+    week_str = f"{monday.strftime('%b %d')} - {sunday.strftime('%b %d, %Y')}"
+    
+    description = f"""
+**Total Bets:** {total_bets}
+**Record:** {total_won}-{total_lost} ({hit_rate:.1f}%)
+**ROI:** {roi:+.1f}%
+**Net Profit:** {profit_emoji} **{total_profit:+.2f} units**
 """
     
-    if results['value_singles']['details']:
-        msg += "\n" + "\n".join(results['value_singles']['details'][:3])
+    fields = []
     
-    msg += f"""
-
-<b>🎲 SGP PARLAYS</b>
-Won: {results['sgp']['won']} | Lost: {results['sgp']['lost']}
-Profit: <b>{sgp_units:+.2f} units</b>
-"""
+    if results['value_singles']['won'] + results['value_singles']['lost'] > 0:
+        vs = results['value_singles']
+        vs_bets = vs['won'] + vs['lost']
+        vs_roi = (vs['profit'] / vs_bets * 100) if vs_bets > 0 else 0
+        fields.append({
+            "name": "⚽ Value Singles",
+            "value": f"{vs['won']}-{vs['lost']} | {vs['profit']:+.2f}u ({vs_roi:+.1f}%)",
+            "inline": True
+        })
     
-    if results['sgp']['details']:
-        msg += "\n" + "\n".join(results['sgp']['details'][:5])
+    if results['corners_cards']['won'] + results['corners_cards']['lost'] > 0:
+        cc = results['corners_cards']
+        cc_bets = cc['won'] + cc['lost']
+        cc_roi = (cc['profit'] / cc_bets * 100) if cc_bets > 0 else 0
+        fields.append({
+            "name": "🔢 Corners & Cards",
+            "value": f"{cc['won']}-{cc['lost']} | {cc['profit']:+.2f}u ({cc_roi:+.1f}%)",
+            "inline": True
+        })
     
-    msg += f"""
-
-<b>🏀 COLLEGE BASKETBALL</b>
-Won: {results['basketball']['won']} | Lost: {results['basketball']['lost']}
-Profit: <b>{bb_units:+.2f} units</b>
-"""
+    if results['parlays']['won'] + results['parlays']['lost'] > 0:
+        p = results['parlays']
+        p_bets = p['won'] + p['lost']
+        p_roi = (p['profit'] / p_bets * 100) if p_bets > 0 else 0
+        fields.append({
+            "name": "🎲 Parlays",
+            "value": f"{p['won']}-{p['lost']} | {p['profit']:+.2f}u ({p_roi:+.1f}%)",
+            "inline": True
+        })
     
-    if results['basketball']['details']:
-        msg += "\n" + "\n".join(results['basketball']['details'][:3])
+    if results['basketball']['won'] + results['basketball']['lost'] > 0:
+        bb = results['basketball']
+        bb_bets = bb['won'] + bb['lost']
+        bb_roi = (bb['profit'] / bb_bets * 100) if bb_bets > 0 else 0
+        fields.append({
+            "name": "🏀 Basketball",
+            "value": f"{bb['won']}-{bb['lost']} | {bb['profit']:+.2f}u ({bb_roi:+.1f}%)",
+            "inline": True
+        })
     
-    profit_color = "🟢" if total_units >= 0 else "🔴"
+    send_discord_embed(
+        title=f"📈 Weekly Recap - {week_str}",
+        description=description,
+        color=color,
+        fields=fields
+    )
     
-    msg += f"""
-
-━━━━━━━━━━━━━━━━━━━━━━
-
-<b>{profit_color} DAILY TOTAL</b>
-Won: {total_won} | Lost: {total_lost}
-Hit Rate: {(total_won/(total_won+total_lost)*100) if (total_won+total_lost) > 0 else 0:.1f}%
-<b>Net Profit: {total_units:+.2f} units</b>
-
-━━━━━━━━━━━━━━━━━━━━━━
-🤖 PGR AI Predictions
-"""
-    
-    return msg
+    logger.info(f"📊 Weekly recap sent: {total_bets} bets, {total_profit:+.2f} units, {roi:+.1f}% ROI")
 
 
 def send_daily_recap():
-    """Main function to send daily recap"""
-    logger.info("📊 Generating daily recap...")
-    
-    results = get_todays_results()
-    
-    total_bets = sum(r['won'] + r['lost'] for r in results.values())
-    
-    if total_bets == 0:
-        logger.info("No settled bets today, skipping recap")
-        return
-    
-    message = format_recap_message(results)
-    
-    send_telegram_message(message)
-    
-    logger.info(f"📊 Recap sent: {total_bets} bets, {sum(r['profit'] for r in results.values()):+,.0f} kr profit")
+    """Legacy function - now sends to Discord"""
+    send_daily_discord_recap()
 
 
 if __name__ == "__main__":
-    send_daily_recap()
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == 'weekly':
+        send_weekly_discord_recap()
+    else:
+        send_daily_discord_recap()

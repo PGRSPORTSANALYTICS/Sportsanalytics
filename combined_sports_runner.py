@@ -258,11 +258,21 @@ def run_daily_games_reminder():
 def run_daily_recap():
     """Send daily recap of all results at 22:30"""
     try:
-        from daily_recap import send_daily_recap
-        logger.info("📊 Running daily recap...")
-        send_daily_recap()
+        from daily_recap import send_daily_discord_recap
+        logger.info("📊 Running daily Discord recap...")
+        send_daily_discord_recap()
     except Exception as e:
         logger.error(f"❌ Daily recap error: {e}")
+
+
+def run_weekly_recap():
+    """Send weekly recap on Sunday at 22:30"""
+    try:
+        from daily_recap import send_weekly_discord_recap
+        logger.info("📈 Running weekly Discord recap...")
+        send_weekly_discord_recap()
+    except Exception as e:
+        logger.error(f"❌ Weekly recap error: {e}")
 
 
 def main():
@@ -297,7 +307,8 @@ def main():
     logger.info("="*80)
     logger.info("📊 CLV Tracking - Every 10 minutes (closing odds capture)")
     logger.info("📊 Performance Updates - Every 6 hours")
-    logger.info("📊 Daily Recap - Daily at 22:30")
+    logger.info("📊 Daily Recap - Daily at 22:30 (Discord)")
+    logger.info("📈 Weekly Recap - Sunday at 22:30 (Discord)")
     logger.info("📂 Bet Categorizer - Daily at 23:00")
     logger.info("📅 Games Reminder - Daily at 08:00")
     logger.info("="*80)
@@ -369,6 +380,7 @@ def main():
     schedule.every(6).hours.do(run_performance_updates)
     
     schedule.every().day.at("22:30").do(run_daily_recap)
+    schedule.every().sunday.at("22:30").do(run_weekly_recap)
     schedule.every().day.at("23:00").do(run_daily_categorizer)
     schedule.every().day.at("08:00").do(run_daily_games_reminder)
     
