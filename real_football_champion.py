@@ -29,6 +29,7 @@ from bankroll_manager import get_bankroll_manager
 from data_collector import get_collector
 from discord_notifier import send_bet_to_discord
 from monte_carlo_integration import run_monte_carlo, classify_trust_level
+from datetime_utils import normalize_kickoff, to_iso_utc, now_utc
 
 # League configuration
 from league_config import get_odds_api_keys, get_league_by_odds_key, LEAGUE_REGISTRY
@@ -3630,14 +3631,19 @@ class RealFootballChampion:
             odds_by_bookmaker = opp_dict.get('odds_by_bookmaker')
             odds_by_bookmaker_json = json.dumps(odds_by_bookmaker) if odds_by_bookmaker else None
             
+            kickoff_utc = opp_dict.get('kickoff_utc')
+            kickoff_epoch = opp_dict.get('kickoff_epoch')
+            created_at_utc = opp_dict.get('created_at_utc')
+            
             db_helper.execute('''
                 INSERT INTO football_opportunities 
                 (timestamp, match_id, home_team, away_team, league, market, selection, 
                  odds, edge_percentage, confidence, analysis, stake, match_date, kickoff_time,
+                 kickoff_utc, kickoff_epoch, created_at_utc,
                  quality_score, recommended_date, recommended_tier, daily_rank, mode, bet_placed,
                  open_odds, odds_source, trust_level,
                  odds_by_bookmaker, best_odds_value, best_odds_bookmaker, avg_odds, fair_odds, fixture_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ''', (
                 opp_dict.get('timestamp', int(time.time())),
                 opp_dict.get('match_id'),
@@ -3653,6 +3659,9 @@ class RealFootballChampion:
                 float(opp_dict.get('stake', 100)),
                 opp_dict.get('match_date'),
                 opp_dict.get('kickoff_time'),
+                kickoff_utc,
+                kickoff_epoch,
+                created_at_utc,
                 float(quality_score),
                 today_date,
                 opp_dict.get('recommended_tier', 'SINGLE'),

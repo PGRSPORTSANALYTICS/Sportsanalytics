@@ -17,6 +17,7 @@ from bankroll_manager import get_bankroll_manager
 from data_collector import get_collector
 from monte_carlo_integration import run_monte_carlo, classify_trust_level, analyze_bet_with_monte_carlo
 from discord_notifier import send_bet_to_discord
+from datetime_utils import normalize_kickoff, to_iso_utc, now_utc
 
 try:
     from live_learning_config import apply_ev_controls, is_stability_mode_active
@@ -661,6 +662,9 @@ class ValueSinglesEngine:
                 # Calculate fair_odds based on model probability
                 fair_odds = round(1.0 / p_model, 3) if p_model > 0 else None
                 
+                kickoff_utc, kickoff_epoch = normalize_kickoff(commence_time)
+                created_at_utc = to_iso_utc(now_utc())
+                
                 opportunity = {
                     "timestamp": int(time.time()),
                     "match_id": match_id,
@@ -682,6 +686,9 @@ class ValueSinglesEngine:
                     "stake": VALUE_SINGLES_STAKE,
                     "match_date": match_date,
                     "kickoff_time": kickoff_time,
+                    "kickoff_utc": kickoff_utc,
+                    "kickoff_epoch": kickoff_epoch,
+                    "created_at_utc": created_at_utc,
                     "quality_score": float(match.get("quality_score", 50)),
                     "recommended_tier": "SINGLE",
                     "daily_rank": 999,
