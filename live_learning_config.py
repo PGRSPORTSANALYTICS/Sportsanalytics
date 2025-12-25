@@ -1,11 +1,19 @@
 #!/usr/bin/env python3
 """
-Live Learning Mode Configuration
-================================
-Configuration for LIVE LEARNING MODE - full data capture across all markets.
+Live Learning Mode Configuration - STABILITY & VERIFICATION MODE
+=================================================================
+Configuration for LIVE LEARNING MODE with strict signal verification.
 
-Purpose: Gather maximum real-world betting data for system self-calibration,
-EV model strengthening, trust tier refinement, and market weight optimization.
+ACTIVE MODE: STABILITY & VERIFICATION (Dec 25, 2025)
+- Hard EV cap at 25%
+- Global EV deflator 0.4x
+- 50-100% EV band BLOCKED
+- SGP markets DISABLED
+- CORNERS capped at 30% exposure
+- CLV tracking ENABLED
+- Unit-based flat staking (no scaling)
+
+Objective: Verify edge via CLV, not P/L. Reduce variance. Stabilize signals.
 """
 
 from dataclasses import dataclass, field
@@ -14,21 +22,76 @@ from datetime import datetime
 
 
 @dataclass
+class StabilityModeConfig:
+    """Stability & Verification Mode constraints."""
+    
+    enabled: bool = True
+    activated_at: datetime = field(default_factory=datetime.now)
+    
+    hard_ev_cap: float = 0.25
+    ev_deflator: float = 0.4
+    
+    blocked_ev_bands: List[tuple] = field(default_factory=lambda: [
+        (0.50, 1.00),
+    ])
+    
+    sgp_enabled: bool = False
+    sgp_reason: str = "SGP 3-5x tier structurally -EV (-29 units, 17% hit rate)"
+    
+    market_exposure_caps: Dict[str, float] = field(default_factory=lambda: {
+        "CORNERS": 0.30,
+        "SGP": 0.00,
+        "VALUE_SINGLE": 0.35,
+        "CARDS": 0.20,
+        "BASKET_SINGLE": 0.15,
+        "TOTALS": 0.25,
+        "BTTS": 0.20,
+        "EXACT_SCORE": 0.00,
+    })
+    
+    preserved_markets: List[str] = field(default_factory=lambda: [
+        "CARDS",
+    ])
+    
+    clv_tracking_enabled: bool = True
+    clv_capture_on_bet_placement: bool = True
+    clv_capture_at_kickoff: bool = True
+    
+    unit_flat_staking: bool = True
+    stake_per_bet: float = 1.0
+    no_kelly_scaling: bool = True
+    
+    verification_objectives: Dict[str, str] = field(default_factory=lambda: {
+        "primary": "Verify edge via CLV, not P/L",
+        "secondary": "Reduce daily variance",
+        "tertiary": "Stabilize EV distribution",
+    })
+    
+    exit_criteria: Dict[str, float] = field(default_factory=lambda: {
+        "min_clv_avg": 0.01,
+        "min_settled_bets": 1500,
+        "max_daily_variance_sd": 40.0,
+        "max_corners_concentration": 0.35,
+        "min_sgp_hit_rate_3_5x": 0.22,
+    })
+
+
+@dataclass
 class LiveLearningConfig:
     """Configuration for Live Learning Mode."""
     
     mode: str = "LIVE_LEARNING"
-    version: str = "1.1"
+    version: str = "2.0_STABILITY"
     activated_at: Optional[datetime] = None
     
-    # ROI TARGETS
-    target_roi_min: float = 20.0  # 20% minimum target ROI
-    target_roi_max: float = 25.0  # 25% stretch goal ROI
-    target_hit_rate_min: float = 52.0  # Minimum hit rate for profitability
+    stability_mode: StabilityModeConfig = field(default_factory=StabilityModeConfig)
     
-    # Learning phase settings
-    learning_phase_weeks: int = 4  # Weeks before full optimization kicks in
-    min_bets_before_optimization: int = 200  # Min settled bets before auto-adjustments
+    target_roi_min: float = 20.0
+    target_roi_max: float = 25.0
+    target_hit_rate_min: float = 52.0
+    
+    learning_phase_weeks: int = 4
+    min_bets_before_optimization: int = 200
     
     capture_all_picks: bool = True
     capture_trust_tiers: List[str] = field(default_factory=lambda: [
@@ -46,12 +109,19 @@ class LiveLearningConfig:
     enable_market_weight: bool = True
     enable_hidden_value_scanner: bool = True
     
-    # DISABLED MARKETS (historically unprofitable)
-    enable_exact_score: bool = False  # -111 units, 2% hit rate - DISABLED
+    enable_exact_score: bool = False
+    enable_sgp: bool = False
     
-    ev_filter_enabled: bool = False
-    min_ev_threshold: float = -1.0
-    min_confidence_threshold: float = 0.0
+    ev_filter_enabled: bool = True
+    min_ev_threshold: float = 0.02
+    max_ev_threshold: float = 0.25
+    ev_deflator: float = 0.4
+    
+    blocked_ev_bands: List[tuple] = field(default_factory=lambda: [
+        (0.50, 1.00),
+    ])
+    
+    min_confidence_threshold: float = 0.50
     
     ev_near_miss_range: tuple = (-0.01, 0.02)
     
@@ -65,6 +135,10 @@ class LiveLearningConfig:
     store_market_weight_details: bool = True
     store_hidden_value_status: bool = True
     
+    store_opening_odds: bool = True
+    store_closing_odds: bool = True
+    store_clv_delta: bool = True
+    
     market_weight_learning_enabled: bool = True
     market_weight_min_sample_size: int = 10
     market_weight_learning_rate: float = 0.1
@@ -77,7 +151,11 @@ class LiveLearningConfig:
         "BTTS_YES", "BTTS_NO",
         "CORNERS_MATCH", "CORNERS_TEAM", "CORNERS_HANDICAP",
         "CARDS_MATCH", "CARDS_TEAM",
-        "SHOTS_TEAM", "SHOTS_MATCH"
+    ])
+    
+    disabled_markets: List[str] = field(default_factory=lambda: [
+        "SGP",
+        "EXACT_SCORE",
     ])
     
     logging_mode: str = "VERBOSE"
@@ -85,12 +163,40 @@ class LiveLearningConfig:
     log_clv_updates: bool = True
     log_result_settlements: bool = True
     
+    def apply_ev_deflator(self, raw_ev: float) -> float:
+        """Apply EV deflator to raw EV estimate."""
+        deflated = raw_ev * self.ev_deflator
+        return min(deflated, self.max_ev_threshold)
+    
+    def is_ev_blocked(self, ev: float) -> bool:
+        """Check if EV falls in a blocked band."""
+        for low, high in self.blocked_ev_bands:
+            if low <= ev <= high:
+                return True
+        return False
+    
+    def get_market_cap(self, market: str) -> float:
+        """Get exposure cap for a market."""
+        return self.stability_mode.market_exposure_caps.get(market.upper(), 0.25)
+    
+    def is_market_disabled(self, market: str) -> bool:
+        """Check if a market is disabled."""
+        return market.upper() in self.disabled_markets
+    
     def to_dict(self) -> Dict:
         """Convert config to dictionary."""
         return {
             "mode": self.mode,
             "version": self.version,
             "activated_at": self.activated_at.isoformat() if self.activated_at else None,
+            "stability_mode": {
+                "enabled": self.stability_mode.enabled,
+                "hard_ev_cap": self.stability_mode.hard_ev_cap,
+                "ev_deflator": self.stability_mode.ev_deflator,
+                "sgp_enabled": self.stability_mode.sgp_enabled,
+                "clv_tracking": self.stability_mode.clv_tracking_enabled,
+                "market_caps": self.stability_mode.market_exposure_caps,
+            },
             "target_roi": {"min": self.target_roi_min, "max": self.target_roi_max},
             "target_hit_rate_min": self.target_hit_rate_min,
             "learning_phase_weeks": self.learning_phase_weeks,
@@ -99,6 +205,10 @@ class LiveLearningConfig:
             "capture_trust_tiers": self.capture_trust_tiers,
             "enable_clv_tracking": self.enable_clv_tracking,
             "ev_filter_enabled": self.ev_filter_enabled,
+            "max_ev_threshold": self.max_ev_threshold,
+            "ev_deflator": self.ev_deflator,
+            "blocked_ev_bands": self.blocked_ev_bands,
+            "disabled_markets": self.disabled_markets,
             "unit_based_tracking": self.unit_based_tracking,
             "market_weight_learning_enabled": self.market_weight_learning_enabled,
             "pick_markets": self.pick_markets,
@@ -128,6 +238,21 @@ class LiveLearningConfig:
             "status": status,
             "message": message
         }
+    
+    def get_stability_status(self) -> Dict:
+        """Get current stability mode status."""
+        return {
+            "mode": "STABILITY_VERIFICATION",
+            "version": self.version,
+            "hard_ev_cap": f"{self.max_ev_threshold:.0%}",
+            "ev_deflator": f"{self.ev_deflator:.0%}",
+            "blocked_bands": [f"{l:.0%}-{h:.0%}" for l, h in self.blocked_ev_bands],
+            "sgp_status": "DISABLED" if not self.enable_sgp else "ENABLED",
+            "corners_cap": f"{self.stability_mode.market_exposure_caps.get('CORNERS', 0.30):.0%}",
+            "clv_tracking": "ENABLED" if self.enable_clv_tracking else "DISABLED",
+            "staking": "FLAT 1 UNIT" if self.unit_based_tracking else "VARIABLE",
+            "objective": "Verify edge via CLV, not P/L",
+        }
 
 
 LIVE_LEARNING_CONFIG = LiveLearningConfig(
@@ -143,3 +268,69 @@ def get_live_learning_config() -> LiveLearningConfig:
 def is_live_learning_active() -> bool:
     """Check if live learning mode is active."""
     return LIVE_LEARNING_CONFIG.mode == "LIVE_LEARNING"
+
+
+def is_stability_mode_active() -> bool:
+    """Check if stability verification mode is active."""
+    return LIVE_LEARNING_CONFIG.stability_mode.enabled
+
+
+def apply_ev_controls(raw_ev: float) -> tuple:
+    """
+    Apply all EV controls from stability mode.
+    Returns: (adjusted_ev, is_blocked, block_reason)
+    """
+    config = LIVE_LEARNING_CONFIG
+    
+    if config.is_ev_blocked(raw_ev):
+        return (0, True, f"EV {raw_ev:.1%} in blocked band 50-100%")
+    
+    deflated = config.apply_ev_deflator(raw_ev)
+    
+    if deflated > config.max_ev_threshold:
+        deflated = config.max_ev_threshold
+    
+    return (deflated, False, None)
+
+
+def check_market_allowed(market: str, current_exposure: Dict[str, float]) -> tuple:
+    """
+    Check if a market is allowed given current exposure.
+    Returns: (is_allowed, reason)
+    """
+    config = LIVE_LEARNING_CONFIG
+    
+    if config.is_market_disabled(market):
+        return (False, f"{market} is disabled in stability mode")
+    
+    market_upper = market.upper()
+    cap = config.get_market_cap(market_upper)
+    current = current_exposure.get(market_upper, 0)
+    
+    if current >= cap:
+        return (False, f"{market} at cap ({current:.0%} >= {cap:.0%})")
+    
+    return (True, None)
+
+
+if __name__ == "__main__":
+    config = get_live_learning_config()
+    print("=" * 60)
+    print("LIVE LEARNING MODE - STABILITY & VERIFICATION")
+    print("=" * 60)
+    
+    status = config.get_stability_status()
+    for key, value in status.items():
+        print(f"  {key}: {value}")
+    
+    print("\n" + "=" * 60)
+    print("EV CONTROL TESTS")
+    print("=" * 60)
+    
+    test_evs = [0.05, 0.15, 0.30, 0.55, 0.80, 1.20]
+    for ev in test_evs:
+        adj, blocked, reason = apply_ev_controls(ev)
+        if blocked:
+            print(f"  Raw EV {ev:.0%} → BLOCKED ({reason})")
+        else:
+            print(f"  Raw EV {ev:.0%} → Adjusted {adj:.1%}")
