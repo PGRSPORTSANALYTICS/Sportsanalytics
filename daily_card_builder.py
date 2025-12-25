@@ -127,8 +127,13 @@ class DailyCardBuilder:
         )
         
         non_corners_count = len(card.value_singles) + len(card.totals) + len(card.btts)
-        max_corners_total = int(non_corners_count * CORNERS_MAX_EXPOSURE / (1 - CORNERS_MAX_EXPOSURE)) if non_corners_count > 0 else 6
-        max_corners_total = max(max_corners_total, 4)
+        
+        if non_corners_count == 0:
+            max_corners_total = 0
+            logger.info("📊 No non-corner bets available - CORNERS capped at 0 to enforce 30% exposure limit")
+        else:
+            max_corners_total = int(non_corners_count * CORNERS_MAX_EXPOSURE / (1 - CORNERS_MAX_EXPOSURE))
+            max_corners_total = max(max_corners_total, 1)
         
         corners_match_max = min(PRODUCT_CONFIGS["CORNERS_MATCH"].max_per_day, max_corners_total)
         card.corners_match = self._filter_product(
@@ -145,15 +150,30 @@ class DailyCardBuilder:
             "CORNERS_TEAM"
         )
         
-        total_bets = card.total_bets()
-        total_corners = len(card.corners_match) + len(card.corners_team)
-        corners_pct = total_corners / total_bets if total_bets > 0 else 0
+        def enforce_corners_cap():
+            total_bets = card.total_bets()
+            if total_bets == 0:
+                return
+            
+            total_corners = len(card.corners_match) + len(card.corners_team)
+            corners_pct = total_corners / total_bets
+            
+            while corners_pct > CORNERS_MAX_EXPOSURE and total_corners > 0:
+                if card.corners_team:
+                    card.corners_team.pop()
+                elif card.corners_match:
+                    card.corners_match.pop()
+                else:
+                    break
+                
+                total_bets = card.total_bets()
+                total_corners = len(card.corners_match) + len(card.corners_team)
+                corners_pct = total_corners / total_bets if total_bets > 0 else 0
+            
+            if total_corners != len(card.corners_match) + len(card.corners_team):
+                logger.warning(f"⚠️ CORNERS trimmed to enforce {CORNERS_MAX_EXPOSURE:.0%} cap")
         
-        if corners_pct > CORNERS_MAX_EXPOSURE:
-            logger.warning(f"⚠️ CORNERS at {corners_pct:.0%} (cap: {CORNERS_MAX_EXPOSURE:.0%}) - enforcing cap")
-            excess = int(total_corners - (total_bets * CORNERS_MAX_EXPOSURE))
-            if excess > 0 and card.corners_team:
-                card.corners_team = card.corners_team[:-min(excess, len(card.corners_team))]
+        enforce_corners_cap()
         
         if ml_parlays:
             card.ml_parlays = ml_parlays[:PRODUCT_CONFIGS["ML_PARLAYS"].max_per_day]

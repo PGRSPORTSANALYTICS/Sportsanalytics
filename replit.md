@@ -148,8 +148,35 @@ The Value Singles tab now displays picks in 3 sections:
 - **Weekly Recap:** Every Sunday at 22:30 - Full week summary with ROI%
 - **Config:** `daily_recap.py` with `send_daily_discord_recap()` and `send_weekly_discord_recap()`
 
+### STABILITY & VERIFICATION MODE (December 25, 2025)
+**Objective:** Verify edge via CLV (Closing Line Value) tracking, NOT via P/L. Reduce variance. Stabilize signals before scaling.
+
+**Active Controls:**
+- **Hard EV Cap:** 25% maximum (prevents overconfident predictions)
+- **EV Deflator:** 0.4x applied globally (raw EV was averaging 74%, unrealistic)
+- **Blocked EV Bands:** 50-100% structurally -EV (-47 units, -32.9% ROI on 143 bets)
+- **SGP:** DISABLED (3-5x tier bleeding -29 units, 17.1% hit rate vs 24.1% required)
+- **CORNERS Cap:** 30% of daily portfolio exposure (was 47%)
+- **Flat Staking:** 1 unit per bet, no Kelly scaling during verification phase
+
+**Files:**
+- `ev_controller.py` - Central EV control module
+- `live_learning_config.py` - Stability mode configuration
+- `daily_card_builder.py` - Market exposure cap enforcement
+
+**Exit Criteria (before scaling):**
+- Average CLV > 1%
+- 1500+ settled bets with verified CLV
+- Daily variance SD < 40 units
+- CORNERS concentration < 35%
+
+**CLV Tracking:**
+- Database columns: `open_odds`, `close_odds`, `clv_pct`
+- CLV tracking every 10 minutes for closing odds capture
+- Objective: If CLV is consistently positive, edge is verified regardless of short-term P/L variance
+
 ### Active Workflows
 - **Real Football Dashboard** (port 5000) - Main UI
-- **Combined Sports Engine** - Prediction engine with 1-hour Value Singles cycles
+- **Combined Sports Engine** - Prediction engine with 1-hour Value Singles cycles (STABILITY MODE)
 - **PGR API Server** (port 8000) - REST API
 - **College Basketball Dashboard** (port 6000) - Basketball predictions

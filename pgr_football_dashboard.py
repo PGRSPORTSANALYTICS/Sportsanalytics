@@ -839,13 +839,13 @@ def get_free_predictions() -> list:
             id, home_team, away_team, selection, market, odds, 
             edge_percentage as ev, confidence, league, match_date,
             odds_by_bookmaker, best_odds_value, best_odds_bookmaker,
-            product
+            market as product
         FROM football_opportunities
         WHERE LOWER(status) = 'pending'
           AND edge_percentage >= :min_ev
           AND odds >= :min_odds
           AND odds <= :max_odds
-          AND product IN ('VALUE_SINGLE', 'VALUE_SINGLES', 'FOOTBALL_SINGLE')
+          AND market = 'Value Single'
         ORDER BY edge_percentage DESC
         LIMIT :max_picks
     """)
