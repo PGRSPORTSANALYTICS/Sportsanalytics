@@ -16,10 +16,11 @@ Captures ALL picks across all trust tiers with:
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any, Tuple
 
 from db_helper import db_helper
+from datetime_utils import normalize_kickoff, validate_kickoff, now_utc, to_iso_utc, now_epoch
 from live_learning_config import get_live_learning_config, is_live_learning_active
 from profile_boost_engine import ProfileBoostEngine, BoostResult
 from market_weight_engine import MarketWeightEngine, WeightResult
@@ -38,13 +39,14 @@ class LiveLearningPick:
     league: str
     match_date: str
     kickoff_time: str
-    
     market: str
     market_key: str
     selection: str
-    
     opening_odds: float
     current_odds: float
+    
+    kickoff_utc: Optional[str] = None
+    kickoff_epoch: Optional[int] = None
     closing_odds: Optional[float] = None
     clv_delta: Optional[float] = None
     
@@ -85,6 +87,8 @@ class LiveLearningPick:
             "league": self.league,
             "match_date": self.match_date,
             "kickoff_time": self.kickoff_time,
+            "kickoff_utc": self.kickoff_utc,
+            "kickoff_epoch": self.kickoff_epoch,
             "market": self.market,
             "market_key": self.market_key,
             "selection": self.selection,
@@ -147,7 +151,8 @@ class LiveLearningTracker:
         sim_prob: float,
         confidence: float,
         trust_tier: str,
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Dict[str, Any]] = None,
+        commence_time: Optional[str] = None
     ) -> LiveLearningPick:
         """
         Process a pick through all syndicate engines and capture full data.
@@ -160,6 +165,8 @@ class LiveLearningTracker:
         Returns the fully processed LiveLearningPick.
         """
         context = context or {}
+        
+        kickoff_utc, kickoff_epoch = normalize_kickoff(commence_time)
         
         boost_result = self.pb_engine.calculate_boost(
             base_ev=raw_ev,
@@ -221,6 +228,8 @@ class LiveLearningTracker:
             selection=selection,
             opening_odds=odds,
             current_odds=odds,
+            kickoff_utc=kickoff_utc,
+            kickoff_epoch=kickoff_epoch,
             raw_ev=raw_ev,
             boosted_ev=boost_result.boosted_ev,
             weighted_ev=weighted_ev,
@@ -249,15 +258,23 @@ class LiveLearningTracker:
     def save_pick_to_db(self, pick: LiveLearningPick) -> bool:
         """Save a processed pick to the database with proper column mapping."""
         try:
+            if pick.kickoff_utc and pick.kickoff_epoch:
+                is_valid, error_msg = validate_kickoff(pick.kickoff_utc, pick.kickoff_epoch)
+                if not is_valid:
+                    logger.warning(f"[LIVE_LEARNING] Invalid kickoff time: {error_msg}")
+            
             open_prob = 1 / pick.opening_odds if pick.opening_odds > 0 else 0
             close_prob = 1 / pick.current_odds if pick.current_odds > 0 else 0
             clv_pct = (close_prob - open_prob) * 100 if pick.closing_odds else 0
+            
+            created_at_utc = to_iso_utc(now_utc())
             
             query = """
                 INSERT INTO football_opportunities (
                     timestamp, match_id, home_team, away_team, league,
                     market, selection, odds, edge_percentage, confidence,
-                    status, match_date, kickoff_time, mode, trust_level,
+                    status, match_date, kickoff_time, kickoff_utc, kickoff_epoch,
+                    created_at_utc, mode, trust_level,
                     model_prob, sim_probability, 
                     open_odds, close_odds, clv_pct,
                     raw_ev, boosted_ev, weighted_ev,
@@ -267,6 +284,7 @@ class LiveLearningTracker:
                     %s, %s, %s, %s, %s,
                     %s, %s, %s, %s, %s,
                     %s, %s, %s, %s, %s,
+                    %s, %s, %s,
                     %s, %s, 
                     %s, %s, %s,
                     %s, %s, %s,
@@ -289,11 +307,13 @@ class LiveLearningTracker:
                     hidden_value_score = EXCLUDED.hidden_value_score,
                     hidden_value_status = EXCLUDED.hidden_value_status,
                     mode = EXCLUDED.mode,
-                    trust_level = EXCLUDED.trust_level
+                    trust_level = EXCLUDED.trust_level,
+                    kickoff_utc = COALESCE(EXCLUDED.kickoff_utc, football_opportunities.kickoff_utc),
+                    kickoff_epoch = COALESCE(EXCLUDED.kickoff_epoch, football_opportunities.kickoff_epoch)
             """
             
             params = (
-                int(datetime.now().timestamp()),
+                now_epoch(),
                 pick.match_id,
                 pick.home_team,
                 pick.away_team,
@@ -306,6 +326,9 @@ class LiveLearningTracker:
                 "pending",
                 pick.match_date,
                 pick.kickoff_time,
+                pick.kickoff_utc,
+                pick.kickoff_epoch,
+                created_at_utc,
                 "LIVE_LEARNING",
                 pick.trust_tier,
                 pick.model_prob,
@@ -324,7 +347,7 @@ class LiveLearningTracker:
             )
             
             db_helper.execute(query, params)
-            logger.info(f"[LIVE_LEARNING] Saved: {pick.home_team} vs {pick.away_team} - {pick.selection}")
+            logger.info(f"[LIVE_LEARNING] Saved: {pick.home_team} vs {pick.away_team} - {pick.selection} | kickoff_epoch={pick.kickoff_epoch}")
             return True
             
         except Exception as e:
