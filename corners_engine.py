@@ -45,6 +45,14 @@ from dataclasses import dataclass, field
 from bet_filter import BetCandidate
 from multimarket_config import PRODUCT_CONFIGS, get_market_label, MarketType
 
+try:
+    from live_learning_config import apply_ev_controls, is_stability_mode_active
+    STABILITY_MODE = True
+except ImportError:
+    STABILITY_MODE = False
+    def apply_ev_controls(ev): return (ev * 0.4, False, None)
+    def is_stability_mode_active(): return False
+
 logger = logging.getLogger(__name__)
 
 _DEFAULT_HOME_CORNERS = 5.2
@@ -501,7 +509,14 @@ class CornersEngine:
                 if p_model < self.match_config.min_confidence:
                     continue
                 
-                ev = (p_model * odds) - 1.0
+                raw_ev = (p_model * odds) - 1.0
+                
+                adj_ev, is_blocked, block_reason = apply_ev_controls(raw_ev)
+                if is_blocked:
+                    logger.debug(f"🚫 BLOCKED: {market_key} raw_ev={raw_ev:.1%} - {block_reason}")
+                    continue
+                
+                ev = adj_ev
                 
                 if ev < self.match_config.min_ev:
                     continue
@@ -579,7 +594,14 @@ class CornersEngine:
                 if p_model < self.team_config.min_confidence:
                     continue
                 
-                ev = (p_model * odds) - 1.0
+                raw_ev = (p_model * odds) - 1.0
+                
+                adj_ev, is_blocked, block_reason = apply_ev_controls(raw_ev)
+                if is_blocked:
+                    logger.debug(f"🚫 BLOCKED: {market_key} raw_ev={raw_ev:.1%} - {block_reason}")
+                    continue
+                
+                ev = adj_ev
                 
                 if ev < self.team_config.min_ev:
                     continue

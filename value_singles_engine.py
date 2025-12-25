@@ -18,6 +18,14 @@ from data_collector import get_collector
 from monte_carlo_integration import run_monte_carlo, classify_trust_level, analyze_bet_with_monte_carlo
 from discord_notifier import send_bet_to_discord
 
+try:
+    from live_learning_config import apply_ev_controls, is_stability_mode_active
+    STABILITY_MODE = True
+except ImportError:
+    STABILITY_MODE = False
+    def apply_ev_controls(ev): return (ev * 0.4, False, None)
+    def is_stability_mode_active(): return False
+
 
 # ============================================================
 # NOVA v2.0 BETTING FILTERS (Dec 9, 2025)
@@ -498,7 +506,14 @@ class ValueSinglesEngine:
                     if self._is_1x2_conflicting(home_team, away_team, market_key):
                         continue  # Skip conflicting 1X2 selections
 
-                ev = self._calc_ev(p_model, odds)
+                raw_ev = self._calc_ev(p_model, odds)
+                
+                adj_ev, is_blocked, block_reason = apply_ev_controls(raw_ev)
+                if is_blocked:
+                    print(f"   🚫 BLOCKED: {market_key} raw_ev={raw_ev:.1%} - {block_reason}")
+                    continue
+                
+                ev = adj_ev
                 
                 # HARD FILTER: Minimum EV (dynamic for tournaments)
                 if ev < match_ev_threshold:
