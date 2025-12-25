@@ -38,9 +38,33 @@ class ResultsEngine:
             'settled': 0,
             'voided': 0,
             'failed': 0,
-            'api_calls': 0
+            'api_calls': 0,
+            'manual_applied': 0,
+            'fallback_used': 0
         }
         self._match_cache = {}
+        self._manual_results = None
+        self._verification_metrics = None
+    
+    def _get_manual_results_manager(self):
+        """Lazy load manual results manager."""
+        if self._manual_results is None:
+            try:
+                from flashscore_stats_scraper import ManualResultsManager
+                self._manual_results = ManualResultsManager()
+            except ImportError:
+                pass
+        return self._manual_results
+    
+    def _get_verification_metrics(self):
+        """Lazy load verification metrics."""
+        if self._verification_metrics is None:
+            try:
+                from flashscore_stats_scraper import VerificationMetrics
+                self._verification_metrics = VerificationMetrics()
+            except ImportError:
+                pass
+        return self._verification_metrics
     
     def run_cycle(self) -> Dict:
         """Run a complete verification cycle for all bet types."""
@@ -48,7 +72,7 @@ class ResultsEngine:
         logger.info("🔄 RESULTS ENGINE - Starting verification cycle")
         logger.info("="*60)
         
-        self.stats = {'settled': 0, 'voided': 0, 'failed': 0, 'api_calls': 0}
+        self.stats = {'settled': 0, 'voided': 0, 'failed': 0, 'api_calls': 0, 'manual_applied': 0, 'fallback_used': 0}
         
         try:
             self._auto_void_old_bets()
@@ -163,10 +187,26 @@ class ResultsEngine:
             
             for bet in pending:
                 try:
+                    manual_mgr = self._get_manual_results_manager()
+                    if manual_mgr:
+                        manual_result = manual_mgr.get_manual_result(bet['id'], 'football_opportunities')
+                        if manual_result:
+                            outcome = manual_result['result'].lower()
+                            if outcome in ['won', 'lost', 'void']:
+                                self._update_football_bet(cursor, bet['id'], outcome, {'source': 'manual'})
+                                self.stats['settled'] += 1
+                                self.stats['manual_applied'] += 1
+                                logger.info(f"📋 Applied manual result for bet #{bet['id']}: {outcome}")
+                                continue
+                    
                     match_key = f"{bet['home_team']}_{bet['away_team']}_{bet['match_date']}"
+                    market = (bet.get('market') or '').lower()
                     
                     if match_key not in matches_processed:
-                        result = self._get_match_result(bet['home_team'], bet['away_team'], bet['match_date'], bet.get('match_id'))
+                        result = self._get_match_result_with_fallbacks(
+                            bet['home_team'], bet['away_team'], bet['match_date'], 
+                            bet.get('match_id'), market, bet['id']
+                        )
                         matches_processed[match_key] = result
                         time.sleep(0.3)
                     else:
@@ -179,6 +219,8 @@ class ResultsEngine:
                     if outcome in ['won', 'lost']:
                         self._update_football_bet(cursor, bet['id'], outcome, result)
                         self.stats['settled'] += 1
+                        if result.get('source') not in ['api-football', 'database']:
+                            self.stats['fallback_used'] += 1
                     
                 except Exception as e:
                     logger.warning(f"⚠️ Error settling bet {bet['id']}: {e}")
@@ -334,23 +376,96 @@ class ResultsEngine:
         return None
     
     def _get_match_result(self, home_team: str, away_team: str, match_date: str, match_id: Optional[int]) -> Optional[Dict]:
-        """Get match result with multi-source fallback."""
+        """Get match result with multi-source fallback (legacy method)."""
+        return self._get_match_result_with_fallbacks(home_team, away_team, match_date, match_id, None, None)
+    
+    def _get_match_result_with_fallbacks(
+        self, 
+        home_team: str, 
+        away_team: str, 
+        match_date: str, 
+        match_id: Optional[int],
+        market: Optional[str],
+        bet_id: Optional[int]
+    ) -> Optional[Dict]:
+        """
+        Get match result with bulletproof multi-source fallback chain.
+        
+        Fallback order:
+        1. Database (already settled results)
+        2. API-Football (primary source)
+        3. The Odds API (for score verification)
+        4. Return partial result if goals available but corners/cards missing
+        """
         cache_key = f"{home_team}_{away_team}_{match_date}"
         if cache_key in self._match_cache:
-            return self._match_cache[cache_key]
+            cached = self._match_cache[cache_key]
+            if market in ['corners', 'cards']:
+                if market == 'corners' and cached.get('total_corners') is not None:
+                    return cached
+                if market == 'cards' and cached.get('total_cards') is not None:
+                    return cached
+            else:
+                return cached
+        
+        metrics = self._get_verification_metrics()
+        needs_stats = market in ['corners', 'cards']
         
         result = self._check_database_for_result(home_team, away_team, match_date)
         if result:
-            self._match_cache[cache_key] = result
-            return result
+            if needs_stats:
+                if market == 'corners' and result.get('total_corners') is not None:
+                    self._log_verification(metrics, bet_id, market, 'database', True, result)
+                    self._match_cache[cache_key] = result
+                    return result
+                if market == 'cards' and result.get('total_cards') is not None:
+                    self._log_verification(metrics, bet_id, market, 'database', True, result)
+                    self._match_cache[cache_key] = result
+                    return result
+            else:
+                self._log_verification(metrics, bet_id, market, 'database', True, result)
+                self._match_cache[cache_key] = result
+                return result
         
         if self.api_football_key:
             result = self._get_api_football_result(home_team, away_team, match_date, match_id)
             if result:
-                self._match_cache[cache_key] = result
-                return result
+                if needs_stats:
+                    if market == 'corners' and result.get('total_corners') is not None:
+                        self._log_verification(metrics, bet_id, market, 'api-football', True, result)
+                        self._match_cache[cache_key] = result
+                        return result
+                    if market == 'cards' and result.get('total_cards') is not None:
+                        self._log_verification(metrics, bet_id, market, 'api-football', True, result)
+                        self._match_cache[cache_key] = result
+                        return result
+                    self._log_verification(metrics, bet_id, market, 'api-football', False, None, 'Stats not available')
+                else:
+                    self._log_verification(metrics, bet_id, market, 'api-football', True, result)
+                    self._match_cache[cache_key] = result
+                    return result
+        
+        if needs_stats:
+            self._log_verification(metrics, bet_id, market, 'all-sources', False, None, 'No stats data available from any source')
+            return None
         
         return None
+    
+    def _log_verification(self, metrics, bet_id, market, source, success, data, error=None):
+        """Log verification attempt to metrics."""
+        if metrics and bet_id:
+            try:
+                metrics.log_attempt(
+                    bet_id=bet_id,
+                    bet_table='football_opportunities',
+                    market=market or 'unknown',
+                    source_tried=source,
+                    success=success,
+                    error_message=error,
+                    data_found={'source': source} if success else None
+                )
+            except Exception as e:
+                logger.warning(f"Metrics log error: {e}")
     
     def _check_database_for_result(self, home_team: str, away_team: str, match_date: str) -> Optional[Dict]:
         """Check if we already have settled results in database for this match."""

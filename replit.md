@@ -121,6 +121,33 @@ The Value Singles tab now displays picks in 3 sections:
 - **Embed Format:** Color-coded by ROI (green positive, orange warning, red negative)
 - **Metrics Included:** ROI%, units profit, hit rate, record, pending bets, recent results
 
+### Manual Settlement System (December 25, 2025)
+**Purpose:** Bulletproof verification for corners/cards when API-Football lacks data.
+
+**Components:**
+- `manual_results` table - Stores operator overrides with full audit trail
+- `verification_metrics` table - Tracks success rates by market and source
+- `flashscore_stats_scraper.py` - ManualResultsManager, VerificationMetrics classes
+
+**API Endpoints (Authenticated with X-API-Key header):**
+- POST /api/manual/settle - Manually settle a bet with corners/cards/goals data
+- GET /api/manual/pending - Get bets needing manual review
+- GET /api/verification/metrics - View success rates by market/source
+- GET /api/manual/audit - View audit log of all manual settlements
+
+**Security:** Requires ADMIN_API_KEY environment variable to be set.
+
+**Flow:**
+1. Results engine checks for manual overrides before auto-verification
+2. API-Football is primary source, then database cache
+3. Unverifiable corners/cards can be settled via manual API
+4. All manual settlements logged with operator, reason, timestamp
+
+### Discord Scheduled Notifications (December 25, 2025)
+- **Daily Recap:** Every day at 22:30 - Day's results to Discord
+- **Weekly Recap:** Every Sunday at 22:30 - Full week summary with ROI%
+- **Config:** `daily_recap.py` with `send_daily_discord_recap()` and `send_weekly_discord_recap()`
+
 ### Active Workflows
 - **Real Football Dashboard** (port 5000) - Main UI
 - **Combined Sports Engine** - Prediction engine with 1-hour Value Singles cycles

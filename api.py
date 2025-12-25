@@ -1748,6 +1748,172 @@ async def get_roi_stats_endpoint():
 
 
 # =============================================================================
+# Manual Settlement API (for corners/cards that fail auto-verification)
+# REQUIRES API KEY AUTHENTICATION - Internal operator use only
+# =============================================================================
+
+from fastapi import Header
+
+
+def verify_admin_key(x_api_key: str = Header(None, alias="X-API-Key")):
+    """Verify admin API key for internal endpoints."""
+    admin_key = os.environ.get("ADMIN_API_KEY")
+    if not admin_key:
+        raise HTTPException(status_code=503, detail="Manual settlement not configured - ADMIN_API_KEY not set")
+    if not x_api_key or x_api_key != admin_key:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+    return True
+
+
+class ManualSettleRequest(BaseModel):
+    bet_id: int
+    result: str  # WON, LOST, VOID
+    home_corners: Optional[int] = None
+    away_corners: Optional[int] = None
+    home_cards: Optional[int] = None
+    away_cards: Optional[int] = None
+    home_goals: Optional[int] = None
+    away_goals: Optional[int] = None
+    reason: Optional[str] = None
+
+
+@app.post("/api/manual/settle", tags=["Manual Settlement"], include_in_schema=False)
+async def manual_settle_bet(request: ManualSettleRequest, x_api_key: str = Header(None, alias="X-API-Key")):
+    """
+    Manually settle a bet that failed automatic verification.
+    Used for corners/cards bets where API data is unavailable.
+    REQUIRES X-API-Key header for authentication.
+    """
+    verify_admin_key(x_api_key)
+    try:
+        from flashscore_stats_scraper import settle_bet_manually
+        
+        corners = None
+        cards = None
+        goals = None
+        
+        if request.home_corners is not None and request.away_corners is not None:
+            corners = (request.home_corners, request.away_corners)
+        if request.home_cards is not None and request.away_cards is not None:
+            cards = (request.home_cards, request.away_cards)
+        if request.home_goals is not None and request.away_goals is not None:
+            goals = (request.home_goals, request.away_goals)
+        
+        success = settle_bet_manually(
+            bet_id=request.bet_id,
+            result=request.result,
+            corners=corners,
+            cards=cards,
+            goals=goals,
+            reason=request.reason,
+            operator='api'
+        )
+        
+        return {
+            "success": success,
+            "bet_id": request.bet_id,
+            "result": request.result,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Manual settlement error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/manual/pending", tags=["Manual Settlement"])
+async def get_pending_manual_review(market: Optional[str] = None, limit: int = 50):
+    """
+    Get bets that need manual review (failed auto-verification).
+    Filter by market: 'Corners', 'Cards', or None for all.
+    """
+    try:
+        from flashscore_stats_scraper import ManualResultsManager
+        
+        manager = ManualResultsManager()
+        pending = manager.get_pending_manual_review(market=market, limit=limit)
+        
+        return {
+            "count": len(pending),
+            "pending_bets": pending,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Pending review error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/verification/metrics", tags=["Manual Settlement"])
+async def get_verification_metrics(days: int = 7):
+    """
+    Get verification success rates by market and source.
+    Shows which sources are reliable for different market types.
+    """
+    try:
+        from flashscore_stats_scraper import VerificationMetrics
+        
+        metrics = VerificationMetrics()
+        rates = metrics.get_success_rates(days=days)
+        
+        return {
+            "period_days": days,
+            "success_rates": rates,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Metrics error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/manual/audit", tags=["Manual Settlement"])
+async def get_manual_audit_log(limit: int = 100):
+    """
+    Get audit log of all manual settlements.
+    Shows who settled what and when.
+    """
+    try:
+        from db_helper import db_helper
+        
+        query = """
+            SELECT id, bet_id, bet_table, home_team, away_team, match_date,
+                   selection, market, result, reason, source, operator, created_at
+            FROM manual_results
+            ORDER BY created_at DESC
+            LIMIT %s
+        """
+        
+        rows = db_helper.fetch_all(query, [limit])
+        
+        results = []
+        for row in rows:
+            results.append({
+                "id": row.get("id"),
+                "bet_id": row.get("bet_id"),
+                "home_team": row.get("home_team"),
+                "away_team": row.get("away_team"),
+                "match_date": str(row.get("match_date")) if row.get("match_date") else None,
+                "market": row.get("market"),
+                "selection": row.get("selection"),
+                "result": row.get("result"),
+                "reason": row.get("reason"),
+                "operator": row.get("operator"),
+                "created_at": str(row.get("created_at")) if row.get("created_at") else None
+            })
+        
+        return {
+            "count": len(results),
+            "audit_log": results,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Audit log error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
 # Run with: uvicorn api:app --host 0.0.0.0 --port 8000
 # =============================================================================
 
