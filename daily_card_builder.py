@@ -7,11 +7,16 @@ Products included:
 1. Value Singles (ML/AH/DC) - max 15/day
 2. Totals (Over/Under) - max 10/day
 3. BTTS - max 8/day
-4. Corners - max 6 match, 4 team
+4. Corners - max 6 match, 4 team (CAPPED at 30% of portfolio)
 5. ML Parlays - max 5/day
 6. Multi-Match Parlays - max 2/day
 
 Nova v2.0 trust tiers applied to each product.
+
+STABILITY MODE (Dec 25, 2025):
+- CORNERS capped at 30% of total daily portfolio
+- SGP DISABLED
+- Market exposure caps enforced
 """
 
 import logging
@@ -22,7 +27,15 @@ from dataclasses import dataclass, field
 from bet_filter import BetCandidate
 from multimarket_config import PRODUCT_CONFIGS, DAILY_TARGETS, ProductType
 
+try:
+    from ev_controller import MARKET_EXPOSURE_CAPS, is_market_disabled
+except ImportError:
+    MARKET_EXPOSURE_CAPS = {"CORNERS": 0.30}
+    def is_market_disabled(m): return m.upper() in ["SGP", "EXACT_SCORE"]
+
 logger = logging.getLogger(__name__)
+
+CORNERS_MAX_EXPOSURE = 0.30
 
 
 @dataclass
@@ -113,23 +126,44 @@ class DailyCardBuilder:
             "BTTS"
         )
         
+        non_corners_count = len(card.value_singles) + len(card.totals) + len(card.btts)
+        max_corners_total = int(non_corners_count * CORNERS_MAX_EXPOSURE / (1 - CORNERS_MAX_EXPOSURE)) if non_corners_count > 0 else 6
+        max_corners_total = max(max_corners_total, 4)
+        
+        corners_match_max = min(PRODUCT_CONFIGS["CORNERS_MATCH"].max_per_day, max_corners_total)
         card.corners_match = self._filter_product(
             corners_match,
-            PRODUCT_CONFIGS["CORNERS_MATCH"].max_per_day,
+            corners_match_max,
             "CORNERS_MATCH"
         )
         
+        remaining_corners = max_corners_total - len(card.corners_match)
+        corners_team_max = min(PRODUCT_CONFIGS["CORNERS_TEAM"].max_per_day, max(0, remaining_corners))
         card.corners_team = self._filter_product(
             corners_team,
-            PRODUCT_CONFIGS["CORNERS_TEAM"].max_per_day,
+            corners_team_max,
             "CORNERS_TEAM"
         )
+        
+        total_bets = card.total_bets()
+        total_corners = len(card.corners_match) + len(card.corners_team)
+        corners_pct = total_corners / total_bets if total_bets > 0 else 0
+        
+        if corners_pct > CORNERS_MAX_EXPOSURE:
+            logger.warning(f"⚠️ CORNERS at {corners_pct:.0%} (cap: {CORNERS_MAX_EXPOSURE:.0%}) - enforcing cap")
+            excess = int(total_corners - (total_bets * CORNERS_MAX_EXPOSURE))
+            if excess > 0 and card.corners_team:
+                card.corners_team = card.corners_team[:-min(excess, len(card.corners_team))]
         
         if ml_parlays:
             card.ml_parlays = ml_parlays[:PRODUCT_CONFIGS["ML_PARLAYS"].max_per_day]
         
         if multi_match_parlays:
             card.multi_match_parlays = multi_match_parlays[:PRODUCT_CONFIGS["MULTI_MATCH_PARLAYS"].max_per_day]
+        
+        final_corners = len(card.corners_match) + len(card.corners_team)
+        final_total = card.total_bets()
+        logger.info(f"📊 Daily Card: {final_total} bets | CORNERS: {final_corners} ({final_corners/final_total:.0%})" if final_total > 0 else "📊 Daily Card: 0 bets")
         
         return card
     
