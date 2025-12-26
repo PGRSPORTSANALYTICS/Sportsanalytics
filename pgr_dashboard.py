@@ -269,7 +269,7 @@ else:
                         <span style="color: #FF6B35; font-weight: 600;">{row['market']}: {row['selection']}</span><br>
                         <small>
                             Odds: {row['odds']:.2f} | EV: <strong>{row['ev_percentage']:.1f}%</strong> | 
-                            Confidence: {row['confidence']:.1f}% | Book: {row['bookmaker']}
+                            Confidence: {row['confidence']:.1f}%
                         </small>
                     </div>
                     """, unsafe_allow_html=True)
