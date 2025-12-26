@@ -955,14 +955,12 @@ def render_free_predictions_tab():
                 bookmaker_html += f'''
                 <div style="padding:8px 14px;border-radius:8px;background:linear-gradient(135deg, rgba(34,197,94,0.3), rgba(16,185,129,0.2));border:1px solid rgba(34,197,94,0.6);">
                     <div style="font-size:9px;color:#22C55E;font-weight:600;">BEST</div>
-                    <div style="font-size:11px;color:#E5E7EB;">{best_book[0]}</div>
                     <div style="font-size:18px;font-weight:700;color:#22C55E;">{float(best_book[1]):.2f}</div>
                 </div>'''
             if second_best:
                 bookmaker_html += f'''
                 <div style="padding:8px 14px;border-radius:8px;background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.4);">
                     <div style="font-size:9px;color:#60A5FA;font-weight:600;">2ND</div>
-                    <div style="font-size:11px;color:#E5E7EB;">{second_best[0]}</div>
                     <div style="font-size:18px;font-weight:700;color:#60A5FA;">{float(second_best[1]):.2f}</div>
                 </div>'''
             bookmaker_html += '</div>'
