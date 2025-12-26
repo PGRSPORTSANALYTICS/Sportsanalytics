@@ -170,14 +170,15 @@ class ResultsEngine:
             conn = psycopg2.connect(self.database_url)
             cursor = conn.cursor(cursor_factory=RealDictCursor)
             
+            # Include today's matches (finished games) + last 3 days
             cursor.execute("""
                 SELECT id, home_team, away_team, match_date, market, selection, odds, stake, match_id
                 FROM football_opportunities 
                 WHERE (outcome IS NULL OR outcome = '' OR outcome = 'unknown' OR outcome = 'pending')
-                    AND DATE(match_date) < CURRENT_DATE
+                    AND DATE(match_date) <= CURRENT_DATE
                     AND DATE(match_date) >= CURRENT_DATE - INTERVAL '3 days'
                 ORDER BY match_date DESC
-                LIMIT 150
+                LIMIT 200
             """)
             
             pending = cursor.fetchall()
