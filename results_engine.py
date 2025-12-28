@@ -222,6 +222,14 @@ class ResultsEngine:
                         self.stats['settled'] += 1
                         if result.get('source') not in ['api-football', 'database']:
                             self.stats['fallback_used'] += 1
+                        
+                        if result.get('home_goals') is not None and result.get('away_goals') is not None:
+                            self._update_training_data(
+                                cursor, 
+                                bet.get('match_id', match_key),
+                                result['home_goals'], 
+                                result['away_goals']
+                            )
                     
                 except Exception as e:
                     logger.warning(f"⚠️ Error settling bet {bet['id']}: {e}")
@@ -772,6 +780,34 @@ class ResultsEngine:
         """, (outcome, outcome.upper(), now_ts, bet_id))
         
         logger.info(f"✅ Settled SGP #{bet_id}: {outcome.upper()}")
+    
+    def _update_training_data(self, cursor, match_id: str, home_goals: int, away_goals: int):
+        """Update training_data with actual results for model calibration."""
+        try:
+            actual_score = f"{home_goals}-{away_goals}"
+            cursor.execute("""
+                UPDATE training_data 
+                SET actual_home_goals = %s,
+                    actual_away_goals = %s,
+                    actual_score = %s,
+                    prediction_correct = CASE 
+                        WHEN predicted_winner = 'Home Win' AND %s > %s THEN true
+                        WHEN predicted_winner = 'Away Win' AND %s > %s THEN true
+                        WHEN predicted_winner = 'Draw' AND %s = %s THEN true
+                        ELSE false
+                    END
+                WHERE match_id = %s
+                AND actual_score IS NULL
+            """, (home_goals, away_goals, actual_score, 
+                  home_goals, away_goals,
+                  away_goals, home_goals,
+                  home_goals, away_goals,
+                  match_id))
+            
+            if cursor.rowcount > 0:
+                logger.info(f"📊 Updated {cursor.rowcount} training_data records for {match_id}")
+        except Exception as e:
+            logger.warning(f"⚠️ Training data update failed for {match_id}: {e}")
     
     def _send_discord_update(self):
         """Send Discord update after settlements."""
