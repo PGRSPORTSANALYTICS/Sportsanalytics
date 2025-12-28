@@ -28,7 +28,7 @@ def run_prediction_cycle():
         engine = CollegeBasketValueEngine(
             client=client,
             min_ev=0.03,  # 3% EV minimum
-            min_conf=0.30,  # 30% confidence (balanced - allows moderate underdogs)
+            min_conf=0.05,  # 5% confidence (allows underdogs with high EV)
             max_singles=15,  # 15 singles max
             max_parlays=0,  # DISABLED - parlays losing money (16.4% hit rate)
             min_odds=1.40,  # 1.40 min odds
