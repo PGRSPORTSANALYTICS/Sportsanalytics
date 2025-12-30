@@ -185,18 +185,18 @@ class MLParlayEngine:
             (should_stop, reason) - True if parlays should be suspended
         """
         try:
-            result = db_helper.fetch_one("""
+            result = db_helper.execute("""
                 SELECT 
                     COUNT(*) as total_parlays,
-                    SUM(CASE WHEN outcome = 'won' THEN (total_odds - 1) * 0.2 ELSE -0.2 END) as parlay_pnl
+                    COALESCE(SUM(CASE WHEN outcome = 'won' THEN (total_odds - 1) * 0.2 ELSE -0.2 END), 0) as parlay_pnl
                 FROM ml_parlay_predictions 
                 WHERE outcome IN ('won', 'lost')
                 AND match_date >= (CURRENT_DATE - INTERVAL '30 days')::TEXT
-            """)
+            """, fetch='one')
             
             if result:
-                total = result.get('total_parlays', 0) or 0
-                pnl = float(result.get('parlay_pnl', 0) or 0)
+                total = result[0] or 0
+                pnl = float(result[1] or 0)
                 
                 if total >= MAX_PARLAYS_WITHOUT_POSITIVE_ROI and pnl < 0:
                     return True, f"AUTO-STOP: {total} parlays with negative ROI ({pnl:.2f} units)"

@@ -37,6 +37,7 @@ ALLOWED_TRUST_LEVELS = {"L1", "L2", "L1_HIGH_TRUST", "L2_MEDIUM_TRUST"}
 # FLAT STAKING - 20% of single stake (0.2 units)
 # Kelly staking is STRICTLY FORBIDDEN for parlays
 PARLAY_STAKE_UNITS = 0.2  # Flat stake: 20% of 1-unit single stake
+FLAT_PARLAY_STAKE = 0.2  # Flat 0.2 units per parlay
 
 # Auto-stop conditions
 MAX_PARLAYS_WITHOUT_POSITIVE_ROI = 20
@@ -67,21 +68,21 @@ def _check_parlay_auto_stop() -> Tuple[bool, str]:
         (should_stop, reason) - True if parlays should be suspended
     """
     try:
-        from db_helper import db_helper
+        from db_helper import DatabaseHelper
         
-        result = db_helper.fetch_one("""
+        result = DatabaseHelper.execute("""
             SELECT 
                 COUNT(*) as total_parlays,
-                SUM(CASE WHEN outcome = 'won' THEN (bookmaker_odds - 1) ELSE -1 END) as parlay_pnl
+                COALESCE(SUM(CASE WHEN outcome = 'won' THEN (bookmaker_odds - 1) ELSE -1 END), 0) as parlay_pnl
             FROM sgp_predictions 
             WHERE home_team LIKE '%Multi-Match%'
             AND outcome IN ('won', 'lost')
             AND match_date >= CURRENT_DATE - INTERVAL '30 days'
-        """)
+        """, fetch='one')
         
         if result:
-            total = result.get('total_parlays', 0) or 0
-            pnl = float(result.get('parlay_pnl', 0) or 0)
+            total = result[0] or 0
+            pnl = float(result[1] or 0)
             
             if total >= MAX_PARLAYS_WITHOUT_POSITIVE_ROI and pnl < 0:
                 return True, f"AUTO-STOP: {total} parlays with negative ROI ({pnl:.2f} units)"
@@ -230,11 +231,8 @@ def _evaluate_parlay(legs: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     if ev < MIN_PARLAY_EV:
         return None
     
-    # Calculate 1.6% Kelly stake of bankroll
-    from bankroll_manager import get_bankroll_manager
-    bankroll_mgr = get_bankroll_manager()
-    current_bankroll = bankroll_mgr.get_current_bankroll()
-    stake = round(current_bankroll * KELLY_STAKE_PCT, 2)
+    # Flat staking: 0.2 units per parlay (20% of single stake)
+    stake = FLAT_PARLAY_STAKE
     
     # Build parlay object
     parlay = {
