@@ -28,9 +28,16 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # ============================================================
-# ML PARLAY CONFIGURATION - NOVA v2.0 (Dec 9, 2025)
-# Retuned for production: generates parlays on most match days
+# ML PARLAY CONFIGURATION - POLICY COMPLIANT (Dec 30, 2025)
+# Strict 2-leg only policy with flat staking
 # ============================================================
+
+# PARLAY POLICY RULES:
+# 1. ONLY 2-leg parlays allowed (no 3+ legs)
+# 2. Each leg must be independently approved single with positive EV
+# 3. Same matchday only
+# 4. Flat staking at 10-25% of single stake
+# 5. Kelly staking STRICTLY FORBIDDEN for parlays
 
 # Master switch
 ML_PARLAY_ENABLED = True
@@ -39,23 +46,27 @@ ML_PARLAY_ENABLED = True
 ML_PARLAY_MIN_ODDS = 1.30  # Minimum odds per leg
 ML_PARLAY_MAX_ODDS = 3.00  # Maximum odds per leg
 
-# Total parlay odds range
-ML_PARLAY_MIN_TOTAL_ODDS = 3.00   # Minimum combined odds
-ML_PARLAY_MAX_TOTAL_ODDS = 12.00  # Maximum combined odds
+# Total parlay odds range (adjusted for 2-leg only)
+ML_PARLAY_MIN_TOTAL_ODDS = 2.50   # Minimum combined odds
+ML_PARLAY_MAX_TOTAL_ODDS = 8.00   # Maximum combined odds
 
 # Minimum EV per leg (3% edge for production)
-MIN_ML_PARLAY_LEG_EV = 0.03  # 3% EV threshold - PRODUCTION
+MIN_ML_PARLAY_LEG_EV = 0.03  # 3% EV threshold - each leg must have positive EV
 
 # NOVA v2.0 Safety Guardrail: Minimum total parlay EV
 MIN_ML_PARLAY_TOTAL_EV = 5.0  # 5% total combined EV required
 
-# Parlay construction limits
-MAX_ML_PARLAYS_PER_DAY = 5  # Increased from 3 (Dec 9, 2025)
+# Parlay construction limits - POLICY: 2-LEG ONLY
+MAX_ML_PARLAYS_PER_DAY = 2
 ML_PARLAY_MIN_LEGS = 2
-ML_PARLAY_MAX_LEGS = 4
+ML_PARLAY_MAX_LEGS = 2  # POLICY: Only 2-leg parlays allowed
 
-# Stake as percentage of bankroll
-ML_PARLAY_STAKE_PCT = 0.016  # 1.6% Kelly stake of bankroll
+# FLAT STAKING - 20% of single stake (0.2 units)
+# Kelly staking is STRICTLY FORBIDDEN for parlays
+ML_PARLAY_STAKE_UNITS = 0.2  # Flat stake: 20% of 1-unit single stake
+
+# Auto-stop conditions
+MAX_PARLAYS_WITHOUT_POSITIVE_ROI = 20
 
 # League whitelist - major predictable leagues only
 ML_PARLAY_LEAGUE_WHITELIST = {
@@ -161,7 +172,39 @@ class MLParlayEngine:
         """
         self.champion = champion
         self._init_database()
-        logger.info("✅ ML Parlay Engine initialized (TEST MODE)")
+        logger.info("✅ ML Parlay Engine initialized (POLICY COMPLIANT)")
+    
+    def _check_auto_stop(self) -> Tuple[bool, str]:
+        """
+        Check if ML parlays should be suspended based on auto-stop conditions.
+        
+        Conditions:
+        - 20 parlays without positive cumulative ROI
+        
+        Returns:
+            (should_stop, reason) - True if parlays should be suspended
+        """
+        try:
+            result = db_helper.fetch_one("""
+                SELECT 
+                    COUNT(*) as total_parlays,
+                    SUM(CASE WHEN outcome = 'won' THEN (total_odds - 1) * 0.2 ELSE -0.2 END) as parlay_pnl
+                FROM ml_parlay_predictions 
+                WHERE outcome IN ('won', 'lost')
+                AND match_date >= (CURRENT_DATE - INTERVAL '30 days')::TEXT
+            """)
+            
+            if result:
+                total = result.get('total_parlays', 0) or 0
+                pnl = float(result.get('parlay_pnl', 0) or 0)
+                
+                if total >= MAX_PARLAYS_WITHOUT_POSITIVE_ROI and pnl < 0:
+                    return True, f"AUTO-STOP: {total} parlays with negative ROI ({pnl:.2f} units)"
+            
+            return False, ""
+        except Exception as e:
+            logger.warning(f"Auto-stop check failed: {e}")
+            return False, ""
     
     def _init_database(self):
         """Create ML Parlay predictions table"""
@@ -705,9 +748,7 @@ class MLParlayEngine:
             timestamp = int(time.time())
             today = datetime.utcnow().date()
             
-            bankroll_mgr = get_bankroll_manager()
-            current_bankroll = bankroll_mgr.get_current_bankroll()
-            stake = round(current_bankroll * ML_PARLAY_STAKE_PCT, 2)
+            stake = ML_PARLAY_STAKE_UNITS
             potential_payout = round(stake * metrics['total_odds'], 2)
             
             legs_json = json.dumps([{
@@ -779,6 +820,12 @@ class MLParlayEngine:
         """
         Main entry point: Generate ML parlays for today.
         
+        PARLAY POLICY (Dec 30, 2025):
+        - ONLY 2-leg parlays allowed
+        - Each leg must have positive EV
+        - Flat staking (0.2 units)
+        - Auto-stop if performance conditions met
+        
         Returns:
             List of parlay IDs created
         """
@@ -786,8 +833,13 @@ class MLParlayEngine:
             logger.info("⏭️ ML Parlay engine is disabled")
             return []
         
+        should_stop, reason = self._check_auto_stop()
+        if should_stop:
+            logger.info(f"🚫 NO PARLAYS GENERATED – POLICY RESTRICTION: {reason}")
+            return []
+        
         logger.info("="*60)
-        logger.info("🎰 ML PARLAY ENGINE - Starting (TEST MODE)")
+        logger.info("🎰 ML PARLAY ENGINE - Starting (POLICY COMPLIANT: 2-leg only)")
         logger.info("="*60)
         
         candidates = self._fetch_candidate_legs()

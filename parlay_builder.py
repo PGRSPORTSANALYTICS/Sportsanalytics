@@ -15,20 +15,32 @@ from itertools import combinations
 logger = logging.getLogger(__name__)
 
 # ============================================================
-# MULTI-MATCH PARLAY CONFIGURATION - NOVA v2.0 (Dec 9, 2025)
-# Retuned for controlled variance and daily production
+# MULTI-MATCH PARLAY CONFIGURATION - POLICY COMPLIANT (Dec 30, 2025)
+# Strict 2-leg only policy with flat staking
 # ============================================================
 
-MIN_LEGS = 2
-MAX_LEGS = 3           # Reduced from 4 to control variance
-MIN_PARLAY_ODDS = 3.00  # Lowered from 4.00 for more opportunities
-MAX_PARLAY_ODDS = 10.00 # Reduced from 20.00 for controlled risk
-MIN_PARLAY_EV = 0.03    # 3% minimum EV (lowered from 5%)
-MAX_PARLAYS_PER_DAY = 2 # Reduced from 3 for quality over quantity
-ALLOWED_TRUST_LEVELS = {"L1", "L2", "L1_HIGH_TRUST", "L2_MEDIUM_TRUST"}  # Accept both formats
+# PARLAY POLICY RULES:
+# 1. ONLY 2-leg parlays allowed (no 3+ legs)
+# 2. Each leg must be independently approved single with positive EV
+# 3. Same matchday only
+# 4. Flat staking at 10-25% of single stake
+# 5. Kelly staking FORBIDDEN for parlays
 
-# Stake configuration - 1.6% Kelly stake of bankroll
-KELLY_STAKE_PCT = 0.016  # 1.6% of bankroll
+MIN_LEGS = 2
+MAX_LEGS = 2           # POLICY: Only 2-leg parlays allowed
+MIN_PARLAY_ODDS = 2.50  # Adjusted for 2-leg parlays
+MAX_PARLAY_ODDS = 8.00  # Controlled risk for 2-leg
+MIN_PARLAY_EV = 0.03    # 3% minimum EV - each leg must have positive EV
+MAX_PARLAYS_PER_DAY = 2 # Quality over quantity
+ALLOWED_TRUST_LEVELS = {"L1", "L2", "L1_HIGH_TRUST", "L2_MEDIUM_TRUST"}
+
+# FLAT STAKING - 20% of single stake (0.2 units)
+# Kelly staking is STRICTLY FORBIDDEN for parlays
+PARLAY_STAKE_UNITS = 0.2  # Flat stake: 20% of 1-unit single stake
+
+# Auto-stop conditions
+MAX_PARLAYS_WITHOUT_POSITIVE_ROI = 20
+MAX_PARLAY_DRAWDOWN_MULTIPLIER = 2.0  # Stop if drawdown > 2x singles drawdown
 
 # Market short name mapping for parlay descriptions
 MARKET_SHORT_NAMES = {
@@ -47,18 +59,49 @@ def _get_market_short_name(market: str) -> str:
     return MARKET_SHORT_NAMES.get(market, market[:3].upper())
 
 
+def _check_parlay_auto_stop() -> Tuple[bool, str]:
+    """
+    Check if parlays should be suspended based on auto-stop conditions.
+    
+    Returns:
+        (should_stop, reason) - True if parlays should be suspended
+    """
+    try:
+        from db_helper import db_helper
+        
+        result = db_helper.fetch_one("""
+            SELECT 
+                COUNT(*) as total_parlays,
+                SUM(CASE WHEN outcome = 'won' THEN (bookmaker_odds - 1) ELSE -1 END) as parlay_pnl
+            FROM sgp_predictions 
+            WHERE home_team LIKE '%Multi-Match%'
+            AND outcome IN ('won', 'lost')
+            AND match_date >= CURRENT_DATE - INTERVAL '30 days'
+        """)
+        
+        if result:
+            total = result.get('total_parlays', 0) or 0
+            pnl = float(result.get('parlay_pnl', 0) or 0)
+            
+            if total >= MAX_PARLAYS_WITHOUT_POSITIVE_ROI and pnl < 0:
+                return True, f"AUTO-STOP: {total} parlays with negative ROI ({pnl:.2f} units)"
+        
+        return False, ""
+    except Exception as e:
+        logger.warning(f"Auto-stop check failed: {e}")
+        return False, ""
+
+
 def build_parlays_from_singles(singles: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Build multi-match parlays from approved single bets.
     
-    Rules:
-    1. Only L1 and L2 trust level singles
-    2. 2-4 legs per parlay
-    3. Only 1 leg per match (guaranteed since singles are unique per match)
-    4. Total odds between 4.00 and 20.00
-    5. EV >= 5% (probability_product * odds_product - 1)
-    6. Return sorted by highest EV first
-    7. Maximum 3 parlays per day
+    PARLAY POLICY (Dec 30, 2025):
+    1. ONLY 2-leg parlays allowed
+    2. Each leg must be independently approved single with positive EV
+    3. Same matchday only
+    4. Flat staking (0.2 units = 20% of single stake)
+    5. Auto-stop if 20 parlays without positive ROI
     
     Args:
         singles: List of single bet opportunities with probability and odds
@@ -66,6 +109,11 @@ def build_parlays_from_singles(singles: List[Dict[str, Any]]) -> List[Dict[str, 
     Returns:
         List of parlay opportunities sorted by EV (descending)
     """
+    should_stop, reason = _check_parlay_auto_stop()
+    if should_stop:
+        print(f"🚫 NO PARLAYS GENERATED – POLICY RESTRICTION: {reason}")
+        return []
+    
     if not singles:
         print("📦 No singles provided for parlay building")
         return []
