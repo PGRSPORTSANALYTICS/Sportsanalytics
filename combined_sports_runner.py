@@ -265,6 +265,17 @@ def run_daily_recap():
         logger.error(f"❌ Daily recap error: {e}")
 
 
+def run_daily_analysis():
+    """Run Daily Analysis Engine - Post-match analysis + upcoming match teaser"""
+    try:
+        from daily_analysis_engine import run_daily_analysis as analysis_cycle
+        logger.info("📝 Running Daily Analysis Engine...")
+        posts = analysis_cycle()
+        logger.info(f"📝 Daily Analysis complete: {posts}/3 posts generated")
+    except Exception as e:
+        logger.error(f"❌ Daily Analysis error: {e}")
+
+
 def run_weekly_recap():
     """Send weekly recap on Sunday at 22:30"""
     try:
@@ -313,6 +324,7 @@ def main():
     logger.info("📈 Weekly Recap - Sunday at 22:30 (Discord)")
     logger.info("📂 Bet Categorizer - Daily at 23:00")
     logger.info("📅 Games Reminder - Daily at 08:00")
+    logger.info("📝 Daily Analysis - Daily at 09:00 (Discord)")
     logger.info("="*80)
     
     # Run enabled engines on startup
@@ -385,6 +397,7 @@ def main():
     schedule.every().sunday.at("22:30").do(run_weekly_recap)
     schedule.every().day.at("23:00").do(run_daily_categorizer)
     schedule.every().day.at("08:00").do(run_daily_games_reminder)
+    schedule.every().day.at("09:00").do(run_daily_analysis)
     
     logger.info("✅ All schedules configured. Starting main loop...")
     
