@@ -161,16 +161,36 @@ class ResultsEngine:
         except Exception as e:
             logger.error(f"❌ Auto-void error: {e}")
     
+    def _get_db_connection(self):
+        """Get a fresh database connection with retry logic."""
+        for attempt in range(3):
+            try:
+                conn = psycopg2.connect(
+                    self.database_url,
+                    connect_timeout=30,
+                    keepalives=1,
+                    keepalives_idle=30,
+                    keepalives_interval=10,
+                    keepalives_count=5
+                )
+                return conn
+            except Exception as e:
+                if attempt < 2:
+                    logger.warning(f"DB connection attempt {attempt+1} failed: {e}, retrying...")
+                    time.sleep(2)
+                else:
+                    raise
+        return None
+    
     def _settle_football_opportunities(self):
         """Settle pending football opportunities (Value Singles, Corners, Cards)."""
         if not self.database_url:
             return
         
         try:
-            conn = psycopg2.connect(self.database_url)
+            conn = self._get_db_connection()
             cursor = conn.cursor(cursor_factory=RealDictCursor)
             
-            # Include today's matches (finished games) + last 3 days
             cursor.execute("""
                 SELECT id, home_team, away_team, match_date, market, selection, odds, stake, match_id
                 FROM football_opportunities 
@@ -182,9 +202,13 @@ class ResultsEngine:
             """)
             
             pending = cursor.fetchall()
+            cursor.close()
+            conn.close()
+            
             logger.info(f"📋 Found {len(pending)} pending football bets to settle")
             
             matches_processed = {}
+            bets_to_update = []
             
             for bet in pending:
                 try:
@@ -194,7 +218,7 @@ class ResultsEngine:
                         if manual_result:
                             outcome = manual_result['result'].lower()
                             if outcome in ['won', 'lost', 'void']:
-                                self._update_football_bet(cursor, bet['id'], outcome, {'source': 'manual'})
+                                bets_to_update.append((bet['id'], outcome, {'source': 'manual'}, None))
                                 self.stats['settled'] += 1
                                 self.stats['manual_applied'] += 1
                                 logger.info(f"📋 Applied manual result for bet #{bet['id']}: {outcome}")
@@ -218,26 +242,32 @@ class ResultsEngine:
                     
                     outcome = self._calculate_outcome(bet, result)
                     if outcome in ['won', 'lost']:
-                        self._update_football_bet(cursor, bet['id'], outcome, result)
+                        training_key = bet.get('match_id', match_key)
+                        bets_to_update.append((bet['id'], outcome, result, training_key))
                         self.stats['settled'] += 1
                         if result.get('source') not in ['api-football', 'database']:
                             self.stats['fallback_used'] += 1
-                        
-                        if result.get('home_goals') is not None and result.get('away_goals') is not None:
-                            self._update_training_data(
-                                cursor, 
-                                bet.get('match_id', match_key),
-                                result['home_goals'], 
-                                result['away_goals']
-                            )
                     
                 except Exception as e:
-                    logger.warning(f"⚠️ Error settling bet {bet['id']}: {e}")
+                    logger.warning(f"⚠️ Error processing bet {bet['id']}: {e}")
                     self.stats['failed'] += 1
             
-            conn.commit()
-            cursor.close()
-            conn.close()
+            if bets_to_update:
+                update_conn = self._get_db_connection()
+                update_cursor = update_conn.cursor(cursor_factory=RealDictCursor)
+                
+                for bet_id, outcome, result, training_key in bets_to_update:
+                    try:
+                        self._update_football_bet(update_cursor, bet_id, outcome, result)
+                        if training_key and result.get('home_goals') is not None:
+                            self._update_training_data(update_cursor, training_key, result['home_goals'], result['away_goals'])
+                        logger.info(f"✅ Settled football #{bet_id}: {outcome.upper()}")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Error updating bet {bet_id}: {e}")
+                
+                update_conn.commit()
+                update_cursor.close()
+                update_conn.close()
             
         except Exception as e:
             logger.error(f"❌ Football settlement error: {e}")
@@ -248,7 +278,7 @@ class ResultsEngine:
             return
         
         try:
-            conn = psycopg2.connect(self.database_url)
+            conn = self._get_db_connection()
             cursor = conn.cursor(cursor_factory=RealDictCursor)
             
             cursor.execute("""
@@ -628,6 +658,13 @@ class ResultsEngine:
             logger.warning(f"Stats fetch error: {e}")
             return None
     
+    def _normalize_team_name(self, name: str) -> str:
+        """Normalize team name by removing accents and common suffixes."""
+        import unicodedata
+        normalized = unicodedata.normalize('NFKD', name).encode('ASCII', 'ignore').decode('ASCII')
+        normalized = normalized.lower().replace('fc ', '').replace(' fc', '').replace('cf ', '').strip()
+        return normalized
+    
     def _fuzzy_match(self, team1: str, team2: str) -> bool:
         """Fuzzy match team names with common abbreviations."""
         TEAM_ALIASES = {
@@ -656,8 +693,8 @@ class ResultsEngine:
             'leverkusen': ['bayer leverkusen', 'bayer 04 leverkusen'],
         }
         
-        t1 = team1.lower().replace('fc ', '').replace(' fc', '').replace('cf ', '').strip()
-        t2 = team2.lower().replace('fc ', '').replace(' fc', '').replace('cf ', '').strip()
+        t1 = self._normalize_team_name(team1)
+        t2 = self._normalize_team_name(team2)
         
         if t1 == t2:
             return True
