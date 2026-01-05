@@ -20,9 +20,9 @@ logger = logging.getLogger(__name__)
 # PRODUCT ENABLE/DISABLE FLAGS - Set to False to pause product
 # ============================================================
 ENABLE_VALUE_SINGLES = True          # Core product - AI picks for 1X2, O/U, BTTS, etc.
-ENABLE_PARLAYS = True                # Multi-match parlays from L1/L2 singles
+ENABLE_PARLAYS = False               # DISABLED per Jan 2026 policy - no multi-match parlays
 ENABLE_COLLEGE_BASKETBALL = True     # ACTIVE - 63.3% hit rate, +$3,446 profit
-ENABLE_ML_PARLAY = True              # ENABLED - test mode (data collection only)
+ENABLE_ML_PARLAY = True              # 2-leg moneyline parlays ONLY (policy exception)
 
 # ============================================================
 # LIVE LEARNING MODE - Full Data Capture Enabled

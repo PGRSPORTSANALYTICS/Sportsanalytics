@@ -42,13 +42,13 @@ logger = logging.getLogger(__name__)
 # Master switch
 ML_PARLAY_ENABLED = True
 
-# Odds filters per leg - PRODUCTION SETTINGS
-ML_PARLAY_MIN_ODDS = 1.30  # Minimum odds per leg
-ML_PARLAY_MAX_ODDS = 3.00  # Maximum odds per leg
+# Odds filters per leg - POLICY COMPLIANT (Jan 2026)
+ML_PARLAY_MIN_ODDS = 1.35  # Minimum odds per leg (policy: 1.35-1.70)
+ML_PARLAY_MAX_ODDS = 1.70  # Maximum odds per leg (policy: 1.35-1.70)
 
-# Total parlay odds range (adjusted for 2-leg only)
-ML_PARLAY_MIN_TOTAL_ODDS = 2.50   # Minimum combined odds
-ML_PARLAY_MAX_TOTAL_ODDS = 8.00   # Maximum combined odds
+# Total parlay odds range (2-leg only: 1.35*1.35=1.82 to 1.70*1.70=2.89)
+ML_PARLAY_MIN_TOTAL_ODDS = 1.82   # Minimum combined odds (1.35 x 1.35)
+ML_PARLAY_MAX_TOTAL_ODDS = 2.89   # Maximum combined odds (1.70 x 1.70)
 
 # Minimum EV per leg (3% edge for production)
 MIN_ML_PARLAY_LEG_EV = 0.03  # 3% EV threshold - each leg must have positive EV
