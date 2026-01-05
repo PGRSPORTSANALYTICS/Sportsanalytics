@@ -21,9 +21,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 ODDS_SOURCE_DEFAULT = 'the_odds_api'
-CLOSING_WINDOW_BEFORE_KICKOFF_MINUTES = 5
-CLOSING_WINDOW_AFTER_KICKOFF_MINUTES = 2
-CLV_CAPTURE_MINUTES_BEFORE = 5
+CLOSING_WINDOW_BEFORE_KICKOFF_MINUTES = 15  # Extended to catch more matches
+CLOSING_WINDOW_AFTER_KICKOFF_MINUTES = 5    # Allow 5 min after kickoff for late capture
+CLV_CAPTURE_MINUTES_BEFORE = 15              # Look 15 min before kickoff
 
 class CLVService:
     """Service for tracking Closing Line Value"""
@@ -58,8 +58,8 @@ class CLVService:
         candidates = []
         
         try:
-            capture_window_start = current_epoch + (CLOSING_WINDOW_AFTER_KICKOFF_MINUTES * 60)
-            capture_window_end = current_epoch - (CLV_CAPTURE_MINUTES_BEFORE * 60)
+            window_start = current_epoch - (CLOSING_WINDOW_AFTER_KICKOFF_MINUTES * 60)
+            window_end = current_epoch + (CLV_CAPTURE_MINUTES_BEFORE * 60)
             
             rows = db_helper.execute("""
                 SELECT id, match_id, home_team, away_team, market, selection, 
@@ -68,12 +68,11 @@ class CLVService:
                 WHERE close_odds IS NULL
                   AND open_odds IS NOT NULL
                   AND status = 'pending'
-                  AND (
-                      (kickoff_epoch IS NOT NULL AND kickoff_epoch >= %s AND kickoff_epoch <= %s)
-                      OR (kickoff_epoch IS NULL AND match_date IS NOT NULL)
-                  )
-                ORDER BY kickoff_epoch ASC NULLS LAST
-            """, (capture_window_end, capture_window_start), fetch='all') or []
+                  AND kickoff_epoch IS NOT NULL
+                  AND kickoff_epoch >= %s
+                  AND kickoff_epoch <= %s
+                ORDER BY kickoff_epoch ASC
+            """, (window_start, window_end), fetch='all') or []
             
             for row in rows:
                 row_dict = dict(row) if hasattr(row, '_mapping') else {
@@ -84,38 +83,32 @@ class CLVService:
                 }
                 
                 kickoff_epoch = row_dict.get('kickoff_epoch')
-                
                 if kickoff_epoch is None:
-                    kickoff_dt = self._parse_kickoff_time(row_dict.get('kickoff_time'), row_dict.get('match_date'))
-                    if not kickoff_dt:
-                        continue
-                    kickoff_epoch = int(kickoff_dt.timestamp())
+                    continue
                 
-                clv_capture_at = get_clv_capture_epoch(kickoff_epoch, CLV_CAPTURE_MINUTES_BEFORE)
-                seconds_to_capture = clv_capture_at - current_epoch
+                seconds_to_kickoff = kickoff_epoch - current_epoch
                 
-                if -120 <= seconds_to_capture <= 300:
-                    candidates.append({
-                        'id': row_dict['id'],
-                        'match_id': row_dict['match_id'],
-                        'home_team': row_dict['home_team'],
-                        'away_team': row_dict['away_team'],
-                        'market': row_dict['market'],
-                        'selection': row_dict['selection'],
-                        'open_odds': row_dict['open_odds'],
-                        'kickoff_time': row_dict['kickoff_time'],
-                        'kickoff_epoch': kickoff_epoch,
-                        'kickoff_utc': row_dict.get('kickoff_utc'),
-                        'match_date': row_dict['match_date'],
-                        'league': row_dict['league'],
-                        'seconds_to_capture': seconds_to_capture,
-                        'clv_capture_at': clv_capture_at
-                    })
+                candidates.append({
+                    'id': row_dict['id'],
+                    'match_id': row_dict['match_id'],
+                    'home_team': row_dict['home_team'],
+                    'away_team': row_dict['away_team'],
+                    'market': row_dict['market'],
+                    'selection': row_dict['selection'],
+                    'open_odds': row_dict['open_odds'],
+                    'kickoff_time': row_dict['kickoff_time'],
+                    'kickoff_epoch': kickoff_epoch,
+                    'kickoff_utc': row_dict.get('kickoff_utc'),
+                    'match_date': row_dict['match_date'],
+                    'league': row_dict['league'],
+                    'seconds_to_kickoff': seconds_to_kickoff
+                })
             
             if candidates:
-                logger.info(f"📊 CLV: Found {len(candidates)} candidates for closing odds (epoch-based, 5min before kickoff)")
+                logger.info(f"📊 CLV: Found {len(candidates)} candidates for closing odds capture")
                 for c in candidates[:3]:
-                    logger.info(f"   • {c['home_team']} vs {c['away_team']} | capture in {c['seconds_to_capture']}s")
+                    mins = c['seconds_to_kickoff'] // 60
+                    logger.info(f"   • {c['home_team']} vs {c['away_team']} | kickoff in {mins} min")
             
             return candidates
             

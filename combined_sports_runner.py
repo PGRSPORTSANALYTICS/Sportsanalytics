@@ -318,7 +318,7 @@ def main():
     logger.info("🏀 Basketball Results - Every 5 minutes")
     logger.info("🎰 ML Parlay Results - Every 5 minutes")
     logger.info("="*80)
-    logger.info("📊 CLV Tracking - Every 10 minutes (closing odds capture)")
+    logger.info("📊 CLV Tracking - Every 5 minutes (closing odds capture)")
     logger.info("📊 Performance Updates - Every 6 hours")
     logger.info("📊 Daily Recap - Daily at 22:30 (Discord)")
     logger.info("📈 Weekly Recap - Sunday at 22:30 (Discord)")
@@ -379,8 +379,8 @@ def main():
     schedule.every(5).minutes.do(run_results_engine)  # Unified Results Engine
     schedule.every(5).minutes.do(verify_basketball_results)  # Basketball separate
     
-    # Schedule CLV update - Every 10 minutes to capture closing odds
-    schedule.every(10).minutes.do(run_clv_update_cycle)
+    # Schedule CLV update - Every 5 minutes for reliable closing odds capture
+    schedule.every(5).minutes.do(run_clv_update_cycle)
     
     # Schedule LIVE LEARNING enrichment - Every 10 minutes to add syndicate data
     if LIVE_LEARNING_MODE:
