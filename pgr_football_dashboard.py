@@ -3525,8 +3525,8 @@ def main():
     # Split PROD vs BACKTEST data
     prod_bets, backtest_bets = split_bets_by_mode(all_bets)
 
-    # Tabs for different products
-    free_tab, daily_card_tab, overview_tab, singles_tab, odds_compare_tab, props_tab, parlays_tab, ml_parlay_tab, basket_tab, kelly_tab, backtest_tab = st.tabs(
+    # Tabs for different products (Parlays disabled per Jan 2026 policy)
+    free_tab, daily_card_tab, overview_tab, singles_tab, odds_compare_tab, props_tab, basket_tab, kelly_tab, backtest_tab = st.tabs(
         [
             "Free Picks",
             "Daily Card",
@@ -3534,8 +3534,6 @@ def main():
             "Value Singles",
             "Odds Compare",
             "Props & Specials",
-            "Parlays",
-            "ML Parlay",
             "College Basketball",
             "Smart Stake",
             "Backtests",
@@ -3554,7 +3552,7 @@ def main():
     with singles_tab:
         render_product_tab(
             prod_bets,
-            product_codes=["VALUE_SINGLE", "VALUE_SINGLES", "FOOTBALL_SINGLE", "CORNERS", "CARDS"],  # EXACT_SCORE removed
+            product_codes=["VALUE_SINGLE", "VALUE_SINGLES", "FOOTBALL_SINGLE", "CORNERS", "CARDS"],
             title="Value Singles",
             description="High-edge single bets across 1X2, over/under, BTTS, corners and cards.",
         )
@@ -3564,12 +3562,6 @@ def main():
 
     with props_tab:
         render_props_tab()
-
-    with parlays_tab:
-        render_parlays_tab()
-
-    with ml_parlay_tab:
-        render_ml_parlay_tab()
 
     with basket_tab:
         render_basketball_tab(prod_bets)
