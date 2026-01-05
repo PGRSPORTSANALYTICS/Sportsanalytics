@@ -108,10 +108,9 @@ class ResultsEngine:
                     outcome = 'void', 
                     result = 'VOID',
                     settled_timestamp = %s
-                WHERE (status = 'pending' OR outcome IS NULL OR outcome = '' OR outcome = 'unknown')
-                    AND market IN ('Corners', 'Cards')
+                WHERE market IN ('Corners', 'Cards')
                     AND DATE(match_date) < CURRENT_DATE - INTERVAL '2 days'
-                    AND outcome NOT IN ('won', 'lost', 'void')
+                    AND (outcome IS NULL OR outcome = '' OR outcome = 'unknown' OR outcome = 'pending')
             """, (now_ts,))
             corners_cards_voided = cursor.rowcount
             
@@ -121,10 +120,9 @@ class ResultsEngine:
                     outcome = 'void', 
                     result = 'VOID',
                     settled_timestamp = %s
-                WHERE (status = 'pending' OR outcome IS NULL OR outcome = '' OR outcome = 'unknown')
-                    AND market NOT IN ('Corners', 'Cards')
+                WHERE market NOT IN ('Corners', 'Cards')
                     AND DATE(match_date) < CURRENT_DATE - INTERVAL '3 days'
-                    AND outcome NOT IN ('won', 'lost', 'void')
+                    AND (outcome IS NULL OR outcome = '' OR outcome = 'unknown' OR outcome = 'pending')
             """, (now_ts,))
             football_voided = cursor.rowcount
             
@@ -238,6 +236,13 @@ class ResultsEngine:
                         result = matches_processed[match_key]
                     
                     if not result:
+                        continue
+                    
+                    # Check if match was postponed/cancelled - should be voided
+                    if result.get('void'):
+                        bets_to_update.append((bet['id'], 'void', result, None))
+                        self.stats['voided'] += 1
+                        logger.info(f"🚫 Voiding bet #{bet['id']} - match was {result.get('status', 'postponed')}")
                         continue
                     
                     outcome = self._calculate_outcome(bet, result)
@@ -439,6 +444,9 @@ class ResultsEngine:
         cache_key = f"{home_team}_{away_team}_{match_date}"
         if cache_key in self._match_cache:
             cached = self._match_cache[cache_key]
+            # Always return void results (postponed/cancelled matches)
+            if cached.get('void'):
+                return cached
             if market in ['corners', 'cards']:
                 if market == 'corners' and cached.get('total_corners') is not None:
                     return cached
@@ -469,6 +477,12 @@ class ResultsEngine:
         if self.api_football_key:
             result = self._get_api_football_result(home_team, away_team, match_date, match_id)
             if result:
+                # Handle void results (postponed/cancelled matches) immediately
+                if result.get('void'):
+                    self._log_verification(metrics, bet_id, market, 'api-football', True, result)
+                    self._match_cache[cache_key] = result
+                    return result
+                
                 if needs_stats:
                     if market == 'corners' and result.get('total_corners') is not None:
                         self._log_verification(metrics, bet_id, market, 'api-football', True, result)
@@ -564,40 +578,63 @@ class ResultsEngine:
                 'X-RapidAPI-Key': self.api_football_key,
                 'X-RapidAPI-Host': 'v3.football.api-sports.io'
             }
-            params = {'date': api_date, 'status': 'FT'}
             
+            # First check for finished matches
+            params = {'date': api_date, 'status': 'FT'}
             response = requests.get(url, headers=headers, params=params, timeout=20)
             self.stats['api_calls'] += 1
             
-            if response.status_code != 200:
-                return None
-            
-            fixtures = response.json().get('response', [])
-            
-            for fixture in fixtures:
-                teams = fixture.get('teams', {})
-                home_api = teams.get('home', {}).get('name', '').lower()
-                away_api = teams.get('away', {}).get('name', '').lower()
+            if response.status_code == 200:
+                fixtures = response.json().get('response', [])
                 
-                if self._fuzzy_match(home_team, home_api) and self._fuzzy_match(away_team, away_api):
-                    goals = fixture.get('goals', {})
-                    home_goals = goals.get('home')
-                    away_goals = goals.get('away')
+                for fixture in fixtures:
+                    teams = fixture.get('teams', {})
+                    home_api = teams.get('home', {}).get('name', '').lower()
+                    away_api = teams.get('away', {}).get('name', '').lower()
                     
-                    if home_goals is not None and away_goals is not None:
-                        result = {
-                            'home_goals': int(home_goals),
-                            'away_goals': int(away_goals),
-                            'source': 'api-football'
-                        }
+                    if self._fuzzy_match(home_team, home_api) and self._fuzzy_match(away_team, away_api):
+                        goals = fixture.get('goals', {})
+                        home_goals = goals.get('home')
+                        away_goals = goals.get('away')
                         
-                        fixture_id = fixture.get('fixture', {}).get('id')
-                        if fixture_id:
-                            stats = self._get_fixture_stats(fixture_id)
-                            if stats:
-                                result.update(stats)
-                        
-                        return result
+                        if home_goals is not None and away_goals is not None:
+                            result = {
+                                'home_goals': int(home_goals),
+                                'away_goals': int(away_goals),
+                                'source': 'api-football'
+                            }
+                            
+                            fixture_id = fixture.get('fixture', {}).get('id')
+                            if fixture_id:
+                                stats = self._get_fixture_stats(fixture_id)
+                                if stats:
+                                    result.update(stats)
+                            
+                            return result
+            
+            # Check for postponed/cancelled matches (should be voided)
+            params_all = {'date': api_date}
+            response_all = requests.get(url, headers=headers, params=params_all, timeout=20)
+            self.stats['api_calls'] += 1
+            
+            if response_all.status_code == 200:
+                all_fixtures = response_all.json().get('response', [])
+                
+                for fixture in all_fixtures:
+                    teams = fixture.get('teams', {})
+                    home_api = teams.get('home', {}).get('name', '').lower()
+                    away_api = teams.get('away', {}).get('name', '').lower()
+                    
+                    if self._fuzzy_match(home_team, home_api) and self._fuzzy_match(away_team, away_api):
+                        status = fixture.get('fixture', {}).get('status', {}).get('short', '')
+                        # PST=Postponed, CANC=Cancelled, ABD=Abandoned
+                        if status in ['PST', 'CANC', 'ABD']:
+                            logger.info(f"🚫 Match {home_team} vs {away_team} was {status} - marking for void")
+                            return {
+                                'status': status,
+                                'void': True,
+                                'source': 'api-football'
+                            }
             
             return None
             
