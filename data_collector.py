@@ -789,10 +789,10 @@ class DataCollector:
                     SELECT 
                         DATE(match_date) as day,
                         CASE 
+                            WHEN market = 'Corners' THEN 'Corners'
+                            WHEN market = 'Cards' THEN 'Cards'
                             WHEN selection IN ('Home Win', 'Away Win', 'Draw') THEN '1X2'
                             WHEN selection LIKE '%Goal%' THEN 'O/U'
-                            WHEN selection LIKE '%Corner%' THEN 'Corners'
-                            WHEN selection LIKE '%Card%' THEN 'Cards'
                             WHEN selection LIKE '%BTTS%' OR selection LIKE '%Both%' THEN 'BTTS'
                             ELSE 'Other'
                         END as market_category,
@@ -801,13 +801,13 @@ class DataCollector:
                         SUM(CASE WHEN outcome = 'won' THEN 1 ELSE 0 END) as correct
                     FROM football_opportunities
                     WHERE match_date::date >= CURRENT_DATE - :days
-                      AND market = 'Value Single'
+                      AND market IN ('Value Single', 'Corners', 'Cards')
                     GROUP BY DATE(match_date), 
                              CASE 
+                                WHEN market = 'Corners' THEN 'Corners'
+                                WHEN market = 'Cards' THEN 'Cards'
                                 WHEN selection IN ('Home Win', 'Away Win', 'Draw') THEN '1X2'
                                 WHEN selection LIKE '%Goal%' THEN 'O/U'
-                                WHEN selection LIKE '%Corner%' THEN 'Corners'
-                                WHEN selection LIKE '%Card%' THEN 'Cards'
                                 WHEN selection LIKE '%BTTS%' OR selection LIKE '%Both%' THEN 'BTTS'
                                 ELSE 'Other'
                              END
