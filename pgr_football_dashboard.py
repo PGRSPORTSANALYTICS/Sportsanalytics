@@ -1627,6 +1627,117 @@ def render_learning_track_record():
         
         st.plotly_chart(fig, use_container_width=True)
     
+    # Performance by Market Chart - Rolling Trend
+    market_data = collector.get_daily_accuracy_by_market(days=30)
+    if market_data:
+        import pandas as pd
+        import plotly.graph_objects as go
+        
+        st.markdown("### Performance by Market – Rolling Trend")
+        
+        market_colors = {
+            '1X2': '#00F59D',
+            'O/U': '#3B82F6', 
+            'Corners': '#F59E0B',
+            'Cards': '#EF4444',
+            'BTTS': '#8B5CF6',
+            'Other': '#6B7280'
+        }
+        
+        market_stats = []
+        for market, data in market_data.items():
+            if len(data) >= 2:
+                total_settled = sum(d['settled'] for d in data)
+                total_correct = sum(d['correct'] for d in data)
+                if total_settled >= 5:
+                    market_stats.append({
+                        'market': market,
+                        'accuracy': (total_correct / total_settled * 100) if total_settled > 0 else 0,
+                        'bets': total_settled,
+                        'color': market_colors.get(market, '#6B7280')
+                    })
+        
+        if market_stats:
+            market_stats.sort(key=lambda x: x['bets'], reverse=True)
+            
+            stats_html = '<div style="display:flex;gap:16px;margin-bottom:12px;padding:12px 16px;background:rgba(0,0,0,0.3);border-radius:8px;flex-wrap:wrap;">'
+            for stat in market_stats[:4]:
+                stats_html += f'''
+                <div style="min-width:80px;">
+                    <span style="color:{stat['color']};font-size:12px;font-weight:600;">{stat['market']}</span><br/>
+                    <span style="color:#FFFFFF;font-size:18px;font-weight:600;">{stat['accuracy']:.1f}%</span>
+                    <span style="color:#9CA3AF;font-size:11px;"> ({stat['bets']})</span>
+                </div>'''
+            stats_html += '</div>'
+            st.markdown(stats_html, unsafe_allow_html=True)
+        
+        fig_market = go.Figure()
+        
+        for market, data in market_data.items():
+            if len(data) < 3:
+                continue
+            
+            mkt_df = pd.DataFrame(data)
+            mkt_df['date'] = pd.to_datetime(mkt_df['date'])
+            mkt_df = mkt_df.sort_values('date')
+            
+            mkt_df['rolling_correct'] = mkt_df['correct'].rolling(window=7, min_periods=1).sum()
+            mkt_df['rolling_settled'] = mkt_df['settled'].rolling(window=7, min_periods=1).sum()
+            mkt_df['rolling_accuracy'] = (mkt_df['rolling_correct'] / mkt_df['rolling_settled'] * 100).fillna(0)
+            
+            total_settled = mkt_df['settled'].sum()
+            if total_settled < 5:
+                continue
+            
+            fig_market.add_trace(go.Scatter(
+                x=mkt_df['date'],
+                y=mkt_df['rolling_accuracy'],
+                mode='lines',
+                name=market,
+                line=dict(color=market_colors.get(market, '#6B7280'), width=2),
+                hovertemplate=f'{market}<br>%{{x|%b %d}}<br>7-Day Avg: %{{y:.1f}}%<extra></extra>'
+            ))
+        
+        if daily_data and len(daily_data) >= 2:
+            date_range = pd.date_range(start=daily_df['date'].min(), end=daily_df['date'].max(), freq='W-SUN')
+            if len(date_range) == 0:
+                date_range = [daily_df['date'].min(), daily_df['date'].max()]
+        else:
+            date_range = None
+        
+        fig_market.update_layout(
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            font_color="#FFFFFF",
+            xaxis=dict(
+                gridcolor="rgba(255,255,255,0.05)",
+                tickvals=date_range,
+                tickformat="%b %d",
+                tickfont=dict(size=11),
+                showgrid=False
+            ),
+            yaxis=dict(
+                gridcolor="rgba(255,255,255,0.1)",
+                range=[0, 100],
+                tickvals=[0, 25, 50, 75],
+                ticktext=["0%", "25%", "50%", "75%"],
+                tickfont=dict(size=11)
+            ),
+            height=280,
+            margin=dict(l=0, r=0, t=10, b=0),
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="left",
+                x=0,
+                font=dict(size=11)
+            ),
+            hovermode="x unified"
+        )
+        
+        st.plotly_chart(fig_market, use_container_width=True)
+    
     # Model Calibration Chart
     calibration_data = collector.get_calibration_data(bins=10)
     if calibration_data and len(calibration_data) >= 2:

@@ -777,6 +777,65 @@ class DataCollector:
         except SQLAlchemyError as e:
             logger.error(f"❌ Error getting calibration data: {e}")
             return []
+    
+    def get_daily_accuracy_by_market(self, days: int = 30) -> Dict[str, List[Dict[str, Any]]]:
+        """Get daily accuracy by market category for trend analysis"""
+        if not self._engine:
+            return {}
+        
+        try:
+            with self._engine.connect() as conn:
+                result = conn.execute(text("""
+                    SELECT 
+                        DATE(match_date) as day,
+                        CASE 
+                            WHEN selection IN ('Home Win', 'Away Win', 'Draw') THEN '1X2'
+                            WHEN selection LIKE '%Goal%' THEN 'O/U'
+                            WHEN selection LIKE '%Corner%' THEN 'Corners'
+                            WHEN selection LIKE '%Card%' THEN 'Cards'
+                            WHEN selection LIKE '%BTTS%' OR selection LIKE '%Both%' THEN 'BTTS'
+                            ELSE 'Other'
+                        END as market_category,
+                        COUNT(*) as total,
+                        SUM(CASE WHEN outcome IN ('won', 'lost') THEN 1 ELSE 0 END) as settled,
+                        SUM(CASE WHEN outcome = 'won' THEN 1 ELSE 0 END) as correct
+                    FROM football_opportunities
+                    WHERE match_date::date >= CURRENT_DATE - :days
+                      AND market = 'Value Single'
+                    GROUP BY DATE(match_date), 
+                             CASE 
+                                WHEN selection IN ('Home Win', 'Away Win', 'Draw') THEN '1X2'
+                                WHEN selection LIKE '%Goal%' THEN 'O/U'
+                                WHEN selection LIKE '%Corner%' THEN 'Corners'
+                                WHEN selection LIKE '%Card%' THEN 'Cards'
+                                WHEN selection LIKE '%BTTS%' OR selection LIKE '%Both%' THEN 'BTTS'
+                                ELSE 'Other'
+                             END
+                    ORDER BY day ASC, market_category
+                """), {'days': days})
+                
+                market_data = {}
+                for row in result.fetchall():
+                    day = row[0]
+                    category = row[1]
+                    settled = row[3] or 0
+                    correct = row[4] or 0
+                    
+                    if category not in market_data:
+                        market_data[category] = []
+                    
+                    market_data[category].append({
+                        'date': day,
+                        'total': row[2] or 0,
+                        'settled': settled,
+                        'correct': correct,
+                        'accuracy_pct': (correct / settled * 100) if settled > 0 else 0
+                    })
+                
+                return market_data
+        except SQLAlchemyError as e:
+            logger.error(f"❌ Error getting daily accuracy by market: {e}")
+            return {}
 
 
 # Global instance for easy access
