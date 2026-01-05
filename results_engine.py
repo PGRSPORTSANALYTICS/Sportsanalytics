@@ -629,7 +629,33 @@ class ResultsEngine:
             return None
     
     def _fuzzy_match(self, team1: str, team2: str) -> bool:
-        """Fuzzy match team names."""
+        """Fuzzy match team names with common abbreviations."""
+        TEAM_ALIASES = {
+            'qpr': ['queens park rangers', 'queens park'],
+            'man utd': ['manchester united', 'man united'],
+            'man city': ['manchester city'],
+            'spurs': ['tottenham', 'tottenham hotspur'],
+            'wolves': ['wolverhampton', 'wolverhampton wanderers'],
+            'brighton': ['brighton & hove albion', 'brighton hove'],
+            'west ham': ['west ham united'],
+            'newcastle': ['newcastle united'],
+            'norwich': ['norwich city'],
+            'leeds': ['leeds united'],
+            'sheff utd': ['sheffield united', 'sheffield utd'],
+            'sheff wed': ['sheffield wednesday'],
+            'nottm forest': ['nottingham forest'],
+            'west brom': ['west bromwich albion', 'west bromwich'],
+            'psg': ['paris saint-germain', 'paris saint germain', 'paris sg'],
+            'atletico': ['atletico madrid', 'atletico de madrid'],
+            'real': ['real madrid'],
+            'inter': ['inter milan', 'internazionale'],
+            'ac milan': ['milan'],
+            'bayern': ['bayern munich', 'bayern munchen'],
+            'dortmund': ['borussia dortmund'],
+            'rb leipzig': ['rasenballsport leipzig', 'leipzig'],
+            'leverkusen': ['bayer leverkusen', 'bayer 04 leverkusen'],
+        }
+        
         t1 = team1.lower().replace('fc ', '').replace(' fc', '').replace('cf ', '').strip()
         t2 = team2.lower().replace('fc ', '').replace(' fc', '').replace('cf ', '').strip()
         
@@ -639,6 +665,14 @@ class ResultsEngine:
             return True
         if t1.split()[0] == t2.split()[0]:
             return True
+        
+        for abbrev, full_names in TEAM_ALIASES.items():
+            names_set = set([abbrev] + full_names)
+            if t1 in names_set and t2 in names_set:
+                return True
+            if any(t1 in name or name in t1 for name in names_set) and any(t2 in name or name in t2 for name in names_set):
+                return True
+        
         return False
     
     def _calculate_outcome(self, bet: Dict, result: Dict) -> str:
