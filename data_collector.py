@@ -706,7 +706,7 @@ class DataCollector:
             return []
     
     def get_daily_accuracy(self, days: int = 30) -> List[Dict[str, Any]]:
-        """Get daily accuracy for trend analysis"""
+        """Get daily accuracy for trend analysis using actual bet data"""
         if not self._engine:
             return []
         
@@ -716,10 +716,11 @@ class DataCollector:
                     SELECT 
                         DATE(match_date) as day,
                         COUNT(*) as total,
-                        SUM(CASE WHEN actual_score IS NOT NULL THEN 1 ELSE 0 END) as settled,
-                        SUM(CASE WHEN prediction_correct = true THEN 1 ELSE 0 END) as correct
-                    FROM training_data
-                    WHERE match_date >= CURRENT_DATE - :days
+                        SUM(CASE WHEN outcome IN ('won', 'lost') THEN 1 ELSE 0 END) as settled,
+                        SUM(CASE WHEN outcome = 'won' THEN 1 ELSE 0 END) as correct
+                    FROM football_opportunities
+                    WHERE match_date::date >= CURRENT_DATE - :days
+                      AND market = 'Value Single'
                     GROUP BY DATE(match_date)
                     ORDER BY DATE(match_date) ASC
                 """), {'days': days})
@@ -741,7 +742,7 @@ class DataCollector:
             return []
     
     def get_calibration_data(self, bins: int = 10) -> List[Dict[str, Any]]:
-        """Get model calibration data (predicted probability vs actual hit rate)"""
+        """Get model calibration data (predicted probability vs actual hit rate) using actual bets"""
         if not self._engine:
             return []
         
@@ -749,14 +750,15 @@ class DataCollector:
             with self._engine.connect() as conn:
                 result = conn.execute(text("""
                     SELECT 
-                        FLOOR(model_probability * :bins) / :bins as prob_bin,
+                        FLOOR(model_prob * :bins) / :bins as prob_bin,
                         COUNT(*) as total,
-                        SUM(CASE WHEN prediction_correct = true THEN 1 ELSE 0 END) as correct,
-                        AVG(model_probability) as avg_predicted
-                    FROM training_data
-                    WHERE model_probability IS NOT NULL 
-                    AND actual_score IS NOT NULL
-                    GROUP BY FLOOR(model_probability * :bins)
+                        SUM(CASE WHEN outcome = 'won' THEN 1 ELSE 0 END) as correct,
+                        AVG(model_prob) as avg_predicted
+                    FROM football_opportunities
+                    WHERE model_prob IS NOT NULL 
+                      AND outcome IN ('won', 'lost')
+                      AND market = 'Value Single'
+                    GROUP BY FLOOR(model_prob * :bins)
                     ORDER BY prob_bin ASC
                 """), {'bins': bins})
                 
