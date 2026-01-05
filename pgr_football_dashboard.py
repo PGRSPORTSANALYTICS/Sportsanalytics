@@ -1512,7 +1512,7 @@ def render_learning_track_record():
         else:
             st.info("Need more settled predictions per league (min 3) to show breakdown.")
     
-    # Accuracy Trend Chart
+    # Accuracy Trend Chart - Redesigned for instant readability
     daily_data = collector.get_daily_accuracy(days=30)
     if daily_data and len(daily_data) >= 2:
         import pandas as pd
@@ -1520,43 +1520,108 @@ def render_learning_track_record():
         
         daily_df = pd.DataFrame(daily_data)
         daily_df['date'] = pd.to_datetime(daily_df['date'])
+        daily_df = daily_df.sort_values('date')
         
         # Calculate 7-day rolling accuracy
         daily_df['rolling_correct'] = daily_df['correct'].rolling(window=7, min_periods=1).sum()
         daily_df['rolling_settled'] = daily_df['settled'].rolling(window=7, min_periods=1).sum()
         daily_df['rolling_accuracy'] = (daily_df['rolling_correct'] / daily_df['rolling_settled'] * 100).fillna(0)
         
+        # Calculate summary stats
+        total_settled = daily_df['settled'].sum()
+        total_correct = daily_df['correct'].sum()
+        avg_accuracy = (total_correct / total_settled * 100) if total_settled > 0 else 0
+        days_with_data = len(daily_df[daily_df['settled'] > 0])
+        avg_bets_per_day = total_settled / days_with_data if days_with_data > 0 else 0
+        
+        # Calculate trend from rolling average slope (last 7 days vs first 7 days)
+        if len(daily_df) >= 14:
+            first_week_avg = daily_df['rolling_accuracy'].iloc[:7].mean()
+            last_week_avg = daily_df['rolling_accuracy'].iloc[-7:].mean()
+            trend_diff = last_week_avg - first_week_avg
+            if trend_diff > 3:
+                trend_indicator = "📈 Improving"
+                trend_color = "#00F59D"
+            elif trend_diff < -3:
+                trend_indicator = "📉 Declining"
+                trend_color = "#EF4444"
+            else:
+                trend_indicator = "➡️ Stable"
+                trend_color = "#9CA3AF"
+        else:
+            trend_indicator = "📊 Building"
+            trend_color = "#9CA3AF"
+        
+        # Summary above chart
+        st.markdown(f"""
+        <div style="display:flex;gap:24px;margin-bottom:12px;padding:12px 16px;background:rgba(0,0,0,0.3);border-radius:8px;">
+            <div>
+                <span style="color:#9CA3AF;font-size:12px;">30-Day Accuracy</span><br/>
+                <span style="color:#FFFFFF;font-size:20px;font-weight:600;">{avg_accuracy:.1f}%</span>
+            </div>
+            <div>
+                <span style="color:#9CA3AF;font-size:12px;">Bets / Day</span><br/>
+                <span style="color:#FFFFFF;font-size:20px;font-weight:600;">{avg_bets_per_day:.1f}</span>
+            </div>
+            <div>
+                <span style="color:#9CA3AF;font-size:12px;">Trend</span><br/>
+                <span style="color:{trend_color};font-size:20px;font-weight:600;">{trend_indicator}</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # View toggle
+        chart_view = st.radio("", ["Trend", "Daily Breakdown"], horizontal=True, key="accuracy_chart_view", label_visibility="collapsed")
+        
         fig = go.Figure()
         
-        # Daily accuracy bars
-        fig.add_trace(go.Bar(
-            x=daily_df['date'],
-            y=daily_df['accuracy_pct'],
-            name='Daily Accuracy',
-            marker_color='rgba(0,245,157,0.4)',
-            hovertemplate='%{x}<br>Accuracy: %{y:.1f}%<extra></extra>'
-        ))
+        if chart_view == "Daily Breakdown":
+            # Daily accuracy bars (advanced view)
+            fig.add_trace(go.Bar(
+                x=daily_df['date'],
+                y=daily_df['accuracy_pct'],
+                name='Daily Accuracy',
+                marker_color='rgba(0,245,157,0.4)',
+                hovertemplate='%{x|%b %d}<br>Accuracy: %{y:.1f}%<br>Settled: ' + daily_df['settled'].astype(str) + '<extra></extra>'
+            ))
         
-        # 7-day rolling average line
+        # 7-day rolling average line (always shown)
         fig.add_trace(go.Scatter(
             x=daily_df['date'],
             y=daily_df['rolling_accuracy'],
             mode='lines',
-            name='7-Day Average',
+            name='7-Day Rolling Accuracy',
             line=dict(color='#00F59D', width=3),
-            hovertemplate='%{x}<br>7-Day Avg: %{y:.1f}%<extra></extra>'
+            hovertemplate='%{x|%b %d}<br>7-Day Avg: %{y:.1f}%<extra></extra>'
         ))
         
+        # Generate weekly tick values
+        date_range = pd.date_range(start=daily_df['date'].min(), end=daily_df['date'].max(), freq='W-SUN')
+        if len(date_range) == 0:
+            date_range = [daily_df['date'].min(), daily_df['date'].max()]
+        
         fig.update_layout(
-            title='Prediction Accuracy Over Time',
+            title='Model Accuracy – Rolling Trend',
             plot_bgcolor="rgba(0,0,0,0)",
             paper_bgcolor="rgba(0,0,0,0)",
             font_color="#FFFFFF",
-            xaxis=dict(gridcolor="rgba(255,255,255,0.1)", title="Date"),
-            yaxis=dict(gridcolor="rgba(255,255,255,0.1)", title="Accuracy %", range=[0, 100]),
-            height=300,
+            xaxis=dict(
+                gridcolor="rgba(255,255,255,0.05)",
+                tickvals=date_range,
+                tickformat="%b %d",
+                tickfont=dict(size=11),
+                showgrid=False
+            ),
+            yaxis=dict(
+                gridcolor="rgba(255,255,255,0.1)",
+                range=[0, 100],
+                tickvals=[0, 25, 50, 75],
+                ticktext=["0%", "25%", "50%", "75%"],
+                tickfont=dict(size=11)
+            ),
+            height=280,
             margin=dict(l=0, r=0, t=40, b=0),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            showlegend=False,
             hovermode="x unified"
         )
         
