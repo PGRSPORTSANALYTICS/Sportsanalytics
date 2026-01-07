@@ -944,21 +944,30 @@ def send_instant_pick(pick: Dict) -> bool:
         time_str = "TBD"
     
     trust_emoji = "🟢" if trust_level in ['L1', 'L1_HIGH_TRUST'] else "🟡" if trust_level == 'L2' else "⚪"
-    edge = pick.get('edge_percentage', 0) or 0
     
-    content = f"**🎯 NEW VALUE SINGLE**\n"
-    content += "━" * 30 + "\n\n"
-    content += f"**{league}**\n"
-    content += f"**{home_team} vs {away_team}**\n\n"
-    content += f"• Selection: **{selection}**\n"
-    content += f"• Odds: **{odds:.2f}**\n"
-    content += f"• Edge: {float(edge):.1f}%\n"
-    content += f"• Confidence: {confidence:.0f}%\n"
-    content += f"• Units: 1.0 (flat)\n"
-    content += f"• Kickoff: {time_str} UTC\n"
+    # Format kickoff date as DD-MM
+    if isinstance(match_date, datetime):
+        kickoff_date_str = match_date.strftime('%d-%m')
+    elif isinstance(match_date, str) and len(match_date) >= 10:
+        parts = match_date[:10].split('-')
+        if len(parts) == 3:
+            kickoff_date_str = f"{parts[2]}-{parts[1]}"
+        else:
+            kickoff_date_str = match_date[:5]
+    else:
+        kickoff_date_str = "TBD"
+    
+    # Build clean embed content matching user format
+    content = f"⚽ **{league} — Today's Picks**\n"
+    content += f"**{league.upper()}**\n\n"
+    content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+    content += f"**{home_team} vs {away_team}**\n"
+    content += f"• Selection: {selection}\n"
+    content += f"• Odds: {odds:.2f}\n"
+    content += f"• Units: 1.0\n"
+    content += f"• Kickoff: {kickoff_date_str} UTC\n"
     content += f"• {trust_emoji} {trust_level}\n\n"
-    content += "━" * 30 + "\n"
-    content += "*PGR Analytics — Real-time alert*"
+    content += "1 pick(s) | Flat stake | PGR Analytics"
     
     try:
         embed = {
