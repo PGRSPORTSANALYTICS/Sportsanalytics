@@ -665,14 +665,14 @@ def send_results_to_discord(results: List[Dict]) -> int:
         logger.warning("⚠️ No results webhook configured")
         return 0
     
-    wins = [r for r in results if r.get('outcome') == 'WON']
-    losses = [r for r in results if r.get('outcome') == 'LOST']
-    pushes = [r for r in results if r.get('outcome') == 'PUSH']
+    wins = [r for r in results if str(r.get('outcome', '')).upper() == 'WON']
+    losses = [r for r in results if str(r.get('outcome', '')).upper() == 'LOST']
+    pushes = [r for r in results if str(r.get('outcome', '')).upper() == 'PUSH']
     
     total_units = sum(r.get('units', 1.0) for r in results)
     profit = sum(
-        (float(r.get('odds', 1.0)) - 1) * float(r.get('units', 1.0)) if r.get('outcome') == 'WON'
-        else -float(r.get('units', 1.0)) if r.get('outcome') == 'LOST'
+        (float(r.get('odds', 1.0)) - 1) * float(r.get('units', 1.0)) if str(r.get('outcome', '')).upper() == 'WON'
+        else -float(r.get('units', 1.0)) if str(r.get('outcome', '')).upper() == 'LOST'
         else 0
         for r in results
     )
@@ -681,7 +681,7 @@ def send_results_to_discord(results: List[Dict]) -> int:
     content += "━" * 30 + "\n\n"
     
     for r in results:
-        outcome = r.get('outcome', 'PENDING')
+        outcome = str(r.get('outcome', 'PENDING')).upper()
         emoji = "✅" if outcome == 'WON' else "❌" if outcome == 'LOST' else "🔄"
         
         content += f"{emoji} **{r.get('home_team', '')} vs {r.get('away_team', '')}**\n"
@@ -726,12 +726,13 @@ def get_todays_settled_bets() -> List[Dict]:
                 fo.id, fo.home_team, fo.away_team, fo.league,
                 fo.selection, fo.odds, fo.outcome,
                 fo.actual_score as final_score,
-                bdl.units
+                COALESCE(bdl.units, 1.0) as units
             FROM football_opportunities fo
-            JOIN bet_distribution_log bdl ON bdl.opportunity_id = fo.id
+            LEFT JOIN bet_distribution_log bdl ON bdl.opportunity_id = fo.id
             WHERE DATE(fo.match_date::timestamp) = CURRENT_DATE
               AND fo.outcome IS NOT NULL
               AND fo.outcome != 'PENDING'
+              AND fo.outcome != ''
             ORDER BY fo.match_date ASC
         """)
         
