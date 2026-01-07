@@ -899,6 +899,98 @@ def send_daily_results() -> int:
     return 0
 
 
+def send_instant_pick(pick: Dict) -> bool:
+    """Send a single pick to Discord immediately when created."""
+    ensure_distribution_log_table()
+    
+    webhook = WEBHOOK_VALUE_SINGLES or DISCORD_FREE_PICKS_WEBHOOK_URL
+    if not webhook:
+        logger.warning("⚠️ No value singles webhook for instant send")
+        return False
+    
+    home_team = pick.get('home_team', '')
+    away_team = pick.get('away_team', '')
+    league = normalize_league(pick.get('league')) or 'Other'
+    selection = pick.get('selection', '')
+    odds = float(pick.get('odds', 0))
+    confidence = float(pick.get('confidence', 0))
+    trust_level = pick.get('trust_level', 'L3')
+    match_date = pick.get('match_date')
+    opportunity_id = pick.get('id')
+    
+    event_id = f"{home_team}_{away_team}"
+    event_date_str = str(match_date)[:10] if match_date else date.today().isoformat()
+    bet_id = generate_bet_id('football', league, event_id, 'Value Single', selection, selection, event_date_str)
+    
+    if is_duplicate_bet(bet_id):
+        logger.debug(f"⏭️ Already sent: {home_team} vs {away_team}")
+        return False
+    
+    if not is_same_day_event(match_date):
+        logger.debug(f"⏭️ Not today's event: {home_team} vs {away_team}")
+        return False
+    
+    kickoff = match_date
+    if isinstance(kickoff, datetime):
+        time_str = kickoff.strftime('%H:%M')
+    elif isinstance(kickoff, str) and len(kickoff) > 10:
+        time_str = kickoff[11:16]
+    else:
+        time_str = "TBD"
+    
+    trust_emoji = "🟢" if trust_level in ['L1', 'L1_HIGH_TRUST'] else "🟡" if trust_level == 'L2' else "⚪"
+    edge = pick.get('edge_percentage', 0) or 0
+    
+    content = f"**🎯 NEW VALUE SINGLE**\n"
+    content += "━" * 30 + "\n\n"
+    content += f"**{league}**\n"
+    content += f"**{home_team} vs {away_team}**\n\n"
+    content += f"• Selection: **{selection}**\n"
+    content += f"• Odds: **{odds:.2f}**\n"
+    content += f"• Edge: {float(edge):.1f}%\n"
+    content += f"• Confidence: {confidence:.0f}%\n"
+    content += f"• Units: 1.0 (flat)\n"
+    content += f"• Kickoff: {time_str} UTC\n"
+    content += f"• {trust_emoji} {trust_level}\n\n"
+    content += "━" * 30 + "\n"
+    content += "*PGR Analytics — Real-time alert*"
+    
+    try:
+        embed = {
+            "description": content[:4000],
+            "color": 3066993,
+            "footer": {"text": f"PGR Sports Analytics — {league}"}
+        }
+        
+        payload = {"embeds": [embed]}
+        response = requests.post(webhook, json=payload, timeout=10)
+        
+        if response.status_code in [200, 204]:
+            log_sent_bet(
+                bet_id=bet_id,
+                opportunity_id=opportunity_id,
+                sport='football',
+                league=league,
+                home_team=home_team,
+                away_team=away_team,
+                market='Value Single',
+                selection=selection,
+                line=selection,
+                odds=odds,
+                units=1.0,
+                event_date=match_date,
+                discord_channel='value_singles'
+            )
+            logger.info(f"⚡ INSTANT: {home_team} vs {away_team} | {selection} @ {odds:.2f}")
+            return True
+        else:
+            logger.error(f"Discord error: {response.status_code}")
+            return False
+    except Exception as e:
+        logger.error(f"Instant send error: {e}")
+        return False
+
+
 if __name__ == "__main__":
     ensure_distribution_log_table()
     

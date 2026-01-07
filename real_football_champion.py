@@ -3680,22 +3680,24 @@ class RealFootballChampion:
             ))
             
             try:
-                send_bet_to_discord({
+                from bet_distribution_controller import send_instant_pick
+                sent = send_instant_pick({
+                    'id': None,
                     'league': opp_dict.get('league', ''),
                     'home_team': opp_dict.get('home_team'),
                     'away_team': opp_dict.get('away_team'),
                     'match_date': opp_dict.get('match_date'),
-                    'product': 'VALUE_SINGLE',
                     'market': opp_dict.get('market'),
                     'selection': opp_dict.get('selection'),
                     'odds': odds_value,
-                    'ev': float(opp_dict.get('edge_percentage', 0)),
+                    'edge_percentage': float(opp_dict.get('edge_percentage', 0)),
                     'confidence': opp_dict.get('confidence'),
                     'trust_level': trust_level
-                }, product_type='VALUE_SINGLE')
-                print(f"📤 Discord: Sent {opp_dict.get('home_team')} vs {opp_dict.get('away_team')} - {opp_dict.get('selection')}")
+                })
+                if sent:
+                    print(f"⚡ INSTANT: {opp_dict.get('home_team')} vs {opp_dict.get('away_team')} - {opp_dict.get('selection')} @ {odds_value}")
             except Exception as discord_err:
-                print(f"⚠️ Discord notification failed: {discord_err}")
+                print(f"⚠️ Instant Discord notification failed: {discord_err}")
             
             return True
         except Exception as e:
