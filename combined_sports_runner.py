@@ -276,6 +276,17 @@ def run_daily_analysis():
         logger.error(f"❌ Daily Analysis error: {e}")
 
 
+def run_free_picks():
+    """Send 1-2 free picks to Discord"""
+    try:
+        from free_picks_engine import run_free_picks as free_picks_cycle
+        logger.info("🎁 Running Free Picks Engine...")
+        sent = free_picks_cycle(2)
+        logger.info(f"🎁 Free Picks complete: {sent} picks sent")
+    except Exception as e:
+        logger.error(f"❌ Free Picks error: {e}")
+
+
 def run_weekly_recap():
     """Send weekly recap on Sunday at 22:30"""
     try:
@@ -325,6 +336,7 @@ def main():
     logger.info("📂 Bet Categorizer - Daily at 23:00")
     logger.info("📅 Games Reminder - Daily at 08:00")
     logger.info("📝 Daily Analysis - Daily at 09:00 (Discord)")
+    logger.info("🎁 Free Picks - Daily at 10:00 (Discord)")
     logger.info("="*80)
     
     # Run enabled engines on startup
@@ -398,6 +410,7 @@ def main():
     schedule.every().day.at("23:00").do(run_daily_categorizer)
     schedule.every().day.at("08:00").do(run_daily_games_reminder)
     schedule.every().day.at("09:00").do(run_daily_analysis)
+    schedule.every().day.at("10:00").do(run_free_picks)
     
     logger.info("✅ All schedules configured. Starting main loop...")
     
