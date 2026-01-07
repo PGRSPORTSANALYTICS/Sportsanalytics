@@ -1,6 +1,7 @@
 """
 Bet Distribution Controller - Central control for all Discord bet distribution.
 Ensures ONLY valid, non-duplicate, same-day bets are sent.
+Includes League Routing for grouped, league-specific distribution.
 """
 
 import os
@@ -12,12 +13,94 @@ from typing import Optional, Dict, List, Tuple
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import logging
+from collections import defaultdict
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 DISCORD_FREE_PICKS_WEBHOOK_URL = os.getenv("DISCORD_FREE_PICKS_WEBHOOK_URL")
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
+
+LEAGUE_NORMALIZATION = {
+    'premier league': 'Premier League',
+    'english premier league': 'Premier League',
+    'epl': 'Premier League',
+    'serie a': 'Serie A',
+    'italian serie a': 'Serie A',
+    'la liga': 'La Liga',
+    'spanish la liga': 'La Liga',
+    'bundesliga': 'Bundesliga',
+    'german bundesliga': 'Bundesliga',
+    'ligue 1': 'Ligue 1',
+    'french ligue 1': 'Ligue 1',
+    'championship': 'Championship',
+    'english championship': 'Championship',
+    'eredivisie': 'Eredivisie',
+    'dutch eredivisie': 'Eredivisie',
+    'primeira liga': 'Primeira Liga',
+    'portuguese primeira liga': 'Primeira Liga',
+    'mls': 'MLS',
+    'major league soccer': 'MLS',
+    'champions league': 'Champions League',
+    'uefa champions league': 'Champions League',
+    'europa league': 'Europa League',
+    'uefa europa league': 'Europa League',
+    'scottish premiership': 'Scottish Premiership',
+    'belgian pro league': 'Belgian Pro League',
+    'english league one': 'League One',
+    'league one': 'League One',
+    'english league two': 'League Two',
+    'league two': 'League Two',
+    'fa cup': 'FA Cup',
+    'copa del rey': 'Copa del Rey',
+    'coppa italia': 'Coppa Italia',
+    'dfb pokal': 'DFB Pokal',
+}
+
+LEAGUE_CHANNEL_MAP = {
+    'Premier League': {'channel': 'premier-league', 'env_var': 'DISCORD_PREMIER_LEAGUE_WEBHOOK'},
+    'Serie A': {'channel': 'serie-a', 'env_var': 'DISCORD_SERIE_A_WEBHOOK'},
+    'La Liga': {'channel': 'la-liga', 'env_var': 'DISCORD_LA_LIGA_WEBHOOK'},
+    'Bundesliga': {'channel': 'bundesliga', 'env_var': 'DISCORD_BUNDESLIGA_WEBHOOK'},
+    'Ligue 1': {'channel': 'ligue-1', 'env_var': 'DISCORD_LIGUE_1_WEBHOOK'},
+    'Championship': {'channel': 'championship', 'env_var': 'DISCORD_CHAMPIONSHIP_WEBHOOK'},
+    'Eredivisie': {'channel': 'eredivisie', 'env_var': 'DISCORD_EREDIVISIE_WEBHOOK'},
+    'Champions League': {'channel': 'champions-league', 'env_var': 'DISCORD_CHAMPIONS_LEAGUE_WEBHOOK'},
+    'Europa League': {'channel': 'europa-league', 'env_var': 'DISCORD_EUROPA_LEAGUE_WEBHOOK'},
+}
+
+FALLBACK_CHANNEL = {'channel': 'other-leagues', 'env_var': 'DISCORD_FREE_PICKS_WEBHOOK_URL'}
+
+
+def normalize_league(league_name: str) -> Optional[str]:
+    """Normalize league name to standard format."""
+    if not league_name:
+        return None
+    
+    lower = league_name.lower().strip()
+    
+    if lower in LEAGUE_NORMALIZATION:
+        return LEAGUE_NORMALIZATION[lower]
+    
+    for key, value in LEAGUE_NORMALIZATION.items():
+        if key in lower or lower in key:
+            return value
+    
+    return league_name.title()
+
+
+def get_league_webhook(league: str) -> Tuple[Optional[str], str]:
+    """Get webhook URL and channel name for a league."""
+    normalized = normalize_league(league)
+    
+    if normalized in LEAGUE_CHANNEL_MAP:
+        config = LEAGUE_CHANNEL_MAP[normalized]
+        webhook = os.getenv(config['env_var'])
+        if webhook:
+            return webhook, config['channel']
+    
+    fallback_webhook = os.getenv(FALLBACK_CHANNEL['env_var'])
+    return fallback_webhook, FALLBACK_CHANNEL['channel']
 
 
 def get_db_connection():
@@ -393,10 +476,189 @@ def get_distribution_stats() -> Dict:
         return {}
 
 
+def format_league_message(league: str, bets: List[Dict]) -> str:
+    """Format a grouped message for a single league."""
+    bets_sorted = sorted(bets, key=lambda x: x.get('match_date') or datetime.max)
+    
+    content = f"**{league.upper()}**\n"
+    content += "━" * 30 + "\n\n"
+    
+    for bet in bets_sorted:
+        kickoff = bet.get('match_date')
+        if isinstance(kickoff, datetime):
+            time_str = kickoff.strftime('%H:%M')
+        elif isinstance(kickoff, str):
+            time_str = kickoff[-8:-3] if len(kickoff) > 8 else kickoff
+        else:
+            time_str = "TBD"
+        
+        trust = bet.get('trust_level', 'L3')
+        trust_emoji = "🟢" if trust in ['L1', 'L1_HIGH_TRUST'] else "🟡" if trust == 'L2' else "⚪"
+        
+        content += f"**{bet['home_team']} vs {bet['away_team']}**\n"
+        content += f"• Selection: {bet['selection']}\n"
+        content += f"• Odds: {float(bet.get('odds', 0)):.2f}\n"
+        content += f"• Units: 1.0\n"
+        content += f"• Kickoff: {time_str} UTC\n"
+        content += f"• {trust_emoji} {trust}\n\n"
+    
+    content += "━" * 30 + "\n"
+    content += f"*{len(bets)} pick(s) | Flat stake | PGR Analytics*"
+    
+    return content
+
+
+def send_league_grouped_message(league: str, bets: List[Dict], webhook_url: str, channel: str) -> Tuple[bool, List[int]]:
+    """Send a grouped league message and return success + list of sent bet IDs."""
+    if not webhook_url:
+        logger.warning(f"⚠️ No webhook for {league}, skipping")
+        return False, []
+    
+    content = format_league_message(league, bets)
+    
+    try:
+        embed = {
+            "description": content[:4000],
+            "color": 3066993,
+            "footer": {"text": f"PGR Sports Analytics — {league}"}
+        }
+        embed["title"] = f"🎯 {league} — Today's Picks"
+        
+        payload = {"embeds": [embed]}
+        response = requests.post(webhook_url, json=payload, timeout=10)
+        
+        if response.status_code in [200, 204]:
+            sent_ids = []
+            for bet in bets:
+                event_id = f"{bet['home_team']}_{bet['away_team']}"
+                event_date_str = str(bet.get('match_date', ''))[:10]
+                bet_id = generate_bet_id(
+                    'football', league, event_id, 
+                    bet.get('market', 'Value Single'),
+                    bet['selection'], bet['selection'], event_date_str
+                )
+                
+                log_sent_bet(
+                    bet_id=bet_id,
+                    opportunity_id=bet['id'],
+                    sport='football',
+                    league=league,
+                    home_team=bet['home_team'],
+                    away_team=bet['away_team'],
+                    market=bet.get('market', 'Value Single'),
+                    selection=bet['selection'],
+                    line=bet['selection'],
+                    odds=float(bet.get('odds', 0)),
+                    units=1.0,
+                    event_date=bet.get('match_date'),
+                    discord_channel=channel
+                )
+                sent_ids.append(bet['id'])
+            
+            logger.info(f"✅ SENT {league}: {len(bets)} picks → #{channel}")
+            return True, sent_ids
+        else:
+            logger.error(f"Discord error for {league}: {response.status_code}")
+            return False, []
+    except Exception as e:
+        logger.error(f"Send error for {league}: {e}")
+        return False, []
+
+
+def distribute_by_league(max_per_league: int = 3) -> Dict[str, int]:
+    """Distribute today's picks grouped by league."""
+    ensure_distribution_log_table()
+    
+    logger.info(f"\n{'='*60}")
+    logger.info(f"LEAGUE ROUTING DISTRIBUTION - {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC")
+    logger.info(f"{'='*60}")
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        cur.execute("""
+            SELECT 
+                id, home_team, away_team, league, match_date,
+                selection, odds, model_prob, edge_percentage,
+                confidence, trust_level, market
+            FROM football_opportunities
+            WHERE DATE(match_date::timestamp) = CURRENT_DATE
+              AND market = 'Value Single'
+              AND odds BETWEEN 1.50 AND 2.50
+              AND confidence >= 55
+              AND outcome IS NULL
+              AND selection IN ('Home Win', 'Away Win', 'Draw', 
+                               'Over 2.5 Goals', 'Under 2.5 Goals',
+                               'Over 1.5 Goals', 'Under 3.5 Goals')
+            ORDER BY match_date ASC
+        """)
+        
+        all_picks = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        if not all_picks:
+            logger.info("❌ No valid same-day picks found")
+            return {}
+        
+        league_groups = defaultdict(list)
+        for pick in all_picks:
+            league = normalize_league(pick['league']) or 'Other'
+            
+            event_id = f"{pick['home_team']}_{pick['away_team']}"
+            event_date_str = str(pick.get('match_date', ''))[:10]
+            bet_id = generate_bet_id(
+                'football', league, event_id,
+                pick.get('market', 'Value Single'),
+                pick['selection'], pick['selection'], event_date_str
+            )
+            
+            if is_duplicate_bet(bet_id):
+                continue
+            
+            league_groups[league].append(dict(pick))
+        
+        league_order = sorted(
+            league_groups.keys(),
+            key=lambda lg: min(
+                (p.get('match_date') or datetime.max for p in league_groups[lg]),
+                default=datetime.max
+            )
+        )
+        
+        results = {}
+        for league in league_order:
+            bets = league_groups[league][:max_per_league]
+            
+            if not bets:
+                continue
+            
+            webhook, channel = get_league_webhook(league)
+            
+            success, sent_ids = send_league_grouped_message(league, bets, webhook, channel)
+            
+            if success:
+                results[league] = len(sent_ids)
+        
+        logger.info(f"\n📊 League Distribution Summary:")
+        for league, count in results.items():
+            logger.info(f"   • {league}: {count} picks")
+        logger.info(f"   Total: {sum(results.values())} picks across {len(results)} leagues")
+        
+        return results
+        
+    except Exception as e:
+        logger.error(f"League distribution error: {e}")
+        return {}
+
+
 if __name__ == "__main__":
     ensure_distribution_log_table()
-    sent = distribute_free_picks(2)
-    print(f"\nDistributed {sent} picks")
+    
+    print("Testing league-grouped distribution...")
+    results = distribute_by_league(3)
+    print(f"\nDistributed by league: {json.dumps(results, default=str, indent=2)}")
     
     stats = get_distribution_stats()
     print(f"\nDistribution Stats: {json.dumps(stats, default=str, indent=2)}")
