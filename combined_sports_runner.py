@@ -90,25 +90,30 @@ def verify_basketball_results():
 
 
 def run_results_engine():
-    """Run unified Results Engine for ALL bet types"""
+    """Run unified Results Engine for ALL bet types (settlement only, no Discord)"""
     try:
         from results_engine import run_results_engine as engine_cycle
         logger.info("🔄 Running Results Engine (unified settlement)...")
         stats = engine_cycle()
         logger.info(f"🔄 Results Engine: {stats['settled']} settled, {stats['voided']} voided, {stats['failed']} failed")
-        
-        if stats.get('settled', 0) > 0:
-            try:
-                from bet_distribution_controller import send_daily_results
-                results_sent = send_daily_results()
-                if results_sent > 0:
-                    logger.info(f"📤 Results sent to Discord: {results_sent} bets")
-            except Exception as discord_err:
-                logger.warning(f"⚠️ Results Discord update skipped: {discord_err}")
     except Exception as e:
         logger.error(f"❌ Results Engine error: {e}")
         import traceback
         traceback.print_exc()
+
+
+def run_end_of_day_results():
+    """Send daily results summary to Discord once all games are done"""
+    try:
+        from bet_distribution_controller import send_daily_results
+        logger.info("📊 Sending end-of-day results to Discord...")
+        results_sent = send_daily_results()
+        if results_sent > 0:
+            logger.info(f"📤 End-of-day results sent: {results_sent} bets")
+        else:
+            logger.info("📊 No settled bets to report today")
+    except Exception as e:
+        logger.error(f"❌ End-of-day results error: {e}")
 
 
 def verify_football_results():
@@ -417,6 +422,7 @@ def main():
     schedule.every().day.at("22:30").do(run_daily_recap)
     schedule.every().sunday.at("22:30").do(run_weekly_recap)
     schedule.every().day.at("23:00").do(run_daily_categorizer)
+    schedule.every().day.at("23:30").do(run_end_of_day_results)  # Results summary after all games
     schedule.every().day.at("08:00").do(run_daily_games_reminder)
     schedule.every().day.at("09:00").do(run_daily_analysis)
     schedule.every().day.at("10:00").do(run_free_picks)
