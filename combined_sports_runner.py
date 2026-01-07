@@ -277,11 +277,11 @@ def run_daily_analysis():
 
 
 def run_free_picks():
-    """Send 1-2 free picks to Discord"""
+    """Send 1-2 free picks to Discord with full validation"""
     try:
-        from free_picks_engine import run_free_picks as free_picks_cycle
-        logger.info("🎁 Running Free Picks Engine...")
-        sent = free_picks_cycle(2)
+        from bet_distribution_controller import distribute_free_picks
+        logger.info("🎁 Running Bet Distribution Controller (Free Picks)...")
+        sent = distribute_free_picks(2)
         logger.info(f"🎁 Free Picks complete: {sent} picks sent")
     except Exception as e:
         logger.error(f"❌ Free Picks error: {e}")
