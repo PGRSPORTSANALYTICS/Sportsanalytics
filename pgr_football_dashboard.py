@@ -842,6 +842,7 @@ def get_free_predictions() -> list:
             market as product
         FROM football_opportunities
         WHERE LOWER(status) = 'pending'
+          AND match_date = CURRENT_DATE
           AND edge_percentage >= :min_ev
           AND odds >= :min_odds
           AND odds <= :max_odds
