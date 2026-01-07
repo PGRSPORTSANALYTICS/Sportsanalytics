@@ -685,7 +685,11 @@ def send_results_to_discord(results: List[Dict]) -> int:
         emoji = "✅" if outcome == 'WON' else "❌" if outcome == 'LOST' else "🔄"
         
         content += f"{emoji} **{r.get('home_team', '')} vs {r.get('away_team', '')}**\n"
-        content += f"• {r.get('selection', '')} @ {float(r.get('odds', 0)):.2f}\n"
+        market = r.get('market', '')
+        selection = r.get('selection', '')
+        if market and market.lower() not in selection.lower():
+            selection = f"{selection} {market}"
+        content += f"• {selection} @ {float(r.get('odds', 0)):.2f}\n"
         if r.get('final_score'):
             content += f"• Score: {r['final_score']}\n"
         content += "\n"
