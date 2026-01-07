@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 DISCORD_FREE_PICKS_WEBHOOK_URL = os.getenv("DISCORD_FREE_PICKS_WEBHOOK_URL")
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 WEBHOOK_VALUE_SINGLES = os.getenv("WEBHOOK_Value_singles")
-WEBHOOK_RESULTS = os.getenv("DISCORD_WEBHOOK_URL")
+WEBHOOK_RESULTS = os.getenv("DISCORD_RESULTS_WEBHOOK")
 
 LEAGUE_NORMALIZATION = {
     'premier league': 'Premier League',
