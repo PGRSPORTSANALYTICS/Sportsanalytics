@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 
 DISCORD_FREE_PICKS_WEBHOOK_URL = os.getenv("DISCORD_FREE_PICKS_WEBHOOK_URL")
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
+WEBHOOK_VALUE_SINGLES = os.getenv("WEBHOOK_Value_singles")
+WEBHOOK_RESULTS = os.getenv("DISCORD_WEBHOOK_URL")
 
 LEAGUE_NORMALIZATION = {
     'premier league': 'Premier League',
@@ -653,12 +655,260 @@ def distribute_by_league(max_per_league: int = 3) -> Dict[str, int]:
         return {}
 
 
+def send_results_to_discord(results: List[Dict]) -> int:
+    """Send settled bet results to Discord."""
+    if not results:
+        return 0
+    
+    webhook = WEBHOOK_RESULTS or DISCORD_WEBHOOK_URL
+    if not webhook:
+        logger.warning("⚠️ No results webhook configured")
+        return 0
+    
+    wins = [r for r in results if r.get('outcome') == 'WON']
+    losses = [r for r in results if r.get('outcome') == 'LOST']
+    pushes = [r for r in results if r.get('outcome') == 'PUSH']
+    
+    total_units = sum(r.get('units', 1.0) for r in results)
+    profit = sum(
+        (float(r.get('odds', 1.0)) - 1) * float(r.get('units', 1.0)) if r.get('outcome') == 'WON'
+        else -float(r.get('units', 1.0)) if r.get('outcome') == 'LOST'
+        else 0
+        for r in results
+    )
+    
+    content = "**📊 RESULTS UPDATE**\n"
+    content += "━" * 30 + "\n\n"
+    
+    for r in results:
+        outcome = r.get('outcome', 'PENDING')
+        emoji = "✅" if outcome == 'WON' else "❌" if outcome == 'LOST' else "🔄"
+        
+        content += f"{emoji} **{r.get('home_team', '')} vs {r.get('away_team', '')}**\n"
+        content += f"• {r.get('selection', '')} @ {float(r.get('odds', 0)):.2f}\n"
+        if r.get('final_score'):
+            content += f"• Score: {r['final_score']}\n"
+        content += "\n"
+    
+    content += "━" * 30 + "\n"
+    content += f"**Summary:** {len(wins)}W - {len(losses)}L - {len(pushes)}P\n"
+    content += f"**P/L:** {profit:+.2f} units\n"
+    
+    try:
+        embed = {
+            "description": content[:4000],
+            "color": 3066993 if profit >= 0 else 15158332,
+            "footer": {"text": f"PGR Sports Analytics — Results"}
+        }
+        
+        payload = {"embeds": [embed]}
+        response = requests.post(webhook, json=payload, timeout=10)
+        
+        if response.status_code in [200, 204]:
+            logger.info(f"✅ Results sent: {len(wins)}W-{len(losses)}L-{len(pushes)}P ({profit:+.2f}u)")
+            return len(results)
+        else:
+            logger.error(f"Discord error: {response.status_code}")
+            return 0
+    except Exception as e:
+        logger.error(f"Results send error: {e}")
+        return 0
+
+
+def get_todays_settled_bets() -> List[Dict]:
+    """Get today's settled bets for results notification."""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        cur.execute("""
+            SELECT 
+                fo.id, fo.home_team, fo.away_team, fo.league,
+                fo.selection, fo.odds, fo.outcome,
+                fo.actual_score as final_score,
+                bdl.units
+            FROM football_opportunities fo
+            JOIN bet_distribution_log bdl ON bdl.opportunity_id = fo.id
+            WHERE DATE(fo.match_date::timestamp) = CURRENT_DATE
+              AND fo.outcome IS NOT NULL
+              AND fo.outcome != 'PENDING'
+            ORDER BY fo.match_date ASC
+        """)
+        
+        results = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        return [dict(r) for r in results]
+    except Exception as e:
+        logger.error(f"Get settled bets error: {e}")
+        return []
+
+
+def distribute_value_singles(max_picks: int = 5) -> int:
+    """Distribute value singles to dedicated channel."""
+    ensure_distribution_log_table()
+    
+    webhook = WEBHOOK_VALUE_SINGLES or DISCORD_FREE_PICKS_WEBHOOK_URL
+    if not webhook:
+        logger.error("❌ No value singles webhook configured")
+        return 0
+    
+    logger.info(f"\n{'='*50}")
+    logger.info(f"VALUE SINGLES DISTRIBUTION - {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC")
+    logger.info(f"{'='*50}")
+    
+    already_sent = get_todays_sent_count('value_singles')
+    if already_sent >= max_picks:
+        logger.info(f"⏸️ Daily limit reached: {already_sent}/{max_picks}")
+        return 0
+    
+    remaining = max_picks - already_sent
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        cur.execute("""
+            SELECT 
+                id, home_team, away_team, league, match_date,
+                selection, odds, model_prob, edge_percentage,
+                confidence, trust_level, market
+            FROM football_opportunities
+            WHERE DATE(match_date::timestamp) = CURRENT_DATE
+              AND market = 'Value Single'
+              AND odds BETWEEN 1.50 AND 2.50
+              AND confidence >= 55
+              AND outcome IS NULL
+            ORDER BY 
+                CASE WHEN trust_level IN ('L1', 'L1_HIGH_TRUST') THEN 1 
+                     WHEN trust_level = 'L2' THEN 2 
+                     ELSE 3 END,
+                edge_percentage DESC NULLS LAST,
+                match_date ASC
+            LIMIT %s
+        """, (remaining + 10,))
+        
+        candidates = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        if not candidates:
+            logger.info("❌ No valid value singles found")
+            return 0
+        
+        valid_picks = []
+        for pick in candidates:
+            if len(valid_picks) >= remaining:
+                break
+            
+            event_id = f"{pick['home_team']}_{pick['away_team']}"
+            event_date_str = str(pick.get('match_date', ''))[:10]
+            bet_id = generate_bet_id(
+                'football', pick['league'] or 'Unknown', event_id,
+                'Value Single', pick['selection'], pick['selection'], event_date_str
+            )
+            
+            if not is_duplicate_bet(bet_id):
+                valid_picks.append(dict(pick))
+        
+        if not valid_picks:
+            logger.info("❌ All candidates already sent")
+            return 0
+        
+        league_groups = defaultdict(list)
+        for pick in valid_picks:
+            league = normalize_league(pick['league']) or 'Other'
+            league_groups[league].append(pick)
+        
+        content = "**🎯 VALUE SINGLES — Today's Picks**\n"
+        content += "━" * 35 + "\n\n"
+        
+        for league in sorted(league_groups.keys()):
+            bets = sorted(league_groups[league], key=lambda x: x.get('match_date') or datetime.max)
+            content += f"**{league}**\n"
+            
+            for bet in bets:
+                kickoff = bet.get('match_date')
+                time_str = kickoff.strftime('%H:%M') if isinstance(kickoff, datetime) else "TBD"
+                trust = bet.get('trust_level', 'L3')
+                trust_emoji = "🟢" if trust in ['L1', 'L1_HIGH_TRUST'] else "🟡" if trust == 'L2' else "⚪"
+                
+                content += f"• {bet['home_team']} vs {bet['away_team']} — **{bet['selection']}** @ {float(bet['odds']):.2f} ({time_str}) {trust_emoji}\n"
+            
+            content += "\n"
+        
+        content += "━" * 35 + "\n"
+        content += f"*{len(valid_picks)} pick(s) | Flat 1u | PGR Analytics*"
+        
+        try:
+            embed = {
+                "description": content[:4000],
+                "color": 3066993,
+                "footer": {"text": f"PGR Sports Analytics — Value Singles"}
+            }
+            
+            payload = {"embeds": [embed]}
+            response = requests.post(webhook, json=payload, timeout=10)
+            
+            if response.status_code in [200, 204]:
+                for pick in valid_picks:
+                    event_id = f"{pick['home_team']}_{pick['away_team']}"
+                    event_date_str = str(pick.get('match_date', ''))[:10]
+                    bet_id = generate_bet_id(
+                        'football', pick['league'] or 'Unknown', event_id,
+                        'Value Single', pick['selection'], pick['selection'], event_date_str
+                    )
+                    
+                    log_sent_bet(
+                        bet_id=bet_id,
+                        opportunity_id=pick['id'],
+                        sport='football',
+                        league=normalize_league(pick['league']) or 'Other',
+                        home_team=pick['home_team'],
+                        away_team=pick['away_team'],
+                        market='Value Single',
+                        selection=pick['selection'],
+                        line=pick['selection'],
+                        odds=float(pick['odds']),
+                        units=1.0,
+                        event_date=pick['match_date'],
+                        discord_channel='value_singles'
+                    )
+                
+                logger.info(f"✅ Sent {len(valid_picks)} value singles to Discord")
+                return len(valid_picks)
+            else:
+                logger.error(f"Discord error: {response.status_code}")
+                return 0
+        except Exception as e:
+            logger.error(f"Send error: {e}")
+            return 0
+        
+    except Exception as e:
+        logger.error(f"Distribution error: {e}")
+        return 0
+
+
+def send_daily_results() -> int:
+    """Send daily results summary to Discord."""
+    settled = get_todays_settled_bets()
+    if settled:
+        return send_results_to_discord(settled)
+    logger.info("📊 No settled bets to report today")
+    return 0
+
+
 if __name__ == "__main__":
     ensure_distribution_log_table()
     
-    print("Testing league-grouped distribution...")
-    results = distribute_by_league(3)
-    print(f"\nDistributed by league: {json.dumps(results, default=str, indent=2)}")
+    print("Testing value singles distribution...")
+    sent = distribute_value_singles(5)
+    print(f"\nSent {sent} value singles")
+    
+    print("\nChecking for results to send...")
+    results_sent = send_daily_results()
+    print(f"Sent {results_sent} results")
     
     stats = get_distribution_stats()
     print(f"\nDistribution Stats: {json.dumps(stats, default=str, indent=2)}")

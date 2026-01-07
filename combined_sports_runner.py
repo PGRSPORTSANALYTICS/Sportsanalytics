@@ -96,6 +96,15 @@ def run_results_engine():
         logger.info("🔄 Running Results Engine (unified settlement)...")
         stats = engine_cycle()
         logger.info(f"🔄 Results Engine: {stats['settled']} settled, {stats['voided']} voided, {stats['failed']} failed")
+        
+        if stats.get('settled', 0) > 0:
+            try:
+                from bet_distribution_controller import send_daily_results
+                results_sent = send_daily_results()
+                if results_sent > 0:
+                    logger.info(f"📤 Results sent to Discord: {results_sent} bets")
+            except Exception as discord_err:
+                logger.warning(f"⚠️ Results Discord update skipped: {discord_err}")
     except Exception as e:
         logger.error(f"❌ Results Engine error: {e}")
         import traceback
@@ -277,14 +286,14 @@ def run_daily_analysis():
 
 
 def run_free_picks():
-    """Send 1-2 free picks to Discord with full validation"""
+    """Send value singles to Discord with full validation"""
     try:
-        from bet_distribution_controller import distribute_free_picks
-        logger.info("🎁 Running Bet Distribution Controller (Free Picks)...")
-        sent = distribute_free_picks(2)
-        logger.info(f"🎁 Free Picks complete: {sent} picks sent")
+        from bet_distribution_controller import distribute_value_singles
+        logger.info("🎯 Running Value Singles Distribution...")
+        sent = distribute_value_singles(5)
+        logger.info(f"🎯 Value Singles complete: {sent} picks sent")
     except Exception as e:
-        logger.error(f"❌ Free Picks error: {e}")
+        logger.error(f"❌ Value Singles distribution error: {e}")
 
 
 def run_weekly_recap():
