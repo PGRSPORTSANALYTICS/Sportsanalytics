@@ -310,7 +310,7 @@ class CollegeBasketValueEngine:
         max_singles: int = 20,      # Increased for high volume
         max_parlays: int = 3,
         min_odds: float = 1.40,     # Kept at 1.40
-        max_odds: float = 3.00,     # Kept at 3.00 (AI-learned)
+        max_odds: float = 3.99,     # 3.99 max (AI-learned sweet spot)
         allow_parlays: bool = False,  # DISABLED - parlays losing money
     ):
         self.client = client

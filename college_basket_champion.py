@@ -32,7 +32,7 @@ def run_prediction_cycle():
             max_singles=15,  # 15 singles max
             max_parlays=0,  # DISABLED - parlays losing money (16.4% hit rate)
             min_odds=1.40,  # 1.40 min odds
-            max_odds=12.00,  # 12.00 max odds
+            max_odds=3.99,  # 3.99 max odds (AI-learned sweet spot)
             allow_parlays=False  # DISABLED - parlays losing money
         )
         
@@ -71,7 +71,7 @@ def main():
     logger.info("🚀 College Basketball Champion Starting...")
     logger.info("🏀 Sport: NCAAB (College Basketball)")
     logger.info("📊 Min EV: 3% | Min Confidence: 50%")
-    logger.info("🎯 Odds Range: 1.40 - 5.50")
+    logger.info("🎯 Odds Range: 1.40 - 3.99")
     logger.info("🔄 Prediction cycle: Every 2 hours")
     logger.info("="*60)
     
