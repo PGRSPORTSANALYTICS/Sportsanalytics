@@ -34,16 +34,28 @@ MARKETS:
 - Corner Handicaps: Home/Away -1.5, -2.5, etc.
 
 Daily Limits: 6 match corners, 4 team corners, 6 corner handicaps
+
+VOLUME CONTROL (Jan 10, 2026):
+- Global daily cap: 20 CORNERS picks maximum (HARD STOP)
+- Per-match limit: 3 picks maximum per fixture
+- L3_SOFT_VALUE tier: BLOCKED from production
+- DB check: Queries all_bets table before generating new picks
 """
 
 import logging
+import os
 import numpy as np
+import psycopg2
 from datetime import datetime
 from typing import List, Dict, Optional, Tuple, Any
 from dataclasses import dataclass, field
+from collections import defaultdict
 
 from bet_filter import BetCandidate
 from multimarket_config import PRODUCT_CONFIGS, get_market_label, MarketType
+
+CORNERS_GLOBAL_DAILY_CAP = 20
+CORNERS_MAX_PICKS_PER_MATCH = 3
 
 try:
     from live_learning_config import apply_ev_controls, is_stability_mode_active
@@ -58,6 +70,70 @@ logger = logging.getLogger(__name__)
 _DEFAULT_HOME_CORNERS = 5.2
 _DEFAULT_AWAY_CORNERS = 4.8
 _DEFAULT_REFEREE_CORNERS = 10.0
+
+
+def _get_corners_db_connection():
+    """Get database connection for CORNERS volume control."""
+    try:
+        conn = psycopg2.connect(
+            os.getenv('DATABASE_URL'),
+            connect_timeout=10,
+            options='-c statement_timeout=30000'
+        )
+        return conn
+    except Exception as e:
+        logger.error(f"CORNERS DB connection failed: {e}")
+        return None
+
+
+def get_corners_today_count() -> int:
+    """Get count of CORNERS picks already saved today (UTC)."""
+    conn = _get_corners_db_connection()
+    if not conn:
+        return 0
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT COUNT(*) FROM all_bets 
+            WHERE product = 'CORNERS' 
+            AND created_at::date = CURRENT_DATE
+        """)
+        count = cur.fetchone()[0]
+        cur.close()
+        conn.close()
+        logger.info(f"🔢 CORNERS DB check: {count} picks already saved today")
+        return count
+    except Exception as e:
+        logger.error(f"Error checking CORNERS count: {e}")
+        if conn:
+            conn.close()
+        return 0
+
+
+def get_picks_per_match_today() -> Dict[str, int]:
+    """Get count of CORNERS picks per match today."""
+    conn = _get_corners_db_connection()
+    if not conn:
+        return {}
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT home_team, away_team, COUNT(*) 
+            FROM all_bets 
+            WHERE product = 'CORNERS' 
+            AND created_at::date = CURRENT_DATE
+            GROUP BY home_team, away_team
+        """)
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        result = {f"{row[0]} vs {row[1]}": row[2] for row in rows}
+        return result
+    except Exception as e:
+        logger.error(f"Error checking CORNERS per-match count: {e}")
+        if conn:
+            conn.close()
+        return {}
 
 
 def build_corner_features(match_row: Dict) -> Dict[str, float]:
@@ -793,27 +869,67 @@ class CornersEngine:
         self,
         match_candidates: List[BetCandidate],
         team_candidates: List[BetCandidate],
-        handicap_candidates: Optional[List[BetCandidate]] = None
+        handicap_candidates: Optional[List[BetCandidate]] = None,
+        existing_count: int = 0,
+        picks_per_match: Optional[Dict[str, int]] = None
     ) -> Tuple[List[BetCandidate], List[BetCandidate], List[BetCandidate]]:
-        def filter_by_tier(candidates, max_count):
+        picks_per_match = picks_per_match or {}
+        remaining_global_slots = max(0, CORNERS_GLOBAL_DAILY_CAP - existing_count)
+        
+        if remaining_global_slots == 0:
+            logger.warning("⛔ CORNERS HARD STOP: Global daily cap reached, returning empty")
+            return [], [], []
+        
+        def filter_by_tier_and_match(candidates, max_count, current_match_counts):
             l1 = sorted([c for c in candidates if c.tier == "L1_HIGH_TRUST"], key=lambda x: -x.ev_sim)
             l2 = sorted([c for c in candidates if c.tier == "L2_MEDIUM_TRUST"], key=lambda x: -x.ev_sim)
-            l3 = sorted([c for c in candidates if c.tier == "L3_SOFT_VALUE"], key=lambda x: -x.ev_sim)
             
-            selected = l1[:max(2, max_count // 2)]
-            remaining = max_count - len(selected)
-            selected.extend(l2[:remaining])
-            remaining = max_count - len(selected)
-            selected.extend(l3[:remaining])
+            all_valid = l1 + l2
+            
+            selected = []
+            
+            for candidate in all_valid:
+                if len(selected) >= max_count:
+                    break
+                match_key = candidate.match
+                current_count = current_match_counts.get(match_key, 0)
+                if current_count >= CORNERS_MAX_PICKS_PER_MATCH:
+                    logger.debug(f"⏭️ Skipping {candidate.selection}: {match_key} already has {CORNERS_MAX_PICKS_PER_MATCH} picks")
+                    continue
+                selected.append(candidate)
+                current_match_counts[match_key] = current_count + 1
             
             return selected
         
-        match_selected = filter_by_tier(match_candidates, self.match_config.max_per_day)
-        team_selected = filter_by_tier(team_candidates, self.team_config.max_per_day)
+        match_counts = dict(picks_per_match)
+        
+        match_selected = filter_by_tier_and_match(
+            match_candidates, 
+            min(self.match_config.max_per_day, remaining_global_slots),
+            match_counts
+        )
+        remaining_global_slots -= len(match_selected)
+        
+        team_selected = filter_by_tier_and_match(
+            team_candidates,
+            min(self.team_config.max_per_day, remaining_global_slots),
+            match_counts
+        )
+        remaining_global_slots -= len(team_selected)
         
         handicap_selected = []
-        if handicap_candidates:
-            handicap_selected = filter_by_tier(handicap_candidates, self.handicap_config.max_per_day)
+        if handicap_candidates and remaining_global_slots > 0:
+            handicap_selected = filter_by_tier_and_match(
+                handicap_candidates,
+                min(self.handicap_config.max_per_day, remaining_global_slots),
+                match_counts
+            )
+        
+        total_selected = len(match_selected) + len(team_selected) + len(handicap_selected)
+        logger.info(
+            f"🔢 CORNERS filter: L3 BLOCKED | {total_selected} picks selected "
+            f"({existing_count} already in DB, {CORNERS_GLOBAL_DAILY_CAP} cap)"
+        )
         
         return match_selected, team_selected, handicap_selected
     
@@ -854,6 +970,18 @@ def run_corners_cycle(
     referee_data: Optional[Dict] = None,
     weather_data: Optional[Dict] = None
 ) -> Tuple[List[BetCandidate], List[BetCandidate], List[BetCandidate]]:
+    existing_count = get_corners_today_count()
+    if existing_count >= CORNERS_GLOBAL_DAILY_CAP:
+        logger.warning(
+            f"⛔ CORNERS HARD STOP: {existing_count} picks already in DB today "
+            f"(cap={CORNERS_GLOBAL_DAILY_CAP}). Skipping entire cycle."
+        )
+        return [], [], []
+    
+    picks_per_match = get_picks_per_match_today()
+    logger.info(f"🔢 CORNERS volume control: {existing_count}/{CORNERS_GLOBAL_DAILY_CAP} used, "
+                f"{len(picks_per_match)} matches with existing picks")
+    
     engine = CornersEngine()
     all_match = []
     all_team = []
@@ -901,11 +1029,15 @@ def run_corners_cycle(
         all_team.extend(team_bets)
         all_handicap.extend(hc_bets)
     
-    match_sel, team_sel, hc_sel = engine.apply_daily_filter(all_match, all_team, all_handicap)
+    match_sel, team_sel, hc_sel = engine.apply_daily_filter(
+        all_match, all_team, all_handicap,
+        existing_count=existing_count,
+        picks_per_match=picks_per_match
+    )
     
     logger.info(
         f"🔢 CORNERS ENGINE: {len(match_sel)} match + {len(team_sel)} team + {len(hc_sel)} handicap = "
-        f"{len(match_sel) + len(team_sel) + len(hc_sel)} total picks"
+        f"{len(match_sel) + len(team_sel) + len(hc_sel)} total picks (L3 BLOCKED, max {CORNERS_MAX_PICKS_PER_MATCH}/match)"
     )
     
     return match_sel, team_sel, hc_sel
