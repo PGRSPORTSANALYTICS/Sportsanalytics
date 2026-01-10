@@ -125,13 +125,8 @@ def verify_football_results():
         results = verifier.verify_pending_tips()
         logger.info(f"⚽ Football verification: {results['verified']} verified, {results['failed']} failed")
         
-        if results.get('verified', 0) > 0:
-            try:
-                from discord_roi_webhook import send_discord_stats
-                send_discord_stats(f"🔄 Auto-update: {results['verified']} bets settled")
-                logger.info("📤 Discord stats update sent")
-            except Exception as discord_err:
-                logger.warning(f"⚠️ Discord update skipped: {discord_err}")
+        # ROI webhook only sends after ALL day's matches are settled (end-of-day)
+        # Individual results use DISCORD_RESULTS_WEBHOOK
     except Exception as e:
         logger.error(f"❌ Football verification error: {e}")
 

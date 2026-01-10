@@ -918,13 +918,27 @@ class ResultsEngine:
             logger.warning(f"⚠️ Training data update failed for {match_id}: {e}")
     
     def _send_discord_update(self):
-        """Send Discord update after settlements."""
+        """Send Discord ROI update ONLY when all today's matches are settled."""
         try:
+            # Check if any pending bets remain for today
+            pending = self.cursor.execute("""
+                SELECT COUNT(*) FROM all_bets 
+                WHERE (result IS NULL OR result = '')
+                AND DATE(created_at) = CURRENT_DATE
+            """).fetchone()
+            
+            pending_count = pending[0] if pending else 0
+            
+            if pending_count > 0:
+                logger.info(f"📊 {pending_count} bets still pending - ROI webhook deferred")
+                return
+            
+            # All settled - send ROI update
             from discord_roi_webhook import send_discord_stats
-            send_discord_stats(f"🔄 Results Engine: {self.stats['settled']} bets settled")
-            logger.info("📤 Discord stats update sent")
+            send_discord_stats(f"📊 All today's matches settled - Final ROI update")
+            logger.info("📤 Discord ROI stats sent (all matches settled)")
         except Exception as e:
-            logger.warning(f"⚠️ Discord update skipped: {e}")
+            logger.warning(f"⚠️ Discord ROI update skipped: {e}")
 
 
 def run_results_engine():
