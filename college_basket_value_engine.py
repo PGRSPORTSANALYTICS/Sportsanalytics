@@ -305,12 +305,12 @@ class CollegeBasketValueEngine:
     def __init__(
         self,
         client: OddsAPIClient,
-        min_ev: float = 0.01,       # 1% EV - max volume for basketball
-        min_conf: float = 0.50,     # 50% confidence - lower threshold
+        min_ev: float = 0.03,       # 3% EV - tighter filter for quality (was 1%)
+        min_conf: float = 0.55,     # 55% confidence - more conviction (was 50%)
         max_singles: int = 20,      # Increased for high volume
         max_parlays: int = 3,
         min_odds: float = 1.40,     # Kept at 1.40
-        max_odds: float = 3.99,     # 3.99 max (AI-learned sweet spot)
+        max_odds: float = 3.10,     # 3.10 max - sweet spot is under 3.00 (was 3.99)
         allow_parlays: bool = False,  # DISABLED - parlays losing money
     ):
         self.client = client
