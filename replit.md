@@ -33,6 +33,7 @@ The system incorporates advanced features such as:
     - **Hidden Value Scanner:** Identifies "soft edge" picks (EV between -1% and +2%) using composite scoring.
 - **LIVE LEARNING MODE (v1.0 - ACTIVE):** A full data capture system for model calibration, tracking all trust tiers, CLV, unit-based P/L, raw/boosted/weighted EV, profile boost details, and market weights.
 - **Stability & Verification Mode:** Active controls like hard EV caps, EV deflators, blocked EV bands, disabled SGP, CORNERS exposure caps, and flat staking to verify edge via CLV tracking before scaling.
+- **CORNERS Volume Control (Jan 10, 2026):** Fixed CORNERS explosion (69+/day → max 20). Implemented: (1) DB check for existing picks today before generating, (2) Hard global cap of 20/day with HARD STOP guard, (3) Max 3 picks per match enforced via shared dict across all sub-markets (match/team/handicap), (4) L3_SOFT_VALUE tier blocked from production.
 
 ### System Design Choices
 - **Data Layer:** PostgreSQL (Neon database) with connection pooling, TCP keepalives, and retry logic.
