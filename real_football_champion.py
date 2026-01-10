@@ -3604,18 +3604,6 @@ class RealFootballChampion:
     def save_opportunity(self, opp_dict: Dict) -> bool:
         """Save Value Singles prediction (dict format) to database"""
         try:
-            # Check for duplicates
-            result = db_helper.execute('''
-                SELECT COUNT(*) FROM football_opportunities 
-                WHERE home_team = %s AND away_team = %s AND market = %s
-                AND match_date = %s
-                AND status = 'pending'
-            ''', (opp_dict.get('home_team'), opp_dict.get('away_team'), 
-                  opp_dict.get('market'), opp_dict.get('match_date')), fetch='one')
-            
-            if result and result[0] > 0:
-                return False  # Duplicate found
-            
             # Calculate quality score
             quality_score = (opp_dict.get('edge_percentage', 0) * 0.6) + (opp_dict.get('confidence', 0) * 0.4)
             today_date = datetime.now().strftime('%Y-%m-%d')
@@ -3635,7 +3623,9 @@ class RealFootballChampion:
             kickoff_epoch = opp_dict.get('kickoff_epoch')
             created_at_utc = opp_dict.get('created_at_utc')
             
-            db_helper.execute('''
+            # Use ON CONFLICT to prevent race condition duplicates
+            # Unique constraint: (home_team, away_team, selection, market, match_date, mode)
+            result = db_helper.execute('''
                 INSERT INTO football_opportunities 
                 (timestamp, match_id, home_team, away_team, league, market, selection, 
                  odds, edge_percentage, confidence, analysis, stake, match_date, kickoff_time,
@@ -3644,6 +3634,8 @@ class RealFootballChampion:
                  open_odds, odds_source, trust_level,
                  odds_by_bookmaker, best_odds_value, best_odds_bookmaker, avg_odds, fair_odds, fixture_id)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (home_team, away_team, selection, market, match_date, mode) DO NOTHING
+                RETURNING id
             ''', (
                 opp_dict.get('timestamp', int(time.time())),
                 opp_dict.get('match_id'),
@@ -3677,12 +3669,16 @@ class RealFootballChampion:
                 opp_dict.get('avg_odds'),
                 opp_dict.get('fair_odds'),
                 opp_dict.get('fixture_id')  # API-Football fixture ID for result verification
-            ))
+            ), fetch='one')
+            
+            # Only proceed if a new row was inserted (ON CONFLICT DO NOTHING returns NULL if duplicate)
+            if not result:
+                return False  # Duplicate - skip Discord notification
             
             try:
                 from bet_distribution_controller import send_instant_pick
                 sent = send_instant_pick({
-                    'id': None,
+                    'id': result[0] if result else None,
                     'league': opp_dict.get('league', ''),
                     'home_team': opp_dict.get('home_team'),
                     'away_team': opp_dict.get('away_team'),
@@ -4073,15 +4069,6 @@ def _save_bet_candidates_to_db(candidates, market_label: str) -> int:
     
     for candidate in candidates:
         try:
-            # Check for duplicates
-            existing = db_helper.execute('''
-                SELECT COUNT(*) FROM football_opportunities 
-                WHERE home_team = %s AND away_team = %s AND selection = %s AND match_date = %s
-            ''', (candidate.home_team, candidate.away_team, candidate.selection, candidate.match_date), fetch='one')
-            
-            if existing and existing[0] > 0:
-                continue
-            
             # Calculate quality score
             quality_score = (candidate.ev_sim * 100 * 0.6) + (candidate.confidence * 100 * 0.4)
             
@@ -4104,8 +4091,9 @@ def _save_bet_candidates_to_db(candidates, market_label: str) -> int:
             
             odds_by_bookmaker_json = json.dumps(odds_by_bookmaker)
             
-            # Insert to database
-            db_helper.execute('''
+            # Insert to database with ON CONFLICT to prevent race condition duplicates
+            # Unique constraint: (home_team, away_team, selection, market, match_date, mode)
+            result = db_helper.execute('''
                 INSERT INTO football_opportunities 
                 (timestamp, match_id, home_team, away_team, league, market, selection, 
                  odds, edge_percentage, confidence, analysis, stake, match_date, kickoff_time,
@@ -4113,6 +4101,8 @@ def _save_bet_candidates_to_db(candidates, market_label: str) -> int:
                  trust_level, sim_probability, ev_sim,
                  odds_by_bookmaker, best_odds_value, best_odds_bookmaker, avg_odds, fair_odds)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (home_team, away_team, selection, market, match_date, mode) DO NOTHING
+                RETURNING id
             ''', (
                 int(time.time()),
                 candidate.match.replace(' ', '_').replace('vs', '_vs_'),
@@ -4142,8 +4132,11 @@ def _save_bet_candidates_to_db(candidates, market_label: str) -> int:
                 best_odds_bookmaker,
                 float(avg_odds),
                 float(fair_odds)
-            ))
-            saved += 1
+            ), fetch='one')
+            
+            # Only count as saved if a new row was actually inserted (RETURNING id returns something)
+            if result:
+                saved += 1
             
         except Exception as e:
             print(f"      ⚠️ Failed to save {candidate.selection}: {e}")
