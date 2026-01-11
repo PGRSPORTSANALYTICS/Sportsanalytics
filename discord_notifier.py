@@ -351,12 +351,15 @@ def create_result_embed(bet_info: dict) -> dict:
     except:
         profit_units = 0.0
     
+    is_basketball = 'BASKET' in product_type or 'NCAAB' in league.upper() or 'NCAA' in league.upper()
+    score_emoji = "🏀" if is_basketball else "⚽"
+    
     embed = {
         "title": f"{emoji} {status} | {selection}",
         "description": f"**{home_team}** vs **{away_team}**",
         "color": color,
         "fields": [
-            {"name": "⚽ Score", "value": f"`{actual_score}`", "inline": True},
+            {"name": f"{score_emoji} Score", "value": f"`{actual_score}`", "inline": True},
             {"name": "📊 Odds", "value": f"`{float(odds or 0):.2f}`", "inline": True},
             {"name": "💰 P/L", "value": f"`{profit_units:+.2f}u`", "inline": True},
         ],

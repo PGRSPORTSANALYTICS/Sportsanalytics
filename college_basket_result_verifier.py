@@ -186,6 +186,10 @@ class CollegeBasketballResultVerifier:
             status_emoji = "✅" if outcome == "won" else "❌"
             logger.info(f"{status_emoji} {pick['match']}: {pick['selection']} - {outcome.upper()} (P&L: ${profit_loss:.2f})")
             
+            # Extract actual scores from game result
+            home_score, away_score = self._extract_scores(game_result)
+            actual_score = f"{home_score}-{away_score}"
+            
             # Send Discord notification
             try:
                 discord_info = {
@@ -193,9 +197,9 @@ class CollegeBasketballResultVerifier:
                     'home_team': pick['match'].split(' vs ')[0] if ' vs ' in pick['match'] else pick['match'],
                     'away_team': pick['match'].split(' vs ')[1] if ' vs ' in pick['match'] else '',
                     'selection': pick['selection'],
-                    'actual_score': f"{game_result.get('home_score', '?')}-{game_result.get('away_score', '?')}",
+                    'actual_score': actual_score,
                     'odds': pick['odds'],
-                    'profit_loss': profit_loss,  # Already in SEK (173 stake)
+                    'profit_loss': profit_loss,
                     'product_type': 'BASKETBALL',
                     'league': 'NCAAB'
                 }
@@ -209,6 +213,27 @@ class CollegeBasketballResultVerifier:
         except Exception as e:
             logger.error(f"❌ Error verifying single pick: {e}")
             return False
+    
+    def _extract_scores(self, game_result: Dict) -> Tuple[str, str]:
+        """Extract home and away scores from game result."""
+        try:
+            scores = game_result.get('scores', [])
+            home_team = game_result.get('home_team', '')
+            away_team = game_result.get('away_team', '')
+            
+            home_score = '?'
+            away_score = '?'
+            
+            for score in scores:
+                if score.get('name') == home_team:
+                    home_score = str(score.get('score', '?'))
+                elif score.get('name') == away_team:
+                    away_score = str(score.get('score', '?'))
+            
+            return home_score, away_score
+        except Exception as e:
+            logger.warning(f"⚠️ Error extracting scores: {e}")
+            return '?', '?'
     
     def _verify_parlay(self, pick: Dict, completed_games: List[Dict]) -> bool:
         """Verify a parlay pick (all legs must win)"""
