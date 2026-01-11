@@ -39,8 +39,25 @@ except ImportError:
 # Lower bookmaker margins (4-8%) vs SGP (28-45%) = better ROI
 # ============================================================
 
-# Minimum Expected Value (EV) - 2% edge for volume
+# Minimum Expected Value (EV) - 2% edge for volume (default)
 MIN_VALUE_SINGLE_EV = 0.02  # 2% edge - increased volume
+
+# ============================================================
+# MARKET-SPECIFIC MIN_EV THRESHOLDS (Jan 11, 2026 Adjustment)
+# Based on historical performance analysis:
+# - Over 2.5: 35.5% hit rate, -9.18u → raise to 8%
+# - Home Win: 33.3% hit rate, -10.86u → raise to 6%
+# - Away Win: 29.2% hit rate, -4.26u → raise to 6%
+# - Under 2.5/3.5: 56.8%/60% hit rate, +positive → unchanged at 8%
+# ============================================================
+MARKET_SPECIFIC_MIN_EV = {
+    "FT_OVER_2_5": 0.08,   # 8% EV minimum
+    "FT_OVER_3_5": 0.08,   # 8% EV minimum  
+    "HOME_WIN": 0.06,      # 6% EV minimum
+    "AWAY_WIN": 0.06,      # 6% EV minimum
+    "FT_UNDER_2_5": 0.08,  # 8% EV minimum (unchanged, already performing)
+    "FT_UNDER_3_5": 0.08,  # 8% EV minimum (unchanged, already performing)
+}
 
 # Odds range filter - tighter range for consistency (Dec 9, 2025)
 MIN_VALUE_SINGLE_ODDS = 1.40  # Lower min for safer bets
@@ -516,12 +533,15 @@ class ValueSinglesEngine:
                 
                 ev = adj_ev
                 
-                # HARD FILTER: Minimum EV (dynamic for tournaments)
-                if ev < match_ev_threshold:
+                # MARKET-SPECIFIC EV FILTER (Jan 11, 2026)
+                # Use market-specific threshold if defined, else fall back to match threshold
+                market_min_ev = MARKET_SPECIFIC_MIN_EV.get(market_key, match_ev_threshold)
+                if ev < market_min_ev:
                     continue
                 
-                # REDUCED PRIORITY: Under bets require higher EV (harder to hit consistently)
-                if 'UNDER' in market_key and ev < 0.08:  # 8% EV minimum for Unders
+                # UNIVERSAL UNDER PROTECTION: All UNDER markets require 8% EV minimum
+                # This catches Under 0.5, 1.5, 4.5 etc. that aren't in MARKET_SPECIFIC_MIN_EV
+                if 'UNDER' in market_key and ev < 0.08:
                     continue
                 
                 # Smart conflict resolution for Over/Under goals vs Exact Score

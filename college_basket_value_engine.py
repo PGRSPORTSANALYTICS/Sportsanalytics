@@ -388,6 +388,13 @@ class CollegeBasketValueEngine:
                     odds, book = best
                     if not (self.min_odds <= odds <= self.max_odds):
                         continue
+                    
+                    # HOME WIN FILTER (Jan 11, 2026): Only allow Home Win if odds >= 4.0
+                    # Data shows: Home Win 20% hit rate, -21.60u loss at avg 5.18 odds
+                    # Filter out low-odds Home Wins which are losing heavily
+                    if side == "Home Win" and odds < 4.0:
+                        continue  # Skip Home Win below 4.0 odds
+                    
                     ev = ev_from_prob_odds(fair_p, odds)
                     conf = clamp(fair_p, 0.05, 0.95)
 
