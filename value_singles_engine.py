@@ -43,20 +43,39 @@ except ImportError:
 MIN_VALUE_SINGLE_EV = 0.02  # 2% edge - increased volume
 
 # ============================================================
-# MARKET-SPECIFIC MIN_EV THRESHOLDS (Jan 11, 2026 Adjustment)
-# Based on historical performance analysis:
-# - Over 2.5: 35.5% hit rate, -9.18u → raise to 8%
-# - Home Win: 33.3% hit rate, -10.86u → raise to 6%
-# - Away Win: 29.2% hit rate, -4.26u → raise to 6%
-# - Under 2.5/3.5: 56.8%/60% hit rate, +positive → unchanged at 8%
+# MARKET-SPECIFIC MIN_EV THRESHOLDS (Jan 11, 2026 v2)
+# Updated based on live performance Dec 25 - Jan 11:
+# - Under 2.5: 57.1% hit, +1.20u → KEEP (profitable)
+# - Under 3.5: 60.0% hit, +0.64u → KEEP (profitable)
+# - Over 2.5: 39.3% hit, -6.28u, max DD -7.56u → RAISE to 12%
+# - Home Win: 40.5% hit, -4.41u, 7d recovery +1.79u → MIN_ODDS filter
+# - Away Win: 29.4% hit, -5.45u, max DD -10.45u → LEARNING ONLY
 # ============================================================
 MARKET_SPECIFIC_MIN_EV = {
-    "FT_OVER_2_5": 0.08,   # 8% EV minimum
-    "FT_OVER_3_5": 0.08,   # 8% EV minimum  
-    "HOME_WIN": 0.06,      # 6% EV minimum
-    "AWAY_WIN": 0.06,      # 6% EV minimum
-    "FT_UNDER_2_5": 0.08,  # 8% EV minimum (unchanged, already performing)
-    "FT_UNDER_3_5": 0.08,  # 8% EV minimum (unchanged, already performing)
+    "FT_OVER_2_5": 0.12,   # 12% EV minimum (raised from 8% - underperforming)
+    "FT_OVER_3_5": 0.12,   # 12% EV minimum (raised from 8%)
+    "HOME_WIN": 0.08,      # 8% EV minimum + MIN_ODDS filter below
+    "FT_UNDER_2_5": 0.08,  # 8% EV minimum (unchanged - profitable)
+    "FT_UNDER_3_5": 0.08,  # 8% EV minimum (unchanged - profitable)
+    # AWAY_WIN: Now LEARNING_ONLY - see filter below
+}
+
+# ============================================================
+# LEARNING ONLY MARKETS (Jan 11, 2026)
+# Markets that log data for AI training but DO NOT publish publicly.
+# Reason: Structural underperformance beyond acceptable variance.
+# Re-evaluate: Jan 25, 2026 or after +100 bets per market
+# ============================================================
+LEARNING_ONLY_MARKETS = {
+    "AWAY_WIN",  # 29.4% hit rate, -5.45u, -10.45u max drawdown
+}
+
+# ============================================================
+# MARKET-SPECIFIC MIN_ODDS (Jan 11, 2026)
+# Require higher odds for markets showing value only at longer prices
+# ============================================================
+MARKET_SPECIFIC_MIN_ODDS = {
+    "HOME_WIN": 2.50,  # Only Home Win at 2.50+ odds (filter out short favorites)
 }
 
 # Odds range filter - tighter range for consistency (Dec 9, 2025)
@@ -515,6 +534,13 @@ class ValueSinglesEngine:
                 if not (MIN_VALUE_SINGLE_ODDS <= odds <= MAX_LEARNING_ODDS):
                     continue  # Skip bets outside learning range
                 
+                # MARKET-SPECIFIC MIN_ODDS FILTER (Jan 11, 2026)
+                # Some markets only profitable at longer odds
+                market_min_odds = MARKET_SPECIFIC_MIN_ODDS.get(market_key)
+                if market_min_odds and odds < market_min_odds:
+                    print(f"   ⚠️ FILTERED: {market_key} odds {odds:.2f} < min {market_min_odds:.2f}")
+                    continue
+                
                 # HARD FILTER: Model probability >= threshold (dynamic for tournaments)
                 if p_model < match_confidence_threshold:
                     continue  # Skip low-confidence predictions
@@ -682,6 +708,14 @@ class ValueSinglesEngine:
                 
                 kickoff_utc, kickoff_epoch = normalize_kickoff(commence_time)
                 created_at_utc = to_iso_utc(now_utc())
+                
+                # LEARNING ONLY CHECK (Jan 11, 2026)
+                # Markets in LEARNING_ONLY_MARKETS are logged for AI but NOT added to picks
+                is_learning_only = market_key in LEARNING_ONLY_MARKETS
+                if is_learning_only:
+                    print(f"   📚 LEARNING ONLY: {market_key} @ {odds:.2f} EV={ev:.1%} - skipping from public output")
+                    # Skip adding to picks list - data is collected via training_data table separately
+                    continue
                 
                 opportunity = {
                     "timestamp": int(time.time()),
