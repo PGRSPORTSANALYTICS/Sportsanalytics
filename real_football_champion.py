@@ -3855,8 +3855,14 @@ def get_pending_match_ids() -> set:
         match_ids = set()
         if rows:
             for row in rows:
-                home = row.get('home_team', '') or ''
-                away = row.get('away_team', '') or ''
+                # Handle both tuple and dict formats from db_helper
+                if isinstance(row, dict):
+                    home = row.get('home_team', '') or ''
+                    away = row.get('away_team', '') or ''
+                else:
+                    # Tuple format: (home_team, away_team)
+                    home = row[0] if row[0] else ''
+                    away = row[1] if row[1] else ''
                 if home and away:
                     match_ids.add(f"{home}_vs_{away}")
         print(f"📋 Found {len(match_ids)} pending matches to avoid duplicates")
