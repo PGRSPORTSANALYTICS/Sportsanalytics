@@ -3405,6 +3405,176 @@ def render_props_tab():
                 </div>
                 """, unsafe_allow_html=True)
         
+        # === DETAILED CARDS PERFORMANCE SECTION ===
+        if not cards_df.empty:
+            st.markdown("---")
+            st.markdown("### 🟨 Cards Market Deep Dive")
+            
+            # Group by selection type for breakdown (filter out null/empty selections)
+            cards_breakdown = []
+            valid_selections = [s for s in cards_df['selection'].unique() if s and pd.notna(s)]
+            for selection in valid_selections:
+                sel_df = cards_df[cards_df['selection'] == selection]
+                sel_stats = compute_props_roi(sel_df)
+                cards_breakdown.append({
+                    'Selection': selection,
+                    'Bets': sel_stats['bets'],
+                    'W': sel_stats['wins'],
+                    'L': sel_stats['losses'],
+                    'P': sel_stats['pending'],
+                    'Units P/L': sel_stats['units_won'],
+                    'Hit Rate': f"{sel_stats['hit_rate']:.0f}%",
+                    'ROI': f"{sel_stats['roi']:+.1f}%"
+                })
+            
+            if cards_breakdown:
+                breakdown_df = pd.DataFrame(cards_breakdown)
+                breakdown_df = breakdown_df.sort_values('Units P/L', ascending=False)
+                
+                st.markdown("#### Performance by Selection Type")
+                
+                # Color code the ROI column
+                def style_roi(val):
+                    if '+' in str(val):
+                        return 'color: #10B981'
+                    elif '-' in str(val):
+                        return 'color: #EF4444'
+                    return ''
+                
+                st.dataframe(
+                    breakdown_df,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        'Selection': st.column_config.TextColumn('Selection', width='medium'),
+                        'Units P/L': st.column_config.NumberColumn('Units P/L', format='%.2f'),
+                    }
+                )
+                
+                # Best and worst performers
+                if len(breakdown_df) > 0:
+                    best = breakdown_df.iloc[0]
+                    worst = breakdown_df.iloc[-1]
+                    
+                    bcol1, bcol2 = st.columns(2)
+                    with bcol1:
+                        best_color = "#10B981" if best['Units P/L'] >= 0 else "#EF4444"
+                        st.markdown(f"""
+                        <div style="padding:12px;border-radius:10px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);">
+                            <div style="font-size:12px;color:#9CA3AF;">Best Performer</div>
+                            <div style="font-size:14px;font-weight:600;color:#10B981;">{best['Selection']}</div>
+                            <div style="font-size:11px;color:{best_color};">{best['Units P/L']:+.2f} units | {best['Hit Rate']} hit | {best['W']}W-{best['L']}L</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    with bcol2:
+                        worst_color = "#10B981" if worst['Units P/L'] >= 0 else "#EF4444"
+                        st.markdown(f"""
+                        <div style="padding:12px;border-radius:10px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);">
+                            <div style="font-size:12px;color:#9CA3AF;">Worst Performer</div>
+                            <div style="font-size:14px;font-weight:600;color:#EF4444;">{worst['Selection']}</div>
+                            <div style="font-size:11px;color:{worst_color};">{worst['Units P/L']:+.2f} units | {worst['Hit Rate']} hit | {worst['W']}W-{worst['L']}L</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+            
+            # Daily cumulative profit chart for Cards
+            if 'match_date' in cards_df.columns:
+                settled_cards = cards_df[cards_df['result'].fillna('').str.lower().str.contains('won|lost', na=False)].copy()
+                if not settled_cards.empty:
+                    st.markdown("#### Cards Daily Cumulative Profit")
+                    
+                    settled_cards['date'] = pd.to_datetime(settled_cards['match_date']).dt.date
+                    
+                    # Calculate daily profit
+                    daily_profit = []
+                    for date in sorted(settled_cards['date'].unique()):
+                        day_df = settled_cards[settled_cards['date'] == date]
+                        day_stats = compute_props_roi(day_df)
+                        daily_profit.append({
+                            'date': date,
+                            'profit': day_stats['units_won'],
+                            'bets': day_stats['bets'],
+                            'wins': day_stats['wins'],
+                            'losses': day_stats['losses']
+                        })
+                    
+                    if daily_profit:
+                        profit_df = pd.DataFrame(daily_profit)
+                        profit_df['cumulative'] = profit_df['profit'].cumsum()
+                        
+                        import plotly.graph_objects as go
+                        
+                        fig = go.Figure()
+                        
+                        # Cumulative line
+                        fig.add_trace(go.Scatter(
+                            x=profit_df['date'],
+                            y=profit_df['cumulative'],
+                            mode='lines+markers',
+                            name='Cumulative P/L',
+                            line=dict(color='#F59E0B', width=3),
+                            marker=dict(size=6),
+                            hovertemplate='%{x}<br>Cumulative: %{y:.2f} units<extra></extra>'
+                        ))
+                        
+                        # Zero line
+                        fig.add_hline(y=0, line_dash="dash", line_color="#6B7280", opacity=0.5)
+                        
+                        # Fill color based on profit/loss
+                        fig.add_trace(go.Scatter(
+                            x=profit_df['date'],
+                            y=profit_df['cumulative'],
+                            fill='tozeroy',
+                            fillcolor='rgba(245,158,11,0.1)',
+                            line=dict(width=0),
+                            showlegend=False,
+                            hoverinfo='skip'
+                        ))
+                        
+                        fig.update_layout(
+                            height=300,
+                            margin=dict(l=0, r=0, t=20, b=0),
+                            paper_bgcolor='rgba(0,0,0,0)',
+                            plot_bgcolor='rgba(0,0,0,0)',
+                            xaxis=dict(
+                                showgrid=False,
+                                color='#9CA3AF'
+                            ),
+                            yaxis=dict(
+                                title='Units',
+                                showgrid=True,
+                                gridcolor='rgba(255,255,255,0.1)',
+                                color='#9CA3AF'
+                            ),
+                            showlegend=False
+                        )
+                        
+                        st.plotly_chart(fig, use_container_width=True)
+                        
+                        # Summary stats below chart
+                        total_profit = profit_df['cumulative'].iloc[-1]
+                        total_bets = profit_df['bets'].sum()
+                        total_wins = profit_df['wins'].sum()
+                        win_rate = (total_wins / total_bets * 100) if total_bets > 0 else 0
+                        profit_color = "#10B981" if total_profit >= 0 else "#EF4444"
+                        
+                        st.markdown(f"""
+                        <div style="display:flex;gap:24px;padding:12px;background:rgba(0,0,0,0.3);border-radius:8px;">
+                            <div>
+                                <span style="color:#9CA3AF;font-size:12px;">Total P/L</span><br/>
+                                <span style="color:{profit_color};font-size:18px;font-weight:600;">{total_profit:+.2f} units</span>
+                            </div>
+                            <div>
+                                <span style="color:#9CA3AF;font-size:12px;">Settled Bets</span><br/>
+                                <span style="color:#FFFFFF;font-size:18px;font-weight:600;">{int(total_bets)}</span>
+                            </div>
+                            <div>
+                                <span style="color:#9CA3AF;font-size:12px;">Win Rate</span><br/>
+                                <span style="color:#FFFFFF;font-size:18px;font-weight:600;">{win_rate:.0f}%</span>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+        
         st.markdown("---")
         st.markdown("### Recent Props Bets")
         
