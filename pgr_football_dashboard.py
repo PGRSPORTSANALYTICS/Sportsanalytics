@@ -2366,170 +2366,173 @@ def render_daily_card_tab():
     # Performance History Section
     with st.expander("📊 Performance History", expanded=False):
         try:
-            conn = get_db_connection()
-            
-            # Get settled football bets (Value Singles)
-            football_query = """
-                SELECT 
-                    DATE(kickoff_time) as date,
-                    result,
-                    odds,
-                    market
-                FROM football_opportunities
-                WHERE result IS NOT NULL 
-                AND result NOT IN ('pending', 'voided', 'void')
-                AND kickoff_time >= NOW() - INTERVAL '30 days'
-                ORDER BY kickoff_time
-            """
-            football_df = pd.read_sql(football_query, conn)
-            
-            # Get settled basketball bets (from basketball_predictions - Daily Card source)
-            basketball_query = """
-                SELECT 
-                    DATE(game_time) as date,
-                    result,
-                    odds,
-                    market
-                FROM basketball_predictions
-                WHERE result IS NOT NULL 
-                AND result NOT IN ('pending', 'voided', 'void')
-                AND game_time >= NOW() - INTERVAL '30 days'
-                ORDER BY game_time
-            """
-            try:
-                basketball_df = pd.read_sql(basketball_query, conn)
-            except Exception:
-                basketball_df = pd.DataFrame()
-            conn.close()
-            
-            # Calculate stats for each category
-            def calc_stats(df):
-                if df.empty:
-                    return {'bets': 0, 'wins': 0, 'losses': 0, 'units_pl': 0, 'hit_rate': 0, 'roi': 0}
-                wins = len(df[df['result'].str.lower().str.contains('won', na=False)])
-                losses = len(df[df['result'].str.lower().str.contains('lost', na=False)])
-                total = wins + losses
-                units_pl = 0
-                for _, row in df.iterrows():
-                    if 'won' in str(row['result']).lower():
-                        units_pl += float(row['odds'] or 1) - 1
-                    elif 'lost' in str(row['result']).lower():
-                        units_pl -= 1
-                hit_rate = (wins / total * 100) if total > 0 else 0
-                roi = (units_pl / total * 100) if total > 0 else 0
-                return {'bets': total, 'wins': wins, 'losses': losses, 'units_pl': units_pl, 'hit_rate': hit_rate, 'roi': roi}
-            
-            football_stats = calc_stats(football_df)
-            basketball_stats = calc_stats(basketball_df)
-            
-            # Combined stats
-            combined_bets = football_stats['bets'] + basketball_stats['bets']
-            combined_wins = football_stats['wins'] + basketball_stats['wins']
-            combined_units = football_stats['units_pl'] + basketball_stats['units_pl']
-            combined_hit = (combined_wins / combined_bets * 100) if combined_bets > 0 else 0
-            combined_roi = (combined_units / combined_bets * 100) if combined_bets > 0 else 0
-            
-            # Display overall stats
-            st.markdown("#### Last 30 Days Performance")
-            overall_cols = st.columns(5)
-            with overall_cols[0]:
-                st.metric("Total Bets", combined_bets)
-            with overall_cols[1]:
-                st.metric("Wins", combined_wins)
-            with overall_cols[2]:
-                color = "#10B981" if combined_units >= 0 else "#EF4444"
-                st.markdown(f"<div style='font-size:12px;color:#9CA3AF;'>Units P/L</div><div style='font-size:24px;font-weight:600;color:{color};'>{combined_units:+.2f}</div>", unsafe_allow_html=True)
-            with overall_cols[3]:
-                st.metric("Hit Rate", f"{combined_hit:.1f}%")
-            with overall_cols[4]:
-                color = "#10B981" if combined_roi >= 0 else "#EF4444"
-                st.markdown(f"<div style='font-size:12px;color:#9CA3AF;'>ROI</div><div style='font-size:24px;font-weight:600;color:{color};'>{combined_roi:+.1f}%</div>", unsafe_allow_html=True)
-            
-            st.markdown("---")
-            
-            # Breakdown by category
-            st.markdown("#### By Category")
-            cat_cols = st.columns(2)
-            with cat_cols[0]:
-                fb_color = "#10B981" if football_stats['units_pl'] >= 0 else "#EF4444"
-                st.markdown(f"""
-                <div style="padding:12px;border-radius:10px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);margin-bottom:10px;">
-                    <div style="font-size:14px;font-weight:600;color:#10B981;margin-bottom:8px;">⚽ Football (Value Singles)</div>
-                    <div style="display:flex;gap:16px;flex-wrap:wrap;">
-                        <div><span style="font-size:11px;color:#9CA3AF;">Bets</span><br/><span style="font-size:16px;color:#E5E7EB;">{football_stats['bets']}</span></div>
-                        <div><span style="font-size:11px;color:#9CA3AF;">W-L</span><br/><span style="font-size:16px;color:#E5E7EB;">{football_stats['wins']}-{football_stats['losses']}</span></div>
-                        <div><span style="font-size:11px;color:#9CA3AF;">Units</span><br/><span style="font-size:16px;color:{fb_color};">{football_stats['units_pl']:+.2f}</span></div>
-                        <div><span style="font-size:11px;color:#9CA3AF;">Hit%</span><br/><span style="font-size:16px;color:#E5E7EB;">{football_stats['hit_rate']:.1f}%</span></div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-            with cat_cols[1]:
-                bb_color = "#10B981" if basketball_stats['units_pl'] >= 0 else "#EF4444"
-                st.markdown(f"""
-                <div style="padding:12px;border-radius:10px;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);margin-bottom:10px;">
-                    <div style="font-size:14px;font-weight:600;color:#F97316;margin-bottom:8px;">🏀 Basketball</div>
-                    <div style="display:flex;gap:16px;flex-wrap:wrap;">
-                        <div><span style="font-size:11px;color:#9CA3AF;">Bets</span><br/><span style="font-size:16px;color:#E5E7EB;">{basketball_stats['bets']}</span></div>
-                        <div><span style="font-size:11px;color:#9CA3AF;">W-L</span><br/><span style="font-size:16px;color:#E5E7EB;">{basketball_stats['wins']}-{basketball_stats['losses']}</span></div>
-                        <div><span style="font-size:11px;color:#9CA3AF;">Units</span><br/><span style="font-size:16px;color:{bb_color};">{basketball_stats['units_pl']:+.2f}</span></div>
-                        <div><span style="font-size:11px;color:#9CA3AF;">Hit%</span><br/><span style="font-size:16px;color:#E5E7EB;">{basketball_stats['hit_rate']:.1f}%</span></div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            # Daily profit chart
-            if not football_df.empty or not basketball_df.empty:
+            db_url = os.getenv("DATABASE_URL")
+            if not db_url:
+                st.warning("Database connection not available")
+            else:
+                engine = create_engine(db_url)
+                
+                # Get settled football bets (Value Singles)
+                football_query = """
+                    SELECT 
+                        DATE(kickoff_time) as date,
+                        result,
+                        odds,
+                        market
+                    FROM football_opportunities
+                    WHERE result IS NOT NULL 
+                    AND result NOT IN ('pending', 'voided', 'void')
+                    AND kickoff_time >= NOW() - INTERVAL '30 days'
+                    ORDER BY kickoff_time
+                """
+                football_df = pd.read_sql(football_query, engine)
+                
+                # Get settled basketball bets (from basketball_predictions - Daily Card source)
+                basketball_query = """
+                    SELECT 
+                        DATE(game_time) as date,
+                        result,
+                        odds,
+                        market
+                    FROM basketball_predictions
+                    WHERE result IS NOT NULL 
+                    AND result NOT IN ('pending', 'voided', 'void')
+                    AND game_time >= NOW() - INTERVAL '30 days'
+                    ORDER BY game_time
+                """
+                try:
+                    basketball_df = pd.read_sql(basketball_query, engine)
+                except Exception:
+                    basketball_df = pd.DataFrame()
+                
+                # Calculate stats for each category
+                def calc_stats(df):
+                    if df.empty:
+                        return {'bets': 0, 'wins': 0, 'losses': 0, 'units_pl': 0, 'hit_rate': 0, 'roi': 0}
+                    wins = len(df[df['result'].str.lower().str.contains('won', na=False)])
+                    losses = len(df[df['result'].str.lower().str.contains('lost', na=False)])
+                    total = wins + losses
+                    units_pl = 0
+                    for _, row in df.iterrows():
+                        if 'won' in str(row['result']).lower():
+                            units_pl += float(row['odds'] or 1) - 1
+                        elif 'lost' in str(row['result']).lower():
+                            units_pl -= 1
+                    hit_rate = (wins / total * 100) if total > 0 else 0
+                    roi = (units_pl / total * 100) if total > 0 else 0
+                    return {'bets': total, 'wins': wins, 'losses': losses, 'units_pl': units_pl, 'hit_rate': hit_rate, 'roi': roi}
+                
+                football_stats = calc_stats(football_df)
+                basketball_stats = calc_stats(basketball_df)
+                
+                # Combined stats
+                combined_bets = football_stats['bets'] + basketball_stats['bets']
+                combined_wins = football_stats['wins'] + basketball_stats['wins']
+                combined_units = football_stats['units_pl'] + basketball_stats['units_pl']
+                combined_hit = (combined_wins / combined_bets * 100) if combined_bets > 0 else 0
+                combined_roi = (combined_units / combined_bets * 100) if combined_bets > 0 else 0
+                
+                # Display overall stats
+                st.markdown("#### Last 30 Days Performance")
+                overall_cols = st.columns(5)
+                with overall_cols[0]:
+                    st.metric("Total Bets", combined_bets)
+                with overall_cols[1]:
+                    st.metric("Wins", combined_wins)
+                with overall_cols[2]:
+                    color = "#10B981" if combined_units >= 0 else "#EF4444"
+                    st.markdown(f"<div style='font-size:12px;color:#9CA3AF;'>Units P/L</div><div style='font-size:24px;font-weight:600;color:{color};'>{combined_units:+.2f}</div>", unsafe_allow_html=True)
+                with overall_cols[3]:
+                    st.metric("Hit Rate", f"{combined_hit:.1f}%")
+                with overall_cols[4]:
+                    color = "#10B981" if combined_roi >= 0 else "#EF4444"
+                    st.markdown(f"<div style='font-size:12px;color:#9CA3AF;'>ROI</div><div style='font-size:24px;font-weight:600;color:{color};'>{combined_roi:+.1f}%</div>", unsafe_allow_html=True)
+                
                 st.markdown("---")
-                st.markdown("#### Cumulative Profit (30 Days)")
                 
-                # Combine and calculate daily P/L
-                all_bets = []
-                for _, row in football_df.iterrows():
-                    pl = (float(row['odds'] or 1) - 1) if 'won' in str(row['result']).lower() else (-1 if 'lost' in str(row['result']).lower() else 0)
-                    if pl != 0:
-                        all_bets.append({'date': row['date'], 'pl': pl})
-                for _, row in basketball_df.iterrows():
-                    pl = (float(row['odds'] or 1) - 1) if 'won' in str(row['result']).lower() else (-1 if 'lost' in str(row['result']).lower() else 0)
-                    if pl != 0:
-                        all_bets.append({'date': row['date'], 'pl': pl})
+                # Breakdown by category
+                st.markdown("#### By Category")
+                cat_cols = st.columns(2)
+                with cat_cols[0]:
+                    fb_color = "#10B981" if football_stats['units_pl'] >= 0 else "#EF4444"
+                    st.markdown(f"""
+                    <div style="padding:12px;border-radius:10px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);margin-bottom:10px;">
+                        <div style="font-size:14px;font-weight:600;color:#10B981;margin-bottom:8px;">⚽ Football (Value Singles)</div>
+                        <div style="display:flex;gap:16px;flex-wrap:wrap;">
+                            <div><span style="font-size:11px;color:#9CA3AF;">Bets</span><br/><span style="font-size:16px;color:#E5E7EB;">{football_stats['bets']}</span></div>
+                            <div><span style="font-size:11px;color:#9CA3AF;">W-L</span><br/><span style="font-size:16px;color:#E5E7EB;">{football_stats['wins']}-{football_stats['losses']}</span></div>
+                            <div><span style="font-size:11px;color:#9CA3AF;">Units</span><br/><span style="font-size:16px;color:{fb_color};">{football_stats['units_pl']:+.2f}</span></div>
+                            <div><span style="font-size:11px;color:#9CA3AF;">Hit%</span><br/><span style="font-size:16px;color:#E5E7EB;">{football_stats['hit_rate']:.1f}%</span></div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                with cat_cols[1]:
+                    bb_color = "#10B981" if basketball_stats['units_pl'] >= 0 else "#EF4444"
+                    st.markdown(f"""
+                    <div style="padding:12px;border-radius:10px;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);margin-bottom:10px;">
+                        <div style="font-size:14px;font-weight:600;color:#F97316;margin-bottom:8px;">🏀 Basketball</div>
+                        <div style="display:flex;gap:16px;flex-wrap:wrap;">
+                            <div><span style="font-size:11px;color:#9CA3AF;">Bets</span><br/><span style="font-size:16px;color:#E5E7EB;">{basketball_stats['bets']}</span></div>
+                            <div><span style="font-size:11px;color:#9CA3AF;">W-L</span><br/><span style="font-size:16px;color:#E5E7EB;">{basketball_stats['wins']}-{basketball_stats['losses']}</span></div>
+                            <div><span style="font-size:11px;color:#9CA3AF;">Units</span><br/><span style="font-size:16px;color:{bb_color};">{basketball_stats['units_pl']:+.2f}</span></div>
+                            <div><span style="font-size:11px;color:#9CA3AF;">Hit%</span><br/><span style="font-size:16px;color:#E5E7EB;">{basketball_stats['hit_rate']:.1f}%</span></div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
                 
-                if all_bets:
-                    daily_df = pd.DataFrame(all_bets)
-                    daily_agg = daily_df.groupby('date').agg({'pl': 'sum'}).reset_index()
-                    daily_agg = daily_agg.sort_values('date')
-                    daily_agg['cumulative'] = daily_agg['pl'].cumsum()
+                # Daily profit chart
+                if not football_df.empty or not basketball_df.empty:
+                    st.markdown("---")
+                    st.markdown("#### Cumulative Profit (30 Days)")
                     
-                    fig = go.Figure()
-                    fig.add_trace(go.Scatter(
-                        x=daily_agg['date'],
-                        y=daily_agg['cumulative'],
-                        mode='lines+markers',
-                        name='Cumulative P/L',
-                        line=dict(color='#10B981', width=3),
-                        marker=dict(size=6),
-                        hovertemplate='%{x}<br>Cumulative: %{y:.2f} units<extra></extra>'
-                    ))
-                    fig.add_hline(y=0, line_dash="dash", line_color="#6B7280", opacity=0.5)
-                    fig.add_trace(go.Scatter(
-                        x=daily_agg['date'],
-                        y=daily_agg['cumulative'],
-                        fill='tozeroy',
-                        fillcolor='rgba(16,185,129,0.1)',
-                        line=dict(width=0),
-                        showlegend=False,
-                        hoverinfo='skip'
-                    ))
-                    fig.update_layout(
-                        height=250,
-                        margin=dict(l=0, r=0, t=10, b=0),
-                        paper_bgcolor='rgba(0,0,0,0)',
-                        plot_bgcolor='rgba(0,0,0,0)',
-                        xaxis=dict(showgrid=False, color='#9CA3AF'),
-                        yaxis=dict(title='Units', showgrid=True, gridcolor='rgba(255,255,255,0.1)', color='#9CA3AF'),
-                        showlegend=False
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
+                    # Combine and calculate daily P/L
+                    all_bets = []
+                    for _, row in football_df.iterrows():
+                        pl = (float(row['odds'] or 1) - 1) if 'won' in str(row['result']).lower() else (-1 if 'lost' in str(row['result']).lower() else 0)
+                        if pl != 0:
+                            all_bets.append({'date': row['date'], 'pl': pl})
+                    for _, row in basketball_df.iterrows():
+                        pl = (float(row['odds'] or 1) - 1) if 'won' in str(row['result']).lower() else (-1 if 'lost' in str(row['result']).lower() else 0)
+                        if pl != 0:
+                            all_bets.append({'date': row['date'], 'pl': pl})
                     
+                    if all_bets:
+                        daily_df = pd.DataFrame(all_bets)
+                        daily_agg = daily_df.groupby('date').agg({'pl': 'sum'}).reset_index()
+                        daily_agg = daily_agg.sort_values('date')
+                        daily_agg['cumulative'] = daily_agg['pl'].cumsum()
+                        
+                        fig = go.Figure()
+                        fig.add_trace(go.Scatter(
+                            x=daily_agg['date'],
+                            y=daily_agg['cumulative'],
+                            mode='lines+markers',
+                            name='Cumulative P/L',
+                            line=dict(color='#10B981', width=3),
+                            marker=dict(size=6),
+                            hovertemplate='%{x}<br>Cumulative: %{y:.2f} units<extra></extra>'
+                        ))
+                        fig.add_hline(y=0, line_dash="dash", line_color="#6B7280", opacity=0.5)
+                        fig.add_trace(go.Scatter(
+                            x=daily_agg['date'],
+                            y=daily_agg['cumulative'],
+                            fill='tozeroy',
+                            fillcolor='rgba(16,185,129,0.1)',
+                            line=dict(width=0),
+                            showlegend=False,
+                            hoverinfo='skip'
+                        ))
+                        fig.update_layout(
+                            height=250,
+                            margin=dict(l=0, r=0, t=10, b=0),
+                            paper_bgcolor='rgba(0,0,0,0)',
+                            plot_bgcolor='rgba(0,0,0,0)',
+                            xaxis=dict(showgrid=False, color='#9CA3AF'),
+                            yaxis=dict(title='Units', showgrid=True, gridcolor='rgba(255,255,255,0.1)', color='#9CA3AF'),
+                            showlegend=False
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                        
         except Exception as e:
             st.warning(f"Could not load performance history: {e}")
     
