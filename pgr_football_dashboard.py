@@ -2375,34 +2375,33 @@ def render_daily_card_tab():
                 # Get settled football bets (Value Singles)
                 football_query = """
                     SELECT 
-                        DATE(NULLIF(kickoff_time, '')::timestamp) as date,
+                        DATE(match_date::timestamp) as date,
                         result,
                         odds,
                         market
                     FROM football_opportunities
                     WHERE result IS NOT NULL 
                     AND result NOT IN ('pending', 'voided', 'void')
-                    AND kickoff_time IS NOT NULL
-                    AND kickoff_time != ''
-                    AND NULLIF(kickoff_time, '')::timestamp >= NOW() - INTERVAL '30 days'
-                    ORDER BY kickoff_time
+                    AND match_date IS NOT NULL
+                    AND match_date != ''
+                    AND match_date::timestamp >= NOW() - INTERVAL '30 days'
+                    ORDER BY match_date DESC
                 """
                 football_df = pd.read_sql(football_query, engine)
                 
                 # Get settled basketball bets (from basketball_predictions - Daily Card source)
                 basketball_query = """
                     SELECT 
-                        DATE(NULLIF(game_time, '')::timestamp) as date,
-                        result,
+                        DATE(commence_time::timestamp) as date,
+                        status as result,
                         odds,
                         market
                     FROM basketball_predictions
-                    WHERE result IS NOT NULL 
-                    AND result NOT IN ('pending', 'voided', 'void')
-                    AND game_time IS NOT NULL
-                    AND game_time != ''
-                    AND NULLIF(game_time, '')::timestamp >= NOW() - INTERVAL '30 days'
-                    ORDER BY game_time
+                    WHERE status IS NOT NULL 
+                    AND status NOT IN ('pending', 'voided', 'void')
+                    AND commence_time IS NOT NULL
+                    AND commence_time::timestamp >= NOW() - INTERVAL '30 days'
+                    ORDER BY commence_time DESC
                 """
                 try:
                     basketball_df = pd.read_sql(basketball_query, engine)
