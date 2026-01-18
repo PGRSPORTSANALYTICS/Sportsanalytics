@@ -56,6 +56,15 @@ MIN_ML_PARLAY_LEG_EV = 0.03  # 3% EV threshold - each leg must have positive EV
 # NOVA v2.0 Safety Guardrail: Minimum total parlay EV
 MIN_ML_PARLAY_TOTAL_EV = 5.0  # 5% total combined EV required
 
+# ============================================================
+# WIN PROBABILITY FOCUS (Jan 18, 2026)
+# Prioritize hit rate over edge - better user experience
+# ============================================================
+MIN_LEG_WIN_PROBABILITY = 0.58  # 58%+ win probability per leg (realistic for 1.35-1.70 odds)
+MAX_COMBINED_PARLAY_ODDS = 2.50  # Cap total odds for higher hit rate
+PREFER_DIFFERENT_LEAGUES = True  # Diversity bonus for uncorrelated legs (soft preference)
+MIN_CONFIDENCE_SCORE = 0.50  # Composite confidence threshold (lowered for realistic production)
+
 # Parlay construction limits - POLICY: 2-LEG ONLY
 MAX_ML_PARLAYS_PER_DAY = 2
 ML_PARLAY_MIN_LEGS = 2
@@ -382,6 +391,16 @@ class MLParlayEngine:
                                 if edge < MIN_ML_PARLAY_LEG_EV:
                                     continue
                                 
+                                # WIN PROBABILITY FILTER (Jan 18, 2026)
+                                # Require high win probability, not just positive EV
+                                if prob < MIN_LEG_WIN_PROBABILITY:
+                                    continue
+                                
+                                # Calculate composite confidence score
+                                confidence = self._calculate_leg_confidence(prob, edge, odds)
+                                if confidence < MIN_CONFIDENCE_SCORE:
+                                    continue
+                                
                                 candidates.append({
                                     'match_id': match_id,
                                     'home_team': home_team,
@@ -395,6 +414,7 @@ class MLParlayEngine:
                                     'odds': odds,
                                     'model_probability': prob,
                                     'edge_percentage': edge * 100,
+                                    'confidence_score': confidence,
                                     'xg_home': xg_home,
                                     'xg_away': xg_away,
                                 })
@@ -420,6 +440,15 @@ class MLParlayEngine:
                                 if edge < MIN_ML_PARLAY_LEG_EV:
                                     continue
                                 
+                                # WIN PROBABILITY FILTER (Jan 18, 2026)
+                                if prob < MIN_LEG_WIN_PROBABILITY:
+                                    continue
+                                
+                                # Calculate composite confidence score
+                                confidence = self._calculate_leg_confidence(prob, edge, dnb_odds)
+                                if confidence < MIN_CONFIDENCE_SCORE:
+                                    continue
+                                
                                 candidates.append({
                                     'match_id': match_id,
                                     'home_team': home_team,
@@ -433,6 +462,7 @@ class MLParlayEngine:
                                     'odds': dnb_odds,
                                     'model_probability': prob,
                                     'edge_percentage': edge * 100,
+                                    'confidence_score': confidence,
                                     'xg_home': xg_home,
                                     'xg_away': xg_away,
                                 })
@@ -447,8 +477,9 @@ class MLParlayEngine:
                 
                 time.sleep(0.2)
             
-            candidates.sort(key=lambda x: x['edge_percentage'], reverse=True)
-            logger.info(f"📊 Found {len(candidates)} candidate legs for ML Parlays")
+            # Sort by confidence score (prioritize high probability), then by edge
+            candidates.sort(key=lambda x: (x.get('confidence_score', 0), x.get('model_probability', 0)), reverse=True)
+            logger.info(f"📊 Found {len(candidates)} candidate legs for ML Parlays (min {MIN_LEG_WIN_PROBABILITY*100:.0f}% prob)")
             
             return candidates
             
@@ -535,6 +566,38 @@ class MLParlayEngine:
         dnb_odds *= 0.95
         
         return max(1.01, min(dnb_odds, ml_odds))
+    
+    def _calculate_leg_confidence(self, probability: float, edge: float, odds: float) -> float:
+        """
+        Calculate composite confidence score for a parlay leg.
+        
+        Factors:
+        - Win probability (40% weight) - higher is better
+        - Edge/EV (30% weight) - positive edge required
+        - Odds safety (30% weight) - lower odds = safer
+        
+        Returns:
+            Confidence score between 0-1
+        """
+        # Win probability component (0-1, higher = better)
+        prob_score = min(1.0, probability)
+        
+        # Edge component (normalize edge, cap at 20%)
+        edge_score = min(1.0, max(0.0, edge / 0.20))
+        
+        # Odds safety component (lower odds = higher score)
+        # 1.35 = 1.0, 1.70 = 0.0 within our range
+        if odds <= ML_PARLAY_MIN_ODDS:
+            odds_score = 1.0
+        elif odds >= ML_PARLAY_MAX_ODDS:
+            odds_score = 0.0
+        else:
+            odds_score = 1.0 - ((odds - ML_PARLAY_MIN_ODDS) / (ML_PARLAY_MAX_ODDS - ML_PARLAY_MIN_ODDS))
+        
+        # Weighted composite score
+        confidence = (prob_score * 0.40) + (edge_score * 0.30) + (odds_score * 0.30)
+        
+        return round(confidence, 3)
     
     def _get_existing_parlays_today(self) -> int:
         """Count how many ML parlays already created today"""
@@ -661,14 +724,17 @@ class MLParlayEngine:
         available_legs = []
         for legs in candidates_by_match.values():
             available_legs.extend(legs)
-        available_legs.sort(key=lambda x: x['edge_percentage'], reverse=True)
+        # Sort by confidence score (prioritizes probability), then edge
+        available_legs.sort(key=lambda x: (x.get('confidence_score', 0), x.get('model_probability', 0)), reverse=True)
         
         for _ in range(remaining_slots):
             parlay_legs = []
             parlay_matches = set()
+            parlay_leagues = set()  # Track leagues for diversity
             
             for leg in available_legs:
                 mid = leg['match_id']
+                league_key = leg.get('league_key', '')
                 
                 if mid in parlay_matches:
                     continue
@@ -676,8 +742,22 @@ class MLParlayEngine:
                 if mid in used_matches:
                     continue
                 
+                # LEAGUE DIVERSITY: Soft preference for different leagues
+                # Skip same-league legs on first pass, but allow as fallback
+                if PREFER_DIFFERENT_LEAGUES and league_key in parlay_leagues and len(parlay_legs) < ML_PARLAY_MAX_LEGS:
+                    # Check if there are other league options available
+                    other_leagues_available = any(
+                        l.get('league_key', '') not in parlay_leagues 
+                        and l['match_id'] not in parlay_matches 
+                        and l['match_id'] not in used_matches
+                        for l in available_legs
+                    )
+                    if other_leagues_available:
+                        continue  # Skip this same-league leg, try others first
+                
                 parlay_legs.append(leg)
                 parlay_matches.add(mid)
+                parlay_leagues.add(league_key)
                 
                 if len(parlay_legs) >= ML_PARLAY_MAX_LEGS:
                     break
@@ -695,6 +775,12 @@ class MLParlayEngine:
                 metrics = self._calculate_parlay_metrics(parlay_legs)
                 if metrics['combined_ev'] < MIN_ML_PARLAY_TOTAL_EV:
                     logger.info(f"⏭️ Skipping parlay: combined EV {metrics['combined_ev']:.1f}% < {MIN_ML_PARLAY_TOTAL_EV}% minimum")
+                    used_matches.update(parlay_matches)
+                    continue
+                
+                # WIN PROBABILITY FOCUS: Cap combined odds for higher hit rate
+                if metrics['total_odds'] > MAX_COMBINED_PARLAY_ODDS:
+                    logger.info(f"⏭️ Skipping parlay: total odds {metrics['total_odds']:.2f} > {MAX_COMBINED_PARLAY_ODDS} cap (hit rate focus)")
                     used_matches.update(parlay_matches)
                     continue
                 
