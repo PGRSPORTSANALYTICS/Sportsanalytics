@@ -42,13 +42,13 @@ logger = logging.getLogger(__name__)
 # Master switch
 ML_PARLAY_ENABLED = True
 
-# Odds filters per leg - POLICY COMPLIANT (Jan 2026)
-ML_PARLAY_MIN_ODDS = 1.35  # Minimum odds per leg (policy: 1.35-1.70)
-ML_PARLAY_MAX_ODDS = 1.70  # Maximum odds per leg (policy: 1.35-1.70)
+# Odds filters per leg - Updated for ~4x parlay target (Jan 18, 2026)
+ML_PARLAY_MIN_ODDS = 1.50  # Minimum odds per leg (better value)
+ML_PARLAY_MAX_ODDS = 2.20  # Maximum odds per leg (allows 4x+ combined)
 
-# Total parlay odds range (2-leg only: 1.35*1.35=1.82 to 1.70*1.70=2.89)
-ML_PARLAY_MIN_TOTAL_ODDS = 1.82   # Minimum combined odds (1.35 x 1.35)
-ML_PARLAY_MAX_TOTAL_ODDS = 2.89   # Maximum combined odds (1.70 x 1.70)
+# Total parlay odds range (2-leg: 1.50*1.50=2.25 to 2.20*2.20=4.84)
+ML_PARLAY_MIN_TOTAL_ODDS = 2.25   # Minimum combined odds (1.50 x 1.50)
+ML_PARLAY_MAX_TOTAL_ODDS = 4.84   # Maximum combined odds (2.20 x 2.20)
 
 # Minimum EV per leg (3% edge for production)
 MIN_ML_PARLAY_LEG_EV = 0.03  # 3% EV threshold - each leg must have positive EV
@@ -58,12 +58,13 @@ MIN_ML_PARLAY_TOTAL_EV = 5.0  # 5% total combined EV required
 
 # ============================================================
 # WIN PROBABILITY FOCUS (Jan 18, 2026)
-# Prioritize hit rate over edge - better user experience
+# Balance hit rate with attractive parlay odds (~4x)
 # ============================================================
-MIN_LEG_WIN_PROBABILITY = 0.58  # 58%+ win probability per leg (realistic for 1.35-1.70 odds)
-MAX_COMBINED_PARLAY_ODDS = 2.50  # Cap total odds for higher hit rate
+MIN_LEG_WIN_PROBABILITY = 0.55  # 55%+ win probability per leg
+MAX_COMBINED_PARLAY_ODDS = 4.50  # Target ~4x payout (attractive for parlay bettors)
+MIN_COMBINED_PARLAY_ODDS = 3.00  # Minimum 3x to make it worth the parlay risk
 PREFER_DIFFERENT_LEAGUES = True  # Diversity bonus for uncorrelated legs (soft preference)
-MIN_CONFIDENCE_SCORE = 0.50  # Composite confidence threshold (lowered for realistic production)
+MIN_CONFIDENCE_SCORE = 0.45  # Composite confidence threshold
 
 # Parlay construction limits - POLICY: 2-LEG ONLY
 MAX_ML_PARLAYS_PER_DAY = 2
@@ -778,9 +779,14 @@ class MLParlayEngine:
                     used_matches.update(parlay_matches)
                     continue
                 
-                # WIN PROBABILITY FOCUS: Cap combined odds for higher hit rate
+                # WIN PROBABILITY FOCUS: Target attractive odds range (3x-4.5x)
                 if metrics['total_odds'] > MAX_COMBINED_PARLAY_ODDS:
-                    logger.info(f"⏭️ Skipping parlay: total odds {metrics['total_odds']:.2f} > {MAX_COMBINED_PARLAY_ODDS} cap (hit rate focus)")
+                    logger.info(f"⏭️ Skipping parlay: total odds {metrics['total_odds']:.2f} > {MAX_COMBINED_PARLAY_ODDS} cap")
+                    used_matches.update(parlay_matches)
+                    continue
+                
+                if metrics['total_odds'] < MIN_COMBINED_PARLAY_ODDS:
+                    logger.info(f"⏭️ Skipping parlay: total odds {metrics['total_odds']:.2f} < {MIN_COMBINED_PARLAY_ODDS} min (not worth it)")
                     used_matches.update(parlay_matches)
                     continue
                 
