@@ -1194,7 +1194,7 @@ def render_overview(df: pd.DataFrame):
     
     try:
         from daily_units_service import get_daily_units
-        daily_data = get_daily_units(days_back=14)
+        daily_data = get_daily_units(days_back=31)  # Full month of data
         
         if daily_data.get('daily_units'):
             dcol1, dcol2, dcol3 = st.columns(3)
