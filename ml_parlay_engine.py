@@ -42,29 +42,42 @@ logger = logging.getLogger(__name__)
 # Master switch
 ML_PARLAY_ENABLED = True
 
-# Odds filters per leg - Updated for ~4x parlay target (Jan 18, 2026)
-ML_PARLAY_MIN_ODDS = 1.50  # Minimum odds per leg (better value)
-ML_PARLAY_MAX_ODDS = 2.20  # Maximum odds per leg (allows 4x+ combined)
+# ============================================================
+# PARLAY PAUSE MODE (Jan 23, 2026)
+# Set to True to pause parlay generation while focusing on singles
+# Parlays have -399 SEK loss vs +100u singles profit
+# ============================================================
+ML_PARLAY_PAUSED = True  # PAUSED: Focus on profitable singles first
 
-# Total parlay odds range (2-leg: 1.50*1.50=2.25 to 2.20*2.20=4.84)
-ML_PARLAY_MIN_TOTAL_ODDS = 2.25   # Minimum combined odds (1.50 x 1.50)
-ML_PARLAY_MAX_TOTAL_ODDS = 4.84   # Maximum combined odds (2.20 x 2.20)
+# Odds filters per leg - TIGHTENED (Jan 23, 2026)
+# Lower max odds = stronger favorites = higher hit rate
+ML_PARLAY_MIN_ODDS = 1.40  # Minimum odds per leg (strong favorites)
+ML_PARLAY_MAX_ODDS = 1.80  # Maximum odds per leg (REDUCED from 2.20)
 
-# Minimum EV per leg (3% edge for production)
-MIN_ML_PARLAY_LEG_EV = 0.03  # 3% EV threshold - each leg must have positive EV
+# Total parlay odds range - LOWERED to 2.5-3x (Jan 23, 2026)
+# Previous 3-4x required ~28% hit rate, new 2.5-3x requires ~35% (more achievable)
+ML_PARLAY_MIN_TOTAL_ODDS = 2.00   # Minimum combined odds (1.40 x 1.43)
+ML_PARLAY_MAX_TOTAL_ODDS = 3.24   # Maximum combined odds (1.80 x 1.80)
+
+# Minimum EV per leg (5% edge - INCREASED from 3%)
+MIN_ML_PARLAY_LEG_EV = 0.05  # 5% EV threshold - stricter edge requirement
 
 # NOVA v2.0 Safety Guardrail: Minimum total parlay EV
-MIN_ML_PARLAY_TOTAL_EV = 5.0  # 5% total combined EV required
+MIN_ML_PARLAY_TOTAL_EV = 8.0  # 8% total combined EV required (was 5%)
 
 # ============================================================
-# WIN PROBABILITY FOCUS (Jan 18, 2026)
-# Balance hit rate with attractive parlay odds (~4x)
+# WIN PROBABILITY FOCUS - TIGHTENED (Jan 23, 2026)
+# Prioritize hit rate over odds attractiveness
 # ============================================================
-MIN_LEG_WIN_PROBABILITY = 0.55  # 55%+ win probability per leg
-MAX_COMBINED_PARLAY_ODDS = 4.50  # Target ~4x payout (attractive for parlay bettors)
-MIN_COMBINED_PARLAY_ODDS = 3.00  # Minimum 3x to make it worth the parlay risk
+MIN_LEG_WIN_PROBABILITY = 0.65  # 65%+ win probability per leg (was 55%)
+MAX_COMBINED_PARLAY_ODDS = 3.00  # Target 2.5-3x payout (was 4.5x)
+MIN_COMBINED_PARLAY_ODDS = 2.50  # Minimum 2.5x (was 3x)
 PREFER_DIFFERENT_LEAGUES = True  # Diversity bonus for uncorrelated legs (soft preference)
-MIN_CONFIDENCE_SCORE = 0.45  # Composite confidence threshold
+MIN_CONFIDENCE_SCORE = 0.65  # Composite confidence threshold (was 0.45)
+
+# Form-based filtering (Jan 23, 2026)
+MIN_RECENT_WINS = 3  # Team must have 3+ wins in last 5 matches
+FORM_LOOKBACK_MATCHES = 5  # Check last 5 matches for form
 
 # Parlay construction limits - POLICY: 2-LEG ONLY
 MAX_ML_PARLAYS_PER_DAY = 2
@@ -568,6 +581,72 @@ class MLParlayEngine:
         
         return max(1.01, min(dnb_odds, ml_odds))
     
+    def _check_team_form(self, team_name: str, league_key: str, selection: str) -> Tuple[bool, int]:
+        """
+        Check if team has good recent form (3+ wins in last 5 matches).
+        
+        Returns:
+            (passes_filter, wins_count) - True if team form is acceptable
+        """
+        try:
+            import requests
+            import os
+            
+            api_key = os.environ.get('API_FOOTBALL_KEY')
+            if not api_key:
+                return True, 0
+            
+            league_id_map = {
+                'soccer_epl': 39,
+                'soccer_spain_la_liga': 140,
+                'soccer_italy_serie_a': 135,
+                'soccer_germany_bundesliga': 78,
+                'soccer_france_ligue_one': 61,
+            }
+            
+            league_id = league_id_map.get(league_key)
+            if not league_id:
+                return True, 0
+            
+            url = 'https://v3.football.api-sports.io/fixtures'
+            headers = {
+                'X-RapidAPI-Key': api_key,
+                'X-RapidAPI-Host': 'v3.football.api-sports.io'
+            }
+            params = {
+                'team': team_name,
+                'last': FORM_LOOKBACK_MATCHES,
+                'league': league_id,
+                'season': 2025
+            }
+            
+            resp = requests.get(url, headers=headers, params=params, timeout=10)
+            if resp.status_code != 200:
+                return True, 0
+            
+            data = resp.json()
+            fixtures = data.get('response', [])
+            
+            wins = 0
+            for fixture in fixtures:
+                home_goals = fixture.get('goals', {}).get('home', 0) or 0
+                away_goals = fixture.get('goals', {}).get('away', 0) or 0
+                home_team = fixture.get('teams', {}).get('home', {}).get('name', '')
+                
+                is_home = team_name.lower() in home_team.lower()
+                
+                if is_home and home_goals > away_goals:
+                    wins += 1
+                elif not is_home and away_goals > home_goals:
+                    wins += 1
+            
+            passes = wins >= MIN_RECENT_WINS
+            return passes, wins
+            
+        except Exception as e:
+            logger.debug(f"Form check failed for {team_name}: {e}")
+            return True, 0
+    
     def _calculate_leg_confidence(self, probability: float, edge: float, odds: float) -> float:
         """
         Calculate composite confidence score for a parlay leg.
@@ -790,6 +869,31 @@ class MLParlayEngine:
                     used_matches.update(parlay_matches)
                     continue
                 
+                # FORM-BASED FILTERING (Jan 23, 2026)
+                # Check if selected teams have good recent form (3+ wins in last 5)
+                form_pass = True
+                for leg in parlay_legs:
+                    selection = leg.get('selection', '')
+                    team_to_check = None
+                    
+                    if 'HOME' in selection:
+                        team_to_check = leg.get('home_team', '')
+                    elif 'AWAY' in selection:
+                        team_to_check = leg.get('away_team', '')
+                    
+                    if team_to_check:
+                        passes, wins = self._check_team_form(team_to_check, leg.get('league_key', ''), selection)
+                        if not passes:
+                            logger.info(f"⏭️ Form filter failed: {team_to_check} has only {wins} wins in last {FORM_LOOKBACK_MATCHES} (need {MIN_RECENT_WINS}+)")
+                            form_pass = False
+                            break
+                        else:
+                            logger.debug(f"✅ Form check passed: {team_to_check} has {wins} wins in last {FORM_LOOKBACK_MATCHES}")
+                
+                if not form_pass:
+                    used_matches.update(parlay_matches)
+                    continue
+                
                 parlays.append({
                     'legs': parlay_legs,
                     'matches_used': parlay_matches
@@ -987,6 +1091,11 @@ class MLParlayEngine:
 def run_prediction_cycle():
     """Run a single ML Parlay prediction cycle"""
     try:
+        if ML_PARLAY_PAUSED:
+            logger.info("⏸️ ML Parlays PAUSED - Focus on profitable singles (+100u ROI)")
+            logger.info("   Set ML_PARLAY_PAUSED = False to resume parlay generation")
+            return []
+        
         engine = MLParlayEngine()
         parlay_ids = engine.generate_ml_parlays()
         logger.info(f"🎰 ML Parlay cycle complete: {len(parlay_ids)} parlays created")
