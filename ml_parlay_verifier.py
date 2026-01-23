@@ -270,7 +270,7 @@ class MLParlayVerifier:
                 
                 legs_data = db_helper.execute(
                     """SELECT match_id, home_team, away_team, league_key, 
-                              market_type, selection, odds
+                              market_type, selection, odds, kickoff_time
                        FROM ml_parlay_legs 
                        WHERE parlay_id = %s
                        ORDER BY leg_number""",
@@ -287,7 +287,8 @@ class MLParlayVerifier:
                             'league_key': l[3],
                             'market_type': l[4],
                             'selection': l[5],
-                            'odds': l[6]
+                            'odds': l[6],
+                            'kickoff_time': str(l[7]) if l[7] else None
                         }
                         for l in legs_data
                     ]
@@ -321,17 +322,13 @@ class MLParlayVerifier:
                     
                     # Fallback: Use API-Football (with improved team matching)
                     if not match_result:
-                        match_date = leg.get('match_date', leg.get('kickoff', ''))
-                        if not match_date:
-                            # Try to get date from parlay
-                            parlay_info = db_helper.execute(
-                                "SELECT match_date FROM ml_parlay_predictions WHERE parlay_id = %s",
-                                (parlay_id,), fetch='one'
-                            )
-                            if parlay_info:
-                                match_date = str(parlay_info[0])
+                        # Use kickoff_time from the leg (correct match date)
+                        match_date = leg.get('kickoff_time', '')
                         if match_date:
-                            match_result = self._fetch_from_api_football(home_team, away_team, str(match_date))
+                            # Extract date portion (YYYY-MM-DD) from kickoff_time
+                            match_date = str(match_date).split('T')[0][:10]
+                        if match_date:
+                            match_result = self._fetch_from_api_football(home_team, away_team, match_date)
                     
                     if match_result and match_result.get('completed'):
                         result = self._determine_leg_result(leg, match_result)
