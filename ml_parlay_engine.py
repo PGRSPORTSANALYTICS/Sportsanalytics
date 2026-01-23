@@ -47,40 +47,40 @@ ML_PARLAY_ENABLED = True
 # Set to True to pause parlay generation while focusing on singles
 # Parlays have -399 SEK loss vs +100u singles profit
 # ============================================================
-ML_PARLAY_PAUSED = True  # PAUSED: Focus on profitable singles first
+ML_PARLAY_PAUSED = False  # ENABLED: Testing new stricter filters (Jan 23, 2026)
 
-# Odds filters per leg - TIGHTENED (Jan 23, 2026)
-# Lower max odds = stronger favorites = higher hit rate
-ML_PARLAY_MIN_ODDS = 1.40  # Minimum odds per leg (strong favorites)
-ML_PARLAY_MAX_ODDS = 1.80  # Maximum odds per leg (REDUCED from 2.20)
+# Odds filters per leg - BALANCED (Jan 23, 2026)
+# Find +EV according to model (needs odds >= 2.27 for home, >= 3.34 for away)
+ML_PARLAY_MIN_ODDS = 1.90  # Minimum odds per leg (model needs higher odds for +EV)
+ML_PARLAY_MAX_ODDS = 2.80  # Maximum odds per leg (moderate favorites/underdogs)
 
-# Total parlay odds range - LOWERED to 2.5-3x (Jan 23, 2026)
-# Previous 3-4x required ~28% hit rate, new 2.5-3x requires ~35% (more achievable)
-ML_PARLAY_MIN_TOTAL_ODDS = 2.00   # Minimum combined odds (1.40 x 1.43)
-ML_PARLAY_MAX_TOTAL_ODDS = 3.24   # Maximum combined odds (1.80 x 1.80)
+# Total parlay odds range - TARGET 3.5-7x (based on per-leg range)
+# 2-leg: 1.90*1.90=3.61 to 2.80*2.80=7.84
+ML_PARLAY_MIN_TOTAL_ODDS = 3.50   # Minimum combined odds
+ML_PARLAY_MAX_TOTAL_ODDS = 8.00   # Maximum combined odds
 
-# Minimum EV per leg (5% edge - INCREASED from 3%)
-MIN_ML_PARLAY_LEG_EV = 0.05  # 5% EV threshold - stricter edge requirement
+# Minimum EV per leg (3% edge - standard threshold)
+MIN_ML_PARLAY_LEG_EV = 0.03  # 3% EV threshold per leg
 
 # NOVA v2.0 Safety Guardrail: Minimum total parlay EV
-MIN_ML_PARLAY_TOTAL_EV = 8.0  # 8% total combined EV required (was 5%)
+MIN_ML_PARLAY_TOTAL_EV = 5.0  # 5% total combined EV required
 
 # ============================================================
 # WIN PROBABILITY FOCUS - TIGHTENED (Jan 23, 2026)
 # Prioritize hit rate over odds attractiveness
 # ============================================================
-MIN_LEG_WIN_PROBABILITY = 0.65  # 65%+ win probability per leg (was 55%)
-MAX_COMBINED_PARLAY_ODDS = 3.00  # Target 2.5-3x payout (was 4.5x)
-MIN_COMBINED_PARLAY_ODDS = 2.50  # Minimum 2.5x (was 3x)
+MIN_LEG_WIN_PROBABILITY = 0.35  # 35%+ model probability (allows away wins and draws)
+MAX_COMBINED_PARLAY_ODDS = 8.00  # Cap at 8x combined (matches total odds range)
+MIN_COMBINED_PARLAY_ODDS = 3.50  # Minimum 3.5x (matches total odds range)
 PREFER_DIFFERENT_LEAGUES = True  # Diversity bonus for uncorrelated legs (soft preference)
-MIN_CONFIDENCE_SCORE = 0.65  # Composite confidence threshold (was 0.45)
+MIN_CONFIDENCE_SCORE = 0.55  # Composite confidence threshold (was 0.45, relaxed from 0.65)
 
 # Form-based filtering (Jan 23, 2026)
 MIN_RECENT_WINS = 3  # Team must have 3+ wins in last 5 matches
 FORM_LOOKBACK_MATCHES = 5  # Check last 5 matches for form
 
 # Parlay construction limits - POLICY: 2-LEG ONLY
-MAX_ML_PARLAYS_PER_DAY = 2
+MAX_ML_PARLAYS_PER_DAY = 4  # Increased to test new filters (Jan 23, 2026)
 ML_PARLAY_MIN_LEGS = 2
 ML_PARLAY_MAX_LEGS = 2  # POLICY: Only 2-leg parlays allowed
 
