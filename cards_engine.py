@@ -164,6 +164,7 @@ class CardsCandidate:
     metadata: Dict[str, Any]
     match_date: str = ""
     league: str = "Unknown"
+    commence_time: str = ""  # CLV tracking (Jan 2026)
     
     @property
     def match(self) -> str:
@@ -657,7 +658,8 @@ class CardsEngine:
                             "avg_booking_pts": float(np.mean(sims["total_booking_pts"])),
                         },
                         match_date=fixture.get("match_date", datetime.now().strftime('%Y-%m-%d')),
-                        league=fixture.get("league", "Unknown")
+                        league=fixture.get("league", "Unknown"),
+                        commence_time=fixture.get("commence_time", "")  # CLV tracking
                     )
                     candidates.append(candidate)
                     

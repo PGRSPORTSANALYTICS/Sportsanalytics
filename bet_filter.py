@@ -67,6 +67,10 @@ class BetCandidate:
     away_team: Optional[str] = None
     match_date: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
+    # CLV tracking fields (Jan 2026)
+    kickoff_utc: Optional[str] = None
+    kickoff_epoch: Optional[int] = None
+    commence_time: Optional[str] = None  # Raw commence_time from API
 
 
 def filter_level1_high_trust(candidates: List[BetCandidate]) -> List[BetCandidate]:

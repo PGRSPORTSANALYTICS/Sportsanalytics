@@ -76,6 +76,9 @@ class FootballOpportunity:
     stake: float
     match_date: str = ""
     kickoff_time: str = ""
+    # CLV tracking fields (Jan 2026)
+    kickoff_utc: str = None
+    kickoff_epoch: int = None
     # Monte Carlo fields (Dec 2025)
     sim_probability: float = 0.0
     home_xg: float = 0.0
@@ -2286,18 +2289,27 @@ class RealFootballChampion:
         commence_time = match.get('commence_time', '')
         match_date = match.get('formatted_date', "")  # Try formatted date first
         kickoff_time = match.get('formatted_time', "")  # Try formatted time first
+        kickoff_utc = None
+        kickoff_epoch = None
         
         # If not available, parse from commence_time
-        if not match_date and commence_time:
-            from datetime import datetime
+        if commence_time:
+            from datetime import datetime, timezone
             try:
                 dt = datetime.fromisoformat(commence_time.replace('Z', '+00:00'))
-                match_date = dt.strftime("%Y-%m-%d")
-                kickoff_time = dt.strftime("%H:%M")
+                if not match_date:
+                    match_date = dt.strftime("%Y-%m-%d")
+                if not kickoff_time:
+                    kickoff_time = dt.strftime("%H:%M")
+                # Calculate epoch and UTC string for CLV tracking
+                kickoff_utc = dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+                kickoff_epoch = int(dt.timestamp())
             except:
                 # If parsing fails, use raw data
-                match_date = commence_time[:10] if len(commence_time) > 10 else ""
-                kickoff_time = commence_time[11:16] if len(commence_time) > 16 else ""
+                if not match_date:
+                    match_date = commence_time[:10] if len(commence_time) > 10 else ""
+                if not kickoff_time:
+                    kickoff_time = commence_time[11:16] if len(commence_time) > 16 else ""
         
         # Get proper league name
         sport_key = match.get('sport', '')
@@ -2339,6 +2351,8 @@ class RealFootballChampion:
             stake=stake,
             match_date=match_date,
             kickoff_time=kickoff_time,
+            kickoff_utc=kickoff_utc,
+            kickoff_epoch=kickoff_epoch,
             odds_by_bookmaker=bm_odds if bm_odds else None,
             best_odds_value=best_val,
             best_odds_bookmaker=best_book,
@@ -3928,7 +3942,7 @@ def _run_corners_cards_cycle(champion):
     # Get fixtures from today's pending opportunities in database
     try:
         rows = db_helper.execute('''
-            SELECT DISTINCT home_team, away_team, league, match_date 
+            SELECT DISTINCT home_team, away_team, league, match_date, kickoff_utc 
             FROM football_opportunities 
             WHERE match_date::date = %s::date AND LOWER(status) = 'pending'
             LIMIT 50
@@ -3936,7 +3950,7 @@ def _run_corners_cards_cycle(champion):
         
         if rows:
             for row in rows:
-                home_team, away_team, league, match_date = row
+                home_team, away_team, league, match_date, kickoff_utc = row
                 fixture_id = f"{home_team}_{away_team}".replace(' ', '_')
                 
                 if fixture_id not in odds_data:
@@ -3948,6 +3962,7 @@ def _run_corners_cards_cycle(champion):
                         'match_date': str(match_date) if match_date else today,
                         'home_xg': 1.4 + random.uniform(-0.3, 0.5),
                         'away_xg': 1.2 + random.uniform(-0.3, 0.4),
+                        'commence_time': kickoff_utc or '',  # CLV tracking
                     })
                     
                     # Generate synthetic realistic odds for CORNERS markets
@@ -4097,16 +4112,32 @@ def _save_bet_candidates_to_db(candidates, market_label: str) -> int:
             
             odds_by_bookmaker_json = json.dumps(odds_by_bookmaker)
             
+            # Calculate kickoff_epoch from commence_time if available
+            kickoff_epoch = getattr(candidate, 'kickoff_epoch', None)
+            kickoff_utc = getattr(candidate, 'kickoff_utc', None)
+            commence_time = getattr(candidate, 'commence_time', None)
+            
+            # If we have commence_time but not epoch, calculate it
+            if commence_time and not kickoff_epoch:
+                try:
+                    from datetime import datetime, timezone
+                    dt = datetime.fromisoformat(commence_time.replace('Z', '+00:00'))
+                    kickoff_utc = dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+                    kickoff_epoch = int(dt.timestamp())
+                except:
+                    pass
+            
             # Insert to database with ON CONFLICT to prevent race condition duplicates
             # Unique constraint: (home_team, away_team, selection, market, match_date, mode)
             result = db_helper.execute('''
                 INSERT INTO football_opportunities 
                 (timestamp, match_id, home_team, away_team, league, market, selection, 
                  odds, edge_percentage, confidence, analysis, stake, match_date, kickoff_time,
+                 kickoff_utc, kickoff_epoch, open_odds,
                  quality_score, recommended_date, recommended_tier, daily_rank, mode, bet_placed,
                  trust_level, sim_probability, ev_sim,
                  odds_by_bookmaker, best_odds_value, best_odds_bookmaker, avg_odds, fair_odds)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (home_team, away_team, selection, market, match_date, mode) DO NOTHING
                 RETURNING id
             ''', (
@@ -4124,6 +4155,9 @@ def _save_bet_candidates_to_db(candidates, market_label: str) -> int:
                 1.0,  # 1 unit stake
                 candidate.match_date,
                 '',  # kickoff_time
+                kickoff_utc,  # CLV tracking
+                kickoff_epoch,  # CLV tracking (epoch seconds)
+                float(candidate.odds),  # open_odds = odds at bet creation
                 float(quality_score),
                 today,
                 market_label.upper(),

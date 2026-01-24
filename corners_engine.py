@@ -564,7 +564,8 @@ class CornersEngine:
         corner_sim: Dict,
         odds_dict: Dict[str, float],
         match_date: Optional[str] = None,
-        factors: Optional[CornerFactors] = None
+        factors: Optional[CornerFactors] = None,
+        commence_time: Optional[str] = None  # CLV tracking
     ) -> List[BetCandidate]:
         candidates = []
         
@@ -629,7 +630,8 @@ class CornersEngine:
                     home_team=home_team,
                     away_team=away_team,
                     match_date=match_date or self.today,
-                    metadata=metadata
+                    metadata=metadata,
+                    commence_time=commence_time  # CLV tracking
                 )
                 candidates.append(candidate)
                 
@@ -649,7 +651,8 @@ class CornersEngine:
         corner_sim: Dict,
         odds_dict: Dict[str, float],
         match_date: Optional[str] = None,
-        factors: Optional[CornerFactors] = None
+        factors: Optional[CornerFactors] = None,
+        commence_time: Optional[str] = None  # CLV tracking
     ) -> List[BetCandidate]:
         candidates = []
         
@@ -717,7 +720,8 @@ class CornersEngine:
                     home_team=home_team,
                     away_team=away_team,
                     match_date=match_date or self.today,
-                    metadata=metadata
+                    metadata=metadata,
+                    commence_time=commence_time  # CLV tracking
                 )
                 candidates.append(candidate)
         
@@ -732,7 +736,8 @@ class CornersEngine:
         corner_sim: Dict,
         odds_dict: Dict[str, float],
         match_date: Optional[str] = None,
-        factors: Optional[CornerFactors] = None
+        factors: Optional[CornerFactors] = None,
+        commence_time: Optional[str] = None  # CLV tracking
     ) -> List[BetCandidate]:
         candidates = []
         
@@ -799,7 +804,8 @@ class CornersEngine:
                     home_team=home_team,
                     away_team=away_team,
                     match_date=match_date or self.today,
-                    metadata=metadata
+                    metadata=metadata,
+                    commence_time=commence_time  # CLV tracking
                 )
                 candidates.append(candidate)
         
@@ -821,7 +827,8 @@ class CornersEngine:
         away_stats: Optional[Dict] = None,
         referee_stats: Optional[Dict] = None,
         weather: Optional[Dict] = None,
-        match_importance: float = 1.0
+        match_importance: float = 1.0,
+        commence_time: Optional[str] = None  # CLV tracking (Jan 2026)
     ) -> Tuple[List[BetCandidate], List[BetCandidate], List[BetCandidate]]:
         home_stats = home_stats or {}
         away_stats = away_stats or {}
@@ -846,15 +853,15 @@ class CornersEngine:
         corner_sim = self.model.simulate_corners(home_exp, away_exp)
         
         match_bets = self.find_match_corner_value(
-            match, home_team, away_team, league, corner_sim, odds_dict, match_date, factors
+            match, home_team, away_team, league, corner_sim, odds_dict, match_date, factors, commence_time
         )
         
         team_bets = self.find_team_corner_value(
-            match, home_team, away_team, league, corner_sim, odds_dict, match_date, factors
+            match, home_team, away_team, league, corner_sim, odds_dict, match_date, factors, commence_time
         )
         
         handicap_bets = self.find_corner_handicap_value(
-            match, home_team, away_team, league, corner_sim, odds_dict, match_date, factors
+            match, home_team, away_team, league, corner_sim, odds_dict, match_date, factors, commence_time
         )
         
         logger.debug(
@@ -997,6 +1004,7 @@ def run_corners_cycle(
         away_team = fixture.get("away_team", "Away")
         league = fixture.get("league", "Unknown")
         match_date = fixture.get("match_date", engine.today)
+        commence_time = fixture.get("commence_time", "")  # CLV tracking
         
         home_xg = fixture.get("home_xg", 1.5)
         away_xg = fixture.get("away_xg", 1.2)
@@ -1022,7 +1030,8 @@ def run_corners_cycle(
             home_stats=home_stats,
             away_stats=away_stats,
             referee_stats=referee_stats,
-            weather=weather
+            weather=weather,
+            commence_time=commence_time  # CLV tracking
         )
         
         all_match.extend(match_bets)
