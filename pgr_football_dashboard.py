@@ -1294,61 +1294,6 @@ def render_overview(df: pd.DataFrame):
     else:
         st.info("No settled bets yet - equity curve will appear once results are in.")
 
-    st.markdown("### 🧩 ROI by Product (Units)")
-
-    if not df.empty:
-        prod_settled = df[df["profit"].notna()].copy()
-        if not prod_settled.empty:
-            agg = (
-                prod_settled.groupby("product")
-                .apply(lambda x: compute_roi_units(x)["roi"])
-                .reset_index(name="ROI")
-            )
-            agg = agg.sort_values("ROI", ascending=False)
-            
-            units_agg = (
-                prod_settled.groupby("product")
-                .apply(lambda x: compute_roi_units(x)["units_won"])
-                .reset_index(name="Units")
-            )
-            agg = agg.merge(units_agg, on="product")
-            
-            fig = px.bar(
-                agg,
-                x="product",
-                y="ROI",
-                labels={"product": "Product", "ROI": "ROI (%)"},
-                color="ROI",
-                color_continuous_scale=["#FF4444", "#FFAA00", "#00F59D"],
-                hover_data={"Units": ":.1f"},
-            )
-            fig.update_layout(
-                plot_bgcolor="rgba(0,0,0,0)",
-                paper_bgcolor="rgba(0,0,0,0)",
-                font_color="#FFFFFF",
-                xaxis=dict(gridcolor="rgba(255,255,255,0.1)"),
-                yaxis=dict(gridcolor="rgba(255,255,255,0.1)"),
-                height=300,
-                margin=dict(l=0, r=0, t=10, b=0),
-                showlegend=False,
-                coloraxis_showscale=False,
-            )
-            st.plotly_chart(fig, use_container_width=True)
-            
-            st.markdown("**Per-Product Summary (Units)**")
-            for _, row in agg.iterrows():
-                prod_stats = compute_roi_units(prod_settled[prod_settled["product"] == row["product"]])
-                st.markdown(
-                    f"**{row['product']}**: {format_roi(prod_stats['roi'])} | "
-                    f"{format_units(prod_stats['units_won'])} | "
-                    f"{prod_stats['bets']} bets | "
-                    f"{prod_stats['hit_rate']:.1f}% hit rate"
-                )
-        else:
-            st.info("Waiting for settled bets before we can show per-product ROI.")
-    else:
-        st.info("No bets found in the database yet.")
-
     st.markdown("### 🕒 Latest 50 Bets")
     latest = df.sort_values("created_at", ascending=False).head(50)
     table = style_bet_table(latest)
