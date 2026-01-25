@@ -557,24 +557,69 @@ class CollegeBasketValueEngine:
 
         all_picks.sort(key=lambda x: (x.ev, x.confidence), reverse=True)
         
-        # DEDUP: Keep only the best EV bet per game
-        best_by_match: Dict[str, BasketPick] = {}
-        for pick in all_picks:
-            if pick.match not in best_by_match:
-                best_by_match[pick.match] = pick
-            elif pick.ev > best_by_match[pick.match].ev:
-                best_by_match[pick.match] = pick
+        # MARKET BALANCING (Jan 25, 2026): Mix markets for diversification
+        # Goal: ~40% Totals, ~30% Home Win, ~30% Away Win
+        # Instead of just picking best EV per match, balance across market types
         
-        # Get unique picks (one per game, best EV)
-        unique_picks = list(best_by_match.values())
-        unique_picks.sort(key=lambda x: (x.ev, x.confidence), reverse=True)
+        # Separate picks by market type
+        moneyline_home = [p for p in all_picks if p.market == "1X2 Moneyline" and p.selection == "Home Win"]
+        moneyline_away = [p for p in all_picks if p.market == "1X2 Moneyline" and p.selection == "Away Win"]
+        totals_picks = [p for p in all_picks if p.market == "Totals"]
+        spread_picks = [p for p in all_picks if p.market == "Spread"]
         
-        # Limit singles to max_singles
-        singles = unique_picks[: self.max_singles]
+        # Sort each by EV
+        moneyline_home.sort(key=lambda x: x.ev, reverse=True)
+        moneyline_away.sort(key=lambda x: x.ev, reverse=True)
+        totals_picks.sort(key=lambda x: x.ev, reverse=True)
+        spread_picks.sort(key=lambda x: x.ev, reverse=True)
+        
+        # Market quotas based on max_singles (default 15)
+        # Prioritize Totals (40%), then balance Home/Away (30% each)
+        totals_quota = max(6, int(self.max_singles * 0.40))  # ~40% Totals
+        home_quota = max(4, int(self.max_singles * 0.30))     # ~30% Home Win
+        away_quota = max(3, int(self.max_singles * 0.20))     # ~20% Away Win (reduced)
+        spread_quota = max(2, int(self.max_singles * 0.10))   # ~10% Spread
+        
+        print(f"📊 Market quotas: Totals={totals_quota}, Home={home_quota}, Away={away_quota}, Spread={spread_quota}")
+        
+        # Select best picks from each category (one per match to avoid conflicts)
+        selected: List[BasketPick] = []
+        used_matches: set = set()
+        
+        def add_picks_from_pool(pool: List[BasketPick], quota: int, label: str):
+            added = 0
+            for pick in pool:
+                if added >= quota:
+                    break
+                if pick.match not in used_matches:
+                    selected.append(pick)
+                    used_matches.add(pick.match)
+                    added += 1
+            print(f"   {label}: {added}/{quota} picks added")
+        
+        # Fill quotas in order: Totals first (priority), then Home, then Away, then Spread
+        add_picks_from_pool(totals_picks, totals_quota, "Totals")
+        add_picks_from_pool(moneyline_home, home_quota, "Home Win")
+        add_picks_from_pool(moneyline_away, away_quota, "Away Win")
+        add_picks_from_pool(spread_picks, spread_quota, "Spread")
+        
+        # If we have room left, fill with remaining best EV picks
+        remaining_slots = self.max_singles - len(selected)
+        if remaining_slots > 0:
+            remaining = [p for p in all_picks if p.match not in used_matches]
+            remaining.sort(key=lambda x: x.ev, reverse=True)
+            for pick in remaining[:remaining_slots]:
+                selected.append(pick)
+                used_matches.add(pick.match)
+            print(f"   Filled {min(remaining_slots, len(remaining))} remaining slots with best EV")
+        
+        # Sort final selection by EV
+        selected.sort(key=lambda x: (x.ev, x.confidence), reverse=True)
+        singles = selected
 
         if self.allow_parlays and singles:
-            # Build parlays from unique picks (already deduped - one per game)
-            top_for_parlay = unique_picks[:25]
+            # Build parlays from balanced picks (one per game)
+            top_for_parlay = selected[:25]
             parlays_3 = build_parlays(top_for_parlay, legs=3, min_parlay_ev=0.02)
             parlays_4 = build_parlays(top_for_parlay, legs=4, min_parlay_ev=0.03)
             

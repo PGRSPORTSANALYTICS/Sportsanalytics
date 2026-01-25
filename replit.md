@@ -51,6 +51,12 @@ The system incorporates advanced features such as:
 - **Historical Fixes (Learning Phase):**
     - CORNERS Volume Control (Jan 10): Max 20/day, 3 picks per match
     - Basketball Flat Staking (Jan 11): Fixed Kelly scaling to 1-unit flat stakes
+- **Basketball Market Balancing (Jan 25, 2026):** Diversified market selection to reduce Away Win dominance.
+    - Totals (Over/Under): 40% quota (~6 picks) - prioritized
+    - Home Win: 30% quota (~4 picks)
+    - Away Win: 20% quota (~3 picks) - reduced from previous dominance
+    - Spread: 10% quota (~2 picks)
+    - Fills remaining slots with best EV from any market
 
 ### System Design Choices
 - **Data Layer:** PostgreSQL (Neon database) with connection pooling, TCP keepalives, and retry logic.
