@@ -31,16 +31,26 @@ The system incorporates advanced features such as:
     - **Profile Boost Engine:** Adjusts EV/confidence based on contextual factors (tempo, rivalry, referee, etc.).
     - **Market Weight Engine:** Learns from 30-day historical ROI to bias towards high-performing markets.
     - **Hidden Value Scanner:** Identifies "soft edge" picks (EV between -1% and +2%) using composite scoring.
-- **LIVE LEARNING MODE (v1.0 - ACTIVE):** A full data capture system for model calibration, tracking all trust tiers, CLV, unit-based P/L, raw/boosted/weighted EV, profile boost details, and market weights.
-- **Stability & Verification Mode:** Active controls like hard EV caps, EV deflators, blocked EV bands, disabled SGP, CORNERS exposure caps, and flat staking to verify edge via CLV tracking before scaling.
-- **CORNERS Volume Control (Jan 10, 2026):** Fixed CORNERS explosion (69+/day → max 20). Implemented: (1) DB check for existing picks today before generating, (2) Hard global cap of 20/day with HARD STOP guard, (3) Max 3 picks per match enforced via shared dict across all sub-markets (match/team/handicap), (4) L3_SOFT_VALUE tier blocked from production.
-- **Basketball Flat Staking Fix (Jan 11, 2026):** Basketball engine was using Kelly staking (~100u/bet) instead of Stability Mode flat 1-unit stakes. Fixed: (1) Added `STABILITY_MODE.unit_flat_staking` check at module level in `college_basket_value_engine.py`, (2) Updated `all_bets` view to use `stake=1` for basketball (targeted fix, other products unchanged).
-- **Value Singles Controlled Guardrails (Jan 11, 2026):** Data-driven temporary restrictions based on live performance (Dec 25 - Jan 11):
-    - **PROFITABLE (Public):** Under 2.5 (+1.20u, 57% hit), Under 3.5 (+0.64u, 60% hit)
-    - **RESTRICTED (Higher filters):** Over 2.5/3.5 require 12% MIN_EV (was 8%), Home Win requires odds ≥2.50
-    - **LEARNING ONLY:** Away Win (-5.45u, 29% hit, -10.45u max DD) excluded from public output, data still collected for AI training
-    - **Re-evaluation checkpoint:** Jan 25, 2026 or after +100 bets per market
-    - **Goal:** Preserve learning integrity while protecting release credibility during Stability Mode
+- **PRODUCTION MODEL v1.0 (Jan 25, 2026 - ACTIVE):** Learning phase completed with verified edge. System now operates in production mode with optimized market configuration.
+    - **Learning Phase Results (Dec 25, 2025 - Jan 25, 2026):**
+        - 1909 bets settled | 59.5% hit rate | +23.5% ROI | +449.2 units profit
+    - **PRODUCTION MARKETS (Live, full weight):**
+        - CARDS: 88.4% hit rate, +127.70u
+        - CORNERS: 60.6% hit rate, +146.53u
+        - VALUE_SINGLE (excluding Away Win)
+    - **LEARNING ONLY (Low weight, data collection):**
+        - BASKETBALL: Breakeven, continued data collection
+        - AWAY_WIN: Excluded from public output, AI training continues
+    - **DISABLED:**
+        - SGP: Permanently disabled (2.8% hit rate, -5065u)
+    - **Post-Learning Rules:**
+        - No stake increases
+        - No new markets
+        - No threshold changes
+        - All changes logged as post-learning modifications
+- **Historical Fixes (Learning Phase):**
+    - CORNERS Volume Control (Jan 10): Max 20/day, 3 picks per match
+    - Basketball Flat Staking (Jan 11): Fixed Kelly scaling to 1-unit flat stakes
 
 ### System Design Choices
 - **Data Layer:** PostgreSQL (Neon database) with connection pooling, TCP keepalives, and retry logic.
@@ -52,7 +62,7 @@ The system incorporates advanced features such as:
 
 ### Feature Specifications
 - **Real Football Dashboard:** Main UI accessible via port 5000.
-- **Combined Sports Engine:** Prediction engine operating with 1-hour Value Singles cycles in STABILITY MODE.
+- **Combined Sports Engine:** Prediction engine in PRODUCTION MODE v1.0 with 1-hour Value Singles cycles.
 - **PGR API Server:** REST API accessible via port 8000.
 - **College Basketball Dashboard:** Dedicated dashboard for basketball predictions via port 6000.
 

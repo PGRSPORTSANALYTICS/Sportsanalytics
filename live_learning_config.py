@@ -1,78 +1,99 @@
 #!/usr/bin/env python3
 """
-Live Learning Mode Configuration - STABILITY & VERIFICATION MODE
-=================================================================
-Configuration for LIVE LEARNING MODE with strict signal verification.
+Production Model v1.0 Configuration
+====================================
+Post-learning production configuration based on verified edge (Dec 25, 2025 - Jan 25, 2026).
 
-ACTIVE MODE: STABILITY & VERIFICATION (Dec 25, 2025)
-- Hard EV cap at 25%
-- Global EV deflator 0.4x
-- 50-100% EV band BLOCKED
-- SGP markets DISABLED
-- CORNERS capped at 30% exposure
-- CLV tracking ENABLED
-- Unit-based flat staking (no scaling)
+ACTIVE MODE: PRODUCTION v1.0 (Jan 25, 2026)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Learning Phase Results:
+- 1909 bets settled, 59.5% hit rate, +23.5% ROI, +449.2 units
 
-Objective: Verify edge via CLV, not P/L. Reduce variance. Stabilize signals.
+PRODUCTION MARKETS (Live):
+- CARDS: 88.4% hit rate, +127.70u
+- CORNERS: 60.6% hit rate, +146.53u  
+- VALUE_SINGLE (excl. Away Win)
+
+LEARNING ONLY (Low weight):
+- BASKETBALL, Away Win
+
+DISABLED: SGP (all variants)
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from datetime import datetime
 
 
 @dataclass
 class StabilityModeConfig:
-    """Stability & Verification Mode constraints."""
+    """Production Mode v1.0 configuration (post-learning phase)."""
     
-    enabled: bool = True
+    enabled: bool = False  # STABILITY MODE DISABLED - Production v1.0 active
     activated_at: datetime = field(default_factory=datetime.now)
+    completed_at: datetime = field(default_factory=lambda: datetime(2026, 1, 25))
     
     hard_ev_cap: float = 0.25
-    ev_deflator: float = 0.4
+    ev_deflator: float = 1.0  # No deflation in production
     
     blocked_ev_bands: List[tuple] = field(default_factory=lambda: [
-        (0.50, 1.00),
+        (0.50, 1.00),  # Still block unrealistic EV
     ])
     
     sgp_enabled: bool = False
-    sgp_reason: str = "SGP 3-5x tier structurally -EV (-29 units, 17% hit rate)"
+    sgp_reason: str = "SGP permanently disabled - 2.8% hit rate, -5065u in learning phase"
     
     market_exposure_caps: Dict[str, float] = field(default_factory=lambda: {
-        "CORNERS": 0.30,
-        "SGP": 0.00,
-        "VALUE_SINGLE": 0.35,
-        "CARDS": 0.20,
-        "BASKET_SINGLE": 0.15,
+        "CORNERS": 0.35,      # PRODUCTION - slight increase
+        "SGP": 0.00,          # DISABLED
+        "VALUE_SINGLE": 0.35, # PRODUCTION (excl. Away Win)
+        "CARDS": 0.25,        # PRODUCTION - slight increase
+        "BASKET_SINGLE": 0.10, # LEARNING ONLY - reduced
         "TOTALS": 0.25,
         "BTTS": 0.20,
         "EXACT_SCORE": 0.00,
+        "AWAY_WIN": 0.00,     # LEARNING ONLY - not counted in production
     })
     
-    preserved_markets: List[str] = field(default_factory=lambda: [
+    production_markets: List[str] = field(default_factory=lambda: [
         "CARDS",
+        "CORNERS", 
+        "VALUE_SINGLE",  # Excluding Away Win
+    ])
+    
+    learning_only_markets: List[str] = field(default_factory=lambda: [
+        "BASKET_SINGLE",
+        "AWAY_WIN",
+    ])
+    
+    disabled_markets: List[str] = field(default_factory=lambda: [
+        "SGP",
+        "EXACT_SCORE",
     ])
     
     clv_tracking_enabled: bool = True
     clv_capture_on_bet_placement: bool = True
     clv_capture_at_kickoff: bool = True
     
-    unit_flat_staking: bool = True
+    unit_flat_staking: bool = True  # Keep flat staking for now
     stake_per_bet: float = 1.0
     no_kelly_scaling: bool = True
     
-    verification_objectives: Dict[str, str] = field(default_factory=lambda: {
-        "primary": "Verify edge via CLV, not P/L",
-        "secondary": "Reduce daily variance",
-        "tertiary": "Stabilize EV distribution",
+    production_objectives: Dict[str, str] = field(default_factory=lambda: {
+        "primary": "Maintain verified edge on production markets",
+        "secondary": "Continue learning on experimental markets",
+        "tertiary": "Log all post-learning changes",
     })
     
-    exit_criteria: Dict[str, float] = field(default_factory=lambda: {
-        "min_clv_avg": 0.01,
-        "min_settled_bets": 1500,
-        "max_daily_variance_sd": 40.0,
-        "max_corners_concentration": 0.35,
-        "min_sgp_hit_rate_3_5x": 0.22,
+    learning_phase_results: Dict[str, Any] = field(default_factory=lambda: {
+        "start_date": "2025-12-25",
+        "end_date": "2026-01-25",
+        "total_bets": 1909,
+        "hit_rate": 59.5,
+        "roi": 23.5,
+        "profit_units": 449.2,
+        "cards_hit_rate": 88.4,
+        "corners_hit_rate": 60.6,
     })
 
 
@@ -80,9 +101,9 @@ class StabilityModeConfig:
 class LiveLearningConfig:
     """Configuration for Live Learning Mode."""
     
-    mode: str = "LIVE_LEARNING"
-    version: str = "2.0_STABILITY"
-    activated_at: Optional[datetime] = None
+    mode: str = "PRODUCTION"
+    version: str = "1.0"
+    activated_at: Optional[datetime] = field(default_factory=lambda: datetime(2026, 1, 25))
     
     stability_mode: StabilityModeConfig = field(default_factory=StabilityModeConfig)
     
@@ -90,8 +111,9 @@ class LiveLearningConfig:
     target_roi_max: float = 25.0
     target_hit_rate_min: float = 52.0
     
-    learning_phase_weeks: int = 4
-    min_bets_before_optimization: int = 200
+    learning_phase_weeks: int = 4  # Completed
+    learning_phase_completed: bool = True
+    min_bets_before_optimization: int = 200  # Met: 1909 bets
     
     capture_all_picks: bool = True
     capture_trust_tiers: List[str] = field(default_factory=lambda: [
@@ -115,7 +137,7 @@ class LiveLearningConfig:
     ev_filter_enabled: bool = True
     min_ev_threshold: float = 0.02
     max_ev_threshold: float = 0.25
-    ev_deflator: float = 0.4
+    ev_deflator: float = 1.0  # No deflation in production
     
     blocked_ev_bands: List[tuple] = field(default_factory=lambda: [
         (0.50, 1.00),
