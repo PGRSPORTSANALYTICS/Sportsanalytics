@@ -181,6 +181,36 @@ def prob_dnb(lh: float, la: float, max_goals: int = 8) -> Tuple[float, float]:
     return p_hw / non_draw, p_aw / non_draw
 
 
+def prob_btts(lh: float, la: float, max_goals: int = 8) -> Tuple[float, float]:
+    """
+    Calculate Both Teams To Score probabilities using Poisson distribution.
+    BTTS Yes = P(home scores >= 1 AND away scores >= 1)
+    BTTS No = P(home scores = 0 OR away scores = 0)
+    
+    Returns (P(BTTS Yes), P(BTTS No))
+    """
+    p_home_zero = poisson_pmf(lh, 0)  # P(home scores 0)
+    p_away_zero = poisson_pmf(la, 0)  # P(away scores 0)
+    
+    # P(both score) = P(home >= 1) * P(away >= 1)
+    # = (1 - P(home = 0)) * (1 - P(away = 0))
+    p_btts_yes = (1 - p_home_zero) * (1 - p_away_zero)
+    p_btts_no = 1 - p_btts_yes
+    
+    return p_btts_yes, p_btts_no
+
+
+# ============================================================
+# BTTS PARLAY CONFIGURATION (Jan 25, 2026)
+# Step 1: Test BTTS as parlay leg type
+# ============================================================
+BTTS_PARLAY_ENABLED = True           # Master switch for BTTS legs
+BTTS_MIN_EV = 0.03                   # 3% EV minimum (same as ML)
+BTTS_MAX_PER_PARLAY = 1              # Max 1 BTTS leg per parlay
+BTTS_MIN_ODDS = 1.65                 # BTTS typical odds range
+BTTS_MAX_ODDS = 2.20                 # BTTS typical odds range
+
+
 class MLParlayEngine:
     """
     Moneyline Parlay Engine
@@ -348,7 +378,7 @@ class MLParlayEngine:
                     params = {
                         'apiKey': api_key,
                         'regions': 'eu',
-                        'markets': 'h2h',
+                        'markets': 'h2h,btts' if BTTS_PARLAY_ENABLED else 'h2h',
                         'oddsFormat': 'decimal',
                         'dateFormat': 'iso'
                     }
@@ -480,6 +510,55 @@ class MLParlayEngine:
                                     'xg_home': xg_home,
                                     'xg_away': xg_away,
                                 })
+                            
+                            # ============== BTTS CANDIDATES (Jan 25, 2026) ==============
+                            if BTTS_PARLAY_ENABLED:
+                                btts_odds = self._extract_best_btts_odds(bookmakers)
+                                if btts_odds.get('yes', 0) > 0 or btts_odds.get('no', 0) > 0:
+                                    p_btts_yes, p_btts_no = prob_btts(xg_home, xg_away)
+                                    
+                                    for selection, prob, odds_key in [
+                                        ('BTTS_YES', p_btts_yes, 'yes'),
+                                        ('BTTS_NO', p_btts_no, 'no')
+                                    ]:
+                                        odds = btts_odds.get(odds_key, 0)
+                                        if odds <= 0:
+                                            continue
+                                        
+                                        if odds < BTTS_MIN_ODDS or odds > BTTS_MAX_ODDS:
+                                            continue
+                                        
+                                        implied_prob = 1.0 / odds
+                                        edge = (prob - implied_prob) / implied_prob if implied_prob > 0 else 0
+                                        
+                                        if edge < BTTS_MIN_EV:
+                                            continue
+                                        
+                                        # WIN PROBABILITY FILTER
+                                        if prob < MIN_LEG_WIN_PROBABILITY:
+                                            continue
+                                        
+                                        confidence = self._calculate_leg_confidence(prob, edge, odds)
+                                        if confidence < MIN_CONFIDENCE_SCORE:
+                                            continue
+                                        
+                                        candidates.append({
+                                            'match_id': match_id,
+                                            'home_team': home_team,
+                                            'away_team': away_team,
+                                            'league': LEAGUE_DISPLAY_NAMES.get(league_key, league_key),
+                                            'league_key': league_key,
+                                            'kickoff_time': commence_time,
+                                            'match_date': str(match_date),
+                                            'market_type': 'BTTS',
+                                            'selection': selection,
+                                            'odds': odds,
+                                            'model_probability': prob,
+                                            'edge_percentage': edge * 100,
+                                            'confidence_score': confidence,
+                                            'xg_home': xg_home,
+                                            'xg_away': xg_away,
+                                        })
                         
                         except Exception as match_err:
                             logger.debug(f"Error processing match: {match_err}")
@@ -538,6 +617,38 @@ class MLParlayEngine:
                     elif name == away_team:
                         if price > best['away']:
                             best['away'] = price
+        
+        return best
+    
+    def _extract_best_btts_odds(self, bookmakers: List[Dict]) -> Dict[str, float]:
+        """
+        Extract best BTTS odds from bookmaker data.
+        
+        Returns:
+            Dict with 'yes' and 'no' odds for BTTS market
+        """
+        best = {'yes': 0.0, 'no': 0.0}
+        
+        for bm in bookmakers:
+            markets = bm.get('markets', [])
+            for market in markets:
+                if market.get('key') != 'btts':
+                    continue
+                
+                outcomes = market.get('outcomes', [])
+                for outcome in outcomes:
+                    name = outcome.get('name', '').lower()
+                    price = outcome.get('price', 0)
+                    
+                    if price <= 0:
+                        continue
+                    
+                    if name == 'yes':
+                        if price > best['yes']:
+                            best['yes'] = price
+                    elif name == 'no':
+                        if price > best['no']:
+                            best['no'] = price
         
         return best
     
@@ -811,16 +922,22 @@ class MLParlayEngine:
             parlay_legs = []
             parlay_matches = set()
             parlay_leagues = set()  # Track leagues for diversity
+            btts_count = 0  # Track BTTS legs (max 1 per parlay)
             
             for leg in available_legs:
                 mid = leg['match_id']
                 league_key = leg.get('league_key', '')
+                market_type = leg.get('market_type', '')
                 
                 if mid in parlay_matches:
                     continue
                 
                 if mid in used_matches:
                     continue
+                
+                # BTTS LIMIT: Max 1 BTTS leg per parlay (Jan 25, 2026)
+                if market_type == 'BTTS' and btts_count >= BTTS_MAX_PER_PARLAY:
+                    continue  # Skip additional BTTS legs
                 
                 # LEAGUE DIVERSITY: Soft preference for different leagues
                 # Skip same-league legs on first pass, but allow as fallback
@@ -838,6 +955,8 @@ class MLParlayEngine:
                 parlay_legs.append(leg)
                 parlay_matches.add(mid)
                 parlay_leagues.add(league_key)
+                if market_type == 'BTTS':
+                    btts_count += 1
                 
                 if len(parlay_legs) >= ML_PARLAY_MAX_LEGS:
                     break
@@ -959,8 +1078,10 @@ class MLParlayEngine:
             } for l in parlay['legs']])
             
             description_parts = []
+            btts_included = False
             for leg in parlay['legs']:
                 sel = leg['selection']
+                market = leg.get('market_type', '')
                 if sel == 'HOME':
                     pick = leg['home_team']
                 elif sel == 'AWAY':
@@ -971,11 +1092,19 @@ class MLParlayEngine:
                     pick = f"{leg['home_team']} (DNB)"
                 elif sel == 'AWAY_DNB':
                     pick = f"{leg['away_team']} (DNB)"
+                elif sel == 'BTTS_YES':
+                    pick = f"{leg['home_team']} vs {leg['away_team']} BTTS Yes"
+                    btts_included = True
+                elif sel == 'BTTS_NO':
+                    pick = f"{leg['home_team']} vs {leg['away_team']} BTTS No"
+                    btts_included = True
                 else:
                     pick = sel
                 description_parts.append(f"{pick} @{leg['odds']:.2f}")
             
             parlay_description = " + ".join(description_parts)
+            if btts_included:
+                parlay_description += " [1x BTTS included]"
             
             db_helper.execute('''
                 INSERT INTO ml_parlay_predictions (

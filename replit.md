@@ -57,6 +57,11 @@ The system incorporates advanced features such as:
     - Away Win: 20% quota (~3 picks) - reduced from previous dominance
     - Spread: 10% quota (~2 picks)
     - Fills remaining slots with best EV from any market
+- **ML Parlay BTTS Integration (Jan 25, 2026):** Added BTTS as leg type in ML Parlay engine.
+    - Step 1 (Active): BTTS legs enabled with 3%+ EV, max 1 per parlay
+    - BTTS legs flagged in output: "[1x BTTS included]"
+    - Step 2 (After 100-150 bets): Evaluate hit rate, CLV, contribution vs ML
+    - If stable: Consider separate BTTS-BTTS parlay channel
 
 ### System Design Choices
 - **Data Layer:** PostgreSQL (Neon database) with connection pooling, TCP keepalives, and retry logic.
