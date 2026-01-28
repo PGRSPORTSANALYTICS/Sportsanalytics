@@ -62,6 +62,12 @@ The system incorporates advanced features such as:
     - BTTS legs flagged in output: "[1x BTTS included]"
     - Step 2 (After 100-150 bets): Evaluate hit rate, CLV, contribution vs ML
     - If stable: Consider separate BTTS-BTTS parlay channel
+- **Daily Soft Stop-Loss (Jan 28, 2026):** Implemented -5u daily stop-loss for production.
+    - Stops NEW bets when daily settled P/L reaches -5 units
+    - Pending/running bets are NOT affected (soft stop-loss)
+    - Applies to: VALUE_SINGLE, CARDS, CORNERS
+    - Resets at midnight UTC
+    - Module: `daily_stoploss.py`
 
 ### System Design Choices
 - **Data Layer:** PostgreSQL (Neon database) with connection pooling, TCP keepalives, and retry logic.

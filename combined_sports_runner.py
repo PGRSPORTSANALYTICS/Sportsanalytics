@@ -25,6 +25,12 @@ ENABLE_COLLEGE_BASKETBALL = True     # ACTIVE - 63.3% hit rate, +$3,446 profit
 ENABLE_ML_PARLAY = True              # 2-leg moneyline parlays ONLY (policy exception)
 
 # ============================================================
+# DAILY STOP-LOSS (Jan 28, 2026)
+# ============================================================
+ENABLE_DAILY_STOPLOSS = True         # Soft stop-loss at -5u per day
+# Threshold configured in daily_stoploss.py (DAILY_STOPLOSS_UNITS = -5.0)
+
+# ============================================================
 # LIVE LEARNING MODE - Full Data Capture Enabled
 # ============================================================
 LIVE_LEARNING_MODE = True            # Capture ALL picks for maximum learning
@@ -32,8 +38,31 @@ LIVE_LEARNING_SAVE_ALL_TIERS = True  # Save L1, L2, L3, and Hidden Value picks
 LIVE_LEARNING_CLV_TRACKING = True    # Track opening/closing odds for every pick
 
 
+def check_daily_stoploss() -> bool:
+    """
+    Check if daily stop-loss has been triggered.
+    Returns True if new bets should be blocked.
+    """
+    if not ENABLE_DAILY_STOPLOSS:
+        return False
+    
+    try:
+        from daily_stoploss import is_stoploss_triggered
+        triggered, pnl, message = is_stoploss_triggered()
+        if triggered:
+            logger.warning(f"🛑 DAILY STOP-LOSS ACTIVE: {message}")
+        return triggered
+    except Exception as e:
+        logger.error(f"❌ Stop-loss check failed: {e}")
+        return False  # Allow bets if check fails
+
+
 def run_value_singles():
     """Run Value Singles predictions (core product)"""
+    if check_daily_stoploss():
+        logger.warning("⏭️ Value Singles SKIPPED - Daily stop-loss active")
+        return
+    
     try:
         import real_football_champion
         logger.info("💰 Starting Value Singles cycle...")

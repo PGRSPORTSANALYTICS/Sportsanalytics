@@ -3932,6 +3932,16 @@ def _run_corners_cards_cycle(champion):
     from cards_engine import run_cards_cycle
     import random
     
+    # Check daily stop-loss before generating new picks
+    try:
+        from daily_stoploss import is_stoploss_triggered
+        triggered, pnl, message = is_stoploss_triggered()
+        if triggered:
+            print(f"\n🛑 CORNERS/CARDS SKIPPED - Daily stop-loss active ({pnl:+.1f}u)")
+            return
+    except Exception as e:
+        print(f"⚠️ Stop-loss check failed: {e}")
+    
     print("\n🔢 CORNERS & CARDS MARKETS")
     print("-" * 40)
     
