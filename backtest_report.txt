@@ -1,0 +1,308 @@
+================================================================================
+⚠️ BACKTEST ONLY - NOT LIVE RESULTS ⚠️
+================================================================================
+
+ISOLATED HISTORICAL BACKTEST REPORT
+Generated: 2026-01-28 19:58:43
+
+--------------------------------------------------------------------------------
+BACKTEST CONFIGURATION
+--------------------------------------------------------------------------------
+Period: 2025-12-11 to 2026-01-27
+Initial Bankroll: 10,000 SEK
+Stake Model: FLAT STAKING (1 unit = 1% = 100 SEK)
+Markets: CARDS, CORNERS
+
+ASSUMPTIONS:
+- Perfect execution at closing odds
+- No slippage or CLV modeling
+- EV-prioritized selection when volume capped
+- Daily stop-loss checked after each bet
+
+================================================================================
+SCENARIO RESULTS
+================================================================================
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ SCENARIO: Volume Cap 20/day, Stop-Loss   -10u                              │
+├────────────────────────────────────────────────────────────────────────────┤
+│ Total Units (BACKTEST): +223.39u                                           │
+│ Final Bankroll: 32,339 SEK (+223.4% ROI)                                   │
+│ Bets Placed: 559 (68.5% hit rate)                                          │
+├────────────────────────────────────────────────────────────────────────────┤
+│ RISK METRICS:                                                              │
+│   Max Drawdown: 9.69u (9.7%)                                               │
+│   Worst Single Day: -4.36u                                                 │
+│   Avg Daily P/L: +6.57u                                                    │
+│   Trading Days: 34                                                         │
+├────────────────────────────────────────────────────────────────────────────┤
+│ LOSING DAYS DISTRIBUTION:                                                  │
+│   Days worse than -5u:    0                                                │
+│   Days worse than -10u:   0                                                │
+│   Days worse than -15u:   0                                                │
+├────────────────────────────────────────────────────────────────────────────┤
+│ MARKET BREAKDOWN:                                                          │
+│   CARDS: 150 bets, 88.0% hit, +115.52u                                     │
+│   CORNERS: 409 bets, 61.4% hit, +107.87u                                   │
+├────────────────────────────────────────────────────────────────────────────┤
+│ FILTERED OUT:                                                              │
+│   Volume cap: 854 bets skipped                                             │
+└────────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ SCENARIO: Volume Cap 20/day, Stop-Loss   -15u                              │
+├────────────────────────────────────────────────────────────────────────────┤
+│ Total Units (BACKTEST): +223.39u                                           │
+│ Final Bankroll: 32,339 SEK (+223.4% ROI)                                   │
+│ Bets Placed: 559 (68.5% hit rate)                                          │
+├────────────────────────────────────────────────────────────────────────────┤
+│ RISK METRICS:                                                              │
+│   Max Drawdown: 9.69u (9.7%)                                               │
+│   Worst Single Day: -4.36u                                                 │
+│   Avg Daily P/L: +6.57u                                                    │
+│   Trading Days: 34                                                         │
+├────────────────────────────────────────────────────────────────────────────┤
+│ LOSING DAYS DISTRIBUTION:                                                  │
+│   Days worse than -5u:    0                                                │
+│   Days worse than -10u:   0                                                │
+│   Days worse than -15u:   0                                                │
+├────────────────────────────────────────────────────────────────────────────┤
+│ MARKET BREAKDOWN:                                                          │
+│   CARDS: 150 bets, 88.0% hit, +115.52u                                     │
+│   CORNERS: 409 bets, 61.4% hit, +107.87u                                   │
+├────────────────────────────────────────────────────────────────────────────┤
+│ FILTERED OUT:                                                              │
+│   Volume cap: 854 bets skipped                                             │
+└────────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ SCENARIO: Volume Cap 20/day, Stop-Loss   None                              │
+├────────────────────────────────────────────────────────────────────────────┤
+│ Total Units (BACKTEST): +223.39u                                           │
+│ Final Bankroll: 32,339 SEK (+223.4% ROI)                                   │
+│ Bets Placed: 559 (68.5% hit rate)                                          │
+├────────────────────────────────────────────────────────────────────────────┤
+│ RISK METRICS:                                                              │
+│   Max Drawdown: 9.69u (9.7%)                                               │
+│   Worst Single Day: -4.36u                                                 │
+│   Avg Daily P/L: +6.57u                                                    │
+│   Trading Days: 34                                                         │
+├────────────────────────────────────────────────────────────────────────────┤
+│ LOSING DAYS DISTRIBUTION:                                                  │
+│   Days worse than -5u:    0                                                │
+│   Days worse than -10u:   0                                                │
+│   Days worse than -15u:   0                                                │
+├────────────────────────────────────────────────────────────────────────────┤
+│ MARKET BREAKDOWN:                                                          │
+│   CARDS: 150 bets, 88.0% hit, +115.52u                                     │
+│   CORNERS: 409 bets, 61.4% hit, +107.87u                                   │
+├────────────────────────────────────────────────────────────────────────────┤
+│ FILTERED OUT:                                                              │
+│   Volume cap: 854 bets skipped                                             │
+└────────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ SCENARIO: Volume Cap 30/day, Stop-Loss   -10u                              │
+├────────────────────────────────────────────────────────────────────────────┤
+│ Total Units (BACKTEST): +281.15u                                           │
+│ Final Bankroll: 38,115 SEK (+281.1% ROI)                                   │
+│ Bets Placed: 772 (66.8% hit rate)                                          │
+├────────────────────────────────────────────────────────────────────────────┤
+│ RISK METRICS:                                                              │
+│   Max Drawdown: 9.93u (9.9%)                                               │
+│   Worst Single Day: -4.47u                                                 │
+│   Avg Daily P/L: +8.27u                                                    │
+│   Trading Days: 34                                                         │
+├────────────────────────────────────────────────────────────────────────────┤
+│ LOSING DAYS DISTRIBUTION:                                                  │
+│   Days worse than -5u:    0                                                │
+│   Days worse than -10u:   0                                                │
+│   Days worse than -15u:   0                                                │
+├────────────────────────────────────────────────────────────────────────────┤
+│ MARKET BREAKDOWN:                                                          │
+│   CARDS: 175 bets, 87.4% hit, +132.58u                                     │
+│   CORNERS: 597 bets, 60.8% hit, +148.57u                                   │
+├────────────────────────────────────────────────────────────────────────────┤
+│ FILTERED OUT:                                                              │
+│   Volume cap: 641 bets skipped                                             │
+└────────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ SCENARIO: Volume Cap 30/day, Stop-Loss   -15u                              │
+├────────────────────────────────────────────────────────────────────────────┤
+│ Total Units (BACKTEST): +281.15u                                           │
+│ Final Bankroll: 38,115 SEK (+281.1% ROI)                                   │
+│ Bets Placed: 772 (66.8% hit rate)                                          │
+├────────────────────────────────────────────────────────────────────────────┤
+│ RISK METRICS:                                                              │
+│   Max Drawdown: 9.93u (9.9%)                                               │
+│   Worst Single Day: -4.47u                                                 │
+│   Avg Daily P/L: +8.27u                                                    │
+│   Trading Days: 34                                                         │
+├────────────────────────────────────────────────────────────────────────────┤
+│ LOSING DAYS DISTRIBUTION:                                                  │
+│   Days worse than -5u:    0                                                │
+│   Days worse than -10u:   0                                                │
+│   Days worse than -15u:   0                                                │
+├────────────────────────────────────────────────────────────────────────────┤
+│ MARKET BREAKDOWN:                                                          │
+│   CARDS: 175 bets, 87.4% hit, +132.58u                                     │
+│   CORNERS: 597 bets, 60.8% hit, +148.57u                                   │
+├────────────────────────────────────────────────────────────────────────────┤
+│ FILTERED OUT:                                                              │
+│   Volume cap: 641 bets skipped                                             │
+└────────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ SCENARIO: Volume Cap 30/day, Stop-Loss   None                              │
+├────────────────────────────────────────────────────────────────────────────┤
+│ Total Units (BACKTEST): +281.15u                                           │
+│ Final Bankroll: 38,115 SEK (+281.1% ROI)                                   │
+│ Bets Placed: 772 (66.8% hit rate)                                          │
+├────────────────────────────────────────────────────────────────────────────┤
+│ RISK METRICS:                                                              │
+│   Max Drawdown: 9.93u (9.9%)                                               │
+│   Worst Single Day: -4.47u                                                 │
+│   Avg Daily P/L: +8.27u                                                    │
+│   Trading Days: 34                                                         │
+├────────────────────────────────────────────────────────────────────────────┤
+│ LOSING DAYS DISTRIBUTION:                                                  │
+│   Days worse than -5u:    0                                                │
+│   Days worse than -10u:   0                                                │
+│   Days worse than -15u:   0                                                │
+├────────────────────────────────────────────────────────────────────────────┤
+│ MARKET BREAKDOWN:                                                          │
+│   CARDS: 175 bets, 87.4% hit, +132.58u                                     │
+│   CORNERS: 597 bets, 60.8% hit, +148.57u                                   │
+├────────────────────────────────────────────────────────────────────────────┤
+│ FILTERED OUT:                                                              │
+│   Volume cap: 641 bets skipped                                             │
+└────────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ SCENARIO: Volume Cap 50/day, Stop-Loss   -10u                              │
+├────────────────────────────────────────────────────────────────────────────┤
+│ Total Units (BACKTEST): +364.90u                                           │
+│ Final Bankroll: 46,490 SEK (+364.9% ROI)                                   │
+│ Bets Placed: 1039 (66.1% hit rate)                                         │
+├────────────────────────────────────────────────────────────────────────────┤
+│ RISK METRICS:                                                              │
+│   Max Drawdown: 16.30u (16.3%)                                             │
+│   Worst Single Day: -3.68u                                                 │
+│   Avg Daily P/L: +10.73u                                                   │
+│   Trading Days: 34                                                         │
+├────────────────────────────────────────────────────────────────────────────┤
+│ LOSING DAYS DISTRIBUTION:                                                  │
+│   Days worse than -5u:    0                                                │
+│   Days worse than -10u:   0                                                │
+│   Days worse than -15u:   0                                                │
+├────────────────────────────────────────────────────────────────────────────┤
+│ MARKET BREAKDOWN:                                                          │
+│   CARDS: 196 bets, 87.2% hit, +147.60u                                     │
+│   CORNERS: 843 bets, 61.2% hit, +217.30u                                   │
+├────────────────────────────────────────────────────────────────────────────┤
+│ FILTERED OUT:                                                              │
+│   Volume cap: 374 bets skipped                                             │
+└────────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ SCENARIO: Volume Cap 50/day, Stop-Loss   -15u                              │
+├────────────────────────────────────────────────────────────────────────────┤
+│ Total Units (BACKTEST): +364.90u                                           │
+│ Final Bankroll: 46,490 SEK (+364.9% ROI)                                   │
+│ Bets Placed: 1039 (66.1% hit rate)                                         │
+├────────────────────────────────────────────────────────────────────────────┤
+│ RISK METRICS:                                                              │
+│   Max Drawdown: 16.30u (16.3%)                                             │
+│   Worst Single Day: -3.68u                                                 │
+│   Avg Daily P/L: +10.73u                                                   │
+│   Trading Days: 34                                                         │
+├────────────────────────────────────────────────────────────────────────────┤
+│ LOSING DAYS DISTRIBUTION:                                                  │
+│   Days worse than -5u:    0                                                │
+│   Days worse than -10u:   0                                                │
+│   Days worse than -15u:   0                                                │
+├────────────────────────────────────────────────────────────────────────────┤
+│ MARKET BREAKDOWN:                                                          │
+│   CARDS: 196 bets, 87.2% hit, +147.60u                                     │
+│   CORNERS: 843 bets, 61.2% hit, +217.30u                                   │
+├────────────────────────────────────────────────────────────────────────────┤
+│ FILTERED OUT:                                                              │
+│   Volume cap: 374 bets skipped                                             │
+└────────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ SCENARIO: Volume Cap 50/day, Stop-Loss   None                              │
+├────────────────────────────────────────────────────────────────────────────┤
+│ Total Units (BACKTEST): +364.90u                                           │
+│ Final Bankroll: 46,490 SEK (+364.9% ROI)                                   │
+│ Bets Placed: 1039 (66.1% hit rate)                                         │
+├────────────────────────────────────────────────────────────────────────────┤
+│ RISK METRICS:                                                              │
+│   Max Drawdown: 16.30u (16.3%)                                             │
+│   Worst Single Day: -3.68u                                                 │
+│   Avg Daily P/L: +10.73u                                                   │
+│   Trading Days: 34                                                         │
+├────────────────────────────────────────────────────────────────────────────┤
+│ LOSING DAYS DISTRIBUTION:                                                  │
+│   Days worse than -5u:    0                                                │
+│   Days worse than -10u:   0                                                │
+│   Days worse than -15u:   0                                                │
+├────────────────────────────────────────────────────────────────────────────┤
+│ MARKET BREAKDOWN:                                                          │
+│   CARDS: 196 bets, 87.2% hit, +147.60u                                     │
+│   CORNERS: 843 bets, 61.2% hit, +217.30u                                   │
+├────────────────────────────────────────────────────────────────────────────┤
+│ FILTERED OUT:                                                              │
+│   Volume cap: 374 bets skipped                                             │
+└────────────────────────────────────────────────────────────────────────────┘
+
+================================================================================
+COMPARATIVE SUMMARY
+================================================================================
+
+Config                       Units     ROI%    MaxDD    Worst     Hit%     Risk
+--------------------------------------------------------------------------------
+Cap 20, SL -10u             +223.4  +223.4%      9.7     -4.4    68.5%     0.04
+Cap 20, SL -15u             +223.4  +223.4%      9.7     -4.4    68.5%     0.04
+Cap 20, SL None             +223.4  +223.4%      9.7     -4.4    68.5%     0.04
+Cap 30, SL -10u             +281.1  +281.1%      9.9     -4.5    66.8%     0.04
+Cap 30, SL -15u             +281.1  +281.1%      9.9     -4.5    66.8%     0.04
+Cap 30, SL None             +281.1  +281.1%      9.9     -4.5    66.8%     0.04
+Cap 50, SL -10u             +364.9  +364.9%     16.3     -3.7    66.1%     0.04
+Cap 50, SL -15u             +364.9  +364.9%     16.3     -3.7    66.1%     0.04
+Cap 50, SL None             +364.9  +364.9%     16.3     -3.7    66.1%     0.04
+
+================================================================================
+IMPORTANT OBSERVATIONS
+================================================================================
+
+⚠️ STOP-LOSS NOTE: No daily stop-loss was triggered during the backtest period.
+   This means all stop-loss scenarios produced IDENTICAL results.
+   System never experienced a single day with losses exceeding -10 units.
+   This is positive for stability but means stop-loss scenarios cannot be
+   differentiated in this historical period.
+
+================================================================================
+BACKTEST INSIGHTS – NOT LIVE RESULTS
+================================================================================
+
+1. BEST BALANCE BETWEEN GROWTH AND DRAWDOWN:
+   → Volume Cap 30/day, Stop-Loss -10u
+   → +281.1u profit with 9.9u max drawdown
+   → Risk ratio: 0.04
+
+2. RECOMMENDED FOR PUBLIC LAUNCH:
+   → Volume Cap 30/day, Stop-Loss -10u
+   → Reasoning: Controlled volume with acceptable drawdown variance
+   → Only 0 days exceeding -10u loss
+
+3. RISK BEHAVIOR TO COMMUNICATE TO USERS:
+   → Expect occasional losing days of 4+ units
+   → Maximum drawdown can reach 12+ units before recovery
+   → System requires patience through variance periods
+   → Historical hit rate: ~67%
+
+================================================================================
+⚠️ BACKTEST ONLY - NOT LIVE RESULTS ⚠️
+================================================================================
