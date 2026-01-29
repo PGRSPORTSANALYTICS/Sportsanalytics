@@ -315,12 +315,12 @@ def run_daily_analysis():
 
 
 def run_free_picks():
-    """Send value singles to Discord with full validation"""
+    """Send 1 free pick to Discord daily (Jan 28, 2026 policy)"""
     try:
         from bet_distribution_controller import distribute_value_singles
-        logger.info("🎯 Running Value Singles Distribution...")
-        sent = distribute_value_singles(5)
-        logger.info(f"🎯 Value Singles complete: {sent} picks sent")
+        logger.info("🎯 Running Free Pick Distribution (1 pick/day)...")
+        sent = distribute_value_singles(1)  # Only 1 free pick per day
+        logger.info(f"🎯 Free pick complete: {sent} pick sent")
     except Exception as e:
         logger.error(f"❌ Value Singles distribution error: {e}")
 
