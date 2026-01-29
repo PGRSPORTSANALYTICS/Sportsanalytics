@@ -315,14 +315,25 @@ def run_daily_analysis():
 
 
 def run_free_picks():
-    """Send 1 free pick to Discord daily (Jan 28, 2026 policy)"""
+    """Send value singles to Discord with full validation"""
     try:
         from bet_distribution_controller import distribute_value_singles
-        logger.info("🎯 Running Free Pick Distribution (1 pick/day)...")
-        sent = distribute_value_singles(1)  # Only 1 free pick per day
-        logger.info(f"🎯 Free pick complete: {sent} pick sent")
+        logger.info("🎯 Running Value Singles Distribution...")
+        sent = distribute_value_singles(5)  # 5 value singles
+        logger.info(f"🎯 Value Singles complete: {sent} picks sent")
     except Exception as e:
         logger.error(f"❌ Value Singles distribution error: {e}")
+
+
+def run_daily_free_pick():
+    """Send 1 free pick to Discord daily (Jan 29, 2026 policy)"""
+    try:
+        from free_picks_engine import run_free_picks
+        logger.info("🎁 Running Daily Free Pick (1 pick/day)...")
+        sent = run_free_picks(picks_to_send=1)
+        logger.info(f"🎁 Free pick complete: {sent} pick sent")
+    except Exception as e:
+        logger.error(f"❌ Free pick error: {e}")
 
 
 def run_weekly_recap():
@@ -457,7 +468,8 @@ def main():
     schedule.every().day.at("23:30").do(run_end_of_day_results)  # Results summary after all games
     schedule.every().day.at("08:00").do(run_daily_games_reminder)
     schedule.every().day.at("09:00").do(run_daily_analysis)
-    schedule.every().day.at("10:00").do(run_free_picks)
+    schedule.every().day.at("10:00").do(run_free_picks)  # 5 value singles
+    schedule.every().day.at("11:00").do(run_daily_free_pick)  # 1 free pick to Discord
     
     logger.info("✅ All schedules configured. Starting main loop...")
     

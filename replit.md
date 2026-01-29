@@ -69,8 +69,8 @@ The system incorporates advanced features such as:
     - Resets at midnight UTC
     - Module: `daily_stoploss.py`
 - **Free Pick Limit (Jan 29, 2026):** Reduced to 1 free pick per day.
-    - Previously: 5 picks/day
-    - Now: 1 pick/day via Discord
+    - Value Singles: 5 picks/day @ 10:00 UTC (internal distribution)
+    - Free Pick: 1 pick/day @ 11:00 UTC (public Discord channel)
 
 ### System Design Choices
 - **Data Layer:** PostgreSQL (Neon database) with connection pooling, TCP keepalives, and retry logic.
