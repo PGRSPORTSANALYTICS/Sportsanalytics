@@ -465,7 +465,7 @@ def main():
     schedule.every().day.at("22:30").do(run_daily_recap)
     schedule.every().sunday.at("22:30").do(run_weekly_recap)
     schedule.every().day.at("23:00").do(run_daily_categorizer)
-    schedule.every().day.at("23:30").do(run_end_of_day_results)  # Results summary after all games
+    schedule.every().day.at("22:45").do(run_end_of_day_results)  # Results summary after all games
     schedule.every().day.at("08:00").do(run_daily_games_reminder)
     schedule.every().day.at("09:00").do(run_daily_analysis)
     schedule.every().day.at("10:00").do(run_free_picks)  # 5 value singles
