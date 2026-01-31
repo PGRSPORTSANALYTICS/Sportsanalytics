@@ -920,14 +920,16 @@ class ResultsEngine:
     def _send_discord_update(self):
         """Send Discord ROI update ONLY when all today's matches are settled."""
         try:
-            # Check if any pending bets remain for today
-            pending = self.cursor.execute("""
-                SELECT COUNT(*) FROM all_bets 
-                WHERE (result IS NULL OR result = '')
-                AND DATE(created_at) = CURRENT_DATE
-            """).fetchone()
+            from sqlalchemy import create_engine, text
+            engine = create_engine(self.database_url)
             
-            pending_count = pending[0] if pending else 0
+            with engine.connect() as conn:
+                result = conn.execute(text("""
+                    SELECT COUNT(*) FROM all_bets 
+                    WHERE (result IS NULL OR result = '' OR result = 'PENDING')
+                    AND DATE(created_at) = CURRENT_DATE
+                """))
+                pending_count = result.scalar() or 0
             
             if pending_count > 0:
                 logger.info(f"📊 {pending_count} bets still pending - ROI webhook deferred")
