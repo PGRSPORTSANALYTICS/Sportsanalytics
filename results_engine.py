@@ -855,12 +855,12 @@ class ResultsEngine:
     def _update_football_bet(self, cursor, bet_id: int, outcome: str, result: Dict):
         """Update football bet with outcome."""
         profit_loss = 0
-        cursor.execute("SELECT odds, stake FROM football_opportunities WHERE id = %s", (bet_id,))
+        cursor.execute("SELECT odds FROM football_opportunities WHERE id = %s", (bet_id,))
         row = cursor.fetchone()
         if row:
             odds = float(row['odds'] or 1)
-            stake = float(row['stake'] or 100)
-            profit_loss = stake * (odds - 1) if outcome == 'won' else -stake
+            # Calculate profit/loss in UNITS (1 unit stake)
+            profit_loss = (odds - 1) if outcome == 'won' else -1.0
         
         now_ts = int(datetime.now().timestamp())
         cursor.execute("""

@@ -1039,17 +1039,16 @@ class RealResultVerifier:
             return 'error'
     
     def _calculate_profit_loss(self, tip: Dict, outcome: str) -> float:
-        """Calculate real profit/loss based on outcome"""
+        """Calculate profit/loss in UNITS (not dollars)"""
         try:
-            stake = float(tip['stake'] or 0)
             odds = float(tip['odds'] or 0)
             
             if outcome == 'won':
-                return stake * (odds - 1)  # Profit
+                return odds - 1  # Profit in units (1 unit stake)
             elif outcome == 'lost':
-                return -stake  # Loss
+                return -1.0  # Loss = 1 unit
             elif outcome == 'push':
-                return 0.0  # Push/void - stake returned, no profit or loss
+                return 0.0  # Push/void - stake returned
             else:
                 return 0.0  # Unknown/error
                 
@@ -1392,10 +1391,9 @@ class RealResultVerifier:
                 logger.info(f"📊 1X2: {home_goals}-{away_goals}, Draw = {outcome}")
         
         if outcome:
-            stake = float(bet.get('stake', 0) or 0)
             odds = float(bet.get('odds', 1) or 1)
-            payout = stake * odds if outcome == 'WON' else 0
-            profit_loss = payout - stake if outcome == 'WON' else -stake
+            # Calculate profit/loss in UNITS (1 unit stake)
+            profit_loss = (odds - 1) if outcome == 'WON' else -1.0
             
             # Update the underlying football_opportunities table (not the view)
             outcome_lower = 'won' if outcome == 'WON' else 'lost' if outcome == 'LOST' else outcome.lower()
