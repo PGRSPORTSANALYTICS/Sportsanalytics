@@ -818,7 +818,7 @@ def product_filter(df: pd.DataFrame, product_codes: List[str]) -> pd.DataFrame:
 # ------------- FREE PREDICTIONS (TEASER) ------------- #
 
 FREE_PICKS_CONFIG = {
-    'max_picks': 3,
+    'max_picks': 1,
     'min_ev': 0.06,  # 6% minimum EV
     'preferred_ev': 0.08,  # 8%+ preferred
     'min_odds': 1.80,
