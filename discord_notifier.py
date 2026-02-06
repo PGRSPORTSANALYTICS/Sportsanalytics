@@ -19,125 +19,75 @@ PRODUCT_WEBHOOKS = {
 
 
 def format_parlay_message(bet) -> str:
-    """Format ML Parlay bet with clear leg-by-leg breakdown."""
+    """Format parlay bet matching standard Discord format."""
     if isinstance(bet, dict):
         legs = bet.get('legs', [])
-        kickoff = bet.get('match_date', bet.get('kickoff', ''))
         odds = bet.get('odds', 0)
-        ev = bet.get('ev', None)
-        trust_level = bet.get('trust_level', 'L2')
-        num_legs = bet.get('num_legs', len(legs))
     else:
         legs = getattr(bet, 'legs', [])
-        kickoff = getattr(bet, 'match_date', getattr(bet, 'kickoff', ''))
         odds = getattr(bet, 'odds', 0)
-        ev = getattr(bet, 'ev', None)
-        trust_level = getattr(bet, 'trust_level', 'L2')
-        num_legs = getattr(bet, 'num_legs', len(legs))
     
-    lines = [
-        ":ticket: **ML PARLAY**",
-        f"Kickoff: `{kickoff}`",
-        ""
-    ]
+    content = "🎟️ **PARLAYS — Today's Picks**\n\n"
+    content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
     
-    if legs:
-        lines.append("**PICKS:**")
-        for i, leg in enumerate(legs, 1):
-            home = leg.get('home_team', '')
-            away = leg.get('away_team', '')
-            selection = leg.get('selection', '')
-            leg_odds = leg.get('odds', 0)
-            lines.append(f"{i}. **{home}** vs {away}")
-            lines.append(f"   :dart: {selection} @ {float(leg_odds):.2f}")
-        lines.append("")
+    for leg in legs:
+        home = leg.get('home_team', '')
+        away = leg.get('away_team', '')
+        selection = leg.get('selection', '')
+        leg_odds = leg.get('odds', 0)
+        leg_league = leg.get('league', '')
+        if leg_league:
+            content += f"**{leg_league}**\n"
+        content += f"• {home} vs {away} — **{selection}** @ {float(leg_odds):.2f} (TBD) 🔘\n\n"
     
-    lines.append(f":moneybag: **Combined Odds:** {float(odds):.2f}")
+    content += f"**Combined Odds:** {float(odds):.2f}\n\n"
+    content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+    content += f"*{len(legs)} leg(s) | Flat 1u | PGR Analytics*"
     
-    if ev is not None:
-        try:
-            ev_val = float(ev)
-            if ev_val > 100:
-                ev_val = ev_val / 100
-            if ev_val < 1:
-                ev_val = ev_val * 100
-            lines.append(f":chart_with_upwards_trend: **EV:** {ev_val:.1f}%")
-        except:
-            pass
-    
-    lines.append(f":pushpin: **Trust:** {trust_level}")
-    lines.append(f":coin: **Stake:** 1 unit")
-    lines.append("")
-    lines.append("_PGR Sports Analytics – AI-powered betting_")
-    
-    return "\n".join(lines)
+    return content
 
 
 def format_value_single_message(bet) -> str:
-    """Format Value Single bet with clear actionable info."""
+    """Format Value Single bet matching standard Discord format."""
     if isinstance(bet, dict):
         league = bet.get('league', 'Unknown League')
         home_team = bet.get('home_team', '')
         away_team = bet.get('away_team', '')
-        kickoff = bet.get('match_date', bet.get('kickoff', ''))
-        market = bet.get('market', '')
         selection = bet.get('selection', '')
         odds = bet.get('odds', 0)
-        ev = bet.get('ev', None)
-        trust_level = bet.get('trust_level', 'L2')
-        confidence = bet.get('confidence', None)
+        market = bet.get('market', '')
         product_type = bet.get('product', bet.get('product_type', '')).upper()
     else:
         league = getattr(bet, 'league', 'Unknown League')
         home_team = getattr(bet, 'home_team', '')
         away_team = getattr(bet, 'away_team', '')
-        kickoff = getattr(bet, 'match_date', getattr(bet, 'kickoff', ''))
-        market = getattr(bet, 'market', '')
         selection = getattr(bet, 'selection', '')
         odds = getattr(bet, 'odds', 0)
-        ev = getattr(bet, 'ev', None)
-        trust_level = getattr(bet, 'trust_level', 'L2')
-        confidence = getattr(bet, 'confidence', None)
+        market = getattr(bet, 'market', '')
         product_type = getattr(bet, 'product', getattr(bet, 'product_type', '')).upper()
     
-    is_basketball = 'BASKET' in product_type or 'NCAAB' in league.upper() or 'NCAA' in league.upper()
-    sport_emoji = ":basketball:" if is_basketball else ":soccer:"
+    market_upper = (market or product_type or '').upper()
+    if 'CORNER' in market_upper:
+        product_emoji = "🔷"
+        product_label = "CORNERS"
+    elif 'CARD' in market_upper:
+        product_emoji = "🟨"
+        product_label = "CARDS"
+    elif 'BASKET' in market_upper or 'NCAAB' in league.upper() or 'NCAA' in league.upper():
+        product_emoji = "🏀"
+        product_label = "BASKETBALL"
+    else:
+        product_emoji = "🎯"
+        product_label = "VALUE SINGLES"
     
-    lines = [
-        f"{sport_emoji} **{league}**",
-        f"**{home_team}** vs **{away_team}**",
-        f"Kickoff: `{kickoff}`",
-        "",
-        f":dart: **PICK:** {selection}",
-        f":moneybag: **Odds:** {float(odds):.2f}" if odds else "",
-    ]
+    content = f"{product_emoji} **{product_label} — Today's Picks**\n\n"
+    content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+    content += f"**{league}**\n"
+    content += f"• {home_team} vs {away_team} — **{selection}** @ {float(odds or 0):.2f} (TBD) 🔘\n\n"
+    content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+    content += "*1 pick(s) | Flat 1u | PGR Analytics*"
     
-    if ev is not None:
-        try:
-            ev_val = float(ev)
-            if ev_val > 100:
-                ev_val = ev_val / 100
-            if ev_val < 1:
-                ev_val = ev_val * 100
-            lines.append(f":chart_with_upwards_trend: **EV:** {ev_val:.1f}%")
-        except:
-            pass
-    
-    if confidence is not None:
-        try:
-            conf_val = float(confidence)
-            if conf_val < 1:
-                conf_val = conf_val * 100
-            lines.append(f":bar_chart: **Confidence:** {conf_val:.0f}%")
-        except:
-            pass
-    
-    lines.append(f":pushpin: **Trust:** {trust_level}")
-    lines.append(f":coin: **Stake:** 1 unit")
-    lines.append("")
-    lines.append("_PGR Sports Analytics – AI-powered betting_")
-    
-    return "\n".join([l for l in lines if l or l == ""])
+    return content
 
 
 def format_bet_message(bet) -> str:
@@ -158,119 +108,79 @@ def format_bet_message(bet) -> str:
 
 
 def create_bet_embed(bet, product_type=None) -> dict:
-    """Create a clean Discord embed for any bet type."""
+    """Create a clean Discord embed matching the standard format."""
     if isinstance(bet, dict):
         home_team = bet.get('home_team', 'TBD')
         away_team = bet.get('away_team', 'TBD')
         selection = bet.get('selection', '')
         odds = bet.get('odds', 0)
-        ev = bet.get('ev', bet.get('edge_percentage', 0))
-        confidence = bet.get('confidence', 0)
-        kickoff = bet.get('match_date', bet.get('kickoff', ''))
-        league = bet.get('league', '')
-        trust_level = bet.get('trust_level', 'L2')
+        league = bet.get('league', 'Unknown')
         market = bet.get('market', product_type or '')
         legs = bet.get('legs', [])
+        units = bet.get('units', bet.get('stake', 1.0))
     else:
         home_team = getattr(bet, 'home_team', 'TBD')
         away_team = getattr(bet, 'away_team', 'TBD')
         selection = getattr(bet, 'selection', '')
         odds = getattr(bet, 'odds', 0)
-        ev = getattr(bet, 'ev', getattr(bet, 'edge_percentage', 0))
-        confidence = getattr(bet, 'confidence', 0)
-        kickoff = getattr(bet, 'match_date', getattr(bet, 'kickoff', ''))
-        league = getattr(bet, 'league', '')
-        trust_level = getattr(bet, 'trust_level', 'L2')
+        league = getattr(bet, 'league', 'Unknown')
         market = getattr(bet, 'market', product_type or '')
         legs = getattr(bet, 'legs', [])
+        units = getattr(bet, 'units', getattr(bet, 'stake', 1.0))
     
     market_upper = (market or product_type or '').upper()
     
     if 'CORNER' in market_upper:
-        emoji = "🔷"
-        color = 0x3498db
+        product_emoji = "🔷"
+        product_label = "CORNERS"
     elif 'CARD' in market_upper:
-        emoji = "🟨"
-        color = 0xf1c40f
+        product_emoji = "🟨"
+        product_label = "CARDS"
     elif 'SHOT' in market_upper:
-        emoji = "🎯"
-        color = 0xe74c3c
-    elif 'ML_PARLAY' in market_upper:
-        emoji = "🎰"
-        color = 0x9b59b6
-        market_upper = "ML PARLAY"
+        product_emoji = "🎯"
+        product_label = "SHOTS"
     elif 'PARLAY' in market_upper or 'MULTI' in market_upper or legs:
-        emoji = "🎟️"
-        color = 0x9b59b6
-        market_upper = "MULTI-MARKET PARLAY"
+        product_emoji = "🎟️"
+        product_label = "PARLAYS"
     elif 'BASKET' in market_upper:
-        emoji = "🏀"
-        color = 0xe67e22
-    elif 'BTTS' in selection.upper():
-        emoji = "⚽"
-        color = 0x2ecc71
-    elif 'OVER' in selection.upper() or 'UNDER' in selection.upper():
-        emoji = "📊"
-        color = 0x3498db
+        product_emoji = "🏀"
+        product_label = "BASKETBALL"
     else:
-        emoji = "💰"
-        color = 0x2ecc71
+        product_emoji = "🎯"
+        product_label = "VALUE SINGLES"
     
     try:
-        ev_val = float(ev or 0)
-        if ev_val > 100:
-            ev_val = ev_val / 100
-        if ev_val < 1 and ev_val > 0:
-            ev_val = ev_val * 100
+        units_val = float(units or 1)
     except:
-        ev_val = 0
-    
-    ev_bullets = "🔥🔥🔥" if ev_val >= 8 else "🔥🔥" if ev_val >= 5 else "🔥" if ev_val >= 3 else ""
+        units_val = 1
     
     if legs and len(legs) > 0:
-        if 'ML_PARLAY' in (market or product_type or '').upper():
-            legs_lines = []
-            for l in legs[:5]:
-                ht = l.get('home_team', '')
-                at = l.get('away_team', '')
-                sel = l.get('selection', '')
-                leg_odds = l.get('odds', 0)
-                if ht and at:
-                    legs_lines.append(f"• **{ht}** vs {at}: {sel} @ {leg_odds:.2f}")
-                else:
-                    legs_lines.append(f"• {sel} @ {leg_odds:.2f}")
-            description = "\n".join(legs_lines)
-        else:
-            description = f"**{home_team}** vs **{away_team}**"
+        content = f"{product_emoji} **{product_label} — Today's Picks**\n\n"
+        content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        for i, leg in enumerate(legs, 1):
+            ht = leg.get('home_team', '')
+            at = leg.get('away_team', '')
+            sel = leg.get('selection', '')
+            leg_odds = leg.get('odds', 0)
+            leg_league = leg.get('league', '')
+            if leg_league:
+                content += f"**{leg_league}**\n"
+            content += f"• {ht} vs {at} — **{sel}** @ {float(leg_odds):.2f} (TBD) 🔘\n\n"
+        content += f"**Combined Odds:** {float(odds or 0):.2f}\n\n"
+        content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        content += f"*{len(legs)} leg(s) | Flat {units_val:.0f}u | PGR Analytics*"
     else:
-        description = f"**{home_team}** vs **{away_team}**"
-    
-    try:
-        conf_val = float(confidence or 0)
-        if conf_val < 1 and conf_val > 0:
-            conf_val = conf_val * 100
-    except:
-        conf_val = 0
-    
-    fields = [
-        {"name": "📊 Odds", "value": f"`{float(odds or 0):.2f}`", "inline": True},
-        {"name": "💎 EV", "value": f"`+{ev_val:.1f}%` {ev_bullets}", "inline": True},
-    ]
-    
-    if conf_val > 0:
-        fields.append({"name": "🎯 Confidence", "value": f"`{conf_val:.0f}%`", "inline": True})
-    
-    if trust_level:
-        trust_emoji = "🔥" if trust_level == 'L1' else "💎" if trust_level == 'L2' else "📊"
-        fields.append({"name": "🏆 Trust", "value": f"`{trust_level}` {trust_emoji}", "inline": True})
+        content = f"{product_emoji} **{product_label} — Today's Picks**\n\n"
+        content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        content += f"**{league}**\n"
+        content += f"• {home_team} vs {away_team} — **{selection}** @ {float(odds or 0):.2f} (TBD) 🔘\n\n"
+        content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        content += f"*1 pick(s) | Flat {units_val:.0f}u | PGR Analytics*"
     
     embed = {
-        "title": f"{emoji} {market_upper} | {selection}",
-        "description": description,
-        "color": color,
-        "fields": fields,
-        "footer": {"text": f"{league} • {str(kickoff)[:16] if kickoff else 'TBD'}"},
-        "timestamp": datetime.utcnow().isoformat()
+        "description": content[:4000],
+        "color": 3066993,
+        "footer": {"text": f"PGR Sports Analytics — {product_label}"}
     }
     
     return embed

@@ -90,36 +90,13 @@ def format_free_pick(pick: Dict) -> str:
     league = pick.get('league', 'Unknown')
     selection = pick.get('selection', 'N/A')
     odds = pick.get('odds', 0)
-    confidence = pick.get('confidence', 0)
-    trust = pick.get('trust_level', 'L3')
     
-    match_date = pick.get('match_date')
-    if match_date:
-        if isinstance(match_date, str):
-            date_str = match_date
-        else:
-            date_str = match_date.strftime('%a %b %d, %H:%M UTC')
-    else:
-        date_str = "TBD"
-    
-    trust_emoji = "🟢" if trust == 'L1' else "🟡" if trust == 'L2' else "⚪"
-    
-    content = f"""**{home} vs {away}**
-*{league}*
-📅 {date_str}
-
-━━━━━━━━━━━━━━━━━━━━
-
-**🎯 Selection:** {selection}
-**💰 Odds:** {odds:.2f}
-**📊 Confidence:** {confidence:.0f}%
-**{trust_emoji} Trust Level:** {trust}
-
-━━━━━━━━━━━━━━━━━━━━
-
-*Free pick from PGR Sports Analytics*
-*Flat stake recommended | Not financial advice*
-"""
+    content = "🎯 **VALUE SINGLES — Today's Picks**\n\n"
+    content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+    content += f"**{league}**\n"
+    content += f"• {home} vs {away} — **{selection}** @ {odds:.2f} (TBD) 🔘\n\n"
+    content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+    content += "*1 pick(s) | Flat 1u | PGR Analytics*"
     
     return content
 
@@ -134,11 +111,8 @@ def send_free_pick_to_discord(content: str, title: str = "") -> bool:
         embed = {
             "description": content[:4000],
             "color": 3066993,
-            "footer": {"text": "PGR Free Picks — Bet Responsibly"}
+            "footer": {"text": "PGR Sports Analytics — Value Singles"}
         }
-        
-        if title:
-            embed["title"] = title
         
         payload = {"embeds": [embed]}
         

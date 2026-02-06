@@ -301,42 +301,33 @@ def validate_and_send_bet(
     if not webhook_url:
         return False, "NO_WEBHOOK"
     
-    if isinstance(event_date, datetime):
-        date_display = event_date.strftime('%H:%M UTC')
-    elif isinstance(event_date, str):
-        date_display = event_date
+    product_label = market.upper() if market else "VALUE SINGLES"
+    if 'CORNER' in product_label.upper():
+        product_emoji = "🔷"
+        product_label = "CORNERS"
+    elif 'CARD' in product_label.upper():
+        product_emoji = "🟨"
+        product_label = "CARDS"
+    elif 'BASKET' in product_label.upper():
+        product_emoji = "🏀"
+        product_label = "BASKETBALL"
     else:
-        date_display = "Today"
+        product_emoji = "🎯"
+        product_label = "VALUE SINGLES"
     
-    trust_emoji = "🟢" if trust_level in ['L1', 'L1_HIGH_TRUST'] else "🟡" if trust_level == 'L2' else "⚪"
-    
-    content = f"""**{home_team} vs {away_team}**
-*{league}*
-📅 {date_display}
-
-━━━━━━━━━━━━━━━━━━━━
-
-**🎯 Selection:** {selection}
-**💰 Odds:** {odds:.2f}
-**📊 Confidence:** {confidence:.0f}%
-**{trust_emoji} Trust Level:** {trust_level}
-**📏 Stake:** {units:.1f} units
-
-━━━━━━━━━━━━━━━━━━━━
-
-*PGR Sports Analytics*
-*Flat stake | Bet responsibly*
-"""
+    content = f"{product_emoji} **{product_label} — Today's Picks**\n\n"
+    content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+    content += f"**{league}**\n"
+    content += f"• {home_team} vs {away_team} — **{selection}** @ {odds:.2f} (TBD) 🔘\n\n"
+    content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+    content += f"*1 pick(s) | Flat {units:.0f}u | PGR Analytics*"
     
     try:
         embed = {
             "description": content[:4000],
             "color": 3066993,
-            "footer": {"text": f"Bet ID: {bet_id[:8]}"}
+            "footer": {"text": f"PGR Sports Analytics — {product_label}"}
         }
-        
-        title = f"🎯 {home_team} vs {away_team}"
-        embed["title"] = title
         
         payload = {"embeds": [embed]}
         
@@ -482,30 +473,15 @@ def format_league_message(league: str, bets: List[Dict]) -> str:
     """Format a grouped message for a single league."""
     bets_sorted = sorted(bets, key=lambda x: x.get('match_date') or datetime.max)
     
-    content = f"**{league.upper()}**\n"
-    content += "━" * 30 + "\n\n"
+    content = "🎯 **VALUE SINGLES — Today's Picks**\n\n"
+    content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+    content += f"**{league}**\n"
     
     for bet in bets_sorted:
-        kickoff = bet.get('match_date')
-        if isinstance(kickoff, datetime):
-            time_str = kickoff.strftime('%H:%M')
-        elif isinstance(kickoff, str):
-            time_str = kickoff[-8:-3] if len(kickoff) > 8 else kickoff
-        else:
-            time_str = "TBD"
-        
-        trust = bet.get('trust_level', 'L3')
-        trust_emoji = "🟢" if trust in ['L1', 'L1_HIGH_TRUST'] else "🟡" if trust == 'L2' else "⚪"
-        
-        content += f"**{bet['home_team']} vs {bet['away_team']}**\n"
-        content += f"• Selection: {bet['selection']}\n"
-        content += f"• Odds: {float(bet.get('odds', 0)):.2f}\n"
-        content += f"• Units: 1.0\n"
-        content += f"• Kickoff: {time_str} UTC\n"
-        content += f"• {trust_emoji} {trust}\n\n"
+        content += f"• {bet['home_team']} vs {bet['away_team']} — **{bet['selection']}** @ {float(bet.get('odds', 0)):.2f} (TBD) 🔘\n"
     
-    content += "━" * 30 + "\n"
-    content += f"*{len(bets)} pick(s) | Flat stake | PGR Analytics*"
+    content += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+    content += f"*{len(bets)} pick(s) | Flat 1u | PGR Analytics*"
     
     return content
 
@@ -524,7 +500,6 @@ def send_league_grouped_message(league: str, bets: List[Dict], webhook_url: str,
             "color": 3066993,
             "footer": {"text": f"PGR Sports Analytics — {league}"}
         }
-        embed["title"] = f"🎯 {league} — Today's Picks"
         
         payload = {"embeds": [embed]}
         response = requests.post(webhook_url, json=payload, timeout=10)
@@ -826,24 +801,19 @@ def distribute_value_singles(max_picks: int = 5) -> int:
             league = normalize_league(pick['league']) or 'Other'
             league_groups[league].append(pick)
         
-        content = "**🎯 VALUE SINGLES — Today's Picks**\n"
-        content += "━" * 35 + "\n\n"
+        content = "🎯 **VALUE SINGLES — Today's Picks**\n\n"
+        content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         
         for league in sorted(league_groups.keys()):
             bets = sorted(league_groups[league], key=lambda x: x.get('match_date') or datetime.max)
             content += f"**{league}**\n"
             
             for bet in bets:
-                kickoff = bet.get('match_date')
-                time_str = kickoff.strftime('%H:%M') if isinstance(kickoff, datetime) else "TBD"
-                trust = bet.get('trust_level', 'L3')
-                trust_emoji = "🟢" if trust in ['L1', 'L1_HIGH_TRUST'] else "🟡" if trust == 'L2' else "⚪"
-                
-                content += f"• {bet['home_team']} vs {bet['away_team']} — **{bet['selection']}** @ {float(bet['odds']):.2f} ({time_str}) {trust_emoji}\n"
+                content += f"• {bet['home_team']} vs {bet['away_team']} — **{bet['selection']}** @ {float(bet['odds']):.2f} (TBD) 🔘\n"
             
             content += "\n"
         
-        content += "━" * 35 + "\n"
+        content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         content += f"*{len(valid_picks)} pick(s) | Flat 1u | PGR Analytics*"
         
         try:
@@ -935,45 +905,18 @@ def send_instant_pick(pick: Dict) -> bool:
         logger.debug(f"⏭️ Not today's event: {home_team} vs {away_team}")
         return False
     
-    kickoff = match_date
-    if isinstance(kickoff, datetime):
-        time_str = kickoff.strftime('%H:%M')
-    elif isinstance(kickoff, str) and len(kickoff) > 10:
-        time_str = kickoff[11:16]
-    else:
-        time_str = "TBD"
-    
-    trust_emoji = "🟢" if trust_level in ['L1', 'L1_HIGH_TRUST'] else "🟡" if trust_level == 'L2' else "⚪"
-    
-    # Format kickoff date as DD-MM
-    if isinstance(match_date, datetime):
-        kickoff_date_str = match_date.strftime('%d-%m')
-    elif isinstance(match_date, str) and len(match_date) >= 10:
-        parts = match_date[:10].split('-')
-        if len(parts) == 3:
-            kickoff_date_str = f"{parts[2]}-{parts[1]}"
-        else:
-            kickoff_date_str = match_date[:5]
-    else:
-        kickoff_date_str = "TBD"
-    
-    # Build clean embed content matching user format
-    content = f"⚽ **{league} — Today's Picks**\n"
-    content += f"**{league.upper()}**\n\n"
+    content = "🎯 **VALUE SINGLES — Today's Picks**\n\n"
     content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-    content += f"**{home_team} vs {away_team}**\n"
-    content += f"• Selection: {selection}\n"
-    content += f"• Odds: {odds:.2f}\n"
-    content += f"• Units: 1.0\n"
-    content += f"• Kickoff: {kickoff_date_str} UTC\n"
-    content += f"• {trust_emoji} {trust_level}\n\n"
-    content += "1 pick(s) | Flat stake | PGR Analytics"
+    content += f"**{league}**\n"
+    content += f"• {home_team} vs {away_team} — **{selection}** @ {odds:.2f} (TBD) 🔘\n\n"
+    content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+    content += "*1 pick(s) | Flat 1u | PGR Analytics*"
     
     try:
         embed = {
             "description": content[:4000],
             "color": 3066993,
-            "footer": {"text": f"PGR Sports Analytics — {league}"}
+            "footer": {"text": "PGR Sports Analytics — Value Singles"}
         }
         
         payload = {"embeds": [embed]}
