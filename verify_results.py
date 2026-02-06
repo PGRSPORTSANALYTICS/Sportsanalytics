@@ -18,6 +18,7 @@ import requests
 import trafilatura
 import re
 import os
+import unicodedata
 import json
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -642,7 +643,9 @@ class RealResultVerifier:
     
     def _normalize_team_name(self, team_name: str) -> str:
         """Normalize team names for matching with common abbreviations"""
-        normalized = re.sub(r'[^\w\s]', '', team_name.lower().strip())
+        normalized = unicodedata.normalize('NFKD', team_name.lower().strip())
+        normalized = ''.join(c for c in normalized if not unicodedata.combining(c))
+        normalized = re.sub(r'[^\w\s]', '', normalized)
         
         # Remove common prefixes/suffixes that vary between sources
         remove_patterns = [
@@ -725,6 +728,7 @@ class RealResultVerifier:
             'vitoria sc': 'vitoria',
             'vitoria guimaraes': 'vitoria',
             'vitoria de guimaraes': 'vitoria',
+            'guimaraes': 'vitoria',
             'sporting cp': 'sporting',
             'sporting lisbon': 'sporting',
             'avs futebol sad': 'avs',

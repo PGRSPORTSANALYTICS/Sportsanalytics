@@ -432,6 +432,7 @@ def main():
     logger.info("🔄 Running immediate Results Engine...")
     run_results_engine()  # Unified settlement for ALL bet types
     verify_basketball_results()  # Basketball has separate verifier
+    verify_ml_parlay_results()  # ML Parlay verification
     logger.info("✅ Initial verification complete")
     
     # Schedule recurring prediction tasks (only enabled products)
@@ -447,6 +448,7 @@ def main():
     # Schedule result verification - Every 5 minutes for FAST results
     schedule.every(5).minutes.do(run_results_engine)  # Unified Results Engine
     schedule.every(5).minutes.do(verify_basketball_results)  # Basketball separate
+    schedule.every(30).minutes.do(verify_ml_parlay_results)  # ML Parlay verification
     
     # Schedule CLV update - Every 5 minutes for reliable closing odds capture
     schedule.every(5).minutes.do(run_clv_update_cycle)

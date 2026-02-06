@@ -3637,6 +3637,13 @@ class RealFootballChampion:
             kickoff_epoch = opp_dict.get('kickoff_epoch')
             created_at_utc = opp_dict.get('created_at_utc')
             
+            # Extract model_prob from analysis JSON
+            analysis_data = json.loads(opp_dict.get('analysis', '{}'))
+            model_prob_value = analysis_data.get('p_model', 0)
+            sim_probability = opp_dict.get('sim_probability')
+            ev_sim = opp_dict.get('ev_sim')
+            disagreement = opp_dict.get('disagreement')
+            
             # Use ON CONFLICT to prevent race condition duplicates
             # Unique constraint: (home_team, away_team, selection, market, match_date, mode)
             result = db_helper.execute('''
@@ -3646,8 +3653,9 @@ class RealFootballChampion:
                  kickoff_utc, kickoff_epoch, created_at_utc,
                  quality_score, recommended_date, recommended_tier, daily_rank, mode, bet_placed,
                  open_odds, odds_source, trust_level,
-                 odds_by_bookmaker, best_odds_value, best_odds_bookmaker, avg_odds, fair_odds, fixture_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 odds_by_bookmaker, best_odds_value, best_odds_bookmaker, avg_odds, fair_odds, fixture_id,
+                 model_prob, sim_probability, ev_sim, disagreement)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (home_team, away_team, selection, market, match_date, mode) DO NOTHING
                 RETURNING id
             ''', (
@@ -3682,7 +3690,11 @@ class RealFootballChampion:
                 opp_dict.get('best_odds_bookmaker'),
                 opp_dict.get('avg_odds'),
                 opp_dict.get('fair_odds'),
-                opp_dict.get('fixture_id')  # API-Football fixture ID for result verification
+                opp_dict.get('fixture_id'),
+                float(model_prob_value) if model_prob_value else None,
+                float(sim_probability) if sim_probability else None,
+                float(ev_sim) if ev_sim else None,
+                float(disagreement) if disagreement else None
             ), fetch='one')
             
             # Only proceed if a new row was inserted (ON CONFLICT DO NOTHING returns NULL if duplicate)

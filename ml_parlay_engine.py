@@ -352,12 +352,98 @@ class MLParlayEngine:
         
         return league_key in ML_PARLAY_LEAGUE_WHITELIST
     
+    def _fetch_value_singles_candidates(self) -> List[Dict]:
+        """
+        Fetch approved Value Singles from DB as parlay candidates.
+        These have real model probabilities from thorough analysis.
+        """
+        candidates = []
+        try:
+            today = datetime.utcnow().strftime('%Y-%m-%d')
+            tomorrow = (datetime.utcnow() + timedelta(days=1)).strftime('%Y-%m-%d')
+            
+            rows = db_helper.execute('''
+                SELECT home_team, away_team, league, market, selection, odds, 
+                       model_prob, edge_percentage, match_date, kickoff_time, match_id,
+                       sim_probability, trust_level
+                FROM football_opportunities
+                WHERE match_date IN (%s, %s)
+                  AND model_prob IS NOT NULL
+                  AND model_prob >= %s
+                  AND bet_placed = true
+                  AND market IN ('Value Single')
+                  AND odds >= %s AND odds <= %s
+                  AND result IS NULL
+            ''', (today, tomorrow, MIN_LEG_WIN_PROBABILITY, ML_PARLAY_MIN_ODDS, ML_PARLAY_MAX_ODDS), 
+            fetch='all')
+            
+            if not rows:
+                return []
+            
+            for row in rows:
+                home_team, away_team, league, market, selection, odds, model_prob, edge_pct, match_date, kickoff_time, match_id, sim_prob, trust_level = row
+                
+                # POLICY: Only 1X2/Moneyline/DNB selections allowed for ML Parlays
+                market_type = None
+                sel = selection
+                if 'Home Win' in selection or selection == 'HOME':
+                    market_type = '1X2'
+                    sel = 'HOME'
+                elif 'Away Win' in selection or selection == 'AWAY':
+                    market_type = '1X2'
+                    sel = 'AWAY'
+                elif 'Draw' in selection or selection == 'DRAW':
+                    market_type = '1X2'
+                    sel = 'DRAW'
+                elif 'DNB' in selection:
+                    market_type = 'DNB'
+                
+                if market_type is None:
+                    continue
+                
+                implied_prob = 1.0 / odds if odds > 0 else 0
+                edge = (model_prob - implied_prob) / implied_prob if implied_prob > 0 else 0
+                
+                if edge < MIN_ML_PARLAY_LEG_EV:
+                    continue
+                
+                confidence = self._calculate_leg_confidence(model_prob, edge, odds)
+                if confidence < MIN_CONFIDENCE_SCORE:
+                    continue
+                
+                candidates.append({
+                    'match_id': match_id or f"{home_team}_{away_team}_{match_date}",
+                    'home_team': home_team,
+                    'away_team': away_team,
+                    'league': league,
+                    'league_key': '',
+                    'kickoff_time': kickoff_time or '',
+                    'match_date': match_date,
+                    'market_type': market_type,
+                    'selection': sel,
+                    'odds': float(odds),
+                    'model_probability': float(model_prob),
+                    'edge_percentage': float(edge * 100),
+                    'confidence_score': float(confidence),
+                    'source': 'value_singles_db'
+                })
+            
+            logger.info(f"📊 Found {len(candidates)} Value Singles candidates from DB")
+            return candidates
+            
+        except Exception as e:
+            logger.debug(f"Error fetching Value Singles candidates: {e}")
+            return []
+    
     def _fetch_candidate_legs(self) -> List[Dict]:
         """
         Fetch all candidate legs for ML parlays.
-        Uses existing match data from The Odds API.
+        Uses existing match data from The Odds API + Value Singles from DB.
         """
         candidates = []
+        
+        db_candidates = self._fetch_value_singles_candidates()
+        candidates.extend(db_candidates)
         
         try:
             import requests
@@ -366,7 +452,7 @@ class MLParlayEngine:
             api_key = os.environ.get('THE_ODDS_API_KEY')
             if not api_key:
                 logger.error("❌ THE_ODDS_API_KEY not found")
-                return []
+                return candidates
             
             today = datetime.utcnow().date()
             tomorrow = today + timedelta(days=1)
