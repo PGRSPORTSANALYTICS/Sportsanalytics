@@ -85,17 +85,23 @@ def get_free_pick_candidates(hours_ahead: int = 24, limit: int = 5) -> List[Dict
 
 def format_free_pick(pick: Dict) -> str:
     """Format a pick for Discord display."""
+    from discord_notifier import build_analysis_reason
+    
     home = pick.get('home_team', 'TBD')
     away = pick.get('away_team', 'TBD')
     league = pick.get('league', 'Unknown')
     selection = pick.get('selection', 'N/A')
     odds = pick.get('odds', 0)
     
+    reason = build_analysis_reason(pick)
+    
     content = "🎯 **VALUE SINGLES — Today's Picks**\n\n"
     content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
     content += f"**{league}**\n"
-    content += f"• {home} vs {away} — **{selection}** @ {odds:.2f} (TBD) 🔘\n\n"
-    content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+    content += f"• {home} vs {away} — **{selection}** @ {odds:.2f} (TBD) 🔘\n"
+    if reason:
+        content += f"{reason}\n"
+    content += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
     content += "*1 pick(s) | Flat 1u | PGR Analytics*"
     
     return content

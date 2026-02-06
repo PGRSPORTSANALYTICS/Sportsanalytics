@@ -1,6 +1,71 @@
 import os
+import json
 import requests
 from datetime import datetime
+
+
+def build_analysis_reason(bet) -> str:
+    """Build a human-readable analysis reason from bet data."""
+    if isinstance(bet, dict):
+        analysis_raw = bet.get('analysis', None)
+        selection = bet.get('selection', '')
+        odds = float(bet.get('odds', 0) or 0)
+        edge = bet.get('edge_percentage', None)
+        confidence = bet.get('confidence', None)
+        model_prob = bet.get('model_prob', None)
+    else:
+        analysis_raw = getattr(bet, 'analysis', None)
+        selection = getattr(bet, 'selection', '')
+        odds = float(getattr(bet, 'odds', 0) or 0)
+        edge = getattr(bet, 'edge_percentage', None)
+        confidence = getattr(bet, 'confidence', None)
+        model_prob = getattr(bet, 'model_prob', None)
+
+    if not analysis_raw:
+        return ""
+
+    try:
+        analysis = json.loads(analysis_raw) if isinstance(analysis_raw, str) else analysis_raw
+    except:
+        return ""
+
+    if not isinstance(analysis, dict):
+        return ""
+
+    parts = []
+
+    exp_home = analysis.get('expected_home_goals')
+    exp_away = analysis.get('expected_away_goals')
+    if exp_home is not None and exp_away is not None:
+        total = float(exp_home) + float(exp_away)
+        parts.append(f"xG {total:.1f}")
+
+    avg_corners = analysis.get('avg_corners')
+    if avg_corners is not None:
+        parts.append(f"Avg {float(avg_corners):.1f} corners")
+
+    avg_cards = analysis.get('avg_total_cards')
+    if avg_cards is not None:
+        parts.append(f"Avg {float(avg_cards):.1f} cards")
+
+    p_model = analysis.get('p_model') or model_prob
+    if p_model is not None:
+        p = float(p_model)
+        if p < 1:
+            p = p * 100
+        implied = (1 / odds * 100) if odds > 1 else 0
+        parts.append(f"{p:.0f}% model vs {implied:.0f}% implied")
+
+    if edge is not None:
+        try:
+            parts.append(f"+{float(edge):.1f}% edge")
+        except:
+            pass
+
+    if not parts:
+        return ""
+
+    return "  _" + " | ".join(parts) + "_"
 
 PRODUCT_WEBHOOKS = {
     "EXACT_SCORE": os.getenv("WEBHOOK_Final_score"),
@@ -38,7 +103,11 @@ def format_parlay_message(bet) -> str:
         leg_league = leg.get('league', '')
         if leg_league:
             content += f"**{leg_league}**\n"
-        content += f"• {home} vs {away} — **{selection}** @ {float(leg_odds):.2f} (TBD) 🔘\n\n"
+        content += f"• {home} vs {away} — **{selection}** @ {float(leg_odds):.2f} (TBD) 🔘\n"
+        leg_reason = build_analysis_reason(leg)
+        if leg_reason:
+            content += f"{leg_reason}\n"
+        content += "\n"
     
     content += f"**Combined Odds:** {float(odds):.2f}\n\n"
     content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -80,11 +149,15 @@ def format_value_single_message(bet) -> str:
         product_emoji = "🎯"
         product_label = "VALUE SINGLES"
     
+    reason = build_analysis_reason(bet)
+    
     content = f"{product_emoji} **{product_label} — Today's Picks**\n\n"
     content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
     content += f"**{league}**\n"
-    content += f"• {home_team} vs {away_team} — **{selection}** @ {float(odds or 0):.2f} (TBD) 🔘\n\n"
-    content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+    content += f"• {home_team} vs {away_team} — **{selection}** @ {float(odds or 0):.2f} (TBD) 🔘\n"
+    if reason:
+        content += f"{reason}\n"
+    content += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
     content += "*1 pick(s) | Flat 1u | PGR Analytics*"
     
     return content
@@ -165,16 +238,23 @@ def create_bet_embed(bet, product_type=None) -> dict:
             leg_league = leg.get('league', '')
             if leg_league:
                 content += f"**{leg_league}**\n"
-            content += f"• {ht} vs {at} — **{sel}** @ {float(leg_odds):.2f} (TBD) 🔘\n\n"
+            content += f"• {ht} vs {at} — **{sel}** @ {float(leg_odds):.2f} (TBD) 🔘\n"
+            leg_reason = build_analysis_reason(leg)
+            if leg_reason:
+                content += f"{leg_reason}\n"
+            content += "\n"
         content += f"**Combined Odds:** {float(odds or 0):.2f}\n\n"
         content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         content += f"*{len(legs)} leg(s) | Flat {units_val:.0f}u | PGR Analytics*"
     else:
+        reason = build_analysis_reason(bet)
         content = f"{product_emoji} **{product_label} — Today's Picks**\n\n"
         content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         content += f"**{league}**\n"
-        content += f"• {home_team} vs {away_team} — **{selection}** @ {float(odds or 0):.2f} (TBD) 🔘\n\n"
-        content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        content += f"• {home_team} vs {away_team} — **{selection}** @ {float(odds or 0):.2f} (TBD) 🔘\n"
+        if reason:
+            content += f"{reason}\n"
+        content += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         content += f"*1 pick(s) | Flat {units_val:.0f}u | PGR Analytics*"
     
     embed = {

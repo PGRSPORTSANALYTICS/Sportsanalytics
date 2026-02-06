@@ -15,6 +15,8 @@ from psycopg2.extras import RealDictCursor
 import logging
 from collections import defaultdict
 
+from discord_notifier import build_analysis_reason
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -279,7 +281,10 @@ def validate_and_send_bet(
     confidence: float,
     trust_level: str,
     discord_channel: str,
-    webhook_url: str
+    webhook_url: str,
+    analysis=None,
+    edge_percentage=None,
+    model_prob=None
 ) -> Tuple[bool, str]:
     """
     Validate and send a bet to Discord.
@@ -315,11 +320,18 @@ def validate_and_send_bet(
         product_emoji = "🎯"
         product_label = "VALUE SINGLES"
     
+    reason = build_analysis_reason({
+        'analysis': analysis, 'odds': odds,
+        'edge_percentage': edge_percentage, 'model_prob': model_prob
+    })
+    
     content = f"{product_emoji} **{product_label} — Today's Picks**\n\n"
     content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
     content += f"**{league}**\n"
-    content += f"• {home_team} vs {away_team} — **{selection}** @ {odds:.2f} (TBD) 🔘\n\n"
-    content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+    content += f"• {home_team} vs {away_team} — **{selection}** @ {odds:.2f} (TBD) 🔘\n"
+    if reason:
+        content += f"{reason}\n"
+    content += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
     content += f"*1 pick(s) | Flat {units:.0f}u | PGR Analytics*"
     
     try:
@@ -382,7 +394,7 @@ def distribute_free_picks(max_picks: int = 2) -> int:
             SELECT 
                 id, home_team, away_team, league, match_date,
                 selection, odds, model_prob, edge_percentage,
-                confidence, trust_level, market
+                confidence, trust_level, market, analysis
             FROM football_opportunities
             WHERE DATE(match_date::timestamp) = CURRENT_DATE
               AND market = 'Value Single'
@@ -427,7 +439,10 @@ def distribute_free_picks(max_picks: int = 2) -> int:
                 confidence=float(pick['confidence'] or 0),
                 trust_level=pick['trust_level'] or 'L3',
                 discord_channel='free_picks',
-                webhook_url=DISCORD_FREE_PICKS_WEBHOOK_URL
+                webhook_url=DISCORD_FREE_PICKS_WEBHOOK_URL,
+                analysis=pick.get('analysis'),
+                edge_percentage=pick.get('edge_percentage'),
+                model_prob=pick.get('model_prob')
             )
             
             if success:
@@ -479,6 +494,9 @@ def format_league_message(league: str, bets: List[Dict]) -> str:
     
     for bet in bets_sorted:
         content += f"• {bet['home_team']} vs {bet['away_team']} — **{bet['selection']}** @ {float(bet.get('odds', 0)):.2f} (TBD) 🔘\n"
+        reason = build_analysis_reason(bet)
+        if reason:
+            content += f"{reason}\n"
     
     content += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
     content += f"*{len(bets)} pick(s) | Flat 1u | PGR Analytics*"
@@ -558,7 +576,7 @@ def distribute_by_league(max_per_league: int = 3) -> Dict[str, int]:
             SELECT 
                 id, home_team, away_team, league, match_date,
                 selection, odds, model_prob, edge_percentage,
-                confidence, trust_level, market
+                confidence, trust_level, market, analysis
             FROM football_opportunities
             WHERE DATE(match_date::timestamp) = CURRENT_DATE
               AND market = 'Value Single'
@@ -753,7 +771,7 @@ def distribute_value_singles(max_picks: int = 5) -> int:
             SELECT 
                 id, home_team, away_team, league, match_date,
                 selection, odds, model_prob, edge_percentage,
-                confidence, trust_level, market
+                confidence, trust_level, market, analysis
             FROM football_opportunities
             WHERE DATE(match_date::timestamp) = CURRENT_DATE
               AND market = 'Value Single'
@@ -810,6 +828,9 @@ def distribute_value_singles(max_picks: int = 5) -> int:
             
             for bet in bets:
                 content += f"• {bet['home_team']} vs {bet['away_team']} — **{bet['selection']}** @ {float(bet['odds']):.2f} (TBD) 🔘\n"
+                reason = build_analysis_reason(bet)
+                if reason:
+                    content += f"{reason}\n"
             
             content += "\n"
         
