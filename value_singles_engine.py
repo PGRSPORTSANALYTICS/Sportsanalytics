@@ -48,13 +48,13 @@ MIN_VALUE_SINGLE_EV = 0.02  # 2% edge - increased volume
 # - Under 2.5: 57.1% hit, +1.20u → KEEP (profitable)
 # - Under 3.5: 60.0% hit, +0.64u → KEEP (profitable)
 # - Over 2.5: 39.3% hit, -6.28u, max DD -7.56u → RAISE to 12%
-# - Home Win: 40.5% hit, -4.41u, 7d recovery +1.79u → MIN_ODDS filter
+# - Home Win: 36.6% hit, -12.5u → LEARNING ONLY (Feb 6, 2026)
 # - Away Win: 29.4% hit, -5.45u, max DD -10.45u → LEARNING ONLY
 # ============================================================
 MARKET_SPECIFIC_MIN_EV = {
     "FT_OVER_2_5": 0.12,   # 12% EV minimum (raised from 8% - underperforming)
     "FT_OVER_3_5": 0.12,   # 12% EV minimum (raised from 8%)
-    "HOME_WIN": 0.08,      # 8% EV minimum + MIN_ODDS filter below
+    # HOME_WIN: Now LEARNING_ONLY (Feb 6, 2026) - see filter below
     "FT_UNDER_2_5": 0.08,  # 8% EV minimum (unchanged - profitable)
     "FT_UNDER_3_5": 0.08,  # 8% EV minimum (unchanged - profitable)
     # AWAY_WIN: Now LEARNING_ONLY - see filter below
@@ -67,7 +67,9 @@ MARKET_SPECIFIC_MIN_EV = {
 # Re-evaluate: Jan 25, 2026 or after +100 bets per market
 # ============================================================
 LEARNING_ONLY_MARKETS = {
-    "AWAY_WIN",  # 29.4% hit rate, -5.45u, -10.45u max drawdown
+    "AWAY_WIN",  # 31.6% hit rate, -10.1u — bookmakers price 1X2 too sharply
+    "HOME_WIN",  # 36.6% hit rate, -12.5u — model overestimates by ~25pp (Feb 6, 2026)
+    "DRAW",      # 12.5% hit rate, -5.0u — most unpredictable 1X2 outcome (Feb 6, 2026)
 }
 
 # ============================================================
@@ -75,7 +77,7 @@ LEARNING_ONLY_MARKETS = {
 # Require higher odds for markets showing value only at longer prices
 # ============================================================
 MARKET_SPECIFIC_MIN_ODDS = {
-    "HOME_WIN": 2.50,  # Only Home Win at 2.50+ odds (filter out short favorites)
+    # HOME_WIN: Removed — now LEARNING_ONLY (Feb 6, 2026)
 }
 
 # Odds range filter - tighter range for consistency (Dec 9, 2025)

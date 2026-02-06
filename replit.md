@@ -37,10 +37,10 @@ The system incorporates advanced features such as:
     - **PRODUCTION MARKETS (Live, full weight):**
         - CARDS: 88.4% hit rate, +127.70u
         - CORNERS: 60.6% hit rate, +146.53u
-        - VALUE_SINGLE (excluding Away Win)
+        - VALUE_SINGLE (Totals + BTTS only — no 1X2)
     - **LEARNING ONLY (Low weight, data collection):**
         - BASKETBALL: Breakeven, continued data collection
-        - AWAY_WIN: Excluded from public output, AI training continues
+        - HOME_WIN + AWAY_WIN: All 1X2 excluded — bookmakers too sharp, AI training continues
     - **DISABLED:**
         - SGP: Permanently disabled (2.8% hit rate, -5065u)
     - **Post-Learning Rules:**
@@ -57,6 +57,12 @@ The system incorporates advanced features such as:
     - Away Win: 20% quota (~3 picks) - reduced from previous dominance
     - Spread: 10% quota (~2 picks)
     - Fills remaining slots with best EV from any market
+- **1X2 Market Disabled (Feb 6, 2026):** Moved all 1X2 (Home Win, Away Win, Draw) to learning-only.
+    - Home Win: 36.6% hit rate, -12.5u (model overestimates by ~25pp)
+    - Away Win: 31.6% hit rate, -10.1u (already learning-only since Jan 11)
+    - Reason: Bookmakers price 1X2 too sharply — model can't find real edge
+    - Production Value Singles now limited to: Totals (O/U) and BTTS markets
+    - 1X2 data still collected for AI training
 - **Parlay Engine Rework (Feb 6, 2026):** Simplified from ML-only to all-market parlays.
     - Sources: Best approved Value Singles from DB (real model probabilities)
     - Markets: 1X2, Over/Under, BTTS, Double Chance, DNB

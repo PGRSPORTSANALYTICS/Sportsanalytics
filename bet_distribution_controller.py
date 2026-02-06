@@ -401,7 +401,7 @@ def distribute_free_picks(max_picks: int = 2) -> int:
               AND odds BETWEEN 1.70 AND 2.20
               AND confidence >= 60
               AND outcome IS NULL
-              AND selection IN ('Home Win', 'Away Win', 'Over 2.5 Goals', 'Under 2.5 Goals')
+              AND selection IN ('Over 2.5 Goals', 'Under 2.5 Goals', 'Over 1.5 Goals', 'Under 3.5 Goals', 'BTTS Yes', 'BTTS No')
             ORDER BY 
                 CASE WHEN trust_level IN ('L1', 'L1_HIGH_TRUST') THEN 1 
                      WHEN trust_level = 'L2' THEN 2 
@@ -583,9 +583,9 @@ def distribute_by_league(max_per_league: int = 3) -> Dict[str, int]:
               AND odds BETWEEN 1.50 AND 2.50
               AND confidence >= 55
               AND outcome IS NULL
-              AND selection IN ('Home Win', 'Away Win', 'Draw', 
-                               'Over 2.5 Goals', 'Under 2.5 Goals',
-                               'Over 1.5 Goals', 'Under 3.5 Goals')
+              AND selection IN ('Over 2.5 Goals', 'Under 2.5 Goals',
+                               'Over 1.5 Goals', 'Under 3.5 Goals',
+                               'BTTS Yes', 'BTTS No')
             ORDER BY match_date ASC
         """)
         
