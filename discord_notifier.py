@@ -4,6 +4,34 @@ import requests
 from datetime import datetime
 
 
+def format_kickoff(bet) -> str:
+    """Extract and format kickoff time from bet data as 'Feb 6, 18:30 UTC'."""
+    if isinstance(bet, dict):
+        md = bet.get('match_date') or bet.get('commence_time') or bet.get('event_date', '')
+    else:
+        md = getattr(bet, 'match_date', '') or getattr(bet, 'commence_time', '') or getattr(bet, 'event_date', '')
+    if not md:
+        return ""
+    try:
+        if isinstance(md, datetime):
+            dt = md
+        else:
+            s = str(md).strip()
+            for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M:%S%z', '%Y-%m-%dT%H:%M:%S%z', '%Y-%m-%d'):
+                try:
+                    dt = datetime.strptime(s[:len(fmt)+5], fmt)
+                    break
+                except ValueError:
+                    continue
+            else:
+                return ""
+        if dt.hour == 0 and dt.minute == 0:
+            return dt.strftime('%b %d')
+        return dt.strftime('%b %d, %H:%M UTC')
+    except:
+        return ""
+
+
 def build_analysis_reason(bet) -> str:
     """Build a human-readable analysis reason from bet data."""
     if isinstance(bet, dict):
@@ -101,9 +129,11 @@ def format_parlay_message(bet) -> str:
         selection = leg.get('selection', '')
         leg_odds = leg.get('odds', 0)
         leg_league = leg.get('league', '')
+        ko = format_kickoff(leg)
         if leg_league:
             content += f"**{leg_league}**\n"
-        content += f"• {home} vs {away} — **{selection}** @ {float(leg_odds):.2f} (TBD) 🔘\n"
+        ko_str = f" | {ko}" if ko else ""
+        content += f"• {home} vs {away} — **{selection}** @ {float(leg_odds):.2f}{ko_str} (TBD) 🔘\n"
         leg_reason = build_analysis_reason(leg)
         if leg_reason:
             content += f"{leg_reason}\n"
@@ -150,11 +180,13 @@ def format_value_single_message(bet) -> str:
         product_label = "VALUE SINGLES"
     
     reason = build_analysis_reason(bet)
+    ko = format_kickoff(bet)
+    ko_str = f" | {ko}" if ko else ""
     
     content = f"{product_emoji} **{product_label} — Today's Picks**\n\n"
     content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
     content += f"**{league}**\n"
-    content += f"• {home_team} vs {away_team} — **{selection}** @ {float(odds or 0):.2f} (TBD) 🔘\n"
+    content += f"• {home_team} vs {away_team} — **{selection}** @ {float(odds or 0):.2f}{ko_str} (TBD) 🔘\n"
     if reason:
         content += f"{reason}\n"
     content += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -236,9 +268,11 @@ def create_bet_embed(bet, product_type=None) -> dict:
             sel = leg.get('selection', '')
             leg_odds = leg.get('odds', 0)
             leg_league = leg.get('league', '')
+            ko = format_kickoff(leg)
             if leg_league:
                 content += f"**{leg_league}**\n"
-            content += f"• {ht} vs {at} — **{sel}** @ {float(leg_odds):.2f} (TBD) 🔘\n"
+            ko_str = f" | {ko}" if ko else ""
+            content += f"• {ht} vs {at} — **{sel}** @ {float(leg_odds):.2f}{ko_str} (TBD) 🔘\n"
             leg_reason = build_analysis_reason(leg)
             if leg_reason:
                 content += f"{leg_reason}\n"
@@ -248,10 +282,12 @@ def create_bet_embed(bet, product_type=None) -> dict:
         content += f"*{len(legs)} leg(s) | Flat {units_val:.0f}u | PGR Analytics*"
     else:
         reason = build_analysis_reason(bet)
+        ko = format_kickoff(bet)
+        ko_str = f" | {ko}" if ko else ""
         content = f"{product_emoji} **{product_label} — Today's Picks**\n\n"
         content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         content += f"**{league}**\n"
-        content += f"• {home_team} vs {away_team} — **{selection}** @ {float(odds or 0):.2f} (TBD) 🔘\n"
+        content += f"• {home_team} vs {away_team} — **{selection}** @ {float(odds or 0):.2f}{ko_str} (TBD) 🔘\n"
         if reason:
             content += f"{reason}\n"
         content += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"

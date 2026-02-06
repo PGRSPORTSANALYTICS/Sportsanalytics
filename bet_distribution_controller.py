@@ -15,7 +15,7 @@ from psycopg2.extras import RealDictCursor
 import logging
 from collections import defaultdict
 
-from discord_notifier import build_analysis_reason
+from discord_notifier import build_analysis_reason, format_kickoff
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -325,10 +325,13 @@ def validate_and_send_bet(
         'edge_percentage': edge_percentage, 'model_prob': model_prob
     })
     
+    ko = format_kickoff({'match_date': event_date})
+    ko_str = f" | {ko}" if ko else ""
+    
     content = f"{product_emoji} **{product_label} — Today's Picks**\n\n"
     content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
     content += f"**{league}**\n"
-    content += f"• {home_team} vs {away_team} — **{selection}** @ {odds:.2f} (TBD) 🔘\n"
+    content += f"• {home_team} vs {away_team} — **{selection}** @ {odds:.2f}{ko_str} (TBD) 🔘\n"
     if reason:
         content += f"{reason}\n"
     content += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -493,7 +496,9 @@ def format_league_message(league: str, bets: List[Dict]) -> str:
     content += f"**{league}**\n"
     
     for bet in bets_sorted:
-        content += f"• {bet['home_team']} vs {bet['away_team']} — **{bet['selection']}** @ {float(bet.get('odds', 0)):.2f} (TBD) 🔘\n"
+        ko = format_kickoff(bet)
+        ko_str = f" | {ko}" if ko else ""
+        content += f"• {bet['home_team']} vs {bet['away_team']} — **{bet['selection']}** @ {float(bet.get('odds', 0)):.2f}{ko_str} (TBD) 🔘\n"
         reason = build_analysis_reason(bet)
         if reason:
             content += f"{reason}\n"
