@@ -5,7 +5,7 @@ ML PARLAY ENGINE (Moneyline Parlay)
 LOW/MEDIUM risk, bread-and-butter product with 2-4 legs per parlay.
 
 Product Features:
-- Only 1X2 / Moneyline / Draw-No-Bet markets
+- 1X2 / Moneyline / Draw-No-Bet / BTTS markets
 - 2-4 legs per parlay
 - Max 3 parlays per day
 - 4%+ EV per leg
@@ -383,7 +383,6 @@ class MLParlayEngine:
             for row in rows:
                 home_team, away_team, league, market, selection, odds, model_prob, edge_pct, match_date, kickoff_time, match_id, sim_prob, trust_level = row
                 
-                # POLICY: Only 1X2/Moneyline/DNB selections allowed for ML Parlays
                 market_type = None
                 sel = selection
                 if 'Home Win' in selection or selection == 'HOME':
@@ -397,8 +396,17 @@ class MLParlayEngine:
                     sel = 'DRAW'
                 elif 'DNB' in selection:
                     market_type = 'DNB'
+                elif BTTS_PARLAY_ENABLED and 'BTTS Yes' in selection:
+                    market_type = 'BTTS'
+                    sel = 'BTTS_YES'
+                elif BTTS_PARLAY_ENABLED and 'BTTS No' in selection:
+                    market_type = 'BTTS'
+                    sel = 'BTTS_NO'
                 
                 if market_type is None:
+                    continue
+                
+                if market_type == 'BTTS' and (odds < BTTS_MIN_ODDS or odds > BTTS_MAX_ODDS):
                     continue
                 
                 implied_prob = 1.0 / odds if odds > 0 else 0
