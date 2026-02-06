@@ -170,10 +170,11 @@ class MLParlayVerifier:
         """
         home_score = match_result['home_score']
         away_score = match_result['away_score']
+        total_goals = home_score + away_score
         selection = leg.get('selection', '')
         market_type = leg.get('market_type', '')
         
-        if market_type == '1X2':
+        if market_type == '1X2' or market_type == 'ML':
             if selection == 'HOME':
                 return 'won' if home_score > away_score else 'lost'
             elif selection == 'AWAY':
@@ -184,16 +185,35 @@ class MLParlayVerifier:
         elif market_type == 'DNB':
             if home_score == away_score:
                 return 'push'
-            elif selection == 'HOME_DNB':
+            elif 'HOME' in selection:
                 return 'won' if home_score > away_score else 'lost'
-            elif selection == 'AWAY_DNB':
+            elif 'AWAY' in selection:
                 return 'won' if away_score > home_score else 'lost'
         
-        elif market_type == 'ML':
-            if selection == 'HOME':
-                return 'won' if home_score > away_score else 'lost'
-            elif selection == 'AWAY':
-                return 'won' if away_score > home_score else 'lost'
+        elif market_type == 'TOTALS':
+            import re
+            line_match = re.search(r'(\d+\.?\d*)', selection)
+            if line_match:
+                line = float(line_match.group(1))
+                if 'Over' in selection:
+                    return 'won' if total_goals > line else 'lost'
+                elif 'Under' in selection:
+                    return 'won' if total_goals < line else 'lost'
+        
+        elif market_type == 'BTTS':
+            both_scored = home_score > 0 and away_score > 0
+            if selection == 'BTTS_YES':
+                return 'won' if both_scored else 'lost'
+            elif selection == 'BTTS_NO':
+                return 'won' if not both_scored else 'lost'
+        
+        elif market_type == 'DC':
+            if '1X' in selection or 'Home or Draw' in selection:
+                return 'won' if home_score >= away_score else 'lost'
+            elif 'X2' in selection or 'Draw or Away' in selection:
+                return 'won' if away_score >= home_score else 'lost'
+            elif '12' in selection or 'Home or Away' in selection:
+                return 'won' if home_score != away_score else 'lost'
         
         return 'lost'
     

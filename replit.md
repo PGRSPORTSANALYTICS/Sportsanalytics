@@ -22,7 +22,7 @@ The system incorporates advanced features such as:
 - **Intelligent Result Verification:** A production-ready caching and cooldown system with multi-source fallback (Flashscore, API-Football, The Odds API, Sofascore) ensures fast and reliable settlement. Manual settlement system for unverified corner/card markets.
 - **Bankroll & Analytics:** A centralized `BankrollManager` tracks bankroll and exposure, with primary analytics using a unit-based system for ROI, profit, and hit rate.
 - **AI Training & Learning:** A comprehensive pipeline collects 40+ features for future AI model training, supported by a `training_data` PostgreSQL table and a `DataCollector`, including a Learning System Track Record dashboard and Trust Level Learning.
-- **ML Parlay Engine:** Builds low/medium risk Moneyline/1X2/DNB parlays from approved Value Singles.
+- **Parlay Engine:** Builds 2-3 leg parlays from the best approved Value Singles (all markets: 1X2, Over/Under, BTTS, Double Chance). Max 3 parlays/day, flat staking.
 - **Prediction Filtering:** Includes H2H BTTS filter, AI-learned SGP odds filter, Realistic SGP Margin Calibration, and PGR Final Score Strategy.
 - **3-Tier Trust Level Classification:** Predictions are classified into High (L1), Medium (L2), and Soft (L3) based on simulation approval, EV, confidence, and disagreement.
 - **Central Market Router:** A portfolio balancing system with a two-pass selection algorithm, per-market caps, trust level/EV prioritization, and a global daily pick cap.
@@ -57,11 +57,13 @@ The system incorporates advanced features such as:
     - Away Win: 20% quota (~3 picks) - reduced from previous dominance
     - Spread: 10% quota (~2 picks)
     - Fills remaining slots with best EV from any market
-- **ML Parlay BTTS Integration (Jan 25, 2026):** Added BTTS as leg type in ML Parlay engine.
-    - Step 1 (Active): BTTS legs enabled with 3%+ EV, max 1 per parlay
-    - BTTS legs flagged in output: "[1x BTTS included]"
-    - Step 2 (After 100-150 bets): Evaluate hit rate, CLV, contribution vs ML
-    - If stable: Consider separate BTTS-BTTS parlay channel
+- **Parlay Engine Rework (Feb 6, 2026):** Simplified from ML-only to all-market parlays.
+    - Sources: Best approved Value Singles from DB (real model probabilities)
+    - Markets: 1X2, Over/Under, BTTS, Double Chance, DNB
+    - Legs: 2-3 per parlay (was 2 only)
+    - Max 3 parlays/day, flat staking (0.2u)
+    - Verifier updated for all market types (TOTALS, BTTS, DC)
+    - Removed: Odds API fetching, xG estimation, form checks (all now handled by Value Singles engine)
 - **Daily Soft Stop-Loss (Jan 28, 2026):** Implemented -5u daily stop-loss for production.
     - Stops NEW bets when daily settled P/L reaches -5 units
     - Pending/running bets are NOT affected (soft stop-loss)
