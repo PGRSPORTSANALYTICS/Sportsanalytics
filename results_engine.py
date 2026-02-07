@@ -309,8 +309,6 @@ class ResultsEngine:
             pending = cursor.fetchall()
             logger.info(f"📋 Found {len(pending)} pending SGP/parlays to settle")
             
-            sgp_settled = []
-            
             for bet in pending:
                 try:
                     if 'Multi-Match Parlay' in str(bet.get('home_team', '')):
@@ -322,7 +320,6 @@ class ResultsEngine:
                         self._update_sgp_bet(cursor, bet['id'], outcome)
                         if outcome != 'void':
                             self.stats['settled'] += 1
-                        sgp_settled.append((bet, outcome))
                     
                 except Exception as e:
                     logger.warning(f"⚠️ Error settling SGP {bet['id']}: {e}")
@@ -331,22 +328,6 @@ class ResultsEngine:
             conn.commit()
             cursor.close()
             conn.close()
-            
-            for bet, outcome in sgp_settled:
-                try:
-                    discord_info = {
-                        'outcome': outcome.upper(),
-                        'home_team': bet.get('home_team', ''),
-                        'away_team': bet.get('away_team', ''),
-                        'selection': bet.get('parlay_description', ''),
-                        'actual_score': '',
-                        'odds': bet.get('bookmaker_odds', 0),
-                        'product_type': 'ML_PARLAY',
-                        'league': '',
-                    }
-                    send_result_to_discord(discord_info, 'ML_PARLAY')
-                except Exception as e:
-                    logger.warning(f"⚠️ Discord SGP result notification failed: {e}")
             
         except Exception as e:
             logger.error(f"❌ SGP settlement error: {e}")
