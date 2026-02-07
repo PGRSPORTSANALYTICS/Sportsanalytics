@@ -20,6 +20,7 @@ from psycopg2.extras import RealDictCursor
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import requests
+from discord_notifier import send_result_to_discord
 
 logging.basicConfig(
     level=logging.INFO,
@@ -190,7 +191,7 @@ class ResultsEngine:
             cursor = conn.cursor(cursor_factory=RealDictCursor)
             
             cursor.execute("""
-                SELECT id, home_team, away_team, match_date, market, selection, odds, stake, match_id
+                SELECT id, home_team, away_team, match_date, market, selection, odds, stake, match_id, league
                 FROM football_opportunities 
                 WHERE (outcome IS NULL OR outcome = '' OR outcome = 'unknown' OR outcome = 'pending')
                     AND DATE(match_date) <= CURRENT_DATE
@@ -216,7 +217,7 @@ class ResultsEngine:
                         if manual_result:
                             outcome = manual_result['result'].lower()
                             if outcome in ['won', 'lost', 'void']:
-                                bets_to_update.append((bet['id'], outcome, {'source': 'manual'}, None))
+                                bets_to_update.append((bet['id'], outcome, {'source': 'manual'}, None, dict(bet)))
                                 self.stats['settled'] += 1
                                 self.stats['manual_applied'] += 1
                                 logger.info(f"📋 Applied manual result for bet #{bet['id']}: {outcome}")
@@ -238,9 +239,8 @@ class ResultsEngine:
                     if not result:
                         continue
                     
-                    # Check if match was postponed/cancelled - should be voided
                     if result.get('void'):
-                        bets_to_update.append((bet['id'], 'void', result, None))
+                        bets_to_update.append((bet['id'], 'void', result, None, dict(bet)))
                         self.stats['voided'] += 1
                         logger.info(f"🚫 Voiding bet #{bet['id']} - match was {result.get('status', 'postponed')}")
                         continue
@@ -248,7 +248,7 @@ class ResultsEngine:
                     outcome = self._calculate_outcome(bet, result)
                     if outcome in ['won', 'lost']:
                         training_key = bet.get('match_id', match_key)
-                        bets_to_update.append((bet['id'], outcome, result, training_key))
+                        bets_to_update.append((bet['id'], outcome, result, training_key, dict(bet)))
                         self.stats['settled'] += 1
                         if result.get('source') not in ['api-football', 'database']:
                             self.stats['fallback_used'] += 1
@@ -261,18 +261,28 @@ class ResultsEngine:
                 update_conn = self._get_db_connection()
                 update_cursor = update_conn.cursor(cursor_factory=RealDictCursor)
                 
-                for bet_id, outcome, result, training_key in bets_to_update:
+                settled_for_discord = []
+                
+                for bet_id, outcome, result, training_key, bet_data in bets_to_update:
                     try:
                         self._update_football_bet(update_cursor, bet_id, outcome, result)
                         if training_key and result.get('home_goals') is not None:
                             self._update_training_data(update_cursor, training_key, result['home_goals'], result['away_goals'])
                         logger.info(f"✅ Settled football #{bet_id}: {outcome.upper()}")
+                        if outcome in ['won', 'lost', 'void']:
+                            settled_for_discord.append((bet_data, outcome, result))
                     except Exception as e:
                         logger.warning(f"⚠️ Error updating bet {bet_id}: {e}")
                 
                 update_conn.commit()
                 update_cursor.close()
                 update_conn.close()
+                
+                for bet_data, outcome, result in settled_for_discord:
+                    try:
+                        self._send_discord_result(bet_data, outcome, result)
+                    except Exception as e:
+                        logger.warning(f"⚠️ Discord result notification failed: {e}")
             
         except Exception as e:
             logger.error(f"❌ Football settlement error: {e}")
@@ -299,6 +309,8 @@ class ResultsEngine:
             pending = cursor.fetchall()
             logger.info(f"📋 Found {len(pending)} pending SGP/parlays to settle")
             
+            sgp_settled = []
+            
             for bet in pending:
                 try:
                     if 'Multi-Match Parlay' in str(bet.get('home_team', '')):
@@ -310,6 +322,7 @@ class ResultsEngine:
                         self._update_sgp_bet(cursor, bet['id'], outcome)
                         if outcome != 'void':
                             self.stats['settled'] += 1
+                        sgp_settled.append((bet, outcome))
                     
                 except Exception as e:
                     logger.warning(f"⚠️ Error settling SGP {bet['id']}: {e}")
@@ -318,6 +331,22 @@ class ResultsEngine:
             conn.commit()
             cursor.close()
             conn.close()
+            
+            for bet, outcome in sgp_settled:
+                try:
+                    discord_info = {
+                        'outcome': outcome.upper(),
+                        'home_team': bet.get('home_team', ''),
+                        'away_team': bet.get('away_team', ''),
+                        'selection': bet.get('parlay_description', ''),
+                        'actual_score': '',
+                        'odds': bet.get('bookmaker_odds', 0),
+                        'product_type': 'ML_PARLAY',
+                        'league': '',
+                    }
+                    send_result_to_discord(discord_info, 'ML_PARLAY')
+                except Exception as e:
+                    logger.warning(f"⚠️ Discord SGP result notification failed: {e}")
             
         except Exception as e:
             logger.error(f"❌ SGP settlement error: {e}")
@@ -916,6 +945,43 @@ class ResultsEngine:
                 logger.info(f"📊 Updated {cursor.rowcount} training_data records for {match_id}")
         except Exception as e:
             logger.warning(f"⚠️ Training data update failed for {match_id}: {e}")
+    
+    def _send_discord_result(self, bet_data: Dict, outcome: str, result: Dict):
+        """Send individual settled bet result to Discord."""
+        market = (bet_data.get('market') or '').upper()
+        if market in ['CORNERS', 'CORNER']:
+            product_type = 'CORNERS'
+        elif market in ['CARDS', 'CARD']:
+            product_type = 'CARDS'
+        else:
+            product_type = 'VALUE_SINGLE'
+        
+        home_goals = result.get('home_goals')
+        away_goals = result.get('away_goals')
+        actual_score = f"{home_goals}-{away_goals}" if home_goals is not None and away_goals is not None else '?-?'
+        
+        if market in ['CORNERS', 'CORNER']:
+            total_corners = result.get('total_corners', result.get('corners_home', 0) + result.get('corners_away', 0) if result.get('corners_home') is not None else None)
+            if total_corners is not None:
+                actual_score = f"{actual_score} ({total_corners} corners)"
+        elif market in ['CARDS', 'CARD']:
+            total_cards = result.get('total_cards', result.get('cards_home', 0) + result.get('cards_away', 0) if result.get('cards_home') is not None else None)
+            if total_cards is not None:
+                actual_score = f"{actual_score} ({total_cards} cards)"
+        
+        discord_info = {
+            'outcome': outcome.upper(),
+            'home_team': bet_data.get('home_team', ''),
+            'away_team': bet_data.get('away_team', ''),
+            'selection': bet_data.get('selection', ''),
+            'actual_score': actual_score,
+            'odds': bet_data.get('odds', 0),
+            'product_type': product_type,
+            'league': bet_data.get('league', ''),
+        }
+        
+        send_result_to_discord(discord_info, product_type)
+        logger.info(f"📤 Discord result sent: {bet_data.get('home_team')} vs {bet_data.get('away_team')} = {outcome.upper()}")
     
     def _send_discord_update(self):
         """Send Discord ROI update ONLY when all today's matches are settled."""
