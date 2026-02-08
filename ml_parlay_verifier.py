@@ -259,7 +259,7 @@ class MLParlayVerifier:
         
         try:
             pending = db_helper.execute(
-                """SELECT parlay_id, legs, stake, total_odds 
+                """SELECT parlay_id, legs, stake, total_odds, match_date 
                    FROM ml_parlay_predictions 
                    WHERE status = 'pending'
                    ORDER BY timestamp ASC
@@ -278,6 +278,7 @@ class MLParlayVerifier:
                 legs_json = row[1]
                 stake = float(row[2] or 0)
                 total_odds = float(row[3] or 1)
+                parlay_match_date = str(row[4] or '')[:10] if row[4] else ''
                 
                 try:
                     legs = json.loads(legs_json) if legs_json else []
@@ -340,13 +341,12 @@ class MLParlayVerifier:
                     if not match_result:
                         match_result = self._fetch_from_cache(home_team, away_team)
                     
-                    # Fallback: Use API-Football (with improved team matching)
                     if not match_result:
-                        # Use kickoff_time from the leg (correct match date)
                         match_date = leg.get('kickoff_time', '')
                         if match_date:
-                            # Extract date portion (YYYY-MM-DD) from kickoff_time
                             match_date = str(match_date).split('T')[0][:10]
+                        if not match_date or len(match_date) < 8:
+                            match_date = parlay_match_date
                         if match_date:
                             match_result = self._fetch_from_api_football(home_team, away_team, match_date)
                     
@@ -366,10 +366,15 @@ class MLParlayVerifier:
                         leg_results.append('pending')
                 
                 if not all_legs_settled:
-                    stats['pending'] += 1
-                    continue
-                
-                outcome, adjusted_odds = self._calculate_parlay_result(leg_results, legs)
+                    if 'lost' in leg_results:
+                        outcome = 'lost'
+                        adjusted_odds = 0
+                        logger.info(f"⚡ Early settlement: Parlay {parlay_id} has lost leg(s), settling as LOST")
+                    else:
+                        stats['pending'] += 1
+                        continue
+                else:
+                    outcome, adjusted_odds = self._calculate_parlay_result(leg_results, legs)
                 
                 if outcome == 'won':
                     profit_loss = stake * (adjusted_odds - 1)

@@ -305,13 +305,19 @@ class MLParlayEngine:
                 if confidence < MIN_CONFIDENCE_SCORE:
                     continue
                 
+                full_kickoff = str(match_date or '')
+                if kickoff_time and len(str(kickoff_time)) <= 8:
+                    full_kickoff = f"{str(match_date)[:10]}T{kickoff_time}"
+                elif kickoff_time:
+                    full_kickoff = str(kickoff_time)
+                
                 candidates.append({
                     'match_id': match_id or f"{home_team}_{away_team}_{match_date}",
                     'home_team': home_team,
                     'away_team': away_team,
                     'league': league,
-                    'league_key': '',
-                    'kickoff_time': kickoff_time or '',
+                    'league_key': league or '',
+                    'kickoff_time': full_kickoff,
                     'match_date': match_date,
                     'market_type': market_type,
                     'selection': sel,
