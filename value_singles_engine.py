@@ -849,9 +849,14 @@ class ValueSinglesEngine:
                                 'market': s.get('market', ''),
                                 'selection': s.get('selection', ''),
                                 'odds': s.get('odds', 0),
-                                'ev': s.get('edge_percentage', 0) / 100,  # Convert to decimal
+                                'ev': s.get('edge_percentage', 0) / 100,
                                 'confidence': analysis.get('p_model', 0),
-                                'trust_level': s.get('trust_level', 'L2')
+                                'trust_level': s.get('trust_level', 'L2'),
+                                'analysis': s.get('analysis', '{}'),
+                                'odds_by_bookmaker': s.get('odds_by_bookmaker'),
+                                'best_odds_value': s.get('best_odds_value'),
+                                'best_odds_bookmaker': s.get('best_odds_bookmaker'),
+                                'avg_odds': s.get('avg_odds'),
                             }, product_type='VALUE_SINGLE')
                         except Exception as e:
                             print(f"⚠️ Discord notification failed: {e}")

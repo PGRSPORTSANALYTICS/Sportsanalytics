@@ -1,7 +1,10 @@
 import os
 import json
+import logging
 import requests
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 
 def format_kickoff(bet) -> str:
@@ -95,6 +98,180 @@ def build_analysis_reason(bet) -> str:
 
     return "  _" + " | ".join(parts) + "_"
 
+def format_bookmaker_odds(bet) -> str:
+    """Format top bookmaker odds for Discord display, showing where to get the best price."""
+    if isinstance(bet, dict):
+        odds_by_book = bet.get('odds_by_bookmaker')
+        best_value = bet.get('best_odds_value')
+        best_book = bet.get('best_odds_bookmaker')
+        model_odds = float(bet.get('odds', 0) or 0)
+        avg_odds = bet.get('avg_odds')
+    else:
+        odds_by_book = getattr(bet, 'odds_by_bookmaker', None)
+        best_value = getattr(bet, 'best_odds_value', None)
+        best_book = getattr(bet, 'best_odds_bookmaker', None)
+        model_odds = float(getattr(bet, 'odds', 0) or 0)
+        avg_odds = getattr(bet, 'avg_odds', None)
+
+    if not odds_by_book:
+        return ""
+
+    try:
+        if isinstance(odds_by_book, str):
+            odds_by_book = json.loads(odds_by_book)
+    except:
+        return ""
+
+    if not isinstance(odds_by_book, dict) or not odds_by_book:
+        return ""
+
+    swedish_books = ['Betsson', 'Unibet (SE)', 'LeoVegas (SE)', 'Coolbet', 'Nordic Bet', 'ComeOn (SE)']
+    sorted_books = sorted(odds_by_book.items(), key=lambda x: float(x[1] or 0), reverse=True)
+
+    top3 = sorted_books[:3]
+    se_entries = [(b, o) for b, o in sorted_books if b in swedish_books and (b, o) not in top3]
+    if se_entries:
+        top3 = top3[:2] + [se_entries[0]]
+
+    parts = []
+    for book, odds_val in top3:
+        o = float(odds_val or 0)
+        flag = "🇸🇪 " if book in swedish_books else ""
+        parts.append(f"{flag}{book} **{o:.2f}**")
+
+    line = "  📊 " + " | ".join(parts)
+
+    if best_value and best_book:
+        bv = float(best_value)
+        if bv > model_odds * 1.02:
+            line += f"\n  🔝 Best: **{bv:.2f}** @ {best_book}"
+
+    if avg_odds:
+        spread = float(best_value or model_odds) - float(sorted_books[-1][1])
+        if spread > 0.10:
+            line += f"\n  💡 _Spread {spread:.2f} — shop for best price!_"
+
+    return line
+
+
+def fetch_live_odds_for_match(home_team: str, away_team: str, selection: str, sport_key: str = None) -> dict:
+    """Fetch current live odds for a specific match from The Odds API."""
+    api_key = os.getenv('THE_ODDS_API_KEY')
+    if not api_key:
+        return {}
+
+    if not sport_key:
+        sport_key = 'soccer_epl'
+
+    base_url = "https://api.the-odds-api.com/v4"
+
+    market_type = 'h2h'
+    if 'over' in selection.lower() or 'under' in selection.lower():
+        market_type = 'totals'
+    elif 'btts' in selection.lower():
+        market_type = 'btts'
+
+    try:
+        url = f"{base_url}/sports/{sport_key}/odds"
+        params = {
+            'apiKey': api_key,
+            'regions': 'uk,eu',
+            'markets': market_type,
+            'oddsFormat': 'decimal'
+        }
+
+        resp = requests.get(url, params=params, timeout=10)
+        if resp.status_code != 200:
+            return {}
+
+        data = resp.json()
+
+        def norm(t):
+            return t.lower().replace(' fc', '').replace('fc ', '').strip()
+
+        home_norm = norm(home_team)
+        away_norm = norm(away_team)
+
+        for game in data:
+            gh = norm(game.get('home_team', ''))
+            ga = norm(game.get('away_team', ''))
+
+            if (home_norm in gh or gh in home_norm) and (away_norm in ga or ga in away_norm):
+                live_odds = {}
+                for bm in game.get('bookmakers', []):
+                    book_name = bm.get('title', '')
+                    for mkt in bm.get('markets', []):
+                        for outcome in mkt.get('outcomes', []):
+                            oc_name = outcome.get('name', '')
+                            oc_point = outcome.get('point')
+                            oc_price = outcome.get('price', 0)
+
+                            if market_type == 'totals':
+                                if oc_name.lower() in selection.lower():
+                                    sel_point = None
+                                    import re
+                                    m = re.search(r'(\d+\.?\d*)', selection)
+                                    if m:
+                                        sel_point = float(m.group(1))
+                                    if sel_point and oc_point and abs(float(oc_point) - sel_point) < 0.01:
+                                        live_odds[book_name] = oc_price
+                            elif market_type == 'h2h':
+                                if ('home' in selection.lower() and oc_name == game.get('home_team')) or \
+                                   ('away' in selection.lower() and oc_name == game.get('away_team')) or \
+                                   ('draw' in selection.lower() and oc_name == 'Draw'):
+                                    live_odds[book_name] = oc_price
+
+                if not live_odds and market_type == 'btts':
+                    for bm in game.get('bookmakers', []):
+                        book_name = bm.get('title', '')
+                        for mkt in bm.get('markets', []):
+                            if mkt.get('key') != 'btts':
+                                continue
+                            for outcome in mkt.get('outcomes', []):
+                                oc_name = outcome.get('name', '').lower()
+                                oc_price = outcome.get('price', 0)
+                                if ('yes' in selection.lower() and oc_name == 'yes') or \
+                                   ('no' in selection.lower() and oc_name == 'no'):
+                                    live_odds[book_name] = oc_price
+
+                if live_odds:
+                    best_book = max(live_odds, key=live_odds.get)
+                    return {
+                        'odds_by_bookmaker': live_odds,
+                        'best_odds_value': live_odds[best_book],
+                        'best_odds_bookmaker': best_book,
+                        'avg_odds': sum(live_odds.values()) / len(live_odds)
+                    }
+
+        return {}
+    except Exception as e:
+        logger.debug(f"Live odds fetch failed: {e}")
+        return {}
+
+
+def format_odds_comparison(model_odds: float, live_data: dict) -> str:
+    """Format comparison between model odds and current live odds."""
+    if not live_data:
+        return ""
+
+    best_live = float(live_data.get('best_odds_value', 0))
+    best_book = live_data.get('best_odds_bookmaker', '')
+
+    if best_live <= 0:
+        return ""
+
+    drift_pct = ((best_live - model_odds) / model_odds) * 100
+
+    if drift_pct < -5:
+        return f"  ⚠️ Odds dropped: Model {model_odds:.2f} → Now **{best_live:.2f}** @ {best_book} ({drift_pct:+.1f}%)"
+    elif drift_pct < -2:
+        return f"  📉 Odds moved: Model {model_odds:.2f} → Now **{best_live:.2f}** @ {best_book} ({drift_pct:+.1f}%)"
+    elif drift_pct > 2:
+        return f"  📈 Odds up: Model {model_odds:.2f} → Now **{best_live:.2f}** @ {best_book} ({drift_pct:+.1f}%) — More value!"
+    else:
+        return f"  ✅ Odds stable: **{best_live:.2f}** @ {best_book}"
+
+
 PRODUCT_WEBHOOKS = {
     "EXACT_SCORE": os.getenv("WEBHOOK_Final_score"),
     "ML_PARLAY": os.getenv("WEBHOOK_ML_PARLAYS"),
@@ -182,6 +359,7 @@ def format_value_single_message(bet) -> str:
     reason = build_analysis_reason(bet)
     ko = format_kickoff(bet)
     ko_str = f" | {ko}" if ko else ""
+    bookmaker_line = format_bookmaker_odds(bet)
     
     content = f"{product_emoji} **{product_label} — Today's Picks**\n\n"
     content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -189,6 +367,8 @@ def format_value_single_message(bet) -> str:
     content += f"• {home_team} vs {away_team} — **{selection}** @ {float(odds or 0):.2f}{ko_str} (TBD) 🔘\n"
     if reason:
         content += f"{reason}\n"
+    if bookmaker_line:
+        content += f"{bookmaker_line}\n"
     content += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
     content += "*1 pick(s) | Flat 1u | PGR Analytics*"
     
@@ -284,12 +464,15 @@ def create_bet_embed(bet, product_type=None) -> dict:
         reason = build_analysis_reason(bet)
         ko = format_kickoff(bet)
         ko_str = f" | {ko}" if ko else ""
+        bookmaker_line = format_bookmaker_odds(bet)
         content = f"{product_emoji} **{product_label} — Today's Picks**\n\n"
         content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         content += f"**{league}**\n"
         content += f"• {home_team} vs {away_team} — **{selection}** @ {float(odds or 0):.2f}{ko_str} (TBD) 🔘\n"
         if reason:
             content += f"{reason}\n"
+        if bookmaker_line:
+            content += f"{bookmaker_line}\n"
         content += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         content += f"*1 pick(s) | Flat {units_val:.0f}u | PGR Analytics*"
     

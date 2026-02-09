@@ -15,7 +15,7 @@ from psycopg2.extras import RealDictCursor
 import logging
 from collections import defaultdict
 
-from discord_notifier import build_analysis_reason, format_kickoff
+from discord_notifier import build_analysis_reason, format_kickoff, format_bookmaker_odds, format_odds_comparison
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -123,6 +123,79 @@ def get_db_connection():
                 time.sleep(2)
             else:
                 raise e
+
+
+LEAGUE_TO_SPORT_KEY = {
+    'Premier League': 'soccer_epl',
+    'Championship': 'soccer_efl_champ',
+    'La Liga': 'soccer_spain_la_liga',
+    'Serie A': 'soccer_italy_serie_a',
+    'Bundesliga': 'soccer_germany_bundesliga',
+    'Ligue 1': 'soccer_france_ligue_one',
+    'Eredivisie': 'soccer_netherlands_eredivisie',
+    'Primeira Liga': 'soccer_portugal_primeira_liga',
+    'Scottish Premiership': 'soccer_scotland_premiership',
+    'Belgian Pro League': 'soccer_belgium_first_div',
+    'League One': 'soccer_england_league1',
+    'League Two': 'soccer_england_league2',
+    'Champions League': 'soccer_uefa_champs_league',
+    'Europa League': 'soccer_uefa_europa_league',
+    'Copa del Rey': 'soccer_spain_la_liga',
+    'Coppa Italia': 'soccer_italy_serie_a',
+    'FA Cup': 'soccer_epl',
+}
+
+
+def refresh_odds_for_picks(picks: list) -> list:
+    """Refresh bookmaker odds for picks just before distribution.
+    Uses The Odds API to get current odds and adds live comparison.
+    Returns picks with updated odds_comparison field."""
+    from discord_notifier import fetch_live_odds_for_match, format_odds_comparison
+    
+    api_key = os.getenv('THE_ODDS_API_KEY')
+    if not api_key:
+        logger.info("⏭️ No THE_ODDS_API_KEY — skipping live odds refresh")
+        return picks
+    
+    leagues_needed = set()
+    for p in picks:
+        league = normalize_league(p.get('league', '')) or 'Other'
+        sport_key = LEAGUE_TO_SPORT_KEY.get(league)
+        if sport_key:
+            leagues_needed.add(sport_key)
+    
+    if len(leagues_needed) > 3:
+        logger.info(f"⏭️ Too many leagues ({len(leagues_needed)}) — skipping live refresh to save API quota")
+        return picks
+    
+    for pick in picks:
+        try:
+            league = normalize_league(pick.get('league', '')) or 'Other'
+            sport_key = LEAGUE_TO_SPORT_KEY.get(league)
+            if not sport_key:
+                continue
+            
+            selection = pick.get('selection', '')
+            home_team = pick.get('home_team', '')
+            away_team = pick.get('away_team', '')
+            model_odds = float(pick.get('odds', 0))
+            
+            live_data = fetch_live_odds_for_match(home_team, away_team, selection, sport_key)
+            
+            if live_data:
+                pick['live_odds_data'] = live_data
+                pick['odds_comparison'] = format_odds_comparison(model_odds, live_data)
+                
+                if live_data.get('odds_by_bookmaker'):
+                    pick['odds_by_bookmaker'] = live_data['odds_by_bookmaker']
+                    pick['best_odds_value'] = live_data.get('best_odds_value')
+                    pick['best_odds_bookmaker'] = live_data.get('best_odds_bookmaker')
+                    pick['avg_odds'] = live_data.get('avg_odds')
+                    logger.info(f"🔄 Fresh odds: {home_team} vs {away_team} | Best: {live_data.get('best_odds_value', '?')} @ {live_data.get('best_odds_bookmaker', '?')}")
+        except Exception as e:
+            logger.debug(f"Live odds refresh failed for {pick.get('home_team', '?')}: {e}")
+    
+    return picks
 
 
 def ensure_distribution_log_table():
@@ -776,7 +849,8 @@ def distribute_value_singles(max_picks: int = 5) -> int:
             SELECT 
                 id, home_team, away_team, league, match_date,
                 selection, odds, model_prob, edge_percentage,
-                confidence, trust_level, market, analysis
+                confidence, trust_level, market, analysis,
+                odds_by_bookmaker, best_odds_value, best_odds_bookmaker, avg_odds
             FROM football_opportunities
             WHERE DATE(match_date::timestamp) = CURRENT_DATE
               AND market = 'Value Single'
@@ -819,6 +893,8 @@ def distribute_value_singles(max_picks: int = 5) -> int:
             logger.info("❌ All candidates already sent")
             return 0
         
+        valid_picks = refresh_odds_for_picks(valid_picks)
+        
         league_groups = defaultdict(list)
         for pick in valid_picks:
             league = normalize_league(pick['league']) or 'Other'
@@ -836,6 +912,12 @@ def distribute_value_singles(max_picks: int = 5) -> int:
                 reason = build_analysis_reason(bet)
                 if reason:
                     content += f"{reason}\n"
+                bookmaker_line = format_bookmaker_odds(bet)
+                if bookmaker_line:
+                    content += f"{bookmaker_line}\n"
+                odds_comp = bet.get('odds_comparison', '')
+                if odds_comp:
+                    content += f"{odds_comp}\n"
             
             content += "\n"
         
@@ -931,11 +1013,15 @@ def send_instant_pick(pick: Dict) -> bool:
         logger.debug(f"⏭️ Not today's event: {home_team} vs {away_team}")
         return False
     
+    bookmaker_line = format_bookmaker_odds(pick)
+    
     content = "🎯 **VALUE SINGLES — Today's Picks**\n\n"
     content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
     content += f"**{league}**\n"
-    content += f"• {home_team} vs {away_team} — **{selection}** @ {odds:.2f} (TBD) 🔘\n\n"
-    content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+    content += f"• {home_team} vs {away_team} — **{selection}** @ {odds:.2f} (TBD) 🔘\n"
+    if bookmaker_line:
+        content += f"{bookmaker_line}\n"
+    content += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
     content += "*1 pick(s) | Flat 1u | PGR Analytics*"
     
     try:
