@@ -79,6 +79,16 @@ The system incorporates advanced features such as:
 - **Free Pick Limit (Jan 29, 2026):** Reduced to 1 free pick per day.
     - Value Singles: 5 picks/day @ 10:00 UTC (internal distribution)
     - Free Pick: 1 pick/day @ 11:00 UTC (public Discord channel)
+- **Player Props Engine (Feb 11, 2026):** Internal learning mode for player prop markets.
+    - **Football:** player_anytime_goalscorer, player_shots_on_goal (limited coverage from The Odds API)
+    - **Basketball:** player_points, player_rebounds (strong coverage — NBA/NCAAB)
+    - Mode: LEARNING ONLY — no real stakes, data collection for AI training
+    - Schedule: Every 6 hours via combined_sports_runner.py
+    - API budget: Max 15 credits per cycle (conserves 500/month quota)
+    - DB table: `player_props` (separate from football_opportunities)
+    - Discord: Top-edge props sent to DISCORD_PROPS_WEBHOOK_URL with learning mode badge
+    - Auto-void: Props older than 3 days auto-voided by results_engine.py
+    - Module: `player_props_engine.py`
 
 ### System Design Choices
 - **Data Layer:** PostgreSQL (Neon database) with connection pooling, TCP keepalives, and retry logic.

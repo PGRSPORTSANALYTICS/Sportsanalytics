@@ -51,8 +51,8 @@ BASKETBALL_PROP_MARKETS = [
 
 SWEDISH_BOOKMAKERS = ['betsson', 'unibet', 'leovegas', 'coolbet', 'nordicbet']
 
-MAX_EVENTS_PER_CYCLE = 6
-MAX_API_CREDITS_PER_CYCLE = 10
+MAX_EVENTS_PER_CYCLE = 4
+MAX_API_CREDITS_PER_CYCLE = 15
 MIN_EDGE_PCT = 2.0
 
 
@@ -73,17 +73,17 @@ class PlayerPropsEngine:
         self.stats = {'football_props': 0, 'basketball_props': 0, 'total_saved': 0, 'errors': 0}
 
         try:
-            football_props = self._run_football_props()
-            self.stats['football_props'] = len(football_props)
-        except Exception as e:
-            logger.error(f"Football props error: {e}")
-            self.stats['errors'] += 1
-
-        try:
             basketball_props = self._run_basketball_props()
             self.stats['basketball_props'] = len(basketball_props)
         except Exception as e:
             logger.error(f"Basketball props error: {e}")
+            self.stats['errors'] += 1
+
+        try:
+            football_props = self._run_football_props()
+            self.stats['football_props'] = len(football_props)
+        except Exception as e:
+            logger.error(f"Football props error: {e}")
             self.stats['errors'] += 1
 
         logger.info(f"🎯 Props cycle complete: {self.stats['football_props']} football, "
