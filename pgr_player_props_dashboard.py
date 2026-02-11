@@ -332,8 +332,8 @@ if overview is not None and overview['total_props'] > 0:
 
     st.markdown("<div style='margin:20px 0'></div>", unsafe_allow_html=True)
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "Top Edge Props", "By Sport/Market", "Top Players", "Collection History", "Raw Data"
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+        "Top Edge Props", "Performance Tracker", "By Sport/Market", "Top Players", "Collection History", "Raw Data"
     ])
 
     with tab1:
@@ -387,6 +387,279 @@ if overview is not None and overview['total_props'] > 0:
                 """, unsafe_allow_html=True)
 
     with tab2:
+        st.markdown('<div class="section-title">Performance Tracker (Paper Trading)</div>', unsafe_allow_html=True)
+        st.markdown("<div style='color:#64748B;font-size:0.8rem;margin-bottom:16px;'>Simulated 1u flat stakes &bull; Learning mode &mdash; tracking what results would be</div>", unsafe_allow_html=True)
+
+        @st.cache_data(ttl=120)
+        def get_tracker_stats():
+            try:
+                with DatabaseConnection.get_connection() as conn:
+                    query = """
+                        SELECT 
+                            COUNT(*) as total,
+                            COUNT(*) FILTER (WHERE status = 'won') as wins,
+                            COUNT(*) FILTER (WHERE status = 'lost') as losses,
+                            COUNT(*) FILTER (WHERE status = 'void') as voids,
+                            COUNT(*) FILTER (WHERE status = 'pending') as pending,
+                            COALESCE(SUM(CASE WHEN status = 'won' THEN (odds - 1) WHEN status = 'lost' THEN -1 ELSE 0 END), 0) as net_profit,
+                            ROUND(AVG(CASE WHEN status IN ('won','lost') THEN odds END)::numeric, 2) as avg_settled_odds,
+                            ROUND(AVG(CASE WHEN status IN ('won','lost') THEN edge_pct END)::numeric, 1) as avg_settled_edge
+                        FROM player_props
+                        WHERE mode = 'LEARNING'
+                    """
+                    return pd.read_sql(query, conn).iloc[0]
+            except Exception:
+                return None
+
+        @st.cache_data(ttl=120)
+        def get_tracker_by_market():
+            try:
+                with DatabaseConnection.get_connection() as conn:
+                    query = """
+                        SELECT 
+                            sport, market,
+                            COUNT(*) FILTER (WHERE status IN ('won','lost')) as settled,
+                            COUNT(*) FILTER (WHERE status = 'won') as wins,
+                            COUNT(*) FILTER (WHERE status = 'lost') as losses,
+                            COUNT(*) FILTER (WHERE status = 'pending') as pending,
+                            COALESCE(SUM(CASE WHEN status = 'won' THEN (odds - 1) WHEN status = 'lost' THEN -1 ELSE 0 END), 0) as profit,
+                            ROUND(AVG(CASE WHEN status IN ('won','lost') THEN odds END)::numeric, 2) as avg_odds,
+                            ROUND(AVG(edge_pct)::numeric, 1) as avg_edge
+                        FROM player_props
+                        WHERE mode = 'LEARNING'
+                        GROUP BY sport, market
+                        ORDER BY profit DESC
+                    """
+                    return pd.read_sql(query, conn)
+            except Exception:
+                return pd.DataFrame()
+
+        @st.cache_data(ttl=120)
+        def get_tracker_daily():
+            try:
+                with DatabaseConnection.get_connection() as conn:
+                    query = """
+                        SELECT 
+                            DATE(created_at) as date,
+                            COUNT(*) FILTER (WHERE status IN ('won','lost')) as settled,
+                            COUNT(*) FILTER (WHERE status = 'won') as wins,
+                            COUNT(*) FILTER (WHERE status = 'lost') as losses,
+                            COUNT(*) FILTER (WHERE status = 'pending') as pending,
+                            COALESCE(SUM(CASE WHEN status = 'won' THEN (odds - 1) WHEN status = 'lost' THEN -1 ELSE 0 END), 0) as daily_profit
+                        FROM player_props
+                        WHERE mode = 'LEARNING'
+                        GROUP BY DATE(created_at)
+                        ORDER BY date
+                    """
+                    return pd.read_sql(query, conn)
+            except Exception:
+                return pd.DataFrame()
+
+        @st.cache_data(ttl=120)
+        def get_tracker_recent():
+            try:
+                with DatabaseConnection.get_connection() as conn:
+                    query = """
+                        SELECT 
+                            player_name, sport, market, selection, line, odds,
+                            edge_pct, home_team || ' vs ' || away_team as match,
+                            status, profit_loss,
+                            COALESCE(settled_at, created_at) as date
+                        FROM player_props
+                        WHERE mode = 'LEARNING' AND status IN ('won', 'lost')
+                        ORDER BY settled_at DESC NULLS LAST
+                        LIMIT 30
+                    """
+                    return pd.read_sql(query, conn)
+            except Exception:
+                return pd.DataFrame()
+
+        ts = get_tracker_stats()
+        if ts is not None:
+            wins = int(ts['wins'] or 0)
+            losses = int(ts['losses'] or 0)
+            voids = int(ts['voids'] or 0)
+            pending = int(ts['pending'] or 0)
+            settled = wins + losses
+            hit_rate = (wins / settled * 100) if settled > 0 else 0
+            net_profit = float(ts['net_profit'] or 0)
+            roi = (net_profit / settled * 100) if settled > 0 else 0
+
+            mc1, mc2, mc3, mc4, mc5, mc6 = st.columns(6)
+
+            with mc1:
+                st.markdown(f"""
+                <div class="metric-glass">
+                    <div class="mv">{settled}</div>
+                    <div class="ml">SETTLED</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with mc2:
+                st.markdown(f"""
+                <div class="metric-glass" style="border-color:rgba(34,197,94,0.3);">
+                    <div class="mv" style="color:#22C55E;">{wins}</div>
+                    <div class="ml">WINS</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with mc3:
+                st.markdown(f"""
+                <div class="metric-glass" style="border-color:rgba(239,68,68,0.3);">
+                    <div class="mv" style="color:#EF4444;">{losses}</div>
+                    <div class="ml">LOSSES</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with mc4:
+                hr_color = "#00FFC2" if hit_rate >= 50 else "#EF4444"
+                st.markdown(f"""
+                <div class="metric-glass">
+                    <div class="mv" style="color:{hr_color};">{hit_rate:.1f}%</div>
+                    <div class="ml">HIT RATE</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with mc5:
+                pl_color = "#00FFA6" if net_profit >= 0 else "#F97373"
+                st.markdown(f"""
+                <div class="metric-glass">
+                    <div class="mv" style="color:{pl_color};">{net_profit:+.1f}u</div>
+                    <div class="ml">PROFIT</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with mc6:
+                roi_color = "#00FFA6" if roi >= 0 else "#F97373"
+                st.markdown(f"""
+                <div class="metric-glass">
+                    <div class="mv" style="color:{roi_color};">{roi:+.1f}%</div>
+                    <div class="ml">ROI</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            st.markdown(f"<div style='text-align:center;color:#475569;font-size:0.75rem;margin:8px 0 16px;'>{pending} pending &bull; {voids} void</div>", unsafe_allow_html=True)
+
+            tm_df = get_tracker_by_market()
+            if not tm_df.empty and tm_df['settled'].sum() > 0:
+                st.markdown('<div class="section-title" style="margin-top:20px;">By Market</div>', unsafe_allow_html=True)
+                for _, mrow in tm_df.iterrows():
+                    s = int(mrow['settled'])
+                    w = int(mrow['wins'])
+                    l = int(mrow['losses'])
+                    p = float(mrow['profit'])
+                    hr = (w / s * 100) if s > 0 else 0
+                    r = (p / s * 100) if s > 0 else 0
+                    m_emoji = "🏀" if mrow['sport'] == 'basketball' else "⚽"
+                    m_accent = "#FF9800" if mrow['sport'] == 'basketball' else "#00FFC2"
+                    mname = mrow['market'].replace('player_', '').replace('_', ' ').title()
+                    pl_c = "#00FFA6" if p >= 0 else "#F97373"
+                    hr_c = "#00FFC2" if hr >= 50 else "#F97373"
+
+                    st.markdown(f"""
+                    <div class="prop-card" style="border-left-color:{m_accent};">
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <span class="player-name">{m_emoji} {mname}</span>
+                            <span style="font-weight:800;color:{pl_c};font-size:1.1rem;">{p:+.1f}u</span>
+                        </div>
+                        <div style="margin-top:4px;font-size:0.82rem;color:#94A3B8;">
+                            {w}W - {l}L &bull;
+                            Hit Rate: <span style="color:{hr_c};font-weight:600;">{hr:.1f}%</span> &bull;
+                            ROI: <span style="color:{pl_c};font-weight:600;">{r:+.1f}%</span> &bull;
+                            Avg Odds: {mrow['avg_odds'] or 0:.2f} &bull;
+                            Pending: {int(mrow['pending'])}
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+            td_df = get_tracker_daily()
+            if not td_df.empty and td_df['settled'].sum() > 0:
+                st.markdown('<div class="section-title" style="margin-top:20px;">Profit Curve</div>', unsafe_allow_html=True)
+                td_df['cumulative_profit'] = td_df['daily_profit'].cumsum()
+
+                fig_t = go.Figure()
+                fig_t.add_trace(go.Scatter(
+                    x=td_df['date'], y=td_df['cumulative_profit'],
+                    mode='lines+markers',
+                    line=dict(color='#00FFC2', width=3),
+                    fill='tozeroy',
+                    fillcolor='rgba(0,255,194,0.1)',
+                    name='Cumulative P/L'
+                ))
+                fig_t.update_layout(
+                    template="plotly_dark", height=350,
+                    paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                    font=dict(color='#94A3B8'),
+                    xaxis_title="Date", yaxis_title="Profit (units)",
+                    margin=dict(t=20, b=40)
+                )
+                st.plotly_chart(fig_t, use_container_width=True)
+
+                tc1, tc2 = st.columns(2)
+                with tc1:
+                    fig_wl = go.Figure(data=[
+                        go.Bar(name='Wins', x=td_df['date'], y=td_df['wins'], marker_color='#22C55E'),
+                        go.Bar(name='Losses', x=td_df['date'], y=td_df['losses'], marker_color='#EF4444')
+                    ])
+                    fig_wl.update_layout(
+                        title="Daily W/L", barmode='group',
+                        template="plotly_dark", height=280,
+                        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                        font=dict(color='#94A3B8'), margin=dict(t=40, b=30)
+                    )
+                    st.plotly_chart(fig_wl, use_container_width=True)
+
+                with tc2:
+                    fig_dp = go.Figure(data=[
+                        go.Bar(x=td_df['date'], y=td_df['daily_profit'],
+                               marker_color=['#22C55E' if x >= 0 else '#EF4444' for x in td_df['daily_profit']])
+                    ])
+                    fig_dp.update_layout(
+                        title="Daily P/L", template="plotly_dark", height=280,
+                        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                        font=dict(color='#94A3B8'), margin=dict(t=40, b=30)
+                    )
+                    st.plotly_chart(fig_dp, use_container_width=True)
+
+            recent = get_tracker_recent()
+            if not recent.empty:
+                st.markdown('<div class="section-title" style="margin-top:20px;">Recent Settled Props</div>', unsafe_allow_html=True)
+                for _, rrow in recent.iterrows():
+                    is_win = rrow['status'] == 'won'
+                    r_emoji = "✅" if is_win else "❌"
+                    r_sport = "🏀" if rrow['sport'] == 'basketball' else "⚽"
+                    border_c = "rgba(34,197,94,0.5)" if is_win else "rgba(239,68,68,0.5)"
+                    bg_c = "rgba(34,197,94,0.08)" if is_win else "rgba(239,68,68,0.08)"
+                    r_profit = float(rrow['profit_loss'] or (rrow['odds'] - 1 if is_win else -1))
+                    r_pl_c = "#22C55E" if r_profit >= 0 else "#EF4444"
+                    r_mname = rrow['market'].replace('player_', '').replace('_', ' ').title()
+                    r_line = f" {rrow['selection']} {rrow['line']}" if pd.notna(rrow['line']) and rrow['line'] > 0 else ""
+
+                    st.markdown(f"""
+                    <div style="background:{bg_c};border:1px solid {border_c};border-radius:10px;padding:10px 14px;margin-bottom:6px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <span style="color:#E2E8F0;font-weight:600;">{r_emoji} {r_sport} {rrow['player_name']} — {r_mname}{r_line}</span>
+                            <span style="color:{r_pl_c};font-weight:800;">{r_profit:+.2f}u</span>
+                        </div>
+                        <div style="font-size:0.78rem;color:#64748B;margin-top:2px;">
+                            {rrow['match']} &bull; {rrow['odds']:.2f}x &bull; Edge: {rrow['edge_pct']:.1f}%
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+            if settled == 0:
+                st.markdown("""
+                <div style="text-align:center;padding:2rem;background:radial-gradient(circle at top, rgba(255,152,0,0.06), rgba(15,23,42,0.95));border:1px solid rgba(255,152,0,0.15);border-radius:14px;margin:16px 0;">
+                    <div style="font-size:1.5rem;margin-bottom:6px;">📊</div>
+                    <div style="color:#FFA726;font-weight:600;">No settled props yet</div>
+                    <div style="color:#64748B;font-size:0.82rem;margin-top:6px;">
+                        ROI, hit rate and profit charts will appear once props are settled.<br>
+                        Props auto-void after 3 days if not settled.
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+    with tab3:
         sport_market = get_props_by_sport()
         if sport_market.empty:
             st.info("No data yet.")
@@ -432,7 +705,7 @@ if overview is not None and overview['total_props'] > 0:
             )
             st.plotly_chart(fig, use_container_width=True)
 
-    with tab3:
+    with tab4:
         top_players = get_top_players()
         if top_players.empty:
             st.info("No player data yet.")
@@ -463,7 +736,7 @@ if overview is not None and overview['total_props'] > 0:
                 </div>
                 """, unsafe_allow_html=True)
 
-    with tab4:
+    with tab5:
         daily = get_daily_collection()
         if daily.empty:
             st.info("No collection history yet.")
@@ -494,7 +767,7 @@ if overview is not None and overview['total_props'] > 0:
                 hide_index=True
             )
 
-    with tab5:
+    with tab6:
         st.markdown('<div class="section-title">Raw Props Data</div>', unsafe_allow_html=True)
         try:
             with DatabaseConnection.get_connection() as conn:
