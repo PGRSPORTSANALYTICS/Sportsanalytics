@@ -401,7 +401,7 @@ if overview is not None and overview['total_props'] > 0:
                     market_display = row['market'].replace('player_', '').replace('_', ' ').title()
                     is_premium = str(row.get('notes', '')).startswith('PREMIUM')
 
-                    edge = row['edge_pct']
+                    edge = row['edge_pct'] if pd.notna(row['edge_pct']) else 0
                     edge_class = "edge-high" if edge >= 8 else ("edge-mid" if edge >= 5 else "edge-low")
 
                     line_str = f" {row['selection']} {row['line']}" if pd.notna(row['line']) and row['line'] > 0 else f" {row['selection']}"
