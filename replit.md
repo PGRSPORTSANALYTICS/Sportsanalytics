@@ -89,6 +89,25 @@ The system incorporates advanced features such as:
     - Discord: Top-edge props sent to DISCORD_PROPS_WEBHOOK_URL with learning mode badge
     - Auto-void: Props older than 3 days auto-voided by results_engine.py
     - Module: `player_props_engine.py`
+- **Player Props Quality Filter (Feb 11, 2026):** Strict quality filtering for basketball props.
+    - Module: `player_props_filter.py` + `nba_stats_provider.py`
+    - NBA stats via `nba_api` (game logs: minutes, points, rebounds, assists) with 1hr in-memory cache
+    - Markets: player_points, player_rebounds, player_assists, player_points_rebounds_assists (PRA)
+    - Filter criteria (all must pass):
+        1. Allowed markets only (4 basketball markets)
+        2. Odds range: 1.70-2.20
+        3. Deduplication: best odds per player+market+selection+line
+        4. Min 10+ historical games this season
+        5. Avg minutes >= 22 over last 10 games
+        6. Played >= 5 of last 7 games
+        7. Starter (25+ min) or rotation (15+ min) role
+        8. Not returning from injury (<=2 of last 7 games)
+        9. Not limited minutes last game (<15 min with 22+ avg)
+        10. Projection requires 10+ recent game values
+        11. Positive EV only (hit_rate × odds > 1)
+    - Quality flags saved to DB notes: `QUALITY|proj=X|diff=Y|hit=Z%|min=M|g7=N`
+    - Dashboard: "Quality Props" tab shows filtered results with projection data
+    - Typical yield: ~1579 raw → ~65 quality props per cycle
 
 ### System Design Choices
 - **Data Layer:** PostgreSQL (Neon database) with connection pooling, TCP keepalives, and retry logic.
