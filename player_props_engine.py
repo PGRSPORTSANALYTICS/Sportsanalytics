@@ -549,7 +549,7 @@ def _save_quality_flags(quality_props: List[Dict]):
                     prop.get('model_prob'),
                     prop.get('edge_pct'),
                     prop.get('confidence'),
-                    f"QUALITY|proj={prop.get('projected',0)}|diff={prop.get('projection_diff',0)}|hit={prop.get('hit_rate_over',0):.0%}|min={prop.get('avg_minutes',0)}|g7={prop.get('games_last_7',0)}",
+                    f"{'PREMIUM' if prop.get('is_premium') else 'QUALITY'}|proj={prop.get('projected',0)}|diff={prop.get('projection_diff',0)}|hit={prop.get('hit_rate_over',0):.0%}|min={prop.get('avg_minutes',0)}|g7={prop.get('games_last_7',0)}",
                     prop_id
                 ))
             logger.info(f"✅ Updated {len(quality_props)} props with quality flags")

@@ -105,9 +105,16 @@ The system incorporates advanced features such as:
         9. Not limited minutes last game (<15 min with 22+ avg)
         10. Projection requires 10+ recent game values
         11. Positive EV only (hit_rate × odds > 1)
-    - Quality flags saved to DB notes: `QUALITY|proj=X|diff=Y|hit=Z%|min=M|g7=N`
-    - Dashboard: "Quality Props" tab shows filtered results with projection data
-    - Typical yield: ~1579 raw → ~65 quality props per cycle
+    - Post-filter ranking (applied after quality pass):
+        1. Rank by edge descending
+        2. Max 2 props per player
+        3. Max 3 props per match
+        4. Remove projection diff < 1.0 stat unit
+        5. Keep top 15 by edge
+        6. Tag top 5 as Premium Picks
+    - DB notes format: `PREMIUM|proj=X|diff=Y|hit=Z%|min=M|g7=N` (top 5) or `QUALITY|...` (rest)
+    - Dashboard: "Quality Props" tab shows Premium Picks (gold accent) and Quality Picks separately
+    - Typical yield: ~1579 raw → ~65 quality → ~15 ranked final (5 Premium + 10 Quality)
 
 ### System Design Choices
 - **Data Layer:** PostgreSQL (Neon database) with connection pooling, TCP keepalives, and retry logic.

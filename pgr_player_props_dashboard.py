@@ -338,7 +338,7 @@ if overview is not None and overview['total_props'] > 0:
 
     with tab1:
         st.markdown('<div class="section-title">Quality Filtered Props</div>', unsafe_allow_html=True)
-        st.markdown("<div style='color:#64748B;font-size:0.78rem;margin-bottom:12px;'>Min 22 min/game &bull; 5/7 games played &bull; Odds 1.70-2.20 &bull; Starter/rotation &bull; +EV only &bull; Ranked by projection vs line</div>", unsafe_allow_html=True)
+        st.markdown("<div style='color:#64748B;font-size:0.78rem;margin-bottom:12px;'>Top 15 by edge &bull; Max 2/player &bull; Max 3/match &bull; Proj diff >= 1.0 &bull; Top 5 = Premium Picks</div>", unsafe_allow_html=True)
 
         @st.cache_data(ttl=120)
         def get_quality_props():
@@ -352,10 +352,10 @@ if overview is not None and overview['total_props'] > 0:
                             status, notes, created_at
                         FROM player_props
                         WHERE mode = 'LEARNING'
-                          AND notes LIKE 'QUALITY%%'
+                          AND (notes LIKE 'PREMIUM%%' OR notes LIKE 'QUALITY%%')
                           AND status = 'pending'
                         ORDER BY edge_pct DESC
-                        LIMIT 50
+                        LIMIT 15
                     """
                     return pd.read_sql(query, conn)
             except Exception:
@@ -375,52 +375,80 @@ if overview is not None and overview['total_props'] > 0:
             </div>
             """, unsafe_allow_html=True)
         else:
-            for _, row in quality_df.iterrows():
-                is_basketball = row['sport'] == 'basketball'
-                card_class = "prop-card-basketball" if is_basketball else "prop-card"
-                sport_emoji = "🏀" if is_basketball else "⚽"
-                market_display = row['market'].replace('player_', '').replace('_', ' ').title()
+            premium_df = quality_df[quality_df['notes'].str.startswith('PREMIUM', na=False)]
+            standard_df = quality_df[~quality_df['notes'].str.startswith('PREMIUM', na=False)]
 
-                edge = row['edge_pct']
-                edge_class = "edge-high" if edge >= 8 else ("edge-mid" if edge >= 5 else "edge-low")
-
-                line_str = f" {row['selection']} {row['line']}" if pd.notna(row['line']) and row['line'] > 0 else f" {row['selection']}"
-                accent = "#FF9800" if is_basketball else "#00FFC2"
-
-                notes = row.get('notes', '') or ''
-                proj_str = ""
-                if 'proj=' in notes:
-                    try:
-                        parts = {p.split('=')[0]: p.split('=')[1] for p in notes.replace('QUALITY|', '').split('|') if '=' in p}
-                        proj_val = parts.get('proj', '?')
-                        diff_val = parts.get('diff', '?')
-                        hit_val = parts.get('hit', '?')
-                        min_val = parts.get('min', '?')
-                        g7_val = parts.get('g7', '?')
-                        proj_str = f"Proj: <strong style='color:{accent};'>{proj_val}</strong> (diff: {diff_val}) &bull; Hit: {hit_val} &bull; {min_val} min/g &bull; {g7_val}/7 games"
-                    except Exception:
-                        proj_str = ""
-
+            if not premium_df.empty:
                 st.markdown(f"""
-                <div class="{card_class}">
-                    <div style="display:flex;justify-content:space-between;align-items:center;">
-                        <div>
-                            <span class="player-name">{sport_emoji} {row['player_name']}</span>
-                            <span style="color:{accent};font-weight:600;font-size:0.85rem;margin-left:8px;">{market_display}{line_str}</span>
-                        </div>
-                        <span class="edge-badge {edge_class}">{edge:.1f}%</span>
-                    </div>
-                    <div class="match-info">{row['home_team']} vs {row['away_team']} &bull; {row['league']}</div>
-                    <div style="margin-top:6px;font-size:0.82rem;color:#94A3B8;">
-                        Odds: <span class="odds-val">{row['odds']:.2f}</span> &bull;
-                        Model: {row['model_prob']:.1%} vs Implied: {row['implied_prob']:.1%} &bull;
-                        {row['bookmaker']}
-                    </div>
-                    {"<div style='margin-top:4px;font-size:0.78rem;color:#64748B;'>" + proj_str + "</div>" if proj_str else ""}
+                <div style="background:linear-gradient(135deg, rgba(255,215,0,0.08), rgba(255,152,0,0.05));border:1px solid rgba(255,215,0,0.3);border-radius:12px;padding:12px 16px;margin-bottom:16px;">
+                    <div style="color:#FFD700;font-weight:700;font-size:0.95rem;margin-bottom:8px;">⭐ Premium Picks ({len(premium_df)})</div>
                 </div>
                 """, unsafe_allow_html=True)
 
-            st.markdown(f"<div style='text-align:center;color:#475569;font-size:0.75rem;margin-top:12px;'>{len(quality_df)} quality props passed all filters</div>", unsafe_allow_html=True)
+            for section_df, is_premium_section in [(premium_df, True), (standard_df, False)]:
+                if is_premium_section and section_df.empty:
+                    continue
+                if not is_premium_section and not section_df.empty and not premium_df.empty:
+                    st.markdown(f"""
+                    <div style="color:#64748B;font-weight:600;font-size:0.85rem;margin:16px 0 8px 0;border-top:1px solid rgba(100,116,139,0.2);padding-top:12px;">
+                        Quality Picks ({len(standard_df)})
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                for _, row in section_df.iterrows():
+                    is_basketball = row['sport'] == 'basketball'
+                    sport_emoji = "🏀" if is_basketball else "⚽"
+                    market_display = row['market'].replace('player_', '').replace('_', ' ').title()
+                    is_premium = str(row.get('notes', '')).startswith('PREMIUM')
+
+                    edge = row['edge_pct']
+                    edge_class = "edge-high" if edge >= 8 else ("edge-mid" if edge >= 5 else "edge-low")
+
+                    line_str = f" {row['selection']} {row['line']}" if pd.notna(row['line']) and row['line'] > 0 else f" {row['selection']}"
+                    accent = "#FFD700" if is_premium else ("#FF9800" if is_basketball else "#00FFC2")
+                    border_color = "rgba(255,215,0,0.4)" if is_premium else ("rgba(255,152,0,0.15)" if is_basketball else "rgba(0,255,194,0.1)")
+                    bg_extra = "background:linear-gradient(135deg, rgba(255,215,0,0.04), rgba(15,23,42,0.95));" if is_premium else ""
+                    premium_badge = "<span style='background:#FFD700;color:#0F172A;font-size:0.65rem;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:8px;'>PREMIUM</span>" if is_premium else ""
+
+                    notes = row.get('notes', '') or ''
+                    proj_str = ""
+                    if 'proj=' in notes:
+                        try:
+                            clean_notes = notes.replace('PREMIUM|', '').replace('QUALITY|', '')
+                            parts = {p.split('=')[0]: p.split('=')[1] for p in clean_notes.split('|') if '=' in p}
+                            proj_val = parts.get('proj', '?')
+                            diff_val = parts.get('diff', '?')
+                            hit_val = parts.get('hit', '?')
+                            min_val = parts.get('min', '?')
+                            g7_val = parts.get('g7', '?')
+                            proj_str = f"Proj: <strong style='color:{accent};'>{proj_val}</strong> (diff: {diff_val}) &bull; Hit: {hit_val} &bull; {min_val} min/g &bull; {g7_val}/7 games"
+                        except Exception:
+                            proj_str = ""
+
+                    card_class = "prop-card-basketball" if is_basketball else "prop-card"
+
+                    st.markdown(f"""
+                    <div class="{card_class}" style="border-color:{border_color};{bg_extra}">
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <div>
+                                <span class="player-name">{sport_emoji} {row['player_name']}</span>{premium_badge}
+                                <span style="color:{accent};font-weight:600;font-size:0.85rem;margin-left:8px;">{market_display}{line_str}</span>
+                            </div>
+                            <span class="edge-badge {edge_class}">{edge:.1f}%</span>
+                        </div>
+                        <div class="match-info">{row['home_team']} vs {row['away_team']} &bull; {row['league']}</div>
+                        <div style="margin-top:6px;font-size:0.82rem;color:#94A3B8;">
+                            Odds: <span class="odds-val">{row['odds']:.2f}</span> &bull;
+                            Model: {row['model_prob']:.1%} vs Implied: {row['implied_prob']:.1%} &bull;
+                            {row['bookmaker']}
+                        </div>
+                        {"<div style='margin-top:4px;font-size:0.78rem;color:#64748B;'>" + proj_str + "</div>" if proj_str else ""}
+                    </div>
+                    """, unsafe_allow_html=True)
+
+            premium_count = len(premium_df)
+            standard_count = len(standard_df)
+            st.markdown(f"<div style='text-align:center;color:#475569;font-size:0.75rem;margin-top:12px;'>{len(quality_df)} props total &bull; {premium_count} Premium &bull; {standard_count} Quality</div>", unsafe_allow_html=True)
 
     with tab2:
         st.markdown('<div class="section-title">Performance Tracker (Paper Trading)</div>', unsafe_allow_html=True)

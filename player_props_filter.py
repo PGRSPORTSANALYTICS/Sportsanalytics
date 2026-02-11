@@ -3,17 +3,26 @@ Player Props Quality Filter
 ============================
 Filters raw player props to keep only stable, high-quality betting candidates.
 
-Filters applied:
-1. Avg minutes >= 22 over last 10 games
-2. Played >= 5 of last 7 games
-3. Odds between 1.70 and 2.20
-4. Stable role (starter or consistent rotation)
-5. Not returning from injury
-6. Not limited minutes in last game
-7. At least 10 historical games
-8. Allowed markets only
-9. Deduplicate — keep best odds per player+market+line
-10. Positive EV based on projection vs line
+Quality Filters (all must pass):
+1. Allowed markets only (4 basketball markets)
+2. Odds range: 1.70-2.20
+3. Deduplication: best odds per player+market+selection+line
+4. Min 10+ historical games this season
+5. Avg minutes >= 22 over last 10 games
+6. Played >= 5 of last 7 games
+7. Starter (25+ min) or rotation (15+ min) role
+8. Not returning from injury
+9. Not limited minutes last game
+10. Projection requires 10+ recent game values
+11. Positive EV only
+
+Post-Filter Ranking (applied after quality pass):
+1. Rank by edge descending
+2. Max 2 props per player
+3. Max 3 props per match
+4. Remove projection diff < 1.0 stat unit
+5. Keep top 15 by edge
+6. Tag top 5 as Premium Picks
 """
 
 import logging
@@ -35,6 +44,12 @@ MIN_ODDS = 1.70
 MAX_ODDS = 2.20
 MIN_HISTORICAL_GAMES = 10
 MIN_LAST_GAME_MINUTES = 15
+
+MAX_PROPS_PER_PLAYER = 2
+MAX_PROPS_PER_MATCH = 3
+MIN_PROJECTION_DIFF = 1.0
+MAX_FINAL_PROPS = 15
+PREMIUM_COUNT = 5
 
 
 def filter_quality_props(raw_props: List[Dict]) -> List[Dict]:
@@ -144,14 +159,63 @@ def filter_quality_props(raw_props: List[Dict]) -> List[Dict]:
 
         quality_props.append(prop)
 
-    quality_props.sort(key=lambda x: abs(x.get('projection_diff', 0)), reverse=True)
-
-    logger.info(f"  Quality filter results: {len(quality_props)} passed")
+    logger.info(f"  Quality filter results: {len(quality_props)} passed (before ranking)")
     for reason, count in filtered_reasons.items():
         if count > 0:
             logger.info(f"    Filtered out - {reason}: {count}")
 
-    return quality_props
+    ranked = _apply_ranking_rules(quality_props)
+    return ranked
+
+
+def _apply_ranking_rules(props: List[Dict]) -> List[Dict]:
+    if not props:
+        return props
+
+    props.sort(key=lambda x: x.get('edge_pct', 0), reverse=True)
+    logger.info(f"  Ranking: sorted {len(props)} by edge descending")
+
+    player_counts = {}
+    player_capped = []
+    for p in props:
+        name = p['player_name']
+        player_counts[name] = player_counts.get(name, 0) + 1
+        if player_counts[name] <= MAX_PROPS_PER_PLAYER:
+            player_capped.append(p)
+    removed_player = len(props) - len(player_capped)
+    if removed_player:
+        logger.info(f"  Ranking: removed {removed_player} (max {MAX_PROPS_PER_PLAYER}/player)")
+
+    match_counts = {}
+    match_capped = []
+    for p in player_capped:
+        match_key = f"{p.get('home_team','')}|{p.get('away_team','')}"
+        match_counts[match_key] = match_counts.get(match_key, 0) + 1
+        if match_counts[match_key] <= MAX_PROPS_PER_MATCH:
+            match_capped.append(p)
+    removed_match = len(player_capped) - len(match_capped)
+    if removed_match:
+        logger.info(f"  Ranking: removed {removed_match} (max {MAX_PROPS_PER_MATCH}/match)")
+
+    filtered = [p for p in match_capped if abs(p.get('projection_diff', 0)) >= MIN_PROJECTION_DIFF]
+    removed_diff = len(match_capped) - len(filtered)
+    if removed_diff:
+        logger.info(f"  Ranking: removed {removed_diff} with projection diff < {MIN_PROJECTION_DIFF}")
+
+    final = filtered[:MAX_FINAL_PROPS]
+    if len(filtered) > MAX_FINAL_PROPS:
+        logger.info(f"  Ranking: capped to top {MAX_FINAL_PROPS} (was {len(filtered)})")
+
+    for i, p in enumerate(final):
+        if i < PREMIUM_COUNT:
+            p['is_premium'] = True
+        else:
+            p['is_premium'] = False
+
+    premium_count = sum(1 for p in final if p.get('is_premium'))
+    logger.info(f"  Ranking complete: {len(final)} final props, {premium_count} Premium Picks")
+
+    return final
 
 
 def _deduplicate_props(props: List[Dict]) -> List[Dict]:
