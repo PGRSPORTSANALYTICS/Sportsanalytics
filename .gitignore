@@ -43,9 +43,13 @@ Thumbs.db
 # Replit specific
 .replit
 replit.nix
+replit.md
 .config/
 .upm/
 .pythonlibs/
+.cache/
+generated/
+attached_assets/
 
 # Models and large files
 data/models/
