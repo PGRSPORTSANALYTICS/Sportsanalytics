@@ -743,7 +743,7 @@ if overview is not None and overview['total_props'] > 0:
                 sport_emoji = "🏀" if is_basketball else "⚽"
                 market_display = row['market'].replace('player_', '').replace('_', ' ').title()
 
-                edge = row['edge_pct']
+                edge = row['edge_pct'] if pd.notna(row['edge_pct']) else 0
                 edge_class = "edge-high" if edge >= 8 else ("edge-mid" if edge >= 5 else "edge-low")
 
                 line_str = f" {row['selection']} {row['line']}" if pd.notna(row['line']) and row['line'] > 0 else f" {row['selection']}"
@@ -826,7 +826,7 @@ if overview is not None and overview['total_props'] > 0:
                 accent = "#FF9800" if is_basketball else "#00FFC2"
                 card_class = "prop-card-basketball" if is_basketball else "prop-card"
 
-                edge = row['avg_edge']
+                edge = row['avg_edge'] if pd.notna(row['avg_edge']) else 0
                 edge_class = "edge-high" if edge >= 8 else ("edge-mid" if edge >= 5 else "edge-low")
 
                 st.markdown(f"""
