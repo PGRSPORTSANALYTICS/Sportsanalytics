@@ -23,6 +23,7 @@ ENABLE_VALUE_SINGLES = True          # Core product - AI picks for 1X2, O/U, BTT
 ENABLE_PARLAYS = False               # DISABLED per Jan 2026 policy - no multi-match parlays
 ENABLE_COLLEGE_BASKETBALL = True     # ACTIVE - 63.3% hit rate, +$3,446 profit
 ENABLE_ML_PARLAY = True              # 2-leg moneyline parlays ONLY (policy exception)
+ENABLE_PLAYER_PROPS = True           # LEARNING MODE - player props data collection (Feb 2026)
 
 # ============================================================
 # DAILY STOP-LOSS (Jan 28, 2026)
@@ -93,6 +94,21 @@ def run_college_basketball():
         run_prediction_cycle()
     except Exception as e:
         logger.error(f"❌ College Basketball prediction error: {e}")
+
+
+def run_player_props():
+    """Run Player Props predictions (LEARNING MODE - data collection)"""
+    try:
+        from player_props_engine import run_player_props_cycle
+        logger.info("🎯 Starting Player Props cycle (LEARNING MODE)...")
+        stats = run_player_props_cycle()
+        logger.info(f"🎯 Player Props complete: {stats.get('football_props', 0)} football, "
+                     f"{stats.get('basketball_props', 0)} basketball, "
+                     f"{stats.get('total_saved', 0)} saved")
+    except Exception as e:
+        logger.error(f"❌ Player Props error: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 def run_ml_parlay():
@@ -363,6 +379,7 @@ def main():
     logger.info("   • CORNERS: 60.6% hit rate, +146.53u")
     logger.info("   • VALUE_SINGLE (Totals + BTTS only — no 1X2)")
     logger.info("🧪 LEARNING ONLY:")
+    logger.info("   • PLAYER PROPS (football + basketball, data collection)")
     logger.info("   • BASKETBALL (data collection, no public output)")
     logger.info("   • HOME_WIN + AWAY_WIN (1X2 — bookmakers too sharp, data collection only)")
     logger.info("❌ DISABLED:")
@@ -379,6 +396,7 @@ def main():
     logger.info("🎲 Multi-Match Parlays - Every 2 hours (after Value Singles)")
     logger.info("🏀 College Basketball - Every 2 hours")
     logger.info("🎰 ML Parlay (TEST MODE) - Every 3 hours")
+    logger.info("🎯 Player Props (LEARNING) - Every 6 hours")
     logger.info("="*80)
     logger.info("🔍 FAST RESULT VERIFICATION (5-minute cycles):")
     logger.info("💰 Value Singles Results - Every 5 minutes")
@@ -422,6 +440,12 @@ def main():
     else:
         logger.info("⏸️ ML Parlay PAUSED")
     
+    if ENABLE_PLAYER_PROPS:
+        run_player_props()
+        time.sleep(5)
+    else:
+        logger.info("⏸️ Player Props PAUSED")
+    
     # Print daily stake summary after all prediction cycles
     print_daily_stake_summary()
     
@@ -444,6 +468,8 @@ def main():
         schedule.every(2).hours.do(run_college_basketball)
     if ENABLE_ML_PARLAY:
         schedule.every(3).hours.do(run_ml_parlay)
+    if ENABLE_PLAYER_PROPS:
+        schedule.every(6).hours.do(run_player_props)
     
     # Schedule result verification - Every 5 minutes for FAST results
     schedule.every(5).minutes.do(run_results_engine)  # Unified Results Engine

@@ -233,6 +233,51 @@ def init_schema():
             )
         ''')
         
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS player_props (
+                id SERIAL PRIMARY KEY,
+                created_at TIMESTAMP DEFAULT NOW(),
+                sport TEXT NOT NULL,
+                league TEXT,
+                event_id TEXT,
+                match_id TEXT,
+                home_team TEXT NOT NULL,
+                away_team TEXT NOT NULL,
+                commence_time TIMESTAMP,
+                player_name TEXT NOT NULL,
+                player_id TEXT,
+                market TEXT NOT NULL,
+                line REAL,
+                selection TEXT NOT NULL,
+                odds REAL NOT NULL,
+                implied_prob REAL,
+                model_prob REAL,
+                edge_pct REAL,
+                confidence REAL,
+                bookmaker TEXT,
+                region TEXT,
+                stake REAL DEFAULT 0,
+                status TEXT DEFAULT 'pending',
+                outcome TEXT,
+                result TEXT,
+                actual_value REAL,
+                settled_at TIMESTAMP,
+                profit_loss REAL DEFAULT 0,
+                mode TEXT DEFAULT 'LEARNING',
+                open_odds REAL,
+                close_odds REAL,
+                clv_pct REAL,
+                discord_sent BOOLEAN DEFAULT FALSE,
+                notes TEXT
+            )
+        ''')
+        
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_player_props_sport ON player_props(sport)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_player_props_status ON player_props(status)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_player_props_commence ON player_props(commence_time)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_player_props_player ON player_props(player_name)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_player_props_market ON player_props(market)')
+        
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_recommended_date_tier ON football_opportunities(recommended_date, tier)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_match_id ON football_opportunities(match_id)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_match_date ON football_opportunities(match_date)')

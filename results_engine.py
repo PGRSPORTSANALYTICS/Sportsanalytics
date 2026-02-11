@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import requests
 from discord_notifier import send_result_to_discord
-from db_connection import clean_database_url
+from db_connection import clean_database_url, DatabaseConnection
 
 logging.basicConfig(
     level=logging.INFO,
@@ -992,10 +992,33 @@ class ResultsEngine:
             logger.warning(f"⚠️ Discord ROI update skipped: {e}")
 
 
+def _auto_void_old_player_props():
+    """Auto-void player props past their settlement cutoff (3 days)."""
+    try:
+        with DatabaseConnection.get_cursor() as cursor:
+            cursor.execute("""
+                UPDATE player_props 
+                SET status = 'settled', 
+                    outcome = 'void', 
+                    result = 'VOID',
+                    settled_at = NOW()
+                WHERE commence_time < NOW() - INTERVAL '3 days'
+                  AND (outcome IS NULL OR outcome = '' OR outcome = 'pending')
+                  AND status = 'pending'
+            """)
+            voided = cursor.rowcount
+            if voided > 0:
+                logger.info(f"🎯 Auto-voided {voided} old player props (>3 days)")
+    except Exception as e:
+        logger.warning(f"Player props auto-void error: {e}")
+
+
 def run_results_engine():
     """Run the results engine cycle."""
     engine = ResultsEngine()
-    return engine.run_cycle()
+    stats = engine.run_cycle()
+    _auto_void_old_player_props()
+    return stats
 
 
 if __name__ == "__main__":
