@@ -438,9 +438,9 @@ if overview is not None and overview['total_props'] > 0:
                         </div>
                         <div class="match-info">{row['home_team']} vs {row['away_team']} &bull; {row['league']}</div>
                         <div style="margin-top:6px;font-size:0.82rem;color:#94A3B8;">
-                            Odds: <span class="odds-val">{row['odds']:.2f}</span> &bull;
-                            Model: {row['model_prob']:.1%} vs Implied: {row['implied_prob']:.1%} &bull;
-                            {row['bookmaker']}
+                            Odds: <span class="odds-val">{row['odds'] if pd.notna(row['odds']) else 0:.2f}</span> &bull;
+                            Model: {row['model_prob'] if pd.notna(row['model_prob']) else 0:.1%} vs Implied: {row['implied_prob'] if pd.notna(row['implied_prob']) else 0:.1%} &bull;
+                            {row['bookmaker'] or ''}
                         </div>
                         {"<div style='margin-top:4px;font-size:0.78rem;color:#64748B;'>" + proj_str + "</div>" if proj_str else ""}
                     </div>
@@ -760,9 +760,9 @@ if overview is not None and overview['total_props'] > 0:
                     </div>
                     <div class="match-info">{row['home_team']} vs {row['away_team']} &bull; {row['league']}</div>
                     <div style="margin-top:6px;font-size:0.82rem;color:#94A3B8;">
-                        Odds: <span class="odds-val">{row['odds']:.2f}</span> &bull;
-                        Model: {row['model_prob']:.1%} vs Implied: {row['implied_prob']:.1%} &bull;
-                        {row['bookmaker']}
+                        Odds: <span class="odds-val">{row['odds'] if pd.notna(row['odds']) else 0:.2f}</span> &bull;
+                        Model: {row['model_prob'] if pd.notna(row['model_prob']) else 0:.1%} vs Implied: {row['implied_prob'] if pd.notna(row['implied_prob']) else 0:.1%} &bull;
+                        {row['bookmaker'] or ''}
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
