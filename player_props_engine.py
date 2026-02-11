@@ -506,19 +506,10 @@ def run_player_props_cycle() -> Dict:
         engine = PlayerPropsEngine()
         stats = engine.run_cycle()
 
-        top_props = engine.get_top_edge_props(min_edge=MIN_EDGE_PCT, limit=10)
-        if top_props:
-            send_props_to_discord(top_props)
-
-            try:
-                with DatabaseConnection.get_cursor() as cursor:
-                    ids = [p['id'] for p in top_props if p.get('id')]
-                    if ids:
-                        cursor.execute("""
-                            UPDATE player_props SET discord_sent = TRUE WHERE id = ANY(%s)
-                        """, (ids,))
-            except Exception:
-                pass
+        # Discord disabled for now — props visible in dashboard only
+        # top_props = engine.get_top_edge_props(min_edge=MIN_EDGE_PCT, limit=10)
+        # if top_props:
+        #     send_props_to_discord(top_props)
 
         return stats
 
