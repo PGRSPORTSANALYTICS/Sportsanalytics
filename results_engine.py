@@ -21,6 +21,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import requests
 from discord_notifier import send_result_to_discord
+from db_connection import clean_database_url
 
 logging.basicConfig(
     level=logging.INFO,
@@ -33,7 +34,8 @@ class ResultsEngine:
     """Unified results settlement engine for all bet types."""
     
     def __init__(self):
-        self.database_url = os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL")
+        raw_url = os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL")
+        self.database_url = clean_database_url(raw_url) if raw_url else None
         self.api_football_key = os.environ.get("API_FOOTBALL_KEY")
         self.stats = {
             'settled': 0,
