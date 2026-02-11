@@ -332,41 +332,74 @@ if overview is not None and overview['total_props'] > 0:
 
     st.markdown("<div style='margin:20px 0'></div>", unsafe_allow_html=True)
 
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-        "Top Edge Props", "Performance Tracker", "By Sport/Market", "Top Players", "Collection History", "Raw Data"
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+        "Quality Props", "Performance Tracker", "All Raw Props", "By Sport/Market", "Top Players", "Collection History", "Raw Data"
     ])
 
     with tab1:
-        st.markdown('<div class="section-title">Top Edge Player Props</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Quality Filtered Props</div>', unsafe_allow_html=True)
+        st.markdown("<div style='color:#64748B;font-size:0.78rem;margin-bottom:12px;'>Min 22 min/game &bull; 5/7 games played &bull; Odds 1.70-2.20 &bull; Starter/rotation &bull; +EV only &bull; Ranked by projection vs line</div>", unsafe_allow_html=True)
 
-        fcol1, fcol2 = st.columns(2)
-        with fcol1:
-            sport_filter = st.selectbox("Sport", ["All", "Basketball", "Football"], key="prop_sport")
-        with fcol2:
-            market_filter = st.selectbox("Market", ["All", "player_points", "player_rebounds", "player_anytime_goalscorer", "player_shots_on_goal"], key="prop_market")
+        @st.cache_data(ttl=120)
+        def get_quality_props():
+            try:
+                with DatabaseConnection.get_connection() as conn:
+                    query = """
+                        SELECT 
+                            player_name, sport, league, market, line, selection,
+                            odds, implied_prob, model_prob, edge_pct, confidence,
+                            bookmaker, home_team, away_team, commence_time,
+                            status, notes, created_at
+                        FROM player_props
+                        WHERE mode = 'LEARNING'
+                          AND notes LIKE 'QUALITY%%'
+                          AND status = 'pending'
+                        ORDER BY edge_pct DESC
+                        LIMIT 50
+                    """
+                    return pd.read_sql(query, conn)
+            except Exception:
+                return pd.DataFrame()
 
-        top_props = get_top_edge_props(sport_filter, market_filter)
+        quality_df = get_quality_props()
 
-        if top_props.empty:
-            st.info("No props found with current filters.")
+        if quality_df.empty:
+            st.markdown("""
+            <div style="text-align:center;padding:2rem;background:radial-gradient(circle at top, rgba(0,255,194,0.06), rgba(15,23,42,0.95));border:1px solid rgba(0,255,194,0.15);border-radius:14px;margin:16px 0;">
+                <div style="font-size:1.5rem;margin-bottom:6px;">🎯</div>
+                <div style="color:#E2E8F0;font-weight:600;">No quality props yet</div>
+                <div style="color:#64748B;font-size:0.82rem;margin-top:6px;">
+                    Quality filtering runs after each props cycle (every 6 hours).<br>
+                    Props must pass all filters: minutes, games played, odds range, role, injury check, and +EV.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
         else:
-            for _, row in top_props.iterrows():
+            for _, row in quality_df.iterrows():
                 is_basketball = row['sport'] == 'basketball'
                 card_class = "prop-card-basketball" if is_basketball else "prop-card"
                 sport_emoji = "🏀" if is_basketball else "⚽"
                 market_display = row['market'].replace('player_', '').replace('_', ' ').title()
 
                 edge = row['edge_pct']
-                if edge >= 8:
-                    edge_class = "edge-high"
-                elif edge >= 5:
-                    edge_class = "edge-mid"
-                else:
-                    edge_class = "edge-low"
+                edge_class = "edge-high" if edge >= 8 else ("edge-mid" if edge >= 5 else "edge-low")
 
                 line_str = f" {row['selection']} {row['line']}" if pd.notna(row['line']) and row['line'] > 0 else f" {row['selection']}"
-
                 accent = "#FF9800" if is_basketball else "#00FFC2"
+
+                notes = row.get('notes', '') or ''
+                proj_str = ""
+                if 'proj=' in notes:
+                    try:
+                        parts = {p.split('=')[0]: p.split('=')[1] for p in notes.replace('QUALITY|', '').split('|') if '=' in p}
+                        proj_val = parts.get('proj', '?')
+                        diff_val = parts.get('diff', '?')
+                        hit_val = parts.get('hit', '?')
+                        min_val = parts.get('min', '?')
+                        g7_val = parts.get('g7', '?')
+                        proj_str = f"Proj: <strong style='color:{accent};'>{proj_val}</strong> (diff: {diff_val}) &bull; Hit: {hit_val} &bull; {min_val} min/g &bull; {g7_val}/7 games"
+                    except Exception:
+                        proj_str = ""
 
                 st.markdown(f"""
                 <div class="{card_class}">
@@ -383,8 +416,11 @@ if overview is not None and overview['total_props'] > 0:
                         Model: {row['model_prob']:.1%} vs Implied: {row['implied_prob']:.1%} &bull;
                         {row['bookmaker']}
                     </div>
+                    {"<div style='margin-top:4px;font-size:0.78rem;color:#64748B;'>" + proj_str + "</div>" if proj_str else ""}
                 </div>
                 """, unsafe_allow_html=True)
+
+            st.markdown(f"<div style='text-align:center;color:#475569;font-size:0.75rem;margin-top:12px;'>{len(quality_df)} quality props passed all filters</div>", unsafe_allow_html=True)
 
     with tab2:
         st.markdown('<div class="section-title">Performance Tracker (Paper Trading)</div>', unsafe_allow_html=True)
@@ -660,6 +696,50 @@ if overview is not None and overview['total_props'] > 0:
                 """, unsafe_allow_html=True)
 
     with tab3:
+        st.markdown('<div class="section-title">All Raw Props (Unfiltered)</div>', unsafe_allow_html=True)
+
+        fcol1, fcol2 = st.columns(2)
+        with fcol1:
+            sport_filter = st.selectbox("Sport", ["All", "Basketball", "Football"], key="prop_sport")
+        with fcol2:
+            market_filter = st.selectbox("Market", ["All", "player_points", "player_rebounds", "player_assists", "player_points_rebounds_assists", "player_anytime_goalscorer", "player_shots_on_goal"], key="prop_market")
+
+        top_props = get_top_edge_props(sport_filter, market_filter)
+
+        if top_props.empty:
+            st.info("No props found with current filters.")
+        else:
+            for _, row in top_props.iterrows():
+                is_basketball = row['sport'] == 'basketball'
+                card_class = "prop-card-basketball" if is_basketball else "prop-card"
+                sport_emoji = "🏀" if is_basketball else "⚽"
+                market_display = row['market'].replace('player_', '').replace('_', ' ').title()
+
+                edge = row['edge_pct']
+                edge_class = "edge-high" if edge >= 8 else ("edge-mid" if edge >= 5 else "edge-low")
+
+                line_str = f" {row['selection']} {row['line']}" if pd.notna(row['line']) and row['line'] > 0 else f" {row['selection']}"
+                accent = "#FF9800" if is_basketball else "#00FFC2"
+
+                st.markdown(f"""
+                <div class="{card_class}">
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <div>
+                            <span class="player-name">{sport_emoji} {row['player_name']}</span>
+                            <span style="color:{accent};font-weight:600;font-size:0.85rem;margin-left:8px;">{market_display}{line_str}</span>
+                        </div>
+                        <span class="edge-badge {edge_class}">{edge:.1f}%</span>
+                    </div>
+                    <div class="match-info">{row['home_team']} vs {row['away_team']} &bull; {row['league']}</div>
+                    <div style="margin-top:6px;font-size:0.82rem;color:#94A3B8;">
+                        Odds: <span class="odds-val">{row['odds']:.2f}</span> &bull;
+                        Model: {row['model_prob']:.1%} vs Implied: {row['implied_prob']:.1%} &bull;
+                        {row['bookmaker']}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+    with tab4:
         sport_market = get_props_by_sport()
         if sport_market.empty:
             st.info("No data yet.")
@@ -705,7 +785,7 @@ if overview is not None and overview['total_props'] > 0:
             )
             st.plotly_chart(fig, use_container_width=True)
 
-    with tab4:
+    with tab5:
         top_players = get_top_players()
         if top_players.empty:
             st.info("No player data yet.")
@@ -736,7 +816,7 @@ if overview is not None and overview['total_props'] > 0:
                 </div>
                 """, unsafe_allow_html=True)
 
-    with tab5:
+    with tab6:
         daily = get_daily_collection()
         if daily.empty:
             st.info("No collection history yet.")
@@ -767,7 +847,7 @@ if overview is not None and overview['total_props'] > 0:
                 hide_index=True
             )
 
-    with tab6:
+    with tab7:
         st.markdown('<div class="section-title">Raw Props Data</div>', unsafe_allow_html=True)
         try:
             with DatabaseConnection.get_connection() as conn:

@@ -47,6 +47,8 @@ BASKETBALL_LEAGUES = [
 BASKETBALL_PROP_MARKETS = [
     'player_points',
     'player_rebounds',
+    'player_assists',
+    'player_points_rebounds_assists',
 ]
 
 SWEDISH_BOOKMAKERS = ['betsson', 'unibet', 'leovegas', 'coolbet', 'nordicbet']
@@ -306,6 +308,10 @@ class PlayerPropsEngine:
             devig_factor = 1.06
         elif market == 'player_rebounds':
             devig_factor = 1.06
+        elif market == 'player_assists':
+            devig_factor = 1.06
+        elif market in ('player_points_rebounds_assists', 'player_pra'):
+            devig_factor = 1.05
         else:
             devig_factor = 1.05
 
@@ -506,16 +512,49 @@ def run_player_props_cycle() -> Dict:
         engine = PlayerPropsEngine()
         stats = engine.run_cycle()
 
-        # Discord disabled for now — props visible in dashboard only
-        # top_props = engine.get_top_edge_props(min_edge=MIN_EDGE_PCT, limit=10)
-        # if top_props:
-        #     send_props_to_discord(top_props)
+        try:
+            from player_props_filter import filter_quality_props
+            raw_props = engine.get_top_edge_props(min_edge=0, limit=500)
+            if raw_props:
+                quality = filter_quality_props(raw_props)
+                stats['quality_props'] = len(quality)
+                logger.info(f"🏆 Quality filter: {len(quality)} props passed from {len(raw_props)} raw")
+
+                if quality:
+                    _save_quality_flags(quality)
+        except Exception as e:
+            logger.warning(f"Quality filter error (non-fatal): {e}")
+            stats['quality_props'] = 0
 
         return stats
 
     except Exception as e:
         logger.error(f"Player props cycle error: {e}")
         return {'football_props': 0, 'basketball_props': 0, 'total_saved': 0, 'errors': 1}
+
+
+def _save_quality_flags(quality_props: List[Dict]):
+    try:
+        with DatabaseConnection.get_cursor() as cursor:
+            for prop in quality_props:
+                prop_id = prop.get('id')
+                if not prop_id:
+                    continue
+                cursor.execute("""
+                    UPDATE player_props 
+                    SET model_prob = %s, edge_pct = %s, confidence = %s,
+                        notes = %s
+                    WHERE id = %s
+                """, (
+                    prop.get('model_prob'),
+                    prop.get('edge_pct'),
+                    prop.get('confidence'),
+                    f"QUALITY|proj={prop.get('projected',0)}|diff={prop.get('projection_diff',0)}|hit={prop.get('hit_rate_over',0):.0%}|min={prop.get('avg_minutes',0)}|g7={prop.get('games_last_7',0)}",
+                    prop_id
+                ))
+            logger.info(f"✅ Updated {len(quality_props)} props with quality flags")
+    except Exception as e:
+        logger.warning(f"Quality flag save error: {e}")
 
 
 if __name__ == "__main__":

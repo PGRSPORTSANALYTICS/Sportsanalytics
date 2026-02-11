@@ -10,6 +10,7 @@ dependencies = [
     "joblib>=1.5.2",
     "lxml>=5.4.0",
     "matplotlib>=3.10.7",
+    "nba-api>=1.11.3",
     "numpy>=2.3.2",
     "pandas>=2.3.2",
     "plotly>=6.3.0",
