@@ -2154,8 +2154,8 @@ def render_ml_parlay_tab():
     """Render ML Parlay tab showing moneyline parlays with premium styling."""
     import json
     
-    st.markdown("## ML Parlay Engine")
-    st.caption("Low/Medium Risk Multi-Match Parlays | 1X2 + DNB Markets")
+    st.markdown("## ML Parlay Engine v2")
+    st.caption("2-Leg Parlays | All Markets | Max 5x Odds | Calibrated Probabilities")
     
     try:
         from db_helper import db_helper

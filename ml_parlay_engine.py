@@ -1,15 +1,23 @@
 #!/usr/bin/env python3
 """
-PARLAY ENGINE
-=============
-Builds 2-3 leg parlays from the best approved Value Singles.
+PARLAY ENGINE (v2 — Feb 12, 2026)
+==================================
+Builds 2-leg parlays from the best approved Value Singles.
+
+Changes (Feb 12, 2026):
+- 2-leg only (was 2-3) — higher hit rate
+- Max leg odds 2.20 (was 3.00) — matches Value Singles cap
+- Max total odds 5.00 (was 15.00) — keeps parlays hittable
+- Min leg probability 50% (was 35%) — only confident legs
+- Min leg EV 5% (was 3%) — stronger edges required
+- Probability calibration applied (shrink-to-market)
 
 Product Features:
 - All markets: 1X2, Over/Under, BTTS, Double Chance
-- 2-3 legs per parlay
+- 2 legs per parlay
 - Max 3 parlays per day
-- 3%+ EV per leg
-- Uses approved Value Singles with real model probabilities
+- 5%+ EV per leg (calibrated)
+- Uses approved Value Singles with calibrated model probabilities
 
 INTERNAL TEST MODE: Database logging only, no external posting.
 """
@@ -22,6 +30,7 @@ from typing import Dict, List, Optional, Tuple
 from db_helper import db_helper
 from bankroll_manager import get_bankroll_manager
 from discord_notifier import send_bet_to_discord
+from probability_calibrator import calibrate_probability
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -31,37 +40,38 @@ logger = logging.getLogger(__name__)
 # Best bets from Value Singles → 2-3 leg parlays
 # ============================================================
 
-# PARLAY RULES:
-# 1. 2-3 legs per parlay
-# 2. Each leg must be an approved Value Single with positive EV
+# PARLAY RULES (Feb 12, 2026):
+# 1. 2 legs per parlay (was 2-3)
+# 2. Each leg must be an approved Value Single with 5%+ calibrated EV
 # 3. All markets allowed (1X2, Over/Under, BTTS, Double Chance)
-# 4. Flat staking
+# 4. Flat staking (0.2 units)
 # 5. Max 1 leg per match
+# 6. Max total odds 5.00 (was 15.00)
 
 ML_PARLAY_ENABLED = True
 ML_PARLAY_PAUSED = False
 
-# Odds filters per leg
+# Odds filters per leg (Feb 12, 2026 — tightened from 1.50-3.00)
 ML_PARLAY_MIN_ODDS = 1.50
-ML_PARLAY_MAX_ODDS = 3.00
+ML_PARLAY_MAX_ODDS = 2.20  # Match Value Singles max — no long-shot legs
 
-# Minimum EV per leg (3% edge)
-MIN_ML_PARLAY_LEG_EV = 0.03
+# Minimum EV per leg (5% edge — raised from 3%)
+MIN_ML_PARLAY_LEG_EV = 0.05
 
 # Minimum total parlay EV
 MIN_ML_PARLAY_TOTAL_EV = 5.0
 
-# Win probability
-MIN_LEG_WIN_PROBABILITY = 0.35
-MAX_COMBINED_PARLAY_ODDS = 15.00
-MIN_COMBINED_PARLAY_ODDS = 3.00
+# Win probability (Feb 12, 2026 — raised from 0.35 to 0.50)
+MIN_LEG_WIN_PROBABILITY = 0.50
+MAX_COMBINED_PARLAY_ODDS = 5.00   # Was 15.00 — cap to keep parlays hittable
+MIN_COMBINED_PARLAY_ODDS = 2.50   # Was 3.00 — allow tighter 2-leg combos
 PREFER_DIFFERENT_LEAGUES = True
 MIN_CONFIDENCE_SCORE = 0.50
 
-# Parlay construction limits
+# Parlay construction limits (Feb 12, 2026 — 2-leg only)
 MAX_ML_PARLAYS_PER_DAY = 3
 ML_PARLAY_MIN_LEGS = 2
-ML_PARLAY_MAX_LEGS = 3
+ML_PARLAY_MAX_LEGS = 2  # Was 3 — 2-leg only for higher hit rate
 
 # FLAT STAKING - 20% of single stake (0.2 units)
 ML_PARLAY_STAKE_UNITS = 0.2
@@ -124,10 +134,11 @@ ML_PARLAY_LEAGUE_BLACKLIST = {
 
 class MLParlayEngine:
     """
-    Parlay Engine
+    Parlay Engine v2 (Feb 12, 2026)
     
-    Builds 2-3 leg parlays from the best approved Value Singles.
+    Builds 2-leg parlays from the best approved Value Singles.
     All markets allowed: 1X2, Over/Under, BTTS, Double Chance.
+    Max 5x total odds, calibrated probabilities, min 50% leg probability.
     """
     
     def __init__(self):
@@ -295,13 +306,14 @@ class MLParlayEngine:
                 if not market_type:
                     continue
                 
+                cal_prob = calibrate_probability(model_prob, odds)
                 implied_prob = 1.0 / odds if odds > 0 else 0
-                edge = (model_prob - implied_prob) / implied_prob if implied_prob > 0 else 0
+                edge = (cal_prob - implied_prob) / implied_prob if implied_prob > 0 else 0
                 
                 if edge < MIN_ML_PARLAY_LEG_EV:
                     continue
                 
-                confidence = self._calculate_leg_confidence(model_prob, edge, odds)
+                confidence = self._calculate_leg_confidence(cal_prob, edge, odds)
                 if confidence < MIN_CONFIDENCE_SCORE:
                     continue
                 
@@ -322,7 +334,7 @@ class MLParlayEngine:
                     'market_type': market_type,
                     'selection': sel,
                     'odds': float(odds),
-                    'model_probability': float(model_prob),
+                    'model_probability': float(cal_prob),
                     'edge_percentage': float(edge * 100),
                     'confidence_score': float(confidence),
                     'source': 'value_singles_db'

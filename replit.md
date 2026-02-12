@@ -22,7 +22,7 @@ The system incorporates advanced features such as:
 - **Intelligent Result Verification:** A production-ready caching and cooldown system with multi-source fallback (Flashscore, API-Football, The Odds API, Sofascore) ensures fast and reliable settlement. Manual settlement system for unverified corner/card markets.
 - **Bankroll & Analytics:** A centralized `BankrollManager` tracks bankroll and exposure, with primary analytics using a unit-based system for ROI, profit, and hit rate.
 - **AI Training & Learning:** A comprehensive pipeline collects 40+ features for future AI model training, supported by a `training_data` PostgreSQL table and a `DataCollector`, including a Learning System Track Record dashboard and Trust Level Learning.
-- **Parlay Engine:** Builds 2-3 leg parlays from the best approved Value Singles (all markets: 1X2, Over/Under, BTTS, Double Chance). Max 3 parlays/day, flat staking.
+- **Parlay Engine v2:** Builds 2-leg parlays from the best approved Value Singles (all markets: 1X2, Over/Under, BTTS, Double Chance). Max 3 parlays/day, max 5x total odds, calibrated probabilities, flat staking.
 - **Prediction Filtering:** Includes H2H BTTS filter, AI-learned SGP odds filter, Realistic SGP Margin Calibration, and PGR Final Score Strategy.
 - **3-Tier Trust Level Classification:** Predictions are classified into High (L1), Medium (L2), and Soft (L3) based on simulation approval, EV, confidence, and disagreement.
 - **Central Market Router:** A portfolio balancing system with a two-pass selection algorithm, per-market caps, trust level/EV prioritization, and a global daily pick cap.
