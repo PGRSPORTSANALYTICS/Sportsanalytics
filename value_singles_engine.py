@@ -18,6 +18,7 @@ from data_collector import get_collector
 from monte_carlo_integration import run_monte_carlo, classify_trust_level, analyze_bet_with_monte_carlo
 from discord_notifier import send_bet_to_discord
 from datetime_utils import normalize_kickoff, to_iso_utc, now_utc
+from probability_calibrator import calibrate_and_ev, log_calibration_batch
 
 try:
     from live_learning_config import apply_ev_controls, is_stability_mode_active
@@ -552,11 +553,19 @@ class ValueSinglesEngine:
                     if self._is_1x2_conflicting(home_team, away_team, market_key):
                         continue  # Skip conflicting 1X2 selections
 
-                raw_ev = self._calc_ev(p_model, odds)
-                
-                adj_ev, is_blocked, block_reason = apply_ev_controls(raw_ev)
+                cal_data = calibrate_and_ev(p_model, odds)
+                raw_prob = cal_data['raw_prob']
+                calibrated_prob = cal_data['calibrated_prob']
+                raw_ev = cal_data['raw_ev']
+                ev_after_cal = cal_data['calibrated_ev']
+                prob_shift = cal_data['prob_shift']
+
+                if abs(prob_shift) > 3:
+                    print(f"   📐 CAL: {market_key} p={raw_prob:.3f}→{calibrated_prob:.3f} (shift {prob_shift:+.1f}pp) ev={raw_ev:.3f}→{ev_after_cal:.3f}")
+
+                adj_ev, is_blocked, block_reason = apply_ev_controls(ev_after_cal)
                 if is_blocked:
-                    print(f"   🚫 BLOCKED: {market_key} raw_ev={raw_ev:.1%} - {block_reason}")
+                    print(f"   🚫 BLOCKED: {market_key} cal_ev={ev_after_cal:.1%} - {block_reason}")
                     continue
                 
                 ev = adj_ev
@@ -581,11 +590,9 @@ class ValueSinglesEngine:
                 if confidence < self.min_confidence:
                     continue
 
-                # 🎯 TRUST LEVEL CLASSIFICATION (Dec 2025)
-                # Calculate simulation EV and disagreement
-                sim_prob = p_model  # Monte Carlo probability already used
-                ev_sim = ev  # Already calculated with MC probability
-                disagreement = abs(sim_prob - p_model)  # Will be 0 since using same prob
+                sim_prob = calibrated_prob
+                ev_sim = ev
+                disagreement = abs(raw_prob - calibrated_prob)
                 sim_approved = ev_sim >= 0.03  # 3% EV threshold
                 
                 trust_level = classify_trust_level(
@@ -732,11 +739,16 @@ class ValueSinglesEngine:
                     "confidence": int(confidence),
                     "analysis": json.dumps({
                         "market_key": market_key,
-                        "p_model": float(p_model),
+                        "p_model": float(raw_prob),
+                        "calibrated_prob": float(calibrated_prob),
+                        "prob_shift_pp": float(prob_shift),
                         "ev": float(ev),
+                        "raw_ev": float(raw_ev),
                         "expected_home_goals": float(lh),
                         "expected_away_goals": float(la)
                     }),
+                    "model_prob": float(raw_prob),
+                    "calibrated_prob": float(calibrated_prob),
                     "stake": VALUE_SINGLES_STAKE,
                     "match_date": match_date,
                     "kickoff_time": kickoff_time,
@@ -763,14 +775,23 @@ class ValueSinglesEngine:
 
                 picks.append(opportunity)
 
-        # Debug: Show all candidates that passed hard filters
         print(f"\n📊 VALUE SINGLES SUMMARY: {len(picks)} candidates passed hard filters")
         if picks:
+            log_calibration_batch(
+                [{'raw_prob': json.loads(c.get('analysis', '{}')).get('p_model', 0),
+                  'calibrated_prob': c.get('calibrated_prob', 0),
+                  'raw_ev': json.loads(c.get('analysis', '{}')).get('raw_ev', 0),
+                  'calibrated_ev': c.get('edge_percentage', 0) / 100}
+                 for c in picks],
+                label="VALUE_SINGLES"
+            )
             picks.sort(key=lambda x: x["edge_percentage"], reverse=True)
-            for c in picks[:5]:  # Show top 5
+            for c in picks[:5]:
                 ev_show = c.get("edge_percentage", 0)
-                p_model = json.loads(c.get("analysis", "{}")).get("p_model", 0)
-                print(f"   CANDIDATE: {c['home_team']} vs {c['away_team']} | {c.get('selection')} | odds={c.get('odds', 0):.2f} p={p_model:.2%} EV={ev_show:.1f}%")
+                analysis = json.loads(c.get("analysis", "{}"))
+                p_raw = analysis.get("p_model", 0)
+                p_cal = analysis.get("calibrated_prob", p_raw)
+                print(f"   CANDIDATE: {c['home_team']} vs {c['away_team']} | {c.get('selection')} | odds={c.get('odds', 0):.2f} p={p_raw:.2%}→{p_cal:.2%} EV={ev_show:.1f}%")
 
         # 5) Sort by EV, enforce unique matches, and LIMIT TO MAX_VALUE_SINGLES_PER_DAY
         picks.sort(key=lambda x: x["edge_percentage"], reverse=True)

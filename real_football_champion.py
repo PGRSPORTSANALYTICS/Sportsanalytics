@@ -3654,8 +3654,8 @@ class RealFootballChampion:
                  quality_score, recommended_date, recommended_tier, daily_rank, mode, bet_placed,
                  open_odds, odds_source, trust_level,
                  odds_by_bookmaker, best_odds_value, best_odds_bookmaker, avg_odds, fair_odds, fixture_id,
-                 model_prob, sim_probability, ev_sim, disagreement)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 model_prob, calibrated_prob, sim_probability, ev_sim, disagreement)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (home_team, away_team, selection, market, match_date, mode) DO NOTHING
                 RETURNING id
             ''', (
@@ -3692,6 +3692,7 @@ class RealFootballChampion:
                 opp_dict.get('fair_odds'),
                 opp_dict.get('fixture_id'),
                 float(model_prob_value) if model_prob_value else None,
+                float(opp_dict.get('calibrated_prob')) if opp_dict.get('calibrated_prob') else None,
                 float(sim_probability) if sim_probability else None,
                 float(ev_sim) if ev_sim else None,
                 float(disagreement) if disagreement else None

@@ -5,6 +5,7 @@ Uses proper probability theory instead of arbitrary confidence scores
 """
 import logging
 from typing import Dict, Optional, Tuple
+from probability_calibrator import calibrate_probability
 
 logger = logging.getLogger(__name__)
 
@@ -83,10 +84,9 @@ class ExpectedValueCalculator:
             else:
                 ensemble_prob = probabilities[0] * 0.4 + probabilities[1] * 0.3 + probabilities[2] * 0.3
             
-            # Calculate Expected Value
-            # EV = (Probability × Odds) - 1
-            # EV > 0 = profitable bet
-            # EV > 0.15 = 15%+ edge (our threshold)
+            raw_ensemble_prob = ensemble_prob
+            ensemble_prob = calibrate_probability(ensemble_prob, odds)
+
             expected_value = (ensemble_prob * odds) - 1
             
             # Check if we have mathematical edge
@@ -106,6 +106,7 @@ class ExpectedValueCalculator:
             
             result = {
                 'ensemble_probability': round(ensemble_prob, 4),
+                'raw_ensemble_probability': round(raw_ensemble_prob, 4),
                 'expected_value': round(expected_value, 4),
                 'ev_percentage': round(expected_value * 100, 2),
                 'has_edge': has_edge,
