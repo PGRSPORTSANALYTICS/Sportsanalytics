@@ -111,6 +111,22 @@ def run_player_props():
         traceback.print_exc()
 
 
+def run_player_props_settlement():
+    """Settle player prop bets using actual game stats from nba_api"""
+    try:
+        from player_props_settlement import run_player_props_settlement as settle
+        logger.info("🎯 Starting Player Props settlement...")
+        stats = settle()
+        if stats['settled'] > 0:
+            logger.info(f"🎯 Props settled: {stats['won']}W/{stats['lost']}L/{stats['push']}P/{stats['void']}V")
+        else:
+            logger.info("🎯 No props to settle this cycle")
+    except Exception as e:
+        logger.error(f"❌ Player Props settlement error: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 def run_ml_parlay():
     """Run ML Parlay predictions (TEST MODE - no external posting)"""
     try:
@@ -475,6 +491,7 @@ def main():
     schedule.every(5).minutes.do(run_results_engine)  # Unified Results Engine
     schedule.every(5).minutes.do(verify_basketball_results)  # Basketball separate
     schedule.every(30).minutes.do(verify_ml_parlay_results)  # ML Parlay verification
+    schedule.every(30).minutes.do(run_player_props_settlement)  # Player props settlement
     
     # Schedule CLV update - Every 5 minutes for reliable closing odds capture
     schedule.every(5).minutes.do(run_clv_update_cycle)
