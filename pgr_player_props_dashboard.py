@@ -465,7 +465,7 @@ if overview is not None and overview['total_props'] > 0:
                             COUNT(*) FILTER (WHERE outcome = 'lost') as losses,
                             COUNT(*) FILTER (WHERE outcome = 'void' OR status = 'void') as voids,
                             COUNT(*) FILTER (WHERE status = 'pending') as pending,
-                            COALESCE(SUM(CASE WHEN outcome = 'won' THEN (odds - 1) WHEN outcome = 'lost' THEN -1 ELSE 0 END), 0) as net_profit,
+                            COALESCE(SUM(CASE WHEN outcome IN ('won','lost') THEN profit_loss ELSE 0 END), 0) as net_profit,
                             ROUND(AVG(CASE WHEN outcome IN ('won','lost') THEN odds END)::numeric, 2) as avg_settled_odds,
                             ROUND(AVG(CASE WHEN outcome IN ('won','lost') THEN edge_pct END)::numeric, 1) as avg_settled_edge
                         FROM player_props
@@ -486,7 +486,7 @@ if overview is not None and overview['total_props'] > 0:
                             COUNT(*) FILTER (WHERE outcome = 'won') as wins,
                             COUNT(*) FILTER (WHERE outcome = 'lost') as losses,
                             COUNT(*) FILTER (WHERE status = 'pending') as pending,
-                            COALESCE(SUM(CASE WHEN outcome = 'won' THEN (odds - 1) WHEN outcome = 'lost' THEN -1 ELSE 0 END), 0) as profit,
+                            COALESCE(SUM(CASE WHEN outcome IN ('won','lost') THEN profit_loss ELSE 0 END), 0) as profit,
                             ROUND(AVG(CASE WHEN outcome IN ('won','lost') THEN odds END)::numeric, 2) as avg_odds,
                             ROUND(AVG(edge_pct)::numeric, 1) as avg_edge
                         FROM player_props
@@ -509,7 +509,7 @@ if overview is not None and overview['total_props'] > 0:
                             COUNT(*) FILTER (WHERE outcome = 'won') as wins,
                             COUNT(*) FILTER (WHERE outcome = 'lost') as losses,
                             COUNT(*) FILTER (WHERE status = 'pending') as pending,
-                            COALESCE(SUM(CASE WHEN outcome = 'won' THEN (odds - 1) WHEN outcome = 'lost' THEN -1 ELSE 0 END), 0) as daily_profit
+                            COALESCE(SUM(CASE WHEN outcome IN ('won','lost') THEN profit_loss ELSE 0 END), 0) as daily_profit
                         FROM player_props
                         WHERE mode = 'LEARNING'
                         GROUP BY DATE(created_at)
@@ -694,7 +694,7 @@ if overview is not None and overview['total_props'] > 0:
                     r_sport = "🏀" if rrow['sport'] == 'basketball' else "⚽"
                     border_c = "rgba(34,197,94,0.5)" if is_win else "rgba(239,68,68,0.5)"
                     bg_c = "rgba(34,197,94,0.08)" if is_win else "rgba(239,68,68,0.08)"
-                    r_profit = float(rrow['profit_loss'] or (rrow['odds'] - 1 if is_win else -1))
+                    r_profit = float(rrow['profit_loss'] or 0) if rrow['profit_loss'] else (1.0 if is_win else -1.0)
                     r_pl_c = "#22C55E" if r_profit >= 0 else "#EF4444"
                     r_mname = rrow['market'].replace('player_', '').replace('_', ' ').title()
                     r_line = f" {rrow['selection']} {rrow['line']}" if pd.notna(rrow['line']) and rrow['line'] > 0 else ""

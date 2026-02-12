@@ -286,17 +286,16 @@ def _settle_prop(prop_id: int, outcome: str, actual_val: Optional[float], note: 
         elif outcome == 'lost':
             profit = -1.0
 
-        actual_str = f"{actual_val:.0f}" if actual_val is not None else None
-
         with DatabaseConnection.get_cursor() as cursor:
             cursor.execute("""
                 UPDATE player_props
                 SET status = %s,
                     outcome = %s,
                     result = %s,
+                    profit_loss = %s,
                     settled_at = NOW()
                 WHERE id = %s AND status = 'pending'
-            """, (status, outcome, result_str, prop_id))
+            """, (status, outcome, result_str, profit, prop_id))
 
     except Exception as e:
         logger.warning(f"Error settling prop {prop_id}: {e}")
