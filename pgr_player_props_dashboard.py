@@ -461,13 +461,13 @@ if overview is not None and overview['total_props'] > 0:
                     query = """
                         SELECT 
                             COUNT(*) as total,
-                            COUNT(*) FILTER (WHERE status = 'won') as wins,
-                            COUNT(*) FILTER (WHERE status = 'lost') as losses,
-                            COUNT(*) FILTER (WHERE status = 'void') as voids,
+                            COUNT(*) FILTER (WHERE outcome = 'won') as wins,
+                            COUNT(*) FILTER (WHERE outcome = 'lost') as losses,
+                            COUNT(*) FILTER (WHERE outcome = 'void' OR status = 'void') as voids,
                             COUNT(*) FILTER (WHERE status = 'pending') as pending,
-                            COALESCE(SUM(CASE WHEN status = 'won' THEN (odds - 1) WHEN status = 'lost' THEN -1 ELSE 0 END), 0) as net_profit,
-                            ROUND(AVG(CASE WHEN status IN ('won','lost') THEN odds END)::numeric, 2) as avg_settled_odds,
-                            ROUND(AVG(CASE WHEN status IN ('won','lost') THEN edge_pct END)::numeric, 1) as avg_settled_edge
+                            COALESCE(SUM(CASE WHEN outcome = 'won' THEN (odds - 1) WHEN outcome = 'lost' THEN -1 ELSE 0 END), 0) as net_profit,
+                            ROUND(AVG(CASE WHEN outcome IN ('won','lost') THEN odds END)::numeric, 2) as avg_settled_odds,
+                            ROUND(AVG(CASE WHEN outcome IN ('won','lost') THEN edge_pct END)::numeric, 1) as avg_settled_edge
                         FROM player_props
                         WHERE mode = 'LEARNING'
                     """
@@ -482,12 +482,12 @@ if overview is not None and overview['total_props'] > 0:
                     query = """
                         SELECT 
                             sport, market,
-                            COUNT(*) FILTER (WHERE status IN ('won','lost')) as settled,
-                            COUNT(*) FILTER (WHERE status = 'won') as wins,
-                            COUNT(*) FILTER (WHERE status = 'lost') as losses,
+                            COUNT(*) FILTER (WHERE outcome IN ('won','lost')) as settled,
+                            COUNT(*) FILTER (WHERE outcome = 'won') as wins,
+                            COUNT(*) FILTER (WHERE outcome = 'lost') as losses,
                             COUNT(*) FILTER (WHERE status = 'pending') as pending,
-                            COALESCE(SUM(CASE WHEN status = 'won' THEN (odds - 1) WHEN status = 'lost' THEN -1 ELSE 0 END), 0) as profit,
-                            ROUND(AVG(CASE WHEN status IN ('won','lost') THEN odds END)::numeric, 2) as avg_odds,
+                            COALESCE(SUM(CASE WHEN outcome = 'won' THEN (odds - 1) WHEN outcome = 'lost' THEN -1 ELSE 0 END), 0) as profit,
+                            ROUND(AVG(CASE WHEN outcome IN ('won','lost') THEN odds END)::numeric, 2) as avg_odds,
                             ROUND(AVG(edge_pct)::numeric, 1) as avg_edge
                         FROM player_props
                         WHERE mode = 'LEARNING'
@@ -505,11 +505,11 @@ if overview is not None and overview['total_props'] > 0:
                     query = """
                         SELECT 
                             DATE(created_at) as date,
-                            COUNT(*) FILTER (WHERE status IN ('won','lost')) as settled,
-                            COUNT(*) FILTER (WHERE status = 'won') as wins,
-                            COUNT(*) FILTER (WHERE status = 'lost') as losses,
+                            COUNT(*) FILTER (WHERE outcome IN ('won','lost')) as settled,
+                            COUNT(*) FILTER (WHERE outcome = 'won') as wins,
+                            COUNT(*) FILTER (WHERE outcome = 'lost') as losses,
                             COUNT(*) FILTER (WHERE status = 'pending') as pending,
-                            COALESCE(SUM(CASE WHEN status = 'won' THEN (odds - 1) WHEN status = 'lost' THEN -1 ELSE 0 END), 0) as daily_profit
+                            COALESCE(SUM(CASE WHEN outcome = 'won' THEN (odds - 1) WHEN outcome = 'lost' THEN -1 ELSE 0 END), 0) as daily_profit
                         FROM player_props
                         WHERE mode = 'LEARNING'
                         GROUP BY DATE(created_at)
@@ -527,10 +527,10 @@ if overview is not None and overview['total_props'] > 0:
                         SELECT 
                             player_name, sport, market, selection, line, odds,
                             edge_pct, home_team || ' vs ' || away_team as match,
-                            status, profit_loss,
+                            status, outcome, profit_loss,
                             COALESCE(settled_at, created_at) as date
                         FROM player_props
-                        WHERE mode = 'LEARNING' AND status IN ('won', 'lost')
+                        WHERE mode = 'LEARNING' AND outcome IN ('won', 'lost')
                         ORDER BY settled_at DESC NULLS LAST
                         LIMIT 30
                     """
@@ -689,7 +689,7 @@ if overview is not None and overview['total_props'] > 0:
             if not recent.empty:
                 st.markdown('<div class="section-title" style="margin-top:20px;">Recent Settled Props</div>', unsafe_allow_html=True)
                 for _, rrow in recent.iterrows():
-                    is_win = rrow['status'] == 'won'
+                    is_win = rrow.get('status') == 'won' or rrow.get('outcome') == 'won'
                     r_emoji = "✅" if is_win else "❌"
                     r_sport = "🏀" if rrow['sport'] == 'basketball' else "⚽"
                     border_c = "rgba(34,197,94,0.5)" if is_win else "rgba(239,68,68,0.5)"
