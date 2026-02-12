@@ -18,7 +18,7 @@ st.set_page_config(
 )
 
 st.sidebar.title("🏆 PGR Sports")
-page = st.sidebar.radio("Select Sport", ["⚽ Football", "🏀 College Basketball", "🎯 Player Props"])
+page = st.sidebar.radio("Select Sport", ["⚽ Football", "🏀 College Basketball", "🎯 Player Props", "🌐 Learning Sports"])
 
 if page == "⚽ Football":
     st.info("📌 Football Dashboard is loading from the original file...")
@@ -29,6 +29,10 @@ elif page == "🎯 Player Props":
     with open("pgr_player_props_dashboard.py", "r") as f:
         code = f.read()
     exec(compile(code, "pgr_player_props_dashboard.py", "exec"), globals())
+elif page == "🌐 Learning Sports":
+    with open("pgr_learning_sports_dashboard.py", "r") as f:
+        code = f.read()
+    exec(compile(code, "pgr_learning_sports_dashboard.py", "exec"), globals())
 else:
     st.markdown("""
     <style>

@@ -127,6 +127,37 @@ def run_player_props_settlement():
         traceback.print_exc()
 
 
+def run_multi_sport_learning():
+    """Run multi-sport learning engine (Tennis, Hockey, MMA)"""
+    try:
+        from multi_sport_learning_engine import run_multi_sport_learning as scan
+        logger.info("🌐 Starting Multi-Sport Learning scan...")
+        stats = scan()
+        total = sum(stats[k]['saved'] for k in ['TENNIS', 'HOCKEY', 'MMA'])
+        logger.info(f"🌐 Multi-Sport Learning: {total} picks saved "
+                     f"(🎾{stats['TENNIS']['saved']} 🏒{stats['HOCKEY']['saved']} 🥊{stats['MMA']['saved']})")
+    except Exception as e:
+        logger.error(f"❌ Multi-Sport Learning error: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+def run_multi_sport_settlement():
+    """Settle multi-sport learning bets (Tennis, Hockey, MMA)"""
+    try:
+        from multi_sport_settlement import run_multi_sport_settlement as settle
+        logger.info("🌐 Starting Multi-Sport settlement...")
+        stats = settle()
+        if stats['settled'] > 0:
+            logger.info(f"🌐 Multi-Sport settled: {stats['won']}W/{stats['lost']}L/{stats['push']}P/{stats['void']}V")
+        else:
+            logger.info("🌐 No multi-sport bets to settle")
+    except Exception as e:
+        logger.error(f"❌ Multi-Sport settlement error: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 def run_ml_parlay():
     """Run ML Parlay predictions (TEST MODE - no external posting)"""
     try:
@@ -487,11 +518,15 @@ def main():
     if ENABLE_PLAYER_PROPS:
         schedule.every(6).hours.do(run_player_props)
     
+    # Multi-Sport Learning (Tennis, Hockey, MMA) - Every 6 hours
+    schedule.every(6).hours.do(run_multi_sport_learning)
+    
     # Schedule result verification - Every 5 minutes for FAST results
     schedule.every(5).minutes.do(run_results_engine)  # Unified Results Engine
     schedule.every(5).minutes.do(verify_basketball_results)  # Basketball separate
     schedule.every(30).minutes.do(verify_ml_parlay_results)  # ML Parlay verification
     schedule.every(30).minutes.do(run_player_props_settlement)  # Player props settlement
+    schedule.every(30).minutes.do(run_multi_sport_settlement)  # Multi-sport settlement
     
     # Schedule CLV update - Every 5 minutes for reliable closing odds capture
     schedule.every(5).minutes.do(run_clv_update_cycle)
