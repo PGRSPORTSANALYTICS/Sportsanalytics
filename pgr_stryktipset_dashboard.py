@@ -2,287 +2,625 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 import json
+import requests
+import os
 from datetime import datetime
 import plotly.graph_objects as go
 import plotly.express as px
 
 DB_PATH = "app.db"
+API_BASE = "http://localhost:8000"
+ADMIN_SECRET = os.environ.get("ADMIN_API_KEY", "CHANGE_ME")
 
 def get_stryk_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
+def api_call(method, path, json_data=None):
+    headers = {"X-Admin-Secret": ADMIN_SECRET, "Content-Type": "application/json"}
+    try:
+        if method == "GET":
+            r = requests.get(f"{API_BASE}{path}", headers=headers, timeout=30)
+        else:
+            r = requests.post(f"{API_BASE}{path}", headers=headers, json=json_data, timeout=60)
+        return r.status_code, r.json() if r.headers.get("content-type", "").startswith("application/json") else r.text
+    except Exception as e:
+        return 0, str(e)
+
 def render_stryktipset_dashboard():
-    st.markdown("## 🎰 Stryktipset System")
-    st.caption("AI-Powered Reduced System Generator | Jackpot Strategy")
+    st.markdown("""
+    <style>
+        .stryk-header {
+            text-align: center;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 1rem;
+            border: 1px solid #e94560;
+        }
+        .stryk-header h2 { color: #e94560; margin: 0; }
+        .stryk-header p { color: #a0a0a0; margin: 0.3rem 0 0 0; font-size: 0.85rem; }
+        .stryk-card {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            padding: 1.2rem;
+            border-radius: 10px;
+            border: 1px solid #333;
+            margin-bottom: 0.8rem;
+        }
+        .stryk-metric {
+            background: linear-gradient(135deg, #0f3460 0%, #16213e 100%);
+            padding: 1rem;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid #e94560;
+        }
+        .stryk-metric .value { font-size: 1.8rem; font-weight: 700; color: #e94560; }
+        .stryk-metric .label { font-size: 0.75rem; color: #a0a0a0; }
+        .match-row { padding: 0.4rem 0; border-bottom: 1px solid #222; }
+        .spike-tag { background: #e94560; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; }
+        .half-tag { background: #FFC107; color: black; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; }
+        .full-tag { background: #4CAF50; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; }
+        .disclaimer { text-align: center; color: #666; font-size: 0.7rem; margin-top: 1rem; font-style: italic; }
+    </style>
+    """, unsafe_allow_html=True)
+
+    if "stryk_admin" not in st.session_state:
+        st.session_state.stryk_admin = False
+
+    if not st.session_state.stryk_admin:
+        st.markdown('<div class="stryk-header"><h2>🎰 Stryktipset (Private)</h2><p>Admin access required</p></div>', unsafe_allow_html=True)
+        pwd = st.text_input("Admin Password", type="password", key="stryk_pwd")
+        if st.button("Login", key="stryk_login"):
+            if pwd == ADMIN_SECRET:
+                st.session_state.stryk_admin = True
+                st.rerun()
+            else:
+                st.error("Wrong password")
+        return
+
+    st.markdown('<div class="stryk-header"><h2>🎰 Stryktipset (Private)</h2><p>AI-Powered Reduced System Generator | Jackpot Strategy</p></div>', unsafe_allow_html=True)
 
     try:
         conn = get_stryk_db()
     except Exception as e:
-        st.error(f"Could not connect to Stryktipset database: {e}")
+        st.error(f"Database error: {e}")
         return
 
-    tabs = st.tabs(["📋 Coupons", "🔮 Predictions", "⚙️ Systems", "📊 Results & Scoring"])
+    render_coupon_selector(conn)
 
-    with tabs[0]:
-        render_coupons_tab(conn)
-
-    with tabs[1]:
-        render_predictions_tab(conn)
-
-    with tabs[2]:
-        render_systems_tab(conn)
-
-    with tabs[3]:
-        render_scoring_tab(conn)
-
+    st.markdown('<p class="disclaimer">Private tool – tracks correct picks (0–13), not ROI</p>', unsafe_allow_html=True)
     conn.close()
 
 
-def render_coupons_tab(conn):
-    st.markdown("### Active Coupons")
-
+def render_coupon_selector(conn):
     coupons = conn.execute("SELECT * FROM stryk_coupons ORDER BY created_at DESC").fetchall()
 
-    if not coupons:
-        st.info("No coupons created yet. Use the API to create one.")
+    col_sel, col_new = st.columns([3, 1])
+    with col_sel:
+        if coupons:
+            options = {f"#{c['id']} — {c['name']} ({c['status']})": c["id"] for c in coupons}
+            selected_key = st.selectbox("Select Coupon", list(options.keys()), key="stryk_coupon_sel")
+            coupon_id = options[selected_key]
+        else:
+            st.info("No coupons yet. Create one below.")
+            coupon_id = None
+
+    with col_new:
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("➕ New Coupon", key="stryk_new_coupon", use_container_width=True):
+            st.session_state.stryk_show_create = True
+
+    if st.session_state.get("stryk_show_create", False):
+        render_create_coupon(conn)
+
+    if coupon_id:
+        render_coupon_detail(conn, coupon_id)
+
+
+def render_create_coupon(conn):
+    st.markdown("---")
+    st.markdown("### Create New Coupon")
+
+    c1, c2 = st.columns(2)
+    name = c1.text_input("Coupon Name", value="Stryktipset", key="new_coupon_name")
+    week_tag = c2.text_input("Week Tag", value="", key="new_coupon_week", placeholder="e.g. V7")
+
+    st.markdown("**Enter 13 matches:**")
+    matches = []
+    for i in range(1, 14):
+        cols = st.columns([0.5, 2, 2, 2])
+        cols[0].markdown(f"**{i}**")
+        home = cols[1].text_input("Home", key=f"nc_home_{i}", label_visibility="collapsed", placeholder=f"Home {i}")
+        away = cols[2].text_input("Away", key=f"nc_away_{i}", label_visibility="collapsed", placeholder=f"Away {i}")
+        league = cols[3].text_input("League", key=f"nc_league_{i}", label_visibility="collapsed", placeholder="League")
+        matches.append({"match_no": i, "home_team": home, "away_team": away, "league": league or None})
+
+    c_save, c_cancel = st.columns(2)
+    if c_save.button("Create Coupon", key="stryk_create_save", type="primary", use_container_width=True):
+        missing = [m for m in matches if not m["home_team"].strip() or not m["away_team"].strip()]
+        if missing:
+            st.error(f"Please fill in all 13 matches (missing: {[m['match_no'] for m in missing]})")
+        elif not name.strip():
+            st.error("Please enter a coupon name")
+        else:
+            payload = {"name": name.strip(), "week_tag": week_tag.strip() or None, "matches": matches}
+            status, resp = api_call("POST", "/admin/stryk/coupons", payload)
+            if status == 200:
+                st.success(f"Coupon created! ID: {resp.get('coupon_id')}")
+                st.session_state.stryk_show_create = False
+                st.rerun()
+            else:
+                st.error(f"Error: {resp}")
+
+    if c_cancel.button("Cancel", key="stryk_create_cancel", use_container_width=True):
+        st.session_state.stryk_show_create = False
+        st.rerun()
+
+
+def render_coupon_detail(conn, coupon_id):
+    coupon = conn.execute("SELECT * FROM stryk_coupons WHERE id = ?", (coupon_id,)).fetchone()
+    if not coupon:
+        st.error("Coupon not found")
         return
 
-    for c in coupons:
-        status_colors = {"draft": "🟡", "published": "🟢", "settled": "🔵"}
-        icon = status_colors.get(c["status"], "⚪")
+    status_icon = {"draft": "🟡", "published": "🟢", "settled": "🔵"}.get(coupon["status"], "⚪")
 
-        with st.expander(f"{icon} {c['name']} (ID: {c['id']}) — {c['status'].upper()}", expanded=(c["status"] != "settled")):
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Status", c["status"].upper())
-            col2.metric("Week", c["week_tag"] or "—")
-            col3.metric("Created", str(c["created_at"])[:16] if c["created_at"] else "—")
+    st.markdown("---")
 
-            matches = conn.execute(
-                "SELECT * FROM stryk_matches WHERE coupon_id = ? ORDER BY match_no",
-                (c["id"],)
-            ).fetchall()
+    mc1, mc2, mc3 = st.columns(3)
+    mc1.markdown(f"""<div class="stryk-metric"><div class="value">{status_icon} {coupon['status'].upper()}</div><div class="label">Status</div></div>""", unsafe_allow_html=True)
+    mc2.markdown(f"""<div class="stryk-metric"><div class="value">{coupon['week_tag'] or '—'}</div><div class="label">Week Tag</div></div>""", unsafe_allow_html=True)
+    mc3.markdown(f"""<div class="stryk-metric"><div class="value">#{coupon['id']}</div><div class="label">Coupon ID</div></div>""", unsafe_allow_html=True)
 
-            if matches:
-                rows = []
-                for m in matches:
-                    result_display = m["result"] if m["result"] else "—"
-                    odds_str = f"{m['odds_1'] or '—'} / {m['odds_x'] or '—'} / {m['odds_2'] or '—'}"
-                    pub_str = ""
-                    if m["public_pct_1"] is not None:
-                        pub_str = f"{m['public_pct_1']:.0f}% / {m['public_pct_x']:.0f}% / {m['public_pct_2']:.0f}%"
+    tabs = st.tabs(["📋 Matches", "⚡ Actions", "📊 Public %", "⚙️ Generate System", "📐 System Rows", "🏆 Scoring"])
 
-                    rows.append({
-                        "#": m["match_no"],
-                        "Home": m["home_team"],
-                        "Away": m["away_team"],
-                        "League": m["league"] or "—",
-                        "Odds (1/X/2)": odds_str,
-                        "Public %": pub_str or "—",
-                        "Result": result_display
-                    })
+    with tabs[0]:
+        render_matches_overview(conn, coupon_id)
 
-                df = pd.DataFrame(rows)
-                st.dataframe(df, use_container_width=True, hide_index=True)
+    with tabs[1]:
+        render_actions(conn, coupon_id, coupon["status"])
+
+    with tabs[2]:
+        render_public_input(conn, coupon_id)
+
+    with tabs[3]:
+        render_generate_system(conn, coupon_id)
+
+    with tabs[4]:
+        render_system_rows(conn, coupon_id)
+
+    with tabs[5]:
+        render_scoring(conn, coupon_id, coupon["status"])
 
 
-def render_predictions_tab(conn):
-    st.markdown("### Model Predictions")
-
-    coupons = conn.execute("SELECT * FROM stryk_coupons ORDER BY created_at DESC").fetchall()
-    if not coupons:
-        st.info("No coupons available.")
-        return
-
-    coupon_options = {f"{c['name']} (ID: {c['id']})": c["id"] for c in coupons}
-    selected = st.selectbox("Select Coupon", list(coupon_options.keys()), key="pred_coupon")
-    coupon_id = coupon_options[selected]
-
+def render_matches_overview(conn, coupon_id):
+    matches = conn.execute("SELECT * FROM stryk_matches WHERE coupon_id = ? ORDER BY match_no", (coupon_id,)).fetchall()
     probs = conn.execute("""
-        SELECT sp.*, sm.match_no, sm.home_team, sm.away_team, sm.odds_1, sm.odds_x, sm.odds_2, sm.result
+        SELECT sp.*, sm.match_no
         FROM stryk_probs sp
         JOIN stryk_matches sm ON sp.match_id = sm.id
         WHERE sp.coupon_id = ?
         ORDER BY sm.match_no
     """, (coupon_id,)).fetchall()
+    probs_by_no = {p["match_no"]: p for p in probs}
 
-    if not probs:
-        st.warning("No predictions yet. Run /predict via the API first.")
+    if not matches:
+        st.warning("No matches in this coupon.")
         return
 
     rows = []
-    picks_correct = 0
-    picks_total = 0
+    for m in matches:
+        p = probs_by_no.get(m["match_no"])
+        odds_str = ""
+        if m["odds_1"]:
+            odds_str = f"{m['odds_1']:.2f} / {m['odds_x']:.2f} / {m['odds_2']:.2f}"
 
-    for p in probs:
-        p1, px, p2 = p["p1"], p["px"], p["p2"]
-        best = max(p1, px, p2)
-        if best == p1:
-            pick = "1"
-        elif best == px:
-            pick = "X"
-        else:
-            pick = "2"
+        pub_str = ""
+        if m["public_pct_1"] is not None:
+            pub_str = f"{m['public_pct_1']:.0f} / {m['public_pct_x']:.0f} / {m['public_pct_2']:.0f}"
 
-        result = p["result"]
+        prob_str = ""
+        if p:
+            prob_str = f"{p['p1']:.0%} / {p['px']:.0%} / {p['p2']:.0%}"
+
+        pick = ""
+        if p:
+            best = max(p["p1"], p["px"], p["p2"])
+            if best == p["p1"]: pick = "1"
+            elif best == p["px"]: pick = "X"
+            else: pick = "2"
+
+        result = m["result"] or ""
         correct = ""
-        if result:
-            picks_total += 1
-            if pick == result:
-                correct = "✅"
-                picks_correct += 1
-            else:
-                correct = "❌"
+        if result and pick:
+            correct = "✅" if pick == result else "❌"
 
         rows.append({
-            "#": p["match_no"],
-            "Home": p["home_team"],
-            "Away": p["away_team"],
-            "P(1)": f"{p1:.1%}",
-            "P(X)": f"{px:.1%}",
-            "P(2)": f"{p2:.1%}",
-            "Pick": pick,
+            "#": m["match_no"],
+            "Home": m["home_team"],
+            "Away": m["away_team"],
+            "League": m["league"] or "",
+            "Odds (1/X/2)": odds_str or "—",
+            "Public %": pub_str or "—",
+            "Prob (1/X/2)": prob_str or "—",
+            "Pick": pick or "—",
             "Result": result or "—",
             "": correct,
-            "Model": p["model_version"] or "—"
         })
-
-    if picks_total > 0:
-        col1, col2 = st.columns(2)
-        col1.metric("Picks Correct", f"{picks_correct}/{picks_total}")
-        col2.metric("Hit Rate", f"{picks_correct/picks_total:.0%}")
 
     df = pd.DataFrame(rows)
     st.dataframe(df, use_container_width=True, hide_index=True)
 
-    st.markdown("#### Probability Distribution")
-    prob_data = []
-    for p in probs:
-        prob_data.append({"Match": f"#{p['match_no']}", "Outcome": "1", "Probability": p["p1"]})
-        prob_data.append({"Match": f"#{p['match_no']}", "Outcome": "X", "Probability": p["px"]})
-        prob_data.append({"Match": f"#{p['match_no']}", "Outcome": "2", "Probability": p["p2"]})
+    if probs:
+        prob_data = []
+        for p in probs:
+            prob_data.append({"Match": f"#{p['match_no']}", "Outcome": "1", "Probability": p["p1"]})
+            prob_data.append({"Match": f"#{p['match_no']}", "Outcome": "X", "Probability": p["px"]})
+            prob_data.append({"Match": f"#{p['match_no']}", "Outcome": "2", "Probability": p["p2"]})
 
-    fig = px.bar(
-        pd.DataFrame(prob_data),
-        x="Match", y="Probability", color="Outcome",
-        barmode="group",
-        color_discrete_map={"1": "#4CAF50", "X": "#FFC107", "2": "#F44336"},
-        height=350
-    )
-    fig.update_layout(
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font_color="white",
-        yaxis_tickformat=".0%",
-        margin=dict(l=20, r=20, t=30, b=20)
-    )
-    st.plotly_chart(fig, use_container_width=True)
+        fig = px.bar(
+            pd.DataFrame(prob_data), x="Match", y="Probability", color="Outcome",
+            barmode="group",
+            color_discrete_map={"1": "#4CAF50", "X": "#FFC107", "2": "#F44336"},
+            height=300
+        )
+        fig.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font_color="white", yaxis_tickformat=".0%",
+            margin=dict(l=20, r=20, t=30, b=20)
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
 
-def render_systems_tab(conn):
-    st.markdown("### Generated Systems")
+def render_actions(conn, coupon_id, status):
+    st.markdown("### Quick Actions")
 
-    systems = conn.execute("""
-        SELECT ss.*, sc.name as coupon_name
-        FROM stryk_systems ss
-        JOIN stryk_coupons sc ON ss.coupon_id = sc.id
-        ORDER BY ss.created_at DESC
-    """).fetchall()
+    has_probs = conn.execute("SELECT COUNT(*) as c FROM stryk_probs WHERE coupon_id = ?", (coupon_id,)).fetchone()["c"] > 0
+    has_system = conn.execute("SELECT COUNT(*) as c FROM stryk_systems WHERE coupon_id = ?", (coupon_id,)).fetchone()["c"] > 0
 
-    if not systems:
-        st.info("No systems generated yet. Use the API to generate one.")
+    c1, c2 = st.columns(2)
+
+    with c1:
+        pred_status = "✅ Done" if has_probs else "⏳ Pending"
+        st.markdown(f"**Predict** — {pred_status}")
+        if st.button("🔮 Run Predictions", key="act_predict", use_container_width=True, type="primary"):
+            with st.spinner("Running AI predictions..."):
+                code, resp = api_call("POST", f"/admin/stryk/coupons/{coupon_id}/predict")
+            if code == 200:
+                preds = resp.get("predictions", [])
+                st.success(f"Predictions generated for {len(preds)} matches!")
+                st.rerun()
+            else:
+                st.error(f"Error: {resp}")
+
+    with c2:
+        sys_status = "✅ Done" if has_system else "⏳ Pending"
+        st.markdown(f"**System** — {sys_status}")
+        st.caption("Use the 'Generate System' tab for full config")
+
+    st.markdown("---")
+
+    c3, c4 = st.columns(2)
+
+    with c3:
+        st.markdown(f"**Status:** {status}")
+        if status != "settled":
+            if st.button("🔵 Settle Results", key="act_settle", use_container_width=True):
+                st.session_state.stryk_show_settle = True
+        else:
+            st.success("Coupon is settled")
+
+    with c4:
+        if status == "settled" and has_system:
+            systems = conn.execute("SELECT id FROM stryk_systems WHERE coupon_id = ?", (coupon_id,)).fetchall()
+            if st.button("📊 Score All Systems", key="act_score_all", use_container_width=True, type="primary"):
+                for sys in systems:
+                    code, resp = api_call("POST", f"/admin/stryk/coupons/{coupon_id}/score_system/{sys['id']}")
+                if code == 200:
+                    st.success("All systems scored!")
+                    st.rerun()
+                else:
+                    st.error(f"Error: {resp}")
+
+    if st.session_state.get("stryk_show_settle", False):
+        render_settle_form(conn, coupon_id)
+
+
+def render_settle_form(conn, coupon_id):
+    st.markdown("---")
+    st.markdown("### Enter Results")
+    matches = conn.execute("SELECT * FROM stryk_matches WHERE coupon_id = ? ORDER BY match_no", (coupon_id,)).fetchall()
+
+    results = {}
+    for m in matches:
+        cols = st.columns([0.5, 2, 2, 2])
+        cols[0].markdown(f"**{m['match_no']}**")
+        cols[1].caption(f"{m['home_team']} vs {m['away_team']}")
+        res = cols[2].selectbox(
+            "Result", ["1", "X", "2"],
+            key=f"settle_{m['match_no']}",
+            label_visibility="collapsed"
+        )
+        results[str(m["match_no"])] = res
+
+    if st.button("Submit Results", key="settle_submit", type="primary", use_container_width=True):
+        code, resp = api_call("POST", f"/admin/stryk/coupons/{coupon_id}/settle", {"results": results})
+        if code == 200:
+            st.success("Coupon settled!")
+            st.session_state.stryk_show_settle = False
+            st.rerun()
+        else:
+            st.error(f"Error: {resp}")
+
+
+def render_public_input(conn, coupon_id):
+    st.markdown("### Update Public Betting %")
+    st.caption("Enter the public betting distribution for each match (must sum to ~100)")
+
+    matches = conn.execute("SELECT * FROM stryk_matches WHERE coupon_id = ? ORDER BY match_no", (coupon_id,)).fetchall()
+    if not matches:
+        st.warning("No matches found.")
         return
 
-    for sys in systems:
-        rules = json.loads(sys["rules_json"]) if isinstance(sys["rules_json"], str) else (sys["rules_json"] or {})
+    public_data = {}
+    all_valid = True
 
-        with st.expander(f"System #{sys['id']} — {sys['coupon_name']} | {sys['final_rows']} rows", expanded=True):
-            col1, col2, col3, col4, col5 = st.columns(5)
-            col1.metric("Total Rows", sys["final_rows"])
-            col2.metric("Spikes", sys["spik_count"])
-            col3.metric("Half Guards", sys["half_count"])
-            col4.metric("Full Guards", sys["full_count"])
-            col5.metric("Theoretical", rules.get("theoretical_rows", "—"))
+    for m in matches:
+        cols = st.columns([0.5, 2, 1.2, 1.2, 1.2, 1])
+        cols[0].markdown(f"**{m['match_no']}**")
+        cols[1].caption(f"{m['home_team']} vs {m['away_team']}")
 
-            st.caption(sys["system_summary"] or "")
+        default_1 = m["public_pct_1"] if m["public_pct_1"] is not None else 33.0
+        default_x = m["public_pct_x"] if m["public_pct_x"] is not None else 33.0
+        default_2 = m["public_pct_2"] if m["public_pct_2"] is not None else 34.0
 
+        p1 = cols[2].number_input("1", value=default_1, min_value=0.0, max_value=100.0, step=1.0,
+                                   key=f"pub_1_{m['match_no']}", label_visibility="collapsed")
+        px_val = cols[3].number_input("X", value=default_x, min_value=0.0, max_value=100.0, step=1.0,
+                                      key=f"pub_x_{m['match_no']}", label_visibility="collapsed")
+        p2 = cols[4].number_input("2", value=default_2, min_value=0.0, max_value=100.0, step=1.0,
+                                   key=f"pub_2_{m['match_no']}", label_visibility="collapsed")
+
+        total = p1 + px_val + p2
+        if 98.0 <= total <= 102.0:
+            cols[5].markdown(f"<span style='color:#4CAF50'>✓ {total:.0f}%</span>", unsafe_allow_html=True)
+        else:
+            cols[5].markdown(f"<span style='color:#F44336'>✗ {total:.0f}%</span>", unsafe_allow_html=True)
+            all_valid = False
+
+        public_data[str(m["match_no"])] = {"1": p1, "X": px_val, "2": p2}
+
+    st.markdown("---")
+    if st.button("💾 Save Public %", key="pub_save", type="primary", use_container_width=True, disabled=not all_valid):
+        code, resp = api_call("POST", f"/admin/stryk/coupons/{coupon_id}/public", {"public": public_data})
+        if code == 200:
+            st.success(f"Public % updated for {resp.get('updated', 13)} matches!")
+            st.rerun()
+        else:
+            st.error(f"Error: {resp}")
+
+    if not all_valid:
+        st.warning("Some matches don't sum to ~100%. Fix them before saving.")
+
+
+def render_generate_system(conn, coupon_id):
+    st.markdown("### Generate Reduced System")
+
+    has_probs = conn.execute("SELECT COUNT(*) as c FROM stryk_probs WHERE coupon_id = ?", (coupon_id,)).fetchone()["c"]
+    if has_probs == 0:
+        st.warning("Run predictions first before generating a system.")
+        return
+
+    c1, c2 = st.columns(2)
+    preset = c1.selectbox("Preset", ["jackpot_aggressive"], key="gen_preset")
+    target_rows = c2.selectbox("Target Rows", [64, 128, 256, 512, 1024], index=2, key="gen_target")
+
+    with st.expander("⚙️ Advanced Settings"):
+        ac1, ac2, ac3 = st.columns(3)
+        min_spikes = ac1.number_input("Min Spikes", value=4, min_value=1, max_value=10, key="gen_spikes")
+        max_full = ac2.number_input("Max Full Guards", value=2, min_value=0, max_value=6, key="gen_full")
+        max_half = ac3.number_input("Max Half Guards", value=7, min_value=1, max_value=11, key="gen_half")
+
+        ac4, ac5, ac6 = st.columns(3)
+        draws_policy = ac4.selectbox("Draws Policy", ["high", "normal", "low"], key="gen_draws")
+        min_prob = ac5.number_input("Min Outcome Prob", value=0.10, min_value=0.01, max_value=0.30, step=0.01, key="gen_minprob")
+        alpha = ac6.number_input("Public Bias (alpha)", value=0.25, min_value=0.0, max_value=0.7, step=0.05, key="gen_alpha")
+
+    if st.button("🚀 Generate System", key="gen_submit", type="primary", use_container_width=True):
+        payload = {
+            "preset": preset,
+            "target_rows": target_rows,
+            "min_spikes": min_spikes,
+            "max_full_guards": max_full,
+            "max_half_guards": max_half,
+            "include_draws_policy": draws_policy,
+            "min_outcome_prob": min_prob,
+            "alpha_public_bias": alpha,
+        }
+        with st.spinner(f"Generating {target_rows}-row system..."):
+            code, resp = api_call("POST", f"/admin/stryk/coupons/{coupon_id}/generate_system", payload)
+
+        if code == 200:
+            st.success(f"System #{resp.get('system_id')} generated!")
+
+            rc1, rc2, rc3, rc4 = st.columns(4)
+            rc1.metric("Rows", resp.get("final_rows"))
+            rc2.metric("Spikes", resp.get("spikes"))
+            rc3.metric("Half", resp.get("half_guards"))
+            rc4.metric("Full", resp.get("full_guards"))
+
+            st.caption(resp.get("summary", ""))
+            st.info(f"Theoretical rows: {resp.get('theoretical_rows')} → Reduced to {resp.get('final_rows')}")
+        else:
+            st.error(f"Error: {resp}")
+
+    existing = conn.execute("""
+        SELECT * FROM stryk_systems WHERE coupon_id = ? ORDER BY created_at DESC
+    """, (coupon_id,)).fetchall()
+
+    if existing:
+        st.markdown("---")
+        st.markdown("### Existing Systems")
+        for sys in existing:
+            rules = json.loads(sys["rules_json"]) if isinstance(sys["rules_json"], str) else (sys["rules_json"] or {})
             allowed = rules.get("allowed", {})
-            if allowed:
-                st.markdown("**Match Classification:**")
-                class_rows = []
-                for no_str in sorted(allowed.keys(), key=lambda x: int(x)):
-                    outcomes = allowed[no_str]
-                    if len(outcomes) == 1:
-                        label = f"🔒 Spike ({outcomes[0]})"
-                    elif len(outcomes) == 2:
-                        label = f"↔️ Half ({'/'.join(outcomes)})"
-                    else:
-                        label = f"🛡️ Full (1/X/2)"
-                    class_rows.append({"Match": f"#{no_str}", "Type": label, "Allowed": ", ".join(outcomes)})
 
-                st.dataframe(pd.DataFrame(class_rows), use_container_width=True, hide_index=True)
+            with st.expander(f"System #{sys['id']} — {sys['final_rows']} rows | {sys['spik_count']}S {sys['half_count']}H {sys['full_count']}F"):
+                sc1, sc2, sc3, sc4, sc5 = st.columns(5)
+                sc1.metric("Rows", sys["final_rows"])
+                sc2.metric("Spikes", sys["spik_count"])
+                sc3.metric("Half", sys["half_count"])
+                sc4.metric("Full", sys["full_count"])
+                sc5.metric("Theoretical", rules.get("theoretical_rows", "—"))
 
-            rows = conn.execute(
-                "SELECT * FROM stryk_rows WHERE system_id = ? ORDER BY row_prob DESC LIMIT 20",
-                (sys["id"],)
-            ).fetchall()
+                if allowed:
+                    class_data = []
+                    for no_str in sorted(allowed.keys(), key=lambda x: int(x)):
+                        outcomes = allowed[no_str]
+                        match_info = conn.execute("SELECT home_team, away_team FROM stryk_matches WHERE coupon_id = ? AND match_no = ?", (coupon_id, int(no_str))).fetchone()
+                        teams = f"{match_info['home_team']} vs {match_info['away_team']}" if match_info else f"Match {no_str}"
 
-            if rows:
-                st.markdown(f"**Top 20 Rows by Probability** (of {sys['final_rows']} total):")
-                row_data = []
-                for r in rows:
-                    row_str = r["row_string"]
-                    formatted = " ".join(row_str)
-                    row_data.append({
-                        "#": r["row_no"],
-                        "Row": formatted,
-                        "Model Prob": f"{r['row_prob']:.2e}" if r["row_prob"] else "—",
-                        "Public Prob": f"{r['row_public_prob']:.2e}" if r["row_public_prob"] else "—",
-                        "Contrarian": f"{r['contrarian_score']:.1f}" if r["contrarian_score"] else "—"
-                    })
+                        if len(outcomes) == 1:
+                            tag = f"🔒 Spike ({outcomes[0]})"
+                        elif len(outcomes) == 2:
+                            tag = f"↔️ Half ({'/'.join(outcomes)})"
+                        else:
+                            tag = "🛡️ Full (1/X/2)"
 
-                st.dataframe(pd.DataFrame(row_data), use_container_width=True, hide_index=True)
+                        class_data.append({"#": no_str, "Match": teams, "Type": tag, "Allowed": ", ".join(outcomes)})
+
+                    st.dataframe(pd.DataFrame(class_data), use_container_width=True, hide_index=True)
 
 
-def render_scoring_tab(conn):
-    st.markdown("### System Scoring & Results")
+def render_system_rows(conn, coupon_id):
+    st.markdown("### System Rows Viewer")
+
+    systems = conn.execute("SELECT * FROM stryk_systems WHERE coupon_id = ? ORDER BY created_at DESC", (coupon_id,)).fetchall()
+    if not systems:
+        st.info("No systems generated for this coupon.")
+        return
+
+    sys_options = {f"System #{s['id']} ({s['final_rows']} rows)": s["id"] for s in systems}
+    sel_sys = st.selectbox("Select System", list(sys_options.keys()), key="rows_sys_sel")
+    system_id = sys_options[sel_sys]
+
+    total_count = conn.execute("SELECT COUNT(*) as c FROM stryk_rows WHERE system_id = ?", (system_id,)).fetchone()["c"]
+
+    fc1, fc2, fc3 = st.columns(3)
+    search = fc1.text_input("Search rows (e.g. 'X' or '1X2')", key="rows_search", placeholder="Filter...")
+    sort_by = fc2.selectbox("Sort by", ["Row #", "Model Prob ↓", "Contrarian ↓", "Public Prob ↑"], key="rows_sort")
+    max_show = fc3.number_input("Show rows", value=100, min_value=10, max_value=2000, step=50, key="rows_max")
+
+    order_clause = "row_no ASC"
+    if sort_by == "Model Prob ↓":
+        order_clause = "row_prob DESC"
+    elif sort_by == "Contrarian ↓":
+        order_clause = "contrarian_score DESC"
+    elif sort_by == "Public Prob ↑":
+        order_clause = "row_public_prob ASC"
+
+    all_rows = conn.execute(f"SELECT * FROM stryk_rows WHERE system_id = ? ORDER BY {order_clause}", (system_id,)).fetchall()
+
+    if search.strip():
+        filtered = [r for r in all_rows if search.upper() in r["row_string"].upper()]
+    else:
+        filtered = list(all_rows)
+
+    st.caption(f"Showing {min(len(filtered), max_show)} of {len(filtered)} rows (total: {total_count})")
+
+    if not filtered:
+        st.info("No rows match your filter.")
+        return
+
+    draw_counts = {}
+    row_data = []
+    for r in filtered[:max_show]:
+        row_str = r["row_string"]
+        draws = row_str.count("X")
+        draw_counts[draws] = draw_counts.get(draws, 0) + 1
+
+        formatted = " ".join(row_str)
+        row_data.append({
+            "#": r["row_no"],
+            "Row": formatted,
+            "Draws": draws,
+            "Prob": f"{r['row_prob']:.2e}" if r["row_prob"] else "—",
+            "Pub Prob": f"{r['row_public_prob']:.2e}" if r["row_public_prob"] else "—",
+            "Contrarian": f"{r['contrarian_score']:.1f}" if r["contrarian_score"] else "—"
+        })
+
+    st.dataframe(pd.DataFrame(row_data), use_container_width=True, hide_index=True, height=400)
+
+    if draw_counts:
+        st.markdown("**Draw Distribution in System:**")
+        dc1, dc2 = st.columns([2, 3])
+        with dc1:
+            draw_df = pd.DataFrame([{"Draws": k, "Rows": v} for k, v in sorted(draw_counts.items())])
+            st.dataframe(draw_df, use_container_width=True, hide_index=True)
+
+        with dc2:
+            fig = go.Figure(data=[go.Bar(
+                x=list(sorted(draw_counts.keys())),
+                y=[draw_counts[k] for k in sorted(draw_counts.keys())],
+                marker_color="#FFC107",
+                text=[draw_counts[k] for k in sorted(draw_counts.keys())],
+                textposition="outside"
+            )])
+            fig.update_layout(
+                xaxis_title="Number of X's",
+                yaxis_title="Rows",
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                font_color="white", height=250,
+                margin=dict(l=20, r=20, t=20, b=20)
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+
+def render_scoring(conn, coupon_id, status):
+    st.markdown("### Scoring & Results")
+
+    if status != "settled":
+        st.info("Settle the coupon first to score systems.")
+
+        systems = conn.execute("SELECT * FROM stryk_systems WHERE coupon_id = ?", (coupon_id,)).fetchall()
+        if systems:
+            st.caption(f"{len(systems)} system(s) ready — settle coupon to score.")
+        return
 
     scores = conn.execute("""
-        SELECT sss.*, sc.name as coupon_name
-        FROM stryk_system_scores sss
-        JOIN stryk_coupons sc ON sss.coupon_id = sc.id
-        ORDER BY sss.computed_at DESC
-        LIMIT 20
-    """).fetchall()
+        SELECT * FROM stryk_system_scores WHERE coupon_id = ? ORDER BY computed_at DESC
+    """, (coupon_id,)).fetchall()
+
+    systems = conn.execute("SELECT * FROM stryk_systems WHERE coupon_id = ?", (coupon_id,)).fetchall()
+    unscored = [s for s in systems if not any(sc["system_id"] == s["id"] for sc in scores)]
+
+    if unscored:
+        st.warning(f"{len(unscored)} system(s) not yet scored.")
+        if st.button("📊 Score Unscored Systems", key="score_unscored", type="primary"):
+            for sys in unscored:
+                code, resp = api_call("POST", f"/admin/stryk/coupons/{coupon_id}/score_system/{sys['id']}")
+            st.success("Done!")
+            st.rerun()
 
     if not scores:
-        st.info("No systems scored yet. Settle a coupon and score a system via the API.")
-
-        settled = conn.execute("SELECT * FROM stryk_coupons WHERE status = 'settled' ORDER BY created_at DESC").fetchall()
-        if settled:
-            st.markdown("**Settled coupons ready for scoring:**")
-            for c in settled:
-                st.write(f"- {c['name']} (ID: {c['id']})")
         return
 
-    col1, col2, col3, col4 = st.columns(4)
-    avg_best = sum(s["best_correct"] for s in scores) / len(scores) if scores else 0
-    ge10 = sum(1 for s in scores if s["best_correct"] >= 10)
-    ge12 = sum(1 for s in scores if s["best_correct"] >= 12)
-    eq13 = sum(1 for s in scores if s["best_correct"] == 13)
+    best_overall = max(s["best_correct"] for s in scores)
+    avg_best = sum(s["best_correct"] for s in scores) / len(scores)
 
-    col1.metric("Avg Best Correct", f"{avg_best:.1f}/13")
-    col2.metric("10+ Correct", f"{ge10}/{len(scores)}")
-    col3.metric("12+ Correct", f"{ge12}/{len(scores)}")
-    col4.metric("13/13 Jackpot", f"{eq13}/{len(scores)}")
+    mc1, mc2, mc3, mc4 = st.columns(4)
+    mc1.markdown(f"""<div class="stryk-metric"><div class="value">{best_overall}/13</div><div class="label">Best Score</div></div>""", unsafe_allow_html=True)
+    mc2.markdown(f"""<div class="stryk-metric"><div class="value">{avg_best:.1f}</div><div class="label">Avg Best</div></div>""", unsafe_allow_html=True)
+    ge10 = sum(1 for s in scores if s["best_correct"] >= 10)
+    mc3.markdown(f"""<div class="stryk-metric"><div class="value">{ge10}/{len(scores)}</div><div class="label">10+ Correct</div></div>""", unsafe_allow_html=True)
+    ge12 = sum(1 for s in scores if s["best_correct"] >= 12)
+    mc4.markdown(f"""<div class="stryk-metric"><div class="value">{ge12}/{len(scores)}</div><div class="label">12+ Correct</div></div>""", unsafe_allow_html=True)
 
     for s in scores:
         dist = json.loads(s["dist_json"]) if isinstance(s["dist_json"], str) else (s["dist_json"] or {})
 
-        with st.expander(f"System #{s['system_id']} — {s['coupon_name']} | Best: {s['best_correct']}/13", expanded=True):
-            st.metric("Best Row Correct", f"{s['best_correct']}/13")
-
+        with st.expander(f"System #{s['system_id']} — Best: {s['best_correct']}/13 | {s['total_rows']} rows", expanded=True):
             if s["notes"]:
                 st.caption(s["notes"])
 
@@ -292,57 +630,59 @@ def render_scoring_tab(conn):
                     count = dist.get(str(k), 0)
                     dist_data.append({"Correct": k, "Rows": count})
 
-                fig = go.Figure(data=[
-                    go.Bar(
-                        x=[d["Correct"] for d in dist_data],
-                        y=[d["Rows"] for d in dist_data],
-                        marker_color=["#F44336" if d["Correct"] < 8 else "#FFC107" if d["Correct"] < 10 else "#4CAF50" if d["Correct"] < 13 else "#FFD700" for d in dist_data],
-                        text=[d["Rows"] for d in dist_data],
-                        textposition="outside"
-                    )
-                ])
+                fig = go.Figure(data=[go.Bar(
+                    x=[d["Correct"] for d in dist_data],
+                    y=[d["Rows"] for d in dist_data],
+                    marker_color=[
+                        "#F44336" if d["Correct"] < 8 else
+                        "#FFC107" if d["Correct"] < 10 else
+                        "#4CAF50" if d["Correct"] < 13 else
+                        "#FFD700"
+                        for d in dist_data
+                    ],
+                    text=[d["Rows"] if d["Rows"] > 0 else "" for d in dist_data],
+                    textposition="outside"
+                )])
                 fig.update_layout(
-                    title="Distribution of Correct Predictions per Row",
-                    xaxis_title="Correct Matches",
-                    yaxis_title="Number of Rows",
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    font_color="white",
-                    height=300,
-                    margin=dict(l=20, r=20, t=40, b=20)
+                    xaxis_title="Correct Matches", yaxis_title="Number of Rows",
+                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                    font_color="white", height=300,
+                    margin=dict(l=20, r=20, t=20, b=20)
                 )
                 st.plotly_chart(fig, use_container_width=True)
 
-    if len(scores) >= 2:
-        st.markdown("### Performance Over Time")
-        trend_data = []
-        for s in reversed(scores):
-            trend_data.append({
-                "Coupon": s["coupon_name"],
-                "Best Correct": s["best_correct"],
-                "Total Rows": s["total_rows"]
-            })
+    st.markdown("---")
+    st.markdown("### All-Time Summary")
+    code, resp = api_call("GET", "/admin/stryk/scores/summary?last_n=50")
+    if code == 200:
+        agg = resp.get("aggregate", {})
+        items = resp.get("items", [])
 
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=[d["Coupon"] for d in trend_data],
-            y=[d["Best Correct"] for d in trend_data],
-            mode="lines+markers",
-            name="Best Correct",
-            line=dict(color="#4CAF50", width=2),
-            marker=dict(size=8)
-        ))
-        fig.add_hline(y=10, line_dash="dash", line_color="#FFC107", annotation_text="10 correct")
-        fig.add_hline(y=13, line_dash="dash", line_color="#FFD700", annotation_text="Jackpot")
-        fig.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            font_color="white",
-            yaxis_range=[0, 14],
-            height=300,
-            margin=dict(l=20, r=20, t=30, b=20)
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        ac1, ac2, ac3, ac4 = st.columns(4)
+        ac1.metric("10+ Correct", agg.get("ge10", 0))
+        ac2.metric("11+ Correct", agg.get("ge11", 0))
+        ac3.metric("12+ Correct", agg.get("ge12", 0))
+        ac4.metric("13/13 Jackpot", agg.get("eq13", 0))
+
+        if len(items) >= 2:
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=list(range(len(items))),
+                y=[i["best_correct"] for i in reversed(items)],
+                mode="lines+markers",
+                name="Best Correct",
+                line=dict(color="#e94560", width=2),
+                marker=dict(size=8)
+            ))
+            fig.add_hline(y=10, line_dash="dash", line_color="#FFC107", annotation_text="10")
+            fig.add_hline(y=13, line_dash="dash", line_color="#FFD700", annotation_text="Jackpot")
+            fig.update_layout(
+                xaxis_title="System #", yaxis_title="Best Correct",
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                font_color="white", yaxis_range=[0, 14], height=300,
+                margin=dict(l=20, r=20, t=30, b=20)
+            )
+            st.plotly_chart(fig, use_container_width=True)
 
 
 render_stryktipset_dashboard()

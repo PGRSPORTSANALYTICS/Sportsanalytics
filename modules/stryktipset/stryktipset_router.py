@@ -17,7 +17,8 @@ from sqlalchemy.orm import declarative_base, relationship, sessionmaker, Session
 # CONFIG (change these)
 # =========================
 
-ADMIN_SECRET = "CHANGE_ME"  # put in env in real use
+import os as _os
+ADMIN_SECRET = _os.environ.get("ADMIN_API_KEY", "CHANGE_ME")
 DATABASE_URL = "sqlite:///./app.db"  # or your postgres url
 
 engine = create_engine(DATABASE_URL, future=True)
