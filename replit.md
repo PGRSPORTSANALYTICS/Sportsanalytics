@@ -16,7 +16,7 @@ The system incorporates advanced features such as:
 - **Comprehensive Analysis:** Integrates team form, H2H, league standings, odds movement, and venue-specific xG.
 - **Data Sourcing:** Employs a dual-source system for injury/lineup data (API-Football with Transfermarkt fallback) and a triple-layer fallback for general data resilience (API-Football, web scrapers, safe defaults).
 - **Prediction Models:** Combines Poisson distribution, neural network probabilities, and H2H patterns within an Ensemble Prediction System, enhanced by Monte Carlo simulation and Similar Matches Technology.
-- **Value-Based Betting:** Utilizes Expected Value (EV) Filtering with Kelly Criterion Bet Sizing.
+- **Value-Based Betting:** Utilizes Expected Value (EV) Filtering with Kelly Criterion Bet Sizing, enhanced by Shrink-to-Market Probability Calibration (85% ensemble + 15% market-implied, Feb 12 2026).
 - **Multi-Market Expansion:** Dedicated engines support various market types including Value Singles, Totals, BTTS, Corners, Shots, and Cards.
 - **Bet Monitoring & Delivery:** Features a `BetStatusService`, Live Bet Control Center, an extended Telegram bot with dual channels for predictions, and automated Discord result notifications.
 - **Intelligent Result Verification:** A production-ready caching and cooldown system with multi-source fallback (Flashscore, API-Football, The Odds API, Sofascore) ensures fast and reliable settlement. Manual settlement system for unverified corner/card markets.
