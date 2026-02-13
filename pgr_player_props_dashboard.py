@@ -161,7 +161,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown('<div class="props-header">Player Props</div>', unsafe_allow_html=True)
-st.markdown('<div class="props-sub">NBA &bull; NCAAB &bull; Football &bull; Learning Mode</div>', unsafe_allow_html=True)
+st.markdown('<div class="props-sub">NBA &bull; Football &bull; Learning Mode</div>', unsafe_allow_html=True)
 st.markdown('<center><span class="learning-badge">LEARNING MODE &mdash; NO REAL STAKES</span></center>', unsafe_allow_html=True)
 
 
