@@ -40,8 +40,8 @@ FOOTBALL_PROP_MARKETS = [
 ]
 
 BASKETBALL_LEAGUES = [
-    'basketball_ncaab',
     'basketball_nba',
+    'basketball_ncaab',
 ]
 
 BASKETBALL_PROP_MARKETS = [
@@ -53,8 +53,8 @@ BASKETBALL_PROP_MARKETS = [
 
 SWEDISH_BOOKMAKERS = ['betsson', 'unibet', 'leovegas', 'coolbet', 'nordicbet']
 
-MAX_EVENTS_PER_CYCLE = 4
-MAX_API_CREDITS_PER_CYCLE = 15
+MAX_EVENTS_PER_CYCLE = 10
+MAX_API_CREDITS_PER_CYCLE = 50
 MIN_EDGE_PCT = 2.0
 
 
