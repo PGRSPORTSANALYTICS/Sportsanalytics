@@ -41,7 +41,6 @@ FOOTBALL_PROP_MARKETS = [
 
 BASKETBALL_LEAGUES = [
     'basketball_nba',
-    'basketball_ncaab',
 ]
 
 BASKETBALL_PROP_MARKETS = [
@@ -55,6 +54,7 @@ SWEDISH_BOOKMAKERS = ['betsson', 'unibet', 'leovegas', 'coolbet', 'nordicbet']
 
 MAX_EVENTS_PER_CYCLE = 10
 MAX_API_CREDITS_PER_CYCLE = 50
+MAX_PROPS_PER_CYCLE = 100
 MIN_EDGE_PCT = 2.0
 
 
@@ -74,9 +74,12 @@ class PlayerPropsEngine:
         self.credits_used = 0
         self.stats = {'football_props': 0, 'basketball_props': 0, 'total_saved': 0, 'errors': 0}
 
+        all_props = []
+
         try:
             basketball_props = self._run_basketball_props()
             self.stats['basketball_props'] = len(basketball_props)
+            all_props.extend(basketball_props)
         except Exception as e:
             logger.error(f"Basketball props error: {e}")
             self.stats['errors'] += 1
@@ -84,9 +87,19 @@ class PlayerPropsEngine:
         try:
             football_props = self._run_football_props()
             self.stats['football_props'] = len(football_props)
+            all_props.extend(football_props)
         except Exception as e:
             logger.error(f"Football props error: {e}")
             self.stats['errors'] += 1
+
+        if len(all_props) > MAX_PROPS_PER_CYCLE:
+            all_props.sort(key=lambda x: x.get('edge_pct', 0), reverse=True)
+            all_props = all_props[:MAX_PROPS_PER_CYCLE]
+            logger.info(f"🎯 Capped to {MAX_PROPS_PER_CYCLE} best props (from {self.stats['basketball_props'] + self.stats['football_props']})")
+
+        if all_props:
+            saved = self._save_props_to_db(all_props)
+            self.stats['total_saved'] = saved
 
         logger.info(f"🎯 Props cycle complete: {self.stats['football_props']} football, "
                      f"{self.stats['basketball_props']} basketball, "
@@ -148,11 +161,7 @@ class PlayerPropsEngine:
                 all_props.extend(props)
                 time.sleep(1)
 
-        if all_props:
-            saved = self._save_props_to_db(all_props)
-            self.stats['total_saved'] += saved
-            logger.info(f"⚽ Football: {len(all_props)} props found, {saved} saved")
-
+        logger.info(f"⚽ Football: {len(all_props)} props found")
         return all_props
 
     def _run_basketball_props(self) -> List[Dict]:
@@ -168,8 +177,13 @@ class PlayerPropsEngine:
             if not events:
                 continue
 
+            events = self._filter_future_events(events)
+            if not events:
+                logger.info(f"🏀 {league}: no future events")
+                continue
+
             events_to_scan = events[:MAX_EVENTS_PER_CYCLE]
-            logger.info(f"🏀 {league}: {len(events)} events, scanning {len(events_to_scan)}")
+            logger.info(f"🏀 {league}: {len(events)} future events, scanning {len(events_to_scan)}")
 
             for event in events_to_scan:
                 if self.credits_used >= MAX_API_CREDITS_PER_CYCLE:
@@ -187,11 +201,7 @@ class PlayerPropsEngine:
                 all_props.extend(props)
                 time.sleep(1)
 
-        if all_props:
-            saved = self._save_props_to_db(all_props)
-            self.stats['total_saved'] += saved
-            logger.info(f"🏀 Basketball: {len(all_props)} props found, {saved} saved")
-
+        logger.info(f"🏀 Basketball: {len(all_props)} props found")
         return all_props
 
     def _get_events(self, sport_key: str) -> List[Dict]:
@@ -250,7 +260,7 @@ class PlayerPropsEngine:
             if not bookmakers:
                 return []
 
-            best_odds_map = {}
+            all_outcomes = {}
 
             for bm in bookmakers:
                 bm_key = bm.get('key', '')
@@ -271,14 +281,14 @@ class PlayerPropsEngine:
 
                         prop_key = f"{player_name}|{market_key}|{selection}|{line}"
 
-                        if prop_key not in best_odds_map or odds > best_odds_map[prop_key]['odds']:
+                        if prop_key not in all_outcomes or odds > all_outcomes[prop_key]['odds']:
                             implied_prob = 1.0 / odds if odds > 0 else 0
                             model_prob = self._estimate_model_prob(
                                 sport_type, market_key, player_name, line, odds, implied_prob
                             )
                             edge = ((model_prob * odds) - 1) * 100 if model_prob > 0 else 0
 
-                            best_odds_map[prop_key] = {
+                            all_outcomes[prop_key] = {
                                 'sport': sport_type,
                                 'league': sport,
                                 'event_id': event_id,
@@ -298,12 +308,18 @@ class PlayerPropsEngine:
                                 'region': 'se' if is_swedish else regions,
                                 'is_swedish_bm': is_swedish,
                             }
-                        elif is_swedish and odds == best_odds_map[prop_key]['odds']:
-                            best_odds_map[prop_key]['bookmaker'] = bm_title
-                            best_odds_map[prop_key]['region'] = 'se'
-                            best_odds_map[prop_key]['is_swedish_bm'] = True
+                        elif is_swedish and odds == all_outcomes[prop_key]['odds']:
+                            all_outcomes[prop_key]['bookmaker'] = bm_title
+                            all_outcomes[prop_key]['region'] = 'se'
+                            all_outcomes[prop_key]['is_swedish_bm'] = True
 
-            props = list(best_odds_map.values())
+            best_per_player_market = {}
+            for prop in all_outcomes.values():
+                pm_key = f"{prop['player_name']}|{prop['market']}"
+                if pm_key not in best_per_player_market or prop['edge_pct'] > best_per_player_market[pm_key]['edge_pct']:
+                    best_per_player_market[pm_key] = prop
+
+            props = list(best_per_player_market.values())
 
             if props:
                 logger.info(f"🎯 {home_team} vs {away_team}: {len(props)} player props found")

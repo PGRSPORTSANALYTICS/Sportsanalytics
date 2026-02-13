@@ -81,10 +81,12 @@ The system incorporates advanced features such as:
     - Free Pick: 1 pick/day @ 11:00 UTC (public Discord channel)
 - **Player Props Engine (Feb 11, 2026):** Internal learning mode for player prop markets.
     - **Football:** player_anytime_goalscorer, player_shots_on_goal (limited coverage from The Odds API)
-    - **Basketball:** player_points, player_rebounds (strong coverage — NBA/NCAAB)
+    - **Basketball:** player_points, player_rebounds, player_assists, player_PRA (NBA only — NCAAB removed)
     - Mode: LEARNING ONLY — no real stakes, data collection for AI training
     - Schedule: Every 6 hours via combined_sports_runner.py
-    - API budget: Max 15 credits per cycle (conserves 500/month quota)
+    - API budget: Max 50 credits per cycle
+    - Max 100 props per cycle
+    - One bet per player per market (no duplicate lines for same player+market)
     - DB table: `player_props` (separate from football_opportunities)
     - Discord: Top-edge props sent to DISCORD_PROPS_WEBHOOK_URL with learning mode badge
     - Auto-void: Props older than 3 days auto-voided by results_engine.py
