@@ -93,6 +93,24 @@ class PlayerPropsEngine:
                      f"{self.stats['total_saved']} saved, {self.credits_used} API credits used")
         return self.stats
 
+    def _filter_future_events(self, events: List[Dict]) -> List[Dict]:
+        now = datetime.now(timezone.utc)
+        future = []
+        for e in events:
+            ct = e.get('commence_time', '')
+            if ct:
+                try:
+                    event_time = datetime.fromisoformat(ct.replace('Z', '+00:00'))
+                    if event_time > now:
+                        future.append(e)
+                    else:
+                        logger.debug(f"⏭️ Skipping already started: {e.get('home_team','')} vs {e.get('away_team','')}")
+                except (ValueError, AttributeError):
+                    future.append(e)
+            else:
+                future.append(e)
+        return future
+
     def _run_football_props(self) -> List[Dict]:
         logger.info("⚽ Scanning football player props...")
         all_props = []
@@ -106,8 +124,13 @@ class PlayerPropsEngine:
             if not events:
                 continue
 
+            events = self._filter_future_events(events)
+            if not events:
+                logger.info(f"⚽ {league}: no future events")
+                continue
+
             events_to_scan = events[:MAX_EVENTS_PER_CYCLE]
-            logger.info(f"⚽ {league}: {len(events)} events, scanning {len(events_to_scan)}")
+            logger.info(f"⚽ {league}: {len(events)} future events, scanning {len(events_to_scan)}")
 
             for event in events_to_scan:
                 if self.credits_used >= MAX_API_CREDITS_PER_CYCLE:
