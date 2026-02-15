@@ -192,15 +192,17 @@ class ResultsEngine:
             conn = self._get_db_connection()
             cursor = conn.cursor(cursor_factory=RealDictCursor)
             
+            now_epoch = int(datetime.now().timestamp())
             cursor.execute("""
-                SELECT id, home_team, away_team, match_date, market, selection, odds, stake, match_id, league
+                SELECT id, home_team, away_team, match_date, market, selection, odds, stake, match_id, league, kickoff_epoch
                 FROM football_opportunities 
                 WHERE (outcome IS NULL OR outcome = '' OR outcome = 'unknown' OR outcome = 'pending')
                     AND DATE(match_date) <= CURRENT_DATE
                     AND DATE(match_date) >= CURRENT_DATE - INTERVAL '3 days'
+                    AND (kickoff_epoch IS NULL OR kickoff_epoch < %s - 7200)
                 ORDER BY match_date DESC
                 LIMIT 200
-            """)
+            """, (now_epoch,))
             
             pending = cursor.fetchall()
             cursor.close()
