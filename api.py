@@ -34,6 +34,7 @@ from db_helper import db_helper
 from auth_discord import router as discord_auth_router
 from api_staking import router as staking_router
 from modules.stryktipset.stryktipset_router import router as stryk_router
+from bets_feed import router as bets_feed_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -67,6 +68,9 @@ app.include_router(staking_router)
 
 # Include Stryktipset router
 app.include_router(stryk_router)
+
+# Include Bets Feed router
+app.include_router(bets_feed_router)
 
 # =============================================================================
 # Response Models
