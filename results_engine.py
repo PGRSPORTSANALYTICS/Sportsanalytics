@@ -873,8 +873,12 @@ class ResultsEngine:
         row = cursor.fetchone()
         if row:
             odds = float(row['odds'] or 1)
-            # Calculate profit/loss in UNITS (1 unit stake)
-            profit_loss = (odds - 1) if outcome == 'won' else -1.0
+            if outcome == 'won':
+                profit_loss = (odds - 1)
+            elif outcome == 'void':
+                profit_loss = 0.0
+            else:
+                profit_loss = -1.0
         
         now_ts = int(datetime.now().timestamp())
         cursor.execute("""
