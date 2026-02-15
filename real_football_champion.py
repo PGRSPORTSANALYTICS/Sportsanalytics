@@ -3899,6 +3899,30 @@ def get_pending_match_ids() -> set:
         return set()
 
 
+DAILY_BET_CAP = 25
+
+def get_todays_bet_count() -> int:
+    """Count how many football bets have been created today (by creation timestamp)."""
+    try:
+        now_epoch = int(time.time())
+        midnight_epoch = now_epoch - (now_epoch % 86400)
+        result = db_helper.execute('''
+            SELECT COUNT(*) FROM football_opportunities
+            WHERE timestamp >= %s
+        ''', (midnight_epoch,), fetch='one')
+        count = result[0] if result and result[0] else 0
+        return count
+    except Exception as e:
+        print(f"⚠️ Could not check daily bet count: {e}")
+        return 999
+
+def get_daily_remaining_slots() -> int:
+    """Get how many bet slots remain for today."""
+    used = get_todays_bet_count()
+    remaining = max(0, DAILY_BET_CAP - used)
+    print(f"📊 Daily cap: {used}/{DAILY_BET_CAP} used, {remaining} slots remaining")
+    return remaining
+
 def run_single_cycle():
     """Run a single prediction cycle - VALUE SINGLES + ALL MARKETS"""
     try:
@@ -3908,16 +3932,21 @@ def run_single_cycle():
         print("📊 Markets: 1X2, O/U, BTTS, Corners, Cards, Double Chance")
         print("=" * 60)
         
-        # Get existing pending matches to avoid contradictory picks
+        remaining_slots = get_daily_remaining_slots()
+        if remaining_slots <= 0:
+            print(f"🛑 DAILY CAP REACHED ({DAILY_BET_CAP} bets) - Skipping this cycle")
+            return True
+        
         pending_matches = get_pending_match_ids()
         
-        # 1. Core Value Singles (1X2, O/U, BTTS, DC)
+        vs_slots = min(10, remaining_slots)
         try:
             value_engine = ValueSinglesEngine(champion, ev_threshold=0.05, min_confidence=55)
-            value_singles = value_engine.generate_value_singles(avoid_match_ids=pending_matches, max_picks=10)
+            value_singles = value_engine.generate_value_singles(avoid_match_ids=pending_matches, max_picks=vs_slots)
             if value_singles:
                 saved = value_engine.save_value_singles(value_singles)
                 print(f"✅ Saved {saved} VALUE SINGLES (1X2/O/U/BTTS)")
+                remaining_slots -= saved
             else:
                 print("📊 No value singles found this cycle")
         except Exception as e:
@@ -3925,11 +3954,13 @@ def run_single_cycle():
             import traceback
             traceback.print_exc()
         
-        # 2. Corners & Cards Markets (syndicate-style engines)
-        try:
-            _run_corners_cards_cycle(champion)
-        except Exception as e:
-            print(f"⚠️ Corners/Cards cycle failed: {e}")
+        if remaining_slots > 0:
+            try:
+                _run_corners_cards_cycle(champion, max_picks=remaining_slots)
+            except Exception as e:
+                print(f"⚠️ Corners/Cards cycle failed: {e}")
+        else:
+            print(f"🛑 No slots left for Corners/Cards (daily cap {DAILY_BET_CAP} reached)")
         
         print("✅ Value Singles cycle complete (all markets)")
         return True
@@ -3939,7 +3970,7 @@ def run_single_cycle():
         return False
 
 
-def _run_corners_cards_cycle(champion):
+def _run_corners_cards_cycle(champion, max_picks=15):
     """Run corners and cards engines using fixtures from database with synthetic odds"""
     from corners_engine import run_corners_cycle
     from cards_engine import run_cards_cycle
@@ -4005,22 +4036,32 @@ def _run_corners_cards_cycle(champion):
     
     print(f"   📊 Processing {len(fixtures)} fixtures with synthetic odds")
     
+    saved_total = 0
+    
+    corners_cap = max(0, max_picks // 2)
+    cards_cap = max(0, max_picks - corners_cap)
+    
     # Run corners engine
     try:
         match_corners, team_corners, hc_corners = run_corners_cycle(fixtures, odds_data)
         all_corners = match_corners + team_corners + hc_corners
         if all_corners:
+            all_corners = sorted(all_corners, key=lambda x: x.get('ev', x.get('edge', 0)), reverse=True)[:corners_cap]
             saved = _save_bet_candidates_to_db(all_corners, 'Corners')
-            print(f"   ✅ Saved {saved} CORNERS predictions")
+            saved_total += saved
+            print(f"   ✅ Saved {saved} CORNERS predictions (cap: {corners_cap})")
     except Exception as e:
         print(f"   ⚠️ Corners engine error: {e}")
     
+    remaining_cards = max_picks - saved_total
     # Run cards engine
     try:
         all_cards = run_cards_cycle(fixtures, odds_data)
         if all_cards:
+            all_cards = sorted(all_cards, key=lambda x: x.get('ev', x.get('edge', 0)), reverse=True)[:remaining_cards]
             saved = _save_bet_candidates_to_db(all_cards, 'Cards')
-            print(f"   ✅ Saved {saved} CARDS predictions")
+            saved_total += saved
+            print(f"   ✅ Saved {saved} CARDS predictions (cap: {remaining_cards})")
     except Exception as e:
         print(f"   ⚠️ Cards engine error: {e}")
     
