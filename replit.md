@@ -45,6 +45,7 @@ The system incorporates advanced features such as:
         - FT_UNDER_2_5 + FT_UNDER_3_5: Model underperforms on Under markets
     - **DISABLED:**
         - SGP: Permanently disabled (2.8% hit rate, -5065u)
+        - ML PARLAY: Permanently disabled Feb 16, 2026 (11.9% hit rate, avg odds 19.66x — AI cannot reliably predict parlays)
     - **Post-Learning Rules:**
         - No stake increases
         - No new markets

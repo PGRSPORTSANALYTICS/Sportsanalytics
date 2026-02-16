@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 ENABLE_VALUE_SINGLES = True          # Core product - AI picks for 1X2, O/U, BTTS, etc.
 ENABLE_PARLAYS = False               # DISABLED per Jan 2026 policy - no multi-match parlays
 ENABLE_COLLEGE_BASKETBALL = True     # ACTIVE - 63.3% hit rate, +$3,446 profit
-ENABLE_ML_PARLAY = True              # 2-leg moneyline parlays ONLY (policy exception)
+ENABLE_ML_PARLAY = False             # DISABLED Feb 16, 2026 - 11.9% hit rate, not profitable
 ENABLE_PLAYER_PROPS = True           # LEARNING MODE - player props data collection (Feb 2026)
 
 # ============================================================
