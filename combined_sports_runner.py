@@ -169,6 +169,39 @@ def run_ml_parlay():
         logger.error(f"❌ ML Parlay prediction error: {e}")
 
 
+def run_learning_update():
+    """Run self-learning stats computation and auto-promotion cycle"""
+    try:
+        from learning_engine import run_learning_update as update_stats
+        logger.info("🧠 Running self-learning stats update...")
+        saved = update_stats()
+        logger.info(f"🧠 Learning stats updated: {saved} rows")
+    except Exception as e:
+        logger.error(f"❌ Learning stats error: {e}")
+        import traceback
+        traceback.print_exc()
+
+    try:
+        from auto_promoter import run_promotion_cycle
+        logger.info("🔄 Running auto-promotion cycle...")
+        changes = run_promotion_cycle()
+        promoted = len(changes.get('promoted', []))
+        demoted = len(changes.get('demoted', []))
+        disabled = len(changes.get('disabled', []))
+        if promoted or demoted or disabled:
+            logger.info(f"🔄 Promotion changes: {promoted} promoted, {demoted} demoted, {disabled} disabled")
+            for item in changes.get('promoted', []):
+                logger.info(f"   ✅ PROMOTED: {item['league']}/{item['market']} (ROI {item['roi']:.1f}%)")
+            for item in changes.get('demoted', []):
+                logger.info(f"   ⚠️ DEMOTED: {item['league']}/{item['market']} (ROI {item['roi']:.1f}%)")
+        else:
+            logger.info("🔄 No promotion changes")
+    except Exception as e:
+        logger.error(f"❌ Auto-promotion error: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 def verify_basketball_results():
     """Verify College Basketball results"""
     try:
@@ -509,6 +542,8 @@ def main():
     
     run_performance_updates()
     
+    run_learning_update()
+    
     # CRITICAL: Run Results Engine immediately on startup
     # This ensures no bets drag for days waiting for scheduler
     logger.info("🔄 Running immediate Results Engine...")
@@ -552,6 +587,8 @@ def main():
     schedule.every(1).hours.do(print_daily_stake_summary)
     
     schedule.every(6).hours.do(run_performance_updates)
+    
+    schedule.every(2).hours.do(run_learning_update)
     
     schedule.every().day.at("22:30").do(run_daily_recap)
     schedule.every().sunday.at("22:30").do(run_weekly_recap)

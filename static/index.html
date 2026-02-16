@@ -6,7 +6,7 @@
 <title>PGR Sports Analytics</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-:root{--bg:#0f1117;--card:#1a1d29;--card2:#222639;--accent:#FF6B35;--green:#38ef7d;--red:#ff4757;--text:#e4e6eb;--text2:#9ca3af;--border:#2d3148}
+:root{--bg:#0f1117;--card:#1a1d29;--card2:#222639;--accent:#FF6B35;--green:#38ef7d;--red:#ff4757;--yellow:#ffa502;--blue:#70a1ff;--text:#e4e6eb;--text2:#9ca3af;--border:#2d3148}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
 .container{max-width:1200px;margin:0 auto;padding:1rem}
 header{text-align:center;padding:1.5rem 0 1rem}
@@ -25,6 +25,10 @@ header p{color:var(--text2);font-size:.9rem;margin-top:.3rem}
 .filters button{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:.5rem 1rem;font-size:.85rem;cursor:pointer;font-weight:600}
 .filters button:hover{opacity:.9}
 .filters button.secondary{background:var(--card2);border:1px solid var(--border)}
+.nav-tabs{display:flex;gap:0;margin-bottom:1rem;border-bottom:2px solid var(--border);overflow-x:auto}
+.nav-tab{padding:.6rem 1.2rem;cursor:pointer;font-size:.85rem;font-weight:600;color:var(--text2);border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .2s;white-space:nowrap}
+.nav-tab:hover{color:var(--text)}
+.nav-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
 .tabs{display:flex;gap:0;margin-bottom:1rem;border-bottom:2px solid var(--border)}
 .tab{padding:.6rem 1.2rem;cursor:pointer;font-size:.85rem;font-weight:600;color:var(--text2);border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .2s}
 .tab:hover{color:var(--text)}
@@ -45,6 +49,9 @@ header p{color:var(--text2);font-size:.9rem;margin-top:.3rem}
 .status-badge.lost{background:rgba(255,71,87,.15);color:var(--red)}
 .status-badge.upcoming{background:rgba(255,107,53,.15);color:var(--accent)}
 .status-badge.void{background:rgba(156,163,175,.15);color:var(--text2)}
+.status-badge.PRODUCTION{background:rgba(56,239,125,.15);color:var(--green)}
+.status-badge.LEARNING_ONLY{background:rgba(255,165,2,.15);color:var(--yellow)}
+.status-badge.DISABLED{background:rgba(255,71,87,.15);color:var(--red)}
 .profit{font-weight:700;font-size:.85rem}
 .profit.win{color:var(--green)}
 .profit.loss{color:var(--red)}
@@ -56,12 +63,39 @@ header p{color:var(--text2);font-size:.9rem;margin-top:.3rem}
 .spinner{display:inline-block;width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 .empty{text-align:center;padding:3rem;color:var(--text2)}
+.page-section{display:none}
+.page-section.active{display:block}
+table.data-table{width:100%;border-collapse:collapse;margin-top:.5rem}
+table.data-table th,table.data-table td{padding:.6rem .8rem;text-align:left;border-bottom:1px solid var(--border);font-size:.82rem}
+table.data-table th{color:var(--text2);font-weight:600;text-transform:uppercase;font-size:.7rem;letter-spacing:.5px;position:sticky;top:0;background:var(--bg)}
+table.data-table td{color:var(--text)}
+table.data-table tr:hover{background:var(--card2)}
+.table-container{background:var(--card);border-radius:10px;border:1px solid var(--border);overflow:auto;max-height:600px}
+.section-title{font-size:1.1rem;font-weight:700;margin-bottom:.75rem;color:var(--text)}
+.section-subtitle{font-size:.85rem;color:var(--text2);margin-bottom:1rem}
+.window-select{display:flex;gap:.5rem;margin-bottom:1rem}
+.window-btn{padding:.4rem .8rem;border-radius:6px;border:1px solid var(--border);background:var(--card2);color:var(--text2);cursor:pointer;font-size:.8rem;font-weight:600}
+.window-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.promo-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:.75rem;margin-top:1rem}
+.promo-card{background:var(--card);border-radius:8px;padding:1rem;border:1px solid var(--border)}
+.promo-card h4{font-size:.85rem;margin-bottom:.4rem}
+.promo-card .promo-meta{color:var(--text2);font-size:.75rem}
+.promo-counts{display:flex;gap:1rem;margin-bottom:1rem}
+.promo-count{background:var(--card);border-radius:8px;padding:.75rem 1.2rem;border:1px solid var(--border);text-align:center}
+.promo-count .num{font-size:1.4rem;font-weight:700}
+.promo-count .lbl{font-size:.7rem;color:var(--text2);text-transform:uppercase}
+.bar{height:6px;border-radius:3px;background:var(--card2);overflow:hidden;margin-top:.3rem}
+.bar-fill{height:100%;border-radius:3px;transition:width .3s}
+.bar-fill.green{background:var(--green)}
+.bar-fill.red{background:var(--red)}
+.bar-fill.yellow{background:var(--yellow)}
 @media(max-width:768px){
 .stats-grid{grid-template-columns:repeat(3,1fr)}
 .bet-card{grid-template-columns:auto 1fr;gap:.75rem}
 .bet-right{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;text-align:left}
 .filters{flex-direction:column}
 .filters select,.filters input,.filters button{width:100%}
+.promo-grid{grid-template-columns:1fr}
 }
 @media(max-width:480px){
 .stats-grid{grid-template-columns:repeat(2,1fr)}
@@ -75,6 +109,15 @@ header p{color:var(--text2);font-size:.9rem;margin-top:.3rem}
 <p>AI-Powered Betting Predictions</p>
 </header>
 
+<div class="nav-tabs">
+<div class="nav-tab active" data-page="bets" onclick="switchPage('bets')">Bets Feed</div>
+<div class="nav-tab" data-page="leagues" onclick="switchPage('leagues')">League Rankings</div>
+<div class="nav-tab" data-page="markets" onclick="switchPage('markets')">Market Rankings</div>
+<div class="nav-tab" data-page="combos" onclick="switchPage('combos')">League+Market</div>
+<div class="nav-tab" data-page="promotion" onclick="switchPage('promotion')">Auto Status</div>
+</div>
+
+<div id="page-bets" class="page-section active">
 <div class="stats-grid" id="statsGrid">
 <div class="stat-card"><div class="value">-</div><div class="label">Total Bets</div></div>
 <div class="stat-card green"><div class="value">-</div><div class="label">Won</div></div>
@@ -128,11 +171,73 @@ header p{color:var(--text2);font-size:.9rem;margin-top:.3rem}
 </div>
 </div>
 
+<div id="page-leagues" class="page-section">
+<h2 class="section-title">League Rankings</h2>
+<p class="section-subtitle">Performance of each league sorted by learning score</p>
+<div class="window-select" id="leagueWindowSelect"></div>
+<div class="table-container">
+<table class="data-table" id="leagueTable">
+<thead><tr><th>#</th><th>League</th><th>Bets</th><th>W/L</th><th>Hit Rate</th><th>ROI</th><th>CLV</th><th>Profit</th><th>Score</th></tr></thead>
+<tbody id="leagueBody"><tr><td colspan="9" class="loading">Loading...</td></tr></tbody>
+</table>
+</div>
+</div>
+
+<div id="page-markets" class="page-section">
+<h2 class="section-title">Market Rankings</h2>
+<p class="section-subtitle">Performance of each market type sorted by learning score</p>
+<div class="window-select" id="marketWindowSelect"></div>
+<div class="table-container">
+<table class="data-table" id="marketTable">
+<thead><tr><th>#</th><th>Market</th><th>Bets</th><th>W/L</th><th>Hit Rate</th><th>ROI</th><th>CLV</th><th>Profit</th><th>Score</th></tr></thead>
+<tbody id="marketBody"><tr><td colspan="9" class="loading">Loading...</td></tr></tbody>
+</table>
+</div>
+</div>
+
+<div id="page-combos" class="page-section">
+<h2 class="section-title">League + Market Combinations</h2>
+<p class="section-subtitle">Performance of each league-market combination (min 10 bets)</p>
+<div class="window-select" id="comboWindowSelect"></div>
+<div class="table-container">
+<table class="data-table" id="comboTable">
+<thead><tr><th>#</th><th>League</th><th>Market</th><th>Bets</th><th>Hit Rate</th><th>ROI</th><th>CLV</th><th>Profit</th><th>Score</th></tr></thead>
+<tbody id="comboBody"><tr><td colspan="9" class="loading">Loading...</td></tr></tbody>
+</table>
+</div>
+</div>
+
+<div id="page-promotion" class="page-section">
+<h2 class="section-title">Auto Promotion Status</h2>
+<p class="section-subtitle">Markets automatically move between Production, Learning, and Disabled</p>
+<div class="promo-counts" id="promoCounts"></div>
+<div class="table-container">
+<table class="data-table" id="promoTable">
+<thead><tr><th>Status</th><th>League</th><th>Market</th><th>Bets</th><th>ROI</th><th>CLV</th><th>Profit</th><th>Reason</th></tr></thead>
+<tbody id="promoBody"><tr><td colspan="8" class="loading">Loading...</td></tr></tbody>
+</table>
+</div>
+</div>
+
+</div>
+
 <script>
 const API_BASE = window.location.origin + '/api';
 let currentOffset = 0;
 const PAGE_SIZE = 30;
 let totalBets = 0;
+let currentWindow = 'all_time';
+
+function switchPage(page) {
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.querySelector(`.nav-tab[data-page="${page}"]`).classList.add('active');
+  document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  if (page === 'leagues') loadLeagues();
+  if (page === 'markets') loadMarkets();
+  if (page === 'combos') loadCombos();
+  if (page === 'promotion') loadPromotion();
+}
 
 function sportIcon(sport) {
   const icons = {football:'&#9917;', basketball:'&#127936;', props:'&#127919;'};
@@ -148,6 +253,20 @@ function formatDate(iso) {
     return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
   }
   return d.toLocaleDateString([], {month:'short',day:'numeric'}) + ' ' + d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+}
+
+function colorVal(val, invert) {
+  if (val > 0) return `<span style="color:var(--green)">${invert ? '' : '+'}${val.toFixed(1)}</span>`;
+  if (val < 0) return `<span style="color:var(--red)">${val.toFixed(1)}</span>`;
+  return `<span>${val.toFixed(1)}</span>`;
+}
+
+function renderWindowBtns(containerId, callback) {
+  const wins = [['last_50','Last 50'],['last_100','Last 100'],['all_time','All Time']];
+  const c = document.getElementById(containerId);
+  c.innerHTML = wins.map(([k,l]) =>
+    `<div class="window-btn ${currentWindow===k?'active':''}" onclick="currentWindow='${k}';renderWindowBtns('${containerId}',${callback.name});${callback.name}()">${l}</div>`
+  ).join('');
 }
 
 function renderStats(s) {
@@ -268,6 +387,109 @@ function switchTab(sport) {
   document.getElementById('sportFilter').value = sport === 'all' ? '' : sport;
   currentOffset = 0;
   loadBets();
+}
+
+async function loadLeagues() {
+  renderWindowBtns('leagueWindowSelect', loadLeagues);
+  const body = document.getElementById('leagueBody');
+  body.innerHTML = '<tr><td colspan="9" class="loading">Loading...</td></tr>';
+  try {
+    const res = await fetch(`${API_BASE}/learning/league_rankings?window=${currentWindow}`);
+    const data = await res.json();
+    if (!data.length) { body.innerHTML = '<tr><td colspan="9" class="empty">No data yet</td></tr>'; return; }
+    body.innerHTML = data.map((r, i) => `
+      <tr>
+        <td>${i+1}</td>
+        <td><strong>${r.label || r.league}</strong></td>
+        <td>${r.total_bets}</td>
+        <td>${r.wins}/${r.losses}</td>
+        <td>${r.hit_rate.toFixed(1)}%</td>
+        <td>${colorVal(r.roi_pct)}</td>
+        <td>${r.avg_clv.toFixed(3)}</td>
+        <td>${colorVal(r.profit_units)}</td>
+        <td><strong>${r.score.toFixed(1)}</strong></td>
+      </tr>
+    `).join('');
+  } catch(e) { body.innerHTML = `<tr><td colspan="9">${e.message}</td></tr>`; }
+}
+
+async function loadMarkets() {
+  renderWindowBtns('marketWindowSelect', loadMarkets);
+  const body = document.getElementById('marketBody');
+  body.innerHTML = '<tr><td colspan="9" class="loading">Loading...</td></tr>';
+  try {
+    const res = await fetch(`${API_BASE}/learning/market_rankings?window=${currentWindow}`);
+    const data = await res.json();
+    if (!data.length) { body.innerHTML = '<tr><td colspan="9" class="empty">No data yet</td></tr>'; return; }
+    body.innerHTML = data.map((r, i) => `
+      <tr>
+        <td>${i+1}</td>
+        <td><strong>${r.label || r.market}</strong></td>
+        <td>${r.total_bets}</td>
+        <td>${r.wins}/${r.losses}</td>
+        <td>${r.hit_rate.toFixed(1)}%</td>
+        <td>${colorVal(r.roi_pct)}</td>
+        <td>${r.avg_clv.toFixed(3)}</td>
+        <td>${colorVal(r.profit_units)}</td>
+        <td><strong>${r.score.toFixed(1)}</strong></td>
+      </tr>
+    `).join('');
+  } catch(e) { body.innerHTML = `<tr><td colspan="9">${e.message}</td></tr>`; }
+}
+
+async function loadCombos() {
+  renderWindowBtns('comboWindowSelect', loadCombos);
+  const body = document.getElementById('comboBody');
+  body.innerHTML = '<tr><td colspan="9" class="loading">Loading...</td></tr>';
+  try {
+    const res = await fetch(`${API_BASE}/learning/league_market?window=${currentWindow}&min_bets=10`);
+    const data = await res.json();
+    if (!data.length) { body.innerHTML = '<tr><td colspan="9" class="empty">No data yet (min 10 bets)</td></tr>'; return; }
+    body.innerHTML = data.map((r, i) => `
+      <tr>
+        <td>${i+1}</td>
+        <td>${r.league}</td>
+        <td><strong>${r.market}</strong></td>
+        <td>${r.total_bets}</td>
+        <td>${r.hit_rate.toFixed(1)}%</td>
+        <td>${colorVal(r.roi_pct)}</td>
+        <td>${r.avg_clv.toFixed(3)}</td>
+        <td>${colorVal(r.profit_units)}</td>
+        <td><strong>${r.score.toFixed(1)}</strong></td>
+      </tr>
+    `).join('');
+  } catch(e) { body.innerHTML = `<tr><td colspan="9">${e.message}</td></tr>`; }
+}
+
+async function loadPromotion() {
+  const body = document.getElementById('promoBody');
+  body.innerHTML = '<tr><td colspan="8" class="loading">Loading...</td></tr>';
+  try {
+    const res = await fetch(`${API_BASE}/learning/promotion_status`);
+    const data = await res.json();
+    const counts = {PRODUCTION:0, LEARNING_ONLY:0, DISABLED:0};
+    data.forEach(r => { if (counts[r.status] !== undefined) counts[r.status]++; });
+    document.getElementById('promoCounts').innerHTML = `
+      <div class="promo-count"><div class="num" style="color:var(--green)">${counts.PRODUCTION}</div><div class="lbl">Production</div></div>
+      <div class="promo-count"><div class="num" style="color:var(--yellow)">${counts.LEARNING_ONLY}</div><div class="lbl">Learning</div></div>
+      <div class="promo-count"><div class="num" style="color:var(--red)">${counts.DISABLED}</div><div class="lbl">Disabled</div></div>
+    `;
+    if (!data.length) { body.innerHTML = '<tr><td colspan="8" class="empty">No data yet</td></tr>'; return; }
+    body.innerHTML = data.map(r => {
+      const roiColor = r.roi_pct > 0 ? 'var(--green)' : r.roi_pct < 0 ? 'var(--red)' : 'var(--text)';
+      return `
+      <tr>
+        <td><span class="status-badge ${r.status}">${r.status.replace('_',' ')}</span></td>
+        <td>${r.league_name || r.league}</td>
+        <td>${r.market}</td>
+        <td>${r.total_bets}</td>
+        <td style="color:${roiColor}">${r.roi_pct.toFixed(1)}%</td>
+        <td>${r.avg_clv.toFixed(3)}</td>
+        <td>${colorVal(r.profit_units)}</td>
+        <td style="font-size:.75rem;color:var(--text2)">${r.reason || '-'}</td>
+      </tr>`;
+    }).join('');
+  } catch(e) { body.innerHTML = `<tr><td colspan="8">${e.message}</td></tr>`; }
 }
 
 loadStats();

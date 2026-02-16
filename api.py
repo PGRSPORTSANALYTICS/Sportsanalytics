@@ -1898,6 +1898,151 @@ async def get_manual_audit_log(limit: int = 100):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/learning/league_rankings", tags=["Self-Learning"])
+async def get_league_rankings(
+    sport: str = "football",
+    window: str = "all_time"
+):
+    try:
+        rows = db_helper.execute("""
+            SELECT dimension_key, dimension_label, total_bets, wins, losses,
+                   roi_pct, hit_rate, avg_clv, profit_units, avg_odds, score
+            FROM learning_stats
+            WHERE sport = %s AND dimension = 'league' AND window_type = %s
+              AND total_bets >= 5
+            ORDER BY score DESC
+        """, (sport, window), fetch='all') or []
+        return [{
+            'league': row[0], 'label': row[1], 'total_bets': row[2],
+            'wins': row[3], 'losses': row[4], 'roi_pct': float(row[5]),
+            'hit_rate': float(row[6]), 'avg_clv': float(row[7]),
+            'profit_units': float(row[8]), 'avg_odds': float(row[9]),
+            'score': float(row[10]),
+        } for row in rows]
+    except Exception as e:
+        logger.error(f"League rankings error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/learning/market_rankings", tags=["Self-Learning"])
+async def get_market_rankings(
+    sport: str = "football",
+    window: str = "all_time"
+):
+    try:
+        rows = db_helper.execute("""
+            SELECT dimension_key, dimension_label, total_bets, wins, losses,
+                   roi_pct, hit_rate, avg_clv, profit_units, avg_odds, score
+            FROM learning_stats
+            WHERE sport = %s AND dimension = 'market' AND window_type = %s
+              AND total_bets >= 5
+            ORDER BY score DESC
+        """, (sport, window), fetch='all') or []
+        return [{
+            'market': row[0], 'label': row[1], 'total_bets': row[2],
+            'wins': row[3], 'losses': row[4], 'roi_pct': float(row[5]),
+            'hit_rate': float(row[6]), 'avg_clv': float(row[7]),
+            'profit_units': float(row[8]), 'avg_odds': float(row[9]),
+            'score': float(row[10]),
+        } for row in rows]
+    except Exception as e:
+        logger.error(f"Market rankings error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/learning/league_market", tags=["Self-Learning"])
+async def get_league_market_combos(
+    sport: str = "football",
+    window: str = "all_time",
+    min_bets: int = 10
+):
+    try:
+        rows = db_helper.execute("""
+            SELECT dimension_key, dimension_label, total_bets, wins, losses,
+                   roi_pct, hit_rate, avg_clv, profit_units, avg_odds, score
+            FROM learning_stats
+            WHERE sport = %s AND dimension = 'league_market' AND window_type = %s
+              AND total_bets >= %s
+            ORDER BY score DESC
+        """, (sport, window, min_bets), fetch='all') or []
+        result = []
+        for row in rows:
+            key = str(row[0])
+            parts = key.split('|', 1) if '|' in key else [key, '']
+            result.append({
+                'league': parts[0], 'market': parts[1] if len(parts) > 1 else '',
+                'label': row[1], 'total_bets': row[2],
+                'wins': row[3], 'losses': row[4], 'roi_pct': float(row[5]),
+                'hit_rate': float(row[6]), 'avg_clv': float(row[7]),
+                'profit_units': float(row[8]), 'avg_odds': float(row[9]),
+                'score': float(row[10]),
+            })
+        return result
+    except Exception as e:
+        logger.error(f"League-market combos error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/learning/promotion_status", tags=["Self-Learning"])
+async def get_promotion_status(sport: str = "football"):
+    try:
+        rows = db_helper.execute("""
+            SELECT league_id, league_name, market_type, status, total_bets,
+                   roi_pct, avg_clv, profit_units, manual_override,
+                   promotion_reason, last_promotion_change, updated_at
+            FROM league_market_status
+            WHERE sport = %s
+            ORDER BY 
+                CASE status 
+                    WHEN 'PRODUCTION' THEN 1 
+                    WHEN 'LEARNING_ONLY' THEN 2 
+                    WHEN 'DISABLED' THEN 3 
+                END,
+                total_bets DESC
+        """, (sport,), fetch='all') or []
+        return [{
+            'league': row[0], 'league_name': row[1], 'market': row[2],
+            'status': row[3], 'total_bets': row[4],
+            'roi_pct': float(row[5] or 0), 'avg_clv': float(row[6] or 0),
+            'profit_units': float(row[7] or 0),
+            'manual_override': bool(row[8]),
+            'reason': row[9],
+            'last_change': str(row[10]) if row[10] else None,
+            'updated': str(row[11]) if row[11] else None,
+        } for row in rows]
+    except Exception as e:
+        logger.error(f"Promotion status error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/learning/global_stats", tags=["Self-Learning"])
+async def get_global_learning_stats():
+    try:
+        rows = db_helper.execute("""
+            SELECT sport, window_type, total_bets, wins, losses,
+                   roi_pct, hit_rate, avg_clv, profit_units, avg_odds, score
+            FROM learning_stats
+            WHERE dimension = 'global'
+            ORDER BY sport, window_type
+        """, fetch='all') or []
+        result = {}
+        for row in rows:
+            sport = row[0]
+            window = row[1]
+            if sport not in result:
+                result[sport] = {}
+            result[sport][window] = {
+                'total_bets': row[2], 'wins': row[3], 'losses': row[4],
+                'roi_pct': float(row[5]), 'hit_rate': float(row[6]),
+                'avg_clv': float(row[7]), 'profit_units': float(row[8]),
+                'avg_odds': float(row[9]), 'score': float(row[10]),
+            }
+        return result
+    except Exception as e:
+        logger.error(f"Global stats error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 STATIC_DIR = Path(__file__).parent / "static"
 
 @app.get("/", include_in_schema=False)

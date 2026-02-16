@@ -26,6 +26,15 @@ The system incorporates advanced features such as:
 - **Prediction Filtering:** Includes H2H BTTS filter, AI-learned SGP odds filter, Realistic SGP Margin Calibration, and PGR Final Score Strategy.
 - **3-Tier Trust Level Classification:** Predictions are classified into High (L1), Medium (L2), and Soft (L3) based on simulation approval, EV, confidence, and disagreement.
 - **Central Market Router:** A portfolio balancing system with a two-pass selection algorithm, per-market caps, trust level/EV prioritization, and a global daily pick cap.
+- **Self-Learning Engine (Feb 16, 2026):** Fully automated learning system across ALL leagues and markets.
+    - **Learning Engine:** Computes ROI, hit rate, CLV, profit units per league, market, and league+market with rolling windows (last 50, last 100, all-time).
+    - **League/Market Scoring:** Weighted formula: `score = ROI_weight * ROI + CLV_weight * avg_CLV + volume_weight * log(total_bets)`.
+    - **Auto Promotion/Demotion:** Markets automatically move between PRODUCTION, LEARNING_ONLY, DISABLED based on thresholds (80+ bets, ROI > 3%, positive CLV for promotion).
+    - **Smart Bet Filtering:** Combined confidence = model_EV * league_score * market_score * CLV_score — rejects low-confidence bets.
+    - **Dashboard:** League rankings, market rankings, league+market combinations, auto-promotion status with interactive window selection.
+    - DB tables: `learning_stats`, `league_market_status`
+    - Modules: `learning_engine.py`, `auto_promoter.py`
+    - Schedule: Stats update every 2 hours, auto-promotion check on each update
 - **Odds Drift Module:** Tracks real-time odds movement to block bets with unfavorable drift.
 - **Syndicate Engine Suite (v1.0):** Enhances prediction quality with:
     - **Profile Boost Engine:** Adjusts EV/confidence based on contextual factors (tempo, rivalry, referee, etc.).

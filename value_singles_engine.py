@@ -21,12 +21,26 @@ from datetime_utils import normalize_kickoff, to_iso_utc, now_utc
 from probability_calibrator import calibrate_and_ev, log_calibration_batch
 
 try:
+    from auto_promoter import get_promoter
+    AUTO_PROMOTER_AVAILABLE = True
+except ImportError:
+    AUTO_PROMOTER_AVAILABLE = False
+
+try:
+    from learning_engine import compute_bet_confidence, get_league_scores, get_market_scores
+    LEARNING_ENGINE_AVAILABLE = True
+except ImportError:
+    LEARNING_ENGINE_AVAILABLE = False
+
+try:
     from live_learning_config import apply_ev_controls, is_stability_mode_active
     STABILITY_MODE = True
 except ImportError:
     STABILITY_MODE = False
     def apply_ev_controls(ev): return (ev * 0.4, False, None)
     def is_stability_mode_active(): return False
+
+MIN_COMBINED_CONFIDENCE = 0.01
 
 
 # ============================================================
@@ -732,12 +746,29 @@ class ValueSinglesEngine:
                 kickoff_utc, kickoff_epoch = normalize_kickoff(commence_time)
                 created_at_utc = to_iso_utc(now_utc())
                 
-                # LEARNING ONLY CHECK (Jan 11, 2026)
-                # Markets in LEARNING_ONLY_MARKETS are logged for AI but NOT added to picks
+                league_name = match.get("league_name") or match.get("league") or match.get("sport_title") or "Unknown League"
+                league_key = match.get('sport_key') or match.get('league_key') or match.get('odds_api_key') or league_name
+
                 is_learning_only = market_key in LEARNING_ONLY_MARKETS
+                if AUTO_PROMOTER_AVAILABLE:
+                    promoter = get_promoter()
+                    dynamic_status = promoter.get_market_status('football', league_key, market_key)
+                    if dynamic_status == 'DISABLED':
+                        print(f"   🚫 DISABLED by auto-promoter: {league_key}/{market_key}")
+                        continue
+                    elif dynamic_status == 'PRODUCTION':
+                        is_learning_only = False
+                    elif dynamic_status == 'LEARNING_ONLY':
+                        is_learning_only = True
+
+                if LEARNING_ENGINE_AVAILABLE and not is_learning_only:
+                    combined_conf = compute_bet_confidence(ev, league_key, market_key, 'football')
+                    if combined_conf < MIN_COMBINED_CONFIDENCE:
+                        print(f"   📉 LOW CONFIDENCE: {league_key}/{market_key} conf={combined_conf:.4f} - skipping")
+                        continue
+
                 if is_learning_only:
                     print(f"   📚 LEARNING ONLY: {market_key} @ {odds:.2f} EV={ev:.1%} - skipping from public output")
-                    # Skip adding to picks list - data is collected via training_data table separately
                     continue
                 
                 opportunity = {
