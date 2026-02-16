@@ -547,7 +547,11 @@ async def get_bets_stats(
                 COUNT(CASE WHEN outcome IN ('lost','loss') THEN 1 END),
                 COUNT(CASE WHEN outcome IN ('void','voided') THEN 1 END),
                 COUNT(CASE WHEN outcome IS NULL OR outcome IN ('pending','') THEN 1 END),
-                COALESCE(SUM(profit_loss), 0)
+                COALESCE(SUM(
+                    CASE WHEN outcome IN ('won','win') THEN (odds - 1)
+                         WHEN outcome IN ('lost','loss') THEN -1
+                         ELSE 0 END
+                ), 0)
             FROM football_opportunities
             WHERE (mode IS NULL OR mode != 'TEST') {date_filter}
         """, tuple(params), fetch='one')
