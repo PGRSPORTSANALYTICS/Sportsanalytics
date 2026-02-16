@@ -40,8 +40,8 @@ except ImportError:
 # Lower bookmaker margins (4-8%) vs SGP (28-45%) = better ROI
 # ============================================================
 
-# Minimum Expected Value (EV) - 2% edge for volume (default)
-MIN_VALUE_SINGLE_EV = 0.02  # 2% edge - increased volume
+# Minimum Expected Value (EV) - 7% edge (raised Feb 16, 2026)
+MIN_VALUE_SINGLE_EV = 0.07  # 7% edge - quality over volume
 
 # ============================================================
 # MARKET-SPECIFIC MIN_EV THRESHOLDS (Jan 11, 2026 v2)
@@ -56,8 +56,8 @@ MARKET_SPECIFIC_MIN_EV = {
     "FT_OVER_2_5": 0.12,   # 12% EV minimum (raised from 8% - underperforming)
     "FT_OVER_3_5": 0.12,   # 12% EV minimum (raised from 8%)
     # HOME_WIN: Now LEARNING_ONLY (Feb 6, 2026) - see filter below
-    "FT_UNDER_2_5": 0.08,  # 8% EV minimum (unchanged - profitable)
-    "FT_UNDER_3_5": 0.08,  # 8% EV minimum (unchanged - profitable)
+    # FT_UNDER_2_5: Now LEARNING_ONLY (Feb 16, 2026) - 43.4% hit, -9.14u
+    # FT_UNDER_3_5: Now LEARNING_ONLY (Feb 16, 2026) - 33.3% hit, -2.88u
     # AWAY_WIN: Now LEARNING_ONLY - see filter below
 }
 
@@ -68,9 +68,11 @@ MARKET_SPECIFIC_MIN_EV = {
 # Re-evaluate: Jan 25, 2026 or after +100 bets per market
 # ============================================================
 LEARNING_ONLY_MARKETS = {
-    "AWAY_WIN",  # 31.6% hit rate, -10.1u — bookmakers price 1X2 too sharply
-    "HOME_WIN",  # 36.6% hit rate, -12.5u — model overestimates by ~25pp (Feb 6, 2026)
-    "DRAW",      # 12.5% hit rate, -5.0u — most unpredictable 1X2 outcome (Feb 6, 2026)
+    "AWAY_WIN",      # 31.6% hit rate, -10.1u — bookmakers price 1X2 too sharply
+    "HOME_WIN",      # 36.6% hit rate, -12.5u — model overestimates by ~25pp (Feb 6, 2026)
+    "DRAW",          # 12.5% hit rate, -5.0u — most unpredictable 1X2 outcome (Feb 6, 2026)
+    "FT_UNDER_2_5",  # 43.4% hit rate, -9.14u — model misses something in these matches (Feb 16, 2026)
+    "FT_UNDER_3_5",  # 33.3% hit rate, -2.88u — same pattern as Under 2.5 (Feb 16, 2026)
 }
 
 # ============================================================
