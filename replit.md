@@ -39,7 +39,7 @@ The system incorporates advanced features such as:
         - CORNERS: 60.6% hit rate, +146.53u
         - VALUE_SINGLE (Totals + BTTS only — no 1X2)
     - **LEARNING ONLY (Low weight, data collection):**
-        - ASIAN HANDICAP: All AH lines (-0.5 to ±1.5) — replacing 1X2 learning (Feb 16, 2026)
+        - ASIAN HANDICAP: All AH lines (-0.5 to ±1.5) — dual-source odds (The Odds API + API-Football fallback) (Feb 16, 2026)
         - BASKETBALL: Breakeven, continued data collection
         - HOME_WIN + AWAY_WIN + DRAW: All 1X2 excluded — bookmakers too sharp, AI training continues
         - FT_UNDER_2_5 + FT_UNDER_3_5: Model underperforms on Under markets

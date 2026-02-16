@@ -870,8 +870,33 @@ class RealFootballChampion:
                                 odds_map[k] = float(price)
         
         except Exception as e:
-            # Return empty dict on error - engine will skip this match
             pass
+        
+        has_ah = any(k.startswith('AH_') for k in odds_map)
+        if not has_ah and self.api_football_client:
+            try:
+                home_team = match.get('home_team', '')
+                away_team = match.get('away_team', '')
+                commence = match.get('commence_time', '')
+                if home_team and away_team and commence:
+                    match_date = commence[:10] if 'T' in commence else commence
+                    fixture = self.api_football_client.get_fixture_by_teams_and_date(
+                        home_team, away_team, match_date
+                    )
+                    if fixture:
+                        fid = fixture.get('fixture', {}).get('id')
+                        if fid:
+                            af_odds = self.api_football_client.get_fixture_odds(fid)
+                            af_markets = af_odds.get('markets', {})
+                            ah_keys_added = 0
+                            for k, v in af_markets.items():
+                                if k.startswith('AH_') and k not in odds_map:
+                                    odds_map[k] = v
+                                    ah_keys_added += 1
+                            if ah_keys_added:
+                                print(f"   🔄 API-Football enriched {ah_keys_added} AH odds for {home_team} vs {away_team}")
+            except Exception as e:
+                pass
         
         return odds_map
     

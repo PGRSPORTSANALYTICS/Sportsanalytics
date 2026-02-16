@@ -409,6 +409,16 @@ def run_weekly_recap():
         logger.error(f"❌ Weekly recap error: {e}")
 
 
+def run_weekly_learning_report():
+    """Send weekly learning system report on Sunday at 23:00"""
+    try:
+        from learning_weekly_report import send_weekly_learning_report
+        logger.info("🧪 Running weekly learning system report...")
+        send_weekly_learning_report()
+    except Exception as e:
+        logger.error(f"❌ Weekly learning report error: {e}")
+
+
 def main():
     """Main orchestration loop"""
     logger.info("="*80)
@@ -455,6 +465,7 @@ def main():
     logger.info("📊 Performance Updates - Every 6 hours")
     logger.info("📊 Daily Recap - Daily at 22:30 (Discord)")
     logger.info("📈 Weekly Recap - Sunday at 22:30 (Discord)")
+    logger.info("🧪 Learning System Report - Sunday at 23:00 (Discord)")
     logger.info("📂 Bet Categorizer - Daily at 23:00")
     logger.info("📅 Games Reminder - Daily at 08:00")
     logger.info("📝 Daily Analysis - Daily at 09:00 (Discord)")
@@ -544,6 +555,7 @@ def main():
     
     schedule.every().day.at("22:30").do(run_daily_recap)
     schedule.every().sunday.at("22:30").do(run_weekly_recap)
+    schedule.every().sunday.at("23:00").do(run_weekly_learning_report)
     schedule.every().day.at("23:00").do(run_daily_categorizer)
     schedule.every().day.at("22:45").do(run_end_of_day_results)  # Results summary after all games
     schedule.every().day.at("08:00").do(run_daily_games_reminder)
