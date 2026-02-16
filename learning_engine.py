@@ -33,6 +33,8 @@ ROLLING_WINDOWS = {
     'all_time': None,
 }
 
+EXCLUDED_MARKETS = {'exact_score', 'correct_score', 'first_half_exact', 'halftime_score'}
+
 SPORTS_TABLE_MAP = {
     'football': {
         'table': 'football_opportunities',
@@ -152,6 +154,8 @@ def _fetch_settled_bets(sport: str) -> List[Dict]:
             market = str(r.get('market', '') or '').strip()
 
             if not league or not market or odds_val <= 1.0:
+                continue
+            if market.lower() in EXCLUDED_MARKETS:
                 continue
 
             bets.append({
