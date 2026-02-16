@@ -39,6 +39,12 @@ from api_staking import router as staking_router
 from modules.stryktipset.stryktipset_router import router as stryk_router
 from bets_feed import router as bets_feed_router
 
+try:
+    from pgr_api_router import router as pgr_router
+    PGR_AVAILABLE = True
+except Exception as _pgr_err:
+    PGR_AVAILABLE = False
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -74,6 +80,12 @@ app.include_router(stryk_router)
 
 # Include Bets Feed router
 app.include_router(bets_feed_router)
+
+if PGR_AVAILABLE:
+    app.include_router(pgr_router)
+    logger.info("PGR Analytics router loaded")
+else:
+    logger.warning(f"PGR Analytics router not loaded: {_pgr_err}")
 
 # =============================================================================
 # Response Models
@@ -2052,6 +2064,14 @@ async def root_dashboard():
 @app.get("/dashboard", include_in_schema=False)
 async def dashboard_alias():
     return FileResponse(str(STATIC_DIR / "index.html"))
+
+@app.get("/pgr", include_in_schema=False)
+async def pgr_dashboard():
+    return FileResponse(str(STATIC_DIR / "pgr_dashboard.html"))
+
+@app.get("/edge-finder", include_in_schema=False)
+async def edge_finder_alias():
+    return FileResponse(str(STATIC_DIR / "pgr_dashboard.html"))
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
