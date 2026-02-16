@@ -258,32 +258,6 @@ def get_today_matches_with_ai_data() -> List[Dict[str, Any]]:
     except Exception as e:
         logger.error(f"Error fetching basketball predictions: {e}")
     
-    # 4. ML Parlay
-    try:
-        ml_rows = db_helper.execute("""
-            SELECT id, legs, combined_ev, confidence_score, match_date
-            FROM ml_parlay_predictions
-            WHERE match_date >= %s AND match_date <= %s
-            AND COALESCE(mode, 'PROD') != 'TEST'
-            ORDER BY created_at DESC
-            LIMIT 10
-        """, (str(today), str(tomorrow)), fetch='all') or []
-        
-        for row in ml_rows:
-            try:
-                legs = json.loads(row[1]) if row[1] else []
-                for leg in legs:
-                    home = leg.get('home_team', '')
-                    away = leg.get('away_team', '')
-                    key = f"{home}_{away}"
-                    if key in matches:
-                        matches[key]['products'].add('ML_PARLAY')
-            except:
-                pass
-                
-    except Exception as e:
-        logger.error(f"Error fetching ML parlay: {e}")
-    
     # Convert to list and clean up
     result = []
     for key, m in matches.items():
