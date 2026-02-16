@@ -4,6 +4,7 @@ Handles injuries, lineups, statistics, and match validation
 """
 
 import os
+import re
 import requests
 import time
 from datetime import datetime, timedelta
@@ -998,6 +999,26 @@ class APIFootballClient:
                                 if market_key not in result['markets'] or odds > result['markets'][market_key]:
                                     result['markets'][market_key] = odds
                     
+                    elif bet_name == 'Asian Handicap':
+                        for value in values:
+                            selection = value.get('value', '')
+                            odds = float(value.get('odd', 0))
+                            if odds <= 0:
+                                continue
+                            ah_match = re.match(r'(Home|Away)\s*([+-]?\d+\.?\d*)', selection)
+                            if ah_match:
+                                side = ah_match.group(1).upper()
+                                pt = float(ah_match.group(2))
+                                if abs(pt) <= 2.0:
+                                    if pt == int(pt):
+                                        pt_str = f"{int(pt)}.0"
+                                    else:
+                                        pt_str = str(pt)
+                                    sign = f"+{pt_str}" if pt > 0 else f"{pt_str}"
+                                    market_key = f"AH_{side}_{sign}"
+                                    if market_key not in result['markets'] or odds > result['markets'][market_key]:
+                                        result['markets'][market_key] = odds
+
                     elif bet_name in totals_markets:
                         prefix = totals_markets[bet_name]
                         for value in values:
