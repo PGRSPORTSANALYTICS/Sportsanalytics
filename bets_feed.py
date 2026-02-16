@@ -519,11 +519,17 @@ async def get_bets_stats(
     date_from: Optional[str] = Query(None),
     date_to: Optional[str] = Query(None),
 ):
-    """Quick stats summary for the bets feed header."""
-    cache_key = f"stats:{date_from}:{date_to}"
+    """Quick stats summary for the bets feed header — all sports combined."""
+    cache_key = f"stats_all:{date_from}:{date_to}"
     cached = _get_cached(cache_key)
     if cached:
         return cached
+
+    won_total = 0
+    lost_total = 0
+    void_total = 0
+    upcoming_total = 0
+    profit_total = 0.0
 
     try:
         date_filter = ""
@@ -536,38 +542,71 @@ async def get_bets_stats(
             params.append(date_to)
 
         row = db_helper.execute(f"""
-            SELECT 
-                COUNT(*) as total,
-                COUNT(CASE WHEN outcome IN ('won','win') THEN 1 END) as won,
-                COUNT(CASE WHEN outcome IN ('lost','loss') THEN 1 END) as lost,
-                COUNT(CASE WHEN outcome IN ('void','voided') THEN 1 END) as void,
-                COUNT(CASE WHEN outcome IS NULL OR outcome IN ('pending','') THEN 1 END) as upcoming,
-                ROUND(AVG(odds)::numeric, 2) as avg_odds,
-                ROUND(AVG(CASE WHEN ev_sim IS NOT NULL THEN ev_sim ELSE edge_percentage END)::numeric, 2) as avg_ev
+            SELECT
+                COUNT(CASE WHEN outcome IN ('won','win') THEN 1 END),
+                COUNT(CASE WHEN outcome IN ('lost','loss') THEN 1 END),
+                COUNT(CASE WHEN outcome IN ('void','voided') THEN 1 END),
+                COUNT(CASE WHEN outcome IS NULL OR outcome IN ('pending','') THEN 1 END),
+                COALESCE(SUM(profit_loss), 0)
             FROM football_opportunities
             WHERE (mode IS NULL OR mode != 'TEST') {date_filter}
         """, tuple(params), fetch='one')
-
-        total, won, lost, void, upcoming, avg_odds, avg_ev = row if row else (0,0,0,0,0,0,0)
-        settled = (won or 0) + (lost or 0)
-        hit_rate = round((won or 0) / settled * 100, 1) if settled > 0 else 0
-
-        result = {
-            "total_bets": total or 0,
-            "won": won or 0,
-            "lost": lost or 0,
-            "void": void or 0,
-            "upcoming": upcoming or 0,
-            "hit_rate": hit_rate,
-            "avg_odds": float(avg_odds) if avg_odds else 0,
-            "avg_ev": float(avg_ev) if avg_ev else 0,
-            "generated_at": datetime.utcnow().isoformat(),
-        }
-        _set_cached(cache_key, result)
-        return result
+        if row:
+            won_total += row[0] or 0
+            lost_total += row[1] or 0
+            void_total += row[2] or 0
+            upcoming_total += row[3] or 0
+            profit_total += float(row[4] or 0)
     except Exception as e:
-        logger.error(f"Stats query error: {e}")
-        raise HTTPException(status_code=500, detail="Failed to fetch stats")
+        logger.error(f"Football stats error: {e}")
+
+    try:
+        bb_date_filter = ""
+        bb_params: list = []
+        if date_from:
+            bb_date_filter += " AND commence_time >= %s"
+            bb_params.append(date_from)
+        if date_to:
+            bb_date_filter += " AND commence_time <= %s"
+            bb_params.append(f"{date_to} 23:59:59")
+
+        row = db_helper.execute(f"""
+            SELECT
+                COUNT(CASE WHEN status IN ('won','win','WON') THEN 1 END),
+                COUNT(CASE WHEN status IN ('lost','loss','LOST') THEN 1 END),
+                COUNT(CASE WHEN status IN ('void','voided') THEN 1 END),
+                COUNT(CASE WHEN status IS NULL OR status IN ('pending','') THEN 1 END),
+                COALESCE(SUM(profit_units), 0)
+            FROM basketball_predictions
+            WHERE (mode IS NULL OR mode != 'TEST') {bb_date_filter}
+        """, tuple(bb_params), fetch='one')
+        if row:
+            won_total += row[0] or 0
+            lost_total += row[1] or 0
+            void_total += row[2] or 0
+            upcoming_total += row[3] or 0
+            profit_total += float(row[4] or 0)
+    except Exception as e:
+        logger.error(f"Basketball stats error: {e}")
+
+    settled = won_total + lost_total
+    hit_rate = round(won_total / settled * 100, 1) if settled > 0 else 0
+    total_bets = won_total + lost_total + void_total + upcoming_total
+
+    result = {
+        "total_bets": total_bets,
+        "won": won_total,
+        "lost": lost_total,
+        "void": void_total,
+        "upcoming": upcoming_total,
+        "settled": settled,
+        "hit_rate": hit_rate,
+        "profit_units": round(profit_total, 2),
+        "roi": round(profit_total / settled * 100, 1) if settled > 0 else 0,
+        "generated_at": datetime.utcnow().isoformat(),
+    }
+    _set_cached(cache_key, result)
+    return result
 
 
 @router.get("/bets/sports")

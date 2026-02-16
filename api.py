@@ -26,8 +26,11 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 
+from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from db_helper import db_helper
@@ -1921,9 +1924,17 @@ async def get_manual_audit_log(limit: int = 100):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# =============================================================================
-# Run with: uvicorn api:app --host 0.0.0.0 --port 8000
-# =============================================================================
+STATIC_DIR = Path(__file__).parent / "static"
+
+@app.get("/", include_in_schema=False)
+async def root_dashboard():
+    return FileResponse(str(STATIC_DIR / "index.html"))
+
+@app.get("/dashboard", include_in_schema=False)
+async def dashboard_alias():
+    return FileResponse(str(STATIC_DIR / "index.html"))
+
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":
     import uvicorn

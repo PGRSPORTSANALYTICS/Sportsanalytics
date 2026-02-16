@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PGR Sports Analytics</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0f1117;--card:#1a1d29;--card2:#222639;--accent:#FF6B35;--green:#38ef7d;--red:#ff4757;--text:#e4e6eb;--text2:#9ca3af;--border:#2d3148}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+.container{max-width:1200px;margin:0 auto;padding:1rem}
+header{text-align:center;padding:1.5rem 0 1rem}
+header h1{font-size:1.8rem;font-weight:700;color:var(--accent)}
+header p{color:var(--text2);font-size:.9rem;margin-top:.3rem}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.75rem;margin-bottom:1.5rem}
+.stat-card{background:var(--card);border-radius:10px;padding:1rem;text-align:center;border:1px solid var(--border)}
+.stat-card .value{font-size:1.6rem;font-weight:700}
+.stat-card .label{font-size:.75rem;color:var(--text2);margin-top:.2rem;text-transform:uppercase;letter-spacing:.5px}
+.stat-card.green .value{color:var(--green)}
+.stat-card.red .value{color:var(--red)}
+.stat-card.accent .value{color:var(--accent)}
+.filters{background:var(--card);border-radius:10px;padding:1rem;margin-bottom:1rem;display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;border:1px solid var(--border)}
+.filters select,.filters input{background:var(--card2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:.5rem .75rem;font-size:.85rem;outline:none}
+.filters select:focus,.filters input:focus{border-color:var(--accent)}
+.filters button{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:.5rem 1rem;font-size:.85rem;cursor:pointer;font-weight:600}
+.filters button:hover{opacity:.9}
+.filters button.secondary{background:var(--card2);border:1px solid var(--border)}
+.tabs{display:flex;gap:0;margin-bottom:1rem;border-bottom:2px solid var(--border)}
+.tab{padding:.6rem 1.2rem;cursor:pointer;font-size:.85rem;font-weight:600;color:var(--text2);border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .2s}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.bets-list{display:flex;flex-direction:column;gap:.5rem}
+.bet-card{background:var(--card);border-radius:8px;padding:1rem;border:1px solid var(--border);display:grid;grid-template-columns:auto 1fr auto;gap:1rem;align-items:center;transition:border-color .2s}
+.bet-card:hover{border-color:var(--accent)}
+.bet-sport{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;background:var(--card2)}
+.bet-info h3{font-size:.9rem;font-weight:600;margin-bottom:.25rem}
+.bet-info .market{color:var(--accent);font-size:.8rem;font-weight:600}
+.bet-info .meta{color:var(--text2);font-size:.75rem;margin-top:.2rem}
+.bet-right{text-align:right}
+.bet-right .odds{font-size:1.1rem;font-weight:700}
+.bet-right .ev{font-size:.75rem;margin-top:.15rem}
+.bet-right .ev.positive{color:var(--green)}
+.status-badge{display:inline-block;padding:.15rem .5rem;border-radius:4px;font-size:.7rem;font-weight:600;text-transform:uppercase}
+.status-badge.won{background:rgba(56,239,125,.15);color:var(--green)}
+.status-badge.lost{background:rgba(255,71,87,.15);color:var(--red)}
+.status-badge.upcoming{background:rgba(255,107,53,.15);color:var(--accent)}
+.status-badge.void{background:rgba(156,163,175,.15);color:var(--text2)}
+.profit{font-weight:700;font-size:.85rem}
+.profit.win{color:var(--green)}
+.profit.loss{color:var(--red)}
+.pagination{display:flex;justify-content:center;align-items:center;gap:1rem;padding:1.5rem 0}
+.pagination button{background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:.5rem 1rem;cursor:pointer;font-size:.85rem}
+.pagination button:disabled{opacity:.4;cursor:default}
+.pagination span{color:var(--text2);font-size:.85rem}
+.loading{text-align:center;padding:2rem;color:var(--text2)}
+.spinner{display:inline-block;width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty{text-align:center;padding:3rem;color:var(--text2)}
+@media(max-width:768px){
+.stats-grid{grid-template-columns:repeat(3,1fr)}
+.bet-card{grid-template-columns:auto 1fr;gap:.75rem}
+.bet-right{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;text-align:left}
+.filters{flex-direction:column}
+.filters select,.filters input,.filters button{width:100%}
+}
+@media(max-width:480px){
+.stats-grid{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+<h1>PGR Sports Analytics</h1>
+<p>AI-Powered Betting Predictions</p>
+</header>
+
+<div class="stats-grid" id="statsGrid">
+<div class="stat-card"><div class="value">-</div><div class="label">Total Bets</div></div>
+<div class="stat-card green"><div class="value">-</div><div class="label">Won</div></div>
+<div class="stat-card red"><div class="value">-</div><div class="label">Lost</div></div>
+<div class="stat-card accent"><div class="value">-</div><div class="label">Hit Rate</div></div>
+<div class="stat-card green"><div class="value">-</div><div class="label">Profit (u)</div></div>
+<div class="stat-card"><div class="value">-</div><div class="label">ROI</div></div>
+</div>
+
+<div class="filters">
+<select id="sportFilter">
+<option value="">All Sports</option>
+<option value="football">Football</option>
+<option value="basketball">Basketball</option>
+<option value="props">Player Props</option>
+</select>
+<select id="statusFilter">
+<option value="">All Status</option>
+<option value="upcoming">Upcoming</option>
+<option value="won">Won</option>
+<option value="lost">Lost</option>
+<option value="settled">Settled</option>
+</select>
+<select id="sortFilter">
+<option value="newest">Newest First</option>
+<option value="kickoff">By Kickoff</option>
+<option value="odds">Highest Odds</option>
+<option value="ev">Best EV</option>
+</select>
+<input type="date" id="dateFrom" placeholder="From">
+<input type="date" id="dateTo" placeholder="To">
+<button onclick="applyFilters()">Filter</button>
+<button class="secondary" onclick="resetFilters()">Reset</button>
+</div>
+
+<div class="tabs">
+<div class="tab active" data-tab="all" onclick="switchTab('all')">All Bets</div>
+<div class="tab" data-tab="football" onclick="switchTab('football')">Football</div>
+<div class="tab" data-tab="basketball" onclick="switchTab('basketball')">Basketball</div>
+<div class="tab" data-tab="props" onclick="switchTab('props')">Props</div>
+</div>
+
+<div id="betsContainer" class="bets-list">
+<div class="loading"><div class="spinner"></div><p>Loading predictions...</p></div>
+</div>
+
+<div class="pagination" id="pagination" style="display:none">
+<button id="prevBtn" onclick="prevPage()">Previous</button>
+<span id="pageInfo">Page 1</span>
+<button id="nextBtn" onclick="nextPage()">Next</button>
+</div>
+</div>
+
+<script>
+const API_BASE = window.location.origin + '/api';
+let currentOffset = 0;
+const PAGE_SIZE = 30;
+let totalBets = 0;
+
+function sportIcon(sport) {
+  const icons = {football:'&#9917;', basketball:'&#127936;', props:'&#127919;'};
+  return icons[sport] || '&#127942;';
+}
+
+function formatDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const now = new Date();
+  const diff = d - now;
+  if (Math.abs(diff) < 86400000) {
+    return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  }
+  return d.toLocaleDateString([], {month:'short',day:'numeric'}) + ' ' + d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+}
+
+function renderStats(s) {
+  const profit = s.profit_units || 0;
+  const roi = s.roi || 0;
+  document.getElementById('statsGrid').innerHTML = `
+    <div class="stat-card"><div class="value">${s.settled || 0}</div><div class="label">Settled</div></div>
+    <div class="stat-card green"><div class="value">${s.won || 0}</div><div class="label">Won</div></div>
+    <div class="stat-card red"><div class="value">${s.lost || 0}</div><div class="label">Lost</div></div>
+    <div class="stat-card accent"><div class="value">${s.hit_rate || 0}%</div><div class="label">Hit Rate</div></div>
+    <div class="stat-card ${profit >= 0 ? 'green' : 'red'}"><div class="value">${profit >= 0 ? '+' : ''}${profit.toFixed(1)}u</div><div class="label">Profit</div></div>
+    <div class="stat-card ${roi >= 0 ? 'green' : 'red'}"><div class="value">${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%</div><div class="label">ROI</div></div>
+  `;
+}
+
+function renderBets(bets) {
+  const container = document.getElementById('betsContainer');
+  if (!bets.length) {
+    container.innerHTML = '<div class="empty">No bets found with current filters.</div>';
+    return;
+  }
+  container.innerHTML = bets.map(b => {
+    const profitVal = b.profit_units;
+    let profitHtml = '';
+    if (b.status === 'won' || b.status === 'lost') {
+      const cls = profitVal >= 0 ? 'win' : 'loss';
+      profitHtml = `<div class="profit ${cls}">${profitVal >= 0 ? '+' : ''}${(profitVal||0).toFixed(2)}u</div>`;
+    }
+    const evClass = (b.ev_pct && b.ev_pct > 0) ? 'positive' : '';
+    const evText = b.ev_pct != null ? `EV: ${b.ev_pct >= 0 ? '+' : ''}${b.ev_pct.toFixed(1)}%` : '';
+    const trustBadge = b.trust_level ? ` | ${b.trust_level}` : '';
+    return `
+    <div class="bet-card">
+      <div class="bet-sport">${sportIcon(b.sport)}</div>
+      <div class="bet-info">
+        <h3>${b.match}</h3>
+        <div class="market">${b.market}: ${b.selection}</div>
+        <div class="meta">${b.league || ''} | ${formatDate(b.kickoff)}${trustBadge}</div>
+      </div>
+      <div class="bet-right">
+        <div>
+          <div class="odds">${b.odds.toFixed(2)}x</div>
+          <div class="ev ${evClass}">${evText}</div>
+          <span class="status-badge ${b.status}">${b.status}</span>
+          ${profitHtml}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function updatePagination() {
+  const pg = document.getElementById('pagination');
+  const pages = Math.ceil(totalBets / PAGE_SIZE);
+  const current = Math.floor(currentOffset / PAGE_SIZE) + 1;
+  if (pages <= 1) { pg.style.display = 'none'; return; }
+  pg.style.display = 'flex';
+  document.getElementById('pageInfo').textContent = `Page ${current} of ${pages}`;
+  document.getElementById('prevBtn').disabled = currentOffset === 0;
+  document.getElementById('nextBtn').disabled = currentOffset + PAGE_SIZE >= totalBets;
+}
+
+function getFilterParams() {
+  const sport = document.getElementById('sportFilter').value;
+  const status = document.getElementById('statusFilter').value;
+  const sort = document.getElementById('sortFilter').value;
+  const dateFrom = document.getElementById('dateFrom').value;
+  const dateTo = document.getElementById('dateTo').value;
+  const p = new URLSearchParams();
+  if (sport) p.set('sport', sport);
+  if (status) p.set('status', status);
+  p.set('sort', sort);
+  if (dateFrom) p.set('date_from', dateFrom);
+  if (dateTo) p.set('date_to', dateTo);
+  p.set('limit', PAGE_SIZE);
+  p.set('offset', currentOffset);
+  return p.toString();
+}
+
+async function loadBets() {
+  const container = document.getElementById('betsContainer');
+  container.innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading...</p></div>';
+  try {
+    const res = await fetch(`${API_BASE}/bets?${getFilterParams()}`);
+    const data = await res.json();
+    totalBets = data.total;
+    renderBets(data.bets);
+    updatePagination();
+  } catch(e) {
+    container.innerHTML = `<div class="empty">Failed to load bets. ${e.message}</div>`;
+  }
+}
+
+async function loadStats() {
+  try {
+    const res = await fetch(`${API_BASE}/bets/stats`);
+    const data = await res.json();
+    renderStats(data);
+  } catch(e) { console.error('Stats error:', e); }
+}
+
+function applyFilters() { currentOffset = 0; loadBets(); }
+function resetFilters() {
+  document.getElementById('sportFilter').value = '';
+  document.getElementById('statusFilter').value = '';
+  document.getElementById('sortFilter').value = 'newest';
+  document.getElementById('dateFrom').value = '';
+  document.getElementById('dateTo').value = '';
+  currentOffset = 0;
+  loadBets();
+}
+function prevPage() { currentOffset = Math.max(0, currentOffset - PAGE_SIZE); loadBets(); }
+function nextPage() { currentOffset += PAGE_SIZE; loadBets(); }
+
+function switchTab(sport) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelector(`.tab[data-tab="${sport}"]`).classList.add('active');
+  document.getElementById('sportFilter').value = sport === 'all' ? '' : sport;
+  currentOffset = 0;
+  loadBets();
+}
+
+loadStats();
+loadBets();
+setInterval(() => { loadStats(); loadBets(); }, 120000);
+</script>
+</body>
+</html>
