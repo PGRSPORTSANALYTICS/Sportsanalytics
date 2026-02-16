@@ -38,6 +38,11 @@ LIVE_LEARNING_MODE = True            # Capture ALL picks for maximum learning
 LIVE_LEARNING_SAVE_ALL_TIERS = True  # Save L1, L2, L3, and Hidden Value picks
 LIVE_LEARNING_CLV_TRACKING = True    # Track opening/closing odds for every pick
 
+# ============================================================
+# PGR ANALYTICS v2 — Multi-Book Intelligence (Feb 16, 2026)
+# ============================================================
+ENABLE_PGR_ANALYTICS = True          # Odds ingestion, bet sync, CLV tracking
+
 
 def check_daily_stoploss() -> bool:
     """
@@ -154,6 +159,24 @@ def run_multi_sport_settlement():
             logger.info("🌐 No multi-sport bets to settle")
     except Exception as e:
         logger.error(f"❌ Multi-Sport settlement error: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+def run_pgr_analytics():
+    """Run PGR Analytics v2 cycle — odds ingestion, bet sync, CLV tracking"""
+    try:
+        from pgr_bridge import run_full_pgr_cycle
+        logger.info("📊 Starting PGR Analytics cycle...")
+        results = run_full_pgr_cycle()
+        ingestion = results.get('ingestion', {})
+        sync = results.get('sync_bets', {})
+        settled = results.get('sync_results', {})
+        logger.info(f"📊 PGR cycle: {ingestion.get('total_snapshots', 0)} odds snapshots, "
+                     f"{sync.get('synced', 0)} bets synced, "
+                     f"{settled.get('settled', 0)} results synced")
+    except Exception as e:
+        logger.error(f"❌ PGR Analytics error: {e}")
         import traceback
         traceback.print_exc()
 
@@ -487,6 +510,7 @@ def main():
     logger.info("🏀 College Basketball - Every 2 hours")
     logger.info("🎰 ML Parlay (TEST MODE) - Every 3 hours")
     logger.info("🎯 Player Props (LEARNING) - Every 6 hours")
+    logger.info("📊 PGR Analytics v2 - Every 1 hour (odds ingestion + bet sync)")
     logger.info("="*80)
     logger.info("🔍 FAST RESULT VERIFICATION (5-minute cycles):")
     logger.info("💰 Value Singles Results - Every 5 minutes")
@@ -552,6 +576,11 @@ def main():
     verify_ml_parlay_results()  # ML Parlay verification
     logger.info("✅ Initial verification complete")
     
+    # Run PGR Analytics on startup — sync existing bets + capture odds
+    if ENABLE_PGR_ANALYTICS:
+        run_pgr_analytics()
+        logger.info("📊 PGR Analytics initial sync complete")
+    
     # Schedule recurring prediction tasks (only enabled products)
     if ENABLE_VALUE_SINGLES:
         schedule.every(1).hours.do(run_value_singles)
@@ -576,6 +605,11 @@ def main():
     
     # Schedule CLV update - Every 5 minutes for reliable closing odds capture
     schedule.every(5).minutes.do(run_clv_update_cycle)
+    
+    # PGR Analytics v2 — odds ingestion + bet sync every hour, aligned with Value Singles
+    if ENABLE_PGR_ANALYTICS:
+        schedule.every(1).hours.do(run_pgr_analytics)
+        logger.info("📊 PGR Analytics scheduled (every 1 hour)")
     
     # Schedule LIVE LEARNING enrichment - Every 10 minutes to add syndicate data
     if LIVE_LEARNING_MODE:
