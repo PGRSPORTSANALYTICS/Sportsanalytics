@@ -73,6 +73,18 @@ LEARNING_ONLY_MARKETS = {
     "DRAW",          # 12.5% hit rate, -5.0u — most unpredictable 1X2 outcome (Feb 6, 2026)
     "FT_UNDER_2_5",  # 43.4% hit rate, -9.14u — model misses something in these matches (Feb 16, 2026)
     "FT_UNDER_3_5",  # 33.3% hit rate, -2.88u — same pattern as Under 2.5 (Feb 16, 2026)
+    "AH_HOME_-0.5",  # Asian Handicap learning mode (Feb 16, 2026) — replacing 1X2 learning
+    "AH_HOME_-1.0",
+    "AH_HOME_-1.5",
+    "AH_HOME_+0.5",
+    "AH_HOME_+1.0",
+    "AH_HOME_+1.5",
+    "AH_AWAY_-0.5",
+    "AH_AWAY_-1.0",
+    "AH_AWAY_-1.5",
+    "AH_AWAY_+0.5",
+    "AH_AWAY_+1.0",
+    "AH_AWAY_+1.5",
 }
 
 # ============================================================

@@ -250,7 +250,11 @@ class ResultsEngine:
                         continue
                     
                     outcome = self._calculate_outcome(bet, result)
-                    if outcome in ['won', 'lost']:
+                    if outcome == 'void':
+                        bets_to_update.append((bet['id'], 'void', result, None, dict(bet)))
+                        self.stats['voided'] += 1
+                        logger.info(f"🔄 AH push/void bet #{bet['id']}")
+                    elif outcome in ['won', 'lost']:
                         training_key = bet.get('match_id', match_key)
                         bets_to_update.append((bet['id'], outcome, result, training_key, dict(bet)))
                         self.stats['settled'] += 1
@@ -805,6 +809,26 @@ class ResultsEngine:
             else:
                 return 'won' if not both_scored else 'lost'
         
+        elif '(ah)' in selection:
+            ah_match = re.search(r'([+-]?\d+\.?\d*)\s*\(ah\)', selection)
+            if ah_match:
+                handicap = float(ah_match.group(1))
+                home_team_name = (bet.get('home_team') or '').lower()
+                away_team_name = (bet.get('away_team') or '').lower()
+                away_in_sel = away_team_name and away_team_name[:5] in selection
+                home_in_sel = home_team_name and home_team_name[:5] in selection
+                if away_in_sel and not home_in_sel:
+                    is_home = False
+                else:
+                    is_home = True
+                if is_home:
+                    adjusted = home_goals + handicap
+                    return 'won' if adjusted > away_goals else ('lost' if adjusted < away_goals else 'void')
+                else:
+                    adjusted = away_goals + handicap
+                    return 'won' if adjusted > home_goals else ('lost' if adjusted < home_goals else 'void')
+            return 'unknown'
+
         elif 'home win' in selection or selection == 'home':
             return 'won' if home_goals > away_goals else 'lost'
         elif 'away win' in selection or selection == 'away':

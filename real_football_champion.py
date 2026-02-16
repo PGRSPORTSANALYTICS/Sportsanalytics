@@ -626,7 +626,7 @@ class RealFootballChampion:
                 params = {
                     'apiKey': self.odds_api_key,
                     'regions': 'uk,eu,us',
-                    'markets': 'h2h,totals',  # Note: btts not supported by The Odds API
+                    'markets': 'h2h,totals,spreads',
                     'oddsFormat': 'decimal',
                     'dateFormat': 'iso'
                 }
@@ -822,6 +822,26 @@ class RealFootballChampion:
                             k = KEY_MAP.get('draw', 'DRAW')
                             odds_map[k] = float(price)
                 
+                # Spreads (Asian Handicap) market
+                elif market_key == 'spreads' and outcomes:
+                    home_team_name = match.get('home_team', '')
+                    away_team_name = match.get('away_team', '')
+                    for outcome in outcomes:
+                        name = outcome.get('name', '')
+                        price = outcome.get('price', 0)
+                        point = outcome.get('point', 0)
+                        if abs(point) <= 2.0 and price > 0:
+                            pt = float(point)
+                            if pt == int(pt):
+                                pt_str = f"{int(pt)}.0"
+                            else:
+                                pt_str = str(pt)
+                            sign = f"+{pt_str}" if pt > 0 else f"{pt_str}"
+                            if name == home_team_name:
+                                odds_map[f"AH_HOME_{sign}"] = float(price)
+                            elif name == away_team_name:
+                                odds_map[f"AH_AWAY_{sign}"] = float(price)
+
                 # Totals (Over/Under) market
                 elif market_key == 'totals' and outcomes:
                     for outcome in outcomes:
