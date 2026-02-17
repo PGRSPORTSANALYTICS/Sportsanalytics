@@ -14,8 +14,14 @@ from db_connection import DatabaseConnection
 
 logger = logging.getLogger(__name__)
 
-SETTLE_GRACE_HOURS = 4
+SETTLE_GRACE_HOURS = 2
 VOID_AFTER_HOURS = 72
+
+SPORT_GRACE_HOURS = {
+    'TENNIS': 2,
+    'HOCKEY': 3,
+    'MMA': 4,
+}
 
 
 def run_multi_sport_settlement() -> Dict:
@@ -132,11 +138,11 @@ def _get_pending_bets() -> List[Dict]:
                        odds, commence_time
                 FROM learning_bets
                 WHERE status = 'pending'
-                  AND commence_time < NOW() - INTERVAL '1 hour' * %s
+                  AND commence_time < NOW() - INTERVAL '2 hours'
                   AND commence_time > NOW() - INTERVAL '10 days'
                 ORDER BY commence_time ASC
                 LIMIT 300
-            """, (SETTLE_GRACE_HOURS,))
+            """)
             columns = [desc[0] for desc in cursor.description]
             return [dict(zip(columns, row)) for row in cursor.fetchall()]
     except Exception as e:
@@ -203,30 +209,37 @@ def _evaluate_bet(bet: Dict, home_score: float, away_score: float,
     total = home_score + away_score
     score_str = f"{home_score:.0f}-{away_score:.0f}"
 
-    if market == 'h2h':
+    if market in ('h2h', 'h2h_lay'):
+        is_lay = market == 'h2h_lay'
         if selection == bet_home or selection == home_team_api:
             if home_score > away_score:
-                return 'won', f"Home win {score_str}"
+                raw = 'won'
             elif home_score == away_score:
                 if sport_cat == 'TENNIS':
                     return 'void', f"Tennis draw (walkover?) {score_str}"
                 return 'push', f"Draw {score_str}"
             else:
-                return 'lost', f"Home lost {score_str}"
+                raw = 'lost'
+            result = 'lost' if (is_lay and raw == 'won') else ('won' if (is_lay and raw == 'lost') else raw)
+            return result, f"{'Lay ' if is_lay else ''}Home {'win' if raw == 'won' else 'lost'} {score_str}"
         elif selection == bet_away or selection == away_team_api:
             if away_score > home_score:
-                return 'won', f"Away win {score_str}"
+                raw = 'won'
             elif home_score == away_score:
                 if sport_cat == 'TENNIS':
                     return 'void', f"Tennis draw (walkover?) {score_str}"
                 return 'push', f"Draw {score_str}"
             else:
-                return 'lost', f"Away lost {score_str}"
+                raw = 'lost'
+            result = 'lost' if (is_lay and raw == 'won') else ('won' if (is_lay and raw == 'lost') else raw)
+            return result, f"{'Lay ' if is_lay else ''}Away {'win' if raw == 'won' else 'lost'} {score_str}"
         elif selection.lower() == 'draw':
             if home_score == away_score:
-                return 'won', f"Draw {score_str}"
+                raw = 'won'
             else:
-                return 'lost', f"No draw {score_str}"
+                raw = 'lost'
+            result = 'lost' if (is_lay and raw == 'won') else ('won' if (is_lay and raw == 'lost') else raw)
+            return result, f"{'Lay ' if is_lay else ''}Draw {score_str}"
 
     elif market == 'totals':
         if line is None:
