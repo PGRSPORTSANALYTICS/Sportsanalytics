@@ -767,10 +767,6 @@ class ValueSinglesEngine:
                         print(f"   📉 LOW CONFIDENCE: {league_key}/{market_key} conf={combined_conf:.4f} - skipping")
                         continue
 
-                if is_learning_only:
-                    print(f"   📚 LEARNING ONLY: {market_key} @ {odds:.2f} EV={ev:.1%} - skipping from public output")
-                    continue
-                
                 opportunity = {
                     "timestamp": int(time.time()),
                     "match_id": match_id,
@@ -815,12 +811,17 @@ class ValueSinglesEngine:
                     "avg_odds": bookmaker_data.get('avg_odds'),
                     "fair_odds": fair_odds,
                     # API-Football fixture ID for result verification
-                    "fixture_id": match.get("fixture_id")
+                    "fixture_id": match.get("fixture_id"),
+                    "is_learning_only": is_learning_only,
+                    "market_key_raw": market_key
                 }
 
                 picks.append(opportunity)
 
-        print(f"\n📊 VALUE SINGLES SUMMARY: {len(picks)} candidates passed hard filters")
+        learning_picks = [p for p in picks if p.get('is_learning_only')]
+        production_picks = [p for p in picks if not p.get('is_learning_only')]
+
+        print(f"\n📊 VALUE SINGLES SUMMARY: {len(picks)} total ({len(production_picks)} production, {len(learning_picks)} learning)")
 
         def _resolve_over_under_conflicts(pick_list):
             import re
@@ -847,20 +848,21 @@ class ValueSinglesEngine:
                     print(f"   🔀 CONFLICT: {best['home_team']} vs {best['away_team']} — kept {kept_sel}, dropped {', '.join(dropped)}")
             return resolved
 
-        picks = _resolve_over_under_conflicts(picks)
-        print(f"📊 After Over/Under conflict resolution: {len(picks)} picks remain")
+        production_picks = _resolve_over_under_conflicts(production_picks)
+        print(f"📊 Production after Over/Under conflict resolution: {len(production_picks)} picks")
+        print(f"📚 Learning keeps ALL sides: {len(learning_picks)} picks (both Over & Under preserved)")
 
-        if picks:
+        if production_picks:
             log_calibration_batch(
                 [{'raw_prob': json.loads(c.get('analysis', '{}')).get('p_model', 0),
                   'calibrated_prob': c.get('calibrated_prob', 0),
                   'raw_ev': json.loads(c.get('analysis', '{}')).get('raw_ev', 0),
                   'calibrated_ev': c.get('edge_percentage', 0) / 100}
-                 for c in picks],
+                 for c in production_picks],
                 label="VALUE_SINGLES"
             )
-            picks.sort(key=lambda x: x["edge_percentage"], reverse=True)
-            for c in picks[:5]:
+            production_picks.sort(key=lambda x: x["edge_percentage"], reverse=True)
+            for c in production_picks[:5]:
                 ev_show = c.get("edge_percentage", 0)
                 analysis = json.loads(c.get("analysis", "{}"))
                 p_raw = analysis.get("p_model", 0)
@@ -868,22 +870,23 @@ class ValueSinglesEngine:
                 print(f"   CANDIDATE: {c['home_team']} vs {c['away_team']} | {c.get('selection')} | odds={c.get('odds', 0):.2f} p={p_raw:.2%}→{p_cal:.2%} EV={ev_show:.1f}%")
 
         # 5) Sort by EV, enforce unique matches, and LIMIT TO MAX_VALUE_SINGLES_PER_DAY
-        picks.sort(key=lambda x: x["edge_percentage"], reverse=True)
+        production_picks.sort(key=lambda x: x["edge_percentage"], reverse=True)
 
         unique: List[Dict[str, Any]] = []
         used_matches: Set[str] = set()
-        for p in picks:
+        for p in production_picks:
             if p["match_id"] in used_matches:
                 continue
             unique.append(p)
             used_matches.add(p["match_id"])
-            # HARD LIMIT: Maximum 4 value singles per day
             if len(unique) >= MAX_VALUE_SINGLES_PER_DAY:
                 break
         
-        print(f"🎯 SELECTED: Top {len(unique)} value singles (max {MAX_VALUE_SINGLES_PER_DAY}/day)")
+        print(f"🎯 SELECTED: Top {len(unique)} production singles (max {MAX_VALUE_SINGLES_PER_DAY}/day)")
         for i, p in enumerate(unique, 1):
             print(f"   #{i}: {p['home_team']} vs {p['away_team']} | {p['selection']} @ {p['odds']:.2f} (EV {p['edge_percentage']:.1f}%)")
+
+        self._learning_picks = learning_picks
 
         return unique
 
