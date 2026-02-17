@@ -847,6 +847,7 @@ def get_free_predictions() -> list:
           AND odds >= :min_odds
           AND odds <= :max_odds
           AND market = 'Value Single'
+          AND selection NOT IN ('Under 2.5 Goals', 'Under 3.5 Goals')
         ORDER BY edge_percentage DESC
         LIMIT :max_picks
     """)

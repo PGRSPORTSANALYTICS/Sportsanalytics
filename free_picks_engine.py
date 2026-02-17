@@ -19,7 +19,7 @@ HIGH_VISIBILITY_LEAGUES = [
     'Champions League', 'Europa League'
 ]
 
-ALLOWED_SELECTIONS = ['Over 2.5 Goals', 'Under 2.5 Goals', 'Over 1.5 Goals', 'Under 3.5 Goals', 'BTTS Yes', 'BTTS No']
+ALLOWED_SELECTIONS = ['Over 2.5 Goals', 'Over 1.5 Goals', 'BTTS Yes', 'BTTS No']
 ODDS_MIN = 1.70
 ODDS_MAX = 2.20
 MIN_CONFIDENCE = 0.60
