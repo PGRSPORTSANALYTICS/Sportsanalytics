@@ -3,10 +3,10 @@
 ============================================
 Fetches closing odds and calculates CLV for all bets.
 
-CLV% = ((closing_odds - opening_odds) / opening_odds) * 100
+CLV% = ((opening_odds - closing_odds) / opening_odds) * 100
 
-A negative CLV means the closing odds shortened (you got better value
-than the closing line), which is a strong indicator of long-term betting edge.
+A positive CLV means the closing odds shortened after your bet,
+confirming you got better value than the market closed at.
 """
 
 import os
@@ -442,7 +442,7 @@ class CLVService:
                 logger.warning(f"⚠️ CLV: Invalid closing odds {closing_odds} for bet {bet_id}")
                 return False
             
-            clv_pct = ((closing_odds - open_odds) / open_odds) * 100.0
+            clv_pct = ((open_odds - closing_odds) / open_odds) * 100.0
             
             db_helper.execute("""
                 UPDATE football_opportunities 
@@ -497,7 +497,7 @@ class CLVService:
                     stats['updated'] += 1
                     open_odds = bet.get('open_odds', 0)
                     if open_odds and closing_odds > 1.0:
-                        clv = ((closing_odds - open_odds) / open_odds) * 100.0
+                        clv = ((open_odds - closing_odds) / open_odds) * 100.0
                         stats['clv_values'].append(clv)
                 else:
                     stats['failed'] += 1
