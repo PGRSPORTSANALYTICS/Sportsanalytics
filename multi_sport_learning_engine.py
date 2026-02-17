@@ -298,21 +298,38 @@ def _extract_best_odds(bookmakers: List[Dict]) -> Dict[str, Dict[str, float]]:
 
 
 def _save_pick(category: str, pick: Dict):
+    params = (
+        category, pick['sport_key'], pick['league'], pick['event_id'],
+        pick['home_team'], pick['away_team'], pick['market'],
+        pick['selection'], pick.get('line'),
+        pick['odds'], pick['implied_prob'], None, pick['edge_pct'],
+        'pending', pick['commence_time'], 'LEARNING'
+    )
     with DatabaseConnection.get_cursor() as cursor:
-        cursor.execute("""
-            INSERT INTO learning_bets (
-                sport_category, sport_key, league, event_id,
-                home_team, away_team, market, selection, line,
-                odds, implied_prob, model_prob, edge_pct,
-                status, commence_time, mode
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, (
-            category, pick['sport_key'], pick['league'], pick['event_id'],
-            pick['home_team'], pick['away_team'], pick['market'],
-            pick['selection'], pick.get('line'),
-            pick['odds'], pick['implied_prob'], None, pick['edge_pct'],
-            'pending', pick['commence_time'], 'LEARNING'
-        ))
+        if pick.get('line') is not None:
+            cursor.execute("""
+                INSERT INTO learning_bets (
+                    sport_category, sport_key, league, event_id,
+                    home_team, away_team, market, selection, line,
+                    odds, implied_prob, model_prob, edge_pct,
+                    status, commence_time, mode
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (event_id, market, selection, line) WHERE line IS NOT NULL
+                DO UPDATE SET odds = EXCLUDED.odds, edge_pct = EXCLUDED.edge_pct, implied_prob = EXCLUDED.implied_prob
+                WHERE learning_bets.status = 'pending'
+            """, params)
+        else:
+            cursor.execute("""
+                INSERT INTO learning_bets (
+                    sport_category, sport_key, league, event_id,
+                    home_team, away_team, market, selection, line,
+                    odds, implied_prob, model_prob, edge_pct,
+                    status, commence_time, mode
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (event_id, market, selection) WHERE line IS NULL
+                DO UPDATE SET odds = EXCLUDED.odds, edge_pct = EXCLUDED.edge_pct, implied_prob = EXCLUDED.implied_prob
+                WHERE learning_bets.status = 'pending'
+            """, params)
 
 
 if __name__ == '__main__':
