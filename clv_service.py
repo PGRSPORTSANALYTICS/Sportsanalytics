@@ -3,10 +3,10 @@
 ============================================
 Fetches closing odds and calculates CLV for all bets.
 
-CLV = (open_odds - close_odds) / close_odds * 100
+CLV% = ((closing_odds - opening_odds) / opening_odds) * 100
 
-A positive CLV means you got better odds than the market closed at,
-which is a strong indicator of long-term betting edge.
+A negative CLV means the closing odds shortened (you got better value
+than the closing line), which is a strong indicator of long-term betting edge.
 """
 
 import os
@@ -174,12 +174,20 @@ class CLVService:
             selection = bet.get('selection', '')
             home_team = bet.get('home_team', '')
             away_team = bet.get('away_team', '')
-            
+            open_odds = bet.get('open_odds', 0)
+
+            if not self._is_supported_market(market):
+                logger.debug(f"📊 CLV: Skipping unsupported market '{market}' for {home_team} vs {away_team}")
+                return None
+
             sport_key = self._get_sport_key_for_league(bet.get('league', ''))
             if not sport_key:
-                sport_key = 'soccer_epl'
+                logger.debug(f"📊 CLV: No sport key for league '{bet.get('league', '')}', skipping")
+                return None
             
             market_type = self._map_market_to_odds_api(market)
+            if not market_type:
+                return None
             
             odds_data = self.odds_api.get_live_odds(
                 sport_key, 
@@ -196,7 +204,13 @@ class CLVService:
                         event, market, selection, home_team, away_team
                     )
                     if closing_odds:
-                        logger.info(f"📊 CLV: Found closing odds {closing_odds:.2f} for {home_team} vs {away_team}")
+                        if open_odds and open_odds > 1.0:
+                            drift = abs(closing_odds - open_odds) / open_odds
+                            if drift > 0.50:
+                                logger.warning(f"⚠️ CLV: Rejecting closing odds {closing_odds:.2f} for {home_team} vs {away_team} "
+                                             f"(open={open_odds:.2f}, drift={drift*100:.0f}% > 50% threshold)")
+                                return None
+                        logger.info(f"📊 CLV: Found closing odds {closing_odds:.2f} for {home_team} vs {away_team} (open={open_odds:.2f})")
                         return closing_odds
             
             return None
@@ -253,14 +267,33 @@ class CLVService:
                 return value
         return None
     
-    def _map_market_to_odds_api(self, market: str) -> str:
-        """Map internal market names to Odds API market types"""
+    UNSUPPORTED_MARKETS = {'corners', 'cards', 'shots', 'fouls', 'offsides', 'throw-ins',
+                           'player props', 'player_props', 'props'}
+
+    def _is_supported_market(self, market: str) -> bool:
+        """Check if market is supported by The Odds API for CLV tracking"""
         market_lower = market.lower()
-        
+        for unsupported in self.UNSUPPORTED_MARKETS:
+            if unsupported in market_lower:
+                return False
+        return True
+
+    def _map_market_to_odds_api(self, market: str) -> Optional[str]:
+        """Map internal market names to Odds API market types. Returns None for unsupported."""
+        market_lower = market.lower()
+
+        if not self._is_supported_market(market_lower):
+            return None
+
         if 'over' in market_lower or 'under' in market_lower:
             return 'totals'
-        elif 'btts' in market_lower:
+        elif 'btts' in market_lower or 'both teams' in market_lower:
             return 'btts'
+        elif any(k in market_lower for k in ['1x2', 'home win', 'away win', 'draw',
+                                              'double chance', 'value single', 'moneyline']):
+            return 'h2h'
+        elif 'asian' in market_lower or 'handicap' in market_lower:
+            return 'spreads'
         else:
             return 'h2h'
     
@@ -506,6 +539,7 @@ def get_clv_stats() -> Dict[str, Any]:
                 SUM(CASE WHEN clv_pct > 0 THEN 1 ELSE 0 END) as positive_count
             FROM football_opportunities
             WHERE clv_pct IS NOT NULL
+              AND clv_pct BETWEEN -50 AND 50
         """, fetch='one')
         
         if row:
