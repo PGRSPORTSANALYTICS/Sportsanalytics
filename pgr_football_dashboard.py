@@ -4058,7 +4058,7 @@ def render_system_status_tab():
 
     from value_singles_engine import (
         VALUE_SINGLE_LEAGUE_WHITELIST, LEARNING_ONLY_MARKETS,
-        MINIMUM_EV_BY_MARKET, LEAGUE_WHITELIST_ENABLED
+        MARKET_SPECIFIC_MIN_EV, LEAGUE_WHITELIST_ENABLED
     )
 
     st.markdown("### Recent Changes")
@@ -4129,7 +4129,7 @@ def render_system_status_tab():
         production_markets = []
         learning_markets = list(LEARNING_ONLY_MARKETS)
 
-        for mk in MINIMUM_EV_BY_MARKET:
+        for mk in MARKET_SPECIFIC_MIN_EV:
             if mk not in LEARNING_ONLY_MARKETS:
                 production_markets.append(mk)
 
@@ -4152,7 +4152,7 @@ def render_system_status_tab():
         st.markdown("**PRODUCTION**")
         for mk in sorted(production_markets):
             label = market_labels.get(mk, mk)
-            ev_min = MINIMUM_EV_BY_MARKET.get(mk, 0)
+            ev_min = MARKET_SPECIFIC_MIN_EV.get(mk, 0)
             st.markdown(f"""<div style="padding:4px 10px;margin:2px 0;border-radius:6px;
                 background:rgba(34,197,94,0.1);border-left:3px solid #22C55E;font-size:0.85rem;color:#CBD5E1;">
                 ✅ {label} <span style="color:#6B7280;font-size:0.75rem;">(min EV: {ev_min*100:.0f}%)</span></div>""", unsafe_allow_html=True)
