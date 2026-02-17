@@ -821,6 +821,35 @@ class ValueSinglesEngine:
                 picks.append(opportunity)
 
         print(f"\n📊 VALUE SINGLES SUMMARY: {len(picks)} candidates passed hard filters")
+
+        def _resolve_over_under_conflicts(pick_list):
+            import re
+            conflict_groups = {}
+            non_conflicting = []
+            for p in pick_list:
+                analysis = json.loads(p.get('analysis', '{}'))
+                mk = analysis.get('market_key', '')
+                m = re.match(r'(FT_)(OVER|UNDER)(_\d+_\d+)', mk)
+                if m:
+                    group_key = f"{p['match_id']}_{m.group(1)}{m.group(3)}"
+                    if group_key not in conflict_groups:
+                        conflict_groups[group_key] = []
+                    conflict_groups[group_key].append(p)
+                else:
+                    non_conflicting.append(p)
+            resolved = list(non_conflicting)
+            for group_key, group in conflict_groups.items():
+                best = max(group, key=lambda x: x['edge_percentage'])
+                resolved.append(best)
+                if len(group) > 1:
+                    kept_sel = best.get('selection', '?')
+                    dropped = [g.get('selection', '?') for g in group if g is not best]
+                    print(f"   🔀 CONFLICT: {best['home_team']} vs {best['away_team']} — kept {kept_sel}, dropped {', '.join(dropped)}")
+            return resolved
+
+        picks = _resolve_over_under_conflicts(picks)
+        print(f"📊 After Over/Under conflict resolution: {len(picks)} picks remain")
+
         if picks:
             log_calibration_batch(
                 [{'raw_prob': json.loads(c.get('analysis', '{}')).get('p_model', 0),
