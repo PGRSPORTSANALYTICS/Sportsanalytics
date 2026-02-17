@@ -3996,7 +3996,7 @@ def main():
     prod_bets, backtest_bets = split_bets_by_mode(all_bets)
 
     # Tabs for different products (Multi-match parlays disabled, 2-leg ML Parlay allowed)
-    free_tab, daily_card_tab, overview_tab, singles_tab, odds_compare_tab, props_tab, ml_parlay_tab, basket_tab, kelly_tab, backtest_tab = st.tabs(
+    free_tab, daily_card_tab, overview_tab, singles_tab, odds_compare_tab, props_tab, ml_parlay_tab, basket_tab, kelly_tab, backtest_tab, system_tab = st.tabs(
         [
             "Free Picks",
             "Daily Card",
@@ -4008,6 +4008,7 @@ def main():
             "College Basketball",
             "Smart Stake",
             "Backtests",
+            "System Status",
         ]
     )
 
@@ -4045,6 +4046,151 @@ def main():
 
     with backtest_tab:
         render_backtest_analysis()
+
+    with system_tab:
+        render_system_status_tab()
+
+
+def render_system_status_tab():
+    """Render system configuration and status overview."""
+    st.markdown("## System Configuration & Status")
+    st.caption("Overview of active leagues, market statuses, and recent configuration changes.")
+
+    from value_singles_engine import (
+        VALUE_SINGLE_LEAGUE_WHITELIST, LEARNING_ONLY_MARKETS,
+        MINIMUM_EV_BY_MARKET, LEAGUE_WHITELIST_ENABLED
+    )
+
+    st.markdown("### Recent Changes")
+    st.markdown("""
+    <div style="padding:14px;border-radius:10px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.25);margin-bottom:20px;">
+        <div style="font-weight:600;color:#3B82F6;margin-bottom:8px;">Feb 16, 2026</div>
+        <ul style="margin:0;padding-left:20px;color:#CBD5E1;font-size:0.9rem;">
+            <li><b>Under 2.5 Goals</b> → LEARNING_ONLY (43.4% hit rate, -9.14u)</li>
+            <li><b>Under 3.5 Goals</b> → LEARNING_ONLY (33.3% hit rate, -2.88u)</li>
+            <li><b>Asian Handicap (AH -0.5)</b> → Added to learning mode</li>
+            <li><b>League expansion</b> → ~30 leagues now active (was ~12)</li>
+            <li><b>Minimum EV</b> raised to 7% base for most markets</li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("### Active Leagues")
+        league_mode = "All leagues allowed" if not LEAGUE_WHITELIST_ENABLED else f"{len(VALUE_SINGLE_LEAGUE_WHITELIST)} whitelisted"
+        st.markdown(f"**Mode:** {league_mode}")
+
+        league_labels = {
+            "soccer_epl": "Premier League",
+            "soccer_spain_la_liga": "La Liga",
+            "soccer_italy_serie_a": "Serie A",
+            "soccer_germany_bundesliga": "Bundesliga",
+            "soccer_france_ligue_one": "Ligue 1",
+            "soccer_uefa_champs_league": "Champions League",
+            "soccer_uefa_europa_league": "Europa League",
+            "soccer_uefa_europa_conf_league": "Conference League",
+            "soccer_england_league1": "League One",
+            "soccer_england_league2": "League Two",
+            "soccer_england_efl_champ": "EFL Championship",
+            "soccer_spain_segunda": "La Liga 2",
+            "soccer_germany_bundesliga2": "Bundesliga 2",
+            "soccer_italy_serie_b": "Serie B",
+            "soccer_netherlands_eredivisie": "Eredivisie",
+            "soccer_portugal_primeira_liga": "Primeira Liga",
+            "soccer_belgium_first_div": "Belgian Pro League",
+            "soccer_turkey_super_league": "Turkish Super Lig",
+            "soccer_greece_super_league": "Greek Super League",
+            "soccer_scotland_premiership": "Scottish Premiership",
+            "soccer_switzerland_superleague": "Swiss Super League",
+            "soccer_sweden_allsvenskan": "Allsvenskan",
+            "soccer_denmark_superliga": "Danish Superliga",
+            "soccer_norway_eliteserien": "Eliteserien",
+            "soccer_austria_bundesliga": "Austrian Bundesliga",
+            "soccer_usa_mls": "MLS",
+            "soccer_brazil_campeonato": "Brasileirão",
+            "soccer_argentina_primera_division": "Argentine Primera",
+            "soccer_mexico_ligamx": "Liga MX",
+            "soccer_japan_j_league": "J-League",
+            "soccer_korea_kleague1": "K-League 1",
+            "soccer_australia_aleague": "A-League",
+        }
+
+        for key in VALUE_SINGLE_LEAGUE_WHITELIST:
+            label = league_labels.get(key, key)
+            st.markdown(f"""<div style="padding:4px 10px;margin:2px 0;border-radius:6px;
+                background:rgba(34,197,94,0.1);border-left:3px solid #22C55E;font-size:0.85rem;color:#CBD5E1;">
+                {label}</div>""", unsafe_allow_html=True)
+
+    with col2:
+        st.markdown("### Market Status")
+
+        production_markets = []
+        learning_markets = list(LEARNING_ONLY_MARKETS)
+
+        for mk in MINIMUM_EV_BY_MARKET:
+            if mk not in LEARNING_ONLY_MARKETS:
+                production_markets.append(mk)
+
+        market_labels = {
+            "FT_OVER_2_5": "Over 2.5 Goals",
+            "FT_OVER_3_5": "Over 3.5 Goals",
+            "FT_UNDER_2_5": "Under 2.5 Goals",
+            "FT_UNDER_3_5": "Under 3.5 Goals",
+            "BTTS_YES": "BTTS Yes",
+            "BTTS_NO": "BTTS No",
+            "DOUBLE_CHANCE_1X": "Double Chance 1X",
+            "DOUBLE_CHANCE_X2": "Double Chance X2",
+            "DOUBLE_CHANCE_12": "Double Chance 12",
+            "HOME_WIN": "Home Win (1X2)",
+            "DRAW": "Draw (1X2)",
+            "AWAY_WIN": "Away Win (1X2)",
+            "AH_HOME_-0.5": "Asian Handicap -0.5",
+        }
+
+        st.markdown("**PRODUCTION**")
+        for mk in sorted(production_markets):
+            label = market_labels.get(mk, mk)
+            ev_min = MINIMUM_EV_BY_MARKET.get(mk, 0)
+            st.markdown(f"""<div style="padding:4px 10px;margin:2px 0;border-radius:6px;
+                background:rgba(34,197,94,0.1);border-left:3px solid #22C55E;font-size:0.85rem;color:#CBD5E1;">
+                ✅ {label} <span style="color:#6B7280;font-size:0.75rem;">(min EV: {ev_min*100:.0f}%)</span></div>""", unsafe_allow_html=True)
+
+        st.markdown("**LEARNING ONLY**")
+        for mk in sorted(learning_markets):
+            label = market_labels.get(mk, mk)
+            st.markdown(f"""<div style="padding:4px 10px;margin:2px 0;border-radius:6px;
+                background:rgba(251,191,36,0.1);border-left:3px solid #FBBF24;font-size:0.85rem;color:#CBD5E1;">
+                📊 {label} <span style="color:#6B7280;font-size:0.75rem;">(data collection only)</span></div>""", unsafe_allow_html=True)
+
+    st.markdown("---")
+    st.markdown("### Today's Pipeline Stats")
+    try:
+        db_url = get_db_url()
+        engine = create_engine(db_url)
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT 
+                    COUNT(*) as total_today,
+                    COUNT(*) FILTER (WHERE LOWER(status) = 'pending') as pending,
+                    COUNT(*) FILTER (WHERE LOWER(status) = 'won') as won,
+                    COUNT(*) FILTER (WHERE LOWER(status) = 'lost') as lost,
+                    COUNT(DISTINCT league) as leagues_active,
+                    COUNT(DISTINCT selection) as markets_used
+                FROM football_opportunities
+                WHERE match_date::date = CURRENT_DATE
+            """))
+            row = result.fetchone()
+            if row:
+                c1, c2, c3, c4, c5 = st.columns(5)
+                c1.metric("Predictions Today", row[0])
+                c2.metric("Pending", row[1])
+                c3.metric("Won", row[2])
+                c4.metric("Lost", row[3])
+                c5.metric("Leagues Active", row[4])
+    except Exception as e:
+        st.warning(f"Could not load pipeline stats.")
 
 
 if __name__ == "__main__":
