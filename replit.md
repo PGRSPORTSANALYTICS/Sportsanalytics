@@ -9,7 +9,7 @@ Preferred communication style: Simple, everyday language.
 ## System Architecture
 
 ### UI/UX Decisions
-The platform features a Streamlit web application with a wide layout, utilizing Plotly for interactive charts, auto-refresh functionality, and consistent color coding to enhance data visualization and user experience. A dedicated PGR Edge Finder dashboard provides multi-book comparison and CLV analytics.
+The platform features a Streamlit web application with a wide layout, utilizing Plotly for interactive charts, auto-refresh functionality, and consistent color coding to enhance data visualization and user experience. A dedicated PGR Edge Finder dashboard provides multi-book comparison and CLV analytics. A **Smart Picks** tab (first tab in the football dashboard) provides clean, conflict-free picks with one best pick per match, opposing market detection, and Core/High Value categorization (odds 1.70–2.10 core range). Powered by `smart_picks_filter.py` and `pgr_smart_picks_dashboard.py`.
 
 ### Technical Implementations
 The system incorporates comprehensive analysis of team form, H2H, league standings, odds movement, and venue-specific xG. It employs a dual-source system for injury/lineup data and a triple-layer fallback for general data resilience. Prediction models combine Poisson distribution, neural network probabilities, H2H patterns, Monte Carlo simulation, and Similar Matches Technology. Value-based betting utilizes Expected Value (EV) Filtering with Kelly Criterion Bet Sizing and Shrink-to-Market Probability Calibration.

@@ -3996,8 +3996,9 @@ def main():
     prod_bets, backtest_bets = split_bets_by_mode(all_bets)
 
     # Tabs for different products (Multi-match parlays disabled, 2-leg ML Parlay allowed)
-    free_tab, daily_card_tab, overview_tab, singles_tab, odds_compare_tab, props_tab, ml_parlay_tab, basket_tab, kelly_tab, backtest_tab, system_tab = st.tabs(
+    smart_tab, free_tab, daily_card_tab, overview_tab, singles_tab, odds_compare_tab, props_tab, ml_parlay_tab, basket_tab, kelly_tab, backtest_tab, system_tab = st.tabs(
         [
+            "Smart Picks",
             "Free Picks",
             "Daily Card",
             "Overview",
@@ -4011,6 +4012,10 @@ def main():
             "System Status",
         ]
     )
+
+    with smart_tab:
+        from pgr_smart_picks_dashboard import render_smart_picks_tab
+        render_smart_picks_tab()
 
     with free_tab:
         render_free_predictions_tab()
