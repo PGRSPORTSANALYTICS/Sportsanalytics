@@ -4165,6 +4165,22 @@ def render_system_status_tab():
                 📊 {label} <span style="color:#6B7280;font-size:0.75rem;">(data collection only)</span></div>""", unsafe_allow_html=True)
 
     st.markdown("---")
+    st.markdown("### CLV Performance")
+    try:
+        clv_stats = get_clv_stats_for_dashboard()
+        c1, c2, c3, c4 = st.columns(4)
+        avg_all = clv_stats.get('avg_clv_all')
+        avg_100 = clv_stats.get('avg_clv_last_100')
+        pos_share = clv_stats.get('positive_share')
+        total_clv = clv_stats.get('total_with_clv', 0)
+        c1.metric("Average CLV (All)", f"{avg_all:+.2f}%" if avg_all is not None else "N/A")
+        c2.metric("Average CLV (Last 100)", f"{avg_100:+.2f}%" if avg_100 is not None else "N/A")
+        c3.metric("Positive CLV %", f"{pos_share:.1f}%" if pos_share is not None else "N/A")
+        c4.metric("Bets with CLV", f"{total_clv:,}")
+    except Exception as e:
+        st.warning("Could not load CLV stats.")
+
+    st.markdown("---")
     st.markdown("### Today's Pipeline Stats")
     try:
         db_url = get_db_url()
@@ -4190,7 +4206,7 @@ def render_system_status_tab():
                 c4.metric("Lost", row[3])
                 c5.metric("Leagues Active", row[4])
     except Exception as e:
-        st.warning(f"Could not load pipeline stats.")
+        st.warning("Could not load pipeline stats.")
 
 
 if __name__ == "__main__":

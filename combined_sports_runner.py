@@ -603,8 +603,8 @@ def main():
     schedule.every(30).minutes.do(run_player_props_settlement)  # Player props settlement
     schedule.every(30).minutes.do(run_multi_sport_settlement)  # Multi-sport settlement
     
-    # Schedule CLV update - Every 5 minutes for reliable closing odds capture
-    schedule.every(5).minutes.do(run_clv_update_cycle)
+    # Schedule CLV update - Every 10 minutes for closing odds capture
+    schedule.every(10).minutes.do(run_clv_update_cycle)
     
     # PGR Analytics v2 — odds ingestion + bet sync every hour, aligned with Value Singles
     if ENABLE_PGR_ANALYTICS:

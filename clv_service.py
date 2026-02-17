@@ -21,9 +21,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 ODDS_SOURCE_DEFAULT = 'the_odds_api'
-CLOSING_WINDOW_BEFORE_KICKOFF_MINUTES = 15  # Extended to catch more matches
+CLOSING_WINDOW_BEFORE_KICKOFF_MINUTES = 60  # Look up to 60 min before kickoff
 CLOSING_WINDOW_AFTER_KICKOFF_MINUTES = 5    # Allow 5 min after kickoff for late capture
-CLV_CAPTURE_MINUTES_BEFORE = 15              # Look 15 min before kickoff
+CLV_CAPTURE_MINUTES_BEFORE = 60              # Target bets starting within 60 min
 
 class CLVService:
     """Service for tracking Closing Line Value"""
@@ -42,12 +42,12 @@ class CLVService:
         
         Candidates are bets where:
         - close_odds IS NULL
-        - kickoff_epoch - 300 seconds <= now_epoch (5 min before kickoff)
-        - now_epoch <= kickoff_epoch + 120 seconds (2 min after kickoff)
+        - kickoff_epoch is within 60 min from now (before kickoff)
+        - or up to 5 min after kickoff (late capture)
         - Football only (for now)
         
         Uses kickoff_epoch (seconds since Unix epoch) for precise timing.
-        CLV capture triggers at: kickoff_epoch - 300 (5 min before kickoff)
+        CLV capture window: 60 min before kickoff to 5 min after kickoff
         
         Returns:
             List of bet dicts with id, match_id, home_team, away_team, market, 
@@ -217,8 +217,41 @@ class CLVService:
             'Europa League': 'soccer_uefa_europa_league',
             'Eredivisie': 'soccer_netherlands_eredivisie',
             'Portuguese Primeira': 'soccer_portugal_primeira_liga',
+            'Primeira Liga': 'soccer_portugal_primeira_liga',
+            'Belgian First Division': 'soccer_belgium_first_div',
+            'English Championship': 'soccer_efl_champ',
+            'English League One': 'soccer_england_league1',
+            'English League Two': 'soccer_england_league2',
+            'Scottish Premiership': 'soccer_spl',
+            'Turkish Super Lig': 'soccer_turkey_super_league',
+            'Swiss Super League': 'soccer_switzerland_superleague',
+            'Danish Superliga': 'soccer_denmark_superliga',
+            'Norwegian Eliteserien': 'soccer_norway_eliteserien',
+            'Swedish Allsvenskan': 'soccer_sweden_allsvenskan',
+            'Greek Super League': 'soccer_greece_super_league',
+            'Austrian Bundesliga': 'soccer_austria_bundesliga',
+            'MLS': 'soccer_usa_mls',
+            'Conference League': 'soccer_uefa_europa_conference_league',
+            'Liga MX': 'soccer_mexico_ligamx',
+            'Brazilian Serie A': 'soccer_brazil_serie_a',
+            'Argentine Primera': 'soccer_argentina_primera_division',
+            'J1 League': 'soccer_japan_j_league',
+            'K League 1': 'soccer_korea_kleague1',
+            'A-League': 'soccer_australia_aleague',
+            'Superliga': 'soccer_denmark_superliga',
+            'FA Cup': 'soccer_fa_cup',
+            'Copa del Rey': 'soccer_spain_copa_del_rey',
+            'DFB Pokal': 'soccer_germany_dfb_pokal',
+            'Coppa Italia': 'soccer_italy_coppa_italia',
         }
-        return league_mapping.get(league)
+        league_lower = league.lower()
+        direct = league_mapping.get(league)
+        if direct:
+            return direct
+        for key, value in league_mapping.items():
+            if key.lower() in league_lower or league_lower in key.lower():
+                return value
+        return None
     
     def _map_market_to_odds_api(self, market: str) -> str:
         """Map internal market names to Odds API market types"""
@@ -349,7 +382,8 @@ class CLVService:
         """
         Calculate and update CLV for a bet.
         
-        CLV = (open_odds - close_odds) / close_odds * 100
+        CLV% = ((closing_odds - opening_odds) / opening_odds) * 100
+        Positive CLV = closing odds shortened (you got better value)
         
         Args:
             bet_id: Database ID of the bet
@@ -375,7 +409,7 @@ class CLVService:
                 logger.warning(f"⚠️ CLV: Invalid closing odds {closing_odds} for bet {bet_id}")
                 return False
             
-            clv_pct = ((open_odds - closing_odds) / closing_odds) * 100.0
+            clv_pct = ((closing_odds - open_odds) / open_odds) * 100.0
             
             db_helper.execute("""
                 UPDATE football_opportunities 
@@ -430,7 +464,7 @@ class CLVService:
                     stats['updated'] += 1
                     open_odds = bet.get('open_odds', 0)
                     if open_odds and closing_odds > 1.0:
-                        clv = ((open_odds - closing_odds) / closing_odds) * 100.0
+                        clv = ((closing_odds - open_odds) / open_odds) * 100.0
                         stats['clv_values'].append(clv)
                 else:
                     stats['failed'] += 1
