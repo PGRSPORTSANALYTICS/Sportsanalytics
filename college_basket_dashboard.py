@@ -270,7 +270,121 @@ if stats is not None:
 
 st.markdown("---")
 
-tab1, tab2, tab3, tab4 = st.tabs(["📈 Today's Picks", "🏆 Recent Results", "📊 Performance Chart", "📋 All Data"])
+tab_smart, tab1, tab2, tab3, tab4 = st.tabs(["🎯 Smart Picks", "📈 Today's Picks", "🏆 Recent Results", "📊 Performance Chart", "📋 All Data"])
+
+with tab_smart:
+    st.markdown("### Smart Picks — Moneyline Winners")
+    st.caption("Who wins? Odds 1.70–2.00 | High probability, clean value. Historical: 64% hit rate.")
+
+    st.markdown("""
+    <div style="padding:10px 14px;border-radius:8px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);margin-bottom:16px;">
+        <span style="color:#FBBF24;font-size:12px;">For informational purposes only. Not betting advice.</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    @st.cache_data(ttl=300)
+    def _load_smart_picks():
+        from basketball_smart_picks import fetch_ncaab_moneyline_smart_picks
+        return fetch_ncaab_moneyline_smart_picks()
+
+    try:
+        smart_picks = _load_smart_picks()
+    except Exception as e:
+        smart_picks = []
+        st.error(f"Could not load smart picks: {e}")
+
+    if not smart_picks:
+        st.info("No moneyline picks in the 1.70–2.00 range right now. Check back closer to game time.")
+    else:
+        scol1, scol2, scol3 = st.columns(3)
+        avg_prob = sum(p['probability'] for p in smart_picks) / len(smart_picks)
+        avg_odds = sum(p['odds'] for p in smart_picks) / len(smart_picks)
+        avg_ev = sum(p['ev_percentage'] for p in smart_picks) / len(smart_picks)
+
+        with scol1:
+            st.metric("Picks Found", len(smart_picks))
+        with scol2:
+            st.metric("Avg Win Prob", f"{avg_prob:.1f}%")
+        with scol3:
+            st.metric("Avg Odds", f"{avg_odds:.2f}")
+
+        for pick in smart_picks:
+            prob = pick['probability']
+            ev = pick['ev_percentage']
+            odds = pick['odds']
+
+            if prob >= 55:
+                prob_color = "#10B981"
+            elif prob >= 50:
+                prob_color = "#3B82F6"
+            else:
+                prob_color = "#F59E0B"
+
+            if ev >= 5:
+                ev_color = "#10B981"
+            elif ev >= 0:
+                ev_color = "#3B82F6"
+            else:
+                ev_color = "#EF4444"
+
+            kickoff = pick.get('commence_time', '')
+            if kickoff:
+                try:
+                    dt = datetime.fromisoformat(kickoff.replace('Z', '+00:00'))
+                    kickoff_display = dt.strftime('%b %d, %H:%M UTC')
+                except:
+                    kickoff_display = kickoff[:16].replace('T', ' ')
+            else:
+                kickoff_display = 'TBD'
+
+            odds_by_book = pick.get('odds_by_bookmaker', {})
+            book_html = '<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">'
+            for i, (bname, bodds) in enumerate(odds_by_book.items()):
+                if i == 0:
+                    book_html += f'''
+                    <div style="padding:5px 10px;border-radius:6px;background:rgba(34,197,94,0.2);border:1px solid rgba(34,197,94,0.5);">
+                        <div style="font-size:8px;color:#22C55E;font-weight:600;">BEST</div>
+                        <div style="font-size:15px;font-weight:700;color:#22C55E;">{float(bodds):.2f}</div>
+                        <div style="font-size:8px;color:#6B7280;">{bname}</div>
+                    </div>'''
+                else:
+                    book_html += f'''
+                    <div style="padding:5px 10px;border-radius:6px;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);">
+                        <div style="font-size:15px;font-weight:700;color:#60A5FA;">{float(bodds):.2f}</div>
+                        <div style="font-size:8px;color:#6B7280;">{bname}</div>
+                    </div>'''
+            book_html += '</div>'
+
+            st.markdown(f"""
+            <div style="padding:16px;margin:8px 0;border-radius:12px;background:radial-gradient(circle at top left, rgba(59,130,246,0.1), rgba(15,23,42,0.95));border:1px solid rgba(59,130,246,0.3);">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                    <span style="font-size:11px;color:#9CA3AF;">{kickoff_display}</span>
+                    <div style="display:flex;gap:8px;">
+                        <span style="padding:3px 8px;border-radius:999px;background:{prob_color}22;color:{prob_color};font-size:10px;font-weight:600;">{prob:.0f}% WIN</span>
+                        <span style="padding:3px 8px;border-radius:999px;background:{ev_color}22;color:{ev_color};font-size:10px;font-weight:600;">EV {ev:+.1f}%</span>
+                    </div>
+                </div>
+                <div style="font-size:15px;color:#E5E7EB;font-weight:600;margin-bottom:3px;">{pick['match']}</div>
+                <div style="font-size:14px;color:#6EE7B7;font-weight:600;">{pick['team']} to win @ {odds:.2f}</div>
+                {book_html}
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("---")
+        st.markdown("#### Table View")
+        table_data = []
+        for p in smart_picks:
+            best_book_info = list(p.get('odds_by_bookmaker', {}).items())
+            best_str = f"{best_book_info[0][0]} @ {float(best_book_info[0][1]):.2f}" if best_book_info else ''
+            table_data.append({
+                'Match': p['match'],
+                'Pick': f"{p['team']} to win",
+                'Odds': f"{p['odds']:.2f}",
+                'Win Prob': f"{p['probability']:.1f}%",
+                'EV': f"{p['ev_percentage']:+.1f}%",
+                'Best Book': best_str,
+            })
+        st.dataframe(pd.DataFrame(table_data), use_container_width=True, hide_index=True)
 
 with tab1:
     if picks_df.empty:

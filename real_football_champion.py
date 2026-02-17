@@ -4067,7 +4067,7 @@ def run_single_cycle():
             
             learning_picks = getattr(value_engine, '_learning_picks', [])
             if learning_picks:
-                learning_saved = self._save_learning_picks(learning_picks)
+                learning_saved = champion._save_learning_picks(learning_picks)
                 print(f"📚 Saved {learning_saved} LEARNING picks (all sides preserved for analysis)")
         except Exception as e:
             print(f"⚠️ Value Singles generation failed: {e}")
