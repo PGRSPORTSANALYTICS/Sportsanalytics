@@ -104,7 +104,18 @@ def filter_smart_picks(picks: List[dict]) -> List[dict]:
         result = []
         for match_key, group in match_groups.items():
             group.sort(key=lambda x: x['_smart_score'], reverse=True)
-            result.extend(group[:MAX_PICKS_PER_MATCH])
+            selected = []
+            for candidate in group:
+                if len(selected) >= MAX_PICKS_PER_MATCH:
+                    break
+                has_conflict = False
+                for existing in selected:
+                    if are_opposing(candidate.get('selection', ''), existing.get('selection', '')):
+                        has_conflict = True
+                        break
+                if not has_conflict:
+                    selected.append(candidate)
+            result.extend(selected)
 
         result.sort(key=lambda x: x.get('_smart_score', 0), reverse=True)
         return result
