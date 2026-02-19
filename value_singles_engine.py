@@ -54,8 +54,8 @@ MIN_COMBINED_CONFIDENCE = 0.01
 # Lower bookmaker margins (4-8%) vs SGP (28-45%) = better ROI
 # ============================================================
 
-# Minimum Expected Value (EV) - 7% edge (raised Feb 16, 2026)
-MIN_VALUE_SINGLE_EV = 0.07  # 7% edge - quality over volume
+# Minimum Expected Value (EV) - 6% edge (Stable 2.0 - Feb 19, 2026)
+MIN_VALUE_SINGLE_EV = 0.06  # 6% edge - Stable 2.0 balanced threshold
 
 # ============================================================
 # MARKET-SPECIFIC MIN_EV THRESHOLDS (Jan 11, 2026 v2)
@@ -67,8 +67,8 @@ MIN_VALUE_SINGLE_EV = 0.07  # 7% edge - quality over volume
 # - Away Win: 29.4% hit, -5.45u, max DD -10.45u → LEARNING ONLY
 # ============================================================
 MARKET_SPECIFIC_MIN_EV = {
-    "FT_OVER_2_5": 0.12,   # 12% EV minimum (raised from 8% - underperforming)
-    "FT_OVER_3_5": 0.12,   # 12% EV minimum (raised from 8%)
+    "FT_OVER_2_5": 0.10,   # 10% EV minimum (Stable 2.0 - lowered from 12%)
+    "FT_OVER_3_5": 0.10,   # 10% EV minimum (Stable 2.0 - lowered from 12%)
     # HOME_WIN: Now LEARNING_ONLY (Feb 6, 2026) - see filter below
     # FT_UNDER_2_5: Now LEARNING_ONLY (Feb 16, 2026) - 43.4% hit, -9.14u
     # FT_UNDER_3_5: Now LEARNING_ONLY (Feb 16, 2026) - 33.3% hit, -2.88u
@@ -109,9 +109,9 @@ MARKET_SPECIFIC_MIN_ODDS = {
     # HOME_WIN: Removed — now LEARNING_ONLY (Feb 6, 2026)
 }
 
-# Odds range filter - tighter range for consistency (Dec 9, 2025)
+# Odds range filter - Stable 2.0 (Feb 19, 2026)
 MIN_VALUE_SINGLE_ODDS = 1.40  # Lower min for safer bets
-MAX_VALUE_SINGLE_ODDS = 2.20  # Tighter max for consistency
+MAX_VALUE_SINGLE_ODDS = 2.40  # Stable 2.0 - expanded from 2.20 (no longshots beyond 2.40)
 MAX_LEARNING_ODDS = 4.00      # Collect predictions up to 4.00 for AI training
 
 # Minimum model confidence/probability required

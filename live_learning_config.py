@@ -102,7 +102,7 @@ class LiveLearningConfig:
     """Configuration for Live Learning Mode."""
     
     mode: str = "PRODUCTION"
-    version: str = "1.0"
+    version: str = "2.0"
     activated_at: Optional[datetime] = field(default_factory=lambda: datetime(2026, 1, 25))
     
     stability_mode: StabilityModeConfig = field(default_factory=StabilityModeConfig)

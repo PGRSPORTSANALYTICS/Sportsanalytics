@@ -29,6 +29,9 @@ SMART_PICKS_ODDS_MIN = 1.70
 SMART_PICKS_ODDS_MAX = 2.10
 SMART_PICKS_ODDS_EXTENDED_MAX = 2.50
 
+SMART_PICKS_ENABLED = False  # Stable 2.0 (Feb 19, 2026) - conflict filter disabled
+MAX_PICKS_PER_MATCH = 2      # Stable 2.0 - allow up to 2 picks per match
+
 
 def get_match_key(pick: dict) -> str:
     home = pick.get('home_team', '').strip().lower()
@@ -89,6 +92,23 @@ def compute_smart_score(pick: dict) -> float:
 
 
 def filter_smart_picks(picks: List[dict]) -> List[dict]:
+    if not SMART_PICKS_ENABLED:
+        for p in picks:
+            p['_smart_score'] = compute_smart_score(p)
+
+        match_groups: Dict[str, List[dict]] = {}
+        for p in picks:
+            key = get_match_key(p)
+            match_groups.setdefault(key, []).append(p)
+
+        result = []
+        for match_key, group in match_groups.items():
+            group.sort(key=lambda x: x['_smart_score'], reverse=True)
+            result.extend(group[:MAX_PICKS_PER_MATCH])
+
+        result.sort(key=lambda x: x.get('_smart_score', 0), reverse=True)
+        return result
+
     match_groups: Dict[str, List[dict]] = {}
     for p in picks:
         key = get_match_key(p)

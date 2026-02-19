@@ -45,7 +45,7 @@ PRODUCT_FILTER_CONFIGS: Dict[str, ProductFilterConfig] = {
         l1_min_ev=0.05, l1_min_confidence=0.55, l1_max_disagreement=0.12,
         l2_min_ev=0.02, l2_min_confidence=0.52, l2_max_disagreement=0.15,
         l3_min_ev=0.00, l3_min_confidence=0.50, l3_max_disagreement=0.20,
-        min_odds=1.50, max_odds=3.50, max_per_day=15
+        min_odds=1.40, max_odds=3.50, max_per_day=15
     ),
     "TOTALS": ProductFilterConfig(
         product="TOTALS",
