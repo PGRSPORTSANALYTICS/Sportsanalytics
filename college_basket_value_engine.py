@@ -98,19 +98,38 @@ def devig_two_way(odds_a: float, odds_b: float) -> Tuple[float, float]:
     return pa / s, pb / s
 
 
-def fair_prob_from_books(two_way_books: List[Tuple[float, float]]) -> Tuple[float, float]:
+SHARP_BOOKS = {'pinnacle', 'betfair', 'betfair exchange'}
+
+def fair_prob_from_books(two_way_books: List[Tuple[float, float]], book_names: List[str] = None) -> Tuple[float, float]:
     """
-    Books list of (odds_a, odds_b) -> return average devig prob for both sides.
+    Compute fair probabilities using sharp-book devigging when available.
+    Fallback: use the tightest-juice book (lowest overround) as reference.
+    This finds the book closest to true probability.
     """
-    probs_a = []
-    probs_b = []
-    for oa, ob in two_way_books:
-        pa, pb = devig_two_way(oa, ob)
-        probs_a.append(pa)
-        probs_b.append(pb)
-    if not probs_a:
+    if not two_way_books:
         return 0.5, 0.5
-    return sum(probs_a) / len(probs_a), sum(probs_b) / len(probs_b)
+    
+    sharp_probs = []
+    for i, (oa, ob) in enumerate(two_way_books):
+        if book_names and i < len(book_names):
+            if book_names[i].lower() in SHARP_BOOKS:
+                pa, pb = devig_two_way(oa, ob)
+                sharp_probs.append((pa, pb))
+    
+    if sharp_probs:
+        avg_a = sum(p[0] for p in sharp_probs) / len(sharp_probs)
+        avg_b = sum(p[1] for p in sharp_probs) / len(sharp_probs)
+        return avg_a, avg_b
+    
+    best_vig = 999.0
+    best_pa, best_pb = 0.5, 0.5
+    for oa, ob in two_way_books:
+        vig = (1.0/oa + 1.0/ob) - 1.0
+        if vig < best_vig:
+            best_vig = vig
+            best_pa, best_pb = devig_two_way(oa, ob)
+    
+    return best_pa, best_pb
 
 
 def ev_from_prob_odds(p: float, odds: float) -> float:
@@ -301,21 +320,21 @@ def build_parlays(picks: List[BasketPick], legs: int = 3, min_parlay_ev: float =
 
 class CollegeBasketValueEngine:
     """
-    NOVA v2.0 - College Basketball Value Engine (Dec 9, 2025)
-    Finds value singles in NCAAB using consensus fair odds.
-    Retuned for higher volume while maintaining quality.
+    WIN MACHINE v3.0 - College Basketball Engine (Feb 19, 2026)
+    No EV filtering. Simple rule: odds 1.75-2.00 + fair probability supports it = take it.
+    Focuses on high hit-rate in a tight odds window across all markets.
     """
 
     def __init__(
         self,
         client: OddsAPIClient,
-        min_ev: float = 0.03,       # 3% EV - tighter filter for quality (was 1%)
-        min_conf: float = 0.55,     # 55% confidence - more conviction (was 50%)
-        max_singles: int = 20,      # Increased for high volume
+        min_ev: float = 0.0,        # NOT USED - win machine mode
+        min_conf: float = 0.0,      # NOT USED - win machine mode
+        max_singles: int = 20,
         max_parlays: int = 3,
-        min_odds: float = 1.40,     # Kept at 1.40
-        max_odds: float = 3.10,     # 3.10 max - sweet spot is under 3.00 (was 3.99)
-        allow_parlays: bool = False,  # DISABLED - parlays losing money
+        min_odds: float = 1.75,     # Win machine sweet spot lower bound
+        max_odds: float = 2.00,     # Win machine sweet spot upper bound
+        allow_parlays: bool = False,
     ):
         self.client = client
         self.min_ev = min_ev
@@ -353,6 +372,7 @@ class CollegeBasketValueEngine:
 
             # ---------------- H2H (moneyline)
             h2h_books: List[Tuple[float, float]] = []
+            h2h_book_names: List[str] = []
             best_home = None
             best_away = None
 
@@ -370,6 +390,7 @@ class CollegeBasketValueEngine:
                         home_odds, away_odds = o2["price"], o1["price"]
 
                     h2h_books.append((home_odds, away_odds))
+                    h2h_book_names.append(b.get("title", "book"))
 
                     if (best_home is None) or (home_odds > best_home[0]):
                         best_home = (home_odds, b.get("title", "book"))
@@ -377,9 +398,8 @@ class CollegeBasketValueEngine:
                         best_away = (away_odds, b.get("title", "book"))
 
             if h2h_books and best_home and best_away:
-                fair_p_home, fair_p_away = fair_prob_from_books(h2h_books)
+                fair_p_home, fair_p_away = fair_prob_from_books(h2h_books, h2h_book_names)
 
-                # Evaluate both sides but only pick the BETTER one (conflict prevention)
                 h2h_candidates = []
                 for side, fair_p, best in [
                     ("Home Win", fair_p_home, best_home),
@@ -389,16 +409,9 @@ class CollegeBasketValueEngine:
                     if not (self.min_odds <= odds <= self.max_odds):
                         continue
                     
-                    # HOME WIN FILTER (Jan 11, 2026): Only allow Home Win if odds >= 4.0
-                    # Data shows: Home Win 20% hit rate, -21.60u loss at avg 5.18 odds
-                    # Filter out low-odds Home Wins which are losing heavily
-                    if side == "Home Win" and odds < 4.0:
-                        continue  # Skip Home Win below 4.0 odds
-                    
-                    ev = ev_from_prob_odds(fair_p, odds)
-                    conf = clamp(fair_p, 0.05, 0.95)
-
-                    if ev >= self.min_ev and conf >= self.min_conf:
+                    implied_prob = 1.0 / odds
+                    if fair_p >= implied_prob:
+                        ev = ev_from_prob_odds(fair_p, odds)
                         h2h_candidates.append(
                             BasketPick(
                                 match=match_name,
@@ -407,18 +420,18 @@ class CollegeBasketValueEngine:
                                 odds=odds,
                                 prob=fair_p,
                                 ev=ev,
-                                confidence=conf,
+                                confidence=clamp(fair_p, 0.05, 0.95),
                                 meta={"book": book, "commence_time": commence_time},
                             )
                         )
                 
-                # Only add the BEST pick per game (highest EV wins)
                 if h2h_candidates:
-                    best_pick = max(h2h_candidates, key=lambda p: p.ev)
+                    best_pick = max(h2h_candidates, key=lambda p: p.confidence)
                     all_picks.append(best_pick)
 
             # ---------------- SPREADS
             spread_books: Dict[float, List[Tuple[float, float]]] = {}
+            spread_book_names: Dict[float, List[str]] = {}
             best_spread: Dict[Tuple[str, float], Tuple[float, str]] = {}
 
             for b in books:
@@ -439,6 +452,7 @@ class CollegeBasketValueEngine:
 
                     key_line = float(home_point)
                     spread_books.setdefault(key_line, []).append((home_odds, away_odds))
+                    spread_book_names.setdefault(key_line, []).append(b.get("title", "book"))
 
                     if (("home", key_line) not in best_spread) or (home_odds > best_spread[("home", key_line)][0]):
                         best_spread[("home", key_line)] = (home_odds, b.get("title", "book"))
@@ -446,48 +460,50 @@ class CollegeBasketValueEngine:
                         best_spread[("away", key_line)] = (away_odds, b.get("title", "book"))
 
             for line, books_list in spread_books.items():
-                fair_p_home, fair_p_away = fair_prob_from_books(books_list)
+                fair_p_home, fair_p_away = fair_prob_from_books(books_list, spread_book_names.get(line, []))
 
+                spread_candidates = []
                 if ("home", line) in best_spread:
                     odds, book = best_spread[("home", line)]
-                    if self.min_odds <= odds <= self.max_odds:
+                    if self.min_odds <= odds <= self.max_odds and fair_p_home >= 0.48:
                         ev = ev_from_prob_odds(fair_p_home, odds)
-                        conf = clamp(fair_p_home, 0.05, 0.95)
-                        if ev >= self.min_ev and conf >= self.min_conf:
-                            all_picks.append(
-                                BasketPick(
-                                    match=match_name,
-                                    market="Spread",
-                                    selection=f"{home} {line:+}",
-                                    odds=odds,
-                                    prob=fair_p_home,
-                                    ev=ev,
-                                    confidence=conf,
-                                    meta={"book": book, "line": line, "commence_time": commence_time},
-                                )
+                        spread_candidates.append(
+                            BasketPick(
+                                match=match_name,
+                                market="Spread",
+                                selection=f"{home} {line:+}",
+                                odds=odds,
+                                prob=fair_p_home,
+                                ev=ev,
+                                confidence=clamp(fair_p_home, 0.05, 0.95),
+                                meta={"book": book, "line": line, "commence_time": commence_time},
                             )
+                        )
 
                 if ("away", line) in best_spread:
                     odds, book = best_spread[("away", line)]
-                    if self.min_odds <= odds <= self.max_odds:
+                    if self.min_odds <= odds <= self.max_odds and fair_p_away >= 0.48:
                         ev = ev_from_prob_odds(fair_p_away, odds)
-                        conf = clamp(fair_p_away, 0.05, 0.95)
-                        if ev >= self.min_ev and conf >= self.min_conf:
-                            all_picks.append(
-                                BasketPick(
-                                    match=match_name,
-                                    market="Spread",
-                                    selection=f"{away} {-line:+}",
-                                    odds=odds,
-                                    prob=fair_p_away,
-                                    ev=ev,
-                                    confidence=conf,
-                                    meta={"book": book, "line": line, "commence_time": commence_time},
-                                )
+                        spread_candidates.append(
+                            BasketPick(
+                                match=match_name,
+                                market="Spread",
+                                selection=f"{away} {-line:+}",
+                                odds=odds,
+                                prob=fair_p_away,
+                                ev=ev,
+                                confidence=clamp(fair_p_away, 0.05, 0.95),
+                                meta={"book": book, "line": line, "commence_time": commence_time},
                             )
+                        )
+
+                if spread_candidates:
+                    best_sc = max(spread_candidates, key=lambda p: p.confidence)
+                    all_picks.append(best_sc)
 
             # ---------------- TOTALS (Over/Under)
             totals_books: Dict[float, List[Tuple[float, float]]] = {}
+            totals_book_names: Dict[float, List[str]] = {}
             best_totals: Dict[Tuple[str, float], Tuple[float, str]] = {}
 
             for b in books:
@@ -508,6 +524,7 @@ class CollegeBasketValueEngine:
 
                     key_line = float(over_point)
                     totals_books.setdefault(key_line, []).append((over_odds, under_odds))
+                    totals_book_names.setdefault(key_line, []).append(b.get("title", "book"))
 
                     if (("over", key_line) not in best_totals) or (over_odds > best_totals[("over", key_line)][0]):
                         best_totals[("over", key_line)] = (over_odds, b.get("title", "book"))
@@ -515,106 +532,67 @@ class CollegeBasketValueEngine:
                         best_totals[("under", key_line)] = (under_odds, b.get("title", "book"))
 
             for line, books_list in totals_books.items():
-                fair_p_over, fair_p_under = fair_prob_from_books(books_list)
+                fair_p_over, fair_p_under = fair_prob_from_books(books_list, totals_book_names.get(line, []))
 
+                totals_candidates = []
                 if ("over", line) in best_totals:
                     odds, book = best_totals[("over", line)]
-                    if self.min_odds <= odds <= self.max_odds:
+                    if self.min_odds <= odds <= self.max_odds and fair_p_over >= 0.48:
                         ev = ev_from_prob_odds(fair_p_over, odds)
-                        conf = clamp(fair_p_over, 0.05, 0.95)
-                        if ev >= self.min_ev and conf >= self.min_conf:
-                            all_picks.append(
-                                BasketPick(
-                                    match=match_name,
-                                    market="Totals",
-                                    selection=f"Over {line}",
-                                    odds=odds,
-                                    prob=fair_p_over,
-                                    ev=ev,
-                                    confidence=conf,
-                                    meta={"book": book, "line": line, "commence_time": commence_time},
-                                )
+                        totals_candidates.append(
+                            BasketPick(
+                                match=match_name,
+                                market="Totals",
+                                selection=f"Over {line}",
+                                odds=odds,
+                                prob=fair_p_over,
+                                ev=ev,
+                                confidence=clamp(fair_p_over, 0.05, 0.95),
+                                meta={"book": book, "line": line, "commence_time": commence_time},
                             )
+                        )
 
                 if ("under", line) in best_totals:
                     odds, book = best_totals[("under", line)]
-                    if self.min_odds <= odds <= self.max_odds:
+                    if self.min_odds <= odds <= self.max_odds and fair_p_under >= 0.48:
                         ev = ev_from_prob_odds(fair_p_under, odds)
-                        conf = clamp(fair_p_under, 0.05, 0.95)
-                        if ev >= self.min_ev and conf >= self.min_conf:
-                            all_picks.append(
-                                BasketPick(
-                                    match=match_name,
-                                    market="Totals",
-                                    selection=f"Under {line}",
-                                    odds=odds,
-                                    prob=fair_p_under,
-                                    ev=ev,
-                                    confidence=conf,
-                                    meta={"book": book, "line": line, "commence_time": commence_time},
-                                )
+                        totals_candidates.append(
+                            BasketPick(
+                                match=match_name,
+                                market="Totals",
+                                selection=f"Under {line}",
+                                odds=odds,
+                                prob=fair_p_under,
+                                ev=ev,
+                                confidence=clamp(fair_p_under, 0.05, 0.95),
+                                meta={"book": book, "line": line, "commence_time": commence_time},
                             )
+                        )
 
-        all_picks.sort(key=lambda x: (x.ev, x.confidence), reverse=True)
+                if totals_candidates:
+                    best_tc = max(totals_candidates, key=lambda p: p.confidence)
+                    all_picks.append(best_tc)
+
+        raw_home = len([p for p in all_picks if p.market == "1X2 Moneyline" and p.selection == "Home Win"])
+        raw_away = len([p for p in all_picks if p.market == "1X2 Moneyline" and p.selection == "Away Win"])
+        raw_totals = len([p for p in all_picks if p.market == "Totals"])
+        raw_spread = len([p for p in all_picks if p.market == "Spread"])
+        print(f"🎰 WIN MACHINE v3.0 | Odds window: {self.min_odds}-{self.max_odds}")
+        print(f"📊 Raw picks pool: Home={raw_home}, Away={raw_away}, Totals={raw_totals}, Spread={raw_spread} (total={len(all_picks)})")
         
-        # MARKET BALANCING (Jan 25, 2026): Mix markets for diversification
-        # Goal: ~40% Totals, ~30% Home Win, ~30% Away Win
-        # Instead of just picking best EV per match, balance across market types
+        all_picks.sort(key=lambda x: x.confidence, reverse=True)
         
-        # Separate picks by market type
-        moneyline_home = [p for p in all_picks if p.market == "1X2 Moneyline" and p.selection == "Home Win"]
-        moneyline_away = [p for p in all_picks if p.market == "1X2 Moneyline" and p.selection == "Away Win"]
-        totals_picks = [p for p in all_picks if p.market == "Totals"]
-        spread_picks = [p for p in all_picks if p.market == "Spread"]
-        
-        # Sort each by EV
-        moneyline_home.sort(key=lambda x: x.ev, reverse=True)
-        moneyline_away.sort(key=lambda x: x.ev, reverse=True)
-        totals_picks.sort(key=lambda x: x.ev, reverse=True)
-        spread_picks.sort(key=lambda x: x.ev, reverse=True)
-        
-        # Market quotas based on max_singles (default 15)
-        # Prioritize Totals (40%), then balance Home/Away (30% each)
-        totals_quota = max(6, int(self.max_singles * 0.40))  # ~40% Totals
-        home_quota = max(4, int(self.max_singles * 0.30))     # ~30% Home Win
-        away_quota = max(3, int(self.max_singles * 0.20))     # ~20% Away Win (reduced)
-        spread_quota = max(2, int(self.max_singles * 0.10))   # ~10% Spread
-        
-        print(f"📊 Market quotas: Totals={totals_quota}, Home={home_quota}, Away={away_quota}, Spread={spread_quota}")
-        
-        # Select best picks from each category (one per match to avoid conflicts)
         selected: List[BasketPick] = []
         used_matches: set = set()
         
-        def add_picks_from_pool(pool: List[BasketPick], quota: int, label: str):
-            added = 0
-            for pick in pool:
-                if added >= quota:
-                    break
-                if pick.match not in used_matches:
-                    selected.append(pick)
-                    used_matches.add(pick.match)
-                    added += 1
-            print(f"   {label}: {added}/{quota} picks added")
-        
-        # Fill quotas in order: Totals first (priority), then Home, then Away, then Spread
-        add_picks_from_pool(totals_picks, totals_quota, "Totals")
-        add_picks_from_pool(moneyline_home, home_quota, "Home Win")
-        add_picks_from_pool(moneyline_away, away_quota, "Away Win")
-        add_picks_from_pool(spread_picks, spread_quota, "Spread")
-        
-        # If we have room left, fill with remaining best EV picks
-        remaining_slots = self.max_singles - len(selected)
-        if remaining_slots > 0:
-            remaining = [p for p in all_picks if p.match not in used_matches]
-            remaining.sort(key=lambda x: x.ev, reverse=True)
-            for pick in remaining[:remaining_slots]:
+        for pick in all_picks:
+            if len(selected) >= self.max_singles:
+                break
+            if pick.match not in used_matches:
                 selected.append(pick)
                 used_matches.add(pick.match)
-            print(f"   Filled {min(remaining_slots, len(remaining))} remaining slots with best EV")
         
-        # Sort final selection by EV
-        selected.sort(key=lambda x: (x.ev, x.confidence), reverse=True)
+        print(f"✅ Selected {len(selected)} picks (1 per match, sorted by confidence)")
         singles = selected
 
         if self.allow_parlays and singles:

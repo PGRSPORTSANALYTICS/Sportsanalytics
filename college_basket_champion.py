@@ -27,13 +27,10 @@ def run_prediction_cycle():
         client = OddsAPIClient()
         engine = CollegeBasketValueEngine(
             client=client,
-            min_ev=0.03,  # 3% EV minimum
-            min_conf=0.05,  # 5% confidence (allows underdogs with high EV)
-            max_singles=15,  # 15 singles max
-            max_parlays=0,  # DISABLED - parlays losing money (16.4% hit rate)
-            min_odds=1.40,  # 1.40 min odds
-            max_odds=3.99,  # 3.99 max odds (AI-learned sweet spot)
-            allow_parlays=False  # DISABLED - parlays losing money
+            max_singles=20,
+            min_odds=1.75,   # Win machine: tight odds window
+            max_odds=2.00,   # Win machine: high hit-rate zone
+            allow_parlays=False
         )
         
         logger.info("📊 Fetching NCAAB games and analyzing value...")
@@ -68,10 +65,10 @@ def run_prediction_cycle():
 
 def main():
     """Main loop for NCAAB value picking"""
-    logger.info("🚀 College Basketball Champion Starting...")
+    logger.info("🚀 College Basketball WIN MACHINE v3.0 Starting...")
     logger.info("🏀 Sport: NCAAB (College Basketball)")
-    logger.info("📊 Min EV: 3% | Min Confidence: 50%")
-    logger.info("🎯 Odds Range: 1.40 - 3.99")
+    logger.info("🎰 Mode: WIN MACHINE - No EV filter, fair prob validation only")
+    logger.info("🎯 Odds Range: 1.75 - 2.00 (tight win zone)")
     logger.info("🔄 Prediction cycle: Every 2 hours")
     logger.info("="*60)
     

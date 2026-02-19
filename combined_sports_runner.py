@@ -78,6 +78,23 @@ def run_value_singles():
         logger.error(f"❌ Value Singles prediction error: {e}")
 
 
+def run_corners_cards():
+    """Run Corners & Cards predictions (independent cycle with own cap)"""
+    if check_daily_stoploss():
+        logger.warning("⏭️ Corners/Cards SKIPPED - Daily stop-loss active")
+        return
+    
+    try:
+        import real_football_champion
+        logger.info("🔢 Starting Corners & Cards cycle (independent)...")
+        real_football_champion.run_corners_cards_cycle()
+        logger.info("✅ Corners & Cards cycle complete")
+    except Exception as e:
+        logger.error(f"❌ Corners/Cards prediction error: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 def run_parlay_builder():
     """Run multi-match parlay builder from approved singles"""
     try:
@@ -506,6 +523,7 @@ def main():
     logger.info("="*80)
     
     logger.info("💰 Value Singles - Every 1 hour (Core Product)")
+    logger.info("🔢 Corners & Cards - Every 1 hour (Independent, own cap: 10/day)")
     logger.info("🎲 Multi-Match Parlays - Every 2 hours (after Value Singles)")
     logger.info("🏀 College Basketball - Every 2 hours")
     logger.info("🎰 ML Parlay (TEST MODE) - Every 3 hours")
@@ -533,6 +551,8 @@ def main():
     logger.info("🎬 Running initial prediction cycles...")
     if ENABLE_VALUE_SINGLES:
         run_value_singles()
+        time.sleep(5)
+        run_corners_cards()
         time.sleep(5)
     else:
         logger.info("⏸️ Value Singles PAUSED")
@@ -584,6 +604,7 @@ def main():
     # Schedule recurring prediction tasks (only enabled products)
     if ENABLE_VALUE_SINGLES:
         schedule.every(1).hours.do(run_value_singles)
+        schedule.every(1).hours.do(run_corners_cards)
     if ENABLE_PARLAYS:
         schedule.every(2).hours.do(run_parlay_builder)
     if ENABLE_COLLEGE_BASKETBALL:

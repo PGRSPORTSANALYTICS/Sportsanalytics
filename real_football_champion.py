@@ -3662,7 +3662,6 @@ class RealFootballChampion:
     
     def _save_learning_picks(self, learning_picks: list) -> int:
         saved = 0
-        db_helper = DatabaseConnection()
         today_date = datetime.now().strftime('%Y-%m-%d')
         for pick in learning_picks:
             try:
@@ -4074,14 +4073,6 @@ def run_single_cycle():
             import traceback
             traceback.print_exc()
         
-        if remaining_slots > 0:
-            try:
-                _run_corners_cards_cycle(champion, max_picks=remaining_slots)
-            except Exception as e:
-                print(f"⚠️ Corners/Cards cycle failed: {e}")
-        else:
-            print(f"🛑 No slots left for Corners/Cards (daily cap {DAILY_BET_CAP} reached)")
-        
         print("✅ Value Singles cycle complete (all markets)")
         return True
         
@@ -4090,13 +4081,14 @@ def run_single_cycle():
         return False
 
 
-def _run_corners_cards_cycle(champion, max_picks=15):
-    """Run corners and cards engines using fixtures from database with synthetic odds"""
+CORNERS_CARDS_DAILY_CAP = 10
+
+def run_corners_cards_cycle():
+    """Run corners and cards as INDEPENDENT cycle with own daily cap"""
     from corners_engine import run_corners_cycle
     from cards_engine import run_cards_cycle
     import random
     
-    # Check daily stop-loss before generating new picks
     try:
         from daily_stoploss import is_stoploss_triggered
         triggered, pnl, message = is_stoploss_triggered()
@@ -4106,21 +4098,41 @@ def _run_corners_cards_cycle(champion, max_picks=15):
     except Exception as e:
         print(f"⚠️ Stop-loss check failed: {e}")
     
-    print("\n🔢 CORNERS & CARDS MARKETS")
-    print("-" * 40)
+    print("\n" + "="*60)
+    print("🔢 CORNERS & CARDS ENGINE (Independent Cycle)")
+    print("="*60)
+    
+    today_count = 0
+    try:
+        result = db_helper.execute('''
+            SELECT COUNT(*) FROM all_bets 
+            WHERE created_at::date = CURRENT_DATE 
+              AND UPPER(product) IN ('CORNERS', 'CARDS')
+        ''', fetch='one')
+        today_count = result[0] if result else 0
+    except:
+        pass
+    
+    remaining = max(0, CORNERS_CARDS_DAILY_CAP - today_count)
+    print(f"📊 Daily cap: {today_count}/{CORNERS_CARDS_DAILY_CAP} used, {remaining} slots remaining")
+    
+    if remaining <= 0:
+        print("🛑 Daily corners/cards cap reached")
+        return
     
     fixtures = []
     odds_data = {}
     today = datetime.now().strftime('%Y-%m-%d')
     
-    # Get fixtures from today's pending opportunities in database
     try:
         rows = db_helper.execute('''
             SELECT DISTINCT home_team, away_team, league, match_date, kickoff_utc 
             FROM football_opportunities 
-            WHERE match_date::date = %s::date AND LOWER(status) = 'pending'
+            WHERE match_date::date >= %s::date 
+              AND match_date::date <= (%s::date + INTERVAL '7 days')
+              AND LOWER(status) = 'pending'
             LIMIT 50
-        ''', (today,), fetch='all')
+        ''', (today, today), fetch='all')
         
         if rows:
             for row in rows:
@@ -4136,56 +4148,69 @@ def _run_corners_cards_cycle(champion, max_picks=15):
                         'match_date': str(match_date) if match_date else today,
                         'home_xg': 1.4 + random.uniform(-0.3, 0.5),
                         'away_xg': 1.2 + random.uniform(-0.3, 0.4),
-                        'commence_time': kickoff_utc or '',  # CLV tracking
+                        'commence_time': kickoff_utc or '',
                     })
                     
-                    # Generate synthetic realistic odds for CORNERS markets
                     odds_data[fixture_id] = _generate_corners_odds()
-                    # Add CARDS odds
                     odds_data[fixture_id].update(_generate_cards_odds())
             
             print(f"   📊 Loaded {len(fixtures)} fixtures from database")
     except Exception as e:
         print(f"   ⚠️ Database error: {e}")
     
-    # If no fixtures from database, skip this cycle
     if not fixtures:
-        print("   ⚠️ No pending fixtures in database for corners/cards")
-        print("   💡 Corners/Cards will run after Value Singles generates picks")
+        print("   ⚠️ No pending fixtures found for corners/cards")
         return
     
-    print(f"   📊 Processing {len(fixtures)} fixtures with synthetic odds")
+    print(f"   📊 Processing {len(fixtures)} fixtures")
     
     saved_total = 0
     
-    corners_cap = max(0, max_picks // 2)
-    cards_cap = max(0, max_picks - corners_cap)
+    corners_cap = max(1, remaining // 2)
+    cards_cap = remaining - corners_cap
     
-    # Run corners engine
+    def _get_ev(x):
+        """Get EV from either dict or dataclass object"""
+        if hasattr(x, 'ev_sim'):
+            return x.ev_sim
+        elif hasattr(x, 'ev'):
+            return x.ev
+        elif isinstance(x, dict):
+            return x.get('ev', x.get('edge', 0))
+        return 0
+    
     try:
         match_corners, team_corners, hc_corners = run_corners_cycle(fixtures, odds_data)
         all_corners = match_corners + team_corners + hc_corners
         if all_corners:
-            all_corners = sorted(all_corners, key=lambda x: x.get('ev', x.get('edge', 0)), reverse=True)[:corners_cap]
+            all_corners = sorted(all_corners, key=_get_ev, reverse=True)[:corners_cap]
             saved = _save_bet_candidates_to_db(all_corners, 'Corners')
             saved_total += saved
             print(f"   ✅ Saved {saved} CORNERS predictions (cap: {corners_cap})")
+        else:
+            print(f"   📊 No corners predictions generated")
     except Exception as e:
         print(f"   ⚠️ Corners engine error: {e}")
+        import traceback
+        traceback.print_exc()
     
-    remaining_cards = max_picks - saved_total
-    # Run cards engine
+    remaining_cards = remaining - saved_total
     try:
         all_cards = run_cards_cycle(fixtures, odds_data)
         if all_cards:
-            all_cards = sorted(all_cards, key=lambda x: x.get('ev', x.get('edge', 0)), reverse=True)[:remaining_cards]
+            all_cards = sorted(all_cards, key=_get_ev, reverse=True)[:remaining_cards]
             saved = _save_bet_candidates_to_db(all_cards, 'Cards')
             saved_total += saved
             print(f"   ✅ Saved {saved} CARDS predictions (cap: {remaining_cards})")
+        else:
+            print(f"   📊 No cards predictions generated")
     except Exception as e:
         print(f"   ⚠️ Cards engine error: {e}")
+        import traceback
+        traceback.print_exc()
     
-    # Send props picks to Discord
+    print(f"\n   🎯 CORNERS & CARDS TOTAL: {saved_total} picks saved")
+    
     try:
         from discord_props_webhook import send_new_props_picks
         result = send_new_props_picks()
