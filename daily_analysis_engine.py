@@ -12,7 +12,7 @@ from typing import Optional, Dict, List, Tuple
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
+DISCORD_WEBHOOK_URL = os.getenv("DISCORD_ANALYTICS_WEBHOOK_URL") or os.getenv("DISCORD_WEBHOOK_URL")
 
 ALLOWED_MARKETS = ['Value Single']
 ALLOWED_SELECTIONS = ['Over', 'Under', 'Home Win', 'Away Win', 'Draw', 'BTTS Yes', 'BTTS No', 'DNB']
