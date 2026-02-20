@@ -66,7 +66,8 @@ def render_smart_picks_tab():
     picks = get_smart_picks_from_db()
 
     db = DatabaseHelper()
-    record_rows = db.execute("""
+
+    today_rows = db.execute("""
         SELECT result, COUNT(*) as cnt,
                ROUND(SUM(CASE 
                    WHEN UPPER(result) = 'WON' THEN odds - 1
@@ -77,47 +78,60 @@ def render_smart_picks_tab():
         WHERE mode = 'PROD'
           AND UPPER(status) = 'SETTLED'
           AND UPPER(result) IN ('WON', 'LOST')
+          AND match_date = CURRENT_DATE::text
         GROUP BY result
     """, fetch='all')
 
-    total_wins = 0
-    total_losses = 0
-    total_profit = 0.0
-    for row in (record_rows or []):
+    today_pending = db.execute("""
+        SELECT COUNT(*) FROM football_opportunities
+        WHERE mode = 'PROD' AND UPPER(status) = 'PENDING'
+          AND match_date = CURRENT_DATE::text
+    """, fetch='one')
+
+    today_wins = 0
+    today_losses = 0
+    today_profit = 0.0
+    for row in (today_rows or []):
         r = str(row[0]).upper()
         cnt = int(row[1])
         profit = float(row[2]) if row[2] else 0
         if r == 'WON':
-            total_wins = cnt
+            today_wins = cnt
         elif r == 'LOST':
-            total_losses = cnt
-        total_profit += profit
+            today_losses = cnt
+        today_profit += profit
 
-    total_settled = total_wins + total_losses
-    hit_rate = (total_wins / total_settled * 100) if total_settled > 0 else 0
-    profit_color = "#10B981" if total_profit >= 0 else "#EF4444"
-    profit_sign = "+" if total_profit >= 0 else ""
+    today_settled = today_wins + today_losses
+    today_hit = (today_wins / today_settled * 100) if today_settled > 0 else 0
+    today_pending_cnt = int(today_pending[0]) if today_pending else 0
+    today_profit_color = "#10B981" if today_profit >= 0 else "#EF4444"
+    today_profit_sign = "+" if today_profit >= 0 else ""
 
     if not picks:
         st.info("No Smart Picks available right now. The engine runs every hour — check back soon.")
 
     st.markdown(f"""
+    <div style="font-size:0.85rem;color:#9CA3AF;margin-bottom:6px;">Today's Results</div>
     <div class="sp-stats-row">
         <div class="sp-stat" style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);">
-            <div class="sp-stat-value" style="color:#22C55E;">{total_wins}</div>
+            <div class="sp-stat-value" style="color:#22C55E;">{today_wins}</div>
             <div class="sp-stat-label">Wins</div>
         </div>
         <div class="sp-stat" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);">
-            <div class="sp-stat-value" style="color:#EF4444;">{total_losses}</div>
+            <div class="sp-stat-value" style="color:#EF4444;">{today_losses}</div>
             <div class="sp-stat-label">Losses</div>
         </div>
         <div class="sp-stat" style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);">
-            <div class="sp-stat-value" style="color:#3B82F6;">{hit_rate:.1f}%</div>
+            <div class="sp-stat-value" style="color:#3B82F6;">{today_hit:.1f}%</div>
             <div class="sp-stat-label">Hit Rate</div>
         </div>
         <div class="sp-stat" style="background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.3);">
-            <div class="sp-stat-value" style="color:{profit_color};">{profit_sign}{total_profit:.1f}u</div>
+            <div class="sp-stat-value" style="color:{today_profit_color};">{today_profit_sign}{today_profit:.1f}u</div>
             <div class="sp-stat-label">Profit</div>
+        </div>
+        <div class="sp-stat" style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);">
+            <div class="sp-stat-value" style="color:#F59E0B;">{today_pending_cnt}</div>
+            <div class="sp-stat-label">Pending</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
