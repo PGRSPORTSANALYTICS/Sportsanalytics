@@ -186,8 +186,8 @@ class CardsCandidate:
 CARDS_LINES = {
     "match": [2.5, 3.5, 4.5, 5.5, 6.5],
     "booking_points": [30.5, 40.5, 50.5, 60.5],
-    "home": [0.5, 1.5, 2.5, 3.5],
-    "away": [0.5, 1.5, 2.5, 3.5],
+    "home": [2.5, 3.5],
+    "away": [2.5, 3.5],
 }
 
 DEFAULT_DISCIPLINE_STATS = {
