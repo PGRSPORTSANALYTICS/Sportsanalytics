@@ -354,7 +354,7 @@ class CollegeBasketValueEngine:
     def generate_value_singles(self) -> List[BasketPick]:
         games = self.client.get_upcoming(
             sport_key="basketball_ncaab",
-            markets="h2h,spreads,totals",
+            markets="spreads,totals",
             regions="us"
         )
 
@@ -369,65 +369,6 @@ class CollegeBasketValueEngine:
             books = g.get("bookmakers", [])
             if not books:
                 continue
-
-            # ---------------- H2H (moneyline)
-            h2h_books: List[Tuple[float, float]] = []
-            h2h_book_names: List[str] = []
-            best_home = None
-            best_away = None
-
-            for b in books:
-                for m in b.get("markets", []):
-                    if m.get("key") != "h2h":
-                        continue
-                    outcomes = m.get("outcomes", [])
-                    if len(outcomes) != 2:
-                        continue
-                    o1, o2 = outcomes[0], outcomes[1]
-                    if o1["name"] == home:
-                        home_odds, away_odds = o1["price"], o2["price"]
-                    else:
-                        home_odds, away_odds = o2["price"], o1["price"]
-
-                    h2h_books.append((home_odds, away_odds))
-                    h2h_book_names.append(b.get("title", "book"))
-
-                    if (best_home is None) or (home_odds > best_home[0]):
-                        best_home = (home_odds, b.get("title", "book"))
-                    if (best_away is None) or (away_odds > best_away[0]):
-                        best_away = (away_odds, b.get("title", "book"))
-
-            if h2h_books and best_home and best_away:
-                fair_p_home, fair_p_away = fair_prob_from_books(h2h_books, h2h_book_names)
-
-                h2h_candidates = []
-                for side, fair_p, best in [
-                    ("Home Win", fair_p_home, best_home),
-                    ("Away Win", fair_p_away, best_away),
-                ]:
-                    odds, book = best
-                    if not (self.min_odds <= odds <= self.max_odds):
-                        continue
-                    
-                    implied_prob = 1.0 / odds
-                    if fair_p >= implied_prob:
-                        ev = ev_from_prob_odds(fair_p, odds)
-                        h2h_candidates.append(
-                            BasketPick(
-                                match=match_name,
-                                market="1X2 Moneyline",
-                                selection=side,
-                                odds=odds,
-                                prob=fair_p,
-                                ev=ev,
-                                confidence=clamp(fair_p, 0.05, 0.95),
-                                meta={"book": book, "commence_time": commence_time},
-                            )
-                        )
-                
-                if h2h_candidates:
-                    best_pick = max(h2h_candidates, key=lambda p: p.confidence)
-                    all_picks.append(best_pick)
 
             # ---------------- SPREADS
             spread_books: Dict[float, List[Tuple[float, float]]] = {}
@@ -573,12 +514,10 @@ class CollegeBasketValueEngine:
                     best_tc = max(totals_candidates, key=lambda p: p.confidence)
                     all_picks.append(best_tc)
 
-        raw_home = len([p for p in all_picks if p.market == "1X2 Moneyline" and p.selection == "Home Win"])
-        raw_away = len([p for p in all_picks if p.market == "1X2 Moneyline" and p.selection == "Away Win"])
         raw_totals = len([p for p in all_picks if p.market == "Totals"])
         raw_spread = len([p for p in all_picks if p.market == "Spread"])
-        print(f"🎰 WIN MACHINE v3.0 | Odds window: {self.min_odds}-{self.max_odds}")
-        print(f"📊 Raw picks pool: Home={raw_home}, Away={raw_away}, Totals={raw_totals}, Spread={raw_spread} (total={len(all_picks)})")
+        print(f"🎰 WIN MACHINE v3.1 | Odds window: {self.min_odds}-{self.max_odds} | Spreads+Totals only (no ML)")
+        print(f"📊 Raw picks pool: Totals={raw_totals}, Spread={raw_spread} (total={len(all_picks)})")
         
         all_picks.sort(key=lambda x: x.confidence, reverse=True)
         
