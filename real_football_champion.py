@@ -4124,6 +4124,12 @@ def run_corners_cards_cycle():
     odds_data = {}
     today = datetime.now().strftime('%Y-%m-%d')
     
+    af_client = None
+    try:
+        af_client = APIFootballClient()
+    except Exception as e:
+        print(f"   ⚠️ API-Football client init failed: {e}")
+    
     try:
         rows = db_helper.execute('''
             SELECT DISTINCT home_team, away_team, league, match_date, kickoff_utc 
@@ -4135,26 +4141,58 @@ def run_corners_cards_cycle():
         ''', (today, today), fetch='all')
         
         if rows:
+            real_odds_found = 0
+            skipped_no_odds = 0
+            
             for row in rows:
                 home_team, away_team, league, match_date, kickoff_utc = row
                 fixture_id = f"{home_team}_{away_team}".replace(' ', '_')
                 
-                if fixture_id not in odds_data:
-                    fixtures.append({
-                        'fixture_id': fixture_id,
-                        'home_team': home_team,
-                        'away_team': away_team,
-                        'league': league or 'Unknown',
-                        'match_date': str(match_date) if match_date else today,
-                        'home_xg': 1.4 + random.uniform(-0.3, 0.5),
-                        'away_xg': 1.2 + random.uniform(-0.3, 0.4),
-                        'commence_time': kickoff_utc or '',
-                    })
-                    
-                    odds_data[fixture_id] = _generate_corners_odds()
-                    odds_data[fixture_id].update(_generate_cards_odds())
+                if fixture_id in odds_data:
+                    continue
+                
+                real_odds = {}
+                if af_client:
+                    try:
+                        af_fixture = af_client.get_fixture_by_teams_and_date(
+                            home_team, away_team, str(match_date) if match_date else today
+                        )
+                        if af_fixture:
+                            af_id = af_fixture.get('fixture', {}).get('id')
+                            if af_id:
+                                af_odds = af_client.get_fixture_odds(af_id)
+                                af_markets = af_odds.get('markets', {})
+                                for key, val in af_markets.items():
+                                    if 'CORNERS' in key or 'CARDS' in key:
+                                        real_odds[key] = val
+                    except Exception as e:
+                        print(f"   ⚠️ Odds fetch failed for {home_team} vs {away_team}: {e}")
+                
+                has_corners = any('CORNERS' in k for k in real_odds)
+                has_cards = any('CARDS' in k for k in real_odds)
+                
+                if not has_corners and not has_cards:
+                    skipped_no_odds += 1
+                    continue
+                
+                if has_corners or has_cards:
+                    real_odds_found += 1
+                
+                fixtures.append({
+                    'fixture_id': fixture_id,
+                    'home_team': home_team,
+                    'away_team': away_team,
+                    'league': league or 'Unknown',
+                    'match_date': str(match_date) if match_date else today,
+                    'home_xg': 1.4 + random.uniform(-0.3, 0.5),
+                    'away_xg': 1.2 + random.uniform(-0.3, 0.4),
+                    'commence_time': kickoff_utc or '',
+                })
+                odds_data[fixture_id] = real_odds
             
-            print(f"   📊 Loaded {len(fixtures)} fixtures from database")
+            print(f"   📊 Loaded {len(fixtures)} fixtures with REAL odds ({real_odds_found} with corners/cards)")
+            if skipped_no_odds > 0:
+                print(f"   ⏭️ Skipped {skipped_no_odds} fixtures (no corners/cards odds available)")
     except Exception as e:
         print(f"   ⚠️ Database error: {e}")
     
@@ -4195,19 +4233,27 @@ def run_corners_cards_cycle():
         traceback.print_exc()
     
     remaining_cards = remaining - saved_total
-    try:
-        all_cards = run_cards_cycle(fixtures, odds_data)
-        if all_cards:
-            all_cards = sorted(all_cards, key=_get_ev, reverse=True)[:remaining_cards]
-            saved = _save_bet_candidates_to_db(all_cards, 'Cards')
-            saved_total += saved
-            print(f"   ✅ Saved {saved} CARDS predictions (cap: {remaining_cards})")
-        else:
-            print(f"   📊 No cards predictions generated")
-    except Exception as e:
-        print(f"   ⚠️ Cards engine error: {e}")
-        import traceback
-        traceback.print_exc()
+    has_any_cards_odds = any(
+        any('CARDS' in k for k in odds_data.get(f['fixture_id'], {}))
+        for f in fixtures
+    )
+    
+    if not has_any_cards_odds:
+        print(f"   ⏭️ CARDS skipped - no real cards odds available from API-Football bookmakers")
+    else:
+        try:
+            all_cards = run_cards_cycle(fixtures, odds_data)
+            if all_cards:
+                all_cards = sorted(all_cards, key=_get_ev, reverse=True)[:remaining_cards]
+                saved = _save_bet_candidates_to_db(all_cards, 'Cards')
+                saved_total += saved
+                print(f"   ✅ Saved {saved} CARDS predictions (cap: {remaining_cards})")
+            else:
+                print(f"   📊 No cards predictions generated")
+        except Exception as e:
+            print(f"   ⚠️ Cards engine error: {e}")
+            import traceback
+            traceback.print_exc()
     
     print(f"\n   🎯 CORNERS & CARDS TOTAL: {saved_total} picks saved")
     
@@ -4221,102 +4267,36 @@ def run_corners_cards_cycle():
 
 
 def _generate_corners_odds() -> Dict:
-    """Generate realistic synthetic odds for corners markets"""
-    import random
-    
-    # Base odds with slight randomization for realism
-    odds = {
-        # Match total corners over/under
-        "CORNERS_OVER_8_5": round(1.75 + random.uniform(-0.15, 0.25), 2),
-        "CORNERS_UNDER_8_5": round(2.05 + random.uniform(-0.15, 0.20), 2),
-        "CORNERS_OVER_9_5": round(2.00 + random.uniform(-0.15, 0.30), 2),
-        "CORNERS_UNDER_9_5": round(1.80 + random.uniform(-0.15, 0.20), 2),
-        "CORNERS_OVER_10_5": round(2.40 + random.uniform(-0.20, 0.35), 2),
-        "CORNERS_UNDER_10_5": round(1.55 + random.uniform(-0.10, 0.15), 2),
-        "CORNERS_OVER_11_5": round(2.90 + random.uniform(-0.25, 0.50), 2),
-        "CORNERS_UNDER_11_5": round(1.40 + random.uniform(-0.08, 0.12), 2),
-        
-        # Team corners over
-        "HOME_CORNERS_OVER_3_5": round(1.55 + random.uniform(-0.10, 0.15), 2),
-        "HOME_CORNERS_OVER_4_5": round(1.90 + random.uniform(-0.15, 0.25), 2),
-        "HOME_CORNERS_OVER_5_5": round(2.45 + random.uniform(-0.20, 0.35), 2),
-        "AWAY_CORNERS_OVER_3_5": round(1.65 + random.uniform(-0.10, 0.18), 2),
-        "AWAY_CORNERS_OVER_4_5": round(2.10 + random.uniform(-0.15, 0.30), 2),
-        "AWAY_CORNERS_OVER_5_5": round(2.70 + random.uniform(-0.25, 0.40), 2),
-        
-        # Corner handicaps
-        "CORNERS_HC_HOME_-2_5": round(2.30 + random.uniform(-0.20, 0.35), 2),
-        "CORNERS_HC_HOME_-1_5": round(1.90 + random.uniform(-0.15, 0.25), 2),
-        "CORNERS_HC_HOME_-0_5": round(1.60 + random.uniform(-0.10, 0.18), 2),
-        "CORNERS_HC_AWAY_+0_5": round(2.25 + random.uniform(-0.18, 0.30), 2),
-        "CORNERS_HC_AWAY_+1_5": round(1.85 + random.uniform(-0.12, 0.22), 2),
-        "CORNERS_HC_AWAY_+2_5": round(1.55 + random.uniform(-0.10, 0.15), 2),
-    }
-    return odds
+    """DEPRECATED: Previously generated synthetic odds. Now returns empty dict.
+    Real odds are fetched from API-Football in run_corners_cards_cycle()."""
+    return {}
 
 
 def _generate_cards_odds() -> Dict:
-    """Generate realistic synthetic odds for cards markets"""
-    import random
-    
-    # Base odds with slight randomization for realism
-    odds = {
-        # Match total cards over/under
-        "CARDS_OVER_2_5": round(1.50 + random.uniform(-0.08, 0.12), 2),
-        "CARDS_UNDER_2_5": round(2.55 + random.uniform(-0.20, 0.35), 2),
-        "CARDS_OVER_3_5": round(1.80 + random.uniform(-0.12, 0.22), 2),
-        "CARDS_UNDER_3_5": round(2.00 + random.uniform(-0.15, 0.25), 2),
-        "CARDS_OVER_4_5": round(2.20 + random.uniform(-0.18, 0.32), 2),
-        "CARDS_UNDER_4_5": round(1.65 + random.uniform(-0.10, 0.18), 2),
-        "CARDS_OVER_5_5": round(2.80 + random.uniform(-0.25, 0.45), 2),
-        "CARDS_UNDER_5_5": round(1.42 + random.uniform(-0.08, 0.12), 2),
-        
-        # Team cards over
-        "HOME_CARDS_OVER_1_5": round(1.75 + random.uniform(-0.12, 0.20), 2),
-        "HOME_CARDS_OVER_2_5": round(2.40 + random.uniform(-0.20, 0.35), 2),
-        "AWAY_CARDS_OVER_1_5": round(1.85 + random.uniform(-0.12, 0.22), 2),
-        "AWAY_CARDS_OVER_2_5": round(2.60 + random.uniform(-0.22, 0.40), 2),
-        
-        # Card handicaps
-        "CARDS_HC_HOME_-1_5": round(2.15 + random.uniform(-0.18, 0.30), 2),
-        "CARDS_HC_HOME_-0_5": round(1.75 + random.uniform(-0.12, 0.20), 2),
-        "CARDS_HC_AWAY_+0_5": round(2.05 + random.uniform(-0.15, 0.28), 2),
-        "CARDS_HC_AWAY_+1_5": round(1.70 + random.uniform(-0.10, 0.18), 2),
-    }
-    return odds
+    """DEPRECATED: Previously generated synthetic odds. Now returns empty dict.
+    Real odds are fetched from API-Football in run_corners_cards_cycle().
+    Note: Cards odds are rarely available from API-Football bookmakers."""
+    return {}
 
 
 def _save_bet_candidates_to_db(candidates, market_label: str) -> int:
     """Save BetCandidate picks to football_opportunities with proper market label"""
     from datetime import datetime
-    import random
     
     saved = 0
     today = datetime.now().strftime('%Y-%m-%d')
     
-    # Bookmaker names for synthetic odds display
-    BOOKMAKERS = ['Bet365', 'Pinnacle', 'Unibet', 'Betway', 'William Hill', 'Betfair', '1xBet', 'Betsson']
-    
     for candidate in candidates:
         try:
-            # Calculate quality score
             quality_score = (candidate.ev_sim * 100 * 0.6) + (candidate.confidence * 100 * 0.4)
             
-            # Use the candidate's tier directly
             trust_level = candidate.tier if hasattr(candidate, 'tier') else 'L2_MEDIUM_TRUST'
             
-            # Generate bookmaker odds data (variations around the main odds)
             base_odds = float(candidate.odds)
-            odds_by_bookmaker = {}
-            for book in BOOKMAKERS:
-                variation = random.uniform(-0.08, 0.12)
-                odds_by_bookmaker[book] = round(base_odds + variation, 2)
-            
-            # Sort to find best odds
-            sorted_books = sorted(odds_by_bookmaker.items(), key=lambda x: x[1], reverse=True)
-            best_odds_value = sorted_books[0][1] if sorted_books else base_odds
-            best_odds_bookmaker = sorted_books[0][0] if sorted_books else 'Bet365'
-            avg_odds = sum(odds_by_bookmaker.values()) / len(odds_by_bookmaker) if odds_by_bookmaker else base_odds
+            odds_by_bookmaker = {"API-Football": base_odds}
+            best_odds_value = base_odds
+            best_odds_bookmaker = 'API-Football'
+            avg_odds = base_odds
             fair_odds = round(1 / candidate.confidence, 2) if candidate.confidence > 0 else base_odds
             
             odds_by_bookmaker_json = json.dumps(odds_by_bookmaker)

@@ -953,6 +953,11 @@ class APIFootballClient:
         - BTTS_YES, BTTS_NO
         - HOME_DNB, AWAY_DNB (Draw No Bet)
         - DOUBLE_CHANCE_1X, DOUBLE_CHANCE_12, DOUBLE_CHANCE_X2
+        - CORNERS_OVER_X_5, CORNERS_UNDER_X_5 (Corners Over/Under)
+        - HOME_CORNERS_OVER_X_5, AWAY_CORNERS_OVER_X_5 (Team Corners)
+        - CORNERS_HC_HOME_X, CORNERS_HC_AWAY_X (Corner Handicaps)
+        - CARDS_OVER_X_5, CARDS_UNDER_X_5 (Cards Over/Under)
+        - HOME_CARDS_OVER_X_5, AWAY_CARDS_OVER_X_5 (Team Cards)
         """
         result = {
             'markets': {},
@@ -975,6 +980,32 @@ class APIFootballClient:
             'Goals Over/Under': 'FT',
             'Goals Over/Under First Half': 'HT',
             'Goals Over/Under - Second Half': '2H',
+        }
+        
+        corners_over_under_markets = {
+            'Corners Over Under': 'CORNERS',
+            'Total Corners (1st Half)': 'CORNERS_1H',
+            'Total Corners (2nd Half)': 'CORNERS_2H',
+        }
+        
+        team_corners_markets = {
+            'Home Corners Over/Under': 'HOME_CORNERS',
+            'Away Corners Over/Under': 'AWAY_CORNERS',
+        }
+        
+        corners_handicap_markets = {
+            'Corners Asian Handicap': True,
+            'Corners Asian Handicap (1st Half)': False,
+            'Corners Asian Handicap (2nd Half)': False,
+        }
+        
+        cards_over_under_markets = {
+            'Cards Over/Under': 'CARDS',
+        }
+        
+        team_cards_markets = {
+            'Home Team Total Cards': 'HOME_CARDS',
+            'Away Team Total Cards': 'AWAY_CARDS',
         }
         
         for fixture_odds in odds_data:
@@ -1036,13 +1067,106 @@ class APIFootballClient:
                                 if market_key not in result['markets'] or odds > result['markets'][market_key]:
                                     result['markets'][market_key] = odds
                     
+                    elif bet_name in corners_over_under_markets:
+                        prefix = corners_over_under_markets[bet_name]
+                        for value in values:
+                            selection = value.get('value', '')
+                            odds = float(value.get('odd', 0))
+                            if odds <= 0:
+                                continue
+                            if 'Over' in selection:
+                                line = selection.replace('Over ', '')
+                                market_key = f"{prefix}_OVER_{line.replace('.', '_')}"
+                                if market_key not in result['markets'] or odds > result['markets'][market_key]:
+                                    result['markets'][market_key] = odds
+                            elif 'Under' in selection:
+                                line = selection.replace('Under ', '')
+                                market_key = f"{prefix}_UNDER_{line.replace('.', '_')}"
+                                if market_key not in result['markets'] or odds > result['markets'][market_key]:
+                                    result['markets'][market_key] = odds
+                    
+                    elif bet_name in team_corners_markets:
+                        prefix = team_corners_markets[bet_name]
+                        for value in values:
+                            selection = value.get('value', '')
+                            odds = float(value.get('odd', 0))
+                            if odds <= 0:
+                                continue
+                            if 'Over' in selection:
+                                line = selection.replace('Over ', '')
+                                market_key = f"{prefix}_OVER_{line.replace('.', '_')}"
+                                if market_key not in result['markets'] or odds > result['markets'][market_key]:
+                                    result['markets'][market_key] = odds
+                            elif 'Under' in selection:
+                                line = selection.replace('Under ', '')
+                                market_key = f"{prefix}_UNDER_{line.replace('.', '_')}"
+                                if market_key not in result['markets'] or odds > result['markets'][market_key]:
+                                    result['markets'][market_key] = odds
+                    
+                    elif bet_name in corners_handicap_markets:
+                        is_full_time = corners_handicap_markets[bet_name]
+                        if is_full_time:
+                            for value in values:
+                                selection = value.get('value', '')
+                                odds = float(value.get('odd', 0))
+                                if odds <= 0:
+                                    continue
+                                hc_match = re.match(r'(Home|Away)\s*([+-]?\d+\.?\d*)', selection)
+                                if hc_match:
+                                    side = hc_match.group(1).upper()
+                                    pt = float(hc_match.group(2))
+                                    line_str = str(pt).replace('.', '_')
+                                    if pt > 0:
+                                        line_str = f"+{line_str}"
+                                    market_key = f"CORNERS_HC_{side}_{line_str}"
+                                    if market_key not in result['markets'] or odds > result['markets'][market_key]:
+                                        result['markets'][market_key] = odds
+                    
+                    elif bet_name in cards_over_under_markets:
+                        prefix = cards_over_under_markets[bet_name]
+                        for value in values:
+                            selection = value.get('value', '')
+                            odds = float(value.get('odd', 0))
+                            if odds <= 0:
+                                continue
+                            if 'Over' in selection:
+                                line = selection.replace('Over ', '')
+                                market_key = f"{prefix}_OVER_{line.replace('.', '_')}"
+                                if market_key not in result['markets'] or odds > result['markets'][market_key]:
+                                    result['markets'][market_key] = odds
+                            elif 'Under' in selection:
+                                line = selection.replace('Under ', '')
+                                market_key = f"{prefix}_UNDER_{line.replace('.', '_')}"
+                                if market_key not in result['markets'] or odds > result['markets'][market_key]:
+                                    result['markets'][market_key] = odds
+                    
+                    elif bet_name in team_cards_markets:
+                        prefix = team_cards_markets[bet_name]
+                        for value in values:
+                            selection = value.get('value', '')
+                            odds = float(value.get('odd', 0))
+                            if odds <= 0:
+                                continue
+                            if 'Over' in selection:
+                                line = selection.replace('Over ', '')
+                                market_key = f"{prefix}_OVER_{line.replace('.', '_')}"
+                                if market_key not in result['markets'] or odds > result['markets'][market_key]:
+                                    result['markets'][market_key] = odds
+                            elif 'Under' in selection:
+                                line = selection.replace('Under ', '')
+                                market_key = f"{prefix}_UNDER_{line.replace('.', '_')}"
+                                if market_key not in result['markets'] or odds > result['markets'][market_key]:
+                                    result['markets'][market_key] = odds
+                    
                     result['raw_bets'].append({
                         'bookmaker': bookie_name,
                         'market': bet_name,
                         'values': values
                     })
         
-        logger.info(f"📊 Parsed {len(result['markets'])} market odds from {len(result['bookmakers'])} bookmakers")
+        corners_count = sum(1 for k in result['markets'] if 'CORNERS' in k)
+        cards_count = sum(1 for k in result['markets'] if 'CARDS' in k)
+        logger.info(f"📊 Parsed {len(result['markets'])} market odds from {len(result['bookmakers'])} bookmakers (corners: {corners_count}, cards: {cards_count})")
         return result
     
     def get_odds_for_matches(self, fixture_ids: List[int]) -> Dict[int, Dict]:
