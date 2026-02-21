@@ -77,17 +77,21 @@ st.markdown("""
     }
     .win-card {
         background: #e8f5e9;
-        border-left: 4px solid #4CAF50;
-        padding: 0.8rem;
-        margin-bottom: 0.5rem;
-        border-radius: 5px;
+        border-left: 5px solid #4CAF50;
+        padding: 1.2rem 1.4rem;
+        margin-bottom: 0.7rem;
+        border-radius: 8px;
+        font-size: 1.1rem;
+        line-height: 1.6;
     }
     .loss-card {
         background: #ffebee;
-        border-left: 4px solid #f44336;
-        padding: 0.8rem;
-        margin-bottom: 0.5rem;
-        border-radius: 5px;
+        border-left: 5px solid #f44336;
+        padding: 1.2rem 1.4rem;
+        margin-bottom: 0.7rem;
+        border-radius: 8px;
+        font-size: 1.1rem;
+        line-height: 1.6;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -438,9 +442,9 @@ with tab2:
             
             st.markdown(f"""
             <div class="{card_class}">
-                {emoji} {parlay_badge}<strong>{row['match']}</strong><br>
-                <span>{row['selection']} @ {row['odds']:.2f}x</span>
-                <span style="float: right; font-weight: 600;">{profit_str}</span>
+                <span style="font-size: 1.3rem;">{emoji} {parlay_badge}<strong>{row['match']}</strong></span><br>
+                <span style="font-size: 1.1rem;">{row['selection']} @ {row['odds']:.2f}x</span>
+                <span style="float: right; font-size: 1.2rem; font-weight: 700;">{profit_str}</span>
             </div>
             """, unsafe_allow_html=True)
 
