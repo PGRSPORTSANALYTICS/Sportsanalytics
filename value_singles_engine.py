@@ -752,14 +752,15 @@ class ValueSinglesEngine:
                 is_learning_only = market_key in LEARNING_ONLY_MARKETS
                 if AUTO_PROMOTER_AVAILABLE:
                     promoter = get_promoter()
-                    dynamic_status = promoter.get_market_status('football', league_key, market_key)
-                    if dynamic_status == 'DISABLED':
-                        print(f"   🚫 DISABLED by auto-promoter: {league_key}/{market_key}")
-                        continue
-                    elif dynamic_status == 'PRODUCTION':
-                        is_learning_only = False
-                    elif dynamic_status == 'LEARNING_ONLY':
-                        is_learning_only = True
+                    if promoter.has_explicit_status('football', league_key, market_key):
+                        dynamic_status = promoter.get_market_status('football', league_key, market_key)
+                        if dynamic_status == 'DISABLED':
+                            print(f"   🚫 DISABLED by auto-promoter: {league_key}/{market_key}")
+                            continue
+                        elif dynamic_status == 'PRODUCTION':
+                            is_learning_only = False
+                        elif dynamic_status == 'LEARNING_ONLY':
+                            is_learning_only = True
 
                 if LEARNING_ENGINE_AVAILABLE and not is_learning_only:
                     combined_conf = compute_bet_confidence(ev, league_key, market_key, 'football')

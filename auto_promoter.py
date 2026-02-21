@@ -58,6 +58,11 @@ class AutoPromoter:
         key = f"{sport}|{league}|{market}"
         return self._status_cache.get(key, 'LEARNING_ONLY')
 
+    def has_explicit_status(self, sport: str, league: str, market: str) -> bool:
+        self._load_cache()
+        key = f"{sport}|{league}|{market}"
+        return key in self._status_cache
+
     def is_production(self, sport: str, league: str, market: str) -> bool:
         return self.get_market_status(sport, league, market) == 'PRODUCTION'
 
