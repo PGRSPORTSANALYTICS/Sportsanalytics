@@ -95,6 +95,23 @@ def run_corners_cards():
         traceback.print_exc()
 
 
+def run_late_cards():
+    """Run Late Cards scan - checks for cards odds on matches starting within 3 hours"""
+    if check_daily_stoploss():
+        logger.warning("⏭️ Late Cards SKIPPED - Daily stop-loss active")
+        return
+    
+    try:
+        import real_football_champion
+        logger.info("🟨 Starting Late Cards scan (near-kickoff)...")
+        real_football_champion.run_late_cards_cycle()
+        logger.info("✅ Late Cards scan complete")
+    except Exception as e:
+        logger.error(f"❌ Late Cards error: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 def run_parlay_builder():
     """Run multi-match parlay builder from approved singles"""
     try:
@@ -524,6 +541,7 @@ def main():
     
     logger.info("💰 Value Singles - Every 1 hour (Core Product)")
     logger.info("🔢 Corners & Cards - Every 1 hour (Independent, own cap: 10/day)")
+    logger.info("🟨 Late Cards Scan - Every 30 min (matches within 3h of kickoff, cap: 5/day)")
     logger.info("🎲 Multi-Match Parlays - Every 2 hours (after Value Singles)")
     logger.info("🏀 College Basketball - Every 2 hours")
     logger.info("🎰 ML Parlay (TEST MODE) - Every 3 hours")
@@ -553,6 +571,8 @@ def main():
         run_value_singles()
         time.sleep(5)
         run_corners_cards()
+        time.sleep(5)
+        run_late_cards()
         time.sleep(5)
     else:
         logger.info("⏸️ Value Singles PAUSED")
@@ -605,6 +625,7 @@ def main():
     if ENABLE_VALUE_SINGLES:
         schedule.every(1).hours.do(run_value_singles)
         schedule.every(1).hours.do(run_corners_cards)
+        schedule.every(30).minutes.do(run_late_cards)
     if ENABLE_PARLAYS:
         schedule.every(2).hours.do(run_parlay_builder)
     if ENABLE_COLLEGE_BASKETBALL:

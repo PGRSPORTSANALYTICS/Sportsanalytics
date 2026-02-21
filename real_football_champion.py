@@ -4266,6 +4266,178 @@ def run_corners_cards_cycle():
         print(f"   ⚠️ Discord props webhook error: {e}")
 
 
+LATE_CARDS_DAILY_CAP = 5
+
+def run_late_cards_cycle():
+    """
+    Late Cards Engine: Fetches cards odds for matches starting within 3 hours.
+    Bookmakers typically publish cards markets closer to kickoff.
+    Runs every 30 minutes to catch newly available odds.
+    """
+    from cards_engine import run_cards_cycle
+    import random
+    
+    try:
+        from daily_stoploss import is_stoploss_triggered
+        triggered, pnl, message = is_stoploss_triggered()
+        if triggered:
+            print(f"\n🛑 LATE CARDS SKIPPED - Daily stop-loss active ({pnl:+.1f}u)")
+            return
+    except Exception as e:
+        print(f"⚠️ Stop-loss check failed: {e}")
+    
+    print("\n" + "="*60)
+    print("🟨 LATE CARDS ENGINE (Near-Kickoff Odds Scan)")
+    print("="*60)
+    
+    today_count = 0
+    try:
+        result = db_helper.execute('''
+            SELECT COUNT(*) FROM all_bets 
+            WHERE created_at::date = CURRENT_DATE 
+              AND UPPER(product) = 'CARDS'
+        ''', fetch='one')
+        today_count = result[0] if result else 0
+    except:
+        pass
+    
+    remaining = max(0, LATE_CARDS_DAILY_CAP - today_count)
+    print(f"📊 Cards daily cap: {today_count}/{LATE_CARDS_DAILY_CAP} used, {remaining} slots remaining")
+    
+    if remaining <= 0:
+        print("🛑 Daily cards cap reached")
+        return
+    
+    af_client = None
+    try:
+        af_client = APIFootballClient()
+    except Exception as e:
+        print(f"   ⚠️ API-Football client init failed: {e}")
+        return
+    
+    fixtures = []
+    odds_data = {}
+    today = datetime.now().strftime('%Y-%m-%d')
+    now_epoch = int(time.time())
+    window_seconds = 3 * 3600
+    
+    try:
+        rows = db_helper.execute('''
+            SELECT DISTINCT home_team, away_team, league, match_date, kickoff_utc, kickoff_epoch
+            FROM football_opportunities 
+            WHERE match_date::date = %s::date
+              AND LOWER(status) = 'pending'
+              AND kickoff_epoch IS NOT NULL
+              AND kickoff_epoch > %s
+              AND kickoff_epoch <= %s
+            LIMIT 30
+        ''', (today, now_epoch, now_epoch + window_seconds), fetch='all')
+        
+        if not rows:
+            print(f"   📊 No matches starting within 3 hours")
+            return
+        
+        print(f"   🔍 Found {len(rows)} matches starting within 3 hours, checking for cards odds...")
+        
+        cards_fixtures_found = 0
+        
+        for row in rows:
+            home_team, away_team, league, match_date, kickoff_utc, kickoff_epoch = row
+            fixture_id = f"{home_team}_{away_team}".replace(' ', '_')
+            
+            if fixture_id in odds_data:
+                continue
+            
+            try:
+                already_has_pick = db_helper.execute('''
+                    SELECT COUNT(*) FROM football_opportunities
+                    WHERE home_team = %s AND away_team = %s 
+                      AND match_date::date = %s::date
+                      AND UPPER(market) = 'CARDS'
+                      AND LOWER(status) = 'pending'
+                ''', (home_team, away_team, today), fetch='one')
+                if already_has_pick and already_has_pick[0] > 0:
+                    continue
+            except:
+                pass
+            
+            real_odds = {}
+            try:
+                af_fixture = af_client.get_fixture_by_teams_and_date(
+                    home_team, away_team, str(match_date) if match_date else today
+                )
+                if af_fixture:
+                    af_id = af_fixture.get('fixture', {}).get('id')
+                    if af_id:
+                        af_odds = af_client.get_fixture_odds(af_id)
+                        af_markets = af_odds.get('markets', {})
+                        for key, val in af_markets.items():
+                            if 'CARDS' in key:
+                                real_odds[key] = val
+            except Exception as e:
+                print(f"   ⚠️ Odds fetch failed for {home_team} vs {away_team}: {e}")
+                continue
+            
+            if not real_odds:
+                continue
+            
+            cards_fixtures_found += 1
+            mins_to_kickoff = (kickoff_epoch - now_epoch) // 60
+            print(f"   🟨 CARDS ODDS FOUND: {home_team} vs {away_team} ({len(real_odds)} markets, {mins_to_kickoff}min to kickoff)")
+            
+            fixtures.append({
+                'fixture_id': fixture_id,
+                'home_team': home_team,
+                'away_team': away_team,
+                'league': league or 'Unknown',
+                'match_date': str(match_date) if match_date else today,
+                'home_xg': 1.4 + random.uniform(-0.3, 0.5),
+                'away_xg': 1.2 + random.uniform(-0.3, 0.4),
+                'commence_time': kickoff_utc or '',
+            })
+            odds_data[fixture_id] = real_odds
+        
+        if not fixtures:
+            print(f"   📊 No cards odds available yet for near-kickoff matches")
+            return
+        
+        print(f"   📊 Processing {cards_fixtures_found} fixtures with real cards odds")
+        
+        def _get_ev(x):
+            if hasattr(x, 'ev_sim'):
+                return x.ev_sim
+            elif hasattr(x, 'ev'):
+                return x.ev
+            elif isinstance(x, dict):
+                return x.get('ev', x.get('edge', 0))
+            return 0
+        
+        try:
+            all_cards = run_cards_cycle(fixtures, odds_data)
+            if all_cards:
+                all_cards = sorted(all_cards, key=_get_ev, reverse=True)[:remaining]
+                saved = _save_bet_candidates_to_db(all_cards, 'Cards')
+                print(f"   ✅ Saved {saved} CARDS predictions from late odds scan")
+                
+                if saved > 0:
+                    try:
+                        from discord_props_webhook import send_new_props_picks
+                        result = send_new_props_picks()
+                        if result.get('sent', 0) > 0:
+                            print(f"   📤 Sent {result['sent']} cards picks to Discord")
+                    except:
+                        pass
+            else:
+                print(f"   📊 No cards predictions passed quality filters")
+        except Exception as e:
+            print(f"   ⚠️ Cards engine error: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    except Exception as e:
+        print(f"   ⚠️ Database error: {e}")
+
+
 def _generate_corners_odds() -> Dict:
     """DEPRECATED: Previously generated synthetic odds. Now returns empty dict.
     Real odds are fetched from API-Football in run_corners_cards_cycle()."""
