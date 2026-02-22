@@ -741,24 +741,31 @@ class CornersEngine:
     ) -> List[BetCandidate]:
         candidates = []
         
-        for line in HANDICAP_LINES:
-            if line >= 0:
-                line_str = f"+{str(abs(line)).replace('.', '_')}"
-            else:
-                line_str = f"-{str(abs(line)).replace('.', '_')}"
+        real_hc_keys = [k for k in odds_dict if k.startswith('CORNERS_HC_')]
+        
+        for market_key in real_hc_keys:
+            odds = odds_dict.get(market_key)
+            if odds is None or odds <= 0:
+                continue
             
-            home_hc_key = f"CORNERS_HC_HOME_{line_str}"
-            away_hc_key = f"CORNERS_HC_AWAY_{line_str}"
+            is_home = '_HOME_' in market_key
             
-            for market_key, is_home in [
-                (home_hc_key, True),
-                (away_hc_key, False)
-            ]:
+            try:
+                parts = market_key.replace('CORNERS_HC_HOME_', '').replace('CORNERS_HC_AWAY_', '')
+                line = float(parts.replace('_', '.'))
+            except (ValueError, IndexError):
+                continue
+            
+            home_corners = corner_sim.get("home_corners_raw")
+            away_corners = corner_sim.get("away_corners_raw")
+            if home_corners is None or away_corners is None:
                 p_model = corner_sim.get(market_key, 0.0)
-                odds = odds_dict.get(market_key)
-                
-                if odds is None:
-                    continue
+            else:
+                corner_diff = home_corners - away_corners
+                if is_home:
+                    p_model = float(((corner_diff + line) > 0).mean())
+                else:
+                    p_model = float(((-corner_diff + line) > 0).mean())
                 
                 if not (self.handicap_config.min_odds <= odds <= self.handicap_config.max_odds):
                     continue
@@ -778,7 +785,8 @@ class CornersEngine:
                     continue
                 
                 team = home_team if is_home else away_team
-                selection_text = f"{team} Corners {'+' if line >= 0 else ''}{line}"
+                line_display = f"{int(line)}" if line == int(line) else f"{line}"
+                selection_text = f"{team} Corners {'+' if line >= 0 else ''}{line_display}"
                 
                 metadata = {
                     "handicap_line": line,
