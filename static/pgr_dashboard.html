@@ -40,35 +40,52 @@ header .subtitle{font-size:.8rem;color:var(--text3);margin-top:.1rem}
 .btn-primary{background:var(--accent);color:#fff}
 .btn-secondary{background:var(--card2);color:var(--text2);border:1px solid var(--border)!important}
 .btn:hover{opacity:.85}
-.bet-list{display:flex;flex-direction:column;gap:.4rem}
-.bet-row{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:.75rem 1rem;display:grid;grid-template-columns:44px 1fr 140px 120px 100px 80px;gap:.75rem;align-items:center;cursor:pointer;transition:all .15s}
-.bet-row:hover{background:var(--card-hover);border-color:var(--border2)}
-.bet-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1rem;background:var(--bg2);border:1px solid var(--border)}
-.bet-main h4{font-size:.85rem;font-weight:600;margin-bottom:.15rem}
-.bet-main .mkt{color:var(--accent);font-size:.78rem;font-weight:600}
-.bet-main .meta{color:var(--text3);font-size:.7rem;margin-top:.15rem}
-.bet-odds{text-align:center}
-.bet-odds .big{font-size:1.3rem;font-weight:800;color:var(--text)}
+.bet-list{display:flex;flex-direction:column;gap:.5rem}
+.bet-row{background:var(--card);border:1px solid var(--border);border-left:3px solid var(--border);border-radius:var(--radius);padding:.8rem 1rem;display:grid;grid-template-columns:44px 1fr 140px 120px 100px 80px;gap:.75rem;align-items:center;cursor:pointer;transition:all .2s ease;position:relative;overflow:hidden}
+.bet-row::before{content:'';position:absolute;top:0;left:0;right:0;bottom:0;opacity:0;transition:opacity .2s;pointer-events:none;border-radius:var(--radius)}
+.bet-row:hover{transform:translateY(-1px);box-shadow:0 4px 20px rgba(0,0,0,.35);border-color:var(--border2)}
+.bet-row.s-won{border-left-color:var(--green);background:linear-gradient(135deg,rgba(34,197,94,.05),var(--card) 50%)}
+.bet-row.s-won::before{background:linear-gradient(90deg,rgba(34,197,94,.06),transparent 35%);opacity:1}
+.bet-row.s-won .mkt{color:var(--green)}
+.bet-row.s-lost{border-left-color:var(--red);background:linear-gradient(135deg,rgba(239,68,68,.05),var(--card) 50%)}
+.bet-row.s-lost::before{background:linear-gradient(90deg,rgba(239,68,68,.06),transparent 35%);opacity:1}
+.bet-row.s-lost .mkt{color:var(--red)}
+.bet-row.s-upcoming{border-left-color:var(--accent)}
+.bet-row.s-upcoming .mkt{color:var(--accent)}
+.bet-row.s-live{border-left-color:var(--blue);background:linear-gradient(135deg,rgba(59,130,246,.06),var(--card) 50%);box-shadow:0 0 15px rgba(59,130,246,.08)}
+.bet-row.s-live::before{background:linear-gradient(90deg,rgba(59,130,246,.08),transparent 35%);opacity:1}
+.bet-row.s-live .mkt{color:var(--blue)}
+.bet-row.s-void{border-left-color:var(--text3);opacity:.6}
+.bet-row.s-void .mkt{color:var(--text3)}
+.bet-icon{width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:1.05rem;background:var(--bg2);border:1px solid var(--border);position:relative;z-index:1}
+.bet-main{position:relative;z-index:1}
+.bet-main h4{font-size:.85rem;font-weight:600;margin-bottom:.2rem;letter-spacing:.01em}
+.bet-main .mkt{font-size:.78rem;font-weight:600;transition:color .2s}
+.bet-main .meta{color:var(--text3);font-size:.7rem;margin-top:.2rem}
+.bet-odds{text-align:center;position:relative;z-index:1}
+.bet-odds .big{font-size:1.3rem;font-weight:800;color:var(--text);letter-spacing:.02em}
 .bet-odds .fair{font-size:.7rem;color:var(--text3)}
-.bet-edge{text-align:center}
+.bet-edge{text-align:center;position:relative;z-index:1}
 .bet-edge .edge-val{font-size:.95rem;font-weight:700}
 .bet-edge .ev-val{font-size:.75rem;margin-top:.1rem}
-.bet-conf{text-align:center}
-.badge{display:inline-block;padding:.15rem .4rem;border-radius:4px;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px}
-.badge-high{background:var(--green-bg);color:var(--green)}
+.bet-conf{text-align:center;position:relative;z-index:1}
+.badge{display:inline-block;padding:.18rem .5rem;border-radius:5px;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+.badge-high{background:var(--green-bg);color:var(--green);box-shadow:0 0 6px rgba(34,197,94,.08)}
 .badge-medium{background:var(--yellow-bg);color:var(--yellow)}
 .badge-low{background:rgba(148,163,184,.15);color:var(--text3)}
 .badge-upcoming{background:rgba(249,115,22,.12);color:var(--accent)}
 .badge-settled{background:var(--green-bg);color:var(--green)}
-.badge-won{background:var(--green-bg);color:var(--green)}
-.badge-lost{background:var(--red-bg);color:var(--red)}
+.badge-won{background:var(--green-bg);color:var(--green);box-shadow:0 0 8px rgba(34,197,94,.1)}
+.badge-lost{background:var(--red-bg);color:var(--red);box-shadow:0 0 8px rgba(239,68,68,.1)}
+.badge-live{background:rgba(59,130,246,.15);color:var(--blue);box-shadow:0 0 10px rgba(59,130,246,.12);animation:livePulse 2s ease-in-out infinite}
 .badge-candidate{background:rgba(59,130,246,.12);color:var(--blue)}
 .badge-published{background:rgba(249,115,22,.12);color:var(--accent)}
 .badge-placed{background:rgba(168,85,247,.12);color:var(--purple)}
 .badge-voided{background:rgba(148,163,184,.1);color:var(--text3)}
 .badge-production{background:var(--green-bg);color:var(--green)}
 .badge-learning{background:var(--yellow-bg);color:var(--yellow)}
-.bet-status{text-align:center}
+@keyframes livePulse{0%,100%{opacity:1}50%{opacity:.65}}
+.bet-status{text-align:center;position:relative;z-index:1}
 .bet-detail{display:none;background:var(--bg2);border:1px solid var(--border);border-radius:0 0 var(--radius) var(--radius);margin-top:-5px;padding:1rem;animation:slideDown .2s ease}
 @keyframes slideDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
 .bet-detail.open{display:block}
@@ -264,6 +281,7 @@ const c=document.getElementById('betsList');
 if(!bets.length){c.innerHTML='<div class="empty">No bets found. Try adjusting filters or enable "Show Learning".</div>';return}
 c.innerHTML=bets.map((b,i)=>{
 const statusCls=b.result||b.status;
+const rowStatus=statusCls==='won'?'s-won':statusCls==='lost'?'s-lost':statusCls==='live'?'s-live':statusCls==='voided'||statusCls==='void'?'s-void':'s-upcoming';
 const confCls=b.confidence_badge?b.confidence_badge.toLowerCase():'medium';
 const lineStr=b.line!=null?` (${b.line})`:'';
 const profitStr=b.profit_loss!=null?`<div style="font-size:.78rem;font-weight:700;color:${b.profit_loss>=0?'var(--green)':'var(--red)'">${b.profit_loss>=0?'+':''}${b.profit_loss.toFixed(2)}u</div>`:'';
@@ -272,7 +290,7 @@ const edgeColor=b.edge_pct>0?'var(--green)':'var(--red)';
 const gatingBadge=b.gating_status==='PRODUCTION'?'<span class="badge badge-production" style="margin-left:.3rem">PROD</span>':b.gating_status==='LEARNING_ONLY'?'<span class="badge badge-learning" style="margin-left:.3rem">LEARN</span>':'';
 const tagsHtml=(b.tags||[]).map(t=>`<span class="tag-chip">${t}</span>`).join('');
 return`
-<div class="bet-row" onclick="toggleDetail(${i})">
+<div class="bet-row ${rowStatus}" onclick="toggleDetail(${i})">
 <div class="bet-icon">&#9917;</div>
 <div class="bet-main">
 <h4>${b.home_team} vs ${b.away_team}</h4>
