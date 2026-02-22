@@ -270,7 +270,7 @@ def render_matches_overview(conn, coupon_id):
             font_color="white", yaxis_tickformat=".0%",
             margin=dict(l=20, r=20, t=30, b=20)
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, key="stryktipset_overview_chart")
 
 
 def render_actions(conn, coupon_id, status):
@@ -574,7 +574,7 @@ def render_system_rows(conn, coupon_id):
                 font_color="white", height=250,
                 margin=dict(l=20, r=20, t=20, b=20)
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key="stryktipset_match_chart")
 
 
 def render_scoring(conn, coupon_id, status):
@@ -649,7 +649,7 @@ def render_scoring(conn, coupon_id, status):
                     font_color="white", height=300,
                     margin=dict(l=20, r=20, t=20, b=20)
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, use_container_width=True, key="stryktipset_scoring_chart")
 
     st.markdown("---")
     st.markdown("### All-Time Summary")
@@ -682,7 +682,7 @@ def render_scoring(conn, coupon_id, status):
                 font_color="white", yaxis_range=[0, 14], height=300,
                 margin=dict(l=20, r=20, t=30, b=20)
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key="stryktipset_history_chart")
 
 
 render_stryktipset_dashboard()
