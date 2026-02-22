@@ -4084,22 +4084,22 @@ def run_single_cycle():
 CORNERS_CARDS_DAILY_CAP = 10
 
 def run_corners_cards_cycle():
-    """Run corners and cards as INDEPENDENT cycle with own daily cap"""
+    """Run corners as INDEPENDENT cycle with own daily cap. Cards are handled separately by run_late_cards_cycle() (2-3h before kickoff only)."""
     from corners_engine import run_corners_cycle
-    from cards_engine import run_cards_cycle
     import random
     
     try:
         from daily_stoploss import is_stoploss_triggered
         triggered, pnl, message = is_stoploss_triggered()
         if triggered:
-            print(f"\n🛑 CORNERS/CARDS SKIPPED - Daily stop-loss active ({pnl:+.1f}u)")
+            print(f"\n🛑 CORNERS SKIPPED - Daily stop-loss active ({pnl:+.1f}u)")
             return
     except Exception as e:
         print(f"⚠️ Stop-loss check failed: {e}")
     
     print("\n" + "="*60)
-    print("🔢 CORNERS & CARDS ENGINE (Independent Cycle)")
+    print("🔢 CORNERS ENGINE (Independent Cycle)")
+    print("   Cards handled separately: 2-3h before kickoff only")
     print("="*60)
     
     today_count = 0
@@ -4107,7 +4107,7 @@ def run_corners_cards_cycle():
         result = db_helper.execute('''
             SELECT COUNT(*) FROM all_bets 
             WHERE created_at::date = CURRENT_DATE 
-              AND UPPER(product) IN ('CORNERS', 'CARDS')
+              AND UPPER(product) = 'CORNERS'
         ''', fetch='one')
         today_count = result[0] if result else 0
     except:
@@ -4163,20 +4163,18 @@ def run_corners_cards_cycle():
                                 af_odds = af_client.get_fixture_odds(af_id)
                                 af_markets = af_odds.get('markets', {})
                                 for key, val in af_markets.items():
-                                    if 'CORNERS' in key or 'CARDS' in key:
+                                    if 'CORNERS' in key:
                                         real_odds[key] = val
                     except Exception as e:
                         print(f"   ⚠️ Odds fetch failed for {home_team} vs {away_team}: {e}")
                 
                 has_corners = any('CORNERS' in k for k in real_odds)
-                has_cards = any('CARDS' in k for k in real_odds)
                 
-                if not has_corners and not has_cards:
+                if not has_corners:
                     skipped_no_odds += 1
                     continue
                 
-                if has_corners or has_cards:
-                    real_odds_found += 1
+                real_odds_found += 1
                 
                 fixtures.append({
                     'fixture_id': fixture_id,
@@ -4190,22 +4188,19 @@ def run_corners_cards_cycle():
                 })
                 odds_data[fixture_id] = real_odds
             
-            print(f"   📊 Loaded {len(fixtures)} fixtures with REAL odds ({real_odds_found} with corners/cards)")
+            print(f"   📊 Loaded {len(fixtures)} fixtures with REAL corners odds ({real_odds_found} found)")
             if skipped_no_odds > 0:
-                print(f"   ⏭️ Skipped {skipped_no_odds} fixtures (no corners/cards odds available)")
+                print(f"   ⏭️ Skipped {skipped_no_odds} fixtures (no corners odds available)")
     except Exception as e:
         print(f"   ⚠️ Database error: {e}")
     
     if not fixtures:
-        print("   ⚠️ No pending fixtures found for corners/cards")
+        print("   ⚠️ No pending fixtures found for corners")
         return
     
-    print(f"   📊 Processing {len(fixtures)} fixtures")
+    print(f"   📊 Processing {len(fixtures)} fixtures for corners")
     
     saved_total = 0
-    
-    corners_cap = max(1, remaining // 2)
-    cards_cap = remaining - corners_cap
     
     def _get_ev(x):
         """Get EV from either dict or dataclass object"""
@@ -4221,10 +4216,10 @@ def run_corners_cards_cycle():
         match_corners, team_corners, hc_corners = run_corners_cycle(fixtures, odds_data)
         all_corners = match_corners + team_corners + hc_corners
         if all_corners:
-            all_corners = sorted(all_corners, key=_get_ev, reverse=True)[:corners_cap]
+            all_corners = sorted(all_corners, key=_get_ev, reverse=True)[:remaining]
             saved = _save_bet_candidates_to_db(all_corners, 'Corners')
             saved_total += saved
-            print(f"   ✅ Saved {saved} CORNERS predictions (cap: {corners_cap})")
+            print(f"   ✅ Saved {saved} CORNERS predictions (cap: {remaining})")
         else:
             print(f"   📊 No corners predictions generated")
     except Exception as e:
@@ -4232,30 +4227,7 @@ def run_corners_cards_cycle():
         import traceback
         traceback.print_exc()
     
-    remaining_cards = remaining - saved_total
-    has_any_cards_odds = any(
-        any('CARDS' in k for k in odds_data.get(f['fixture_id'], {}))
-        for f in fixtures
-    )
-    
-    if not has_any_cards_odds:
-        print(f"   ⏭️ CARDS skipped - no real cards odds available from API-Football bookmakers")
-    else:
-        try:
-            all_cards = run_cards_cycle(fixtures, odds_data)
-            if all_cards:
-                all_cards = sorted(all_cards, key=_get_ev, reverse=True)[:remaining_cards]
-                saved = _save_bet_candidates_to_db(all_cards, 'Cards')
-                saved_total += saved
-                print(f"   ✅ Saved {saved} CARDS predictions (cap: {remaining_cards})")
-            else:
-                print(f"   📊 No cards predictions generated")
-        except Exception as e:
-            print(f"   ⚠️ Cards engine error: {e}")
-            import traceback
-            traceback.print_exc()
-    
-    print(f"\n   🎯 CORNERS & CARDS TOTAL: {saved_total} picks saved")
+    print(f"\n   🎯 CORNERS TOTAL: {saved_total} picks saved")
     
     try:
         from discord_props_webhook import send_new_props_picks
@@ -4266,12 +4238,13 @@ def run_corners_cards_cycle():
         print(f"   ⚠️ Discord props webhook error: {e}")
 
 
-LATE_CARDS_DAILY_CAP = 5
+CARDS_DAILY_CAP = 5
 
 def run_late_cards_cycle():
     """
-    Late Cards Engine: Fetches cards odds for matches starting within 3 hours.
-    Bookmakers typically publish cards markets closer to kickoff.
+    Cards Engine: Fetches cards odds for matches starting within 2-3 hours.
+    This is the ONLY cards engine - bookmakers publish accurate card lines
+    close to kickoff, so we wait until 2-3h before to get the best lines.
     Runs every 30 minutes to catch newly available odds.
     """
     from cards_engine import run_cards_cycle
@@ -4281,13 +4254,13 @@ def run_late_cards_cycle():
         from daily_stoploss import is_stoploss_triggered
         triggered, pnl, message = is_stoploss_triggered()
         if triggered:
-            print(f"\n🛑 LATE CARDS SKIPPED - Daily stop-loss active ({pnl:+.1f}u)")
+            print(f"\n🛑 CARDS SKIPPED - Daily stop-loss active ({pnl:+.1f}u)")
             return
     except Exception as e:
         print(f"⚠️ Stop-loss check failed: {e}")
     
     print("\n" + "="*60)
-    print("🟨 LATE CARDS ENGINE (Near-Kickoff Odds Scan)")
+    print("🟨 CARDS ENGINE (2-3h Before Kickoff)")
     print("="*60)
     
     today_count = 0
@@ -4301,8 +4274,8 @@ def run_late_cards_cycle():
     except:
         pass
     
-    remaining = max(0, LATE_CARDS_DAILY_CAP - today_count)
-    print(f"📊 Cards daily cap: {today_count}/{LATE_CARDS_DAILY_CAP} used, {remaining} slots remaining")
+    remaining = max(0, CARDS_DAILY_CAP - today_count)
+    print(f"📊 Cards daily cap: {today_count}/{CARDS_DAILY_CAP} used, {remaining} slots remaining")
     
     if remaining <= 0:
         print("🛑 Daily cards cap reached")
@@ -4319,7 +4292,8 @@ def run_late_cards_cycle():
     odds_data = {}
     today = datetime.now().strftime('%Y-%m-%d')
     now_epoch = int(time.time())
-    window_seconds = 3 * 3600
+    min_window_seconds = 2 * 3600
+    max_window_seconds = 3 * 3600
     
     try:
         rows = db_helper.execute('''
@@ -4331,13 +4305,13 @@ def run_late_cards_cycle():
               AND kickoff_epoch > %s
               AND kickoff_epoch <= %s
             LIMIT 30
-        ''', (today, now_epoch, now_epoch + window_seconds), fetch='all')
+        ''', (today, now_epoch, now_epoch + max_window_seconds), fetch='all')
         
         if not rows:
-            print(f"   📊 No matches starting within 3 hours")
+            print(f"   📊 No matches starting within 2-3 hours")
             return
         
-        print(f"   🔍 Found {len(rows)} matches starting within 3 hours, checking for cards odds...")
+        print(f"   🔍 Found {len(rows)} matches starting within 2-3 hours, checking for cards odds...")
         
         cards_fixtures_found = 0
         
@@ -4398,7 +4372,7 @@ def run_late_cards_cycle():
             odds_data[fixture_id] = real_odds
         
         if not fixtures:
-            print(f"   📊 No cards odds available yet for near-kickoff matches")
+            print(f"   📊 No cards odds available yet for matches within 2-3 hours")
             return
         
         print(f"   📊 Processing {cards_fixtures_found} fixtures with real cards odds")
