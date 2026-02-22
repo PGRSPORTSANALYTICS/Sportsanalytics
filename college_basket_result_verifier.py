@@ -469,16 +469,28 @@ class CollegeBasketballResultVerifier:
             return -stake
     
     def _update_pick_status(self, pick_id: int, outcome: str, profit_loss: float):
-        """Update pick status in database"""
+        """Update pick status in database including profit_units"""
         try:
+            stake_units = 1.0
+            if outcome == "won":
+                odds_row = self.db.execute(
+                    "SELECT odds FROM basketball_predictions WHERE id = %s",
+                    (pick_id,), fetch='one'
+                )
+                odds = odds_row[0] if odds_row else 2.0
+                profit_u = round((odds - 1.0) * stake_units, 2)
+            else:
+                profit_u = -stake_units
+
             query = """
                 UPDATE basketball_predictions
                 SET status = %s,
+                    profit_units = %s,
                     verified_at = CURRENT_TIMESTAMP
                 WHERE id = %s
             """
             
-            self.db.execute(query, (outcome, pick_id), fetch='none')
+            self.db.execute(query, (outcome, profit_u, pick_id), fetch='none')
             
         except Exception as e:
             logger.error(f"❌ Database update error: {e}")
