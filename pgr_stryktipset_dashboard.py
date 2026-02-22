@@ -617,7 +617,7 @@ def render_scoring(conn, coupon_id, status):
     ge12 = sum(1 for s in scores if s["best_correct"] >= 12)
     mc4.markdown(f"""<div class="stryk-metric"><div class="value">{ge12}/{len(scores)}</div><div class="label">12+ Correct</div></div>""", unsafe_allow_html=True)
 
-    for s in scores:
+    for score_idx, s in enumerate(scores):
         dist = json.loads(s["dist_json"]) if isinstance(s["dist_json"], str) else (s["dist_json"] or {})
 
         with st.expander(f"System #{s['system_id']} — Best: {s['best_correct']}/13 | {s['total_rows']} rows", expanded=True):
@@ -649,7 +649,7 @@ def render_scoring(conn, coupon_id, status):
                     font_color="white", height=300,
                     margin=dict(l=20, r=20, t=20, b=20)
                 )
-                st.plotly_chart(fig, use_container_width=True, key=f"stryktipset_scoring_chart_{s['system_id']}")
+                st.plotly_chart(fig, use_container_width=True, key=f"stryktipset_scoring_chart_{score_idx}")
 
     st.markdown("---")
     st.markdown("### All-Time Summary")
