@@ -120,7 +120,7 @@ def _build_football_query(
     min_odds: Optional[float],
     sort_by: str,
 ) -> tuple:
-    conditions = ["(mode IS NULL OR mode != 'TEST')"]
+    conditions = ["(mode IS NULL OR mode NOT IN ('TEST','LEARNING'))"]
     params: list = []
 
     if date_from:
@@ -184,7 +184,7 @@ def _build_basketball_query(
     min_odds: Optional[float],
     sort_by: str,
 ) -> tuple:
-    conditions = ["(mode IS NULL OR mode != 'TEST')"]
+    conditions = ["(mode IS NULL OR mode NOT IN ('TEST','LEARNING'))"]
     params: list = []
 
     if date_from:
@@ -553,7 +553,7 @@ async def get_bets_stats(
                          ELSE 0 END
                 ), 0)
             FROM football_opportunities
-            WHERE (mode IS NULL OR mode != 'TEST') {date_filter}
+            WHERE (mode IS NULL OR mode NOT IN ('TEST','LEARNING')) {date_filter}
         """, tuple(params), fetch='one')
         if row:
             won_total += row[0] or 0
@@ -582,7 +582,7 @@ async def get_bets_stats(
                 COUNT(CASE WHEN status IS NULL OR status IN ('pending','') THEN 1 END),
                 COALESCE(SUM(profit_units), 0)
             FROM basketball_predictions
-            WHERE (mode IS NULL OR mode != 'TEST') {bb_date_filter}
+            WHERE (mode IS NULL OR mode NOT IN ('TEST','LEARNING')) {bb_date_filter}
         """, tuple(bb_params), fetch='one')
         if row:
             won_total += row[0] or 0
@@ -625,7 +625,7 @@ async def get_available_sports():
 
     try:
         fb_count = db_helper.execute(
-            "SELECT COUNT(*) FROM football_opportunities WHERE mode IS NULL OR mode != 'TEST'",
+            "SELECT COUNT(*) FROM football_opportunities WHERE mode IS NULL OR mode NOT IN ('TEST','LEARNING')",
             fetch='one'
         )
         result["sports"].append({"key": "football", "label": "Football", "count": fb_count[0] if fb_count else 0})
@@ -634,7 +634,7 @@ async def get_available_sports():
 
     try:
         bb_count = db_helper.execute(
-            "SELECT COUNT(*) FROM basketball_predictions WHERE mode IS NULL OR mode != 'TEST'",
+            "SELECT COUNT(*) FROM basketball_predictions WHERE mode IS NULL OR mode NOT IN ('TEST','LEARNING')",
             fetch='one'
         )
         result["sports"].append({"key": "basketball", "label": "Basketball", "count": bb_count[0] if bb_count else 0})
@@ -664,7 +664,7 @@ async def get_available_leagues(sport: Optional[str] = Query(None)):
     if sport is None or sport == "football":
         try:
             rows = db_helper.execute(
-                "SELECT DISTINCT league FROM football_opportunities WHERE league IS NOT NULL AND (mode IS NULL OR mode != 'TEST')",
+                "SELECT DISTINCT league FROM football_opportunities WHERE league IS NOT NULL AND (mode IS NULL OR mode NOT IN ('TEST','LEARNING'))",
                 fetch='all'
             ) or []
             for r in rows:
@@ -698,5 +698,206 @@ async def get_available_leagues(sport: Optional[str] = Query(None)):
             pass
 
     result = {"leagues": sorted(leagues), "count": len(leagues), "generated_at": datetime.utcnow().isoformat()}
+    _set_cached(cache_key, result)
+    return result
+
+
+@router.get("/bets/history")
+async def get_bets_history(
+    period: Optional[str] = Query("all", description="Period: 7d, 30d, 90d, all"),
+):
+    cache_key = f"history:{period}"
+    cached = _get_cached(cache_key)
+    if cached:
+        return cached
+
+    date_filter_fb = ""
+    date_filter_bb = ""
+    date_filter_pp = ""
+    if period and period != "all":
+        days = {"7d": 7, "30d": 30, "90d": 90}.get(period, 9999)
+        if days < 9999:
+            date_filter_fb = f"AND match_date >= CURRENT_DATE - INTERVAL '{days} days'"
+            date_filter_bb = f"AND commence_time >= CURRENT_DATE - INTERVAL '{days} days'"
+            date_filter_pp = f"AND commence_time >= CURRENT_DATE - INTERVAL '{days} days'"
+
+    sports = []
+
+    try:
+        row = db_helper.execute(f"""
+            SELECT
+                COUNT(*) as total,
+                COUNT(CASE WHEN outcome IN ('won','win') THEN 1 END) as won,
+                COUNT(CASE WHEN outcome IN ('lost','loss') THEN 1 END) as lost,
+                COUNT(CASE WHEN outcome IN ('void','voided') THEN 1 END) as void,
+                COUNT(CASE WHEN outcome IS NULL OR outcome IN ('pending','') THEN 1 END) as upcoming,
+                COALESCE(SUM(CASE WHEN outcome IN ('won','win') THEN (odds - 1)
+                     WHEN outcome IN ('lost','loss') THEN -1 ELSE 0 END), 0) as profit
+            FROM football_opportunities
+            WHERE (mode IS NULL OR mode NOT IN ('TEST','LEARNING')) {date_filter_fb}
+        """, fetch='one')
+        if row:
+            settled = (row[1] or 0) + (row[2] or 0)
+            sports.append({
+                "sport": "football",
+                "icon": "⚽",
+                "label": "Football",
+                "total": row[0] or 0,
+                "won": row[1] or 0,
+                "lost": row[2] or 0,
+                "void": row[3] or 0,
+                "upcoming": row[4] or 0,
+                "settled": settled,
+                "hit_rate": round((row[1] or 0) / settled * 100, 1) if settled > 0 else 0,
+                "profit_units": round(float(row[5] or 0), 2),
+                "roi": round(float(row[5] or 0) / settled * 100, 1) if settled > 0 else 0,
+            })
+
+        fb_markets = db_helper.execute(f"""
+            SELECT selection,
+                COUNT(*) as total,
+                COUNT(CASE WHEN outcome IN ('won','win') THEN 1 END) as won,
+                COUNT(CASE WHEN outcome IN ('lost','loss') THEN 1 END) as lost,
+                COALESCE(SUM(CASE WHEN outcome IN ('won','win') THEN (odds - 1)
+                     WHEN outcome IN ('lost','loss') THEN -1 ELSE 0 END), 0) as profit
+            FROM football_opportunities
+            WHERE (mode IS NULL OR mode NOT IN ('TEST','LEARNING'))
+              AND outcome IN ('won','win','lost','loss') {date_filter_fb}
+            GROUP BY selection
+            ORDER BY profit DESC
+        """, fetch='all') or []
+        fb_market_list = []
+        for mr in fb_markets:
+            s = (mr[2] or 0) + (mr[3] or 0)
+            if s > 0:
+                fb_market_list.append({
+                    "name": mr[0],
+                    "total": mr[1] or 0,
+                    "won": mr[2] or 0,
+                    "lost": mr[3] or 0,
+                    "hit_rate": round((mr[2] or 0) / s * 100, 1),
+                    "profit": round(float(mr[4] or 0), 2),
+                    "roi": round(float(mr[4] or 0) / s * 100, 1),
+                })
+        if sports:
+            sports[-1]["markets"] = fb_market_list
+    except Exception as e:
+        logger.error(f"History football error: {e}")
+
+    try:
+        row = db_helper.execute(f"""
+            SELECT
+                COUNT(*) as total,
+                COUNT(CASE WHEN status IN ('won','win','WON') THEN 1 END) as won,
+                COUNT(CASE WHEN status IN ('lost','loss','LOST') THEN 1 END) as lost,
+                COUNT(CASE WHEN status IN ('void','voided') THEN 1 END) as void,
+                COUNT(CASE WHEN status IS NULL OR status IN ('pending','') THEN 1 END) as upcoming,
+                COALESCE(SUM(CASE WHEN status IN ('won','win','WON') THEN (odds - 1)
+                     WHEN status IN ('lost','loss','LOST') THEN -1 ELSE 0 END), 0) as profit
+            FROM basketball_predictions
+            WHERE (mode IS NULL OR mode NOT IN ('TEST','LEARNING')) {date_filter_bb}
+        """, fetch='one')
+        if row:
+            settled = (row[1] or 0) + (row[2] or 0)
+            sports.append({
+                "sport": "basketball",
+                "icon": "🏀",
+                "label": "Basketball",
+                "total": row[0] or 0,
+                "won": row[1] or 0,
+                "lost": row[2] or 0,
+                "void": row[3] or 0,
+                "upcoming": row[4] or 0,
+                "settled": settled,
+                "hit_rate": round((row[1] or 0) / settled * 100, 1) if settled > 0 else 0,
+                "profit_units": round(float(row[5] or 0), 2),
+                "roi": round(float(row[5] or 0) / settled * 100, 1) if settled > 0 else 0,
+            })
+
+        bb_markets = db_helper.execute(f"""
+            SELECT market,
+                COUNT(*) as total,
+                COUNT(CASE WHEN status IN ('won','win','WON') THEN 1 END) as won,
+                COUNT(CASE WHEN status IN ('lost','loss','LOST') THEN 1 END) as lost,
+                COALESCE(SUM(CASE WHEN status IN ('won','win','WON') THEN (odds - 1)
+                     WHEN status IN ('lost','loss','LOST') THEN -1 ELSE 0 END), 0) as profit
+            FROM basketball_predictions
+            WHERE (mode IS NULL OR mode NOT IN ('TEST','LEARNING'))
+              AND status IN ('won','win','lost','loss','WON','LOST') {date_filter_bb}
+            GROUP BY market
+            ORDER BY profit DESC
+        """, fetch='all') or []
+        bb_market_list = []
+        for mr in bb_markets:
+            s = (mr[2] or 0) + (mr[3] or 0)
+            if s > 0:
+                bb_market_list.append({
+                    "name": mr[0],
+                    "total": mr[1] or 0,
+                    "won": mr[2] or 0,
+                    "lost": mr[3] or 0,
+                    "hit_rate": round((mr[2] or 0) / s * 100, 1),
+                    "profit": round(float(mr[4] or 0), 2),
+                    "roi": round(float(mr[4] or 0) / s * 100, 1),
+                })
+        if len(sports) > 0 and sports[-1]["sport"] == "basketball":
+            sports[-1]["markets"] = bb_market_list
+    except Exception as e:
+        logger.error(f"History basketball error: {e}")
+
+    try:
+        row = db_helper.execute(f"""
+            SELECT
+                COUNT(*) as total,
+                COUNT(CASE WHEN status IN ('won','win','WON') OR outcome IN ('won','win') THEN 1 END) as won,
+                COUNT(CASE WHEN status IN ('lost','loss','LOST') OR outcome IN ('lost','loss') THEN 1 END) as lost,
+                COUNT(CASE WHEN status IN ('void','voided') THEN 1 END) as void,
+                COUNT(CASE WHEN (status IS NULL OR status IN ('pending',''))
+                           AND (outcome IS NULL OR outcome IN ('pending','')) THEN 1 END) as upcoming,
+                COALESCE(SUM(CASE
+                    WHEN status IN ('won','win','WON') OR outcome IN ('won','win') THEN (odds - 1)
+                    WHEN status IN ('lost','loss','LOST') OR outcome IN ('lost','loss') THEN -1
+                    ELSE 0 END), 0) as profit
+            FROM player_props
+            WHERE 1=1 {date_filter_pp}
+        """, fetch='one')
+        if row and (row[0] or 0) > 0:
+            settled = (row[1] or 0) + (row[2] or 0)
+            sports.append({
+                "sport": "props",
+                "icon": "🎯",
+                "label": "Player Props",
+                "total": row[0] or 0,
+                "won": row[1] or 0,
+                "lost": row[2] or 0,
+                "void": row[3] or 0,
+                "upcoming": row[4] or 0,
+                "settled": settled,
+                "hit_rate": round((row[1] or 0) / settled * 100, 1) if settled > 0 else 0,
+                "profit_units": round(float(row[5] or 0), 2),
+                "roi": round(float(row[5] or 0) / settled * 100, 1) if settled > 0 else 0,
+                "markets": [],
+            })
+    except Exception as e:
+        logger.error(f"History props error: {e}")
+
+    total_won = sum(s["won"] for s in sports)
+    total_lost = sum(s["lost"] for s in sports)
+    total_settled = total_won + total_lost
+    total_profit = sum(s["profit_units"] for s in sports)
+
+    result = {
+        "period": period,
+        "sports": sports,
+        "combined": {
+            "settled": total_settled,
+            "won": total_won,
+            "lost": total_lost,
+            "hit_rate": round(total_won / total_settled * 100, 1) if total_settled > 0 else 0,
+            "profit_units": round(total_profit, 2),
+            "roi": round(total_profit / total_settled * 100, 1) if total_settled > 0 else 0,
+        },
+        "generated_at": datetime.utcnow().isoformat(),
+    }
     _set_cached(cache_key, result)
     return result

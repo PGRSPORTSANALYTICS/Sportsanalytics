@@ -115,6 +115,7 @@ table.data-table tr:hover{background:var(--card2)}
 <div class="nav-tab" data-page="markets" onclick="switchPage('markets')">Market Rankings</div>
 <div class="nav-tab" data-page="combos" onclick="switchPage('combos')">League+Market</div>
 <div class="nav-tab" data-page="promotion" onclick="switchPage('promotion')">Auto Status</div>
+<div class="nav-tab" data-page="history" onclick="switchPage('history')">History</div>
 </div>
 
 <div id="page-bets" class="page-section active">
@@ -219,6 +220,14 @@ table.data-table tr:hover{background:var(--card2)}
 </div>
 </div>
 
+<div id="page-history" class="page-section">
+<h2 class="section-title">Performance History</h2>
+<p class="section-subtitle">Breakdown per sport and market</p>
+<div class="window-select" id="historyWindowSelect"></div>
+<div id="historyCombined" class="stats-grid" style="margin-bottom:1.5rem"></div>
+<div id="historySports"></div>
+</div>
+
 </div>
 
 <script>
@@ -237,6 +246,7 @@ function switchPage(page) {
   if (page === 'markets') loadMarkets();
   if (page === 'combos') loadCombos();
   if (page === 'promotion') loadPromotion();
+  if (page === 'history') loadHistory();
 }
 
 function sportIcon(sport) {
@@ -490,6 +500,111 @@ async function loadPromotion() {
       </tr>`;
     }).join('');
   } catch(e) { body.innerHTML = `<tr><td colspan="8">${e.message}</td></tr>`; }
+}
+
+let historyPeriod = 'all';
+
+function renderHistoryWindowBtns() {
+  const wins = [['7d','Last 7 Days'],['30d','Last 30 Days'],['90d','Last 90 Days'],['all','All Time']];
+  const c = document.getElementById('historyWindowSelect');
+  c.innerHTML = wins.map(([k,l]) =>
+    `<div class="window-btn ${historyPeriod===k?'active':''}" onclick="historyPeriod='${k}';loadHistory()">${l}</div>`
+  ).join('');
+}
+
+async function loadHistory() {
+  renderHistoryWindowBtns();
+  const combined = document.getElementById('historyCombined');
+  const sportsDiv = document.getElementById('historySports');
+  combined.innerHTML = '<div class="stat-card"><div class="value"><div class="spinner"></div></div><div class="label">Loading...</div></div>';
+  sportsDiv.innerHTML = '';
+
+  try {
+    const res = await fetch(`${API_BASE}/bets/history?period=${historyPeriod}`);
+    const data = await res.json();
+    const c = data.combined;
+
+    combined.innerHTML = `
+      <div class="stat-card"><div class="value">${c.settled}</div><div class="label">Total Settled</div></div>
+      <div class="stat-card green"><div class="value">${c.won}</div><div class="label">Won</div></div>
+      <div class="stat-card red"><div class="value">${c.lost}</div><div class="label">Lost</div></div>
+      <div class="stat-card accent"><div class="value">${c.hit_rate}%</div><div class="label">Hit Rate</div></div>
+      <div class="stat-card ${c.profit_units >= 0 ? 'green' : 'red'}"><div class="value">${c.profit_units >= 0 ? '+' : ''}${c.profit_units.toFixed(1)}u</div><div class="label">Profit</div></div>
+      <div class="stat-card ${c.roi >= 0 ? 'green' : 'red'}"><div class="value">${c.roi >= 0 ? '+' : ''}${c.roi.toFixed(1)}%</div><div class="label">ROI</div></div>
+    `;
+
+    sportsDiv.innerHTML = data.sports.map(s => {
+      const profitColor = s.profit_units >= 0 ? 'var(--green)' : 'var(--red)';
+      const roiColor = s.roi >= 0 ? 'var(--green)' : 'var(--red)';
+      const winPct = s.settled > 0 ? (s.won / s.settled * 100) : 0;
+
+      let marketsHtml = '';
+      if (s.markets && s.markets.length > 0) {
+        marketsHtml = `
+          <div class="table-container" style="margin-top:.75rem;max-height:300px">
+            <table class="data-table">
+              <thead><tr><th>Market</th><th>Bets</th><th>W/L</th><th>Hit Rate</th><th>Profit</th><th>ROI</th></tr></thead>
+              <tbody>
+                ${s.markets.map(m => {
+                  const mProfitColor = m.profit >= 0 ? 'var(--green)' : 'var(--red)';
+                  const mRoiColor = m.roi >= 0 ? 'var(--green)' : 'var(--red)';
+                  return `<tr>
+                    <td><strong>${m.name}</strong></td>
+                    <td>${m.total}</td>
+                    <td>${m.won}/${m.lost}</td>
+                    <td>${m.hit_rate}%</td>
+                    <td style="color:${mProfitColor};font-weight:700">${m.profit >= 0 ? '+' : ''}${m.profit.toFixed(1)}u</td>
+                    <td style="color:${mRoiColor};font-weight:700">${m.roi >= 0 ? '+' : ''}${m.roi.toFixed(1)}%</td>
+                  </tr>`;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>`;
+      }
+
+      return `
+        <div style="background:var(--card);border-radius:10px;padding:1.25rem;border:1px solid var(--border);margin-bottom:1rem">
+          <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1rem">
+            <span style="font-size:1.5rem">${s.icon}</span>
+            <div>
+              <h3 style="font-size:1.1rem;font-weight:700;margin:0">${s.label}</h3>
+              <span style="color:var(--text2);font-size:.8rem">${s.total} total bets | ${s.settled} settled | ${s.upcoming} upcoming</span>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.5rem;margin-bottom:.75rem">
+            <div style="text-align:center;padding:.5rem;background:var(--card2);border-radius:8px">
+              <div style="font-size:1.3rem;font-weight:700;color:var(--green)">${s.won}</div>
+              <div style="font-size:.7rem;color:var(--text2)">WON</div>
+            </div>
+            <div style="text-align:center;padding:.5rem;background:var(--card2);border-radius:8px">
+              <div style="font-size:1.3rem;font-weight:700;color:var(--red)">${s.lost}</div>
+              <div style="font-size:.7rem;color:var(--text2)">LOST</div>
+            </div>
+            <div style="text-align:center;padding:.5rem;background:var(--card2);border-radius:8px">
+              <div style="font-size:1.3rem;font-weight:700;color:var(--accent)">${s.hit_rate}%</div>
+              <div style="font-size:.7rem;color:var(--text2)">HIT RATE</div>
+            </div>
+            <div style="text-align:center;padding:.5rem;background:var(--card2);border-radius:8px">
+              <div style="font-size:1.3rem;font-weight:700;color:${profitColor}">${s.profit_units >= 0 ? '+' : ''}${s.profit_units.toFixed(1)}u</div>
+              <div style="font-size:.7rem;color:var(--text2)">PROFIT</div>
+            </div>
+            <div style="text-align:center;padding:.5rem;background:var(--card2);border-radius:8px">
+              <div style="font-size:1.3rem;font-weight:700;color:${roiColor}">${s.roi >= 0 ? '+' : ''}${s.roi.toFixed(1)}%</div>
+              <div style="font-size:.7rem;color:var(--text2)">ROI</div>
+            </div>
+          </div>
+          <div class="bar" style="height:8px;margin-bottom:.5rem">
+            <div class="bar-fill green" style="width:${winPct.toFixed(1)}%"></div>
+          </div>
+          <div style="font-size:.75rem;color:var(--text2);text-align:right">${winPct.toFixed(1)}% win rate</div>
+          ${marketsHtml}
+        </div>
+      `;
+    }).join('');
+
+  } catch(e) {
+    combined.innerHTML = `<div class="empty">Failed to load history. ${e.message}</div>`;
+  }
 }
 
 loadStats();
