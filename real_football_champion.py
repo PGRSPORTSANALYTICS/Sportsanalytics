@@ -4213,13 +4213,14 @@ def run_corners_cards_cycle():
         return 0
     
     try:
-        match_corners, team_corners, hc_corners = run_corners_cycle(fixtures, odds_data)
-        all_corners = match_corners + team_corners + hc_corners
+        match_corners, team_corners, _hc_corners = run_corners_cycle(fixtures, odds_data)
+        all_corners = match_corners + team_corners
         if all_corners:
             all_corners = sorted(all_corners, key=_get_ev, reverse=True)[:remaining]
             saved = _save_bet_candidates_to_db(all_corners, 'Corners')
             saved_total += saved
             print(f"   ✅ Saved {saved} CORNERS predictions (cap: {remaining})")
+            print(f"   ℹ️ Corner handicaps handled separately (2-3h before kickoff)")
         else:
             print(f"   📊 No corners predictions generated")
     except Exception as e:
@@ -4242,9 +4243,9 @@ CARDS_DAILY_CAP = 5
 
 def run_late_cards_cycle():
     """
-    Cards Engine: Fetches cards odds for matches starting within 2-3 hours.
-    This is the ONLY cards engine - bookmakers publish accurate card lines
-    close to kickoff, so we wait until 2-3h before to get the best lines.
+    Late Kickoff Engine: Fetches cards odds AND corner handicap odds for 
+    matches starting within 2-3 hours. Bookmakers publish accurate card 
+    and handicap lines close to kickoff, so we wait until 2-3h before.
     Runs every 30 minutes to catch newly available odds.
     """
     from cards_engine import run_cards_cycle
@@ -4260,7 +4261,7 @@ def run_late_cards_cycle():
         print(f"⚠️ Stop-loss check failed: {e}")
     
     print("\n" + "="*60)
-    print("🟨 CARDS ENGINE (2-3h Before Kickoff)")
+    print("🟨 LATE KICKOFF ENGINE (Cards + Corner Handicaps, 2-3h Before)")
     print("="*60)
     
     today_count = 0
@@ -4290,6 +4291,8 @@ def run_late_cards_cycle():
     
     fixtures = []
     odds_data = {}
+    corners_fixtures = []
+    corners_odds_data = {}
     today = datetime.now().strftime('%Y-%m-%d')
     now_epoch = int(time.time())
     min_window_seconds = 2 * 3600
@@ -4319,23 +4322,25 @@ def run_late_cards_cycle():
             home_team, away_team, league, match_date, kickoff_utc, kickoff_epoch = row
             fixture_id = f"{home_team}_{away_team}".replace(' ', '_')
             
-            if fixture_id in odds_data:
+            if fixture_id in odds_data and fixture_id in corners_odds_data:
                 continue
             
+            skip_cards = False
             try:
-                already_has_pick = db_helper.execute('''
+                already_has_cards = db_helper.execute('''
                     SELECT COUNT(*) FROM football_opportunities
                     WHERE home_team = %s AND away_team = %s 
                       AND match_date::date = %s::date
                       AND UPPER(market) = 'CARDS'
                       AND LOWER(status) = 'pending'
                 ''', (home_team, away_team, today), fetch='one')
-                if already_has_pick and already_has_pick[0] > 0:
-                    continue
+                if already_has_cards and already_has_cards[0] > 0:
+                    skip_cards = True
             except:
                 pass
             
-            real_odds = {}
+            real_cards_odds = {}
+            real_corners_odds = {}
             try:
                 af_fixture = af_client.get_fixture_by_teams_and_date(
                     home_team, away_team, str(match_date) if match_date else today
@@ -4346,20 +4351,24 @@ def run_late_cards_cycle():
                         af_odds = af_client.get_fixture_odds(af_id)
                         af_markets = af_odds.get('markets', {})
                         for key, val in af_markets.items():
-                            if 'CARDS' in key:
-                                real_odds[key] = val
+                            if 'CARDS' in key and not skip_cards:
+                                real_cards_odds[key] = val
+                            elif 'CORNER' in key or 'corner' in key:
+                                real_corners_odds[key] = val
             except Exception as e:
                 print(f"   ⚠️ Odds fetch failed for {home_team} vs {away_team}: {e}")
                 continue
             
-            if not real_odds:
+            if not real_cards_odds and not real_corners_odds:
                 continue
             
-            cards_fixtures_found += 1
             mins_to_kickoff = (kickoff_epoch - now_epoch) // 60
-            print(f"   🟨 CARDS ODDS FOUND: {home_team} vs {away_team} ({len(real_odds)} markets, {mins_to_kickoff}min to kickoff)")
             
-            fixtures.append({
+            if real_cards_odds:
+                cards_fixtures_found += 1
+                print(f"   🟨 CARDS ODDS FOUND: {home_team} vs {away_team} ({len(real_cards_odds)} markets, {mins_to_kickoff}min to kickoff)")
+            
+            fixture_entry = {
                 'fixture_id': fixture_id,
                 'home_team': home_team,
                 'away_team': away_team,
@@ -4368,14 +4377,25 @@ def run_late_cards_cycle():
                 'home_xg': 1.4 + random.uniform(-0.3, 0.5),
                 'away_xg': 1.2 + random.uniform(-0.3, 0.4),
                 'commence_time': kickoff_utc or '',
-            })
-            odds_data[fixture_id] = real_odds
+            }
+            
+            if real_cards_odds:
+                fixtures.append(fixture_entry)
+                odds_data[fixture_id] = real_cards_odds
+            
+            if real_corners_odds:
+                corners_odds_data[fixture_id] = real_corners_odds
+                corners_fixtures.append(fixture_entry)
+                print(f"   📐 CORNER HC ODDS FOUND: {home_team} vs {away_team} ({len(real_corners_odds)} markets, {mins_to_kickoff}min to kickoff)")
         
-        if not fixtures:
-            print(f"   📊 No cards odds available yet for matches within 2-3 hours")
+        if not fixtures and not corners_fixtures:
+            print(f"   📊 No cards/corner handicap odds available for matches within 2-3 hours")
             return
         
-        print(f"   📊 Processing {cards_fixtures_found} fixtures with real cards odds")
+        if cards_fixtures_found > 0:
+            print(f"   📊 Processing {cards_fixtures_found} fixtures with real cards odds")
+        if corners_fixtures:
+            print(f"   📐 Processing {len(corners_fixtures)} fixtures with real corner handicap odds")
         
         def _get_ev(x):
             if hasattr(x, 'ev_sim'):
@@ -4386,27 +4406,51 @@ def run_late_cards_cycle():
                 return x.get('ev', x.get('edge', 0))
             return 0
         
-        try:
-            all_cards = run_cards_cycle(fixtures, odds_data)
-            if all_cards:
-                all_cards = sorted(all_cards, key=_get_ev, reverse=True)[:remaining]
-                saved = _save_bet_candidates_to_db(all_cards, 'Cards')
-                print(f"   ✅ Saved {saved} CARDS predictions from late odds scan")
-                
-                if saved > 0:
-                    try:
-                        from discord_props_webhook import send_new_props_picks
-                        result = send_new_props_picks()
-                        if result.get('sent', 0) > 0:
-                            print(f"   📤 Sent {result['sent']} cards picks to Discord")
-                    except:
-                        pass
-            else:
-                print(f"   📊 No cards predictions passed quality filters")
-        except Exception as e:
-            print(f"   ⚠️ Cards engine error: {e}")
-            import traceback
-            traceback.print_exc()
+        if cards_fixtures_found > 0 and remaining > 0:
+            try:
+                all_cards = run_cards_cycle(fixtures, odds_data)
+                if all_cards:
+                    all_cards = sorted(all_cards, key=_get_ev, reverse=True)[:remaining]
+                    saved = _save_bet_candidates_to_db(all_cards, 'Cards')
+                    print(f"   ✅ Saved {saved} CARDS predictions from late odds scan")
+                    
+                    if saved > 0:
+                        try:
+                            from discord_props_webhook import send_new_props_picks
+                            result = send_new_props_picks()
+                            if result.get('sent', 0) > 0:
+                                print(f"   📤 Sent {result['sent']} cards picks to Discord")
+                        except:
+                            pass
+                else:
+                    print(f"   📊 No cards predictions passed quality filters")
+            except Exception as e:
+                print(f"   ⚠️ Cards engine error: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        if corners_fixtures and corners_odds_data:
+            print(f"\n   📐 CORNER HANDICAP (2-3h Before Kickoff)")
+            print(f"   📊 Processing {len(corners_fixtures)} fixtures with real corner handicap odds")
+            try:
+                from corners_engine import run_corners_cycle as _run_corners, CORNERS_GLOBAL_DAILY_CAP, get_corners_today_count
+                _match_c, _team_c, hc_corners = _run_corners(corners_fixtures, corners_odds_data)
+                if hc_corners:
+                    hc_remaining = max(0, CORNERS_GLOBAL_DAILY_CAP - get_corners_today_count())
+                    if hc_remaining > 0:
+                        hc_corners = sorted(hc_corners, key=_get_ev, reverse=True)[:hc_remaining]
+                        saved_hc = _save_bet_candidates_to_db(hc_corners, 'Corners')
+                        print(f"   ✅ Saved {saved_hc} CORNER HANDICAP predictions (verified 2-3h lines)")
+                    else:
+                        print(f"   🛑 Corners daily cap reached, skipping handicaps")
+                else:
+                    print(f"   📊 No corner handicap predictions passed quality filters")
+            except Exception as e:
+                print(f"   ⚠️ Corner handicap engine error: {e}")
+                import traceback
+                traceback.print_exc()
+        else:
+            print(f"   📊 No corner handicap odds available for near-kickoff matches")
     
     except Exception as e:
         print(f"   ⚠️ Database error: {e}")
