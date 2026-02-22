@@ -67,6 +67,11 @@ st.markdown("""
         padding: 1rem;
         margin-bottom: 1rem;
         border-radius: 5px;
+        color: #1a1a2e;
+    }
+    .pick-card small {
+        color: #333;
+        font-size: 0.85rem;
     }
     .parlay-card {
         background: #fff3e0;
@@ -74,6 +79,11 @@ st.markdown("""
         padding: 1rem;
         margin-bottom: 1rem;
         border-radius: 5px;
+        color: #1a1a2e;
+    }
+    .parlay-card small {
+        color: #333;
+        font-size: 0.85rem;
     }
     .win-card {
         background: #e8f5e9;
@@ -83,6 +93,7 @@ st.markdown("""
         border-radius: 8px;
         font-size: 1.1rem;
         line-height: 1.6;
+        color: #1a1a2e;
     }
     .loss-card {
         background: #ffebee;
@@ -92,6 +103,7 @@ st.markdown("""
         border-radius: 8px;
         font-size: 1.1rem;
         line-height: 1.6;
+        color: #1a1a2e;
     }
 </style>
 """, unsafe_allow_html=True)
