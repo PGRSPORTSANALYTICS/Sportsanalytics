@@ -194,7 +194,7 @@ class ResultsEngine:
             
             now_epoch = int(datetime.now().timestamp())
             cursor.execute("""
-                SELECT id, home_team, away_team, match_date, market, selection, odds, stake, match_id, league, kickoff_epoch
+                SELECT id, home_team, away_team, match_date, market, selection, odds, stake, match_id, league, kickoff_epoch, mode
                 FROM football_opportunities 
                 WHERE (outcome IS NULL OR outcome = '' OR outcome = 'unknown' OR outcome = 'pending')
                     AND DATE(match_date) <= CURRENT_DATE
@@ -288,6 +288,10 @@ class ResultsEngine:
                 
                 for bet_data, outcome, result in settled_for_discord:
                     try:
+                        bet_mode = str(bet_data.get('mode', '')).upper()
+                        if bet_mode not in ('PROD', 'PRODUCTION'):
+                            logger.debug(f"⏭️ Skipping Discord result for {bet_mode or 'UNKNOWN'} mode bet: {bet_data.get('home_team')} vs {bet_data.get('away_team')}")
+                            continue
                         self._send_discord_result(bet_data, outcome, result)
                     except Exception as e:
                         logger.warning(f"⚠️ Discord result notification failed: {e}")

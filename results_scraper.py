@@ -97,7 +97,11 @@ class ResultsScraper:
         product_type = bet_info.get('product_type', 'EXACT_SCORE')
         league = bet_info.get('league', '')
         
-        # Send to Discord (all products)
+        bet_mode = str(bet_info.get('mode', '')).upper()
+        if bet_mode not in ('PROD', 'PRODUCTION'):
+            logger.debug(f"⏭️ Skipping Discord result for {bet_mode or 'UNKNOWN'} mode bet: {home_team} vs {away_team}")
+            return
+        
         try:
             discord_info = {
                 'outcome': outcome,

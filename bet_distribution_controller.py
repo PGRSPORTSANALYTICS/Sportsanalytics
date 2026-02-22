@@ -799,7 +799,7 @@ def get_todays_settled_bets() -> List[Dict]:
         cur.execute("""
             SELECT 
                 fo.id, fo.home_team, fo.away_team, fo.league,
-                fo.selection, fo.odds, fo.outcome,
+                fo.selection, fo.odds, fo.outcome, fo.market,
                 fo.actual_score as final_score,
                 COALESCE(bdl.units, 1.0) as units
             FROM football_opportunities fo
@@ -808,6 +808,7 @@ def get_todays_settled_bets() -> List[Dict]:
               AND fo.outcome IS NOT NULL
               AND fo.outcome != 'PENDING'
               AND fo.outcome != ''
+              AND UPPER(COALESCE(fo.mode, '')) IN ('PROD', 'PRODUCTION')
             ORDER BY fo.match_date ASC
         """)
         
