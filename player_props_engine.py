@@ -54,8 +54,9 @@ SWEDISH_BOOKMAKERS = ['betsson', 'unibet', 'leovegas', 'coolbet', 'nordicbet']
 
 MAX_EVENTS_PER_CYCLE = 10
 MAX_API_CREDITS_PER_CYCLE = 50
-MAX_PROPS_PER_CYCLE = 100
-MIN_EDGE_PCT = 2.0
+MAX_PROPS_PER_CYCLE = 30
+MIN_EDGE_PCT = 5.0
+MAX_PROPS_PER_DAY = 20
 
 
 class PlayerPropsEngine:
@@ -66,10 +67,31 @@ class PlayerPropsEngine:
         self.credits_used = 0
         self.stats = {'football_props': 0, 'basketball_props': 0, 'total_saved': 0, 'errors': 0}
 
+    def _get_daily_props_count(self) -> int:
+        try:
+            with DatabaseConnection.get_cursor() as cursor:
+                cursor.execute("""
+                    SELECT COUNT(*) FROM player_props 
+                    WHERE created_at >= CURRENT_DATE
+                """)
+                row = cursor.fetchone()
+                return row[0] if row else 0
+        except Exception as e:
+            logger.warning(f"Could not check daily props count: {e}")
+            return 0
+
     def run_cycle(self) -> Dict:
         logger.info("=" * 60)
         logger.info("🎯 PLAYER PROPS ENGINE - LEARNING MODE")
         logger.info("=" * 60)
+
+        daily_count = self._get_daily_props_count()
+        remaining_budget = MAX_PROPS_PER_DAY - daily_count
+        if remaining_budget <= 0:
+            logger.info(f"🛑 Daily props cap reached ({daily_count}/{MAX_PROPS_PER_DAY}). Skipping cycle.")
+            return {'football_props': 0, 'basketball_props': 0, 'total_saved': 0, 'errors': 0, 'daily_cap_hit': True}
+
+        logger.info(f"📊 Daily budget: {remaining_budget} props remaining ({daily_count}/{MAX_PROPS_PER_DAY} used)")
 
         self.credits_used = 0
         self.stats = {'football_props': 0, 'basketball_props': 0, 'total_saved': 0, 'errors': 0}
@@ -92,10 +114,12 @@ class PlayerPropsEngine:
             logger.error(f"Football props error: {e}")
             self.stats['errors'] += 1
 
-        if len(all_props) > MAX_PROPS_PER_CYCLE:
-            all_props.sort(key=lambda x: x.get('edge_pct', 0), reverse=True)
-            all_props = all_props[:MAX_PROPS_PER_CYCLE]
-            logger.info(f"🎯 Capped to {MAX_PROPS_PER_CYCLE} best props (from {self.stats['basketball_props'] + self.stats['football_props']})")
+        all_props.sort(key=lambda x: x.get('edge_pct', 0), reverse=True)
+
+        cap = min(MAX_PROPS_PER_CYCLE, remaining_budget)
+        if len(all_props) > cap:
+            logger.info(f"🎯 Capped to {cap} best props (from {len(all_props)} found, daily budget: {remaining_budget})")
+            all_props = all_props[:cap]
 
         if all_props:
             saved = self._save_props_to_db(all_props)

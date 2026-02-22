@@ -4451,6 +4451,19 @@ def _generate_cards_odds() -> Dict:
     return {}
 
 
+def _lookup_league_for_team(team_name: str) -> Optional[str]:
+    try:
+        row = db_helper.execute('''
+            SELECT league FROM football_opportunities 
+            WHERE (home_team = %s OR away_team = %s)
+              AND league IS NOT NULL AND league != '' AND league != 'Unknown'
+            ORDER BY timestamp DESC LIMIT 1
+        ''', (team_name, team_name), fetch='one')
+        return row[0] if row else None
+    except:
+        return None
+
+
 def _save_bet_candidates_to_db(candidates, market_label: str) -> int:
     """Save BetCandidate picks to football_opportunities with proper market label"""
     from datetime import datetime
@@ -4506,7 +4519,7 @@ def _save_bet_candidates_to_db(candidates, market_label: str) -> int:
                 candidate.match.replace(' ', '_').replace('vs', '_vs_'),
                 candidate.home_team,
                 candidate.away_team,
-                candidate.league,
+                candidate.league if candidate.league and candidate.league not in ('Unknown', '') else (_lookup_league_for_team(candidate.home_team) or _lookup_league_for_team(candidate.away_team) or 'Unknown'),
                 market_label,  # 'Corners' or 'Cards'
                 candidate.selection,
                 float(candidate.odds),
