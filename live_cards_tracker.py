@@ -1,8 +1,8 @@
 """
-Live Cards Tracker v1.0
+Live Props Tracker v2.0
 =======================
-Real-time tracking of ongoing cards picks using API-Football live data.
-Shows current card count vs target line for pending cards bets.
+Real-time tracking of ongoing Cards AND Corners picks using API-Football live data.
+Shows current count vs target line for pending bets.
 """
 
 import logging
@@ -18,49 +18,93 @@ FINISHED_STATUSES = {"FT", "AET", "PEN"}
 NOT_STARTED_STATUSES = {"NS", "TBD", "PST", "CANC", "ABD", "AWD", "WO"}
 
 
-def get_pending_cards_bets() -> List[Dict]:
-    db = DatabaseConnection()
+def get_pending_props_bets(market_filter: str = "all") -> List[Dict]:
     try:
-        rows = db.execute_query("""
-            SELECT id, home_team, away_team, league, selection, odds, 
-                   match_date, kickoff_epoch, fixture_id, 
-                   edge_percentage, trust_level, mode
-            FROM football_opportunities
-            WHERE market = 'Cards'
-              AND status = 'pending'
-              AND mode IN ('PROD', 'PRODUCTION')
-            ORDER BY kickoff_epoch ASC
-        """)
-        return rows if rows else []
+        if market_filter == "cards":
+            market_clause = "market = 'Cards'"
+        elif market_filter == "corners":
+            market_clause = "market = 'Corners'"
+        else:
+            market_clause = "market IN ('Cards', 'Corners')"
+
+        with DatabaseConnection.get_cursor(dict_cursor=True) as cur:
+            cur.execute(f"""
+                SELECT id, home_team, away_team, league, market, selection, odds, 
+                       match_date, kickoff_epoch, fixture_id, 
+                       edge_percentage, trust_level, mode
+                FROM football_opportunities
+                WHERE {market_clause}
+                  AND status = 'pending'
+                  AND mode IN ('PROD', 'PRODUCTION')
+                ORDER BY kickoff_epoch ASC
+            """)
+            rows = cur.fetchall()
+        return [dict(r) for r in rows] if rows else []
     except Exception as e:
-        logger.error(f"Failed to get pending cards bets: {e}")
+        logger.error(f"Failed to get pending props bets: {e}")
         return []
 
 
-def parse_cards_selection(selection: str) -> Dict:
-    sel = selection.strip()
-    parts = sel.split()
+def get_pending_cards_bets() -> List[Dict]:
+    return get_pending_props_bets("cards")
 
+
+def parse_selection(selection: str, market: str = "Cards", home_team: str = "", away_team: str = "") -> Dict:
+    sel = selection.strip()
     direction = "over"
     line = 0.0
     scope = "match"
+    team_name = ""
 
-    if len(parts) >= 2:
-        direction = parts[0].lower()
+    lower = sel.lower()
+    if "under" in lower:
+        direction = "under"
+
+    import re
+    nums = re.findall(r'[\d]+\.?\d*', sel)
+    if nums:
         try:
-            line = float(parts[1])
+            line = float(nums[-1])
         except ValueError:
             line = 3.5
 
-    if "home" in sel.lower():
-        scope = "home"
-    elif "away" in sel.lower():
-        scope = "away"
+    if market == "Corners":
+        if "Corner Handicap" in sel or "Handicap" in sel:
+            scope = "handicap"
+        elif "Match Corners" in sel or "Total Corners" in sel or sel.startswith("Corners "):
+            scope = "match"
+        else:
+            ht = home_team.lower().strip()
+            at = away_team.lower().strip()
+            sel_lower = lower
+            if ht and ht in sel_lower:
+                scope = "team"
+                team_name = home_team
+            elif at and at in sel_lower:
+                scope = "team"
+                team_name = away_team
+            else:
+                parts = sel.split("Corners")
+                if len(parts) > 1:
+                    team_part = parts[0].strip()
+                    skip_words = {"over", "under", "match", "total", ""}
+                    if team_part.lower() not in skip_words:
+                        scope = "team"
+                        team_name = team_part
+    else:
+        if "home" in lower:
+            scope = "home"
+        elif "away" in lower:
+            scope = "away"
 
-    return {"direction": direction, "line": line, "scope": scope}
+    return {"direction": direction, "line": line, "scope": scope, "team_name": team_name}
 
 
-def get_live_cards_data(fixture_id: int, home_team: str = "", away_team: str = "") -> Optional[Dict]:
+def parse_cards_selection(selection: str) -> Dict:
+    return parse_selection(selection, "Cards")
+
+
+def get_live_match_data(fixture_id: int, home_team: str = "", away_team: str = "") -> Optional[Dict]:
     try:
         from api_football_client import APIFootballClient
         client = APIFootballClient()
@@ -82,14 +126,23 @@ def get_live_cards_data(fixture_id: int, home_team: str = "", away_team: str = "
             for card in events_data["cards"]:
                 card_events.append(card)
                 card_team = (card.get("team") or "").lower().strip()
-                if home_norm and home_norm in card_team or card_team in home_norm:
+                if home_norm and (home_norm in card_team or card_team in home_norm):
                     home_cards += 1
-                elif away_norm and away_norm in card_team or card_team in away_norm:
+                elif away_norm and (away_norm in card_team or card_team in away_norm):
                     away_cards += 1
                 else:
                     home_cards += 1
 
-        total_cards = home_cards + away_cards
+        home_corners = 0
+        away_corners = 0
+        try:
+            stats = client.get_fixture_detailed_statistics(fixture_id)
+            if stats:
+                home_corners = stats.get("home", {}).get("corners", 0) or 0
+                away_corners = stats.get("away", {}).get("corners", 0) or 0
+        except Exception:
+            pass
+
         status_short = status_data.get("status_short", "NS")
 
         return {
@@ -99,10 +152,13 @@ def get_live_cards_data(fixture_id: int, home_team: str = "", away_team: str = "
             "elapsed": status_data.get("elapsed", 0),
             "home_goals": status_data.get("home_goals", 0),
             "away_goals": status_data.get("away_goals", 0),
-            "total_cards": total_cards,
+            "total_cards": home_cards + away_cards,
             "home_cards": home_cards,
             "away_cards": away_cards,
             "card_events": card_events,
+            "total_corners": home_corners + away_corners,
+            "home_corners": home_corners,
+            "away_corners": away_corners,
             "is_live": status_short in LIVE_STATUSES,
             "is_finished": status_short in FINISHED_STATUSES,
             "is_not_started": status_short in NOT_STARTED_STATUSES,
@@ -113,63 +169,95 @@ def get_live_cards_data(fixture_id: int, home_team: str = "", away_team: str = "
         return None
 
 
-def calculate_cards_progress(total_cards: int, elapsed: int, line: float, direction: str) -> Dict:
+def get_live_cards_data(fixture_id: int, home_team: str = "", away_team: str = "") -> Optional[Dict]:
+    return get_live_match_data(fixture_id, home_team, away_team)
+
+
+def calculate_progress(current_count: int, elapsed: int, line: float, direction: str) -> Dict:
     target = int(line) + 1 if direction == "over" else int(line)
-    cards_needed = max(0, target - total_cards) if direction == "over" else 0
+    needed = max(0, target - current_count) if direction == "over" else 0
     remaining_minutes = max(0, 90 - (elapsed or 0))
 
     if direction == "over":
-        if total_cards > line:
+        if current_count > line:
             status = "WON"
             progress_pct = 100.0
-        elif elapsed and elapsed >= 90 and total_cards <= line:
+        elif elapsed and elapsed >= 90 and current_count <= line:
             status = "LOST"
-            progress_pct = (total_cards / target * 100) if target > 0 else 0
+            progress_pct = (current_count / target * 100) if target > 0 else 0
         else:
-            progress_pct = (total_cards / target * 100) if target > 0 else 0
+            progress_pct = (current_count / target * 100) if target > 0 else 0
             if remaining_minutes > 0:
-                cards_per_min = total_cards / max(elapsed, 1) if elapsed else 0
-                projected = total_cards + (cards_per_min * remaining_minutes)
-                if projected > line:
-                    status = "ON_TRACK"
-                else:
-                    status = "NEEDS_CARDS"
+                rate = current_count / max(elapsed, 1) if elapsed else 0
+                projected = current_count + (rate * remaining_minutes)
+                status = "ON_TRACK" if projected > line else "NEEDS_MORE"
             else:
-                status = "NEEDS_CARDS"
+                status = "NEEDS_MORE"
     else:
-        if elapsed and elapsed >= 90 and total_cards < line:
+        if elapsed and elapsed >= 90 and current_count < line:
             status = "WON"
             progress_pct = 100.0
-        elif total_cards >= line:
+        elif current_count >= line:
             status = "LOST"
             progress_pct = 0
         else:
-            progress_pct = ((line - total_cards) / line * 100) if line > 0 else 100
+            progress_pct = ((line - current_count) / line * 100) if line > 0 else 100
             status = "ON_TRACK"
 
     return {
         "status": status,
         "progress_pct": min(100, progress_pct),
-        "cards_needed": cards_needed,
+        "needed": needed,
         "remaining_minutes": remaining_minutes,
         "target": target,
     }
 
 
-def get_tracker_data() -> List[Dict]:
-    bets = get_pending_cards_bets()
+def calculate_cards_progress(total_cards: int, elapsed: int, line: float, direction: str) -> Dict:
+    result = calculate_progress(total_cards, elapsed, line, direction)
+    result["cards_needed"] = result["needed"]
+    return result
+
+
+def _get_relevant_count(live: Dict, market: str, scope: str, team_name: str, home_team: str, away_team: str) -> int:
+    if market == "Corners":
+        if scope == "team":
+            tn = team_name.lower().strip()
+            hn = home_team.lower().strip()
+            if tn and (tn in hn or hn in tn):
+                return live.get("home_corners", 0)
+            else:
+                return live.get("away_corners", 0)
+        elif scope == "handicap":
+            return live.get("total_corners", 0)
+        else:
+            return live.get("total_corners", 0)
+    else:
+        if scope == "home":
+            return live.get("home_cards", 0)
+        elif scope == "away":
+            return live.get("away_cards", 0)
+        else:
+            return live.get("total_cards", 0)
+
+
+def get_tracker_data(market_filter: str = "all") -> List[Dict]:
+    bets = get_pending_props_bets(market_filter)
     if not bets:
         return []
 
     results = []
     now_epoch = int(time.time())
+    live_cache = {}
 
     for bet in bets:
+        market = bet.get("market", "Cards")
         bet_data = {
             "bet_id": bet.get("id"),
             "home_team": bet.get("home_team", ""),
             "away_team": bet.get("away_team", ""),
             "league": bet.get("league", ""),
+            "market": market,
             "selection": bet.get("selection", ""),
             "odds": bet.get("odds", 0),
             "match_date": bet.get("match_date", ""),
@@ -179,10 +267,11 @@ def get_tracker_data() -> List[Dict]:
             "trust": bet.get("trust_level", ""),
         }
 
-        parsed = parse_cards_selection(bet.get("selection", ""))
+        parsed = parse_selection(bet.get("selection", ""), market, bet.get("home_team", ""), bet.get("away_team", ""))
         bet_data["direction"] = parsed["direction"]
         bet_data["line"] = parsed["line"]
         bet_data["scope"] = parsed["scope"]
+        bet_data["team_name"] = parsed.get("team_name", "")
 
         kickoff = bet.get("kickoff_epoch", 0) or 0
         if kickoff == 0:
@@ -208,31 +297,26 @@ def get_tracker_data() -> List[Dict]:
             results.append(bet_data)
             continue
 
-        live = get_live_cards_data(fixture_id, bet.get("home_team", ""), bet.get("away_team", ""))
+        if fixture_id in live_cache:
+            live = live_cache[fixture_id]
+        else:
+            live = get_live_match_data(fixture_id, bet.get("home_team", ""), bet.get("away_team", ""))
+            live_cache[fixture_id] = live
+
         if live:
             bet_data["live_data"] = live
-            scope = parsed["scope"]
-            if scope == "home":
-                relevant_cards = live.get("home_cards", 0)
-            elif scope == "away":
-                relevant_cards = live.get("away_cards", 0)
-            else:
-                relevant_cards = live.get("total_cards", 0)
-            bet_data["relevant_cards"] = relevant_cards
+            relevant = _get_relevant_count(live, market, parsed["scope"], parsed.get("team_name", ""),
+                                           bet.get("home_team", ""), bet.get("away_team", ""))
+            bet_data["relevant_count"] = relevant
+            bet_data["relevant_cards"] = relevant
 
             if live["is_live"]:
                 bet_data["match_status"] = "LIVE"
-                progress = calculate_cards_progress(
-                    relevant_cards, live["elapsed"],
-                    parsed["line"], parsed["direction"]
-                )
+                progress = calculate_progress(relevant, live["elapsed"], parsed["line"], parsed["direction"])
                 bet_data["progress"] = progress
             elif live["is_finished"]:
                 bet_data["match_status"] = "FINISHED"
-                progress = calculate_cards_progress(
-                    relevant_cards, 90,
-                    parsed["line"], parsed["direction"]
-                )
+                progress = calculate_progress(relevant, 90, parsed["line"], parsed["direction"])
                 bet_data["progress"] = progress
             else:
                 bet_data["match_status"] = "UPCOMING"
@@ -250,3 +334,30 @@ def get_tracker_data() -> List[Dict]:
     ))
 
     return results
+
+
+def get_tracker_data_json(market_filter: str = "all") -> List[Dict]:
+    data = get_tracker_data(market_filter)
+    clean = []
+    for d in data:
+        item = {k: v for k, v in d.items() if k != "live_data"}
+        live = d.get("live_data")
+        if live:
+            item["elapsed"] = live.get("elapsed", 0)
+            item["score"] = f"{live.get('home_goals', 0)}-{live.get('away_goals', 0)}"
+            item["total_cards"] = live.get("total_cards", 0)
+            item["home_cards"] = live.get("home_cards", 0)
+            item["away_cards"] = live.get("away_cards", 0)
+            item["total_corners"] = live.get("total_corners", 0)
+            item["home_corners"] = live.get("home_corners", 0)
+            item["away_corners"] = live.get("away_corners", 0)
+            item["card_events"] = live.get("card_events", [])
+            item["is_live"] = live.get("is_live", False)
+            item["is_finished"] = live.get("is_finished", False)
+        else:
+            item["elapsed"] = 0
+            item["score"] = "0-0"
+            item["is_live"] = False
+            item["is_finished"] = False
+        clean.append(item)
+    return clean

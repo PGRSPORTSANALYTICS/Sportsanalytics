@@ -2055,6 +2055,17 @@ async def get_global_learning_stats():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/live_tracker")
+async def live_tracker_api(market: str = "all"):
+    try:
+        from live_cards_tracker import get_tracker_data_json
+        data = get_tracker_data_json(market)
+        return {"picks": data, "count": len(data)}
+    except Exception as e:
+        logger.error(f"Live tracker error: {e}")
+        return {"picks": [], "count": 0, "error": str(e)}
+
+
 STATIC_DIR = Path(__file__).parent / "static"
 
 @app.get("/", include_in_schema=False)

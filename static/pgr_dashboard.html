@@ -157,14 +157,26 @@ table.dt tr:hover td{background:var(--card2)}
 </div>
 
 <div class="nav">
-<div class="nav-item active" onclick="nav('bets')">Bets Feed</div>
+<div class="nav-item active" onclick="nav('live')">Live Picks</div>
+<div class="nav-item" onclick="nav('bets')">Bets Feed</div>
 <div class="nav-item" onclick="nav('clv')">CLV Analytics</div>
 <div class="nav-item" onclick="nav('discovery')">Discovery</div>
 <div class="nav-item" onclick="nav('timing')">Timing</div>
 <div class="nav-item" onclick="nav('report')">Weekly Report</div>
 </div>
 
-<div id="p-bets" class="page active">
+<div id="p-live" class="page active">
+<div class="section-hdr"><h2>&#9917; Live Picks Tracker</h2>
+<div class="window-btns">
+<div class="win-btn active" onclick="filterLive('all')">All</div>
+<div class="win-btn" onclick="filterLive('cards')">&#127183; Cards</div>
+<div class="win-btn" onclick="filterLive('corners')">&#9971; Corners</div>
+</div>
+</div>
+<div id="livePicksList" class="bet-list"><div class="loading">Loading live picks...</div></div>
+</div>
+
+<div id="p-bets" class="page">
 <div class="filter-bar">
 <select id="fStatus"><option value="">All Status</option><option value="candidate">Candidate</option><option value="published">Published</option><option value="placed">Placed</option><option value="settled">Settled</option></select>
 <select id="fMarket"><option value="">All Markets</option><option value="moneyline">Moneyline</option><option value="totals">Totals</option><option value="asian_handicap">Asian Handicap</option><option value="btts">BTTS</option><option value="corners">Corners</option><option value="cards">Cards</option></select>
@@ -216,18 +228,143 @@ table.dt tr:hover td{background:var(--card2)}
 
 <script>
 const API=window.location.origin+'/api/pgr';
+const LIVE_API=window.location.origin+'/api/live_tracker';
 let offset=0,total=0;
 const PS=30;
+let liveFilter='all';
+let liveInterval=null;
 
 function nav(p){
 document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
 document.querySelector(`.nav-item[onclick="nav('${p}')"]`).classList.add('active');
 document.querySelectorAll('.page').forEach(pg=>pg.classList.remove('active'));
 document.getElementById('p-'+p).classList.add('active');
+if(p==='live')loadLivePicks();
 if(p==='clv')loadCLV();
 if(p==='discovery')loadDiscovery();
 if(p==='timing')loadTiming();
 if(p==='report')loadReport();
+}
+
+function filterLive(f){
+liveFilter=f;
+document.querySelectorAll('#p-live .win-btn').forEach(b=>b.classList.remove('active'));
+event.target.classList.add('active');
+loadLivePicks();
+}
+
+async function loadLivePicks(){
+const c=document.getElementById('livePicksList');
+try{
+const r=await fetch(LIVE_API+'?market='+liveFilter);
+const d=await r.json();
+renderLivePicks(d.picks||[]);
+}catch(e){c.innerHTML=`<div class="empty">Error loading live picks: ${e.message}</div>`}
+}
+
+function renderLivePicks(picks){
+const c=document.getElementById('livePicksList');
+if(!picks.length){c.innerHTML='<div class="empty" style="padding:2rem;text-align:center"><div style="font-size:2rem;margin-bottom:.5rem">&#128247;</div><div style="color:var(--text2)">No pending picks right now</div><div style="color:var(--text3);font-size:.75rem;margin-top:.3rem">Cards &amp; Corners picks will appear here when generated</div></div>';return}
+
+const live=picks.filter(p=>p.match_status==='LIVE');
+const upcoming=picks.filter(p=>p.match_status==='UPCOMING'||p.match_status==='IN_PROGRESS_NO_DATA'||p.match_status==='IN_PROGRESS_NO_ID');
+const finished=picks.filter(p=>p.match_status==='FINISHED');
+
+let html='';
+
+if(live.length){
+html+=`<div style="margin-bottom:.5rem"><span style="color:var(--blue);font-weight:700;font-size:.85rem">&#128308; LIVE (${live.length})</span></div>`;
+html+=live.map(p=>renderLivePick(p)).join('');
+}
+if(upcoming.length){
+html+=`<div style="margin:.75rem 0 .5rem"><span style="color:var(--accent);font-weight:700;font-size:.85rem">&#9202; UPCOMING (${upcoming.length})</span></div>`;
+html+=upcoming.map(p=>renderLivePick(p)).join('');
+}
+if(finished.length){
+html+=`<div style="margin:.75rem 0 .5rem"><span style="color:var(--text3);font-weight:700;font-size:.85rem">&#9989; FINISHED (${finished.length})</span></div>`;
+html+=finished.map(p=>renderLivePick(p)).join('');
+}
+c.innerHTML=html;
+}
+
+function renderLivePick(p){
+const isLive=p.match_status==='LIVE';
+const isFinished=p.match_status==='FINISHED';
+const isCards=p.market==='Cards';
+const icon=isCards?'&#127183;':'&#9971;';
+const mktColor=isCards?'var(--yellow)':'var(--cyan)';
+const prog=p.progress||{};
+const progStatus=prog.status||'';
+const progPct=prog.progress_pct||0;
+
+let statusBadge='';
+let rowCls='s-upcoming';
+if(isLive){
+rowCls='s-live';
+if(progStatus==='WON')statusBadge='<span class="badge badge-won">HIT &#10003;</span>';
+else if(progStatus==='LOST')statusBadge='<span class="badge badge-lost">LOST &#10007;</span>';
+else if(progStatus==='ON_TRACK')statusBadge='<span class="badge badge-live">ON TRACK</span>';
+else if(progStatus==='NEEDS_MORE'||progStatus==='NEEDS_CARDS')statusBadge='<span class="badge" style="background:var(--yellow-bg);color:var(--yellow)">NEEDS MORE</span>';
+else statusBadge='<span class="badge badge-live">LIVE</span>';
+}else if(isFinished){
+if(progStatus==='WON'){rowCls='s-won';statusBadge='<span class="badge badge-won">WON &#10003;</span>';}
+else if(progStatus==='LOST'){rowCls='s-lost';statusBadge='<span class="badge badge-lost">LOST &#10007;</span>';}
+else statusBadge='<span class="badge badge-settled">SETTLED</span>';
+}else{
+statusBadge='<span class="badge badge-upcoming">UPCOMING</span>';
+}
+
+const count=p.relevant_count||0;
+const line=p.line||0;
+const countLabel=isCards?'cards':'corners';
+
+let liveInfo='';
+if(isLive||isFinished){
+const elapsed=p.elapsed||0;
+const score=p.score||'0-0';
+const totalC=isCards?(p.total_cards||0):(p.total_corners||0);
+const homeC=isCards?(p.home_cards||0):(p.home_corners||0);
+const awayC=isCards?(p.away_cards||0):(p.away_corners||0);
+
+const barColor=progStatus==='WON'?'var(--green)':progStatus==='LOST'?'var(--red)':progStatus==='ON_TRACK'?'var(--green)':'var(--yellow)';
+
+liveInfo=`
+<div style="margin-top:.5rem;padding:.5rem;background:var(--bg);border-radius:6px;border:1px solid var(--border)">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem">
+<span style="font-size:.75rem;color:var(--text2)">${elapsed}' | Score: ${score}</span>
+<span style="font-size:.75rem;font-weight:700;color:${barColor}">${count} / ${Math.ceil(line)} ${countLabel}</span>
+</div>
+<div style="height:6px;background:var(--card2);border-radius:3px;overflow:hidden">
+<div style="height:100%;width:${Math.min(100,progPct)}%;background:${barColor};border-radius:3px;transition:width .5s"></div>
+</div>
+<div style="display:flex;justify-content:space-between;margin-top:.3rem;font-size:.68rem;color:var(--text3)">
+<span>Home: ${homeC} | Away: ${awayC}</span>
+${prog.needed>0&&isLive?`<span>Needs ${prog.needed} more</span>`:''}
+${prog.remaining_minutes>0&&isLive?`<span>${prog.remaining_minutes}' left</span>`:''}
+</div>
+</div>`;
+}
+
+let kickoffStr='';
+if(p.match_date){
+try{const d=new Date(p.match_date);kickoffStr=d.toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});}catch(e){kickoffStr=p.match_date;}
+}else if(p.kickoff_epoch){
+try{const d=new Date(p.kickoff_epoch*1000);kickoffStr=d.toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});}catch(e){}
+}
+
+return`
+<div class="bet-row ${rowCls}" style="grid-template-columns:44px 1fr 120px 100px 100px;cursor:default">
+<div class="bet-icon" style="font-size:1.1rem">${icon}</div>
+<div class="bet-main">
+<h4>${p.home_team} vs ${p.away_team}</h4>
+<div class="mkt" style="color:${mktColor}">${p.market}: ${p.selection}</div>
+<div class="meta">${p.league||''} | ${kickoffStr} | ${p.trust||''}</div>
+${liveInfo}
+</div>
+<div class="bet-odds"><div class="big">${(p.odds||0).toFixed(2)}</div><div class="fair">EV: ${(p.ev||0).toFixed(1)}%</div></div>
+<div class="bet-status">${statusBadge}</div>
+<div class="bet-conf"><span class="badge" style="background:${isCards?'var(--yellow-bg)':'rgba(6,182,212,.12)'};color:${mktColor}">${p.market}</span></div>
+</div>`;
 }
 
 function cv(v,dec=1){
@@ -474,8 +611,8 @@ rc.innerHTML=`
 }
 
 loadStats();
-loadBets();
-setInterval(()=>{loadStats()},120000);
+loadLivePicks();
+setInterval(()=>{loadStats();if(document.getElementById('p-live').classList.contains('active'))loadLivePicks()},120000);
 </script>
 </body>
 </html>
