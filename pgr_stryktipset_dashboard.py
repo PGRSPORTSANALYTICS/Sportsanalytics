@@ -649,7 +649,7 @@ def render_scoring(conn, coupon_id, status):
                     font_color="white", height=300,
                     margin=dict(l=20, r=20, t=20, b=20)
                 )
-                st.plotly_chart(fig, use_container_width=True, key="stryktipset_scoring_chart")
+                st.plotly_chart(fig, use_container_width=True, key=f"stryktipset_scoring_chart_{s['system_id']}")
 
     st.markdown("---")
     st.markdown("### All-Time Summary")
