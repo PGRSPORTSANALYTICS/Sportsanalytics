@@ -3475,10 +3475,123 @@ def compute_props_roi(df: pd.DataFrame) -> dict:
     return {"bets": len(df), "wins": wins, "losses": losses, "pending": pending, "needs_verification": needs_verification, "units_won": units_won, "roi": roi, "hit_rate": hit_rate}
 
 
+def render_live_cards_tracker():
+    try:
+        from live_cards_tracker import get_tracker_data
+        tracker_data = get_tracker_data()
+    except Exception as e:
+        return
+
+    if not tracker_data:
+        return
+
+    live_bets = [b for b in tracker_data if b.get("match_status") == "LIVE"]
+    upcoming_bets = [b for b in tracker_data if b.get("match_status") == "UPCOMING"]
+    finished_bets = [b for b in tracker_data if b.get("match_status") == "FINISHED"]
+
+    if not live_bets and not upcoming_bets:
+        return
+
+    st.markdown("### 🟨 Live Cards Tracker")
+
+    if live_bets:
+        for bet in live_bets:
+            live = bet.get("live_data", {}) or {}
+            progress = bet.get("progress", {})
+            elapsed = live.get("elapsed", 0) or 0
+            scope = bet.get("scope", "match")
+            relevant_cards = bet.get("relevant_cards", live.get("total_cards", 0))
+            line = bet.get("line", 0)
+            direction = bet.get("direction", "over")
+            scope_label = {"home": f"{bet['home_team']} Cards", "away": f"{bet['away_team']} Cards"}.get(scope, "Match Cards")
+            status = progress.get("status", "")
+            progress_pct = progress.get("progress_pct", 0)
+            cards_needed = progress.get("cards_needed", 0)
+            remaining = progress.get("remaining_minutes", 0)
+
+            if status == "WON":
+                status_color = "#10B981"
+                status_icon = "✅"
+                status_text = "HIT!"
+            elif status == "LOST":
+                status_color = "#EF4444"
+                status_icon = "❌"
+                status_text = "LOST"
+            elif status == "ON_TRACK":
+                status_color = "#10B981"
+                status_icon = "📈"
+                status_text = "On Track"
+            else:
+                status_color = "#F59E0B"
+                status_icon = "⏳"
+                status_text = f"Needs {cards_needed} more"
+
+            bar_color = status_color
+            score_text = f"{live.get('home_goals', 0)}-{live.get('away_goals', 0)}"
+
+            card_events_html = ""
+            if live.get("card_events"):
+                for ce in live["card_events"][:8]:
+                    card_icon = "🟨" if "Yellow" in ce.get("card_type", "") else "🟥"
+                    card_events_html += f'<span style="margin-right:4px;" title="{ce.get("player","")} ({ce.get("team","")}) {ce.get("time",0)}\'">{card_icon}{ce.get("time",0)}\'</span>'
+
+            st.markdown(f"""
+            <div style="padding:16px;border-radius:12px;background:linear-gradient(135deg, {status_color}15, rgba(15,23,42,0.95));border:1px solid {status_color}44;margin-bottom:12px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div>
+                        <div style="font-size:16px;font-weight:700;color:#F1F5F9;">{bet['home_team']} vs {bet['away_team']}</div>
+                        <div style="font-size:13px;color:#94A3B8;">{bet.get('league','')} | {score_text} | {elapsed}'</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-size:20px;font-weight:700;color:{status_color};">{status_icon} {status_text}</div>
+                        <div style="font-size:13px;color:#94A3B8;">{scope_label}: {direction.title()} {line}</div>
+                    </div>
+                </div>
+                <div style="margin-top:10px;background:rgba(30,41,59,0.8);border-radius:8px;height:28px;overflow:hidden;position:relative;">
+                    <div style="width:{progress_pct:.0f}%;height:100%;background:linear-gradient(90deg, {bar_color}88, {bar_color});border-radius:8px;transition:width 0.5s;"></div>
+                    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:13px;font-weight:600;color:#F1F5F9;">
+                        {relevant_cards} / {int(line)+1 if direction=='over' else int(line)} cards ({progress_pct:.0f}%)
+                    </div>
+                </div>
+                <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center;">
+                    <div style="font-size:12px;color:#64748B;">{card_events_html if card_events_html else 'No cards yet'}</div>
+                    <div style="font-size:12px;color:#94A3B8;">@ {bet.get('odds', 0):.2f}x | EV: {bet.get('ev', 0):+.1f}%</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    if upcoming_bets:
+        with st.expander(f"Upcoming Cards Picks ({len(upcoming_bets)})", expanded=False):
+            for bet in upcoming_bets:
+                kickoff = bet.get("kickoff_epoch", 0)
+                if kickoff:
+                    ko_time = datetime.fromtimestamp(kickoff).strftime("%d %b %H:%M")
+                else:
+                    ko_time = bet.get("match_date", "TBD")
+
+                st.markdown(f"""
+                <div style="padding:10px 14px;border-radius:8px;background:rgba(30,41,59,0.6);border:1px solid #334155;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;">
+                    <div>
+                        <span style="font-weight:600;color:#E2E8F0;">{bet['home_team']} vs {bet['away_team']}</span>
+                        <span style="color:#64748B;font-size:12px;margin-left:8px;">{bet.get('league','')}</span>
+                    </div>
+                    <div style="text-align:right;">
+                        <span style="color:#F59E0B;font-weight:600;">{bet.get('selection','')}</span>
+                        <span style="color:#94A3B8;margin-left:8px;">@ {bet.get('odds',0):.2f}x</span>
+                        <span style="color:#64748B;font-size:12px;margin-left:8px;">{ko_time}</span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+    st.markdown("---")
+
+
 def render_props_tab():
     """Render the Props & Specials tab with Corners, Cards, and Shots predictions."""
     st.markdown("## Props & Specials")
     st.caption("Advanced markets: Corners, Cards, and Team Shots predictions using Monte Carlo simulation.")
+    
+    render_live_cards_tracker()
     
     props_df = load_props_bets()
     

@@ -183,11 +183,14 @@ class CardsCandidate:
         return self.trust_tier
 
 
+MIN_MATCH_CARDS_LINE = 3.5
+MIN_TEAM_CARDS_LINE = 1.5
+
 CARDS_LINES = {
-    "match": [2.5, 3.5, 4.5, 5.5, 6.5],
+    "match": [3.5, 4.5, 5.5, 6.5],
     "booking_points": [30.5, 40.5, 50.5, 60.5],
-    "home": [2.5, 3.5],
-    "away": [2.5, 3.5],
+    "home": [1.5, 2.5, 3.5],
+    "away": [1.5, 2.5, 3.5],
 }
 
 DEFAULT_DISCIPLINE_STATS = {
@@ -599,7 +602,14 @@ class CardsEngine:
             max_odds = getattr(config, 'max_odds', 2.80)
             min_conf = getattr(config, 'min_confidence', 0.52)
             
+            is_match_total = sim_key == "total_cards"
+            min_line = MIN_MATCH_CARDS_LINE if is_match_total else MIN_TEAM_CARDS_LINE
+            
             for line in lines:
+                if line < min_line:
+                    logger.debug(f"⛔ Skipping cards line {line} (min={min_line}) for {sim_key}")
+                    continue
+                    
                 line_str = str(int(line))
                 
                 for direction, template in [("over", over_template), ("under", under_template)]:

@@ -1191,3 +1191,57 @@ class APIFootballClient:
         
         logger.info(f"📊 Retrieved odds for {len(all_odds)}/{len(fixture_ids)} fixtures")
         return all_odds
+
+    def get_live_fixture_events(self, fixture_id: int) -> Optional[Dict]:
+        cache_key = f"live_events_{fixture_id}_{int(time.time() // 120)}"
+        events = self._fetch_with_cache(
+            "fixtures/events",
+            {"fixture": fixture_id},
+            cache_key,
+            ttl_hours=0.03
+        )
+        if not events:
+            return None
+
+        cards = []
+        for ev in events:
+            if ev.get("type") == "Card":
+                cards.append({
+                    "time": ev.get("time", {}).get("elapsed", 0),
+                    "extra": ev.get("time", {}).get("extra"),
+                    "team": ev.get("team", {}).get("name", ""),
+                    "player": ev.get("player", {}).get("name", ""),
+                    "card_type": ev.get("detail", "Yellow Card"),
+                })
+        
+        return {
+            "fixture_id": fixture_id,
+            "cards": cards,
+            "total_cards": len(cards),
+            "yellow_cards": sum(1 for c in cards if "Yellow" in c.get("card_type", "")),
+            "red_cards": sum(1 for c in cards if "Red" in c.get("card_type", "")),
+        }
+
+    def get_live_fixture_status(self, fixture_id: int) -> Optional[Dict]:
+        cache_key = f"live_status_{fixture_id}_{int(time.time() // 120)}"
+        data = self._fetch_with_cache(
+            "fixtures",
+            {"id": fixture_id},
+            cache_key,
+            ttl_hours=0.03
+        )
+        if not data or len(data) == 0:
+            return None
+        
+        fixture = data[0]
+        status = fixture.get("fixture", {}).get("status", {})
+        score = fixture.get("score", {})
+        
+        return {
+            "fixture_id": fixture_id,
+            "status_short": status.get("short", "NS"),
+            "status_long": status.get("long", "Not Started"),
+            "elapsed": status.get("elapsed", 0),
+            "home_goals": score.get("fulltime", {}).get("home") or score.get("halftime", {}).get("home") or 0,
+            "away_goals": score.get("fulltime", {}).get("away") or score.get("halftime", {}).get("away") or 0,
+        }
