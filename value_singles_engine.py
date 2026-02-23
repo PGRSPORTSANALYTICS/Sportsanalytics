@@ -54,8 +54,8 @@ MIN_COMBINED_CONFIDENCE = 0.01
 # Lower bookmaker margins (4-8%) vs SGP (28-45%) = better ROI
 # ============================================================
 
-# Minimum Expected Value (EV) - 6% edge (Stable 2.0 - Feb 19, 2026)
-MIN_VALUE_SINGLE_EV = 0.06  # 6% edge - Stable 2.0 balanced threshold
+# Minimum Expected Value (EV) - 8% edge (Feb 23, 2026 - tightened for quality)
+MIN_VALUE_SINGLE_EV = 0.08  # 8% edge - stricter to reduce volume, only best picks
 
 # ============================================================
 # MARKET-SPECIFIC MIN_EV THRESHOLDS (Jan 11, 2026 v2)
@@ -67,8 +67,8 @@ MIN_VALUE_SINGLE_EV = 0.06  # 6% edge - Stable 2.0 balanced threshold
 # - Away Win: 29.4% hit, -5.45u, max DD -10.45u → LEARNING ONLY
 # ============================================================
 MARKET_SPECIFIC_MIN_EV = {
-    "FT_OVER_2_5": 0.10,   # 10% EV minimum (Stable 2.0 - lowered from 12%)
-    "FT_OVER_3_5": 0.10,   # 10% EV minimum (Stable 2.0 - lowered from 12%)
+    "FT_OVER_2_5": 0.12,   # 12% EV minimum (Feb 23, 2026 - raised for quality)
+    "FT_OVER_3_5": 0.12,   # 12% EV minimum (Feb 23, 2026 - raised for quality)
     # HOME_WIN: Now LEARNING_ONLY (Feb 6, 2026) - see filter below
     # FT_UNDER_2_5: Now LEARNING_ONLY (Feb 16, 2026) - 43.4% hit, -9.14u
     # FT_UNDER_3_5: Now LEARNING_ONLY (Feb 16, 2026) - 33.3% hit, -2.88u
@@ -131,10 +131,10 @@ MAX_VALUE_SINGLE_ODDS = 2.40  # Stable 2.0 - expanded from 2.20 (no longshots be
 MAX_LEARNING_ODDS = 4.00      # Collect predictions up to 4.00 for AI training
 
 # Minimum model confidence/probability required
-MIN_VALUE_SINGLE_CONFIDENCE = 0.52  # 52% - balanced threshold
+MIN_VALUE_SINGLE_CONFIDENCE = 0.55  # 55% - tightened for quality (Feb 23, 2026)
 
 # Maximum number of value singles per day - CORE PRODUCT
-MAX_VALUE_SINGLES_PER_DAY = 20  # Increased for better daily coverage
+MAX_VALUE_SINGLES_PER_DAY = 6  # Feb 23, 2026 - strict cap, only best picks (20-30% of total)
 
 # Tournament filter mode: relaxed thresholds for UCL/UEL
 TOURNAMENT_LEAGUES = {
