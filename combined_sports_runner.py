@@ -509,6 +509,17 @@ def run_daily_free_pick():
         logger.error(f"❌ Free pick error: {e}")
 
 
+def run_smart_picks():
+    """Generate and post Smart Picks — Daily Top 10 at 10:00"""
+    try:
+        from smart_picks_engine import run_smart_picks as smart_picks_cycle
+        logger.info("🧠 Running Smart Picks Engine...")
+        picks = smart_picks_cycle()
+        logger.info(f"🧠 Smart Picks complete: {len(picks) if picks else 0} picks")
+    except Exception as e:
+        logger.error(f"❌ Smart Picks error: {e}")
+
+
 def run_weekly_recap():
     """Send weekly recap on Sunday at 22:30"""
     try:
@@ -694,6 +705,7 @@ def main():
     schedule.every().day.at("08:00").do(run_daily_games_reminder)
     schedule.every().day.at("09:00").do(run_daily_analysis)
     schedule.every().day.at("10:00").do(run_free_picks)  # 5 value singles
+    schedule.every().day.at("10:00").do(run_smart_picks)  # Smart Picks — Daily Top 10
     schedule.every().day.at("11:00").do(run_daily_free_pick)  # 1 free pick to Discord
     
     logger.info("✅ All schedules configured. Starting main loop...")
