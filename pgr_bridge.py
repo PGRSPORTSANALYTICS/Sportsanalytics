@@ -109,6 +109,8 @@ def _parse_analysis(analysis_str: str) -> Dict:
 
 def sync_new_bets(hours_back: int = 6) -> Dict:
     cutoff = datetime.now(timezone.utc) - timedelta(hours=hours_back)
+    cutoff_epoch = int(cutoff.timestamp())
+    cutoff_str = cutoff.isoformat()
 
     rows = db_helper.execute("""
         SELECT id, home_team, away_team, league, market, selection, odds,
@@ -121,7 +123,7 @@ def sync_new_bets(hours_back: int = 6) -> Dict:
         WHERE created_at_utc >= %s
         OR (created_at_utc IS NULL AND timestamp >= %s)
         ORDER BY id DESC
-    """, (cutoff, cutoff), fetch='all') or []
+    """, (cutoff_str, cutoff_epoch), fetch='all') or []
 
     synced = 0
     skipped = 0
@@ -257,6 +259,8 @@ def sync_new_bets(hours_back: int = 6) -> Dict:
 
 def sync_settled_results(hours_back: int = 24) -> Dict:
     cutoff = datetime.now(timezone.utc) - timedelta(hours=hours_back)
+    cutoff_epoch = int(cutoff.timestamp())
+    cutoff_str = cutoff.isoformat()
 
     rows = db_helper.execute("""
         SELECT id, home_team, away_team, league, market, selection,
@@ -266,7 +270,7 @@ def sync_settled_results(hours_back: int = 24) -> Dict:
         WHERE status IN ('won', 'lost')
         AND (settled_timestamp >= %s
              OR updated_at >= %s)
-    """, (cutoff, cutoff), fetch='all') or []
+    """, (cutoff_epoch, cutoff_str), fetch='all') or []
 
     settled = 0
     for r in rows:
