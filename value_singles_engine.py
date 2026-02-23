@@ -82,39 +82,9 @@ MARKET_SPECIFIC_MIN_EV = {
 # Re-evaluate: Jan 25, 2026 or after +100 bets per market
 # ============================================================
 LEARNING_ONLY_MARKETS = {
-    "AWAY_WIN",      # 31.6% hit rate, -10.1u — bookmakers price 1X2 too sharply
-    "HOME_WIN",      # 36.6% hit rate, -12.5u — model overestimates by ~25pp (Feb 6, 2026)
-    "DRAW",          # 12.5% hit rate, -5.0u — most unpredictable 1X2 outcome (Feb 6, 2026)
-    "FT_UNDER_2_5",  # 43.4% hit rate, -9.14u — model misses something in these matches (Feb 16, 2026)
-    "FT_UNDER_3_5",  # 33.3% hit rate, -2.88u — same pattern as Under 2.5 (Feb 16, 2026)
-    "AH_HOME_-0.5",  # Asian Handicap learning mode (Feb 16, 2026)
-    "AH_HOME_-1.0",
-    "AH_HOME_-1.5",
-    "AH_HOME_+0.5",
-    "AH_HOME_+1.0",
-    "AH_HOME_+1.5",
-    "AH_AWAY_-0.5",
-    "AH_AWAY_-1.0",
-    "AH_AWAY_-1.5",
-    "AH_AWAY_+0.5",
-    "AH_AWAY_+1.0",
-    "AH_AWAY_+1.5",
-    "BTTS_YES",      # BTTS — learning mode (Feb 23, 2026), collecting data
-    "BTTS_NO",       # BTTS No — learning mode (Feb 23, 2026)
-    "DC_HOME_DRAW",  # Double Chance — learning mode (Feb 23, 2026)
-    "DC_HOME_AWAY",  # Double Chance — learning mode (Feb 23, 2026)
-    "DC_DRAW_AWAY",  # Double Chance — learning mode (Feb 23, 2026)
-    "DNB_HOME",      # Draw No Bet — learning mode (Feb 23, 2026)
-    "DNB_AWAY",      # Draw No Bet — learning mode (Feb 23, 2026)
-    "HOME_OVER_0_5", # Team Totals — learning mode (Feb 23, 2026)
-    "HOME_OVER_1_5", # Team Totals — learning mode (Feb 23, 2026)
-    "AWAY_OVER_0_5", # Team Totals — learning mode (Feb 23, 2026)
-    "AWAY_OVER_1_5", # Team Totals — learning mode (Feb 23, 2026)
-    "FT_OVER_4_5",   # Over 4.5 Goals — learning mode (Feb 23, 2026)
-    "FT_UNDER_4_5",  # Under 4.5 Goals — learning mode (Feb 23, 2026)
-    "FT_OVER_0_5",   # Over 0.5 Goals — learning mode (Feb 23, 2026)
-    "FT_UNDER_0_5",  # Under 0.5 Goals — learning mode (Feb 23, 2026)
-    "1H_OVER_0_5",   # 1H Over 0.5 — learning mode (Feb 23, 2026)
+    "HOME_WIN",      # 36.6% hit rate, -12.5u — 1X2 markets LEARNING ONLY
+    "AWAY_WIN",      # 31.6% hit rate, -10.1u — 1X2 markets LEARNING ONLY
+    "DRAW",          # 12.5% hit rate, -5.0u — 1X2 markets LEARNING ONLY
 }
 
 # ============================================================
