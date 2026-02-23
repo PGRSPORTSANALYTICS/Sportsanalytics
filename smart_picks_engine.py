@@ -135,6 +135,10 @@ def _compute_smart_score(row: Dict) -> float:
         + stability * SMART_SCORE_WEIGHTS["line_stability"]
         + form * SMART_SCORE_WEIGHTS["form_trend"]
     )
+
+    if row.get("bet_placed") and row.get("mode") == "PROD":
+        score += 15
+
     return round(score, 2)
 
 
@@ -160,7 +164,7 @@ def _fetch_candidates() -> List[Dict]:
     rows = db_helper.execute("""
         SELECT id, home_team, away_team, league, market, selection, odds,
                model_prob, trust_level, open_odds, confidence,
-               analysis, mode
+               analysis, mode, bet_placed
         FROM football_opportunities
         WHERE match_date = %s
         AND odds >= 1.75 AND odds <= 2.10
@@ -174,7 +178,7 @@ def _fetch_candidates() -> List[Dict]:
     columns = [
         "id", "home_team", "away_team", "league", "market", "selection", "odds",
         "model_prob", "trust_level", "open_odds", "confidence",
-        "analysis", "mode"
+        "analysis", "mode", "bet_placed"
     ]
     return [dict(zip(columns, r)) for r in rows]
 
