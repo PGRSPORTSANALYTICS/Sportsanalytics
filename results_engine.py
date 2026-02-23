@@ -833,6 +833,39 @@ class ResultsEngine:
                     return 'won' if adjusted > home_goals else ('lost' if adjusted < home_goals else 'void')
             return 'unknown'
 
+        elif 'home or draw' in selection:
+            return 'won' if home_goals >= away_goals else 'lost'
+        elif 'home or away' in selection:
+            return 'won' if home_goals != away_goals else 'lost'
+        elif 'draw or away' in selection:
+            return 'won' if away_goals >= home_goals else 'lost'
+
+        elif 'draw no bet' in selection:
+            if home_goals == away_goals:
+                return 'void'
+            if 'home' in selection:
+                return 'won' if home_goals > away_goals else 'lost'
+            else:
+                return 'won' if away_goals > home_goals else 'lost'
+
+        elif ('over' in selection or 'under' in selection) and 'goal' in selection:
+            home_team_name = (bet.get('home_team') or '').lower()
+            away_team_name = (bet.get('away_team') or '').lower()
+            line_match = re.search(r'(over|under)\s*(\d+\.?\d*)', selection)
+            if line_match:
+                direction = line_match.group(1)
+                line = float(line_match.group(2))
+                if home_team_name and home_team_name[:5] in selection:
+                    actual = home_goals
+                elif away_team_name and away_team_name[:5] in selection:
+                    actual = away_goals
+                else:
+                    actual = total_goals
+                if direction == 'over':
+                    return 'won' if actual > line else 'lost'
+                else:
+                    return 'won' if actual < line else 'lost'
+
         elif 'home win' in selection or selection == 'home':
             return 'won' if home_goals > away_goals else 'lost'
         elif 'away win' in selection or selection == 'away':

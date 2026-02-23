@@ -778,19 +778,6 @@ class RealFootballChampion:
         Extract and normalize odds from The Odds API match structure.
         Returns odds dict compatible with Value Singles Engine.
         """
-        # Standardized key mapping for Value Singles Engine compatibility
-        KEY_MAP = {
-            "over_2_5": "FT_OVER_2_5",
-            "under_2_5": "FT_UNDER_2_5",
-            "over_3_5": "FT_OVER_3_5",
-            "under_3_5": "FT_UNDER_3_5",
-            "btts_yes": "BTTS_YES",
-            "home_win": "HOME_WIN",
-            "draw": "DRAW",
-            "away_win": "AWAY_WIN",
-            "1h_over_0_5": "1H_OVER_0_5",
-        }
-        
         odds_map = {}
         
         try:
@@ -798,7 +785,9 @@ class RealFootballChampion:
             if not bookmakers:
                 return odds_map
             
-            # Use first bookmaker (usually bet365 or similar major bookmaker)
+            home_team_name = match.get('home_team', '')
+            away_team_name = match.get('away_team', '')
+            
             bookmaker = bookmakers[0]
             markets = bookmaker.get('markets', [])
             
@@ -806,74 +795,116 @@ class RealFootballChampion:
                 market_key = market.get('key', '')
                 outcomes = market.get('outcomes', [])
                 
-                # H2H (1X2) market
                 if market_key == 'h2h' and len(outcomes) == 3:
                     for outcome in outcomes:
                         name = outcome.get('name', '')
                         price = outcome.get('price', 0)
-                        
-                        if name == match.get('home_team'):
-                            k = KEY_MAP.get('home_win', 'HOME_WIN')
-                            odds_map[k] = float(price)
-                        elif name == match.get('away_team'):
-                            k = KEY_MAP.get('away_win', 'AWAY_WIN')
-                            odds_map[k] = float(price)
+                        if name == home_team_name:
+                            odds_map['HOME_WIN'] = float(price)
+                        elif name == away_team_name:
+                            odds_map['AWAY_WIN'] = float(price)
                         elif name == 'Draw':
-                            k = KEY_MAP.get('draw', 'DRAW')
-                            odds_map[k] = float(price)
+                            odds_map['DRAW'] = float(price)
                 
-                # Spreads (Asian Handicap) market
                 elif market_key == 'spreads' and outcomes:
-                    home_team_name = match.get('home_team', '')
-                    away_team_name = match.get('away_team', '')
                     for outcome in outcomes:
                         name = outcome.get('name', '')
                         price = outcome.get('price', 0)
                         point = outcome.get('point', 0)
                         if abs(point) <= 2.0 and price > 0:
                             pt = float(point)
-                            if pt == int(pt):
-                                pt_str = f"{int(pt)}.0"
-                            else:
-                                pt_str = str(pt)
+                            pt_str = f"{int(pt)}.0" if pt == int(pt) else str(pt)
                             sign = f"+{pt_str}" if pt > 0 else f"{pt_str}"
                             if name == home_team_name:
                                 odds_map[f"AH_HOME_{sign}"] = float(price)
                             elif name == away_team_name:
                                 odds_map[f"AH_AWAY_{sign}"] = float(price)
 
-                # Totals (Over/Under) market
                 elif market_key == 'totals' and outcomes:
                     for outcome in outcomes:
                         name = outcome.get('name', '')
                         price = outcome.get('price', 0)
                         point = outcome.get('point', 0)
-                        
+                        if price <= 0:
+                            continue
+                        line_key = f"{str(point).replace('.', '_')}"
                         if name == 'Over':
-                            if point == 1.5:
-                                odds_map['FT_OVER_1_5'] = float(price)
-                            elif point == 2.5:
-                                k = KEY_MAP.get('over_2_5', 'FT_OVER_2_5')
-                                odds_map[k] = float(price)
-                            elif point == 3.5:
-                                k = KEY_MAP.get('over_3_5', 'FT_OVER_3_5')
-                                odds_map[k] = float(price)
-                            elif point == 0.5:
-                                k = KEY_MAP.get('1h_over_0_5', '1H_OVER_0_5')
-                                odds_map[k] = float(price)
+                            odds_map[f'FT_OVER_{line_key}'] = float(price)
                         elif name == 'Under':
-                            if point == 2.5:
-                                k = KEY_MAP.get('under_2_5', 'FT_UNDER_2_5')
-                                odds_map[k] = float(price)
-                            elif point == 3.5:
-                                k = KEY_MAP.get('under_3_5', 'FT_UNDER_3_5')
-                                odds_map[k] = float(price)
+                            odds_map[f'FT_UNDER_{line_key}'] = float(price)
+
+                elif market_key == 'btts' and outcomes:
+                    for outcome in outcomes:
+                        name = outcome.get('name', '')
+                        price = outcome.get('price', 0)
+                        if price <= 0:
+                            continue
+                        if name == 'Yes':
+                            odds_map['BTTS_YES'] = float(price)
+                        elif name == 'No':
+                            odds_map['BTTS_NO'] = float(price)
+
+                elif market_key == 'double_chance' and outcomes:
+                    for outcome in outcomes:
+                        name = outcome.get('name', '')
+                        price = outcome.get('price', 0)
+                        if price <= 0:
+                            continue
+                        if name == f'{home_team_name} or Draw':
+                            odds_map['DC_HOME_DRAW'] = float(price)
+                        elif name == f'{home_team_name} or {away_team_name}':
+                            odds_map['DC_HOME_AWAY'] = float(price)
+                        elif name == f'Draw or {away_team_name}':
+                            odds_map['DC_DRAW_AWAY'] = float(price)
+                        elif 'Home' in name and 'Draw' in name:
+                            odds_map['DC_HOME_DRAW'] = float(price)
+                        elif 'Home' in name and 'Away' in name:
+                            odds_map['DC_HOME_AWAY'] = float(price)
+                        elif 'Draw' in name and 'Away' in name:
+                            odds_map['DC_DRAW_AWAY'] = float(price)
+
+                elif market_key == 'draw_no_bet' and outcomes:
+                    for outcome in outcomes:
+                        name = outcome.get('name', '')
+                        price = outcome.get('price', 0)
+                        if price <= 0:
+                            continue
+                        if name == home_team_name:
+                            odds_map['DNB_HOME'] = float(price)
+                        elif name == away_team_name:
+                            odds_map['DNB_AWAY'] = float(price)
+
+                elif market_key == 'team_totals' and outcomes:
+                    for outcome in outcomes:
+                        name = outcome.get('name', '')
+                        price = outcome.get('price', 0)
+                        point = outcome.get('point', 0)
+                        desc = outcome.get('description', '')
+                        if price <= 0:
+                            continue
+                        line_key = f"{str(point).replace('.', '_')}"
+                        if desc == 'home' or name == home_team_name:
+                            side = 'HOME'
+                        elif desc == 'away' or name == away_team_name:
+                            side = 'AWAY'
+                        else:
+                            if 'Over' in name:
+                                parts = name.split(' Over ')
+                                side = 'HOME' if parts[0].strip() == home_team_name else 'AWAY'
+                            elif 'Under' in name:
+                                parts = name.split(' Under ')
+                                side = 'HOME' if parts[0].strip() == home_team_name else 'AWAY'
+                            else:
+                                continue
+                        if 'Over' in name:
+                            odds_map[f'{side}_OVER_{line_key}'] = float(price)
+                        elif 'Under' in name:
+                            odds_map[f'{side}_UNDER_{line_key}'] = float(price)
         
         except Exception as e:
             pass
         
-        has_ah = any(k.startswith('AH_') for k in odds_map)
-        if not has_ah and self.api_football_client:
+        if self.api_football_client:
             try:
                 home_team = match.get('home_team', '')
                 away_team = match.get('away_team', '')
@@ -888,13 +919,31 @@ class RealFootballChampion:
                         if fid:
                             af_odds = self.api_football_client.get_fixture_odds(fid)
                             af_markets = af_odds.get('markets', {})
-                            ah_keys_added = 0
+                            enriched = 0
+                            af_to_engine = {
+                                'BTTS_YES': 'BTTS_YES', 'BTTS_NO': 'BTTS_NO',
+                                'DOUBLE_CHANCE_1X': 'DC_HOME_DRAW',
+                                'DOUBLE_CHANCE_12': 'DC_HOME_AWAY',
+                                'DOUBLE_CHANCE_X2': 'DC_DRAW_AWAY',
+                                'HOME_DNB': 'DNB_HOME', 'AWAY_DNB': 'DNB_AWAY',
+                                'HOME_OVER_0_5': 'HOME_OVER_0_5',
+                                'HOME_OVER_1_5': 'HOME_OVER_1_5',
+                                'AWAY_OVER_0_5': 'AWAY_OVER_0_5',
+                                'AWAY_OVER_1_5': 'AWAY_OVER_1_5',
+                            }
+                            for af_key, engine_key in af_to_engine.items():
+                                if engine_key not in odds_map and af_key in af_markets:
+                                    odds_map[engine_key] = af_markets[af_key]
+                                    enriched += 1
                             for k, v in af_markets.items():
                                 if k.startswith('AH_') and k not in odds_map:
                                     odds_map[k] = v
-                                    ah_keys_added += 1
-                            if ah_keys_added:
-                                print(f"   🔄 API-Football enriched {ah_keys_added} AH odds for {home_team} vs {away_team}")
+                                    enriched += 1
+                                elif k.startswith('FT_') and k not in odds_map:
+                                    odds_map[k] = v
+                                    enriched += 1
+                            if enriched:
+                                print(f"   🔄 API-Football enriched {enriched} market odds for {home_team} vs {away_team}")
             except Exception as e:
                 pass
         
