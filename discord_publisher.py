@@ -15,7 +15,8 @@ import requests
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [DISCORD-PUB] %(message)s")
+logging.basicConfig(level=logging.INFO,
+                    format="%(asctime)s [DISCORD-PUB] %(message)s")
 logger = logging.getLogger("discord_publisher")
 
 # ---------------------------------------------------------------------------
@@ -24,7 +25,8 @@ logger = logging.getLogger("discord_publisher")
 try:
     from db_connection import DatabaseConnection
 except ImportError:
-    logger.error("Could not import db_connection — publisher cannot run without DB")
+    logger.error(
+        "Could not import db_connection — publisher cannot run without DB")
     raise
 
 # ---------------------------------------------------------------------------
@@ -34,19 +36,20 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # >>>>>>>>>> PASTE YOUR WEBHOOK URLs BELOW <<<<<<<<<<
 LEAGUE_WEBHOOKS: Dict[str, str] = {
-    # "Premier League":           os.getenv("DISCORD_WH_https://discordapp.com/api/webhooks/1475447550273261608/xiXeGEewOuaW5U9bY48VPOVU-U0lNefDtHEdwE17rwikzKVzFFByoDAibJswb66wEt3t", ""),
-    # "La Liga":                  os.getenv("DISCORD_WH_https://discordapp.com/api/webhooks/1475447138833137674/FUCqnqX6dpghIF8EXtH7kXoQ6qV3Fh3CxI9WTsu06TTiiGNjbWUgn2Jvk6iiy0Py8PC9", ""),
-    # "Bundesliga":               os.getenv("DISCORD_WH_https://discordapp.com/api/webhooks/1475446405366677675/1k_DFZ4vmDMCOXk5x5Bkg0gSE42m0fAI2jQZTktJ4OqlSl-EgEmfT8fEtcjxztYY-cki", ""),
-    # "Serie A":                  os.getenv("DISCORD_WH_https://discordapp.com/api/webhooks/1475447887704883272/c5pG7gnJ5bd3jq1Oj5xXiH0MOzpoV7egyuRx51cAZ0UJg_cvrcT6Xn7oTyQaNl_jgCO0", ""),
-    # "Ligue 1":                  os.getenv("DISCORD_WH_https://discordapp.com/api/webhooks/1475447224296276021/pTmZYRbVPxQkNFxcUzPiSaQc0gFEozsx2tCyzN_8USBMxPPX7SCkJ5F1toPpdI6k_vCD", ""),
-    # "Eredivisie":               os.getenv("DISCORD_WH_https://discordapp.com/api/webhooks/1475446657108676760/Ap_OJqps93fwQ93vgA8n91fwPgRn-0qGUqKlaWV9tBqzLTOtko-AjqIF9zuIH0old1oY", ""),
-    # "Champions League":         os.getenv("DISCORD_WH_https://discordapp.com/api/webhooks/1475453720417538049/FM8hRSVI1SV5OjIKCPqhRU6-6xIXPB2FFvnyp3U1DfpKHkgOPgo7DZR1UKTt5s-RMs2w", ""),
-    # "Europa League":            os.getenv("DISCORD_WH_https://discordapp.com/api/webhooks/1475453885463400489/W3SGOWm-RimAHaqhFqBnZ6zNmqVQ6UDhUHNmD9vQCvDuxIcldIuCErZaGUMfOpSqTRHg", ""),
-    # "English Championship":     os.getenv("DISCORD_WH_https://discordapp.com/api/webhooks/1475446757436690563/Oq0IZVY32nyLpMc0ai3lOdYuIVUTp4nDtwHLsMuAK2gI8teYLxP4VOnb5CxKT9mKB22h", ""),
-    # "English League One":       os.getenv("DISCORD_WH_https://discordapp.com/api/webhooks/1475446845433053336/B-Y6ydcO2d4lc7BmhElnXGBYeY2i-cw0IsHEw8_VeDhY1tO50hEzb9RXf2HT8sH5j0aa", ""),
-    # "English League Two":       os.getenv("DISCORD_WH_https://discordapp.com/api/webhooks/1475446923367546962/UX4bEDQzfZEANTZdluDLuQ2oaJLF_Y4hxSfJzUbQvGtwo3t70xjKGKppwb7qFVJOyJRD", ""),
-    # "Portuguese Primeira Liga": os.getenv("DISCORD_WH_https://discordapp.com/api/webhooks/1475447774840487978/xUXOMf1tq9LEUBC6EXJW0Yg5wg6mSWtn2VLPsPTxcsy_utzqpjmPvH5VDyCtDqqtfhOL", ""),
-    # "Belgian First Division":   os.getenv("DISCORD_WH_https://discordapp.com/api/webhooks/1475453149153071226/c6CaQGZsbzpZ8lnwRkNdiLRKaMPq1N6vDNUNmYPFKJV6Xap-wHI-xJ4XZCqv-a54xy3X", ""),
+    "Premier League":           os.getenv("DISCORD_WH_PREMIER_LEAGUE", ""),
+    "La Liga":                  os.getenv("DISCORD_WH_LA_LIGA", ""),
+    "Bundesliga":               os.getenv("DISCORD_WH_BUNDESLIGA", ""),
+    "Serie A":                  os.getenv("DISCORD_WH_SERIE_A", ""),
+    "Ligue 1":                  os.getenv("DISCORD_WH_LIGUE_1", ""),
+    "Eredivisie":               os.getenv("DISCORD_WH_EREDIVISIE", ""),
+    "Champions League":         os.getenv("DISCORD_WH_CHAMPIONS_LEAGUE", ""),
+    "Europa League":            os.getenv("DISCORD_WH_EUROPA_LEAGUE", ""),
+    "English Championship":     os.getenv("DISCORD_WH_CHAMPIONSHIP", ""),
+    "English League One":       os.getenv("DISCORD_WH_LEAGUE_ONE", ""),
+    "English League Two":       os.getenv("DISCORD_WH_LEAGUE_TWO", ""),
+    "Portuguese Primeira Liga": os.getenv("DISCORD_WH_PRIMEIRA_LIGA", ""),
+    "Primeira Liga":            os.getenv("DISCORD_WH_PRIMEIRA_LIGA", ""),
+    "Belgian First Division":   os.getenv("DISCORD_WH_BELGIAN", ""),
 }
 # >>>>>>>>>> END WEBHOOK URLs <<<<<<<<<<
 
@@ -61,6 +64,7 @@ BOT_USERNAME = "PGR Analytics"
 # ---------------------------------------------------------------------------
 # DEDUPE CACHE
 # ---------------------------------------------------------------------------
+
 
 def _load_dedupe_cache() -> Dict[str, float]:
     if not os.path.exists(DEDUPE_FILE):
@@ -86,23 +90,28 @@ def _dedupe_key(pick: dict) -> str:
     raw = f"{pick.get('league','')}|{pick.get('home_team','')}|{pick.get('away_team','')}|{pick.get('market','')}|{pick.get('match_date','')}|{pick.get('odds','')}"
     return hashlib.md5(raw.encode()).hexdigest()
 
+
 # ---------------------------------------------------------------------------
 # LEAGUE DISCOVERY
 # ---------------------------------------------------------------------------
+
 
 def discover_leagues(picks: List[dict]) -> List[str]:
     leagues = sorted(set(p.get("league", "Unknown") for p in picks))
     logger.info("=" * 50)
     logger.info(f"LEAGUE DISCOVERY — {len(leagues)} unique leagues in feed:")
     for lg in leagues:
-        mapped = "MAPPED" if lg in LEAGUE_WEBHOOKS and LEAGUE_WEBHOOKS[lg] else "DEFAULT"
+        mapped = "MAPPED" if lg in LEAGUE_WEBHOOKS and LEAGUE_WEBHOOKS[
+            lg] else "DEFAULT"
         logger.info(f"  • {lg:35s} [{mapped}]")
     logger.info("=" * 50)
     return leagues
 
+
 # ---------------------------------------------------------------------------
 # WEBHOOK ROUTING
 # ---------------------------------------------------------------------------
+
 
 def route_webhook(league: str) -> str:
     url = LEAGUE_WEBHOOKS.get(league, "")
@@ -110,9 +119,11 @@ def route_webhook(league: str) -> str:
         return url
     return DEFAULT_WEBHOOK
 
+
 # ---------------------------------------------------------------------------
 # MESSAGE FORMATTING (Discord Embed — analysis only)
 # ---------------------------------------------------------------------------
+
 
 def _format_kickoff(match_date) -> str:
     if not match_date:
@@ -122,7 +133,9 @@ def _format_kickoff(match_date) -> str:
             dt = match_date
         else:
             s = str(match_date).strip()
-            for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S%z", "%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%d"):
+            for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S",
+                        "%Y-%m-%d %H:%M:%S%z", "%Y-%m-%dT%H:%M:%S%z",
+                        "%Y-%m-%d"):
                 try:
                     dt = datetime.strptime(s[:len(fmt) + 5], fmt)
                     break
@@ -130,7 +143,8 @@ def _format_kickoff(match_date) -> str:
                     continue
             else:
                 return str(match_date)
-        return dt.strftime("%b %d, %H:%M UTC") if dt.hour or dt.minute else dt.strftime("%b %d")
+        return dt.strftime("%b %d, %H:%M UTC"
+                           ) if dt.hour or dt.minute else dt.strftime("%b %d")
     except Exception:
         return str(match_date)
 
@@ -162,14 +176,12 @@ def format_message(pick: dict) -> dict:
     conf_label = _confidence_emoji(confidence)
     conf_line = f"**Trust Level:** {conf_label}" if conf_label else ""
 
-    description = (
-        f"**Match:** {home} vs {away}\n"
-        f"**League:** {league}\n"
-        f"**Market:** {selection}\n"
-        f"**Odds:** {odds:.2f}\n"
-        f"**EV:** {edge:.1f}%\n"
-        f"**Kickoff:** {kickoff}\n"
-    )
+    description = (f"**Match:** {home} vs {away}\n"
+                   f"**League:** {league}\n"
+                   f"**Market:** {selection}\n"
+                   f"**Odds:** {odds:.2f}\n"
+                   f"**EV:** {edge:.1f}%\n"
+                   f"**Kickoff:** {kickoff}\n")
     if conf_line:
         description += f"{conf_line}\n"
 
@@ -179,7 +191,9 @@ def format_message(pick: dict) -> dict:
         "title": f"{home} vs {away}",
         "description": description,
         "color": 3066993,
-        "footer": {"text": f"PGR Sports Analytics — {league} | Analysis Only"},
+        "footer": {
+            "text": f"PGR Sports Analytics — {league} | Analysis Only"
+        },
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -189,9 +203,11 @@ def format_message(pick: dict) -> dict:
     }
     return payload
 
+
 # ---------------------------------------------------------------------------
 # FETCH PENDING PICKS FROM DATABASE
 # ---------------------------------------------------------------------------
+
 
 def fetch_pending_picks() -> List[dict]:
     query = """
@@ -212,9 +228,11 @@ def fetch_pending_picks() -> List[dict]:
         logger.error(f"DB fetch error: {e}")
         return []
 
+
 # ---------------------------------------------------------------------------
 # POST TO DISCORD
 # ---------------------------------------------------------------------------
+
 
 def post_to_discord(webhook_url: str, payload: dict) -> bool:
     if not webhook_url:
@@ -237,9 +255,11 @@ def post_to_discord(webhook_url: str, payload: dict) -> bool:
         logger.error(f"Discord post failed: {e}")
         return False
 
+
 # ---------------------------------------------------------------------------
 # MAIN PUBLISH CYCLE
 # ---------------------------------------------------------------------------
+
 
 def run_publish_cycle():
     logger.info("--- Publish cycle start ---")
@@ -272,7 +292,8 @@ def run_publish_cycle():
                 stats["unknown_league"] += 1
 
         if not webhook_url:
-            logger.warning(f"No webhook available for league '{league}' — skipping")
+            logger.warning(
+                f"No webhook available for league '{league}' — skipping")
             stats["errors"] += 1
             continue
 
@@ -290,7 +311,9 @@ def run_publish_cycle():
             dedupe_cache[key] = time.time()
             last_post_per_webhook[webhook_url] = time.time()
             pick_id = pick.get("id", "?")
-            logger.info(f"Posted pick #{pick_id}: {pick.get('home_team')} vs {pick.get('away_team')} [{league}]")
+            logger.info(
+                f"Posted pick #{pick_id}: {pick.get('home_team')} vs {pick.get('away_team')} [{league}]"
+            )
         else:
             stats["errors"] += 1
 
@@ -300,19 +323,24 @@ def run_publish_cycle():
         f"Cycle done — "
         f"fetched={len(picks)}, posted={stats['posted']}, "
         f"deduped={stats['deduped']}, unknown_league={stats['unknown_league']}, "
-        f"errors={stats['errors']}"
-    )
+        f"errors={stats['errors']}")
+
 
 # ---------------------------------------------------------------------------
 # WORKER LOOP
 # ---------------------------------------------------------------------------
 
+
 def main():
     logger.info("Discord Publisher starting (analysis-only mode)")
-    logger.info(f"Poll interval: {POLL_INTERVAL}s | Dedupe TTL: {DEDUPE_TTL_HOURS}h | Rate limit: {RATE_LIMIT_SECONDS}s/webhook")
+    logger.info(
+        f"Poll interval: {POLL_INTERVAL}s | Dedupe TTL: {DEDUPE_TTL_HOURS}h | Rate limit: {RATE_LIMIT_SECONDS}s/webhook"
+    )
 
     mapped_count = sum(1 for v in LEAGUE_WEBHOOKS.values() if v)
-    logger.info(f"League webhooks configured: {mapped_count} | Default webhook: {'SET' if DEFAULT_WEBHOOK else 'MISSING'}")
+    logger.info(
+        f"League webhooks configured: {mapped_count} | Default webhook: {'SET' if DEFAULT_WEBHOOK else 'MISSING'}"
+    )
 
     while True:
         try:
