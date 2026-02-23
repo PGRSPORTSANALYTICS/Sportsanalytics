@@ -951,30 +951,6 @@ class ValueSinglesEngine:
                     if bet_placed:
                         bets_placed += 1
                         print(f"✅ BET PLACED: {s['home_team']} vs {s['away_team']} -> {s['selection']} @ {s['odds']:.2f} (EV {s['edge_percentage']:.1f}%)")
-                        
-                        # Send Discord notification for bet placed
-                        try:
-                            analysis = json.loads(s.get('analysis', '{}'))
-                            send_bet_to_discord({
-                                'product': 'VALUE_SINGLE',
-                                'league': s.get('league', ''),
-                                'home_team': s.get('home_team', ''),
-                                'away_team': s.get('away_team', ''),
-                                'match_date': s.get('match_date', ''),
-                                'market': s.get('market', ''),
-                                'selection': s.get('selection', ''),
-                                'odds': s.get('odds', 0),
-                                'ev': s.get('edge_percentage', 0) / 100,
-                                'confidence': analysis.get('p_model', 0),
-                                'trust_level': s.get('trust_level', 'L2'),
-                                'analysis': s.get('analysis', '{}'),
-                                'odds_by_bookmaker': s.get('odds_by_bookmaker'),
-                                'best_odds_value': s.get('best_odds_value'),
-                                'best_odds_bookmaker': s.get('best_odds_bookmaker'),
-                                'avg_odds': s.get('avg_odds'),
-                            }, product_type='VALUE_SINGLE')
-                        except Exception as e:
-                            print(f"⚠️ Discord notification failed: {e}")
                     else:
                         print(f"📊 PREDICTION ONLY: {s['home_team']} vs {s['away_team']} -> {s['selection']} @ {s['odds']:.2f} (EV {s['edge_percentage']:.1f}%)")
                     
