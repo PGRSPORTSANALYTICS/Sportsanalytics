@@ -63,6 +63,20 @@ def check_daily_stoploss() -> bool:
         return False  # Allow bets if check fails
 
 
+def run_discord_analysis_publisher():
+    """Publish analysis data to league-specific Discord channels (NO units, NO staking)"""
+    try:
+        from discord_publisher import publish_after_cycle
+        logger.info("📡 Publishing analysis data to Discord channels...")
+        count = publish_after_cycle()
+        if count:
+            logger.info(f"📡 Published {count} analysis entries to Discord")
+        else:
+            logger.info("📡 No new analysis data to publish")
+    except Exception as e:
+        logger.error(f"❌ Discord analysis publish error: {e}")
+
+
 def run_value_singles():
     """Run Value Singles predictions (core product)"""
     if check_daily_stoploss():
@@ -76,6 +90,8 @@ def run_value_singles():
         logger.info("✅ Value Singles cycle complete")
     except Exception as e:
         logger.error(f"❌ Value Singles prediction error: {e}")
+    
+    run_discord_analysis_publisher()
 
 
 def run_corners():
@@ -93,6 +109,8 @@ def run_corners():
         logger.error(f"❌ Corners prediction error: {e}")
         import traceback
         traceback.print_exc()
+    
+    run_discord_analysis_publisher()
 
 
 def run_cards():
@@ -110,6 +128,8 @@ def run_cards():
         logger.error(f"❌ Cards error: {e}")
         import traceback
         traceback.print_exc()
+    
+    run_discord_analysis_publisher()
 
 
 def run_parlay_builder():
