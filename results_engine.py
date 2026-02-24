@@ -241,6 +241,7 @@ class ResultsEngine:
                         result = matches_processed[match_key]
                     
                     if not result:
+                        logger.warning(f"⏳ No result yet for: {bet['home_team']} vs {bet['away_team']} ({bet['match_date']}, market={market})")
                         continue
                     
                     if result.get('void'):
