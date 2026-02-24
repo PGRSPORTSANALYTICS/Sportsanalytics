@@ -11,8 +11,13 @@ import schedule
 from datetime import datetime
 import threading
 
-RAILWAY_ENVIRONMENT = os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("RAILWAY_STATIC_URL")
-IS_RAILWAY = bool(RAILWAY_ENVIRONMENT)
+IS_RAILWAY = bool(
+    os.environ.get("RAILWAY_ENVIRONMENT")
+    or os.environ.get("RAILWAY_STATIC_URL")
+    or os.environ.get("RAILWAY_SERVICE_NAME")
+    or os.environ.get("RAILWAY_PROJECT_ID")
+    or os.environ.get("RAILWAY_RUN_ENGINE")
+)
 
 logging.basicConfig(
     level=logging.INFO,
