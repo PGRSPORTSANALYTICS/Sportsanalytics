@@ -6,9 +6,13 @@ Runs all prediction engines in a single workflow process
 
 import logging
 import time
+import os
 import schedule
 from datetime import datetime
 import threading
+
+RAILWAY_ENVIRONMENT = os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("RAILWAY_STATIC_URL")
+IS_RAILWAY = bool(RAILWAY_ENVIRONMENT)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -724,4 +728,29 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if not IS_RAILWAY:
+        logger.info("⚠️ Running in REPLIT — Engine is managed by Railway.")
+        logger.info("⚠️ This instance will only run Results Engine (verification).")
+        logger.info("⚠️ To generate picks, use Railway deployment.")
+        
+        from results_engine import ResultsEngine
+        from college_basket_result_verifier import CollegeBasketballResultVerifier
+        
+        while True:
+            try:
+                logger.info("🔄 Replit: Running results verification only...")
+                try:
+                    engine = ResultsEngine()
+                    engine.run_cycle()
+                except Exception as e:
+                    logger.error(f"Results Engine error: {e}")
+                try:
+                    bball = CollegeBasketballResultVerifier()
+                    bball.verify_pending_picks()
+                except Exception as e:
+                    logger.error(f"Basketball verifier error: {e}")
+                time.sleep(300)
+            except KeyboardInterrupt:
+                break
+    else:
+        main()
