@@ -459,9 +459,10 @@ class CollegeBasketballResultVerifier:
             logger.error(f"❌ Error calculating outcome: {e}")
             return None
     
-    def _calculate_profit_loss(self, odds: float, outcome: str) -> float:
+    def _calculate_profit_loss(self, odds, outcome: str) -> float:
         """Calculate profit/loss for 16 USD (173 SEK) stake"""
         stake = 173.0  # 16 USD × 10.8
+        odds = float(odds)
         
         if outcome == "won":
             return (odds - 1.0) * stake
@@ -477,7 +478,7 @@ class CollegeBasketballResultVerifier:
                     "SELECT odds FROM basketball_predictions WHERE id = %s",
                     (pick_id,), fetch='one'
                 )
-                odds = odds_row[0] if odds_row else 2.0
+                odds = float(odds_row[0]) if odds_row else 2.0
                 profit_u = round((odds - 1.0) * stake_units, 2)
             else:
                 profit_u = -stake_units
