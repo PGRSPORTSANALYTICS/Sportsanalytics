@@ -729,27 +729,12 @@ def main():
 
 if __name__ == "__main__":
     if not IS_RAILWAY:
-        logger.info("⚠️ Running in REPLIT — Engine is managed by Railway.")
-        logger.info("⚠️ This instance will only run Results Engine (verification).")
-        logger.info("⚠️ To generate picks, use Railway deployment.")
-        
-        from results_engine import ResultsEngine
-        from college_basket_result_verifier import CollegeBasketballResultVerifier
-        
+        logger.info("⚠️ Running in REPLIT — Engine + Results are managed by Railway.")
+        logger.info("⚠️ This instance is idle. All processing happens in Railway 24/7.")
+        logger.info("⚠️ Replit only serves dashboards (ports 5000, 6000, 8000).")
         while True:
             try:
-                logger.info("🔄 Replit: Running results verification only...")
-                try:
-                    engine = ResultsEngine()
-                    engine.run_cycle()
-                except Exception as e:
-                    logger.error(f"Results Engine error: {e}")
-                try:
-                    bball = CollegeBasketballResultVerifier()
-                    bball.verify_pending_picks()
-                except Exception as e:
-                    logger.error(f"Basketball verifier error: {e}")
-                time.sleep(300)
+                time.sleep(3600)
             except KeyboardInterrupt:
                 break
     else:
