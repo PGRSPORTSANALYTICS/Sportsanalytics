@@ -27,7 +27,7 @@ def run_prediction_cycle():
         client = OddsAPIClient()
         engine = CollegeBasketValueEngine(
             client=client,
-            max_singles=20,
+            max_singles=6,
             min_odds=1.75,   # Win machine: tight odds window
             max_odds=2.00,   # Win machine: high hit-rate zone
             allow_parlays=False
