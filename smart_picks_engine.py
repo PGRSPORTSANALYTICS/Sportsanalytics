@@ -281,6 +281,7 @@ def _format_discord_message(picks: List[Dict]) -> str:
         lines.append(f"**Smart Pick #{i}**")
         lines.append(f"League: {p.get('league', 'N/A')}")
         lines.append(f"Match: {p.get('home_team', '')} vs {p.get('away_team', '')}")
+        lines.append(f"Selection: **{p.get('selection', 'N/A')}**")
         lines.append(f"Market: {p.get('market', 'N/A')}")
         lines.append(f"Odds: {float(p.get('odds', 0)):.2f}")
         lines.append(f"Confidence: {p.get('confidence', 'Low')}")
