@@ -28,6 +28,7 @@ def get_pending_props_bets(market_filter: str = "all") -> List[Dict]:
             market_clause = "market IN ('Cards', 'Corners')"
 
         with DatabaseConnection.get_cursor(dict_cursor=True) as cur:
+            cur.execute("SET statement_timeout = '8000'")
             cur.execute(f"""
                 SELECT id, home_team, away_team, league, market, selection, odds, 
                        match_date, kickoff_epoch, fixture_id, 

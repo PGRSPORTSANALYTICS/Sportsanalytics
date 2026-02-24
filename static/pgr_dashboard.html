@@ -256,10 +256,16 @@ loadLivePicks();
 async function loadLivePicks(){
 const c=document.getElementById('livePicksList');
 try{
-const r=await fetch(LIVE_API+'?market='+liveFilter);
+const ctrl=new AbortController();
+const tid=setTimeout(()=>ctrl.abort(),10000);
+const r=await fetch(LIVE_API+'?market='+liveFilter,{signal:ctrl.signal});
+clearTimeout(tid);
 const d=await r.json();
 renderLivePicks(d.picks||[]);
-}catch(e){c.innerHTML=`<div class="empty">Error loading live picks: ${e.message}</div>`}
+}catch(e){
+if(e.name==='AbortError'){c.innerHTML='<div class="empty" style="padding:2rem;text-align:center"><div style="font-size:2rem;margin-bottom:.5rem">&#9203;</div><div style="color:var(--text2)">Loading timed out</div><div style="color:var(--text3);font-size:.75rem;margin-top:.3rem">API is busy — try refreshing in a moment</div></div>';}
+else{c.innerHTML=`<div class="empty">Error loading live picks: ${e.message}</div>`;}
+}
 }
 
 function renderLivePicks(picks){
