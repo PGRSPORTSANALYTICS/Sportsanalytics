@@ -4062,7 +4062,7 @@ def get_pending_match_ids() -> set:
         return set()
 
 
-DAILY_BET_CAP = 25
+DAILY_BET_CAP = 8
 
 def get_todays_bet_count() -> int:
     """Count how many football bets have been created today (by creation timestamp)."""
@@ -4299,15 +4299,6 @@ def run_late_cards_cycle():
     """
     from cards_engine import run_cards_cycle
     import random
-    
-    try:
-        from daily_stoploss import is_stoploss_triggered
-        triggered, pnl, message = is_stoploss_triggered()
-        if triggered:
-            print(f"\n🛑 CARDS SKIPPED - Daily stop-loss active ({pnl:+.1f}u)")
-            return
-    except Exception as e:
-        print(f"⚠️ Stop-loss check failed: {e}")
     
     print("\n" + "="*60)
     print("🟨 LATE KICKOFF ENGINE (Cards + Corner Handicaps, 2-3h Before)")

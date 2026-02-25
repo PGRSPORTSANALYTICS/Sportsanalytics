@@ -123,11 +123,7 @@ def run_corners():
 
 
 def run_cards():
-    """Run Cards scan - fetches cards odds 2-3 hours before kickoff for accurate lines"""
-    if check_daily_stoploss():
-        logger.warning("⏭️ Cards SKIPPED - Daily stop-loss active")
-        return
-    
+    """Run Cards scan - fetches cards odds 2-3 hours before kickoff for accurate lines. Always runs — customer output, not subject to stop-loss."""
     try:
         import real_football_champion
         logger.info("🟨 Starting Cards scan (2-3h before kickoff)...")
