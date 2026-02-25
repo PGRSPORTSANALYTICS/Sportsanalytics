@@ -732,14 +732,4 @@ def main():
 
 
 if __name__ == "__main__":
-    if not IS_RAILWAY:
-        logger.info("⚠️ Running in REPLIT — Engine + Results are managed by Railway.")
-        logger.info("⚠️ This instance is idle. All processing happens in Railway 24/7.")
-        logger.info("⚠️ Replit only serves dashboards (ports 5000, 6000, 8000).")
-        while True:
-            try:
-                time.sleep(3600)
-            except KeyboardInterrupt:
-                break
-    else:
-        main()
+    main()
