@@ -713,7 +713,6 @@ def main():
     schedule.every().day.at("22:45").do(run_end_of_day_results)  # Results summary after all games
     schedule.every().day.at("08:00").do(run_daily_games_reminder)
     schedule.every().day.at("09:00").do(run_daily_analysis)
-    schedule.every().day.at("10:00").do(run_free_picks)  # 5 value singles
     schedule.every().day.at("09:00").do(run_smart_picks)  # Smart Picks — Daily Top 10 (09:00 UTC = 10:00 CET)
     schedule.every().day.at("11:00").do(run_daily_free_pick)  # 1 free pick to Discord
     
