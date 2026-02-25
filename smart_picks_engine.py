@@ -111,6 +111,8 @@ def _compute_form_trend(row: Dict) -> float:
             analysis = json.loads(analysis)
         except:
             analysis = {}
+    if not isinstance(analysis, dict):
+        analysis = {}
 
     form_score = analysis.get("form_score", 0)
     if form_score:
@@ -124,7 +126,8 @@ def _compute_form_trend(row: Dict) -> float:
 
 
 def _compute_smart_score(row: Dict) -> float:
-    model_prob = float(row.get("model_prob", 0) or 0) * 100
+    raw_prob = row.get("model_prob")
+    model_prob = (float(raw_prob) if raw_prob is not None else 0.55) * 100
     trust = _compute_trust_score(row)
     stability = _compute_line_stability(row)
     form = _compute_form_trend(row)
@@ -151,7 +154,8 @@ def _get_confidence(score: float) -> str:
 
 
 def _get_model_grade(row: Dict) -> str:
-    prob = float(row.get("model_prob", 0) or 0)
+    raw = row.get("model_prob")
+    prob = float(raw) if raw is not None else 0.55
     if prob >= MODEL_GRADE_TIERS["A"]:
         return "A"
     elif prob >= MODEL_GRADE_TIERS["B"]:
@@ -161,6 +165,12 @@ def _get_model_grade(row: Dict) -> str:
 
 def _fetch_candidates() -> List[Dict]:
     today = _get_server_date()
+    columns = [
+        "id", "home_team", "away_team", "league", "market", "selection", "odds",
+        "model_prob", "trust_level", "open_odds", "confidence",
+        "analysis", "mode", "bet_placed"
+    ]
+
     rows = db_helper.execute("""
         SELECT id, home_team, away_team, league, market, selection, odds,
                model_prob, trust_level, open_odds, confidence,
@@ -172,15 +182,30 @@ def _fetch_candidates() -> List[Dict]:
         ORDER BY id
     """, (today,), fetch='all')
 
-    if not rows:
+    if rows and len(rows) >= 5:
+        return [dict(zip(columns, r)) for r in rows]
+
+    logger.info(f"Only {len(rows) if rows else 0} candidates in football_opportunities — using all_bets fallback")
+
+    fallback_rows = db_helper.execute("""
+        SELECT id, home_team, away_team,
+               NULL as league, 'Value Single' as market,
+               selection, odds,
+               NULL as model_prob, NULL as trust_level, NULL as open_odds,
+               NULL as confidence, NULL as analysis,
+               mode, true as bet_placed
+        FROM all_bets
+        WHERE DATE(created_at AT TIME ZONE 'UTC') = %s::date
+        AND odds >= 1.75 AND odds <= 2.10
+        AND product = 'VALUE_SINGLE'
+        AND mode = 'PROD'
+        ORDER BY id ASC
+    """, (today,), fetch='all')
+
+    if not fallback_rows:
         return []
 
-    columns = [
-        "id", "home_team", "away_team", "league", "market", "selection", "odds",
-        "model_prob", "trust_level", "open_odds", "confidence",
-        "analysis", "mode", "bet_placed"
-    ]
-    return [dict(zip(columns, r)) for r in rows]
+    return [dict(zip(columns, r)) for r in fallback_rows]
 
 
 def _has_conflict(selection: str, existing_selection: str) -> bool:
@@ -203,7 +228,7 @@ def _select_top_picks(candidates: List[Dict], target: int = 10) -> List[Dict]:
             break
 
         match_key = f"{c['home_team']}_{c['away_team']}"
-        league = c.get("league", "Unknown")
+        league = c.get("league") or match_key
         sel = c.get("selection", "")
 
         if match_key in seen_matches:
@@ -279,7 +304,7 @@ def _format_discord_message(picks: List[Dict]) -> str:
     for i, p in enumerate(picks, 1):
         lines.append("")
         lines.append(f"**Smart Pick #{i}**")
-        lines.append(f"League: {p.get('league', 'N/A')}")
+        lines.append(f"League: {p.get('league') or 'Football'}")
         lines.append(f"Match: {p.get('home_team', '')} vs {p.get('away_team', '')}")
         lines.append(f"Selection: **{p.get('selection', 'N/A')}**")
         lines.append(f"Market: {p.get('market', 'N/A')}")
