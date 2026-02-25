@@ -2395,11 +2395,11 @@ class RealFootballChampion:
         )
     
     def get_todays_count(self):
-        """Get count of today's pending opportunities"""
+        """Get count of today's PROD pending opportunities (LEARNING excluded)"""
         today_date = datetime.now().strftime('%Y-%m-%d')
         result = db_helper.execute('''
             SELECT COUNT(*) FROM football_opportunities 
-            WHERE match_date = %s AND status = 'pending'
+            WHERE match_date = %s AND status = 'pending' AND mode = 'PROD'
         ''', (today_date,), fetch='one')
         return result[0] if result else 0
     
@@ -4004,13 +4004,13 @@ def get_pending_match_ids() -> set:
 DAILY_BET_CAP = 8
 
 def get_todays_bet_count() -> int:
-    """Count how many football bets have been created today (by creation timestamp)."""
+    """Count how many PROD football bets have been created today (LEARNING picks excluded)."""
     try:
         now_epoch = int(time.time())
         midnight_epoch = now_epoch - (now_epoch % 86400)
         result = db_helper.execute('''
             SELECT COUNT(*) FROM football_opportunities
-            WHERE timestamp >= %s
+            WHERE timestamp >= %s AND mode = 'PROD'
         ''', (midnight_epoch,), fetch='one')
         count = result[0] if result and result[0] else 0
         return count
