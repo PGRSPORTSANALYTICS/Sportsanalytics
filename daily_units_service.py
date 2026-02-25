@@ -46,6 +46,7 @@ def get_daily_units(days_back: int = 30) -> Dict:
             WHERE outcome IS NOT NULL
               AND outcome NOT IN ('pending', 'live', '')
               AND match_date IS NOT NULL
+              AND (mode IN ('PROD', 'PRODUCTION') OR mode IS NULL)
               
             UNION ALL
             
@@ -61,6 +62,7 @@ def get_daily_units(days_back: int = 30) -> Dict:
             WHERE status IS NOT NULL
               AND status NOT IN ('pending', 'live', '')
               AND commence_time IS NOT NULL
+              AND (mode IN ('PROD', 'PRODUCTION') OR mode IS NULL)
               
         )
         SELECT 
