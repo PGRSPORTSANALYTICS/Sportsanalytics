@@ -605,61 +605,98 @@ def main():
     logger.info("🎁 Free Picks - Daily at 10:00 (Discord)")
     logger.info("="*80)
     
-    # Run enabled engines on startup
+    # Run enabled engines on startup — each wrapped individually so one crash can't kill startup
     logger.info("🎬 Running initial prediction cycles...")
+    
     if ENABLE_VALUE_SINGLES:
-        run_value_singles()
+        try:
+            run_value_singles()
+        except BaseException as e:
+            logger.error(f"❌ Value Singles startup crash: {e}")
         time.sleep(5)
-        run_corners()
+        try:
+            run_corners()
+        except BaseException as e:
+            logger.error(f"❌ Corners startup crash: {e}")
         time.sleep(5)
-        run_cards()
+        try:
+            run_cards()
+        except BaseException as e:
+            logger.error(f"❌ Cards startup crash: {e}")
         time.sleep(5)
     else:
         logger.info("⏸️ Value Singles PAUSED")
     
     if ENABLE_PARLAYS:
-        run_parlay_builder()
+        try:
+            run_parlay_builder()
+        except BaseException as e:
+            logger.error(f"❌ Parlay startup crash: {e}")
         time.sleep(5)
     else:
         logger.info("⏸️ Parlays PAUSED")
     
     if ENABLE_COLLEGE_BASKETBALL:
-        run_college_basketball()
+        try:
+            run_college_basketball()
+        except BaseException as e:
+            logger.error(f"❌ Basketball startup crash: {e}")
         time.sleep(5)
     else:
         logger.info("⏸️ College Basketball PAUSED")
     
     if ENABLE_ML_PARLAY:
-        run_ml_parlay()
+        try:
+            run_ml_parlay()
+        except BaseException as e:
+            logger.error(f"❌ ML Parlay startup crash: {e}")
         time.sleep(5)
     else:
         logger.info("⏸️ ML Parlay PAUSED")
     
-    if ENABLE_PLAYER_PROPS:
-        run_player_props()
-        time.sleep(5)
-    else:
-        logger.info("⏸️ Player Props PAUSED")
+    # Player Props: skip on startup — NBA API blocks 15s per player (255s total with timeouts)
+    # The scheduler will run it every 6 hours instead
+    logger.info("⏩ Player Props: skipping startup run (scheduled every 6h)")
     
     # Print daily stake summary after all prediction cycles
-    print_daily_stake_summary()
+    try:
+        print_daily_stake_summary()
+    except BaseException as e:
+        logger.error(f"❌ Stake summary startup crash: {e}")
     
-    run_performance_updates()
+    try:
+        run_performance_updates()
+    except BaseException as e:
+        logger.error(f"❌ Performance updates startup crash: {e}")
     
-    run_learning_update()
+    try:
+        run_learning_update()
+    except BaseException as e:
+        logger.error(f"❌ Learning update startup crash: {e}")
     
     # CRITICAL: Run Results Engine immediately on startup
-    # This ensures no bets drag for days waiting for scheduler
     logger.info("🔄 Running immediate Results Engine...")
-    run_results_engine()  # Unified settlement for ALL bet types
-    verify_basketball_results()  # Basketball has separate verifier
-    verify_ml_parlay_results()  # ML Parlay verification
+    try:
+        run_results_engine()
+    except BaseException as e:
+        logger.error(f"❌ Results Engine startup crash: {e}")
+    try:
+        verify_basketball_results()
+    except BaseException as e:
+        logger.error(f"❌ Basketball results startup crash: {e}")
+    try:
+        verify_ml_parlay_results()
+    except BaseException as e:
+        logger.error(f"❌ ML Parlay results startup crash: {e}")
     logger.info("✅ Initial verification complete")
     
     # Run PGR Analytics on startup — sync existing bets + capture odds
     if ENABLE_PGR_ANALYTICS:
-        run_pgr_analytics()
-        logger.info("📊 PGR Analytics initial sync complete")
+        try:
+            run_pgr_analytics()
+            logger.info("📊 PGR Analytics initial sync complete")
+        except BaseException as e:
+            logger.error(f"❌ PGR Analytics startup crash: {e}")
     
     # Schedule recurring prediction tasks (only enabled products)
     if ENABLE_VALUE_SINGLES:
@@ -696,7 +733,10 @@ def main():
     # Schedule LIVE LEARNING enrichment - Every 10 minutes to add syndicate data
     if LIVE_LEARNING_MODE:
         schedule.every(10).minutes.do(run_live_learning_enrichment)
-        run_live_learning_enrichment()  # Run immediately on startup
+        try:
+            run_live_learning_enrichment()  # Run immediately on startup
+        except BaseException as e:
+            logger.error(f"❌ Live Learning startup crash: {e}")
         logger.info("🔬 LIVE LEARNING enrichment scheduled (every 10 minutes)")
     
     # Print stake summary every hour
@@ -718,7 +758,7 @@ def main():
     
     logger.info("✅ All schedules configured. Starting main loop...")
     
-    # Keep running
+    # Keep running — catch BaseException so MemoryError/SystemExit don't kill the loop
     while True:
         try:
             schedule.run_pending()
@@ -729,6 +769,9 @@ def main():
         except Exception as e:
             logger.error(f"❌ Main loop error: {e}", exc_info=True)
             time.sleep(60)
+        except BaseException as e:
+            logger.critical(f"🚨 Critical error in main loop (BaseException): {e}", exc_info=True)
+            time.sleep(120)  # Wait 2 min before retrying
 
 
 if __name__ == "__main__":
