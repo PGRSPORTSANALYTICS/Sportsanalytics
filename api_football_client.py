@@ -109,8 +109,13 @@ class APIFootballClient:
             date_obj = datetime.fromisoformat(match_date.replace('Z', '+00:00'))
             date_str = date_obj.strftime('%Y-%m-%d')
             
-            fixtures_cache_key = f"fixtures_by_date_team_{date_str}_{home_id}"
-            fixtures = self._fetch_with_cache('fixtures', {'date': date_str, 'team': home_id}, fixtures_cache_key, ttl_hours=24)
+            # Calculate correct season (Aug-Jul split): Feb 2026 → season 2025
+            match_year = date_obj.year
+            match_month = date_obj.month
+            current_season = match_year if match_month >= 7 else match_year - 1
+            
+            fixtures_cache_key = f"fixtures_by_date_team_{date_str}_{home_id}_s{current_season}"
+            fixtures = self._fetch_with_cache('fixtures', {'date': date_str, 'team': home_id, 'season': current_season}, fixtures_cache_key, ttl_hours=6)
             
             if fixtures:
                 logger.info(f"🔍 API-Football returned {len(fixtures)} fixtures for {home_team} (ID: {home_id}) on {date_str}")
