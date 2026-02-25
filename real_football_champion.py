@@ -387,9 +387,9 @@ class RealFootballChampion:
         self.backup_min_confidence = 40.0
         self.backup_max_daily = 8
         
-        # Business requirements (realistic based on market efficiency)
-        self.min_daily_tips = 8  # 💰 Realistic minimum for commercial viability
-        self.max_daily_tips = 30  # Maximum total tips per day
+        # Business requirements — quality over quantity
+        self.min_daily_tips = 0  # No minimum: every pick must earn its place
+        self.max_daily_tips = 8  # Hard cap: matches DAILY_BET_CAP
         
         # Legacy parameters (for backward compatibility)
         self.min_edge = self.premium_min_edge
@@ -496,82 +496,36 @@ class RealFootballChampion:
         return counts
     
     def run_progressive_relaxation(self) -> int:
-        """💰 BUSINESS CRITICAL: Actually generate more tips with relaxed standards"""
-        print(f"\n🔄 PROGRESSIVE RELAXATION: Generating additional tips for commercial viability")
-        
-        # Temporarily lower thresholds for additional opportunities
+        """Fall back to Standard tier only — Value and Backup tiers removed (quality over quantity)."""
+        print(f"\n🔄 STANDARD TIER FALLBACK: Trying {self.standard_min_edge}% edge, {self.standard_min_confidence}% confidence")
+
         original_min_edge = self.min_edge
         original_min_confidence = self.min_confidence
-        
         additional_tips = 0
-        
+
         try:
-            # Step 1: Try Standard tier thresholds
-            print(f"   🥈 STANDARD TIER: Trying {self.standard_min_edge}% edge, {self.standard_min_confidence}% confidence")
             self.min_edge = self.standard_min_edge
             self.min_confidence = self.standard_min_confidence
-            
-            # Re-run analysis with relaxed standards
+
             matches = self.get_football_odds()
-            for match in matches[:15]:  # Limit to avoid overwhelming
+            for match in matches[:15]:
                 current_count = self.get_todays_count()
                 if current_count >= self.max_daily_tips:
                     break
-                    
+
                 opportunities = self.find_balanced_opportunities(match)
-                for opp in opportunities[:1]:  # Just take best opportunity per match
+                for opp in opportunities[:1]:
                     if self.get_todays_count() < self.max_daily_tips:
                         saved = self.save_exact_score_opportunity(opp)
                         if saved:
                             additional_tips += 1
-                            print(f"      ✅ STANDARD TIP: {opp.home_team} vs {opp.away_team} - {opp.selection}")
-                    
-            # Step 2: If still short, try Value Picks tier
-            current_total = self.get_todays_count()
-            if current_total < self.min_daily_tips:
-                print(f"   💎 VALUE PICKS TIER: Trying {self.value_min_edge}% edge, {self.value_min_confidence}% confidence")
-                self.min_edge = self.value_min_edge
-                self.min_confidence = self.value_min_confidence
-                
-                for match in matches[:20]:  # More matches for value tier
-                    current_count = self.get_todays_count()
-                    if current_count >= self.max_daily_tips:
-                        break
-                        
-                    opportunities = self.find_balanced_opportunities(match)
-                    for opp in opportunities[:1]:
-                        if self.get_todays_count() < self.max_daily_tips:
-                            saved = self.save_exact_score_opportunity(opp)
-                            if saved:
-                                additional_tips += 1
-                                print(f"      ✅ VALUE PICK: {opp.home_team} vs {opp.away_team} - {opp.selection}")
-            
-            # Step 3: If still short, try Backup tier
-            current_total = self.get_todays_count()
-            if current_total < self.min_daily_tips:
-                print(f"   🥉 BACKUP TIER: Trying {self.backup_min_edge}% edge, {self.backup_min_confidence}% confidence")
-                self.min_edge = self.backup_min_edge
-                self.min_confidence = self.backup_min_confidence
-                
-                for match in matches[:10]:  # Limited for backup
-                    current_count = self.get_todays_count()
-                    if current_count >= self.min_daily_tips:
-                        break
-                        
-                    opportunities = self.find_balanced_opportunities(match)
-                    for opp in opportunities[:1]:
-                        if self.get_todays_count() < self.min_daily_tips:
-                            saved = self.save_exact_score_opportunity(opp)
-                            if saved:
-                                additional_tips += 1
-                                print(f"      ✅ BACKUP TIP: {opp.home_team} vs {opp.away_team} - {opp.selection}")
-                        
+                            print(f"   ✅ STANDARD TIP: {opp.home_team} vs {opp.away_team} - {opp.selection}")
+
         finally:
-            # Restore original thresholds
             self.min_edge = original_min_edge
             self.min_confidence = original_min_confidence
-            
-        print(f"   📊 GENERATED: {additional_tips} additional tips via progressive relaxation")
+
+        print(f"   📊 GENERATED: {additional_tips} additional tips via standard fallback")
         return additional_tips
     
     def ensure_daily_commercial_viability(self):
