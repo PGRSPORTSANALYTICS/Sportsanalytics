@@ -438,37 +438,23 @@ class RealFootballChampion:
         return True
     
     def determine_opportunity_tier(self, opportunity) -> str:
-        """💰 Determine which tier an opportunity belongs to for commercial viability"""
-        
+        """Classify pick quality — Premium or Standard only. Value/Backup tiers removed."""
         edge = opportunity.edge_percentage
         confidence = opportunity.confidence
         selection = opportunity.selection
-        
-        # Check Premium tier first (highest quality)
+
         premium_edge_req = self.premium_min_edge_under if 'Under' in selection else self.premium_min_edge
         premium_conf_req = self.premium_min_confidence_under if 'Under' in selection else self.premium_min_confidence
-        
+
         if edge >= premium_edge_req and confidence >= premium_conf_req:
             return 'premium'
-        
-        # Check Standard tier (good quality, reliable picks)
+
         standard_edge_req = self.standard_min_edge_under if 'Under' in selection else self.standard_min_edge
         standard_conf_req = self.standard_min_confidence_under if 'Under' in selection else self.standard_min_confidence
-        
+
         if edge >= standard_edge_req and confidence >= standard_conf_req:
             return 'standard'
-        
-        # Check Value Picks tier (higher volume, good value)
-        value_edge_req = self.value_min_edge_under if 'Under' in selection else self.value_min_edge
-        value_conf_req = self.value_min_confidence_under if 'Under' in selection else self.value_min_confidence
-        
-        if edge >= value_edge_req and confidence >= value_conf_req:
-            return 'value'
-        
-        # Check Backup tier (emergency - ensure minimum daily tips)
-        if edge >= self.backup_min_edge and confidence >= self.backup_min_confidence:
-            return 'backup'
-        
+
         return 'rejected'
     
     def get_daily_tier_counts(self) -> dict:
@@ -2506,8 +2492,7 @@ class RealFootballChampion:
         if total_opportunities > 0:
             self.rank_and_tier_opportunities()
         
-        # 💰 BUSINESS CRITICAL: Check commercial viability
-        self.ensure_daily_commercial_viability()
+        # Volume pressure removed — quality over quantity, no minimum fill
         
         print("⏱️ Next analysis cycle in 60 minutes...")
         
