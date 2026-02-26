@@ -620,7 +620,7 @@ def get_db_url() -> str:
     )
 
 
-@st.cache_data(ttl=120, show_spinner="Loading bets from database…")
+@st.cache_data(ttl=600, show_spinner=False)
 def load_all_bets_from_db() -> pd.DataFrame:
     """
     Load all bets from the `all_bets` view.
@@ -2192,7 +2192,7 @@ def render_product_tab(
         )
 
 
-@st.cache_data(ttl=120, show_spinner=False)
+@st.cache_data(ttl=600, show_spinner=False)
 def _load_ml_parlays():
     """Cached DB fetch for ML parlay predictions."""
     from db_helper import db_helper
@@ -3250,7 +3250,7 @@ def render_parlays_tab():
 
 # ------------- PROPS & SPECIALS TAB ------------- #
 
-@st.cache_data(ttl=120, show_spinner="Loading props bets...")
+@st.cache_data(ttl=600, show_spinner=False)
 def load_props_bets() -> pd.DataFrame:
     """Load Cards, Corners, and Shots bets from football_opportunities table."""
     try:
@@ -3285,7 +3285,7 @@ def load_props_bets() -> pd.DataFrame:
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=120, show_spinner="Loading bookmaker odds...")
+@st.cache_data(ttl=600, show_spinner=False)
 def load_bookmaker_odds() -> pd.DataFrame:
     """Load bookmaker odds comparison data from football_opportunities table."""
     try:

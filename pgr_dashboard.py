@@ -9,7 +9,6 @@ from datetime import datetime, timedelta
 import plotly.graph_objects as go
 import plotly.express as px
 from db_connection import DatabaseConnection
-
 st.set_page_config(
     page_title="PGR Sports Analytics",
     page_icon="🏆",
@@ -21,19 +20,9 @@ st.sidebar.title("🏆 PGR Sports")
 page = st.sidebar.radio("Select Sport", ["⚽ Football", "🏀 College Basketball", "🎯 Player Props", "🌐 Learning Sports", "🎰 Stryktipset"])
 
 if page == "⚽ Football":
-    import pgr_bg_cache as _bgc
-    _loaded, _cache_hit = _bgc.get("_football_loaded")
-    if not _cache_hit:
-        with st.status("Loading Football Analytics...", expanded=False) as _s:
-            with open("pgr_football_dashboard.py", "r") as f:
-                code = f.read()
-            exec(compile(code, "pgr_football_dashboard.py", "exec"), globals())
-            _bgc.set_cache("_football_loaded", True, ttl=86400)
-            _s.update(label="Football Analytics", state="complete", expanded=False)
-    else:
-        with open("pgr_football_dashboard.py", "r") as f:
-            code = f.read()
-        exec(compile(code, "pgr_football_dashboard.py", "exec"), globals())
+    with open("pgr_football_dashboard.py", "r") as f:
+        code = f.read()
+    exec(compile(code, "pgr_football_dashboard.py", "exec"), globals())
 elif page == "🎯 Player Props":
     with open("pgr_player_props_dashboard.py", "r") as f:
         code = f.read()
