@@ -678,15 +678,21 @@ def main():
     except BaseException as e:
         logger.error(f"❌ Stake summary startup crash: {e}")
     
-    try:
-        run_performance_updates()
-    except BaseException as e:
-        logger.error(f"❌ Performance updates startup crash: {e}")
-    
-    try:
-        run_learning_update()
-    except BaseException as e:
-        logger.error(f"❌ Learning update startup crash: {e}")
+    # Performance updates and learning stats are heavy — delay 3 minutes to avoid
+    # OOM when all 4 processes compete for memory at container startup.
+    import threading as _threading_stats
+    def _delayed_stats():
+        time.sleep(180)
+        try:
+            run_performance_updates()
+        except BaseException as e:
+            logger.error(f"❌ Performance updates delayed crash: {e}")
+        try:
+            run_learning_update()
+        except BaseException as e:
+            logger.error(f"❌ Learning update delayed crash: {e}")
+    _threading_stats.Thread(target=_delayed_stats, daemon=True, name="delayed-stats").start()
+    logger.info("⏩ Performance updates / Learning stats: first run in 3 minutes (startup delay)")
     
     # CRITICAL: Run Results Engine immediately on startup
     logger.info("🔄 Running immediate Results Engine...")

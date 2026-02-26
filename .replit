@@ -59,13 +59,13 @@ outputType = "console"
 name = "College Basketball Dashboard"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "streamlit run college_basket_dashboard.py --server.port=6000 --server.address=0.0.0.0 --server.headless=true"
-waitForPort = 6000
-
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "sleep 180 && streamlit run college_basket_dashboard.py --server.port=6000 --server.address=0.0.0.0 --server.headless=true"
+waitForPort = 6000
 
 [[workflows.workflow]]
 name = "PGR API Server"
