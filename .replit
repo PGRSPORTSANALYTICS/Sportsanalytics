@@ -5,7 +5,7 @@ channel = "stable-25_05"
 packages = ["cairo", "chromedriver", "chromium", "ffmpeg-full", "freetype", "geckodriver", "ghostscript", "glibcLocales", "gobject-introspection", "gtk3", "libxcrypt", "pkg-config", "qhull", "railway", "sqlite", "tcl", "tk", "xcodebuild", "xsimd", "zlib"]
 
 [deployment]
-deploymentTarget = "vm"
+deploymentTarget = "autoscale"
 run = ["bash", "-c", "python3 -m uvicorn api:app --host 127.0.0.1 --port 8000 & python3 combined_sports_runner.py & streamlit run pgr_dashboard.py --server.port 5000 --server.address 0.0.0.0"]
 
 [workflows]
