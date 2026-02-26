@@ -656,6 +656,7 @@ def load_all_bets_from_db() -> pd.DataFrame:
             best_odds_bookmaker
         FROM normalized_bets
         ORDER BY created_at DESC
+        LIMIT 1000
         """
     )
 

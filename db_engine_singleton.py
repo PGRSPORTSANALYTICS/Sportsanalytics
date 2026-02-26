@@ -24,13 +24,13 @@ def get_dashboard_engine():
     try:
         _engine = _create_engine(
             db_url,
-            pool_size=2,
+            pool_size=1,
             max_overflow=1,
             pool_pre_ping=True,
             pool_recycle=300,
             connect_args={"connect_timeout": 8},
         )
-        logger.info("✅ Dashboard SQLAlchemy engine initialized (pool_size=2, max_overflow=1)")
+        logger.info("✅ Dashboard SQLAlchemy engine initialized (pool_size=1, max_overflow=1)")
     except Exception as e:
         logger.error(f"❌ Failed to create dashboard engine: {e}")
         return None
