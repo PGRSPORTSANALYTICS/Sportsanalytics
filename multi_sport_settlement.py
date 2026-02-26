@@ -23,6 +23,13 @@ SPORT_GRACE_HOURS = {
     'MMA': 4,
 }
 
+# Tennis matches finish within hours — void quickly if no scores appear
+SPORT_VOID_HOURS = {
+    'TENNIS': 24,
+    'HOCKEY': 48,
+    'MMA': 72,
+}
+
 
 def run_multi_sport_settlement() -> Dict:
     stats = {
@@ -80,9 +87,11 @@ def run_multi_sport_settlement() -> Dict:
 
         if score_data is None:
             hours_since = _hours_since(sample_bet['commence_time'])
-            if hours_since > VOID_AFTER_HOURS:
+            sport_cat = sample_bet.get('sport_category', 'HOCKEY')
+            void_hours = SPORT_VOID_HOURS.get(sport_cat, VOID_AFTER_HOURS)
+            if hours_since > void_hours:
                 for bet in bets:
-                    _settle_bet(bet['id'], 'void', f'No scores found after {VOID_AFTER_HOURS}h')
+                    _settle_bet(bet['id'], 'void', f'No scores found after {void_hours}h')
                     stats['void'] += 1
                     stats['settled'] += 1
             else:
@@ -156,7 +165,7 @@ def _fetch_scores(api_key: str, sport_key: str) -> List[Dict]:
             f'https://api.the-odds-api.com/v4/sports/{sport_key}/scores',
             params={
                 'apiKey': api_key,
-                'daysFrom': 3,
+                'daysFrom': 5,
             },
             timeout=15
         )

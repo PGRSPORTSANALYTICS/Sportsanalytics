@@ -56,10 +56,19 @@ def _get_server_date() -> str:
 
 
 def _already_posted_today() -> bool:
-    """Returns True only if picks were already successfully posted to Discord today."""
+    """Returns True if picks were already successfully posted to Discord today."""
     today = _get_server_date()
     row = db_helper.execute("""
         SELECT COUNT(*) FROM smart_picks WHERE pick_date = %s AND discord_posted = TRUE
+    """, (today,), fetch='one')
+    return row is not None and row[0] > 0
+
+
+def _picks_exist_today() -> bool:
+    """Returns True if any picks (posted or not) were already generated today."""
+    today = _get_server_date()
+    row = db_helper.execute("""
+        SELECT COUNT(*) FROM smart_picks WHERE pick_date = %s
     """, (today,), fetch='one')
     return row is not None and row[0] > 0
 
@@ -281,8 +290,8 @@ def _select_top_picks(candidates: List[Dict], target: int = 10) -> List[Dict]:
 def generate_smart_picks() -> List[Dict]:
     _ensure_table()
 
-    if _already_posted_today():
-        logger.info("Smart Picks already posted today — skipping")
+    if _picks_exist_today():
+        logger.info("Smart Picks already generated today — skipping to avoid duplicates")
         return []
 
     candidates = _fetch_candidates()
