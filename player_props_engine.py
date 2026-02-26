@@ -308,7 +308,7 @@ class PlayerPropsEngine:
                         if prop_key not in all_outcomes or odds > all_outcomes[prop_key]['odds']:
                             implied_prob = 1.0 / odds if odds > 0 else 0
                             model_prob = self._estimate_model_prob(
-                                sport_type, market_key, player_name, line, odds, implied_prob
+                                sport_type, market_key, player_name, line, odds, implied_prob, selection
                             )
                             edge = ((model_prob * odds) - 1) * 100 if model_prob > 0 else 0
 
@@ -354,32 +354,31 @@ class PlayerPropsEngine:
         return props
 
     def _estimate_model_prob(self, sport: str, market: str, player_name: str,
-                              line: Optional[float], odds: float, implied_prob: float) -> float:
+                              line: Optional[float], odds: float, implied_prob: float,
+                              selection: str = 'Over') -> float:
         """
-        Learning mode estimation: use implied probability with small adjustments.
-        In production, this would use real player stats from API-Football / ESPN.
-        For now, we apply a conservative devig to the implied probability.
+        Data-driven probability estimation using learned historical hit rates.
+        Basketball: uses PropLearningModel (trained on 5500+ settled results).
+        Football: uses conservative devig (insufficient data yet).
         """
         if implied_prob <= 0:
             return 0
+
+        if sport == 'basketball':
+            try:
+                from prop_learning_model import get_model_prob
+                return get_model_prob(market, selection, odds)
+            except Exception:
+                pass
 
         if market == 'player_anytime_goalscorer':
             devig_factor = 1.05
         elif market == 'player_shots_on_goal':
             devig_factor = 1.08 if (line and line <= 1.5) else 1.04
-        elif market == 'player_points':
-            devig_factor = 1.06
-        elif market == 'player_rebounds':
-            devig_factor = 1.06
-        elif market == 'player_assists':
-            devig_factor = 1.06
-        elif market in ('player_points_rebounds_assists', 'player_pra'):
-            devig_factor = 1.05
         else:
-            devig_factor = 1.05
+            devig_factor = 1.03
 
-        model_prob = min(implied_prob * devig_factor, 0.95)
-        return model_prob
+        return min(implied_prob * devig_factor, 0.95)
 
     def _save_props_to_db(self, props: List[Dict]) -> int:
         saved = 0

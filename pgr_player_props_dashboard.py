@@ -332,8 +332,8 @@ if overview is not None and overview['total_props'] > 0:
 
     st.markdown("<div style='margin:20px 0'></div>", unsafe_allow_html=True)
 
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-        "Quality Props", "Performance Tracker", "All Raw Props", "By Sport/Market", "Top Players", "Collection History", "Raw Data"
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+        "Quality Props", "Performance Tracker", "Learned Patterns", "All Raw Props", "By Sport/Market", "Top Players", "Collection History", "Raw Data"
     ])
 
     with tab1:
@@ -726,6 +726,70 @@ if overview is not None and overview['total_props'] > 0:
                 """, unsafe_allow_html=True)
 
     with tab3:
+        st.markdown('<div class="section-title">📈 Learned Patterns (from 5500+ settled bets)</div>', unsafe_allow_html=True)
+        st.markdown("<div style='color:#64748B;font-size:0.8rem;margin-bottom:16px;'>Hit rates learned from historical results — used to calibrate model probabilities. Under consistently outperforms Over.</div>", unsafe_allow_html=True)
+
+        @st.cache_data(ttl=300)
+        def get_learned_patterns():
+            try:
+                with DatabaseConnection.get_connection() as conn:
+                    query = """
+                        SELECT market, selection,
+                            CASE
+                                WHEN odds < 1.80 THEN 'Low (< 1.80)'
+                                WHEN odds < 1.95 THEN 'Mid (1.80–1.95)'
+                                ELSE 'High (1.95+)'
+                            END as odds_tier,
+                            COUNT(*) FILTER (WHERE outcome IN ('won','lost')) as settled,
+                            COUNT(*) FILTER (WHERE outcome='won') as wins,
+                            ROUND(AVG(odds)::numeric, 3) as avg_odds
+                        FROM player_props
+                        WHERE outcome IN ('won','lost') AND sport='basketball'
+                        GROUP BY 1,2,3
+                        HAVING COUNT(*) FILTER (WHERE outcome IN ('won','lost')) >= 20
+                        ORDER BY market, selection, odds_tier
+                    """
+                    return pd.read_sql(query, conn)
+            except Exception:
+                return pd.DataFrame()
+
+        patterns_df = get_learned_patterns()
+
+        if patterns_df.empty:
+            st.info("Not enough settled data yet (need 20+ per segment).")
+        else:
+            patterns_df['hit_rate'] = (patterns_df['wins'] / patterns_df['settled'] * 100).round(1)
+            patterns_df['est_ev'] = ((patterns_df['hit_rate'] / 100 * patterns_df['avg_odds'] - 1) * 100).round(1)
+            patterns_df['market_clean'] = patterns_df['market'].str.replace('player_', '').str.replace('_', ' ').str.title()
+
+            for market in patterns_df['market_clean'].unique():
+                st.markdown(f"**{market}**")
+                mdf = patterns_df[patterns_df['market_clean'] == market].copy()
+                cols = st.columns(len(mdf))
+                for i, (_, row) in enumerate(mdf.iterrows()):
+                    hr = row['hit_rate']
+                    ev = row['est_ev']
+                    hr_color = "#22C55E" if hr >= 55 else ("#F59E0B" if hr >= 50 else "#EF4444")
+                    ev_color = "#22C55E" if ev > 0 else "#EF4444"
+                    sel_icon = "📉" if row['selection'] == 'Under' else "📈"
+                    with cols[i]:
+                        st.markdown(f"""
+                        <div style="background:rgba(15,23,42,0.8);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px;text-align:center;">
+                            <div style="font-size:0.75rem;color:#64748B;">{sel_icon} {row['selection']} · {row['odds_tier']}</div>
+                            <div style="font-size:1.6rem;font-weight:800;color:{hr_color};margin:4px 0;">{hr}%</div>
+                            <div style="font-size:0.72rem;color:#94A3B8;">Hit Rate</div>
+                            <div style="font-size:0.85rem;font-weight:600;color:{ev_color};margin-top:4px;">EV {ev:+.1f}%</div>
+                            <div style="font-size:0.68rem;color:#475569;margin-top:2px;">n={row['settled']}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                st.markdown("")
+
+            total_settled = patterns_df['settled'].sum()
+            total_wins = patterns_df['wins'].sum()
+            overall_hr = round(total_wins / total_settled * 100, 1) if total_settled else 0
+            st.markdown(f"<div style='text-align:center;color:#475569;font-size:0.75rem;margin-top:8px;'>Based on {total_settled:,} settled bets · Overall HR: {overall_hr}%</div>", unsafe_allow_html=True)
+
+    with tab4:
         st.markdown('<div class="section-title">All Raw Props (Unfiltered)</div>', unsafe_allow_html=True)
 
         fcol1, fcol2 = st.columns(2)
@@ -769,7 +833,7 @@ if overview is not None and overview['total_props'] > 0:
                 </div>
                 """, unsafe_allow_html=True)
 
-    with tab4:
+    with tab5:
         sport_market = get_props_by_sport()
         if sport_market.empty:
             st.info("No data yet.")
@@ -815,7 +879,7 @@ if overview is not None and overview['total_props'] > 0:
             )
             st.plotly_chart(fig, width="stretch")
 
-    with tab5:
+    with tab6:
         top_players = get_top_players()
         if top_players.empty:
             st.info("No player data yet.")
@@ -846,7 +910,7 @@ if overview is not None and overview['total_props'] > 0:
                 </div>
                 """, unsafe_allow_html=True)
 
-    with tab6:
+    with tab7:
         daily = get_daily_collection()
         if daily.empty:
             st.info("No collection history yet.")
@@ -877,7 +941,7 @@ if overview is not None and overview['total_props'] > 0:
                 hide_index=True
             )
 
-    with tab7:
+    with tab8:
         st.markdown('<div class="section-title">Raw Props Data</div>', unsafe_allow_html=True)
         try:
             with DatabaseConnection.get_connection() as conn:
