@@ -48,7 +48,7 @@ _cache_loaded = False
 
 
 def _odds_tier(odds: float) -> str:
-    if odds < 1.80:
+    if odds < 1.82:
         return "low"
     elif odds < 1.95:
         return "mid"

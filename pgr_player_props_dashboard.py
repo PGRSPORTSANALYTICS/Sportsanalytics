@@ -736,8 +736,8 @@ if overview is not None and overview['total_props'] > 0:
                     query = """
                         SELECT market, selection,
                             CASE
-                                WHEN odds < 1.80 THEN 'Low (< 1.80)'
-                                WHEN odds < 1.95 THEN 'Mid (1.80–1.95)'
+                                WHEN odds < 1.82 THEN 'Low (1.70–1.82)'
+                                WHEN odds < 1.95 THEN 'Mid (1.82–1.95)'
                                 ELSE 'High (1.95+)'
                             END as odds_tier,
                             COUNT(*) FILTER (WHERE outcome IN ('won','lost')) as settled,

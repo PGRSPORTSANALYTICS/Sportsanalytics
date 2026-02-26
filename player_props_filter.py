@@ -5,7 +5,7 @@ Filters raw player props to keep only stable, high-quality betting candidates.
 
 Quality Filters (all must pass):
 1. Allowed markets only (4 basketball markets)
-2. Odds range: 1.70-2.20
+2. Odds range: 1.70-1.95 (sweetspot)
 3. Deduplication: best odds per player+market+selection+line
 4. Min 10+ historical games this season
 5. Avg minutes >= 22 over last 10 games
@@ -40,8 +40,8 @@ ALLOWED_MARKETS = [
 
 MIN_AVG_MINUTES = 25
 MIN_GAMES_LAST_7 = 5
-MIN_ODDS = 1.75
-MAX_ODDS = 2.15
+MIN_ODDS = 1.70
+MAX_ODDS = 1.95
 MIN_HISTORICAL_GAMES = 15
 MIN_LAST_GAME_MINUTES = 18
 
