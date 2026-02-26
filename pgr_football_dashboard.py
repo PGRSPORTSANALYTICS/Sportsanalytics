@@ -5,8 +5,8 @@ from typing import List, Optional, Dict
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-from streamlit_autorefresh import st_autorefresh
 from sqlalchemy import create_engine, text
+from db_engine_singleton import get_dashboard_engine
 
 from kelly_engine import KellyEngine, suggest_stake, StakeConfig
 
@@ -184,7 +184,7 @@ def get_training_data_stats() -> dict:
         if not db_url:
             return {}
         
-        engine = create_engine(db_url)
+        engine = get_dashboard_engine()
         with engine.connect() as conn:
             result = conn.execute(text("""
                 SELECT 
@@ -445,13 +445,14 @@ def normalize_result(raw_result: Optional[str]) -> str:
 
 # ------------- CONFIG & THEME ------------- #
 
-st.set_page_config(
-    page_title="PGR Sports Analytics – Performance Dashboard",
-    page_icon="📊",
-    layout="wide",
-)
-
-st_autorefresh(interval=300000, limit=None, key="dashboard_autorefresh")  # 5 min refresh
+try:
+    st.set_page_config(
+        page_title="PGR Sports Analytics – Performance Dashboard",
+        page_icon="📊",
+        layout="wide",
+    )
+except Exception:
+    pass  # Already called by parent script (pgr_dashboard.py)
 
 PGR_PRIMARY = "#00FFC2"
 PGR_DARK_BG = "#050A10"
@@ -627,7 +628,7 @@ def load_all_bets_from_db() -> pd.DataFrame:
     ROI is still only based on settled bets (where profit is not null).
     """
     db_url = get_db_url()
-    engine = create_engine(db_url)
+    engine = get_dashboard_engine()
 
     query = text(
         """
@@ -826,13 +827,14 @@ FREE_PICKS_CONFIG = {
     'product_codes': ['VALUE_SINGLE', 'VALUE_SINGLES', 'FOOTBALL_SINGLE']
 }
 
+@st.cache_data(ttl=300, show_spinner=False)
 def get_free_predictions() -> list:
     """
     Select 1-3 free predictions for teaser display.
     Criteria: EV >= 6%, odds 1.80-3.50, sorted by EV descending.
     """
     db_url = get_db_url()
-    engine = create_engine(db_url)
+    engine = get_dashboard_engine()
     
     query = text("""
         SELECT 
@@ -1291,7 +1293,7 @@ def render_overview(df: pd.DataFrame):
             margin=dict(l=0, r=0, t=10, b=0),
         )
         fig.update_traces(line_color="#00F59D", line_width=3)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     else:
         st.info("No settled bets yet - equity curve will appear once results are in.")
 
@@ -1300,7 +1302,7 @@ def render_overview(df: pd.DataFrame):
     table = style_bet_table(latest)
     st.dataframe(
         table,
-        use_container_width=True,
+        width="stretch",
         height=380,
         column_config=None,
     )
@@ -1350,14 +1352,53 @@ def render_overview(df: pd.DataFrame):
     render_learning_track_record()
 
 
+@st.cache_data(ttl=300, show_spinner=False)
+def _load_track_record_summary():
+    """Cached DB fetch for learning system track record summary."""
+    from data_collector import get_collector
+    return get_collector().get_track_record_summary()
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _load_accuracy_by_type():
+    """Cached DB fetch for accuracy breakdown by prediction type."""
+    from data_collector import get_collector
+    return get_collector().get_accuracy_by_type()
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _load_accuracy_by_league():
+    """Cached DB fetch for accuracy breakdown by league."""
+    from data_collector import get_collector
+    return get_collector().get_accuracy_by_league(min_samples=3)
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _load_daily_accuracy():
+    """Cached DB fetch for 30-day daily accuracy data."""
+    from data_collector import get_collector
+    return get_collector().get_daily_accuracy(days=30)
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _load_accuracy_by_market():
+    """Cached DB fetch for daily accuracy breakdown by market (30 days)."""
+    from data_collector import get_collector
+    return get_collector().get_daily_accuracy_by_market(days=30)
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _load_calibration_data():
+    """Cached DB fetch for probability calibration data."""
+    from data_collector import get_collector
+    return get_collector().get_calibration_data(bins=10)
+
+
 def render_learning_track_record():
     """Render the Learning Track Record section showing AI prediction performance."""
-    from data_collector import get_collector
-    
     st.markdown("### 📊 Learning System Track Record")
     
-    collector = get_collector()
-    summary = collector.get_track_record_summary()
+    summary = _load_track_record_summary()
     
     if summary.get('error') or summary.get('settled', 0) == 0:
         st.info("Track record will appear once predictions are settled and verified. Currently collecting data...")
@@ -1436,7 +1477,7 @@ def render_learning_track_record():
     
     # Expandable sections for detailed breakdown
     with st.expander("📈 Performance by Prediction Type", expanded=False):
-        by_type = collector.get_accuracy_by_type()
+        by_type = _load_accuracy_by_type()
         if by_type:
             import pandas as pd
             type_df = pd.DataFrame(by_type)
@@ -1444,23 +1485,23 @@ def render_learning_track_record():
             type_df['Accuracy %'] = type_df['Accuracy %'].apply(lambda x: f"{x:.1f}%")
             type_df['Avg Prob %'] = type_df['Avg Prob %'].apply(lambda x: f"{x*100:.1f}%" if x else "N/A")
             type_df['Avg Edge %'] = type_df['Avg Edge %'].apply(lambda x: f"{x:.1f}%" if x else "N/A")
-            st.dataframe(type_df, use_container_width=True, hide_index=True)
+            st.dataframe(type_df, width="stretch", hide_index=True)
         else:
             st.info("No data by type yet.")
     
     with st.expander("🏆 Performance by League", expanded=False):
-        by_league = collector.get_accuracy_by_league(min_samples=3)
+        by_league = _load_accuracy_by_league()
         if by_league:
             import pandas as pd
             league_df = pd.DataFrame(by_league)
             league_df.columns = ['League', 'Total', 'Settled', 'Correct', 'Accuracy %']
             league_df['Accuracy %'] = league_df['Accuracy %'].apply(lambda x: f"{x:.1f}%")
-            st.dataframe(league_df, use_container_width=True, hide_index=True)
+            st.dataframe(league_df, width="stretch", hide_index=True)
         else:
             st.info("Need more settled predictions per league (min 3) to show breakdown.")
     
     # Accuracy Trend Chart - Redesigned for instant readability
-    daily_data = collector.get_daily_accuracy(days=30)
+    daily_data = _load_daily_accuracy()
     if daily_data and len(daily_data) >= 2:
         import pandas as pd
         import plotly.graph_objects as go
@@ -1572,10 +1613,10 @@ def render_learning_track_record():
             hovermode="x unified"
         )
         
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     
     # Performance by Market Chart - Rolling Trend
-    market_data = collector.get_daily_accuracy_by_market(days=30)
+    market_data = _load_accuracy_by_market()
     if market_data:
         import pandas as pd
         import plotly.graph_objects as go
@@ -1683,10 +1724,10 @@ def render_learning_track_record():
             hovermode="x unified"
         )
         
-        st.plotly_chart(fig_market, use_container_width=True)
+        st.plotly_chart(fig_market, width="stretch")
     
     # Model Calibration Chart
-    calibration_data = collector.get_calibration_data(bins=10)
+    calibration_data = _load_calibration_data()
     if calibration_data and len(calibration_data) >= 2:
         with st.expander("🎯 Model Calibration (Predicted vs Actual)", expanded=False):
             import pandas as pd
@@ -1729,7 +1770,7 @@ def render_learning_track_record():
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             )
             
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
             st.caption("A well-calibrated model follows the diagonal line. Points above = model underestimates, below = overestimates.")
 
 
@@ -2146,9 +2187,24 @@ def render_product_tab(
         
         st.dataframe(
             settled.sort_values("settled_at", ascending=False)[cols_hist],
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
+
+
+@st.cache_data(ttl=120, show_spinner=False)
+def _load_ml_parlays():
+    """Cached DB fetch for ML parlay predictions."""
+    from db_helper import db_helper
+    return db_helper.execute(
+        """SELECT parlay_id, match_date, num_legs, legs, parlay_description,
+                  total_odds, combined_ev, confidence_score, stake,
+                  potential_payout, status, outcome, profit_loss, profit_units, mode, created_at
+           FROM ml_parlay_predictions
+           ORDER BY created_at DESC
+           LIMIT 200""",
+        fetch='all'
+    )
 
 
 def render_ml_parlay_tab():
@@ -2159,17 +2215,7 @@ def render_ml_parlay_tab():
     st.caption("2-Leg Parlays | All Markets | Max 5x Odds | Calibrated Probabilities")
     
     try:
-        from db_helper import db_helper
-        
-        parlays = db_helper.execute(
-            """SELECT parlay_id, match_date, num_legs, legs, parlay_description, 
-                      total_odds, combined_ev, confidence_score, stake, 
-                      potential_payout, status, outcome, profit_loss, profit_units, mode, created_at
-               FROM ml_parlay_predictions 
-               ORDER BY created_at DESC 
-               LIMIT 200""",
-            fetch='all'
-        )
+        parlays = _load_ml_parlays()
         
         if not parlays:
             st.info("No ML Parlays yet. The engine runs every 3 hours and creates parlays when matches meet the filters.")
@@ -2316,7 +2362,7 @@ def render_daily_card_tab():
             if not db_url:
                 st.warning("Database connection not available")
             else:
-                engine = create_engine(db_url)
+                engine = get_dashboard_engine()
                 
                 # Get settled football bets (Value Singles)
                 football_query = """
@@ -2480,7 +2526,7 @@ def render_daily_card_tab():
                             yaxis=dict(title='Units', showgrid=True, gridcolor='rgba(255,255,255,0.1)', color='#9CA3AF'),
                             showlegend=False
                         )
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, width="stretch")
                         
         except Exception as e:
             st.warning(f"Could not load performance history: {e}")
@@ -2635,15 +2681,20 @@ def render_daily_card_tab():
         st.error(f"Error generating daily card: {e}")
 
 
+@st.cache_resource(show_spinner=False)
+def _get_cached_analyzer():
+    """Cache the BacktestAnalyzer singleton — only created once per session."""
+    from backtest_analyzer import BacktestAnalyzer
+    return BacktestAnalyzer()
+
+
 def render_backtest_analysis():
     """Render comprehensive backtest analysis tab with EV, odds, and league breakdowns."""
-    from backtest_analyzer import BacktestAnalyzer
-    
     st.markdown("## Historical Performance Analysis")
     st.caption("Data-driven analysis of what actually works based on all settled bets.")
     
     try:
-        analyzer = BacktestAnalyzer()
+        analyzer = _get_cached_analyzer()
         
         if analyzer.load_error:
             st.warning(f"Could not load backtest data: {analyzer.load_error}")
@@ -2683,7 +2734,7 @@ def render_backtest_analysis():
             st.caption("Which EV ranges generate the best returns?")
             ev_df = analyzer.analyze_ev_thresholds()
             if not ev_df.empty:
-                st.dataframe(ev_df, use_container_width=True, hide_index=True)
+                st.dataframe(ev_df, width="stretch", hide_index=True)
                 
                 best_ev = ev_df.iloc[0]['EV Range']
                 best_roi = ev_df.iloc[0]['ROI']
@@ -2694,7 +2745,7 @@ def render_backtest_analysis():
             st.caption("Which odds ranges are most profitable?")
             odds_df = analyzer.analyze_odds_ranges()
             if not odds_df.empty:
-                st.dataframe(odds_df, use_container_width=True, hide_index=True)
+                st.dataframe(odds_df, width="stretch", hide_index=True)
                 
                 best_odds = odds_df.iloc[0]['Odds Range']
                 best_roi = odds_df.iloc[0]['ROI']
@@ -2709,14 +2760,14 @@ def render_backtest_analysis():
             st.caption("Which leagues predict best?")
             league_df = analyzer.analyze_by_league()
             if not league_df.empty:
-                st.dataframe(league_df, use_container_width=True, hide_index=True)
+                st.dataframe(league_df, width="stretch", hide_index=True)
         
         with col4:
             st.markdown("### Basketball Market Analysis")
             st.caption("Which basketball markets are most accurate?")
             market_df = analyzer.analyze_by_market()
             if not market_df.empty:
-                st.dataframe(market_df, use_container_width=True, hide_index=True)
+                st.dataframe(market_df, width="stretch", hide_index=True)
         
         st.markdown("---")
         
@@ -2727,14 +2778,14 @@ def render_backtest_analysis():
             st.caption("Fine-grained parlay odds analysis")
             sgp_odds_df = analyzer.get_sgp_odds_analysis()
             if not sgp_odds_df.empty:
-                st.dataframe(sgp_odds_df, use_container_width=True, hide_index=True)
+                st.dataframe(sgp_odds_df, width="stretch", hide_index=True)
         
         with col6:
             st.markdown("### Basketball Confidence Levels")
             st.caption("How confidence correlates with accuracy")
             conf_df = analyzer.analyze_confidence_thresholds()
             if not conf_df.empty:
-                st.dataframe(conf_df, use_container_width=True, hide_index=True)
+                st.dataframe(conf_df, width="stretch", hide_index=True)
         
         st.markdown("---")
         st.markdown("### Key Insights")
@@ -2981,7 +3032,7 @@ def render_basketball_tab(df: pd.DataFrame):
             singles_settled["fixture"] = singles_settled.apply(as_fixture, axis=1)
             cols = [c for c in ["fixture", "odds", "result", "profit"] if c in singles_settled.columns]
             if cols:
-                st.dataframe(singles_settled[cols].head(15), use_container_width=True, hide_index=True)
+                st.dataframe(singles_settled[cols].head(15), width="stretch", hide_index=True)
 
     with col2:
         st.markdown("##### Parlays")
@@ -2993,7 +3044,7 @@ def render_basketball_tab(df: pd.DataFrame):
             parlays_settled["fixture"] = parlays_settled.apply(as_fixture, axis=1)
             cols = [c for c in ["fixture", "odds", "result", "profit"] if c in parlays_settled.columns]
             if cols:
-                st.dataframe(parlays_settled[cols].head(15), use_container_width=True, hide_index=True)
+                st.dataframe(parlays_settled[cols].head(15), width="stretch", hide_index=True)
 
 
 def render_parlays_tab():
@@ -3002,7 +3053,7 @@ def render_parlays_tab():
     st.caption("High-edge parlays built from approved L1/L2 single bets across multiple matches.")
 
     db_url = get_db_url()
-    engine = create_engine(db_url)
+    engine = get_dashboard_engine()
     
     from datetime import datetime as dt_module, timedelta as td_module
     today = dt_module.utcnow().date()
@@ -3192,7 +3243,7 @@ def render_parlays_tab():
     display_cols = [c for c in ["match_date", "home_team", "away_team", "parlay_description", "odds", "stake", "ev", "result", "payout"] if c in history_df.columns]
     st.dataframe(
         history_df[display_cols],
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
 
@@ -3204,7 +3255,7 @@ def load_props_bets() -> pd.DataFrame:
     """Load Cards, Corners, and Shots bets from football_opportunities table."""
     try:
         db_url = get_db_url()
-        engine = create_engine(db_url)
+        engine = get_dashboard_engine()
         
         query = text("""
             SELECT 
@@ -3239,7 +3290,7 @@ def load_bookmaker_odds() -> pd.DataFrame:
     """Load bookmaker odds comparison data from football_opportunities table."""
     try:
         db_url = get_db_url()
-        engine = create_engine(db_url)
+        engine = get_dashboard_engine()
         
         from datetime import datetime, timedelta
         today = datetime.utcnow().date()
@@ -3718,7 +3769,7 @@ def render_props_tab():
                 
                 st.dataframe(
                     breakdown_df,
-                    use_container_width=True,
+                    width="stretch",
                     hide_index=True,
                     column_config={
                         'Selection': st.column_config.TextColumn('Selection', width='medium'),
@@ -3824,7 +3875,7 @@ def render_props_tab():
                             showlegend=False
                         )
                         
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, width="stretch")
                         
                         # Summary stats below chart
                         total_profit = profit_df['cumulative'].iloc[-1]
@@ -3864,7 +3915,7 @@ def render_props_tab():
         
         st.dataframe(
             display_df[display_cols].head(100),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
         
@@ -4141,7 +4192,7 @@ def main():
         st.dataframe(
             all_bets[["created_at", "match_date", "product", "home_team", "away_team", "result", "mode", "stake", "odds"]]
             .head(20),
-            use_container_width=True,
+            width="stretch",
         )
 
     # Split PROD vs BACKTEST data
@@ -4206,6 +4257,26 @@ def main():
 
     with system_tab:
         render_system_status_tab()
+
+
+@st.cache_data(ttl=180, show_spinner=False)
+def _load_pipeline_stats():
+    """Cached DB fetch for today's pipeline stats."""
+    db_url = get_db_url()
+    engine = get_dashboard_engine()
+    with engine.connect() as conn:
+        result = conn.execute(text("""
+            SELECT
+                COUNT(*) as total_today,
+                COUNT(*) FILTER (WHERE LOWER(status) = 'pending') as pending,
+                COUNT(*) FILTER (WHERE LOWER(status) = 'won') as won,
+                COUNT(*) FILTER (WHERE LOWER(status) = 'lost') as lost,
+                COUNT(DISTINCT league) as leagues_active,
+                COUNT(DISTINCT selection) as markets_used
+            FROM football_opportunities
+            WHERE match_date::date = CURRENT_DATE
+        """))
+        return result.fetchone()
 
 
 def render_system_status_tab():
@@ -4340,28 +4411,14 @@ def render_system_status_tab():
     st.markdown("---")
     st.markdown("### Today's Pipeline Stats")
     try:
-        db_url = get_db_url()
-        engine = create_engine(db_url)
-        with engine.connect() as conn:
-            result = conn.execute(text("""
-                SELECT 
-                    COUNT(*) as total_today,
-                    COUNT(*) FILTER (WHERE LOWER(status) = 'pending') as pending,
-                    COUNT(*) FILTER (WHERE LOWER(status) = 'won') as won,
-                    COUNT(*) FILTER (WHERE LOWER(status) = 'lost') as lost,
-                    COUNT(DISTINCT league) as leagues_active,
-                    COUNT(DISTINCT selection) as markets_used
-                FROM football_opportunities
-                WHERE match_date::date = CURRENT_DATE
-            """))
-            row = result.fetchone()
-            if row:
-                c1, c2, c3, c4, c5 = st.columns(5)
-                c1.metric("Predictions Today", row[0])
-                c2.metric("Pending", row[1])
-                c3.metric("Won", row[2])
-                c4.metric("Lost", row[3])
-                c5.metric("Leagues Active", row[4])
+        row = _load_pipeline_stats()
+        if row:
+            c1, c2, c3, c4, c5 = st.columns(5)
+            c1.metric("Predictions Today", row[0])
+            c2.metric("Pending", row[1])
+            c3.metric("Won", row[2])
+            c4.metric("Lost", row[3])
+            c5.metric("Leagues Active", row[4])
     except Exception as e:
         st.warning("Could not load pipeline stats.")
 

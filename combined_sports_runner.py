@@ -604,22 +604,40 @@ def main():
     # Run enabled engines on startup — each wrapped individually so one crash can't kill startup
     logger.info("🎬 Running initial prediction cycles...")
     
-    if ENABLE_VALUE_SINGLES:
-        try:
-            run_value_singles()
-        except BaseException as e:
-            logger.error(f"❌ Value Singles startup crash: {e}")
-        time.sleep(5)
-        try:
-            run_corners()
-        except BaseException as e:
-            logger.error(f"❌ Corners startup crash: {e}")
-        time.sleep(5)
-        try:
-            run_cards()
-        except BaseException as e:
-            logger.error(f"❌ Cards startup crash: {e}")
-        time.sleep(5)
+    if ENABLE_VALUE_SINGLES or ENABLE_PGR_ANALYTICS:
+        # Delay heavy cycles to avoid CPU/DB spike at startup (crashes container at ~30s).
+        # PGR Analytics (mass DB inserts) + Value Singles/Corners/Cards all run after 10-min delay.
+        def _delayed_startup_cycles():
+            time.sleep(600)  # 10-minute delay
+            if ENABLE_PGR_ANALYTICS:
+                logger.info("⏰ Delayed startup: running PGR Analytics cycle...")
+                try:
+                    run_pgr_analytics()
+                    logger.info("📊 PGR Analytics initial sync complete")
+                except BaseException as e:
+                    logger.error(f"❌ PGR Analytics startup crash: {e}")
+                time.sleep(10)
+            if ENABLE_VALUE_SINGLES:
+                logger.info("⏰ Delayed startup: running Value Singles cycle...")
+                try:
+                    run_value_singles()
+                except BaseException as e:
+                    logger.error(f"❌ Value Singles startup crash: {e}")
+                time.sleep(10)
+                logger.info("⏰ Delayed startup: running Corners cycle...")
+                try:
+                    run_corners()
+                except BaseException as e:
+                    logger.error(f"❌ Corners startup crash: {e}")
+                time.sleep(10)
+                logger.info("⏰ Delayed startup: running Cards cycle...")
+                try:
+                    run_cards()
+                except BaseException as e:
+                    logger.error(f"❌ Cards startup crash: {e}")
+        import threading as _threading
+        _threading.Thread(target=_delayed_startup_cycles, daemon=True, name="startup-cycles").start()
+        logger.info("⏩ Value Singles / Corners / Cards / PGR Analytics: first run in 10 minutes (startup delay)")
     else:
         logger.info("⏸️ Value Singles PAUSED")
     
@@ -685,14 +703,8 @@ def main():
     except BaseException as e:
         logger.error(f"❌ ML Parlay results startup crash: {e}")
     logger.info("✅ Initial verification complete")
-    
-    # Run PGR Analytics on startup — sync existing bets + capture odds
-    if ENABLE_PGR_ANALYTICS:
-        try:
-            run_pgr_analytics()
-            logger.info("📊 PGR Analytics initial sync complete")
-        except BaseException as e:
-            logger.error(f"❌ PGR Analytics startup crash: {e}")
+    # PGR Analytics initial run is handled by _delayed_startup_cycles (10-min delay)
+    # to avoid DB write spike crashing the container at ~30s startup
     
     # Schedule recurring prediction tasks (only enabled products)
     if ENABLE_VALUE_SINGLES:

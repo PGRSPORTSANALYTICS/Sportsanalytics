@@ -21,10 +21,19 @@ st.sidebar.title("🏆 PGR Sports")
 page = st.sidebar.radio("Select Sport", ["⚽ Football", "🏀 College Basketball", "🎯 Player Props", "🌐 Learning Sports", "🎰 Stryktipset"])
 
 if page == "⚽ Football":
-    st.info("📌 Football Dashboard is loading from the original file...")
-    with open("pgr_football_dashboard.py", "r") as f:
-        code = f.read()
-    exec(compile(code, "pgr_football_dashboard.py", "exec"), globals())
+    import pgr_bg_cache as _bgc
+    _loaded, _cache_hit = _bgc.get("_football_loaded")
+    if not _cache_hit:
+        with st.status("Loading Football Analytics...", expanded=False) as _s:
+            with open("pgr_football_dashboard.py", "r") as f:
+                code = f.read()
+            exec(compile(code, "pgr_football_dashboard.py", "exec"), globals())
+            _bgc.set_cache("_football_loaded", True, ttl=86400)
+            _s.update(label="Football Analytics", state="complete", expanded=False)
+    else:
+        with open("pgr_football_dashboard.py", "r") as f:
+            code = f.read()
+        exec(compile(code, "pgr_football_dashboard.py", "exec"), globals())
 elif page == "🎯 Player Props":
     with open("pgr_player_props_dashboard.py", "r") as f:
         code = f.read()
@@ -346,7 +355,7 @@ else:
                 template="plotly_white",
                 height=400
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
             col1, col2 = st.columns(2)
             with col1:
@@ -355,7 +364,7 @@ else:
                     go.Bar(name='Losses', x=daily_df['date'], y=daily_df['losses'], marker_color='#f44336')
                 ])
                 fig2.update_layout(title="Daily Wins vs Losses", barmode='group', template="plotly_white", height=300)
-                st.plotly_chart(fig2, use_container_width=True)
+                st.plotly_chart(fig2, width="stretch")
 
             with col2:
                 fig3 = go.Figure(data=[
@@ -363,7 +372,7 @@ else:
                            marker_color=['#4CAF50' if x >= 0 else '#f44336' for x in daily_df['daily_profit']])
                 ])
                 fig3.update_layout(title="Daily Profit/Loss", template="plotly_white", height=300)
-                st.plotly_chart(fig3, use_container_width=True)
+                st.plotly_chart(fig3, width="stretch")
 
     with tab4:
         try:
@@ -378,7 +387,7 @@ else:
                 """
                 all_df = pd.read_sql(all_query, conn)
                 if not all_df.empty:
-                    st.dataframe(all_df, use_container_width=True, hide_index=True)
+                    st.dataframe(all_df, width="stretch", hide_index=True)
                 else:
                     st.info("No data available")
         except Exception as e:

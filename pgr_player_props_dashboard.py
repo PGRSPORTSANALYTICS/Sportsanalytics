@@ -657,7 +657,7 @@ if overview is not None and overview['total_props'] > 0:
                     xaxis_title="Date", yaxis_title="Profit (units)",
                     margin=dict(t=20, b=40)
                 )
-                st.plotly_chart(fig_t, use_container_width=True)
+                st.plotly_chart(fig_t, width="stretch")
 
                 tc1, tc2 = st.columns(2)
                 with tc1:
@@ -671,7 +671,7 @@ if overview is not None and overview['total_props'] > 0:
                         paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
                         font=dict(color='#94A3B8'), margin=dict(t=40, b=30)
                     )
-                    st.plotly_chart(fig_wl, use_container_width=True)
+                    st.plotly_chart(fig_wl, width="stretch")
 
                 with tc2:
                     fig_dp = go.Figure(data=[
@@ -683,7 +683,7 @@ if overview is not None and overview['total_props'] > 0:
                         paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
                         font=dict(color='#94A3B8'), margin=dict(t=40, b=30)
                     )
-                    st.plotly_chart(fig_dp, use_container_width=True)
+                    st.plotly_chart(fig_dp, width="stretch")
 
             recent = get_tracker_recent()
             if not recent.empty:
@@ -811,7 +811,7 @@ if overview is not None and overview['total_props'] > 0:
                 plot_bgcolor='rgba(0,0,0,0)',
                 font=dict(color='#94A3B8')
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
     with tab5:
         top_players = get_top_players()
@@ -867,11 +867,11 @@ if overview is not None and overview['total_props'] > 0:
                 plot_bgcolor='rgba(0,0,0,0)',
                 font=dict(color='#94A3B8')
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
             st.dataframe(
                 daily.style.format({'avg_edge': '{:.1f}%'}),
-                use_container_width=True,
+                width="stretch",
                 hide_index=True
             )
 
@@ -892,7 +892,7 @@ if overview is not None and overview['total_props'] > 0:
                 """
                 raw_df = pd.read_sql(raw_query, conn)
                 if not raw_df.empty:
-                    st.dataframe(raw_df, use_container_width=True, hide_index=True)
+                    st.dataframe(raw_df, width="stretch", hide_index=True)
                 else:
                     st.info("No data available.")
         except Exception as e:

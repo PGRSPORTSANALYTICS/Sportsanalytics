@@ -108,7 +108,7 @@ def render_coupon_selector(conn):
 
     with col_new:
         st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("➕ New Coupon", key="stryk_new_coupon", use_container_width=True):
+        if st.button("➕ New Coupon", key="stryk_new_coupon", width="stretch"):
             st.session_state.stryk_show_create = True
 
     if st.session_state.get("stryk_show_create", False):
@@ -137,7 +137,7 @@ def render_create_coupon(conn):
         matches.append({"match_no": i, "home_team": home, "away_team": away, "league": league or None})
 
     c_save, c_cancel = st.columns(2)
-    if c_save.button("Create Coupon", key="stryk_create_save", type="primary", use_container_width=True):
+    if c_save.button("Create Coupon", key="stryk_create_save", type="primary", width="stretch"):
         missing = [m for m in matches if not m["home_team"].strip() or not m["away_team"].strip()]
         if missing:
             st.error(f"Please fill in all 13 matches (missing: {[m['match_no'] for m in missing]})")
@@ -153,7 +153,7 @@ def render_create_coupon(conn):
             else:
                 st.error(f"Error: {resp}")
 
-    if c_cancel.button("Cancel", key="stryk_create_cancel", use_container_width=True):
+    if c_cancel.button("Cancel", key="stryk_create_cancel", width="stretch"):
         st.session_state.stryk_show_create = False
         st.rerun()
 
@@ -250,7 +250,7 @@ def render_matches_overview(conn, coupon_id):
         })
 
     df = pd.DataFrame(rows)
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)
 
     if probs:
         prob_data = []
@@ -270,7 +270,7 @@ def render_matches_overview(conn, coupon_id):
             font_color="white", yaxis_tickformat=".0%",
             margin=dict(l=20, r=20, t=30, b=20)
         )
-        st.plotly_chart(fig, use_container_width=True, key="stryktipset_overview_chart")
+        st.plotly_chart(fig, width="stretch", key="stryktipset_overview_chart")
 
 
 def render_actions(conn, coupon_id, status):
@@ -284,7 +284,7 @@ def render_actions(conn, coupon_id, status):
     with c1:
         pred_status = "✅ Done" if has_probs else "⏳ Pending"
         st.markdown(f"**Predict** — {pred_status}")
-        if st.button("🔮 Run Predictions", key="act_predict", use_container_width=True, type="primary"):
+        if st.button("🔮 Run Predictions", key="act_predict", width="stretch", type="primary"):
             with st.spinner("Running AI predictions..."):
                 code, resp = api_call("POST", f"/admin/stryk/coupons/{coupon_id}/predict")
             if code == 200:
@@ -306,7 +306,7 @@ def render_actions(conn, coupon_id, status):
     with c3:
         st.markdown(f"**Status:** {status}")
         if status != "settled":
-            if st.button("🔵 Settle Results", key="act_settle", use_container_width=True):
+            if st.button("🔵 Settle Results", key="act_settle", width="stretch"):
                 st.session_state.stryk_show_settle = True
         else:
             st.success("Coupon is settled")
@@ -314,7 +314,7 @@ def render_actions(conn, coupon_id, status):
     with c4:
         if status == "settled" and has_system:
             systems = conn.execute("SELECT id FROM stryk_systems WHERE coupon_id = ?", (coupon_id,)).fetchall()
-            if st.button("📊 Score All Systems", key="act_score_all", use_container_width=True, type="primary"):
+            if st.button("📊 Score All Systems", key="act_score_all", width="stretch", type="primary"):
                 for sys in systems:
                     code, resp = api_call("POST", f"/admin/stryk/coupons/{coupon_id}/score_system/{sys['id']}")
                 if code == 200:
@@ -344,7 +344,7 @@ def render_settle_form(conn, coupon_id):
         )
         results[str(m["match_no"])] = res
 
-    if st.button("Submit Results", key="settle_submit", type="primary", use_container_width=True):
+    if st.button("Submit Results", key="settle_submit", type="primary", width="stretch"):
         code, resp = api_call("POST", f"/admin/stryk/coupons/{coupon_id}/settle", {"results": results})
         if code == 200:
             st.success("Coupon settled!")
@@ -392,7 +392,7 @@ def render_public_input(conn, coupon_id):
         public_data[str(m["match_no"])] = {"1": p1, "X": px_val, "2": p2}
 
     st.markdown("---")
-    if st.button("💾 Save Public %", key="pub_save", type="primary", use_container_width=True, disabled=not all_valid):
+    if st.button("💾 Save Public %", key="pub_save", type="primary", width="stretch", disabled=not all_valid):
         code, resp = api_call("POST", f"/admin/stryk/coupons/{coupon_id}/public", {"public": public_data})
         if code == 200:
             st.success(f"Public % updated for {resp.get('updated', 13)} matches!")
@@ -427,7 +427,7 @@ def render_generate_system(conn, coupon_id):
         min_prob = ac5.number_input("Min Outcome Prob", value=0.10, min_value=0.01, max_value=0.30, step=0.01, key="gen_minprob")
         alpha = ac6.number_input("Public Bias (alpha)", value=0.25, min_value=0.0, max_value=0.7, step=0.05, key="gen_alpha")
 
-    if st.button("🚀 Generate System", key="gen_submit", type="primary", use_container_width=True):
+    if st.button("🚀 Generate System", key="gen_submit", type="primary", width="stretch"):
         payload = {
             "preset": preset,
             "target_rows": target_rows,
@@ -490,7 +490,7 @@ def render_generate_system(conn, coupon_id):
 
                         class_data.append({"#": no_str, "Match": teams, "Type": tag, "Allowed": ", ".join(outcomes)})
 
-                    st.dataframe(pd.DataFrame(class_data), use_container_width=True, hide_index=True)
+                    st.dataframe(pd.DataFrame(class_data), width="stretch", hide_index=True)
 
 
 def render_system_rows(conn, coupon_id):
@@ -550,14 +550,14 @@ def render_system_rows(conn, coupon_id):
             "Contrarian": f"{r['contrarian_score']:.1f}" if r["contrarian_score"] else "—"
         })
 
-    st.dataframe(pd.DataFrame(row_data), use_container_width=True, hide_index=True, height=400)
+    st.dataframe(pd.DataFrame(row_data), width="stretch", hide_index=True, height=400)
 
     if draw_counts:
         st.markdown("**Draw Distribution in System:**")
         dc1, dc2 = st.columns([2, 3])
         with dc1:
             draw_df = pd.DataFrame([{"Draws": k, "Rows": v} for k, v in sorted(draw_counts.items())])
-            st.dataframe(draw_df, use_container_width=True, hide_index=True)
+            st.dataframe(draw_df, width="stretch", hide_index=True)
 
         with dc2:
             fig = go.Figure(data=[go.Bar(
@@ -574,7 +574,7 @@ def render_system_rows(conn, coupon_id):
                 font_color="white", height=250,
                 margin=dict(l=20, r=20, t=20, b=20)
             )
-            st.plotly_chart(fig, use_container_width=True, key="stryktipset_match_chart")
+            st.plotly_chart(fig, width="stretch", key="stryktipset_match_chart")
 
 
 def render_scoring(conn, coupon_id, status):
@@ -649,7 +649,7 @@ def render_scoring(conn, coupon_id, status):
                     font_color="white", height=300,
                     margin=dict(l=20, r=20, t=20, b=20)
                 )
-                st.plotly_chart(fig, use_container_width=True, key=f"stryktipset_scoring_chart_{score_idx}")
+                st.plotly_chart(fig, width="stretch", key=f"stryktipset_scoring_chart_{score_idx}")
 
     st.markdown("---")
     st.markdown("### All-Time Summary")
@@ -682,7 +682,7 @@ def render_scoring(conn, coupon_id, status):
                 font_color="white", yaxis_range=[0, 14], height=300,
                 margin=dict(l=20, r=20, t=30, b=20)
             )
-            st.plotly_chart(fig, use_container_width=True, key="stryktipset_history_chart")
+            st.plotly_chart(fig, width="stretch", key="stryktipset_history_chart")
 
 
 render_stryktipset_dashboard()

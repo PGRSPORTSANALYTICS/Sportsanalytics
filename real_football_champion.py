@@ -607,9 +607,9 @@ class RealFootballChampion:
             for league_id in league_ids[:30]:  # Check top 30 leagues (includes European cups)
                 try:
                     # Get upcoming fixtures using CACHED client
-                    cache_key = f"fixtures_league_{league_id}_{today.strftime('%Y%m%d')}_7d"
+                    cache_key = f"fixtures_league_{league_id}_{today.strftime('%Y%m%d')}_3d"
                     
-                    end_date = today + timedelta(days=7)
+                    end_date = today + timedelta(days=3)
                     current_year = today.year
                     current_season = current_year if today.month >= 7 else current_year - 1
                     
@@ -673,18 +673,18 @@ class RealFootballChampion:
             except Exception as e:
                 print(f"❌ Emergency scraping failed: {e}")
         
-        print(f"📅 Filtered to {len(near_time_matches)} upcoming matches (next 7 days)")
+        print(f"📅 Filtered to {len(near_time_matches)} upcoming matches (next 3 days)")
         return near_time_matches
     
     def filter_near_time_matches(self, matches: List[Dict]) -> List[Dict]:
-        """Filter matches to only those happening in the next 7 days (captures weekends)"""
+        """Filter matches to only those happening in the next 3 days"""
         from datetime import datetime, timedelta
         
         if not matches:
             return []
         
         now = datetime.now()
-        week_end = now + timedelta(days=7)  # Look ahead 7 days to capture weekend matches
+        week_end = now + timedelta(days=3)  # Look ahead 3 days to limit Monte Carlo workload
         
         near_time_matches = []
         
@@ -699,7 +699,7 @@ class RealFootballChampion:
                 # Convert to local time for comparison
                 match_time_local = match_time.replace(tzinfo=None)
                 
-                # Include matches starting in the next 7 days
+                # Include matches starting in the next 3 days
                 if now <= match_time_local <= week_end:
                     near_time_matches.append(match)
                     

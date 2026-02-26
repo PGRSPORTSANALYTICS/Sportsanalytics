@@ -273,7 +273,7 @@ for tab_idx, (cat, cfg) in enumerate(SPORT_CONFIGS.items()):
                     margin=dict(l=40, r=20, t=40, b=30),
                     font=dict(size=11),
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
 
             with chart_cols[1]:
                 fig2 = go.Figure()
@@ -296,7 +296,7 @@ for tab_idx, (cat, cfg) in enumerate(SPORT_CONFIGS.items()):
                     font=dict(size=11),
                     yaxis=dict(range=[0, 100]),
                 )
-                st.plotly_chart(fig2, use_container_width=True)
+                st.plotly_chart(fig2, width="stretch")
 
             bar_cols = st.columns(2)
 
@@ -313,7 +313,7 @@ for tab_idx, (cat, cfg) in enumerate(SPORT_CONFIGS.items()):
                     paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
                     margin=dict(l=40, r=20, t=40, b=30), font=dict(size=11),
                 )
-                st.plotly_chart(fig3, use_container_width=True)
+                st.plotly_chart(fig3, width="stretch")
 
             with bar_cols[1]:
                 if not by_market.empty:
@@ -331,7 +331,7 @@ for tab_idx, (cat, cfg) in enumerate(SPORT_CONFIGS.items()):
                         paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
                         margin=dict(l=40, r=20, t=40, b=30), font=dict(size=11),
                     )
-                    st.plotly_chart(fig4, use_container_width=True)
+                    st.plotly_chart(fig4, width="stretch")
 
         else:
             st.info(f"No settled bets yet for {cfg['label']}. Data will appear once games are completed and settled.")

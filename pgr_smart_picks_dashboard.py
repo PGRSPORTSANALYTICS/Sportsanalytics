@@ -206,4 +206,4 @@ def _render_picks_table(picks: list):
 
     if rows:
         df = pd.DataFrame(rows)
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(df, width="stretch", hide_index=True)

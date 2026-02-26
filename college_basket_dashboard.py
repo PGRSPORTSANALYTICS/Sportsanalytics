@@ -400,7 +400,7 @@ with tab_smart:
                 'EV': f"{p['ev_percentage']:+.1f}%",
                 'Best Book': best_str,
             })
-        st.dataframe(pd.DataFrame(table_data), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(table_data), width="stretch", hide_index=True)
 
 with tab1:
     if picks_df.empty:
@@ -489,7 +489,7 @@ with tab3:
             height=400
         )
         
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
         
         col1, col2 = st.columns(2)
         
@@ -504,7 +504,7 @@ with tab3:
                 template="plotly_white",
                 height=300
             )
-            st.plotly_chart(fig2, use_container_width=True)
+            st.plotly_chart(fig2, width="stretch")
         
         with col2:
             fig3 = go.Figure(data=[
@@ -516,7 +516,7 @@ with tab3:
                 template="plotly_white",
                 height=300
             )
-            st.plotly_chart(fig3, use_container_width=True)
+            st.plotly_chart(fig3, width="stretch")
 
 with tab4:
     try:
@@ -538,7 +538,7 @@ with tab4:
             all_df = pd.read_sql(all_query, conn)
             
             if not all_df.empty:
-                st.dataframe(all_df, use_container_width=True, hide_index=True)
+                st.dataframe(all_df, width="stretch", hide_index=True)
             else:
                 st.info("No data available")
     except Exception as e:
