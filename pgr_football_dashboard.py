@@ -1518,7 +1518,7 @@ def render_learning_track_record():
         """, unsafe_allow_html=True)
         
         # View toggle
-        chart_view = st.radio("", ["Trend", "Daily Breakdown"], horizontal=True, key="accuracy_chart_view", label_visibility="collapsed")
+        chart_view = st.radio("Chart View", ["Trend", "Daily Breakdown"], horizontal=True, key="accuracy_chart_view", label_visibility="collapsed")
         
         fig = go.Figure()
         
