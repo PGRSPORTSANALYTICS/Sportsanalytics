@@ -673,7 +673,7 @@ class RealFootballChampion:
             except Exception as e:
                 print(f"❌ Emergency scraping failed: {e}")
         
-        print(f"📅 Filtered to {len(near_time_matches)} upcoming matches (next 3 days)")
+        print(f"📅 Filtered to {len(near_time_matches)} upcoming matches (next 2 days)")
         return near_time_matches
     
     def filter_near_time_matches(self, matches: List[Dict]) -> List[Dict]:
@@ -684,7 +684,7 @@ class RealFootballChampion:
             return []
         
         now = datetime.now()
-        week_end = now + timedelta(days=3)  # Look ahead 3 days to limit Monte Carlo workload
+        week_end = now + timedelta(days=2)  # Look ahead 2 days to reduce batch size and processing time
         
         near_time_matches = []
         
