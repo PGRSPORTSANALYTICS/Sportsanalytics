@@ -25,7 +25,7 @@ SPORT_GRACE_HOURS = {
 
 # Tennis matches finish within hours — void quickly if no scores appear
 SPORT_VOID_HOURS = {
-    'TENNIS': 24,
+    'TENNIS': 6,
     'HOCKEY': 48,
     'MMA': 72,
 }
@@ -165,7 +165,7 @@ def _fetch_scores(api_key: str, sport_key: str) -> List[Dict]:
             f'https://api.the-odds-api.com/v4/sports/{sport_key}/scores',
             params={
                 'apiKey': api_key,
-                'daysFrom': 5,
+                'daysFrom': 3,
             },
             timeout=15
         )
