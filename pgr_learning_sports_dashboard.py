@@ -1,7 +1,7 @@
 """
 Learning Sports Dashboard
 ==========================
-Separate sections for Tennis, Hockey (NHL/SHL), and MMA
+Separate sections for Hockey (NHL/SHL) and MMA.
 Each with performance tracker and learning curve graphs.
 """
 
@@ -12,7 +12,6 @@ from datetime import datetime, timedelta
 from db_connection import DatabaseConnection
 
 SPORT_CONFIGS = {
-    'TENNIS': {'emoji': '🎾', 'label': 'Tennis', 'color': '#4CAF50', 'color_light': 'rgba(76,175,80,0.15)'},
     'HOCKEY': {'emoji': '🏒', 'label': 'Hockey', 'color': '#2196F3', 'color_light': 'rgba(33,150,243,0.15)'},
     'MMA': {'emoji': '🥊', 'label': 'MMA', 'color': '#FF5722', 'color_light': 'rgba(255,87,34,0.15)'},
 }

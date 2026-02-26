@@ -1,7 +1,7 @@
 """
 Multi-Sport Learning Engine
 ============================
-Scans odds from The Odds API for Tennis, NHL/SHL Hockey, and MMA.
+Scans odds from The Odds API for NHL/SHL Hockey and MMA.
 Learning mode only - no real stakes, simulated 1u flat bets.
 Collects data to find edges for potential future production markets.
 """
@@ -17,26 +17,6 @@ from db_connection import DatabaseConnection
 logger = logging.getLogger(__name__)
 
 SPORT_CONFIG = {
-    'TENNIS': {
-        'sport_keys': [
-            'tennis_atp_australian_open', 'tennis_atp_french_open',
-            'tennis_atp_us_open', 'tennis_atp_wimbledon',
-            'tennis_wta_australian_open', 'tennis_wta_french_open',
-            'tennis_wta_us_open', 'tennis_wta_wimbledon',
-            'tennis_atp_indian_wells', 'tennis_wta_indian_wells',
-            'tennis_atp_miami_open', 'tennis_wta_miami_open',
-            'tennis_atp_rome', 'tennis_wta_rome',
-            'tennis_atp_madrid_open', 'tennis_wta_madrid_open',
-            'tennis_atp_canadian_open', 'tennis_wta_canadian_open',
-            'tennis_atp_cincinnati_open', 'tennis_wta_cincinnati_open',
-            'tennis_atp_shanghai', 'tennis_wta_beijing',
-            'tennis_atp_qatar_open', 'tennis_wta_qatar_open',
-            'tennis_atp_dubai', 'tennis_wta_dubai',
-        ],
-        'markets': 'h2h,totals',
-        'label': 'Tennis',
-        'emoji': '🎾',
-    },
     'HOCKEY': {
         'sport_keys': [
             'icehockey_nhl',
@@ -64,7 +44,6 @@ API_BUDGET_PER_CYCLE = 12
 
 def run_multi_sport_learning() -> Dict:
     stats = {
-        'TENNIS': {'scanned': 0, 'saved': 0},
         'HOCKEY': {'scanned': 0, 'saved': 0},
         'MMA': {'scanned': 0, 'saved': 0},
         'api_calls': 0,
@@ -129,7 +108,7 @@ def run_multi_sport_learning() -> Dict:
                      f"{stats[category]['scanned']} events scanned, "
                      f"{stats[category]['saved']} picks saved")
 
-    total_saved = sum(s['saved'] for s in [stats['TENNIS'], stats['HOCKEY'], stats['MMA']])
+    total_saved = sum(s['saved'] for s in [stats['HOCKEY'], stats['MMA']])
     logger.info(f"Multi-sport learning complete: {total_saved} total picks saved, "
                 f"{stats['api_calls']} API calls used")
 

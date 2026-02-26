@@ -18,14 +18,11 @@ SETTLE_GRACE_HOURS = 2
 VOID_AFTER_HOURS = 72
 
 SPORT_GRACE_HOURS = {
-    'TENNIS': 2,
     'HOCKEY': 3,
     'MMA': 4,
 }
 
-# Tennis matches finish within hours — void quickly if no scores appear
 SPORT_VOID_HOURS = {
-    'TENNIS': 6,
     'HOCKEY': 48,
     'MMA': 72,
 }
@@ -147,6 +144,7 @@ def _get_pending_bets() -> List[Dict]:
                        odds, commence_time
                 FROM learning_bets
                 WHERE status = 'pending'
+                  AND sport_category != 'TENNIS'
                   AND commence_time < NOW() - INTERVAL '2 hours'
                   AND commence_time > NOW() - INTERVAL '10 days'
                 ORDER BY commence_time ASC
