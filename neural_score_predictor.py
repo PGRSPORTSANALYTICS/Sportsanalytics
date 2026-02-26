@@ -13,15 +13,30 @@ from pathlib import Path
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Try to import tensorflow/keras, fall back gracefully if not available
-try:
-    from tensorflow import keras
-    from tensorflow.keras import layers, models, callbacks
-    from tensorflow.keras.utils import to_categorical
-    KERAS_AVAILABLE = True
-except ImportError:
-    KERAS_AVAILABLE = False
-    logger.warning("⚠️ TensorFlow not available. Neural network predictions disabled.")
+KERAS_AVAILABLE = False
+keras = None
+layers = None
+models = None
+callbacks = None
+to_categorical = None
+
+def _try_import_keras():
+    global KERAS_AVAILABLE, keras, layers, models, callbacks, to_categorical
+    if KERAS_AVAILABLE:
+        return True
+    try:
+        from tensorflow import keras as _keras
+        from tensorflow.keras import layers as _layers, models as _models, callbacks as _callbacks
+        from tensorflow.keras.utils import to_categorical as _to_categorical
+        keras = _keras
+        layers = _layers
+        models = _models
+        callbacks = _callbacks
+        to_categorical = _to_categorical
+        KERAS_AVAILABLE = True
+        return True
+    except ImportError:
+        return False
 
 
 class NeuralScorePredictor:
@@ -38,10 +53,9 @@ class NeuralScorePredictor:
         self.max_goals = 6  # Predict scores 0-6 for each team
         self.feature_scaler = None
         
-        if not KERAS_AVAILABLE:
-            logger.warning("⚠️ Neural network disabled - TensorFlow not installed")
+        pass  
     
-    def create_model(self, input_dim: int) -> models.Model:
+    def create_model(self, input_dim: int):
         """
         Create neural network architecture for score prediction
         
@@ -248,13 +262,13 @@ class NeuralScorePredictor:
     
     def load_model(self, model_name: str = 'exact_score_nn'):
         """Load trained model from disk"""
-        if not KERAS_AVAILABLE:
-            return False
-        
         model_path = self.model_dir / f"{model_name}.h5"
         
         if not model_path.exists():
             logger.warning(f"⚠️ Model not found: {model_path}")
+            return False
+        
+        if not _try_import_keras():
             return False
         
         try:

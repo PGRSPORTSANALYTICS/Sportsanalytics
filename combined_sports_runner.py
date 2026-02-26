@@ -601,6 +601,20 @@ def main():
     logger.info("🎁 Free Picks - Daily at 10:00 (Discord)")
     logger.info("="*80)
     
+    # Smart Picks catchup — if it's past 08:00 UTC and engine just started, run it now
+    import datetime as _dt
+    _now_utc = _dt.datetime.utcnow()
+    if _now_utc.hour >= 8:
+        def _smart_picks_catchup():
+            time.sleep(15)  # brief delay to let DB settle
+            try:
+                logger.info("🧠 Smart Picks catchup: running missed 08:00 cycle...")
+                run_smart_picks()
+            except Exception as e:
+                logger.error(f"❌ Smart Picks catchup error: {e}")
+        import threading as _sp_thread
+        _sp_thread.Thread(target=_smart_picks_catchup, daemon=True, name="smart-picks-catchup").start()
+
     # Run enabled engines on startup — each wrapped individually so one crash can't kill startup
     logger.info("🎬 Running initial prediction cycles...")
     
@@ -608,15 +622,7 @@ def main():
         # Delay heavy cycles to avoid CPU/DB spike at startup (crashes container at ~30s).
         # PGR Analytics (mass DB inserts) + Value Singles/Corners/Cards all run after 10-min delay.
         def _delayed_startup_cycles():
-            time.sleep(600)  # 10-minute delay
-            if ENABLE_PGR_ANALYTICS:
-                logger.info("⏰ Delayed startup: running PGR Analytics cycle...")
-                try:
-                    run_pgr_analytics()
-                    logger.info("📊 PGR Analytics initial sync complete")
-                except BaseException as e:
-                    logger.error(f"❌ PGR Analytics startup crash: {e}")
-                time.sleep(10)
+            time.sleep(10)  # 10-second delay — start picks before typical crash window
             if ENABLE_VALUE_SINGLES:
                 logger.info("⏰ Delayed startup: running Value Singles cycle...")
                 try:
@@ -635,9 +641,17 @@ def main():
                     run_cards()
                 except BaseException as e:
                     logger.error(f"❌ Cards startup crash: {e}")
+                time.sleep(10)
+            if ENABLE_PGR_ANALYTICS:
+                logger.info("⏰ Delayed startup: running PGR Analytics cycle...")
+                try:
+                    run_pgr_analytics()
+                    logger.info("📊 PGR Analytics initial sync complete")
+                except BaseException as e:
+                    logger.error(f"❌ PGR Analytics startup crash: {e}")
         import threading as _threading
         _threading.Thread(target=_delayed_startup_cycles, daemon=True, name="startup-cycles").start()
-        logger.info("⏩ Value Singles / Corners / Cards / PGR Analytics: first run in 10 minutes (startup delay)")
+        logger.info("⏩ Value Singles / Corners / Cards / PGR Analytics: first run in 30 seconds (startup delay)")
     else:
         logger.info("⏸️ Value Singles PAUSED")
     
@@ -772,10 +786,13 @@ def main():
     
     logger.info("✅ All schedules configured. Starting main loop...")
     
+    _heartbeat_counter = 0
     # Keep running — catch BaseException so MemoryError/SystemExit don't kill the loop
     while True:
         try:
             schedule.run_pending()
+            _heartbeat_counter += 1
+            logger.info(f"💓 Engine alive — cycle {_heartbeat_counter} | next jobs: {len(schedule.jobs)}")
             time.sleep(30)
         except KeyboardInterrupt:
             logger.info("🛑 Shutting down...")
@@ -785,7 +802,7 @@ def main():
             time.sleep(60)
         except BaseException as e:
             logger.critical(f"🚨 Critical error in main loop (BaseException): {e}", exc_info=True)
-            time.sleep(120)  # Wait 2 min before retrying
+            time.sleep(5)
 
 
 if __name__ == "__main__":

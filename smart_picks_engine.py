@@ -56,11 +56,39 @@ def _get_server_date() -> str:
 
 
 def _already_posted_today() -> bool:
+    """Returns True only if picks were already successfully posted to Discord today."""
     today = _get_server_date()
     row = db_helper.execute("""
-        SELECT COUNT(*) FROM smart_picks WHERE pick_date = %s
+        SELECT COUNT(*) FROM smart_picks WHERE pick_date = %s AND discord_posted = TRUE
     """, (today,), fetch='one')
     return row is not None and row[0] > 0
+
+
+def _get_todays_picks_from_db() -> List[Dict]:
+    """Fetch today's picks from DB (for re-posting if Discord post failed)."""
+    today = _get_server_date()
+    rows = db_helper.execute("""
+        SELECT home_team, away_team, league, market, selection, odds, smart_score, confidence, model_grade
+        FROM smart_picks WHERE pick_date = %s ORDER BY smart_score DESC
+    """, (today,), fetch='all')
+    if not rows:
+        return []
+    return [
+        {
+            "home_team": r[0], "away_team": r[1], "league": r[2],
+            "market": r[3], "selection": r[4], "odds": r[5],
+            "smart_score": r[6], "confidence": r[7], "model_grade": r[8]
+        }
+        for r in rows
+    ]
+
+
+def _mark_discord_posted_today():
+    """Mark all today's picks as discord_posted = TRUE."""
+    today = _get_server_date()
+    db_helper.execute("""
+        UPDATE smart_picks SET discord_posted = TRUE WHERE pick_date = %s
+    """, (today,))
 
 
 def _ensure_table():
@@ -77,8 +105,12 @@ def _ensure_table():
             smart_score REAL,
             confidence TEXT,
             model_grade TEXT,
+            discord_posted BOOLEAN DEFAULT FALSE,
             created_at TIMESTAMP DEFAULT NOW()
         )
+    """)
+    db_helper.execute("""
+        ALTER TABLE smart_picks ADD COLUMN IF NOT EXISTS discord_posted BOOLEAN DEFAULT FALSE
     """)
 
 
@@ -338,6 +370,7 @@ def post_to_discord(picks: List[Dict]) -> bool:
         )
         if resp.status_code in (200, 204):
             logger.info(f"Smart Picks posted to Discord ({len(picks)} picks)")
+            _mark_discord_posted_today()
             return True
         else:
             logger.error(f"Discord post failed: {resp.status_code} — {resp.text[:200]}")
@@ -357,8 +390,18 @@ def run_smart_picks():
     if picks:
         posted = post_to_discord(picks)
         logger.info(f"Smart Picks complete: {len(picks)} picks, posted={posted}")
+    elif not _already_posted_today():
+        # Picks may be in DB but Discord post wasn't confirmed — retry
+        db_picks = _get_todays_picks_from_db()
+        if db_picks:
+            logger.info(f"Smart Picks: {len(db_picks)} picks in DB but not confirmed posted — retrying Discord post")
+            posted = post_to_discord(db_picks)
+            logger.info(f"Smart Picks re-post complete: posted={posted}")
+            picks = db_picks
+        else:
+            logger.info("Smart Picks complete: 0 picks generated")
     else:
-        logger.info("Smart Picks complete: 0 picks generated")
+        logger.info("Smart Picks already confirmed posted today — skipping")
 
     return picks
 
