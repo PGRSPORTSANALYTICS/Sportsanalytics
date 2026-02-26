@@ -452,13 +452,15 @@ if overview is not None and overview['total_props'] > 0:
 
     with tab2:
         st.markdown('<div class="section-title">Performance Tracker (Paper Trading)</div>', unsafe_allow_html=True)
-        st.markdown("<div style='color:#64748B;font-size:0.8rem;margin-bottom:16px;'>Simulated 1u flat stakes &bull; Learning mode &mdash; tracking what results would be</div>", unsafe_allow_html=True)
+        st.markdown("<div style='color:#64748B;font-size:0.8rem;margin-bottom:16px;'>Simulated 1u flat stakes &bull; Learning mode &mdash; tracking what results would be &bull; Only quality-filtered picks (NBA stats verified)</div>", unsafe_allow_html=True)
+
+        QUALITY_FILTER = "(notes LIKE 'QUALITY%%' OR notes LIKE 'PREMIUM%%')"
 
         @st.cache_data(ttl=120)
         def get_tracker_stats():
             try:
                 with DatabaseConnection.get_connection() as conn:
-                    query = """
+                    query = f"""
                         SELECT 
                             COUNT(*) as total,
                             COUNT(*) FILTER (WHERE outcome = 'won') as wins,
@@ -469,7 +471,7 @@ if overview is not None and overview['total_props'] > 0:
                             ROUND(AVG(CASE WHEN outcome IN ('won','lost') THEN odds END)::numeric, 2) as avg_settled_odds,
                             ROUND(AVG(CASE WHEN outcome IN ('won','lost') THEN edge_pct END)::numeric, 1) as avg_settled_edge
                         FROM player_props
-                        WHERE mode = 'LEARNING'
+                        WHERE mode = 'LEARNING' AND {QUALITY_FILTER}
                     """
                     return pd.read_sql(query, conn).iloc[0]
             except Exception:
@@ -479,7 +481,7 @@ if overview is not None and overview['total_props'] > 0:
         def get_tracker_by_market():
             try:
                 with DatabaseConnection.get_connection() as conn:
-                    query = """
+                    query = f"""
                         SELECT 
                             sport, market,
                             COUNT(*) FILTER (WHERE outcome IN ('won','lost')) as settled,
@@ -490,7 +492,7 @@ if overview is not None and overview['total_props'] > 0:
                             ROUND(AVG(CASE WHEN outcome IN ('won','lost') THEN odds END)::numeric, 2) as avg_odds,
                             ROUND(AVG(edge_pct)::numeric, 1) as avg_edge
                         FROM player_props
-                        WHERE mode = 'LEARNING'
+                        WHERE mode = 'LEARNING' AND {QUALITY_FILTER}
                         GROUP BY sport, market
                         ORDER BY profit DESC
                     """
@@ -502,7 +504,7 @@ if overview is not None and overview['total_props'] > 0:
         def get_tracker_daily():
             try:
                 with DatabaseConnection.get_connection() as conn:
-                    query = """
+                    query = f"""
                         SELECT 
                             DATE(created_at) as date,
                             COUNT(*) FILTER (WHERE outcome IN ('won','lost')) as settled,
@@ -511,7 +513,7 @@ if overview is not None and overview['total_props'] > 0:
                             COUNT(*) FILTER (WHERE status = 'pending') as pending,
                             COALESCE(SUM(CASE WHEN outcome IN ('won','lost') THEN profit_loss ELSE 0 END), 0) as daily_profit
                         FROM player_props
-                        WHERE mode = 'LEARNING'
+                        WHERE mode = 'LEARNING' AND {QUALITY_FILTER}
                         GROUP BY DATE(created_at)
                         ORDER BY date
                     """
@@ -523,14 +525,14 @@ if overview is not None and overview['total_props'] > 0:
         def get_tracker_recent():
             try:
                 with DatabaseConnection.get_connection() as conn:
-                    query = """
+                    query = f"""
                         SELECT 
                             player_name, sport, market, selection, line, odds,
                             edge_pct, home_team || ' vs ' || away_team as match,
                             status, outcome, profit_loss,
                             COALESCE(settled_at, created_at) as date
                         FROM player_props
-                        WHERE mode = 'LEARNING' AND outcome IN ('won', 'lost')
+                        WHERE mode = 'LEARNING' AND {QUALITY_FILTER} AND outcome IN ('won', 'lost')
                         ORDER BY settled_at DESC NULLS LAST
                         LIMIT 30
                     """
