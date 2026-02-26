@@ -26,10 +26,6 @@ args = "Combined Sports Engine"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "College Basketball Dashboard"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
 args = "PGR API Server"
 
 [[workflows.workflow]]
@@ -48,24 +44,12 @@ waitForPort = 5000
 name = "Combined Sports Engine"
 author = "agent"
 
+[workflows.workflow.metadata]
+outputType = "console"
+
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python3 combined_sports_runner.py"
-
-[workflows.workflow.metadata]
-outputType = "console"
-
-[[workflows.workflow]]
-name = "College Basketball Dashboard"
-author = "agent"
-
-[workflows.workflow.metadata]
-outputType = "console"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "sleep 180 && streamlit run college_basket_dashboard.py --server.port=6000 --server.address=0.0.0.0 --server.headless=true"
-waitForPort = 6000
 
 [[workflows.workflow]]
 name = "PGR API Server"

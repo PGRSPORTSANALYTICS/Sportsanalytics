@@ -30,10 +30,10 @@ A Self-Learning Engine automates performance tracking across all leagues and mar
 - **PGR Analytics v2:** Uses a modular design with dedicated database tables and modules for odds ingestion, fair odds calculation, edge/CLV intelligence, gating, and bet lifecycle management. It includes a vanilla HTML/CSS/JS dashboard.
 
 ### Feature Specifications
-- **Real Football Dashboard:** Main UI accessible via port 5000.
+- **Real Football Dashboard:** Main UI accessible via port 5000. Basketball data included here.
 - **Combined Sports Engine:** Prediction engine in PRODUCTION MODE v1.0 with 1-hour Value Singles cycles.
 - **PGR API Server:** REST API accessible via port 8000. PGR Edge Finder dashboard at /pgr.
-- **College Basketball Dashboard:** Dedicated dashboard for basketball predictions via port 6000.
+- **College Basketball Dashboard:** Removed as separate workflow — basketball data accessed via the main Football Dashboard. The `college_basket_dashboard.py` file is preserved but not running as a workflow.
 
 ## External Dependencies
 
