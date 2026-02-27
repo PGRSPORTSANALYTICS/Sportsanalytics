@@ -6,7 +6,7 @@ packages = ["cairo", "chromedriver", "chromium", "ffmpeg-full", "freetype", "gec
 
 [deployment]
 deploymentTarget = "vm"
-run = ["bash", "-c", "python3 -m uvicorn api:app --host 127.0.0.1 --port 8000 & python3 combined_sports_runner.py & streamlit run pgr_dashboard.py --server.port 5000 --server.address 0.0.0.0"]
+run = ["bash", "start_production.sh"]
 
 [workflows]
 runButton = "Project"
