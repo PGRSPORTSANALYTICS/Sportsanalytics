@@ -1130,7 +1130,7 @@ def get_clv_stats_for_dashboard() -> dict:
         from clv_service import get_clv_stats
         return get_clv_stats()
     except Exception as e:
-        return {'avg_clv_all': None, 'avg_clv_last_100': None, 'positive_share': None, 'total_with_clv': 0}
+        return {'avg_clv': None, 'avg_clv_30d': None, 'positive_rate': None, 'sample_n': 0, 'total_picks': 0, 'coverage_pct': None, 'sample_ok': False, 'breakdown': [], 'recent_20': []}
 
 
 def render_overview(df: pd.DataFrame):
@@ -1167,9 +1167,9 @@ def render_overview(df: pd.DataFrame):
             f"{units_summary['wins']}W / {units_summary['losses']}L / {units_summary['pushes']}P",
         )
     with col4:
-        clv_value = clv_stats.get('avg_clv_last_100')
+        clv_value = clv_stats.get('avg_clv_30d') or clv_stats.get('avg_clv')
         clv_display = f"{clv_value:+.1f}%" if clv_value is not None else "N/A"
-        clv_positive = clv_stats.get('positive_share')
+        clv_positive = clv_stats.get('positive_rate')
         clv_sub = f"{clv_positive:.0f}% positive CLV" if clv_positive is not None else "Collecting closing odds..."
         metric_card(
             "Average CLV",
@@ -4199,7 +4199,7 @@ def main():
     prod_bets, backtest_bets = split_bets_by_mode(all_bets)
 
     # Tabs for different products (Multi-match parlays disabled, 2-leg ML Parlay allowed)
-    smart_tab, free_tab, daily_card_tab, overview_tab, singles_tab, odds_compare_tab, props_tab, ml_parlay_tab, basket_tab, kelly_tab, backtest_tab, system_tab = st.tabs(
+    smart_tab, free_tab, daily_card_tab, overview_tab, singles_tab, odds_compare_tab, props_tab, ml_parlay_tab, basket_tab, kelly_tab, backtest_tab, clv_tab, system_tab = st.tabs(
         [
             "Smart Picks",
             "Free Picks",
@@ -4212,6 +4212,7 @@ def main():
             "College Basketball",
             "Smart Stake",
             "Backtests",
+            "CLV Analytics",
             "System Status",
         ]
     )
@@ -4255,6 +4256,9 @@ def main():
     with backtest_tab:
         render_backtest_analysis()
 
+    with clv_tab:
+        render_clv_analytics_tab()
+
     with system_tab:
         render_system_status_tab()
 
@@ -4277,6 +4281,118 @@ def _load_pipeline_stats():
             WHERE match_date::date = CURRENT_DATE
         """))
         return result.fetchone()
+
+
+def render_clv_analytics_tab():
+    """Full CLV Analytics dashboard with metrics and debug view."""
+    st.markdown("## CLV Analytics — Closing Line Value")
+    st.caption(
+        "CLV% = (open_odds / close_odds − 1) × 100  |  "
+        "Positive = you got better price than the closing line  |  "
+        "Worker captures odds every 5 min, target: 60 min before kickoff"
+    )
+
+    try:
+        from clv_service import get_clv_stats
+        s = get_clv_stats()
+    except Exception as exc:
+        st.error(f"Could not load CLV data: {exc}")
+        return
+
+    n         = s.get('sample_n', 0)
+    total     = s.get('total_picks', 0)
+    coverage  = s.get('coverage_pct')
+    avg_clv   = s.get('avg_clv')
+    avg_30d   = s.get('avg_clv_30d')
+    pos_rate  = s.get('positive_rate')
+    sample_ok = s.get('sample_ok', False)
+
+    if not sample_ok:
+        reasons = []
+        if n < 200:
+            reasons.append(f"only {n} picks have CLV data (need ≥ 200)")
+        if coverage is not None and coverage < 30:
+            reasons.append(f"coverage {coverage:.1f}% (need ≥ 30%)")
+        st.warning(
+            "⚠️ **CLV sample still small** — "
+            + "; ".join(reasons)
+            + ". More data will accumulate as the CLV worker captures closing odds."
+        )
+
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric(
+        "Avg CLV (All time)",
+        f"{avg_clv:+.2f}%" if avg_clv is not None else "—",
+        help="Positive = your picks beat the closing line on average"
+    )
+    c2.metric(
+        "Avg CLV (30 days)",
+        f"{avg_30d:+.2f}%" if avg_30d is not None else "—"
+    )
+    c3.metric(
+        "Positive CLV rate",
+        f"{pos_rate:.1f}%" if pos_rate is not None else "—",
+        help="Share of picks where close_odds < open_odds"
+    )
+    c4.metric(
+        "Coverage",
+        f"{coverage:.1f}%" if coverage is not None else "—",
+        help=f"{n} picks with CLV out of {total} total"
+    )
+    c5.metric("Sample N", f"{n:,}")
+
+    bd = s.get('breakdown', [])
+    if bd:
+        st.markdown("---")
+        bc1, bc2, bc3 = st.columns(3)
+        pos_n = next((x['count'] for x in bd if x['status'] == 'pos'), 0)
+        neg_n = next((x['count'] for x in bd if x['status'] == 'neg'), 0)
+        na_n  = next((x['count'] for x in bd if x['status'] == 'na'),  0)
+        bc1.metric("Positive CLV picks", pos_n)
+        bc2.metric("Negative CLV picks", neg_n)
+        bc3.metric("No data (na)", na_n)
+
+    st.markdown("---")
+    st.markdown("### Debug: Last 20 Picks with CLV Captured")
+    st.caption(
+        "time_to_ko_at_close: minutes between close_ts and kickoff  |  "
+        "target is ~60 min  |  negative = captured after kickoff"
+    )
+
+    recent = s.get('recent_20', [])
+    if not recent:
+        st.info("No CLV-captured picks yet. Data will appear here once the worker captures closing odds near kickoff.")
+    else:
+        import pandas as pd
+
+        rows = []
+        for r in recent:
+            clv_pct = r.get('clv_pct')
+            status  = r.get('clv_status', '')
+            ttko    = r.get('time_to_ko_at_close')
+            rows.append({
+                'Match':        f"{r.get('home_team','?')} vs {r.get('away_team','?')}",
+                'League':       r.get('league', ''),
+                'Market':       r.get('market', ''),
+                'Selection':    r.get('selection', ''),
+                'Open odds':    r.get('open_odds'),
+                'Close odds':   r.get('close_odds'),
+                'CLV%':         f"{clv_pct:+.2f}%" if clv_pct is not None else "—",
+                'Status':       '✅ pos' if status == 'pos' else ('❌ neg' if status == 'neg' else '—'),
+                'Book':         r.get('clv_source_book', ''),
+                'Mins to KO':   f"{ttko:+.0f}" if ttko is not None else "—",
+            })
+
+        df = pd.DataFrame(rows)
+        st.dataframe(df, use_container_width=True, hide_index=True)
+
+    st.markdown("---")
+    st.caption(
+        "CLV formula: CLV% = (open_odds / close_odds − 1) × 100  |  "
+        "Window: picks kicking off within next 0–8 hours  |  "
+        "Worker runs every 5 min  |  "
+        "Minimum sample for reliability: 200 picks with ≥30% coverage"
+    )
 
 
 def render_system_status_tab():
@@ -4397,14 +4513,15 @@ def render_system_status_tab():
     try:
         clv_stats = get_clv_stats_for_dashboard()
         c1, c2, c3, c4 = st.columns(4)
-        avg_all = clv_stats.get('avg_clv_all')
-        avg_100 = clv_stats.get('avg_clv_last_100')
-        pos_share = clv_stats.get('positive_share')
-        total_clv = clv_stats.get('total_with_clv', 0)
+        avg_all   = clv_stats.get('avg_clv')
+        avg_30d   = clv_stats.get('avg_clv_30d')
+        pos_share = clv_stats.get('positive_rate')
+        total_clv = clv_stats.get('sample_n', 0)
+        coverage  = clv_stats.get('coverage_pct')
         c1.metric("Average CLV (All)", f"{avg_all:+.2f}%" if avg_all is not None else "N/A")
-        c2.metric("Average CLV (Last 100)", f"{avg_100:+.2f}%" if avg_100 is not None else "N/A")
+        c2.metric("Average CLV (30 days)", f"{avg_30d:+.2f}%" if avg_30d is not None else "N/A")
         c3.metric("Positive CLV %", f"{pos_share:.1f}%" if pos_share is not None else "N/A")
-        c4.metric("Bets with CLV", f"{total_clv:,}")
+        c4.metric("CLV Coverage", f"{coverage:.1f}% ({total_clv:,} picks)" if coverage is not None else f"{total_clv:,} picks")
     except Exception as e:
         st.warning("Could not load CLV stats.")
 

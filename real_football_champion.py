@@ -3668,8 +3668,9 @@ class RealFootballChampion:
                      quality_score, recommended_date, recommended_tier, daily_rank, mode, bet_placed,
                      open_odds, odds_source, trust_level,
                      odds_by_bookmaker, best_odds_value, best_odds_bookmaker, avg_odds, fair_odds, fixture_id,
-                     model_prob, calibrated_prob, sim_probability, ev_sim, disagreement)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                     model_prob, calibrated_prob, sim_probability, ev_sim, disagreement,
+                     open_ts)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (home_team, away_team, selection, market, match_date, mode) DO UPDATE
                     SET odds = EXCLUDED.odds, edge_percentage = EXCLUDED.edge_percentage,
                         confidence = EXCLUDED.confidence, analysis = EXCLUDED.analysis
@@ -3710,7 +3711,8 @@ class RealFootballChampion:
                     float(pick.get('calibrated_prob')) if pick.get('calibrated_prob') else None,
                     float(pick.get('sim_probability')) if pick.get('sim_probability') else None,
                     float(pick.get('ev_sim')) if pick.get('ev_sim') else None,
-                    float(pick.get('disagreement')) if pick.get('disagreement') else None
+                    float(pick.get('disagreement')) if pick.get('disagreement') else None,
+                    int(time.time()),  # open_ts = epoch when pick was created
                 ))
                 saved += 1
             except Exception as e:
@@ -3756,8 +3758,9 @@ class RealFootballChampion:
                  quality_score, recommended_date, recommended_tier, daily_rank, mode, bet_placed,
                  open_odds, odds_source, trust_level,
                  odds_by_bookmaker, best_odds_value, best_odds_bookmaker, avg_odds, fair_odds, fixture_id,
-                 model_prob, calibrated_prob, sim_probability, ev_sim, disagreement)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 model_prob, calibrated_prob, sim_probability, ev_sim, disagreement,
+                 open_ts)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (home_team, away_team, selection, market, match_date, mode) DO NOTHING
                 RETURNING id
             ''', (
@@ -3797,7 +3800,8 @@ class RealFootballChampion:
                 float(opp_dict.get('calibrated_prob')) if opp_dict.get('calibrated_prob') else None,
                 float(sim_probability) if sim_probability else None,
                 float(ev_sim) if ev_sim else None,
-                float(disagreement) if disagreement else None
+                float(disagreement) if disagreement else None,
+                int(time.time()),  # open_ts = epoch when pick was created
             ), fetch='one')
             
             # Only proceed if a new row was inserted (ON CONFLICT DO NOTHING returns NULL if duplicate)
@@ -3891,8 +3895,9 @@ class RealFootballChampion:
                  odds, edge_percentage, confidence, analysis, stake, match_date, kickoff_time,
                  quality_score, recommended_date, recommended_tier, daily_rank, mode, bet_placed,
                  trust_level, sim_probability, ev_sim, disagreement,
-                 odds_by_bookmaker, best_odds_value, best_odds_bookmaker, avg_odds, fair_odds)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 odds_by_bookmaker, best_odds_value, best_odds_bookmaker, avg_odds, fair_odds,
+                 open_odds, open_ts)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
             ''', (
                 int(time.time()),
@@ -3923,7 +3928,9 @@ class RealFootballChampion:
                 opportunity.best_odds_value,
                 opportunity.best_odds_bookmaker,
                 opportunity.avg_odds,
-                opportunity.fair_odds
+                opportunity.fair_odds,
+                float(opportunity.odds),  # open_odds = odds at bet creation
+                int(time.time()),         # open_ts = epoch when pick was created
             ), fetch='one')
             
             # Get the actual prediction ID from the database
@@ -4507,8 +4514,9 @@ def _save_bet_candidates_to_db(candidates, market_label: str) -> int:
                  kickoff_utc, kickoff_epoch, open_odds,
                  quality_score, recommended_date, recommended_tier, daily_rank, mode, bet_placed,
                  trust_level, sim_probability, ev_sim,
-                 odds_by_bookmaker, best_odds_value, best_odds_bookmaker, avg_odds, fair_odds)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 odds_by_bookmaker, best_odds_value, best_odds_bookmaker, avg_odds, fair_odds,
+                 open_ts)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (home_team, away_team, selection, market, match_date, mode) DO NOTHING
                 RETURNING id
             ''', (
@@ -4542,7 +4550,8 @@ def _save_bet_candidates_to_db(candidates, market_label: str) -> int:
                 float(best_odds_value),
                 best_odds_bookmaker,
                 float(avg_odds),
-                float(fair_odds)
+                float(fair_odds),
+                int(time.time()),  # open_ts = epoch when pick was created
             ), fetch='one')
             
             # Only count as saved if a new row was actually inserted (RETURNING id returns something)
