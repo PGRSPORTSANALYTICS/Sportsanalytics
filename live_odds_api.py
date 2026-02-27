@@ -104,7 +104,7 @@ class TheOddsAPI:
             'soccer_japan_j_league',        # Japanese J1 League
             'soccer_south_korea_k_league_1', # Korean K League 1
             'soccer_china_super_league',    # Chinese Super League
-            'soccer_australia_a_league',    # Australian A-League
+            'soccer_australia_aleague',     # Australian A-League
             'soccer_india_super_league',    # Indian Super League
             
             # Africa (Afternoon Coverage)  
