@@ -179,7 +179,8 @@ class CLVService:
         try:
             rows = db_helper.execute("""
                 SELECT id, match_id, home_team, away_team, league,
-                       market, selection, open_odds, kickoff_epoch, kickoff_utc
+                       market, selection, open_odds, kickoff_epoch, kickoff_utc,
+                       best_odds_bookmaker
                 FROM football_opportunities
                 WHERE status       = 'pending'
                   AND close_odds   IS NULL
@@ -193,17 +194,18 @@ class CLVService:
             candidates = []
             for row in rows:
                 rec = {
-                    'id':             row[0],
-                    'match_id':       row[1],
-                    'home_team':      row[2],
-                    'away_team':      row[3],
-                    'league':         row[4],
-                    'market':         row[5],
-                    'selection':      row[6],
-                    'open_odds':      float(row[7]),
-                    'kickoff_epoch':  int(row[8]),
-                    'kickoff_utc':    row[9],
-                    'seconds_to_ko':  int(row[8]) - now,
+                    'id':                  row[0],
+                    'match_id':            row[1],
+                    'home_team':           row[2],
+                    'away_team':           row[3],
+                    'league':              row[4],
+                    'market':              row[5],
+                    'selection':           row[6],
+                    'open_odds':           float(row[7]),
+                    'kickoff_epoch':       int(row[8]),
+                    'kickoff_utc':         row[9],
+                    'seconds_to_ko':       int(row[8]) - now,
+                    'open_source_book':    row[10] or 'unknown',
                 }
                 candidates.append(rec)
 
@@ -221,7 +223,9 @@ class CLVService:
         """
         Fetch live odds for the bet's match/market.
 
-        Returns dict with keys: odds (float), bookmaker (str), ts (int)
+        Returns dict with keys:
+            odds (float), bookmaker (str), ts (int),
+            api_market_type (str), matched_outcome (str)
         or None if unavailable.
         """
         if not self.odds_api:
@@ -265,23 +269,25 @@ class CLVService:
             if result is None:
                 continue
 
-            close_odds, bookmaker = result
+            close_odds, bookmaker, matched_outcome = result
 
             if open_odds and open_odds > 1.0:
                 drift = abs(close_odds - open_odds) / open_odds
                 if drift > DRIFT_REJECT_PCT:
                     logger.warning(
-                        "CLV: rejecting close_odds %.2f for %s vs %s "
-                        "(open=%.2f drift=%.0f%%)",
-                        close_odds, bet['home_team'], bet['away_team'],
-                        open_odds, drift * 100
+                        "CLV: ⚠️ DRIFT REJECT  bet=%d  %s vs %s | "
+                        "open=%.2f close=%.2f drift=%.0f%%",
+                        bet['id'], bet['home_team'], bet['away_team'],
+                        open_odds, close_odds, drift * 100
                     )
                     return None
 
             return {
-                'odds':      close_odds,
-                'bookmaker': bookmaker,
-                'ts':        _now(),
+                'odds':             close_odds,
+                'bookmaker':        bookmaker,
+                'ts':               _now(),
+                'api_market_type':  mtype,
+                'matched_outcome':  matched_outcome,
             }
 
         return None
@@ -303,7 +309,8 @@ class CLVService:
         self, event: Dict, market: str, selection: str, home: str, away: str
     ) -> Optional[tuple]:
         """
-        Return (odds, bookmaker_name) for the selection, preferring sharp books.
+        Return (odds, bookmaker_name, matched_outcome_name) for the selection,
+        preferring sharp books.
         """
         bookmakers = event.get('bookmakers', [])
         sorted_books = sorted(
@@ -320,7 +327,11 @@ class CLVService:
                     name = outcome.get('name', '').lower()
                     price = outcome.get('price')
                     if price and self._sel_matches(sel_lower, name, home, away, mkt_lower):
-                        return float(price), bk.get('title', bk.get('key', 'unknown'))
+                        return (
+                            float(price),
+                            bk.get('title', bk.get('key', 'unknown')),
+                            outcome.get('name', name),
+                        )
         return None
 
     def _sel_matches(self, sel: str, outcome: str, home: str, away: str, market: str) -> bool:
@@ -348,11 +359,22 @@ class CLVService:
 
     # ── DB update ────────────────────────────────────────────────────────────
 
-    def save_clv(self, bet_id: int, open_odds: float, close_result: Dict) -> bool:
-        """Persist close_odds, close_ts, clv_pct, clv_status, clv_source_book."""
-        close_odds = close_result['odds']
-        close_ts = close_result['ts']
-        bookmaker = close_result['bookmaker']
+    def save_clv(self, bet: Dict, close_result: Dict) -> bool:
+        """Persist close_odds, close_ts, clv_pct, clv_status, clv_source_book.
+        Also emits the full debug block for this CLV calculation.
+        """
+        bet_id    = bet['id']
+        open_odds = bet['open_odds']
+        close_odds  = close_result['odds']
+        close_ts    = close_result['ts']
+        close_book  = close_result['bookmaker']
+        api_mtype   = close_result.get('api_market_type', '?')
+        matched_out = close_result.get('matched_outcome', '?')
+        open_book   = bet.get('open_source_book', 'unknown')
+        ko_epoch    = bet.get('kickoff_epoch', 0)
+        ko_utc      = bet.get('kickoff_utc', '?')
+        db_market   = bet.get('market', '?')
+        db_sel      = bet.get('selection', '?')
 
         try:
             clv = _clv_pct(open_odds, close_odds)
@@ -360,6 +382,53 @@ class CLVService:
         except ValueError as exc:
             logger.warning("CLV calc error for bet %d: %s", bet_id, exc)
             return False
+
+        mins_to_ko_at_close = round((ko_epoch - close_ts) / 60) if ko_epoch else None
+
+        # ── Full debug block (always emitted at INFO level) ──────────────────
+        book_match  = (open_book.lower() == close_book.lower())
+        mtype_label = f"{db_market}  →  API:{api_mtype}"
+        logger.info(
+            "╔═ CLV DEBUG  bet=%d ═══════════════════════════════════════════",
+            bet_id
+        )
+        logger.info("║  Match       : %s vs %s  (%s)", bet['home_team'], bet['away_team'], bet.get('league', '?'))
+        logger.info("║  match_id    : %s", bet.get('match_id', '?'))
+        logger.info("║  DB market   : %s", db_market)
+        logger.info("║  Selection   : %s", db_sel)
+        logger.info("║  API mtype   : %s  (mapped from DB market)", api_mtype)
+        logger.info("║  Matched out : %s  (outcome string in API response)", matched_out)
+
+        mkt_ok = (
+            ('over' in db_market.lower() and 'over' in matched_out.lower())
+            or ('under' in db_market.lower() and 'under' in matched_out.lower())
+            or ('btts' in db_market.lower() and ('yes' in matched_out.lower() or 'no' in matched_out.lower()))
+            or api_mtype == 'h2h'
+        )
+        if not mkt_ok:
+            logger.warning(
+                "║  ⚠️  MARKET MISMATCH  DB market='%s'  matched='%s'",
+                db_market, matched_out
+            )
+
+        logger.info("║  open_odds   : %.3f  [%s]", open_odds, open_book)
+        logger.info("║  close_odds  : %.3f  [%s]", close_odds, close_book)
+        if book_match:
+            logger.info("║  Bookmaker   : ✅ SAME (%s)", close_book)
+        else:
+            logger.warning(
+                "║  ⚠️  BOOK MISMATCH  open=[%s]  close=[%s]",
+                open_book, close_book
+            )
+        logger.info("║  kickoff     : %s", ko_utc)
+        if mins_to_ko_at_close is not None:
+            logger.info("║  mins to KO  : %+d min  (%s before kickoff)",
+                        mins_to_ko_at_close,
+                        f"{mins_to_ko_at_close}min" if mins_to_ko_at_close >= 0 else "AFTER kickoff")
+        logger.info("║  CLV%%        : %+.2f%%  [%s]", clv, status)
+        logger.info(
+            "╚══════════════════════════════════════════════════════════════"
+        )
 
         try:
             db_helper.execute("""
@@ -370,12 +439,7 @@ class CLVService:
                     clv_status      = %s,
                     clv_source_book = %s
                 WHERE id = %s
-            """, (close_odds, close_ts, clv, status, bookmaker, bet_id))
-
-            logger.info(
-                "✅ CLV saved  bet=%d  open=%.2f → close=%.2f  CLV=%+.2f%%  [%s]",
-                bet_id, open_odds, close_odds, clv, bookmaker
-            )
+            """, (close_odds, close_ts, clv, status, close_book, bet_id))
             return True
 
         except Exception as exc:
@@ -419,18 +483,16 @@ class CLVService:
             logger.info("📊 CLV cycle: 0 candidates in 0–8h window — nothing to do")
             return stats
 
+        CAPTURE_WINDOW_MIN  = 120   # Do not finalise close_odds more than 2h before kickoff
+        CAPTURE_WINDOW_PAST = -5    # Allow up to 5 min after kickoff
+
         clv_vals: List[float] = []
         now = _now()
 
         for bet in candidates:
-            bet_id = bet['id']
+            bet_id    = bet['id']
             open_odds = bet['open_odds']
             mins_to_ko = bet['seconds_to_ko'] // 60
-
-            # Only capture closing odds within the ±60-min window around 60-min-before-kickoff
-            # That means: kickoff is between 0 and 120 min away (or up to 5 min past kickoff)
-            CAPTURE_WINDOW_MIN = 120   # Do not finalise close_odds more than 2h before kickoff
-            CAPTURE_WINDOW_PAST = -5   # Allow up to 5 min after kickoff
 
             if mins_to_ko > CAPTURE_WINDOW_MIN:
                 # Too early — will be captured in a future cycle closer to kickoff
@@ -443,7 +505,7 @@ class CLVService:
             close_result = self.fetch_closing_odds(bet)
 
             if close_result:
-                ok = self.save_clv(bet_id, open_odds, close_result)
+                ok = self.save_clv(bet, close_result)
                 if ok:
                     stats['updated'] += 1
                     try:
@@ -453,16 +515,24 @@ class CLVService:
                 else:
                     stats['failed'] += 1
             else:
-                # Only mark na if we're past kickoff and couldn't get data
+                # Log what we attempted so it's traceable
+                db_market = bet.get('market', '?')
+                mtype = _market_type(db_market) or 'unsupported'
+                sport = _sport_key(bet.get('league', '')) or 'no_sport_key'
+                logger.info(
+                    "CLV: ⚪ NO ODDS  bet=%d  %s vs %s | "
+                    "market='%s' → api_type='%s' | sport='%s' | "
+                    "open_book=[%s] | %+d min to KO",
+                    bet_id, bet['home_team'], bet['away_team'],
+                    db_market, mtype, sport,
+                    bet.get('open_source_book', 'unknown'),
+                    mins_to_ko
+                )
                 if mins_to_ko < CAPTURE_WINDOW_PAST:
                     self.mark_clv_na(bet_id, "no odds data found after kickoff")
                     stats['na'] += 1
                 else:
                     stats['failed'] += 1
-                    logger.debug(
-                        "CLV: no close odds for bet %d (%s vs %s, %+d min to KO)",
-                        bet_id, bet['home_team'], bet['away_team'], mins_to_ko
-                    )
 
         if clv_vals:
             stats['avg_clv'] = round(sum(clv_vals) / len(clv_vals), 2)
