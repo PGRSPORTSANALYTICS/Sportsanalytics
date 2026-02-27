@@ -199,6 +199,9 @@ def _process_events(events: List[Dict], category: str, sport_key: str,
         best_odds = _extract_best_odds(bookmakers)
 
         for market_key, outcomes in best_odds.items():
+            if market_key == 'h2h_lay':
+                continue
+
             for selection, odds_val in outcomes.items():
                 if odds_val < ODDS_RANGE[0] or odds_val > ODDS_RANGE[1]:
                     continue

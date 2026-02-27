@@ -145,6 +145,7 @@ def _get_pending_bets() -> List[Dict]:
                 FROM learning_bets
                 WHERE status = 'pending'
                   AND sport_category != 'TENNIS'
+                  AND market != 'h2h_lay'
                   AND commence_time < NOW() - INTERVAL '2 hours'
                   AND commence_time > NOW() - INTERVAL '10 days'
                 ORDER BY commence_time ASC
