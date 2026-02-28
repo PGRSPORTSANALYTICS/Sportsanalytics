@@ -6,7 +6,7 @@ packages = ["cairo", "chromedriver", "chromium", "ffmpeg-full", "freetype", "gec
 
 [deployment]
 deploymentTarget = "vm"
-run = ["bash", "start_production.sh"]
+run = ["python3", "production_start.py"]
 
 [workflows]
 runButton = "Project"
