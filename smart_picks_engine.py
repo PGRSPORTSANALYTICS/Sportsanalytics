@@ -334,30 +334,50 @@ def generate_smart_picks() -> List[Dict]:
     return picks
 
 
-def _format_discord_message(picks: List[Dict]) -> str:
+_DISCORD_MAX_CHARS = 1900  # Safe limit below Discord's 2000-char hard cap
+
+
+def _format_pick_block(i: int, p: Dict) -> str:
+    """Format a single pick as a compact block (under 200 chars)."""
+    match = f"{p.get('home_team', '')} vs {p.get('away_team', '')}"
+    selection = p.get('selection', 'N/A')
+    odds = float(p.get('odds', 0))
+    conf = p.get('confidence', 'Low')
+    grade = p.get('model_grade', 'C')
+    league = p.get('league') or 'Football'
+    lines = [
+        f"**#{i}** {league}",
+        f"{match}",
+        f"**{selection}** @ {odds:.2f} | {conf} | {grade}",
+        "─────────────────────────",
+    ]
+    return "\n".join(lines)
+
+
+def _format_discord_chunks(picks: List[Dict]) -> List[str]:
+    """Split picks into Discord messages that each stay under _DISCORD_MAX_CHARS."""
     today = _get_server_date()
-    lines = []
-    lines.append(f"**PGR SMART PICKS – Daily Top 10**")
-    lines.append(f"*{today}*")
-    lines.append("")
-    lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    header = f"**PGR SMART PICKS — {today}**\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    footer = "\n*AI picks for recreational players. No staking advice.*"
+
+    chunks: List[str] = []
+    current = header
+    first_chunk = True
 
     for i, p in enumerate(picks, 1):
-        lines.append("")
-        lines.append(f"**Smart Pick #{i}**")
-        lines.append(f"League: {p.get('league') or 'Football'}")
-        lines.append(f"Match: {p.get('home_team', '')} vs {p.get('away_team', '')}")
-        lines.append(f"Selection: **{p.get('selection', 'N/A')}**")
-        lines.append(f"Market: {p.get('market', 'N/A')}")
-        lines.append(f"Odds: {float(p.get('odds', 0)):.2f}")
-        lines.append(f"Confidence: {p.get('confidence', 'Low')}")
-        lines.append(f"Model Grade: {p.get('model_grade', 'C')}")
-        lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        block = "\n" + _format_pick_block(i, p) + "\n"
+        candidate = current + block
 
-    lines.append("")
-    lines.append("*Curated AI selections for recreational players. No staking advice.*")
+        if len(candidate) + len(footer) > _DISCORD_MAX_CHARS and not first_chunk:
+            # Close current chunk and start a new one
+            chunks.append(current + footer)
+            current = f"**PGR SMART PICKS (cont.) — {today}**\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" + block
+        else:
+            current = candidate
+            first_chunk = False
 
-    return "\n".join(lines)
+    chunks.append(current + footer)
+    return chunks
 
 
 def post_to_discord(picks: List[Dict]) -> bool:
@@ -369,24 +389,33 @@ def post_to_discord(picks: List[Dict]) -> bool:
         logger.info("No picks to post")
         return False
 
-    message = _format_discord_message(picks)
+    chunks = _format_discord_chunks(picks)
+    success = True
 
-    try:
-        resp = requests.post(
-            SMART_PICKS_WEBHOOK,
-            json={"content": message},
-            timeout=15,
-        )
-        if resp.status_code in (200, 204):
-            logger.info(f"Smart Picks posted to Discord ({len(picks)} picks)")
-            _mark_discord_posted_today()
-            return True
-        else:
-            logger.error(f"Discord post failed: {resp.status_code} — {resp.text[:200]}")
-            return False
-    except Exception as e:
-        logger.error(f"Discord post error: {e}")
-        return False
+    for idx, chunk in enumerate(chunks, 1):
+        try:
+            resp = requests.post(
+                SMART_PICKS_WEBHOOK,
+                json={"content": chunk},
+                timeout=15,
+            )
+            if resp.status_code in (200, 204):
+                logger.info(f"Smart Picks chunk {idx}/{len(chunks)} posted ({len(chunk)} chars)")
+                if resp.status_code == 429:
+                    import time as _time
+                    retry_after = resp.json().get("retry_after", 5)
+                    _time.sleep(retry_after)
+            else:
+                logger.error(f"Discord post failed chunk {idx}: {resp.status_code} — {resp.text[:200]}")
+                success = False
+        except Exception as e:
+            logger.error(f"Discord post error chunk {idx}: {e}")
+            success = False
+
+    if success:
+        logger.info(f"Smart Picks posted to Discord ({len(picks)} picks, {len(chunks)} messages)")
+        _mark_discord_posted_today()
+    return success
 
 
 def run_smart_picks():
