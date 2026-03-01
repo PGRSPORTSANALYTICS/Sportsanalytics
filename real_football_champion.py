@@ -3725,7 +3725,19 @@ class RealFootballChampion:
             # Calculate quality score
             quality_score = (opp_dict.get('edge_percentage', 0) * 0.6) + (opp_dict.get('confidence', 0) * 0.4)
             today_date = datetime.now().strftime('%Y-%m-%d')
-            
+
+            # ── Per-match-date accumulation cap ──────────────────────────────
+            # Prevents multiple creation days from stacking picks on the same match date
+            pick_mode = opp_dict.get('mode', 'PROD')
+            pick_market = opp_dict.get('market', 'Value Single')
+            pick_match_date = opp_dict.get('match_date', today_date)
+            if pick_mode == 'PROD' and pick_market == 'Value Single':
+                existing = get_match_date_count(pick_match_date, 'Value Single')
+                if existing >= MATCH_DATE_CAP_VALUE_SINGLES:
+                    print(f"🛑 Match-date cap: {pick_match_date} already has {existing}/{MATCH_DATE_CAP_VALUE_SINGLES} PROD Value Singles — skipping")
+                    return False
+            # ─────────────────────────────────────────────────────────────────
+
             # Get bet_placed flag from value singles engine
             bet_placed = opp_dict.get('bet_placed', True)
             
@@ -4009,20 +4021,45 @@ def get_pending_match_ids() -> set:
 
 
 DAILY_BET_CAP = 8
+# Per-match-date caps: max PROD picks for any single match day (regardless of when created)
+MATCH_DATE_CAP_VALUE_SINGLES = 8
+MATCH_DATE_CAP_CORNERS = 10
+MATCH_DATE_CAP_CARDS = 5
 
 def get_todays_bet_count() -> int:
-    """Count how many PROD football bets have been created today (LEARNING picks excluded)."""
+    """Count how many PROD football bets target today's matches (LEARNING picks excluded)."""
     try:
-        now_epoch = int(time.time())
-        midnight_epoch = now_epoch - (now_epoch % 86400)
+        today_date = datetime.now().strftime('%Y-%m-%d')
         result = db_helper.execute('''
             SELECT COUNT(*) FROM football_opportunities
-            WHERE timestamp >= %s AND mode = 'PROD'
-        ''', (midnight_epoch,), fetch='one')
+            WHERE match_date = %s AND mode = 'PROD'
+              AND match_id NOT LIKE 'seed_%%'
+        ''', (today_date,), fetch='one')
         count = result[0] if result and result[0] else 0
         return count
     except Exception as e:
         print(f"⚠️ Could not check daily bet count: {e}")
+        return 999
+
+def get_match_date_count(match_date: str, market: str = None) -> int:
+    """Count PROD picks already saved for a specific match date (optional market filter).
+    Used to enforce per-match-date accumulation cap across multiple creation days."""
+    try:
+        if market:
+            result = db_helper.execute('''
+                SELECT COUNT(*) FROM football_opportunities
+                WHERE match_date = %s AND mode = 'PROD' AND market = %s
+                  AND match_id NOT LIKE 'seed_%%'
+            ''', (match_date, market), fetch='one')
+        else:
+            result = db_helper.execute('''
+                SELECT COUNT(*) FROM football_opportunities
+                WHERE match_date = %s AND mode = 'PROD'
+                  AND match_id NOT LIKE 'seed_%%'
+            ''', (match_date,), fetch='one')
+        return result[0] if result and result[0] else 0
+    except Exception as e:
+        print(f"⚠️ Could not check match_date count: {e}")
         return 999
 
 def get_daily_remaining_slots() -> int:
@@ -4471,12 +4508,28 @@ def _lookup_league_for_team(team_name: str) -> Optional[str]:
 def _save_bet_candidates_to_db(candidates, market_label: str) -> int:
     """Save BetCandidate picks to football_opportunities with proper market label"""
     from datetime import datetime
-    
+
+    # Per-match-date cap mapping
+    _match_date_caps = {
+        'Corners': MATCH_DATE_CAP_CORNERS,
+        'Cards':   MATCH_DATE_CAP_CARDS,
+    }
+
     saved = 0
     today = datetime.now().strftime('%Y-%m-%d')
     
     for candidate in candidates:
         try:
+            # ── Per-match-date accumulation cap ──────────────────────────────
+            cap = _match_date_caps.get(market_label)
+            if cap is not None:
+                cand_match_date = getattr(candidate, 'match_date', today)
+                existing = get_match_date_count(cand_match_date, market_label)
+                if existing >= cap:
+                    print(f"🛑 Match-date cap ({market_label}): {cand_match_date} already has {existing}/{cap} — skipping {getattr(candidate, 'match', '')}")
+                    continue
+            # ─────────────────────────────────────────────────────────────────
+
             quality_score = (candidate.ev_sim * 100 * 0.6) + (candidate.confidence * 100 * 0.4)
             
             trust_level = candidate.tier if hasattr(candidate, 'tier') else 'L2_MEDIUM_TRUST'
