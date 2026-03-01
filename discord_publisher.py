@@ -251,8 +251,16 @@ def format_analysis_embed(pick: dict) -> dict:
 
     color = _edge_color(edge)
 
+    if mode == "DATA":
+        title = f"Match Analysis — {league}"
+        color = 0x808080
+    elif mode == "LEARNING":
+        title = f"Learning Signal — {league}"
+    else:
+        title = f"Value Opportunity — {league}"
+
     embed = {
-        "title": f"Value Opportunity — {league}",
+        "title": title,
         "description": "\n".join(lines),
         "color": color,
         "footer": {

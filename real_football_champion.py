@@ -3719,6 +3719,78 @@ class RealFootballChampion:
                 print(f"⚠️ Failed to save learning pick: {e}")
         return saved
 
+    def _save_data_picks(self, data_picks: list) -> int:
+        """Save near-miss picks (positive EV but below PROD threshold) as mode='DATA' for Discord publishing."""
+        saved = 0
+        for pick in data_picks:
+            try:
+                quality_score = (pick.get('edge_percentage', 0) * 0.6) + (pick.get('confidence', 0) * 0.4)
+                odds_value = float(pick.get('odds', 0))
+                analysis_data = json.loads(pick.get('analysis', '{}'))
+                model_prob_value = analysis_data.get('p_model', 0)
+                odds_by_bookmaker = pick.get('odds_by_bookmaker')
+                odds_by_bookmaker_json = json.dumps(odds_by_bookmaker) if odds_by_bookmaker else None
+
+                db_helper.execute('''
+                    INSERT INTO football_opportunities 
+                    (timestamp, match_id, home_team, away_team, league, market, selection, 
+                     odds, edge_percentage, confidence, analysis, stake, match_date, kickoff_time,
+                     kickoff_utc, kickoff_epoch, created_at_utc,
+                     quality_score, recommended_date, recommended_tier, daily_rank, mode, bet_placed,
+                     open_odds, odds_source, trust_level,
+                     odds_by_bookmaker, best_odds_value, best_odds_bookmaker, avg_odds, fair_odds, fixture_id,
+                     model_prob, calibrated_prob, sim_probability, ev_sim, disagreement,
+                     open_ts)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (home_team, away_team, selection, market, match_date, mode) DO UPDATE
+                    SET odds = EXCLUDED.odds, edge_percentage = EXCLUDED.edge_percentage,
+                        confidence = EXCLUDED.confidence, analysis = EXCLUDED.analysis,
+                        discord_sent = false
+                ''', (
+                    pick.get('timestamp', int(time.time())),
+                    pick.get('match_id'),
+                    pick.get('home_team'),
+                    pick.get('away_team'),
+                    pick.get('league'),
+                    pick.get('market'),
+                    pick.get('selection'),
+                    odds_value,
+                    float(pick.get('edge_percentage', 0)),
+                    int(pick.get('confidence', 0)),
+                    pick.get('analysis', '{}'),
+                    0.0,
+                    pick.get('match_date'),
+                    pick.get('kickoff_time', ''),
+                    pick.get('kickoff_utc'),
+                    pick.get('kickoff_epoch'),
+                    pick.get('created_at_utc'),
+                    float(quality_score),
+                    datetime.now().strftime('%Y-%m-%d'),
+                    'DATA',
+                    999,
+                    'DATA',
+                    False,
+                    odds_value,
+                    pick.get('odds_source', 'the_odds_api'),
+                    pick.get('trust_level', 'DATA'),
+                    odds_by_bookmaker_json,
+                    pick.get('best_odds_value'),
+                    pick.get('best_odds_bookmaker'),
+                    pick.get('avg_odds'),
+                    pick.get('fair_odds'),
+                    pick.get('fixture_id'),
+                    float(model_prob_value) if model_prob_value else None,
+                    float(pick.get('calibrated_prob')) if pick.get('calibrated_prob') else None,
+                    float(pick.get('sim_probability')) if pick.get('sim_probability') else None,
+                    float(pick.get('ev_sim')) if pick.get('ev_sim') else None,
+                    float(pick.get('disagreement')) if pick.get('disagreement') else None,
+                    int(time.time()),
+                ))
+                saved += 1
+            except Exception as e:
+                print(f"⚠️ Failed to save data pick: {e}")
+        return saved
+
     def save_opportunity(self, opp_dict: Dict) -> bool:
         """Save Value Singles prediction (dict format) to database"""
         try:
@@ -4100,6 +4172,10 @@ def run_single_cycle():
             if learning_picks:
                 learning_saved = champion._save_learning_picks(learning_picks)
                 print(f"📚 Saved {learning_saved} LEARNING picks (all sides preserved for analysis)")
+            data_picks = getattr(value_engine, '_data_picks', [])
+            if data_picks:
+                data_saved = champion._save_data_picks(data_picks)
+                print(f"📡 Saved {data_saved} DATA picks (near-miss, Discord only)")
         except Exception as e:
             print(f"⚠️ Value Singles generation failed: {e}")
             import traceback
@@ -4644,6 +4720,10 @@ def main():
                 if learning_picks:
                     learning_saved = champion._save_learning_picks(learning_picks)
                     print(f"📚 Saved {learning_saved} LEARNING picks (all sides preserved)")
+                data_picks = getattr(value_engine, '_data_picks', [])
+                if data_picks:
+                    data_saved = champion._save_data_picks(data_picks)
+                    print(f"📡 Saved {data_saved} DATA picks (near-miss, Discord only)")
             except Exception as e:
                 print(f"⚠️ Value Singles generation failed: {e}")
             

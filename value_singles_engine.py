@@ -432,6 +432,7 @@ class ValueSinglesEngine:
     ) -> List[Dict[str, Any]]:
         avoid_match_ids = avoid_match_ids or set()
         picks: List[Dict[str, Any]] = []
+        data_picks: List[Dict[str, Any]] = []  # Near-miss picks for Discord data publishing
 
         print("🔥 VALUE SINGLES START (HARD FILTERS ACTIVE)")
         print(f"   min_ev = {MIN_VALUE_SINGLE_EV*100:.0f}%")
@@ -588,8 +589,62 @@ class ValueSinglesEngine:
                 # Use market-specific threshold if defined, else fall back to match threshold
                 market_min_ev = MARKET_SPECIFIC_MIN_EV.get(market_key, match_ev_threshold)
                 if ev < market_min_ev:
+                    # Near-miss: positive EV but below PROD threshold → Discord data pick
+                    if (0 < ev
+                            and MIN_VALUE_SINGLE_ODDS <= odds <= MAX_VALUE_SINGLE_ODDS
+                            and market_key not in LEARNING_ONLY_MARKETS):
+                        _sel = {
+                            "FT_OVER_2_5": "Over 2.5 Goals", "FT_UNDER_2_5": "Under 2.5 Goals",
+                            "FT_OVER_1_5": "Over 1.5 Goals", "FT_UNDER_1_5": "Under 1.5 Goals",
+                            "FT_OVER_3_5": "Over 3.5 Goals", "FT_UNDER_3_5": "Under 3.5 Goals",
+                            "FT_OVER_0_5": "Over 0.5 Goals", "FT_OVER_4_5": "Over 4.5 Goals",
+                            "BTTS_YES": "BTTS Yes", "BTTS_NO": "BTTS No",
+                            "HOME_WIN": "Home Win", "AWAY_WIN": "Away Win", "DRAW": "Draw",
+                            "DOUBLE_CHANCE_1X": "Double Chance 1X", "DOUBLE_CHANCE_X2": "Double Chance X2",
+                            "DOUBLE_CHANCE_12": "Double Chance 12",
+                            "AH_HOME": "Asian Handicap Home", "AH_AWAY": "Asian Handicap Away",
+                            "1H_OVER_0_5": "1H Over 0.5 Goals", "1H_OVER_1_5": "1H Over 1.5 Goals",
+                        }.get(market_key, market_key.replace("_", " ").title())
+                        _ko_utc, _ko_epoch = normalize_kickoff(commence_time)
+                        data_picks.append({
+                            "timestamp": int(time.time()),
+                            "match_id": match_id,
+                            "home_team": match.get("home_team"),
+                            "away_team": match.get("away_team"),
+                            "league": match.get("league_name") or match.get("league") or "Unknown",
+                            "market": "Value Single",
+                            "selection": _sel,
+                            "odds": float(odds),
+                            "edge_percentage": float(ev * 100),
+                            "confidence": int(min(100, max(0, 50 + ev * 250))),
+                            "analysis": json.dumps({
+                                "market_key": market_key,
+                                "p_model": float(raw_prob),
+                                "calibrated_prob": float(calibrated_prob),
+                                "ev": float(ev),
+                                "data_note": "Near-miss: positive EV below PROD threshold"
+                            }),
+                            "match_date": match_date,
+                            "kickoff_utc": _ko_utc,
+                            "kickoff_epoch": _ko_epoch,
+                            "created_at_utc": to_iso_utc(now_utc()),
+                            "mode": "DATA",
+                            "bet_placed": False,
+                            "odds_by_bookmaker": bookmaker_data.get('odds_by_bookmaker'),
+                            "best_odds_value": bookmaker_data.get('best_odds_value'),
+                            "best_odds_bookmaker": bookmaker_data.get('best_odds_bookmaker'),
+                            "avg_odds": bookmaker_data.get('avg_odds'),
+                            "fair_odds": round(1.0 / raw_prob, 3) if raw_prob > 0 else None,
+                            "fixture_id": match.get("fixture_id"),
+                            "trust_level": "DATA",
+                            "sim_probability": float(calibrated_prob),
+                            "ev_sim": float(ev),
+                            "model_prob": float(raw_prob),
+                            "calibrated_prob": float(calibrated_prob),
+                            "disagreement": float(abs(raw_prob - calibrated_prob)),
+                        })
                     continue
-                
+
                 # UNIVERSAL UNDER PROTECTION: All UNDER markets require 8% EV minimum
                 # This catches Under 0.5, 1.5, 4.5 etc. that aren't in MARKET_SPECIFIC_MIN_EV
                 if 'UNDER' in market_key and ev < 0.08:
@@ -874,6 +929,8 @@ class ValueSinglesEngine:
             print(f"   #{i}: {p['home_team']} vs {p['away_team']} | {p['selection']} @ {p['odds']:.2f} (EV {p['edge_percentage']:.1f}%)")
 
         self._learning_picks = learning_picks
+        self._data_picks = data_picks
+        print(f"📡 DATA PICKS (Discord only): {len(data_picks)} near-miss opportunities queued for publishing")
 
         return unique
 
