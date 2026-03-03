@@ -25,6 +25,7 @@ SPORT_GRACE_HOURS = {
 SPORT_VOID_HOURS = {
     'HOCKEY': 48,
     'MMA': 72,
+    'TENNIS': 24,
 }
 
 
@@ -112,13 +113,7 @@ def run_multi_sport_settlement() -> Dict:
                 result = _evaluate_bet(bet, home_score, away_score, home_team_api, away_team_api)
                 if result:
                     outcome, note = result
-                    profit = 0.0
-                    if outcome == 'won':
-                        profit = 1.0
-                    elif outcome == 'lost':
-                        profit = -1.0
-
-                    _settle_bet(bet['id'], outcome, note, profit)
+                    _settle_bet(bet['id'], outcome, note, 0.0)
                     if outcome in stats:
                         stats[outcome] += 1
                     stats['settled'] += 1
@@ -144,7 +139,6 @@ def _get_pending_bets() -> List[Dict]:
                        odds, commence_time
                 FROM learning_bets
                 WHERE status = 'pending'
-                  AND sport_category != 'TENNIS'
                   AND market != 'h2h_lay'
                   AND commence_time < NOW() - INTERVAL '2 hours'
                   AND commence_time > NOW() - INTERVAL '10 days'
