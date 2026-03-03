@@ -705,10 +705,42 @@ class ResultsScraper:
         logger.info(f"📊 Found {len(results)} total results for {clean_date}")
         return results
     
+    def reconcile_pending_with_outcome(self):
+        """Fix picks where outcome is already set but status is still pending.
+        Also voids LEARNING picks older than 14 days with no outcome found."""
+        try:
+            fixed = db_helper.execute('''
+                UPDATE football_opportunities
+                SET status = 'settled', bet_category = 'historical', updated_at = NOW()
+                WHERE outcome IS NOT NULL AND outcome != ''
+                  AND status = 'pending'
+                RETURNING id
+            ''', fetch='all')
+            if fixed:
+                logger.info(f"🔧 Reconciled {len(fixed)} picks with outcome but pending status")
+
+            voided = db_helper.execute('''
+                UPDATE football_opportunities
+                SET status = 'void', outcome = 'void', updated_at = NOW()
+                WHERE mode = 'LEARNING'
+                  AND status = 'pending'
+                  AND (outcome IS NULL OR outcome = '')
+                  AND match_date IS NOT NULL
+                  AND match_date::date < CURRENT_DATE - INTERVAL '7 days'
+                RETURNING id, home_team, away_team, match_date
+            ''', fetch='all')
+            if voided:
+                for row in voided:
+                    logger.info(f"🗑️ Voided unverifiable LEARNING pick {row[0]}: {row[1]} vs {row[2]} ({row[3]})")
+        except Exception as e:
+            logger.warning(f"⚠️ Reconcile failed: {e}")
+
     def update_bet_outcomes(self):
         """Update bet outcomes based on scraped results"""
         logger.info("🔄 Checking bet outcomes...")
-        
+
+        self.reconcile_pending_with_outcome()
+
         try:
             # Use db_helper for fetching pending bets
             pending_bets = db_helper.execute('''
