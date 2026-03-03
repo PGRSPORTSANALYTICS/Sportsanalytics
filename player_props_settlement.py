@@ -280,11 +280,7 @@ def _settle_prop(prop_id: int, outcome: str, actual_val: Optional[float], note: 
         if outcome == 'push':
             result_str = 'PUSH'
 
-        profit = 0
-        if outcome == 'won':
-            profit = 1.0
-        elif outcome == 'lost':
-            profit = -1.0
+        profit = 0.0
 
         with DatabaseConnection.get_cursor() as cursor:
             cursor.execute("""

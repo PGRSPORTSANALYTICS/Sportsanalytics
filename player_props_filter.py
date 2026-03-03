@@ -14,7 +14,7 @@ Quality Filters (all must pass):
 8. Not returning from injury
 9. Not limited minutes last game
 10. Projection requires 10+ recent game values
-11. Positive EV only
+(Note: EV/edge is calculated for data collection only — NOT used as a pass/fail filter)
 
 Post-Filter Ranking (applied after quality pass):
 1. Rank by edge descending
@@ -78,7 +78,7 @@ def filter_quality_props(raw_props: List[Dict]) -> List[Dict]:
     filtered_reasons = {
         'no_stats': 0, 'low_minutes': 0, 'few_games_7': 0,
         'few_games_total': 0, 'injury_return': 0, 'limited_last': 0,
-        'not_rotation': 0, 'no_projection': 0, 'negative_ev': 0,
+        'not_rotation': 0, 'no_projection': 0,
     }
 
     for prop in deduped:
@@ -138,10 +138,6 @@ def filter_quality_props(raw_props: List[Dict]) -> List[Dict]:
             model_prob = 0.01
 
         ev = (model_prob * odds - 1) * 100
-
-        if ev <= 0:
-            filtered_reasons['negative_ev'] += 1
-            continue
 
         prop['model_prob'] = round(model_prob, 4)
         prop['edge_pct'] = round(ev, 1)
