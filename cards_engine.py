@@ -184,13 +184,13 @@ class CardsCandidate:
 
 
 MIN_MATCH_CARDS_LINE = 3.5
-MIN_TEAM_CARDS_LINE = 1.5
+MIN_TEAM_CARDS_LINE = 2.5  # 1.5 removed — not available at major bookmakers (bet365 etc.)
 
 CARDS_LINES = {
     "match": [3.5, 4.5, 5.5, 6.5],
     "booking_points": [30.5, 40.5, 50.5, 60.5],
-    "home": [1.5, 2.5, 3.5],
-    "away": [1.5, 2.5, 3.5],
+    "home": [2.5, 3.5],   # 1.5 excluded — rarely offered at real bookmakers
+    "away": [2.5, 3.5],   # 1.5 excluded — rarely offered at real bookmakers
 }
 
 DEFAULT_DISCIPLINE_STATS = {
