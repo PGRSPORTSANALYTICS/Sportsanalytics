@@ -2395,11 +2395,12 @@ class RealFootballChampion:
         )
     
     def get_todays_count(self):
-        """Get count of today's PROD pending opportunities (LEARNING excluded)"""
+        """Get count of today's PROD Value Single opportunities only (Corners/Cards excluded)"""
         today_date = datetime.now().strftime('%Y-%m-%d')
         result = db_helper.execute('''
             SELECT COUNT(*) FROM football_opportunities 
             WHERE match_date = %s AND status = 'pending' AND mode = 'PROD'
+              AND market = 'Value Single'
         ''', (today_date,), fetch='one')
         return result[0] if result else 0
     
@@ -4099,12 +4100,14 @@ MATCH_DATE_CAP_CORNERS = 10
 MATCH_DATE_CAP_CARDS = 5
 
 def get_todays_bet_count() -> int:
-    """Count how many PROD football bets target today's matches (LEARNING picks excluded)."""
+    """Count how many PROD Value Single bets target today's matches.
+    Corners and Cards have their own separate caps and are excluded here."""
     try:
         today_date = datetime.now().strftime('%Y-%m-%d')
         result = db_helper.execute('''
             SELECT COUNT(*) FROM football_opportunities
             WHERE match_date = %s AND mode = 'PROD'
+              AND market = 'Value Single'
               AND match_id NOT LIKE 'seed_%%'
         ''', (today_date,), fetch='one')
         count = result[0] if result and result[0] else 0
