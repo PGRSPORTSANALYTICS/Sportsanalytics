@@ -129,17 +129,7 @@ class ResultsEngine:
             """, (now_ts,))
             football_voided = cursor.rowcount
             
-            cursor.execute("""
-                UPDATE sgp_predictions 
-                SET status = 'SETTLED', 
-                    outcome = 'void', 
-                    result = 'VOID',
-                    settled_timestamp = %s
-                WHERE (UPPER(status) = 'PENDING' OR outcome IS NULL OR outcome = '')
-                    AND DATE(match_date) < CURRENT_DATE - INTERVAL '3 days'
-                    AND (outcome IS NULL OR outcome NOT IN ('won', 'lost', 'void', 'win', 'loss'))
-            """, (now_ts,))
-            sgp_voided = cursor.rowcount
+            sgp_voided = 0
             
             cursor.execute("""
                 UPDATE basketball_predictions 
@@ -301,10 +291,8 @@ class ResultsEngine:
             logger.error(f"❌ Football settlement error: {e}")
     
     def _settle_sgp_parlays(self):
-        """Settle pending SGP and multi-match parlays."""
-        if not self.database_url:
-            return
-        
+        """Settle pending SGP and multi-match parlays (disabled — table removed)."""
+        return
         try:
             conn = self._get_db_connection()
             cursor = conn.cursor(cursor_factory=RealDictCursor)

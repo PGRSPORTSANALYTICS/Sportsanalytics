@@ -87,27 +87,8 @@ class BetStatusService:
                 ORDER BY match_date, kickoff_time
             ''', conn)
             
-            # SGP predictions
-            sgps = pd.read_sql('''
-            SELECT 
-                'SGP' as type,
-                id,
-                home_team || ' vs ' || away_team as match,
-                league,
-                parlay_description as prediction,
-                bookmaker_odds as odds,
-                ev_percentage as ev,
-                stake,
-                status,
-                match_date,
-                kickoff_time,
-                outcome as result,
-                payout,
-                profit_loss
-            FROM sgp_predictions
-                WHERE status IN ('pending', 'live')
-                ORDER BY match_date, kickoff_time
-            ''', conn)
+            # SGP predictions (table removed)
+            sgps = pd.DataFrame()
             
             # Women's 1X2 predictions
             women_1x2 = pd.read_sql('''
@@ -232,24 +213,8 @@ class BetStatusService:
                 ORDER BY settled_timestamp DESC
             ''', conn)
             
-            # SGP settled today
-            sgps = pd.read_sql(f'''
-                SELECT 
-                    'SGP' as type,
-                    id,
-                    home_team || ' vs ' || away_team as match,
-                    league,
-                    parlay_description as prediction,
-                    bookmaker_odds as odds,
-                    stake,
-                    outcome as result,
-                    payout,
-                    profit_loss
-                FROM sgp_predictions
-                WHERE status = 'settled'
-                AND DATE(TO_TIMESTAMP(settled_timestamp)) = '{today}'
-                ORDER BY settled_timestamp DESC
-            ''', conn)
+            # SGP settled today (table removed)
+            sgps = pd.DataFrame()
             
             # Women's 1X2 settled today
             women_1x2 = pd.read_sql(f'''

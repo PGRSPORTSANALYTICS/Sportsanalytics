@@ -191,17 +191,9 @@ def get_today_matches_with_ai_data() -> List[Dict[str, Any]]:
     except Exception as e:
         logger.error(f"Error fetching football opportunities: {e}")
     
-    # 2. SGP Predictions
+    # 2. SGP Predictions (removed)
     try:
-        sgp_rows = db_helper.execute("""
-            SELECT DISTINCT ON (home_team, away_team)
-                match_id, home_team, away_team, league, match_date, kickoff_time,
-                legs, ev_percentage, parlay_probability
-            FROM sgp_predictions
-            WHERE match_date >= %s AND match_date <= %s
-            AND mode != 'TEST'
-            ORDER BY home_team, away_team, timestamp DESC
-        """, (str(today), str(tomorrow)), fetch='all') or []
+        sgp_rows = []
         
         for row in sgp_rows:
             key = f"{row[1]}_{row[2]}"
@@ -374,16 +366,9 @@ def get_match_ai_details(match_id: str) -> Optional[Dict[str, Any]]:
     except Exception as e:
         logger.error(f"Error fetching football data for match {match_id}: {e}")
     
-    # 2. Search SGP predictions
+    # 2. Search SGP predictions (removed)
     try:
-        rows = db_helper.execute("""
-            SELECT match_id, home_team, away_team, league, match_date, kickoff_time,
-                   legs, parlay_description, bookmaker_odds, ev_percentage
-            FROM sgp_predictions
-            WHERE match_id = %s OR (home_team || '_' || away_team) = %s
-            ORDER BY timestamp DESC
-            LIMIT 5
-        """, (match_id, match_id), fetch='all') or []
+        rows = []
         
         for row in rows:
             if not match_data:

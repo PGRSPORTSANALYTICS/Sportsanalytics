@@ -535,20 +535,7 @@ class DataCollector:
                 result = conn.execute(text("SELECT COUNT(*) FROM training_data"))
                 total_records = result.fetchone()[0] or 0
                 
-                result = conn.execute(text("""
-                    SELECT 
-                        COUNT(*) as settled,
-                        SUM(CASE WHEN outcome = 'win' THEN 1 ELSE 0 END) as wins
-                    FROM sgp_predictions WHERE status = 'settled'
-                """))
-                row = result.fetchone()
-                if row:
-                    sgp_settled = row[0] or 0
-                    sgp_wins = row[1] or 0
-                    total_settled += sgp_settled
-                    total_correct += sgp_wins
-                    bets_settled += sgp_settled
-                    bets_correct += sgp_wins
+                pass  # SGP table removed
                 
                 result = conn.execute(text("""
                     SELECT 

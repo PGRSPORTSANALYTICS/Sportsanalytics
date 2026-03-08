@@ -33,25 +33,7 @@ class BacktestAnalyzer:
             return
         
         try:
-            sgp_rows = DatabaseHelper.execute("""
-                SELECT 
-                    league, bookmaker_odds as odds, ev_percentage as ev, 
-                    status, stake, match_date_only as bet_date
-                FROM sgp_predictions 
-                WHERE status IN ('won', 'lost') AND bookmaker_odds IS NOT NULL
-            """, fetch='all')
-            
-            if sgp_rows:
-                self.sgp_data = pd.DataFrame(sgp_rows, columns=[
-                    'league', 'odds', 'ev', 'status', 'stake', 'bet_date'
-                ])
-                self.sgp_data['profit_sek'] = self.sgp_data.apply(
-                    lambda x: x['stake'] * x['odds'] - x['stake'] if x['status'] == 'won' else -x['stake'], 
-                    axis=1
-                )
-                self.sgp_data['won'] = self.sgp_data['status'] == 'won'
-            else:
-                self.sgp_data = pd.DataFrame()
+            self.sgp_data = pd.DataFrame()  # SGP table removed
             
             bball_rows = DatabaseHelper.execute("""
                 SELECT 

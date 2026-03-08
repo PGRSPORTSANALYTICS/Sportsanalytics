@@ -60,23 +60,7 @@ class DailyCardSelector:
             now = datetime.now()
             tomorrow = now + timedelta(hours=24)
             
-            sgp_rows = DatabaseHelper.execute("""
-                SELECT 
-                    'SGP' as sport,
-                    league,
-                    'SGP' as market,
-                    parlay_description as selection,
-                    home_team || ' vs ' || away_team as matchup,
-                    bookmaker_odds as odds,
-                    ev_percentage / 100.0 as ev,
-                    parlay_probability as confidence,
-                    match_date as start_time,
-                    status
-                FROM sgp_predictions 
-                WHERE status = 'pending'
-                AND match_date_only >= CURRENT_DATE
-                AND match_date_only <= CURRENT_DATE + INTERVAL '1 day'
-            """, fetch='all')
+            sgp_rows = []  # SGP table removed
             
             if sgp_rows:
                 for row in sgp_rows:
