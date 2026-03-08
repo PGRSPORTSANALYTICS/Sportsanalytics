@@ -103,24 +103,7 @@ def get_results_for_date_range(start_date: date, end_date: date):
                     results[cat]['lost'] += 1
                 results[cat]['profit'] += profit_units
             
-            cur.execute("""
-                SELECT total_odds, result
-                FROM ml_parlay_predictions
-                WHERE match_date::date BETWEEN %s AND %s
-                AND result IN ('WON', 'LOST')
-            """, (start_date, end_date))
-            rows = cur.fetchall()
-            
-            for row in rows:
-                odds, result = row
-                is_win = result == 'WON'
-                profit_units = (float(odds) - 1) if is_win else -1
-                
-                if is_win:
-                    results['parlays']['won'] += 1
-                else:
-                    results['parlays']['lost'] += 1
-                results['parlays']['profit'] += profit_units
+            # ml_parlay_predictions table removed — parlays disabled
             
             cur.execute("""
                 SELECT odds, status
