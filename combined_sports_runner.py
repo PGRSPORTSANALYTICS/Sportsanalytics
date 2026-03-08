@@ -29,9 +29,7 @@ logger = logging.getLogger(__name__)
 # PRODUCT ENABLE/DISABLE FLAGS - Set to False to pause product
 # ============================================================
 ENABLE_VALUE_SINGLES = True          # Core product - AI picks for 1X2, O/U, BTTS, etc.
-ENABLE_PARLAYS = False               # DISABLED per Jan 2026 policy - no multi-match parlays
 ENABLE_COLLEGE_BASKETBALL = True     # ACTIVE - 63.3% hit rate, +$3,446 profit
-ENABLE_ML_PARLAY = False             # DISABLED Feb 16, 2026 - 11.9% hit rate, not profitable
 ENABLE_PLAYER_PROPS = True           # LEARNING MODE - player props data collection (Feb 2026)
 
 # ============================================================
@@ -137,19 +135,6 @@ def run_cards():
     run_discord_analysis_publisher()
 
 
-def run_parlay_builder():
-    """Run multi-match parlay builder from approved singles"""
-    try:
-        from parlay_builder import run_parlay_builder as build_parlays
-        logger.info("🎲 Starting Parlay Builder cycle...")
-        parlays = build_parlays()
-        logger.info(f"✅ Parlay Builder complete: {len(parlays)} parlays generated")
-    except Exception as e:
-        logger.error(f"❌ Parlay builder error: {e}")
-        import traceback
-        traceback.print_exc()
-
-
 def run_college_basketball():
     """Run college basketball predictions"""
     try:
@@ -238,17 +223,6 @@ def run_pgr_analytics():
         logger.error(f"❌ PGR Analytics error: {e}")
         import traceback
         traceback.print_exc()
-
-
-def run_ml_parlay():
-    """Run ML Parlay predictions (TEST MODE - no external posting)"""
-    try:
-        from ml_parlay_engine import run_prediction_cycle
-        logger.info("🎰 Starting ML Parlay cycle (TEST MODE)...")
-        run_prediction_cycle()
-        logger.info("✅ ML Parlay cycle complete")
-    except Exception as e:
-        logger.error(f"❌ ML Parlay prediction error: {e}")
 
 
 def run_learning_update():
@@ -352,32 +326,6 @@ def verify_all_bets_corners_cards():
         traceback.print_exc()
 
 
-def verify_parlay_results():
-    """Verify parlay results using ML parlay verifier"""
-    try:
-        from ml_parlay_verifier import MLParlayVerifier
-        logger.info("🎲 Verifying Parlay results...")
-        verifier = MLParlayVerifier()
-        results = verifier.verify_pending_parlays()
-        logger.info(f"🎲 Parlay verification: {results['verified']} verified, {results['failed']} failed")
-    except Exception as e:
-        logger.error(f"❌ Parlay verification error: {e}")
-        import traceback
-        traceback.print_exc()
-
-
-def verify_ml_parlay_results():
-    """Verify ML Parlay results (TEST MODE)"""
-    try:
-        from ml_parlay_verifier import MLParlayVerifier
-        logger.info("🎰 Verifying ML Parlay results...")
-        verifier = MLParlayVerifier()
-        results = verifier.verify_pending_parlays()
-        logger.info(f"🎰 ML Parlay verification: {results['verified']} verified, {results['failed']} failed")
-    except Exception as e:
-        logger.error(f"❌ ML Parlay verification error: {e}")
-
-
 def run_clv_update_cycle():
     """Run CLV (Closing Line Value) update cycle - capture closing odds near kickoff"""
     try:
@@ -430,8 +378,6 @@ def print_daily_stake_summary():
         logger.info("💰 TODAY'S STAKING SUMMARY (1.6% Kelly)")
         logger.info("="*60)
         logger.info(f"   Value Singles:     {breakdown['value_singles']:,.0f} SEK")
-        logger.info(f"   Multi-Match:       {breakdown['parlays']:,.0f} SEK")
-        logger.info(f"   ML Parlays:        {breakdown['ml_parlays']:,.0f} SEK")
         logger.info(f"   Basketball:        {breakdown['basketball']:,.0f} SEK")
         logger.info("-"*60)
         logger.info(f"   TOTAL STAKED:      {breakdown['total']:,.0f} SEK (${breakdown['total']/usd_rate:,.0f} USD)")
@@ -655,15 +601,6 @@ def main():
     else:
         logger.info("⏸️ Value Singles PAUSED")
     
-    if ENABLE_PARLAYS:
-        try:
-            run_parlay_builder()
-        except BaseException as e:
-            logger.error(f"❌ Parlay startup crash: {e}")
-        time.sleep(5)
-    else:
-        logger.info("⏸️ Parlays PAUSED")
-    
     if ENABLE_COLLEGE_BASKETBALL:
         try:
             run_college_basketball()
@@ -672,15 +609,6 @@ def main():
         time.sleep(5)
     else:
         logger.info("⏸️ College Basketball PAUSED")
-    
-    if ENABLE_ML_PARLAY:
-        try:
-            run_ml_parlay()
-        except BaseException as e:
-            logger.error(f"❌ ML Parlay startup crash: {e}")
-        time.sleep(5)
-    else:
-        logger.info("⏸️ ML Parlay PAUSED")
     
     # Player Props: skip on startup — NBA API blocks 15s per player (255s total with timeouts)
     # The scheduler will run it every 6 hours instead
@@ -718,10 +646,6 @@ def main():
         verify_basketball_results()
     except BaseException as e:
         logger.error(f"❌ Basketball results startup crash: {e}")
-    try:
-        verify_ml_parlay_results()
-    except BaseException as e:
-        logger.error(f"❌ ML Parlay results startup crash: {e}")
     logger.info("✅ Initial verification complete")
     # PGR Analytics initial run is handled by _delayed_startup_cycles (10-min delay)
     # to avoid DB write spike crashing the container at ~30s startup
@@ -731,12 +655,8 @@ def main():
         schedule.every(1).hours.do(run_value_singles)
         schedule.every(1).hours.do(run_corners)
         schedule.every(30).minutes.do(run_cards)
-    if ENABLE_PARLAYS:
-        schedule.every(2).hours.do(run_parlay_builder)
     if ENABLE_COLLEGE_BASKETBALL:
         schedule.every(2).hours.do(run_college_basketball)
-    if ENABLE_ML_PARLAY:
-        schedule.every(3).hours.do(run_ml_parlay)
     if ENABLE_PLAYER_PROPS:
         schedule.every(6).hours.do(run_player_props)
     
@@ -746,7 +666,6 @@ def main():
     # Schedule result verification - Every 5 minutes for FAST results
     schedule.every(5).minutes.do(run_results_engine)  # Unified Results Engine
     schedule.every(5).minutes.do(verify_basketball_results)  # Basketball separate
-    schedule.every(30).minutes.do(verify_ml_parlay_results)  # ML Parlay verification
     schedule.every(30).minutes.do(run_player_props_settlement)  # Player props settlement
     schedule.every(30).minutes.do(run_multi_sport_settlement)  # Multi-sport settlement
     

@@ -1,7 +1,7 @@
 # Sports Betting Analytics Platform
 
 ## Overview
-This AI-powered sports betting analytics platform leverages Monte Carlo simulation and ensemble modeling to generate profitable predictions, primarily focusing on Value Singles (1X2, Over/Under, BTTS, Double Chance). Secondary offerings include Multi-Match Parlays and College Basketball analytics. The platform targets a 15-20% ROI with strict EV filtering (5%+ edge) and features a premium Streamlit dashboard, a Telegram bot for prediction delivery, and automatic result verification. AI analysis incorporates xG, form, H2H data, injuries, and standings. The project aims to provide a reliable, data-driven tool for sports bettors, democratizing advanced analytics for significant market potential.
+This AI-powered sports betting analytics platform leverages Monte Carlo simulation and ensemble modeling to generate profitable predictions, primarily focusing on Value Singles (1X2, Over/Under, BTTS, Double Chance), Corners, and Cards. Secondary offerings include College Basketball analytics. The platform targets a 15-20% ROI with strict EV filtering (5%+ edge) and features a premium Streamlit dashboard, a Telegram bot for prediction delivery, and automatic result verification. AI analysis incorporates xG, form, H2H data, injuries, and standings. The project aims to provide a reliable, data-driven tool for sports bettors, democratizing advanced analytics for significant market potential.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.

@@ -265,7 +265,7 @@ def get_parlays(prod_bets: pd.DataFrame) -> pd.DataFrame:
 
 def get_basket_bets(prod_bets: pd.DataFrame) -> pd.DataFrame:
     """Get College Basketball bets."""
-    return filter_by_product(prod_bets, ["COLLEGE_BASKET", "BASKET_SINGLE", "BASKET_PARLAY", "NCAAB"])
+    return filter_by_product(prod_bets, ["COLLEGE_BASKET", "BASKET_SINGLE", "NCAAB"])
 
 
 def get_women_1x2(prod_bets: pd.DataFrame) -> pd.DataFrame:
@@ -655,8 +655,6 @@ def load_all_bets_from_db() -> pd.DataFrame:
             best_odds_value,
             best_odds_bookmaker
         FROM normalized_bets
-        WHERE (mode IS NULL OR mode NOT IN ('TEST', 'LEARNING'))
-          AND (product IS NULL OR product NOT IN ('SGP'))
         ORDER BY created_at DESC
         """
     )
@@ -2194,157 +2192,6 @@ def render_product_tab(
         )
 
 
-@st.cache_data(ttl=600, show_spinner=False)
-def _load_ml_parlays():
-    """Cached DB fetch for ML parlay predictions."""
-    from db_helper import db_helper
-    return db_helper.execute(
-        """SELECT parlay_id, match_date, num_legs, legs, parlay_description,
-                  total_odds, combined_ev, confidence_score, stake,
-                  potential_payout, status, outcome, profit_loss, profit_units, mode, created_at
-           FROM ml_parlay_predictions
-           ORDER BY created_at DESC
-           LIMIT 200""",
-        fetch='all'
-    )
-
-
-def render_ml_parlay_tab():
-    """Render ML Parlay tab showing moneyline parlays with premium styling."""
-    import json
-    
-    st.markdown("## ML Parlay Engine v2")
-    st.caption("2-Leg Parlays | All Markets | Max 5x Odds | Calibrated Probabilities")
-    
-    try:
-        parlays = _load_ml_parlays()
-        
-        if not parlays:
-            st.info("No ML Parlays yet. The engine runs every 3 hours and creates parlays when matches meet the filters.")
-            return
-        
-        columns = ['parlay_id', 'match_date', 'num_legs', 'legs', 'parlay_description', 
-                   'total_odds', 'combined_ev', 'confidence_score', 'stake',
-                   'potential_payout', 'status', 'outcome', 'profit_loss', 'profit_units', 'mode', 'created_at']
-        df = pd.DataFrame(parlays, columns=columns)
-        
-        settled = df[df['status'] == 'settled'].copy()
-        pending = df[df['status'] == 'pending'].copy()
-        
-        won = len(settled[settled['outcome'] == 'won']) if not settled.empty else 0
-        lost = len(settled[settled['outcome'] == 'lost']) if not settled.empty else 0
-        push = len(settled[settled['outcome'] == 'push']) if not settled.empty else 0
-        void = len(settled[settled['outcome'].isin(['void', 'VOID'])]) if not settled.empty else 0
-        units_staked = won + lost  # Don't count pushes or voids
-        
-        profit_units = 0.0
-        if not settled.empty:
-            settled['total_odds'] = pd.to_numeric(settled['total_odds'], errors='coerce').fillna(2.0)
-            for _, bet in settled.iterrows():
-                if bet['outcome'] == 'won':
-                    odds = float(bet.get('total_odds', 2.0) or 2.0)
-                    profit_units += (odds - 1)
-                elif bet['outcome'] == 'lost':
-                    profit_units -= 1
-                # push/void = 0, no change
-        
-        roi = (profit_units / units_staked * 100) if units_staked > 0 else 0
-        hit_rate = (won / units_staked * 100) if units_staked > 0 else 0
-        avg_odds = settled['total_odds'].mean() if not settled.empty else 0
-        
-        col1, col2, col3, col4, col5 = st.columns(5)
-        with col1:
-            st.metric("ROI", f"{roi:+.1f}%")
-        with col2:
-            st.metric("Profit", f"{profit_units:+.1f}u")
-        with col3:
-            st.metric("Hit Rate", f"{hit_rate:.0f}%")
-        with col4:
-            record_str = f"{won}-{lost}"
-            if push > 0:
-                record_str += f"-{push}P"
-            if void > 0:
-                record_str += f"-{void}V"
-            st.metric("Record", record_str)
-        with col5:
-            st.metric("Pending", len(pending))
-        
-        st.markdown("---")
-        st.markdown("### Active Parlays")
-        
-        if pending.empty:
-            st.info("No active parlays. Next batch generates when matches meet the filters.")
-        else:
-            for idx, row in pending.iterrows():
-                ev = float(row.get('combined_ev', 0) or 0)
-                odds = float(row.get('total_odds', 0) or 0)
-                desc = str(row.get('parlay_description', ''))
-                num_legs = int(row.get('num_legs', 0) or 0)
-                confidence = float(row.get('confidence_score', 0) or 0)
-                parlay_id = str(row.get('parlay_id', ''))[:12]
-                
-                legs_data = row.get('legs', '[]')
-                if isinstance(legs_data, str):
-                    try:
-                        legs_list = json.loads(legs_data)
-                    except:
-                        legs_list = []
-                else:
-                    legs_list = legs_data if legs_data else []
-                
-                ev_tier = "ELITE" if ev >= 50 else "STRONG" if ev >= 20 else "SOLID" if ev >= 10 else "VALUE"
-                
-                with st.expander(f"{num_legs} LEGS @ {odds:.2f}x | EV +{ev:.1f}% | {ev_tier}", expanded=True):
-                    for leg in legs_list:
-                        home = leg.get('home_team', 'Home')
-                        away = leg.get('away_team', 'Away')
-                        league = leg.get('league', '')
-                        selection = leg.get('selection', '')
-                        leg_odds = float(leg.get('odds', 1.0))
-                        edge = float(leg.get('edge_percentage', 0))
-                        
-                        selection_display = selection.replace('_', ' ').replace('HOME', home).replace('AWAY', away)
-                        if 'DNB' in selection:
-                            selection_display = selection_display.replace('DNB', '(DNB)')
-                        
-                        st.markdown(f"**{home} vs {away}** ({league})")
-                        st.markdown(f"Pick: {selection_display} @ {leg_odds:.2f} | Edge: +{edge:.1f}%")
-                        st.markdown("---")
-                    
-                    c1, c2, c3 = st.columns(3)
-                    with c1:
-                        st.metric("Total Odds", f"{odds:.2f}x")
-                    with c2:
-                        st.metric("EV", f"+{ev:.1f}%")
-                    with c3:
-                        st.metric("Stake", "1 unit")
-        
-        st.markdown("---")
-        st.markdown("### Settled History")
-        
-        if settled.empty:
-            st.info("No settled parlays yet. Results will appear here after verification.")
-        else:
-            for _, row in settled.head(10).iterrows():
-                outcome = row.get('outcome', '')
-                ev = float(row.get('combined_ev', 0) or 0)
-                odds = float(row.get('total_odds', 0) or 0)
-                num_legs = int(row.get('num_legs', 0) or 0)
-                match_date = str(row.get('match_date', ''))
-                desc = str(row.get('parlay_description', ''))
-                
-                if outcome == 'won':
-                    pl_display = f"+{odds - 1:.2f}u"
-                    result_icon = "W"
-                else:
-                    pl_display = "-1.00u"
-                    result_icon = "L"
-                
-                st.markdown(f"**{result_icon}** | {desc} @ {odds:.2f}x | {pl_display}")
-            
-    except Exception as e:
-        st.error(f"Error loading ML Parlay data: {e}")
-
 
 def render_daily_card_tab():
     """Render the Daily Betting Card tab with EV-filtered selections."""
@@ -2547,15 +2394,13 @@ def render_daily_card_tab():
         
         summary = card['summary']
         st.markdown("### Card Summary")
-        cols = st.columns(4)
+        cols = st.columns(3)
         with cols[0]:
             st.metric("Total Picks", summary['total_bets'])
         with cols[1]:
             st.metric("Value Singles", summary['value_singles_count'])
         with cols[2]:
-            st.metric("Parlay Bets", summary.get('parlay_count', 0))
-        with cols[3]:
-            st.metric("Basketball", summary['basketball_count'])
+            st.metric("Basketball", summary.get('basketball_count', 0))
         
         st.markdown("---")
         
@@ -2655,13 +2500,7 @@ def render_daily_card_tab():
         st.markdown("### Average Stats")
         stats_cols = st.columns(3)
         with stats_cols[0]:
-            if summary.get('parlay_count', 0) > 0:
-                st.markdown(f"""
-                <div style="padding:12px;border-radius:10px;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);">
-                    <div style="font-size:12px;color:#9CA3AF;">Parlay Average</div>
-                    <div style="font-size:16px;color:#6366F1;">EV: {summary.get('parlay_avg_ev', 0):.1f}% • Odds: {summary.get('parlay_avg_odds', 0):.2f}x</div>
-                </div>
-                """, unsafe_allow_html=True)
+            pass
         with stats_cols[1]:
             if summary['basketball_count'] > 0:
                 st.markdown(f"""
@@ -2778,9 +2617,7 @@ def render_backtest_analysis():
         with col5:
             st.markdown("### Parlay Odds Deep Dive")
             st.caption("Fine-grained parlay odds analysis")
-            sgp_odds_df = analyzer.get_sgp_odds_analysis()
-            if not sgp_odds_df.empty:
-                st.dataframe(sgp_odds_df, width="stretch", hide_index=True)
+            pass
         
         with col6:
             st.markdown("### Basketball Confidence Levels")
@@ -2828,8 +2665,7 @@ def render_basketball_tab(df: pd.DataFrame):
     st.caption("NCAAB value singles and parlays from your basketball engine.")
 
     singles = product_filter(df, ["BASKET_SINGLE"])
-    parlays = product_filter(df, ["BASKET_PARLAY"])
-    all_data = product_filter(df, ["BASKET_SINGLE", "BASKET_PARLAY"])
+    all_data = product_filter(df, ["BASKET_SINGLE"])
 
     if all_data.empty:
         st.info("No basketball bets yet. Once your engine starts saving picks here, this tab will update automatically.")
@@ -3049,210 +2885,6 @@ def render_basketball_tab(df: pd.DataFrame):
                 st.dataframe(parlays_settled[cols].head(15), width="stretch", hide_index=True)
 
 
-def render_parlays_tab():
-    """Specialized Parlays tab with beautiful card layout."""
-    st.markdown("## Multi-Match Parlays")
-    st.caption("High-edge parlays built from approved L1/L2 single bets across multiple matches.")
-
-    db_url = get_db_url()
-    engine = get_dashboard_engine()
-    
-    from datetime import datetime as dt_module, timedelta as td_module
-    today = dt_module.utcnow().date()
-    
-    query = text("""
-        SELECT
-            id,
-            home_team,
-            away_team,
-            legs,
-            parlay_description,
-            bookmaker_odds as odds,
-            stake,
-            ev_percentage as ev,
-            result,
-            outcome,
-            match_date,
-            payout,
-            profit_loss
-        FROM sgp_predictions
-        WHERE mode = 'PROD'
-        ORDER BY match_date DESC, id DESC
-    """)
-    
-    with engine.connect() as conn:
-        df = pd.read_sql(query, conn)
-
-    if df.empty:
-        st.info("No parlays in the database yet.")
-        return
-
-    # Split active vs settled - check BOTH result and outcome columns
-    # Settled = has result (WON/LOSS/VOID) OR has outcome (won/loss/win/lost/void)
-    outcome_settled = df["outcome"].isin(["won", "win", "loss", "lost", "WON", "WIN", "LOSS", "LOST", "void", "VOID"])
-    result_settled = df["result"].isin(["WON", "WIN", "LOSS", "LOST", "VOID", "void"])
-    settled_mask = outcome_settled | result_settled
-    
-    # Only show today's and future unsettled parlays as "active"
-    df["match_date"] = pd.to_datetime(df["match_date"], errors="coerce")
-    today_mask = df["match_date"].dt.date >= today
-    
-    active_bets = df[~settled_mask & today_mask].drop_duplicates(subset=['home_team', 'away_team', 'parlay_description']).copy()
-    settled_bets = df[settled_mask].copy()
-    
-    # Past unsettled parlays (matches already played but not yet verified)
-    past_unsettled = df[~settled_mask & ~today_mask].copy()
-
-    # ROI / PROFIT / HIT RATE for settled (UNITS MODE) - EXCLUDE VOIDs
-    if not settled_bets.empty:
-        # Filter out VOIDs from stats calculations
-        void_mask = settled_bets["result"].isin(["VOID", "void"]) | settled_bets["outcome"].isin(["void", "VOID"])
-        non_void_bets = settled_bets[~void_mask]
-        void_count = void_mask.sum()
-        
-        won_mask = non_void_bets["result"].isin(["WON", "WIN"]) | non_void_bets["outcome"].isin(["won", "win", "WON", "WIN"])
-        won_count = won_mask.sum()
-        lost_count = len(non_void_bets) - won_count
-        units_staked = len(non_void_bets)  # Only count non-void bets
-        
-        profit_units = 0.0
-        for idx, bet in non_void_bets.iterrows():
-            is_won = bet["result"] in ["WON", "WIN"] or bet["outcome"] in ["won", "win", "WON", "WIN"]
-            if is_won:
-                odds = float(bet.get("odds", 2.0) or 2.0)
-                profit_units += (odds - 1)
-            else:
-                profit_units -= 1
-        
-        roi = (profit_units / units_staked * 100) if units_staked > 0 else 0.0
-        hit_rate = (won_count / len(non_void_bets) * 100) if len(non_void_bets) > 0 else 0.0
-
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            roi_color = "#00FFA6" if roi >= 0 else "#F97373"
-            st.markdown(
-                f"""
-                <div style="padding:14px 16px;border-radius:12px;
-                    background:rgba(0,255,166,0.06);border:1px solid rgba(0,255,166,0.3);">
-                    <div style="font-size:11px;text-transform:uppercase;color:#7EF3C9;">ROI</div>
-                    <div style="font-size:26px;font-weight:700;color:{roi_color};">
-                        {roi:+.1f}%
-                    </div>
-                    <div style="font-size:12px;color:#9CA3AF;">
-                        On {units_staked} units
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-        with col2:
-            color = "#00FFA6" if profit_units >= 0 else "#F97373"
-            st.markdown(
-                f"""
-                <div style="padding:14px 16px;border-radius:12px;
-                    background:rgba(15,23,42,0.9);border:1px solid rgba(148,163,184,0.4);">
-                    <div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Profit</div>
-                    <div style="font-size:26px;font-weight:700;color:{color};">
-                        {profit_units:+.1f} units
-                    </div>
-                    <div style="font-size:12px;color:#9CA3AF;">
-                        All settled parlays
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-        with col3:
-            st.markdown(
-                f"""
-                <div style="padding:14px 16px;border-radius:12px;
-                    background:rgba(15,23,42,0.9);border:1px solid rgba(148,163,184,0.4);">
-                    <div style="font-size:11px;text-transform:uppercase;color:#9CA3AF;">Hit rate</div>
-                    <div style="font-size:26px;font-weight:700;color:#E5E7EB;">
-                        {hit_rate:.1f}%
-                    </div>
-                    <div style="font-size:12px;color:#9CA3AF;">
-                        {won_count}/{len(non_void_bets)} won{f' ({void_count} void)' if void_count > 0 else ''}
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-    st.markdown("---")
-
-    # ACTIVE PARLAYS
-    st.markdown("### Active Parlays (Ready to bet)")
-
-    if active_bets.empty:
-        st.info("No active parlays right now.")
-    else:
-        for _, row in active_bets.iterrows():
-            ev = row.get("ev", 0.0) or 0.0
-            try:
-                ev = float(ev)
-            except Exception:
-                ev = 0.0
-            
-            if ev >= 20:
-                ev_bg, ev_border, ev_color, ev_glow = "linear-gradient(135deg, rgba(0,255,166,0.25), rgba(0,255,166,0.15))", "rgba(0,255,166,0.9)", "#00FFA6", "0 0 12px rgba(0,255,166,0.6)"
-            elif ev >= 8:
-                ev_bg, ev_border, ev_color, ev_glow = "linear-gradient(135deg, rgba(34,197,94,0.22), rgba(34,197,94,0.12))", "rgba(34,197,94,0.85)", "#22C55E", "0 0 8px rgba(34,197,94,0.4)"
-            elif ev >= 3:
-                ev_bg, ev_border, ev_color, ev_glow = "linear-gradient(135deg, rgba(59,130,246,0.18), rgba(59,130,246,0.08))", "rgba(59,130,246,0.75)", "#60A5FA", "none"
-            else:
-                ev_bg, ev_border, ev_color, ev_glow = "rgba(148,163,184,0.10)", "rgba(148,163,184,0.5)", "#94A3B8", "none"
-
-            parlay_desc = str(row.get("parlay_description", "") or "")
-            
-            if "|" in parlay_desc:
-                legs_list = [p.strip() for p in parlay_desc.split("|") if p.strip()]
-            elif "+" in parlay_desc:
-                legs_list = [p.strip() for p in parlay_desc.split("+") if p.strip()]
-            else:
-                legs_list = [parlay_desc] if parlay_desc else []
-            
-            legs_html = "".join([f"<div style='margin:3px 0;font-size:13px;color:#CBD5E1;'>• {p}</div>" for p in legs_list]) if legs_list else ""
-
-            match_str = format_kickoff(row.get("match_date"))
-            home_team = str(row.get('home_team', '')).replace('"', '&quot;')
-            away_team = str(row.get('away_team', '')).replace('"', '&quot;')
-            odds_val = float(row.get('odds', 0))
-            num_legs = len(legs_list)
-
-            mm_bullets = []
-            if ev >= 10:
-                mm_bullets.append(f'<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:12px;opacity:0.7;">📊</span><span>Combined EV: +{ev:.1f}% exceeds threshold</span></div>')
-            if num_legs >= 2:
-                mm_bullets.append(f'<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:12px;opacity:0.7;">🧮</span><span>{num_legs} legs selected from L1/L2 approved singles</span></div>')
-            if odds_val >= 3.0:
-                mm_bullets.append(f'<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:12px;opacity:0.7;">💰</span><span>Combined odds {odds_val:.2f}x in target range</span></div>')
-            else:
-                mm_bullets.append(f'<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:12px;opacity:0.7;">⚽</span><span>Cross-match diversification reduces correlation</span></div>')
-            mm_max = 3 if ev >= 5 else 2
-            mm_bullets = mm_bullets[:mm_max]
-            mm_why_html = ''.join(mm_bullets) if mm_bullets else '<div style="color:#6B7280;font-size:12px;">Built from approved value singles</div>'
-            mm_glow = "rgba(0,255,166,0.08)" if ev >= 8 else "rgba(59,130,246,0.06)"
-            mm_why_section = f'''<details style="margin-top:12px;"><summary style="cursor:pointer;font-size:12px;color:#6B7280;padding:6px 0;user-select:none;list-style:none;display:flex;align-items:center;gap:6px;"><span style="color:#9CA3AF;">Why this pick</span><span style="font-size:10px;">▾</span></summary><div style="margin-top:8px;padding:12px;border-radius:10px;background:linear-gradient(135deg, rgba(10,18,35,0.95), rgba(20,30,50,0.9));box-shadow:inset 0 0 20px {mm_glow};font-size:12px;color:#CBD5E1;display:flex;flex-direction:column;gap:6px;">{mm_why_html}</div></details>'''
-
-            card_html = f'<div style="padding:20px;margin:16px 0;border-radius:16px;background:linear-gradient(145deg, rgba(15,23,42,0.98), rgba(30,41,59,0.95));border:1px solid rgba(0,255,166,0.35);box-shadow:0 8px 32px rgba(0,255,166,0.2), 0 4px 16px rgba(0,0,0,0.4);"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;"><div><div style="font-size:12px;color:#6B7280;margin-bottom:4px;">{match_str}</div><div style="font-size:17px;font-weight:600;color:#E5E7EB;">{home_team} vs {away_team}</div></div><div style="padding:6px 12px;border-radius:8px;background:{ev_bg};border:1px solid {ev_border};box-shadow:{ev_glow};"><div style="font-size:10px;color:{ev_color};font-weight:700;letter-spacing:0.1em;">EV</div><div style="font-size:18px;font-weight:800;color:{ev_color};">{ev:+.1f}%</div></div></div><div style="margin:12px 0;"><span style="font-size:10px;padding:3px 10px;border-radius:6px;background:rgba(168,85,247,0.15);color:#A855F7;font-weight:600;letter-spacing:0.04em;">{num_legs}-LEG PARLAY</span></div><div style="margin:8px 0;">{legs_html}</div><div style="display:flex;gap:8px;margin-top:12px;"><div style="padding:8px 14px;border-radius:10px;background:linear-gradient(135deg, rgba(0,255,166,0.25), rgba(34,197,94,0.15));border:2px solid rgba(0,255,166,0.7);box-shadow:0 0 16px rgba(0,255,166,0.3);"><div style="font-size:9px;color:#00FFA6;font-weight:700;">COMBINED</div><div style="font-size:20px;font-weight:800;color:#00FFA6;">{odds_val:.2f}</div></div></div>{mm_why_section}</div>'
-            st.markdown(card_html, unsafe_allow_html=True)
-
-    st.markdown("---")
-    st.markdown("### Parlay history")
-
-    history_df = df.sort_values("match_date", ascending=False).head(100)
-    display_cols = [c for c in ["match_date", "home_team", "away_team", "parlay_description", "odds", "stake", "ev", "result", "payout"] if c in history_df.columns]
-    st.dataframe(
-        history_df[display_cols],
-        width="stretch",
-        hide_index=True,
-    )
-
-
-# ------------- PROPS & SPECIALS TAB ------------- #
-
-@st.cache_data(ttl=600, show_spinner=False)
 def load_props_bets() -> pd.DataFrame:
     """Load Cards, Corners, and Shots bets from football_opportunities table."""
     try:
@@ -4061,7 +3693,7 @@ def render_kelly_calculator():
         
         market_type = st.selectbox(
             "Market Type",
-            options=["single", "parlay", "sgp"],
+            options=["single"],
             index=0,
             help="Single bet or accumulator"
         )
@@ -4200,8 +3832,8 @@ def main():
     # Split PROD vs BACKTEST data
     prod_bets, backtest_bets = split_bets_by_mode(all_bets)
 
-    # Tabs for different products (Multi-match parlays disabled, 2-leg ML Parlay allowed)
-    smart_tab, free_tab, daily_card_tab, overview_tab, singles_tab, odds_compare_tab, props_tab, ml_parlay_tab, basket_tab, kelly_tab, backtest_tab, clv_tab, system_tab = st.tabs(
+    # Tabs for different products
+    smart_tab, free_tab, daily_card_tab, overview_tab, singles_tab, odds_compare_tab, props_tab, basket_tab, kelly_tab, backtest_tab, clv_tab, system_tab = st.tabs(
         [
             "Smart Picks",
             "Free Picks",
@@ -4210,7 +3842,6 @@ def main():
             "Value Singles",
             "Odds Compare",
             "Props & Specials",
-            "ML Parlay",
             "College Basketball",
             "Smart Stake",
             "Backtests",
@@ -4245,9 +3876,6 @@ def main():
 
     with props_tab:
         render_props_tab()
-
-    with ml_parlay_tab:
-        render_ml_parlay_tab()
 
     with basket_tab:
         render_basketball_tab(prod_bets)
