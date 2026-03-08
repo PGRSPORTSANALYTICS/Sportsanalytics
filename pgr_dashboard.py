@@ -8,7 +8,6 @@ import pandas as pd
 from datetime import datetime, timedelta
 import plotly.graph_objects as go
 import plotly.express as px
-import os
 from db_connection import DatabaseConnection
 st.set_page_config(
     page_title="PGR Sports Analytics",
@@ -16,22 +15,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
-
-if not st.session_state.authenticated:
-    st.title("🏆 PGR Sports Analytics")
-    st.markdown("---")
-    password = st.text_input("Access Code", type="password", placeholder="Enter your access code")
-    if st.button("Login"):
-        correct = os.environ.get("ADMIN_API_KEY", "")
-        if password and password == correct:
-            st.session_state.authenticated = True
-            st.rerun()
-        else:
-            st.error("Incorrect access code.")
-    st.stop()
 
 st.sidebar.title("🏆 PGR Sports")
 page = st.sidebar.radio("Select Sport", ["⚽ Football", "🏀 College Basketball", "🎯 Player Props", "🌐 Learning Sports", "🎰 Stryktipset"])
