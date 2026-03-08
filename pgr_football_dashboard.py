@@ -655,6 +655,8 @@ def load_all_bets_from_db() -> pd.DataFrame:
             best_odds_value,
             best_odds_bookmaker
         FROM normalized_bets
+        WHERE (mode IS NULL OR mode NOT IN ('TEST', 'LEARNING'))
+          AND (product IS NULL OR product NOT IN ('SGP'))
         ORDER BY created_at DESC
         """
     )
