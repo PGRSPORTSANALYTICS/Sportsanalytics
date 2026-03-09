@@ -106,7 +106,7 @@ MARKET_SPECIFIC_MIN_ODDS = {
 }
 
 # Odds range filter - Stable 2.0 (Feb 19, 2026)
-MIN_VALUE_SINGLE_ODDS = 1.40  # Lower min for safer bets
+MIN_VALUE_SINGLE_ODDS = 1.70  # Mar 9, 2026: raised from 1.40 — sub-1.70 has -18.7% ROI historically
 MAX_VALUE_SINGLE_ODDS = 2.40  # Stable 2.0 - expanded from 2.20 (no longshots beyond 2.40)
 MAX_LEARNING_ODDS = 4.00      # Collect predictions up to 4.00 for AI training
 
