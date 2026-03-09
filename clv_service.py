@@ -28,7 +28,9 @@ CLOSE_AFTER_KICKOFF_MIN = 5         # Allow capture up to 5 min AFTER kickoff
 TARGET_MINUTES_BEFORE = 60          # Ideal capture point (60 min before KO)
 DRIFT_REJECT_PCT = 0.50             # Reject if odds moved >50% (data error)
 
-SHARP_BOOKS = ['pinnacle', 'betfair', 'betfair_ex_eu', 'nordicbet', 'unibet']
+SHARP_BOOKS = ['pinnacle', 'bet365', 'matchbook', 'betfair', 'betfair_ex_eu', 'nordicbet', 'unibet']
+
+SHARP_PRIORITY = ['pinnacle', 'bet365', 'matchbook', 'betfair', 'betfair_ex_eu']
 
 LEAGUE_TO_SPORT_KEY: Dict[str, str] = {
     'Premier League': 'soccer_epl',
@@ -309,29 +311,47 @@ class CLVService:
         self, event: Dict, market: str, selection: str, home: str, away: str
     ) -> Optional[tuple]:
         """
-        Return (odds, bookmaker_name, matched_outcome_name) for the selection,
-        preferring sharp books.
+        Sharp-average approach: collect closing odds from all available sharp books
+        (Pinnacle, Bet365, Matchbook, Betfair) and return their average.
+        Falls back to any available book if no sharp books match.
+
+        Returns (avg_odds, source_label, matched_outcome_name)
         """
         bookmakers = event.get('bookmakers', [])
-        sorted_books = sorted(
-            bookmakers,
-            key=lambda b: 0 if b.get('key', '').lower() in SHARP_BOOKS else 1
-        )
-
         sel_lower = selection.lower()
         mkt_lower = market.lower()
 
-        for bk in sorted_books:
-            for mkt in bk.get('markets', []):
-                for outcome in mkt.get('outcomes', []):
+        sharp_hits: List[tuple] = []
+        fallback_hit: Optional[tuple] = None
+
+        for bk in bookmakers:
+            bk_key = bk.get('key', '').lower()
+            bk_title = bk.get('title', bk.get('key', 'unknown'))
+            is_sharp = bk_key in SHARP_PRIORITY
+
+            for mkt_obj in bk.get('markets', []):
+                for outcome in mkt_obj.get('outcomes', []):
                     name = outcome.get('name', '').lower()
                     price = outcome.get('price')
-                    if price and self._sel_matches(sel_lower, name, home, away, mkt_lower):
-                        return (
-                            float(price),
-                            bk.get('title', bk.get('key', 'unknown')),
-                            outcome.get('name', name),
-                        )
+                    if not price:
+                        continue
+                    if self._sel_matches(sel_lower, name, home, away, mkt_lower):
+                        entry = (float(price), bk_title, outcome.get('name', name))
+                        if is_sharp:
+                            sharp_hits.append(entry)
+                        elif fallback_hit is None:
+                            fallback_hit = entry
+
+        if sharp_hits:
+            avg_odds = sum(h[0] for h in sharp_hits) / len(sharp_hits)
+            book_names = sorted({h[1] for h in sharp_hits}, key=lambda b: SHARP_PRIORITY.index(b.lower()) if b.lower() in SHARP_PRIORITY else 99)
+            source_label = f"sharp_avg({','.join(book_names)};n={len(sharp_hits)})"
+            matched_out = sharp_hits[0][2]
+            return (round(avg_odds, 4), source_label, matched_out)
+
+        if fallback_hit:
+            return fallback_hit
+
         return None
 
     def _sel_matches(self, sel: str, outcome: str, home: str, away: str, market: str) -> bool:
