@@ -82,9 +82,11 @@ MARKET_SPECIFIC_MIN_EV = {
 # Re-evaluate: Jan 25, 2026 or after +100 bets per market
 # ============================================================
 LEARNING_ONLY_MARKETS = {
-    "HOME_WIN",      # 36.6% hit rate, -12.5u — 1X2 markets LEARNING ONLY
-    "AWAY_WIN",      # 31.6% hit rate, -10.1u — 1X2 markets LEARNING ONLY
-    "DRAW",          # 12.5% hit rate, -5.0u — 1X2 markets LEARNING ONLY
+    "HOME_WIN",      # 36.6% hit rate, -12.5u — blocked Feb 6, 2026
+    "AWAY_WIN",      # 31.6% hit rate, -10.1u — blocked Feb 6, 2026
+    "DRAW",          # 12.5% hit rate, -5.0u — blocked Feb 6, 2026
+    "FT_UNDER_2_5",  # 47.5% hit rate, -32.55u — blocked Mar 9, 2026 (was in comment only, now enforced)
+    "FT_UNDER_3_5",  # 54.0% hit rate, -5.16u — blocked Mar 9, 2026
     # AH Minus sides blocked (Mar 9, 2026): 25% hit rate all-time, -12.06u
     # Model has no edge on AH Minus. AH Plus (+0.5/+1) remains in production.
     "AH_HOME_-0.5",
