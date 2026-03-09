@@ -931,14 +931,12 @@ class APIFootballClient:
         if bookmaker_id:
             cache_key += f"_bookie_{bookmaker_id}"
         
-        cached = self.cache_manager.get_cached_response(cache_key, 'odds')
-        if cached is not None:
-            return cached
-        
         params = {'fixture': fixture_id}
         if bookmaker_id:
             params['bookmaker'] = bookmaker_id
         
+        # _fetch_with_cache handles caching internally — always parse the raw response
+        # (the old early-return bypass caused 'list has no .get()' on cache hits)
         odds_data = self._fetch_with_cache('odds', params, cache_key, ttl_hours=2)
         
         if not odds_data:

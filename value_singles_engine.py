@@ -85,6 +85,14 @@ LEARNING_ONLY_MARKETS = {
     "HOME_WIN",      # 36.6% hit rate, -12.5u — 1X2 markets LEARNING ONLY
     "AWAY_WIN",      # 31.6% hit rate, -10.1u — 1X2 markets LEARNING ONLY
     "DRAW",          # 12.5% hit rate, -5.0u — 1X2 markets LEARNING ONLY
+    # AH Minus sides blocked (Mar 9, 2026): 25% hit rate all-time, -12.06u
+    # Model has no edge on AH Minus. AH Plus (+0.5/+1) remains in production.
+    "AH_HOME_-0.5",
+    "AH_HOME_-1.0",
+    "AH_HOME_-1.5",
+    "AH_AWAY_-0.5",
+    "AH_AWAY_-1.0",
+    "AH_AWAY_-1.5",
 }
 
 # ============================================================
