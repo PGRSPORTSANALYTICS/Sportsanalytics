@@ -140,6 +140,38 @@ def _dedupe_key(pick: dict) -> str:
     return hashlib.md5(raw.encode()).hexdigest()
 
 
+# Markets that are mutually exclusive on the same match — only ONE per group per match
+_CONFLICT_GROUPS = {
+    "HOME_WIN":    "1X2",
+    "AWAY_WIN":    "1X2",
+    "DRAW":        "1X2",
+    "Home Win":    "1X2",
+    "Away Win":    "1X2",
+    "Draw":        "1X2",
+    "FT_OVER_2_5":  "TOTALS_2_5",
+    "FT_UNDER_2_5": "TOTALS_2_5",
+    "Over 2.5 Goals":  "TOTALS_2_5",
+    "Under 2.5 Goals": "TOTALS_2_5",
+    "FT_OVER_3_5":  "TOTALS_3_5",
+    "FT_UNDER_3_5": "TOTALS_3_5",
+    "BTTS_YES": "BTTS",
+    "BTTS_NO":  "BTTS",
+    "BTTS Yes": "BTTS",
+    "BTTS No":  "BTTS",
+}
+
+
+def _conflict_group_key(pick: dict) -> Optional[str]:
+    """Returns a key representing 'match + market group', or None if no conflict group."""
+    market = pick.get("selection") or pick.get("market", "")
+    group = _CONFLICT_GROUPS.get(market)
+    if not group:
+        return None
+    raw = (f"conflict|{pick.get('home_team','')}|{pick.get('away_team','')}|"
+           f"{pick.get('match_date','')}|{group}")
+    return hashlib.md5(raw.encode()).hexdigest()
+
+
 def route_webhook(league: str) -> str:
     url = LEAGUE_WEBHOOKS.get(league, "")
     if url:
@@ -364,6 +396,18 @@ def run_publish_cycle():
             mark_discord_sent(pick["id"])
             continue
 
+        # Block opposing/conflicting markets on the same match (e.g. Home Win + Away Win)
+        conflict_key = _conflict_group_key(pick)
+        if conflict_key and conflict_key in dedupe_cache:
+            stats["deduped"] += 1
+            market = pick.get("selection") or pick.get("market", "")
+            logger.info(
+                f"  CONFLICT BLOCKED: {pick.get('home_team')} vs {pick.get('away_team')} "
+                f"— {market} conflicts with already-published pick for this match"
+            )
+            mark_discord_sent(pick["id"])
+            continue
+
         league = pick.get("league", "Unknown")
         webhook_url = route_webhook(league)
 
@@ -384,6 +428,9 @@ def run_publish_cycle():
         if success:
             stats["posted"] += 1
             dedupe_cache[key] = time.time()
+            # Also store the conflict group key so no opposing market gets published later
+            if conflict_key:
+                dedupe_cache[conflict_key] = time.time()
             last_post_per_webhook[webhook_url] = time.time()
             mark_discord_sent(pick["id"])
             logger.info(
