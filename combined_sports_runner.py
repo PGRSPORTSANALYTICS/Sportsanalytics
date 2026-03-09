@@ -417,14 +417,39 @@ def run_daily_games_reminder():
         logger.error(f"❌ Daily reminder error: {e}")
 
 
+def _recap_marker_path(d=None):
+    import datetime as _dt
+    if d is None:
+        d = _dt.date.today()
+    return f"/tmp/daily_recap_sent_{d.isoformat()}.marker"
+
+
 def run_daily_recap():
     """Send daily recap of all results at 22:30"""
     try:
         from daily_recap import send_daily_discord_recap
+        import os as _os
         logger.info("📊 Running daily Discord recap...")
         send_daily_discord_recap()
+        # Mark as sent so catch-up doesn't double-send
+        with open(_recap_marker_path(), "w") as f:
+            f.write("sent")
     except Exception as e:
         logger.error(f"❌ Daily recap error: {e}")
+
+
+def _catchup_daily_recap():
+    """On engine startup: if it's past 22:30 and recap not yet sent today, send it."""
+    import datetime as _dt
+    import os as _os
+    now_utc = _dt.datetime.utcnow()
+    # 22:30 CET = 21:30 UTC
+    cutoff = now_utc.replace(hour=21, minute=30, second=0, microsecond=0)
+    if now_utc >= cutoff and not _os.path.exists(_recap_marker_path()):
+        logger.info("📊 Catch-up: engine started after 22:30 — sending missed daily recap...")
+        run_daily_recap()
+    else:
+        logger.info("📊 Recap catch-up: not needed (before 22:30 or already sent)")
 
 
 def run_daily_analysis():
@@ -704,6 +729,12 @@ def main():
     schedule.every().day.at("11:00").do(run_daily_free_pick)  # 1 free pick to Discord
     
     logger.info("✅ All schedules configured. Starting main loop...")
+    
+    # Catch-up: send recap if engine restarted after 22:30 and recap wasn't sent yet
+    try:
+        _catchup_daily_recap()
+    except Exception as e:
+        logger.error(f"❌ Recap catch-up error: {e}")
     
     _heartbeat_counter = 0
     # Keep running — catch BaseException so MemoryError/SystemExit don't kill the loop
