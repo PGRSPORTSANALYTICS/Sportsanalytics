@@ -307,8 +307,21 @@ def format_analysis_embed(pick: dict) -> dict:
     }
 
 
+DISCORD_BLOCKED_SELECTION_PATTERNS = [
+    "%Under 2.5%",
+    "%Under 3.5%",
+    "%-0.5 (AH)%",
+    "%-1.0 (AH)%",
+    "%-1.5 (AH)%",
+    "%-2.0 (AH)%",
+]
+
+
 def fetch_analysis_picks() -> List[dict]:
-    query = """
+    blocked_clauses = " AND ".join(
+        [f"selection NOT ILIKE %s" for _ in DISCORD_BLOCKED_SELECTION_PATTERNS]
+    )
+    query = f"""
         SELECT id, league, home_team, away_team, market, selection, odds,
                edge_percentage, match_date, confidence, mode, status,
                model_prob, calibrated_prob, analysis, discord_sent
@@ -318,11 +331,12 @@ def fetch_analysis_picks() -> List[dict]:
           AND odds > 1.0
           AND match_date::date >= CURRENT_DATE
           AND (discord_sent IS NULL OR discord_sent = false)
+          AND ({blocked_clauses})
         ORDER BY match_date ASC, edge_percentage DESC
     """
     try:
         with DatabaseConnection.get_cursor(dict_cursor=True) as cur:
-            cur.execute(query)
+            cur.execute(query, DISCORD_BLOCKED_SELECTION_PATTERNS)
             rows = cur.fetchall()
             return [dict(r) for r in rows] if rows else []
     except Exception as e:
