@@ -643,15 +643,15 @@ class CardsEngine:
                     if ev < effective_min_ev:
                         continue
                     
-                    trust_tier = self.classify_trust_tier(
-                        ev, model_prob, 
-                        sim_approved=True,
-                        product_key=product_key
-                    )
-                    if trust_tier == "REJECTED":
-                        if is_learning_line:
-                            trust_tier = "LEARNING"
-                        else:
+                    if is_learning_line:
+                        trust_tier = "LEARNING"
+                    else:
+                        trust_tier = self.classify_trust_tier(
+                            ev, model_prob, 
+                            sim_approved=True,
+                            product_key=product_key
+                        )
+                        if trust_tier == "REJECTED":
                             continue
                     
                     selection = f"{direction.title()} {line}"
