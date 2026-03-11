@@ -4595,19 +4595,21 @@ def _save_bet_candidates_to_db(candidates, market_label: str) -> int:
     }
 
     saved = 0
+    learning_saved = 0
     today = datetime.now().strftime('%Y-%m-%d')
     
     for candidate in candidates:
         try:
-            # ── Per-match-date accumulation cap ──────────────────────────────
-            cap = _match_date_caps.get(market_label)
-            if cap is not None:
-                cand_match_date = getattr(candidate, 'match_date', today)
-                existing = get_match_date_count(cand_match_date, market_label)
-                if existing >= cap:
-                    print(f"🛑 Match-date cap ({market_label}): {cand_match_date} already has {existing}/{cap} — skipping {getattr(candidate, 'match', '')}")
-                    continue
-            # ─────────────────────────────────────────────────────────────────
+            is_learning = (hasattr(candidate, 'trust_tier') and candidate.trust_tier == 'LEARNING')
+            
+            if not is_learning:
+                cap = _match_date_caps.get(market_label)
+                if cap is not None:
+                    cand_match_date = getattr(candidate, 'match_date', today)
+                    existing = get_match_date_count(cand_match_date, market_label)
+                    if existing >= cap:
+                        print(f"🛑 Match-date cap ({market_label}): {cand_match_date} already has {existing}/{cap} — skipping {getattr(candidate, 'match', '')}")
+                        continue
 
             quality_score = (candidate.ev_sim * 100 * 0.6) + (candidate.confidence * 100 * 0.4)
             
@@ -4663,7 +4665,7 @@ def _save_bet_candidates_to_db(candidates, market_label: str) -> int:
                 float(candidate.ev_sim * 100),  # Convert to percentage
                 int(candidate.confidence * 100),
                 json.dumps(candidate.metadata) if candidate.metadata else '{}',
-                1.0,  # 1 unit stake
+                0.0 if is_learning else 1.0,
                 candidate.match_date,
                 '',  # kickoff_time
                 kickoff_utc,  # CLV tracking
@@ -4673,8 +4675,8 @@ def _save_bet_candidates_to_db(candidates, market_label: str) -> int:
                 today,
                 market_label.upper(),
                 0,
-                'PROD',
-                True,
+                'LEARNING' if is_learning else 'PROD',
+                False if is_learning else True,
                 trust_level,
                 float(candidate.confidence),
                 float(candidate.ev_sim * 100),
@@ -4686,14 +4688,18 @@ def _save_bet_candidates_to_db(candidates, market_label: str) -> int:
                 int(time.time()),  # open_ts = epoch when pick was created
             ), fetch='one')
             
-            # Only count as saved if a new row was actually inserted (RETURNING id returns something)
             if result:
-                saved += 1
+                if is_learning:
+                    learning_saved += 1
+                else:
+                    saved += 1
             
         except Exception as e:
             print(f"      ⚠️ Failed to save {candidate.selection}: {e}")
             continue
     
+    if learning_saved > 0:
+        print(f"   📚 Saved {learning_saved} LEARNING cards picks (Over 3.5/4.5 — data collection only)")
     return saved
 
 

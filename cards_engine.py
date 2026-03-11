@@ -186,6 +186,11 @@ class CardsCandidate:
 MIN_MATCH_CARDS_LINE = 3.5
 MIN_TEAM_CARDS_LINE = 2.5  # 1.5 removed — not available at major bookmakers (bet365 etc.)
 
+CARDS_LEARNING_LINES = {3.5, 4.5}
+
+CARDS_LEARNING_MIN_EV = 0.0
+CARDS_LEARNING_MIN_CONF = 0.40
+
 CARDS_LINES = {
     "match": [3.5, 4.5, 5.5, 6.5],
     "booking_points": [30.5, 40.5, 50.5, 60.5],
@@ -611,9 +616,13 @@ class CardsEngine:
                     continue
                     
                 line_str = str(int(line))
+                is_learning_line = (is_match_total and line in CARDS_LEARNING_LINES)
                 
                 for direction, template in [("over", over_template), ("under", under_template)]:
                     if template is None:
+                        continue
+                    
+                    if is_learning_line and direction == "under":
                         continue
                     
                     market_key = template.format(line_str)
@@ -625,11 +634,13 @@ class CardsEngine:
                     probs = self.calculate_over_under_probs(sims[sim_key], line)
                     model_prob = probs[direction]
                     
-                    if model_prob < min_conf:
+                    effective_min_conf = CARDS_LEARNING_MIN_CONF if is_learning_line else min_conf
+                    if model_prob < effective_min_conf:
                         continue
                     
                     ev = self.calculate_ev(model_prob, book_odds)
-                    if ev < min_ev:
+                    effective_min_ev = CARDS_LEARNING_MIN_EV if is_learning_line else min_ev
+                    if ev < effective_min_ev:
                         continue
                     
                     trust_tier = self.classify_trust_tier(
@@ -638,7 +649,10 @@ class CardsEngine:
                         product_key=product_key
                     )
                     if trust_tier == "REJECTED":
-                        continue
+                        if is_learning_line:
+                            trust_tier = "LEARNING"
+                        else:
+                            continue
                     
                     selection = f"{direction.title()} {line}"
                     
