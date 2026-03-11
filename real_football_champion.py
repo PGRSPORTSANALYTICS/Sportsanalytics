@@ -4508,12 +4508,18 @@ def run_late_cards_cycle():
                 return x.get('ev', x.get('edge', 0))
             return 0
         
-        if cards_fixtures_found > 0 and remaining > 0:
+        if cards_fixtures_found > 0:
             try:
                 all_cards = run_cards_cycle(fixtures, odds_data)
                 if all_cards:
-                    all_cards = sorted(all_cards, key=_get_ev, reverse=True)[:remaining]
-                    saved = _save_bet_candidates_to_db(all_cards, 'Cards')
+                    learning_cards = [c for c in all_cards if getattr(c, 'trust_tier', '') == 'LEARNING']
+                    prod_cards = [c for c in all_cards if getattr(c, 'trust_tier', '') != 'LEARNING']
+                    if remaining > 0 and prod_cards:
+                        prod_cards = sorted(prod_cards, key=_get_ev, reverse=True)[:remaining]
+                    elif remaining <= 0:
+                        prod_cards = []
+                    cards_to_save = prod_cards + learning_cards
+                    saved = _save_bet_candidates_to_db(cards_to_save, 'Cards')
                     print(f"   ✅ Saved {saved} CARDS predictions from late odds scan")
                     
                     if saved > 0:
