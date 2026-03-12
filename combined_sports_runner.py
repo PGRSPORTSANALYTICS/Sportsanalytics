@@ -569,7 +569,7 @@ def main():
     logger.info("📂 Bet Categorizer - Daily at 23:00")
     logger.info("📅 Games Reminder - Daily at 08:00")
     logger.info("📝 Daily Analysis - Daily at 09:00 (Discord)")
-    logger.info("🎁 Free Picks - Daily at 10:00 (Discord)")
+    logger.info("🎁 Free Picks - Daily at 08:00 (Discord)")
     logger.info("="*80)
     
     # Smart Picks catchup — if it's past 08:00 UTC and engine just started, run it now
@@ -585,6 +585,23 @@ def main():
                 logger.error(f"❌ Smart Picks catchup error: {e}")
         import threading as _sp_thread
         _sp_thread.Thread(target=_smart_picks_catchup, daemon=True, name="smart-picks-catchup").start()
+
+    # Free Picks catchup — if it's past 08:00 UTC and no free pick sent today, run it now
+    if _now_utc.hour >= 8:
+        def _free_picks_catchup():
+            time.sleep(20)
+            try:
+                from free_picks_engine import was_free_pick_sent_today, ensure_free_pick_sent_column
+                ensure_free_pick_sent_column()
+                if not was_free_pick_sent_today():
+                    logger.info("🎁 Free Picks catchup: running missed 08:00 cycle...")
+                    run_daily_free_pick()
+                else:
+                    logger.info("🎁 Free Picks catchup: already sent today, skipping")
+            except Exception as e:
+                logger.error(f"❌ Free Picks catchup error: {e}")
+        import threading as _fp_thread
+        _fp_thread.Thread(target=_free_picks_catchup, daemon=True, name="free-picks-catchup").start()
 
     # Run enabled engines on startup — each wrapped individually so one crash can't kill startup
     logger.info("🎬 Running initial prediction cycles...")
@@ -726,7 +743,7 @@ def main():
     schedule.every().day.at("08:00").do(run_daily_games_reminder)
     schedule.every().day.at("09:00").do(run_daily_analysis)
     schedule.every().day.at("08:00").do(run_smart_picks)  # Smart Picks — Daily Top 10 (08:00 UTC = 09:00 CET)
-    schedule.every().day.at("11:00").do(run_daily_free_pick)  # 1 free pick to Discord
+    schedule.every().day.at("08:00").do(run_daily_free_pick)  # 1 free pick to Discord
     
     logger.info("✅ All schedules configured. Starting main loop...")
     

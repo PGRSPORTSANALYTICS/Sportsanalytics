@@ -61,3 +61,6 @@ data/models/
 *.tmp
 *.bak
 analysis*.csv
+
+# Runtime cache
+discord_publisher_dedupe.json

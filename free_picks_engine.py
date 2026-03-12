@@ -13,15 +13,24 @@ from psycopg2.extras import RealDictCursor
 
 DISCORD_FREE_PICKS_WEBHOOK_URL = os.getenv("DISCORD_FREE_PICKS_WEBHOOK_URL")
 
-HIGH_VISIBILITY_LEAGUES = [
-    'Premier League', 'La Liga', 'Serie A', 'Bundesliga', 'Ligue 1',
-    'English Championship', 'Primeira Liga', 'Eredivisie',
-    'Champions League', 'Europa League'
-]
+def _get_webhook_leagues() -> list:
+    """Build candidate leagues dynamically from active discord_publisher webhooks."""
+    try:
+        from discord_publisher import LEAGUE_WEBHOOKS
+        active = [league for league, url in LEAGUE_WEBHOOKS.items() if url]
+        return active if active else list(LEAGUE_WEBHOOKS.keys())
+    except Exception:
+        return [
+            'Premier League', 'La Liga', 'Serie A', 'Bundesliga', 'Ligue 1',
+            'Eredivisie', 'Champions League', 'Europa League',
+        ]
+
+
+HIGH_VISIBILITY_LEAGUES = _get_webhook_leagues()
 
 ALLOWED_SELECTIONS = ['Over 2.5 Goals', 'Over 1.5 Goals', 'BTTS Yes', 'BTTS No']
-ODDS_MIN = 1.70
-ODDS_MAX = 2.20
+ODDS_MIN = 1.65
+ODDS_MAX = 1.90
 MIN_CONFIDENCE = 0.60
 
 
@@ -43,6 +52,46 @@ def get_db_connection():
                 raise e
 
 
+def ensure_free_pick_sent_column():
+    """Add free_pick_sent + free_pick_sent_at columns to football_opportunities if missing."""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            ALTER TABLE football_opportunities
+            ADD COLUMN IF NOT EXISTS free_pick_sent BOOLEAN DEFAULT FALSE
+        """)
+        cur.execute("""
+            ALTER TABLE football_opportunities
+            ADD COLUMN IF NOT EXISTS free_pick_sent_at TIMESTAMPTZ
+        """)
+        conn.commit()
+        cur.close()
+        conn.close()
+        print("free_pick_sent / free_pick_sent_at columns ensured")
+    except Exception as e:
+        print(f"Note: free_pick_sent column check: {e}")
+
+
+def was_free_pick_sent_today() -> bool:
+    """Check if a free pick has already been sent today (UTC)."""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT COUNT(*) FROM football_opportunities
+            WHERE free_pick_sent = TRUE
+              AND (free_pick_sent_at AT TIME ZONE 'UTC')::date = (NOW() AT TIME ZONE 'UTC')::date
+        """)
+        count = cur.fetchone()[0]
+        cur.close()
+        conn.close()
+        return count > 0
+    except Exception as e:
+        print(f"Error checking free pick sent today: {e}")
+        return False
+
+
 def get_free_pick_candidates(hours_ahead: int = 24, limit: int = 5) -> List[Dict]:
     """Get best pick candidates for free distribution."""
     try:
@@ -61,6 +110,7 @@ def get_free_pick_candidates(hours_ahead: int = 24, limit: int = 5) -> List[Dict
               AND odds BETWEEN %s AND %s
               AND confidence >= %s
               AND outcome IS NULL
+              AND COALESCE(free_pick_sent, FALSE) = FALSE
               AND league IN %s
               AND selection IN %s
             ORDER BY 
@@ -143,13 +193,14 @@ def send_free_pick_to_discord(content: str, title: str = "") -> bool:
 
 
 def mark_pick_as_free_sent(pick_id: int) -> bool:
-    """Mark a pick as sent to free channel."""
+    """Mark a pick as sent to free channel using dedicated free_pick_sent flag."""
     try:
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute("""
             UPDATE football_opportunities 
-            SET discord_sent = TRUE 
+            SET free_pick_sent = TRUE,
+                free_pick_sent_at = NOW()
             WHERE id = %s
         """, (pick_id,))
         conn.commit()
@@ -166,6 +217,12 @@ def run_free_picks(picks_to_send: int = 1):
     print(f"\n{'='*50}")
     print(f"FREE PICKS ENGINE - {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC")
     print(f"{'='*50}\n")
+    
+    ensure_free_pick_sent_column()
+    
+    if was_free_pick_sent_today():
+        print("Free pick already sent today — skipping")
+        return 0
     
     candidates = get_free_pick_candidates(hours_ahead=48, limit=picks_to_send + 2)
     
