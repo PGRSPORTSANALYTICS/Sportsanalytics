@@ -120,7 +120,7 @@ def _build_football_query(
     min_odds: Optional[float],
     sort_by: str,
 ) -> tuple:
-    conditions = ["(mode IS NULL OR mode NOT IN ('TEST','LEARNING'))"]
+    conditions = ["(mode IS NULL OR mode = 'PROD')"]
     params: list = []
 
     if date_from:
@@ -184,7 +184,7 @@ def _build_basketball_query(
     min_odds: Optional[float],
     sort_by: str,
 ) -> tuple:
-    conditions = ["(mode IS NULL OR mode NOT IN ('TEST','LEARNING'))"]
+    conditions = ["(mode IS NULL OR mode = 'PROD')"]
     params: list = []
 
     if date_from:
@@ -553,7 +553,7 @@ async def get_bets_stats(
                          ELSE 0 END
                 ), 0)
             FROM football_opportunities
-            WHERE (mode IS NULL OR mode NOT IN ('TEST','LEARNING')) {date_filter}
+            WHERE (mode IS NULL OR mode = 'PROD') {date_filter}
         """, tuple(params), fetch='one')
         if row:
             won_total += row[0] or 0
@@ -582,7 +582,7 @@ async def get_bets_stats(
                 COUNT(CASE WHEN status IS NULL OR status IN ('pending','') THEN 1 END),
                 COALESCE(SUM(profit_units), 0)
             FROM basketball_predictions
-            WHERE (mode IS NULL OR mode NOT IN ('TEST','LEARNING')) {bb_date_filter}
+            WHERE (mode IS NULL OR mode = 'PROD') {bb_date_filter}
         """, tuple(bb_params), fetch='one')
         if row:
             won_total += row[0] or 0
@@ -625,7 +625,7 @@ async def get_available_sports():
 
     try:
         fb_count = db_helper.execute(
-            "SELECT COUNT(*) FROM football_opportunities WHERE mode IS NULL OR mode NOT IN ('TEST','LEARNING')",
+            "SELECT COUNT(*) FROM football_opportunities WHERE mode IS NULL OR mode = 'PROD'",
             fetch='one'
         )
         result["sports"].append({"key": "football", "label": "Football", "count": fb_count[0] if fb_count else 0})
@@ -634,7 +634,7 @@ async def get_available_sports():
 
     try:
         bb_count = db_helper.execute(
-            "SELECT COUNT(*) FROM basketball_predictions WHERE mode IS NULL OR mode NOT IN ('TEST','LEARNING')",
+            "SELECT COUNT(*) FROM basketball_predictions WHERE mode IS NULL OR mode = 'PROD'",
             fetch='one'
         )
         result["sports"].append({"key": "basketball", "label": "Basketball", "count": bb_count[0] if bb_count else 0})
@@ -664,7 +664,7 @@ async def get_available_leagues(sport: Optional[str] = Query(None)):
     if sport is None or sport == "football":
         try:
             rows = db_helper.execute(
-                "SELECT DISTINCT league FROM football_opportunities WHERE league IS NOT NULL AND (mode IS NULL OR mode NOT IN ('TEST','LEARNING'))",
+                "SELECT DISTINCT league FROM football_opportunities WHERE league IS NOT NULL AND (mode IS NULL OR mode = 'PROD')",
                 fetch='all'
             ) or []
             for r in rows:
@@ -734,7 +734,7 @@ async def get_bets_history(
                 COALESCE(SUM(CASE WHEN outcome IN ('won','win') THEN (odds - 1)
                      WHEN outcome IN ('lost','loss') THEN -1 ELSE 0 END), 0) as profit
             FROM football_opportunities
-            WHERE (mode IS NULL OR mode NOT IN ('TEST','LEARNING')) {date_filter_fb}
+            WHERE (mode IS NULL OR mode = 'PROD') {date_filter_fb}
         """, fetch='one')
         if row:
             settled = (row[1] or 0) + (row[2] or 0)
@@ -761,7 +761,7 @@ async def get_bets_history(
                 COALESCE(SUM(CASE WHEN outcome IN ('won','win') THEN (odds - 1)
                      WHEN outcome IN ('lost','loss') THEN -1 ELSE 0 END), 0) as profit
             FROM football_opportunities
-            WHERE (mode IS NULL OR mode NOT IN ('TEST','LEARNING'))
+            WHERE (mode IS NULL OR mode = 'PROD')
               AND outcome IN ('won','win','lost','loss') {date_filter_fb}
             GROUP BY selection
             ORDER BY profit DESC
@@ -795,7 +795,7 @@ async def get_bets_history(
                 COALESCE(SUM(CASE WHEN status IN ('won','win','WON') THEN (odds - 1)
                      WHEN status IN ('lost','loss','LOST') THEN -1 ELSE 0 END), 0) as profit
             FROM basketball_predictions
-            WHERE (mode IS NULL OR mode NOT IN ('TEST','LEARNING')) {date_filter_bb}
+            WHERE (mode IS NULL OR mode = 'PROD') {date_filter_bb}
         """, fetch='one')
         if row:
             settled = (row[1] or 0) + (row[2] or 0)
@@ -822,7 +822,7 @@ async def get_bets_history(
                 COALESCE(SUM(CASE WHEN status IN ('won','win','WON') THEN (odds - 1)
                      WHEN status IN ('lost','loss','LOST') THEN -1 ELSE 0 END), 0) as profit
             FROM basketball_predictions
-            WHERE (mode IS NULL OR mode NOT IN ('TEST','LEARNING'))
+            WHERE (mode IS NULL OR mode = 'PROD')
               AND status IN ('won','win','lost','loss','WON','LOST') {date_filter_bb}
             GROUP BY market
             ORDER BY profit DESC
