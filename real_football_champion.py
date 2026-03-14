@@ -4157,13 +4157,13 @@ def run_single_cycle():
         print("=" * 60)
         
         remaining_slots = get_daily_remaining_slots()
-        if remaining_slots <= 0:
-            print(f"🛑 DAILY CAP REACHED ({DAILY_BET_CAP} bets) - Skipping this cycle")
-            return True
+        cap_reached = remaining_slots <= 0
+        if cap_reached:
+            print(f"📊 DAILY CAP REACHED ({DAILY_BET_CAP} bets) - Continuing scan for LEARNING picks only")
         
         pending_matches = get_pending_match_ids()
         
-        vs_slots = min(10, remaining_slots)
+        vs_slots = 0 if cap_reached else min(10, remaining_slots)
         try:
             value_engine = ValueSinglesEngine(champion, ev_threshold=0.05, min_confidence=55)
             value_singles = value_engine.generate_value_singles(avoid_match_ids=pending_matches, max_picks=vs_slots)

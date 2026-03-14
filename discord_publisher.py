@@ -331,7 +331,7 @@ def fetch_analysis_picks() -> List[dict]:
           AND odds > 1.0
           AND match_date::date >= CURRENT_DATE
           AND (discord_sent IS NULL OR discord_sent = false)
-          AND ({blocked_clauses})
+          AND (mode != 'PROD' OR ({blocked_clauses}))
         ORDER BY match_date ASC, edge_percentage DESC
     """
     try:

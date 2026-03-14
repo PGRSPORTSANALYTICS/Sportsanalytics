@@ -931,17 +931,19 @@ class ValueSinglesEngine:
         # 5) Sort by EV, enforce unique matches, and LIMIT TO MAX_VALUE_SINGLES_PER_DAY
         production_picks.sort(key=lambda x: x["edge_percentage"], reverse=True)
 
+        effective_limit = min(MAX_VALUE_SINGLES_PER_DAY, max_picks)
         unique: List[Dict[str, Any]] = []
         used_matches: Set[str] = set()
-        for p in production_picks:
-            if p["match_id"] in used_matches:
-                continue
-            unique.append(p)
-            used_matches.add(p["match_id"])
-            if len(unique) >= MAX_VALUE_SINGLES_PER_DAY:
-                break
+        if effective_limit > 0:
+            for p in production_picks:
+                if p["match_id"] in used_matches:
+                    continue
+                unique.append(p)
+                used_matches.add(p["match_id"])
+                if len(unique) >= effective_limit:
+                    break
         
-        print(f"🎯 SELECTED: Top {len(unique)} production singles (max {MAX_VALUE_SINGLES_PER_DAY}/day)")
+        print(f"🎯 SELECTED: Top {len(unique)} production singles (max_picks={max_picks}, daily_max={MAX_VALUE_SINGLES_PER_DAY})")
         for i, p in enumerate(unique, 1):
             print(f"   #{i}: {p['home_team']} vs {p['away_team']} | {p['selection']} @ {p['odds']:.2f} (EV {p['edge_percentage']:.1f}%)")
 
