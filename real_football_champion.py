@@ -2774,13 +2774,16 @@ class RealFootballChampion:
             print("❌ No matches found for exact score analysis")
             return 0
         
-        # 🚀 SPEED OPTIMIZATION: Pre-filter to top 30 matches BEFORE expensive analysis
+        # 🚀 SPEED OPTIMIZATION: Pre-filter to top 50 matches BEFORE expensive analysis
         # Prioritize: Major leagues + balanced odds (7-14x range is most profitable)
         MAJOR_LEAGUES = {
             'soccer_epl', 'soccer_spain_la_liga', 'soccer_italy_serie_a',
             'soccer_germany_bundesliga', 'soccer_france_ligue_one',
             'soccer_uefa_champs_league', 'soccer_uefa_europa_league',
-            'soccer_netherlands_eredivisie', 'soccer_portugal_primeira_liga'
+            'soccer_netherlands_eredivisie', 'soccer_portugal_primeira_liga',
+            'soccer_usa_mls', 'soccer_sweden_allsvenskan', 'soccer_norway_eliteserien',
+            'soccer_brazil_serie_a', 'soccer_argentina_primera', 'soccer_mexico_ligamx',
+            'soccer_australia_aleague', 'soccer_japan_j_league', 'soccer_korea_kleague1'
         }
         
         # Score each match for prioritization (no API calls, just odds analysis)
@@ -2796,15 +2799,15 @@ class RealFootballChampion:
             elif 5 <= best_odds <= 20:
                 match['_priority'] += 25  # Good range
         
-        # Sort by priority and take top 30
+        # Sort by priority and take top 50
         matches.sort(key=lambda x: x.get('_priority', 0), reverse=True)
-        matches = matches[:30]  # Only analyze top 30 matches
-        print(f"🎯 Pre-filtered to top 30 matches (major leagues + optimal odds)")
+        matches = matches[:50]  # Only analyze top 50 matches
+        print(f"🎯 Pre-filtered to top {len(matches)} matches (major leagues + optimal odds)")
         
         # Top leagues for API-Football data (to save API quota)
         TOP_LEAGUES_FOR_API = MAJOR_LEAGUES
         
-        # Analyze top 30 matches only
+        # Analyze top 50 matches only
         match_scores = []
         matches_analyzed = 0
         for match in matches:
