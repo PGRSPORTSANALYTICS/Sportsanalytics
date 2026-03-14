@@ -88,13 +88,20 @@ LEARNING_ONLY_MARKETS = {
     "FT_UNDER_2_5",  # 47.5% hit rate, -32.55u — blocked Mar 9, 2026 (was in comment only, now enforced)
     "FT_UNDER_3_5",  # 54.0% hit rate, -5.16u — blocked Mar 9, 2026
     # AH Minus sides blocked (Mar 9, 2026): 25% hit rate all-time, -12.06u
-    # Model has no edge on AH Minus. AH Plus (+0.5/+1) remains in production.
+    # AH Plus sides blocked (Mar 14, 2026): no proven edge yet, collecting data
+    # Entire AH market family now in LEARNING_ONLY.
     "AH_HOME_-0.5",
     "AH_HOME_-1.0",
     "AH_HOME_-1.5",
     "AH_AWAY_-0.5",
     "AH_AWAY_-1.0",
     "AH_AWAY_-1.5",
+    "AH_HOME_+0.5",
+    "AH_HOME_+1.0",
+    "AH_HOME_+1.5",
+    "AH_AWAY_+0.5",
+    "AH_AWAY_+1.0",
+    "AH_AWAY_+1.5",
 }
 
 # ============================================================
