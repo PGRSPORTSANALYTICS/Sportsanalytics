@@ -72,7 +72,9 @@ def run_player_props_settlement() -> Dict:
                 hours_since = _hours_since(commence_time)
                 if hours_since > NCAAB_VOID_HOURS:
                     for prop in props:
-                        _settle_prop(prop['id'], 'void', None, 'NCAAB - no stats API available')
+                        _settle_prop(prop['id'], 'void', None, 'NCAAB - no stats API available',
+                                     odds=prop.get('odds'), player_name=prop.get('player_name', ''),
+                                     market=prop.get('market', ''), line=prop.get('line'))
                         stats['void'] += 1
                         stats['settled'] += 1
                 continue
@@ -87,7 +89,9 @@ def run_player_props_settlement() -> Dict:
                 hours_since = _hours_since(commence_time)
                 if hours_since > NBA_VOID_HOURS:
                     for prop in props:
-                        _settle_prop(prop['id'], 'void', None, f'No stats found after {NBA_VOID_HOURS}h')
+                        _settle_prop(prop['id'], 'void', None, f'No stats found after {NBA_VOID_HOURS}h',
+                                     odds=prop.get('odds'), player_name=prop.get('player_name', ''),
+                                     market=prop.get('market', ''), line=prop.get('line'))
                         stats['void'] += 1
                         stats['settled'] += 1
                 else:
@@ -96,7 +100,9 @@ def run_player_props_settlement() -> Dict:
 
             if actual_stats.get('dnp'):
                 for prop in props:
-                    _settle_prop(prop['id'], 'void', None, 'DNP - Did not play')
+                    _settle_prop(prop['id'], 'void', None, 'DNP - Did not play',
+                                 odds=prop.get('odds'), player_name=prop.get('player_name', ''),
+                                 market=prop.get('market', ''), line=prop.get('line'))
                     stats['void'] += 1
                     stats['settled'] += 1
                 continue
@@ -106,7 +112,9 @@ def run_player_props_settlement() -> Dict:
                     result = _evaluate_prop(prop, actual_stats)
                     if result:
                         outcome, actual_val, note = result
-                        _settle_prop(prop['id'], outcome, actual_val, note)
+                        _settle_prop(prop['id'], outcome, actual_val, note,
+                                     odds=prop.get('odds'), player_name=prop.get('player_name', ''),
+                                     market=prop.get('market', ''), line=prop.get('line'))
                         stats[outcome] += 1
                         stats['settled'] += 1
                         settled_count += 1
@@ -273,14 +281,22 @@ def _evaluate_prop(prop: Dict, actual_stats: Dict) -> Optional[Tuple[str, float,
     return outcome, actual_val, note
 
 
-def _settle_prop(prop_id: int, outcome: str, actual_val: Optional[float], note: str):
+def _settle_prop(prop_id: int, outcome: str, actual_val: Optional[float], note: str,
+                  odds: Optional[float] = None, player_name: str = '', market: str = '', line: Optional[float] = None):
     try:
         status = 'settled'
         result_str = outcome.upper()
         if outcome == 'push':
             result_str = 'PUSH'
 
-        profit = 0.0
+        if outcome == 'won' and odds is not None and odds > 0:
+            profit = round(odds - 1.0, 4)
+        elif outcome == 'lost':
+            profit = -1.0
+        else:
+            profit = 0.0
+
+        logger.info(f"Settled {player_name} {market} {line}: {outcome} @ {odds} → P&L {profit}")
 
         with DatabaseConnection.get_cursor() as cursor:
             cursor.execute("""
@@ -316,7 +332,40 @@ def _hours_since(commence_time) -> float:
     return (now - commence_time).total_seconds() / 3600
 
 
+def backfill_profit_loss() -> Dict:
+    stats = {'updated': 0, 'errors': 0}
+    try:
+        with DatabaseConnection.get_cursor() as cursor:
+            cursor.execute("""
+                UPDATE player_props
+                SET profit_loss = CASE
+                    WHEN outcome = 'won' AND odds IS NOT NULL AND odds > 0 THEN ROUND((odds - 1.0)::numeric, 4)
+                    WHEN outcome = 'lost' THEN -1.0
+                    ELSE 0.0
+                END
+                WHERE status = 'settled'
+                  AND outcome IN ('won', 'lost')
+                  AND (profit_loss = 0 OR profit_loss IS NULL)
+                RETURNING id, outcome, odds, profit_loss
+            """)
+            rows = cursor.fetchall()
+            stats['updated'] = len(rows)
+            for row in rows:
+                logger.info(f"Backfilled prop {row[0]}: outcome={row[1]}, odds={row[2]}, profit_loss={row[3]}")
+        logger.info(f"Backfill complete: {stats['updated']} rows updated")
+    except Exception as e:
+        logger.error(f"Backfill error: {e}")
+        stats['errors'] += 1
+    return stats
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    result = run_player_props_settlement()
-    print(f"Settlement results: {result}")
+
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == '--backfill':
+        result = backfill_profit_loss()
+        print(f"Backfill results: {result}")
+    else:
+        result = run_player_props_settlement()
+        print(f"Settlement results: {result}")
