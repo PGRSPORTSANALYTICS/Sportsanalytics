@@ -561,7 +561,7 @@ class RealFootballChampion:
         print("🎯 Attempting to fetch odds from The Odds API...")
         
         try:
-            for sport_key in football_sports[:15]:  # Limit to conserve quota
+            for sport_key in football_sports:
                 url = f"{self.odds_base_url}/sports/{sport_key}/odds"
                 params = {
                     'apiKey': self.odds_api_key,
