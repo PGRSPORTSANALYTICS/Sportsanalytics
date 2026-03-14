@@ -86,6 +86,7 @@ def get_results_for_date_range(start_date: date, end_date: date):
                 FROM football_opportunities
                 WHERE match_date::date BETWEEN %s AND %s
                 AND outcome IN ('won', 'lost', 'WON', 'LOST')
+                AND mode = 'PROD'
             """, (start_date, end_date))
             rows = cur.fetchall()
             

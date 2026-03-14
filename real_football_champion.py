@@ -4097,24 +4097,59 @@ def get_pending_match_ids() -> set:
 
 
 DAILY_BET_CAP = 8
+SUMMER_DAILY_BET_CAP = 3
 # Per-match-date caps: max PROD picks for any single match day (regardless of when created)
 MATCH_DATE_CAP_VALUE_SINGLES = 8
 MATCH_DATE_CAP_CORNERS = 10
 MATCH_DATE_CAP_CARDS = 5
 
-def get_todays_bet_count() -> int:
+SUMMER_LEAGUE_KEYS = {
+    'soccer_usa_mls',
+    'soccer_japan_j_league',
+    'soccer_korea_kleague1',
+    'soccer_australia_aleague',
+    'soccer_brazil_campeonato',
+    'soccer_sweden_allsvenskan',
+    'soccer_norway_eliteserien',
+    'soccer_mexico_ligamx',
+    'soccer_argentina_primera_division',
+}
+
+SUMMER_LEAGUE_NAMES = {
+    'Major League Soccer', 'MLS',
+    'Japanese J1 League', 'J1 League',
+    'Korean K League 1', 'K League 1',
+    'Australian A-League', 'A-League',
+    'Brazilian Serie A', 'Brasileirao',
+    'Swedish Allsvenskan', 'Allsvenskan',
+    'Norwegian Eliteserien', 'Eliteserien',
+    'Liga MX',
+    'Argentinian Primera Division', 'Argentine Primera',
+}
+
+def _is_summer_league(league_name: str) -> bool:
+    if not league_name:
+        return False
+    return league_name in SUMMER_LEAGUE_NAMES
+
+def get_todays_bet_count(summer_only: bool = False) -> int:
     """Count how many PROD Value Single bets target today's matches.
+    If summer_only=True, only count summer league picks.
     Corners and Cards have their own separate caps and are excluded here."""
     try:
         today_date = datetime.now().strftime('%Y-%m-%d')
         result = db_helper.execute('''
-            SELECT COUNT(*) FROM football_opportunities
+            SELECT league FROM football_opportunities
             WHERE match_date = %s AND mode = 'PROD'
               AND market = 'Value Single'
               AND match_id NOT LIKE 'seed_%%'
-        ''', (today_date,), fetch='one')
-        count = result[0] if result and result[0] else 0
-        return count
+        ''', (today_date,), fetch='all')
+        if not result:
+            return 0
+        if summer_only:
+            return sum(1 for r in result if _is_summer_league(r[0]))
+        else:
+            return sum(1 for r in result if not _is_summer_league(r[0]))
     except Exception as e:
         print(f"⚠️ Could not check daily bet count: {e}")
         return 999
@@ -4140,11 +4175,13 @@ def get_match_date_count(match_date: str, market: str = None) -> int:
         print(f"⚠️ Could not check match_date count: {e}")
         return 999
 
-def get_daily_remaining_slots() -> int:
+def get_daily_remaining_slots(summer: bool = False) -> int:
     """Get how many bet slots remain for today."""
-    used = get_todays_bet_count()
-    remaining = max(0, DAILY_BET_CAP - used)
-    print(f"📊 Daily cap: {used}/{DAILY_BET_CAP} used, {remaining} slots remaining")
+    cap = SUMMER_DAILY_BET_CAP if summer else DAILY_BET_CAP
+    used = get_todays_bet_count(summer_only=summer)
+    remaining = max(0, cap - used)
+    label = "Summer" if summer else "Euro"
+    print(f"📊 {label} daily cap: {used}/{cap} used, {remaining} slots remaining")
     return remaining
 
 def run_single_cycle():
@@ -4156,23 +4193,26 @@ def run_single_cycle():
         print("📊 Markets: 1X2, O/U, BTTS, Corners, Cards, Double Chance")
         print("=" * 60)
         
-        remaining_slots = get_daily_remaining_slots()
-        cap_reached = remaining_slots <= 0
-        if cap_reached:
-            print(f"📊 DAILY CAP REACHED ({DAILY_BET_CAP} bets) - Continuing scan for LEARNING picks only")
+        euro_remaining = get_daily_remaining_slots(summer=False)
+        euro_cap_reached = euro_remaining <= 0
+        if euro_cap_reached:
+            print(f"📊 EURO CAP REACHED ({DAILY_BET_CAP} bets) - Continuing scan for LEARNING picks only")
         
         pending_matches = get_pending_match_ids()
         
-        vs_slots = 0 if cap_reached else min(10, remaining_slots)
+        vs_slots = 0 if euro_cap_reached else min(10, euro_remaining)
         try:
             value_engine = ValueSinglesEngine(champion, ev_threshold=0.05, min_confidence=55)
-            value_singles = value_engine.generate_value_singles(avoid_match_ids=pending_matches, max_picks=vs_slots)
+            value_singles = value_engine.generate_value_singles(
+                avoid_match_ids=pending_matches,
+                max_picks=vs_slots,
+                exclude_leagues=SUMMER_LEAGUE_KEYS
+            )
             if value_singles:
                 saved = value_engine.save_value_singles(value_singles)
-                print(f"✅ Saved {saved} VALUE SINGLES (1X2/O/U/BTTS)")
-                remaining_slots -= saved
+                print(f"✅ Saved {saved} EURO VALUE SINGLES (1X2/O/U/BTTS)")
             else:
-                print("📊 No value singles found this cycle")
+                print("📊 No euro value singles found this cycle")
             
             learning_picks = getattr(value_engine, '_learning_picks', [])
             if learning_picks:
@@ -4183,11 +4223,43 @@ def run_single_cycle():
                 data_saved = champion._save_data_picks(data_picks)
                 print(f"📡 Saved {data_saved} DATA picks (near-miss, Discord only)")
         except Exception as e:
-            print(f"⚠️ Value Singles generation failed: {e}")
+            print(f"⚠️ Euro Value Singles generation failed: {e}")
             import traceback
             traceback.print_exc()
         
-        print("✅ Value Singles cycle complete (all markets)")
+        summer_remaining = get_daily_remaining_slots(summer=True)
+        summer_cap_reached = summer_remaining <= 0
+        if summer_cap_reached:
+            print(f"📊 SUMMER CAP REACHED ({SUMMER_DAILY_BET_CAP} bets) - Skipping summer leagues")
+        else:
+            summer_slots = min(10, summer_remaining)
+            try:
+                summer_engine = ValueSinglesEngine(champion, ev_threshold=0.05, min_confidence=55)
+                summer_singles = summer_engine.generate_value_singles(
+                    avoid_match_ids=pending_matches,
+                    max_picks=summer_slots,
+                    league_filter=SUMMER_LEAGUE_KEYS
+                )
+                if summer_singles:
+                    saved = summer_engine.save_value_singles(summer_singles)
+                    print(f"✅ Saved {saved} SUMMER VALUE SINGLES (MLS/J-League/K-League etc.)")
+                else:
+                    print("📊 No summer league value singles found this cycle")
+                
+                summer_learning = getattr(summer_engine, '_learning_picks', [])
+                if summer_learning:
+                    sl_saved = champion._save_learning_picks(summer_learning)
+                    print(f"📚 Saved {sl_saved} SUMMER LEARNING picks")
+                summer_data = getattr(summer_engine, '_data_picks', [])
+                if summer_data:
+                    sd_saved = champion._save_data_picks(summer_data)
+                    print(f"📡 Saved {sd_saved} SUMMER DATA picks")
+            except Exception as e:
+                print(f"⚠️ Summer Value Singles generation failed: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        print("✅ Value Singles cycle complete (euro + summer)")
         return True
         
     except Exception as e:

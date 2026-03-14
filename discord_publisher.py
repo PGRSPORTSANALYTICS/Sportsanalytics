@@ -308,8 +308,6 @@ def format_analysis_embed(pick: dict) -> dict:
 
 
 DISCORD_BLOCKED_SELECTION_PATTERNS = [
-    "%Under 2.5%",
-    "%Under 3.5%",
     "%-0.5 (AH)%",
     "%-1.0 (AH)%",
     "%-1.5 (AH)%",
@@ -327,11 +325,12 @@ def fetch_analysis_picks() -> List[dict]:
                model_prob, calibrated_prob, analysis, discord_sent
         FROM football_opportunities
         WHERE status = 'pending'
+          AND mode = 'PROD'
           AND edge_percentage > 0
           AND odds > 1.0
           AND match_date::date >= CURRENT_DATE
           AND (discord_sent IS NULL OR discord_sent = false)
-          AND (mode != 'PROD' OR ({blocked_clauses}))
+          AND ({blocked_clauses})
         ORDER BY match_date ASC, edge_percentage DESC
     """
     try:

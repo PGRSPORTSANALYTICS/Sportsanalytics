@@ -445,7 +445,9 @@ class ValueSinglesEngine:
     def generate_value_singles(
         self,
         avoid_match_ids: Optional[Set[str]] = None,
-        max_picks: int = 6
+        max_picks: int = 6,
+        league_filter: Optional[Set[str]] = None,
+        exclude_leagues: Optional[Set[str]] = None
     ) -> List[Dict[str, Any]]:
         avoid_match_ids = avoid_match_ids or set()
         picks: List[Dict[str, Any]] = []
@@ -503,10 +505,14 @@ class ValueSinglesEngine:
                 except:
                     pass  # Couldn't parse, allow it through
             
-            # LEAGUE FILTER: Check whitelist if enabled, otherwise allow all leagues
             league_key = match.get('sport_key') or match.get('league_key') or match.get('odds_api_key') or ''
             is_tournament = league_key in TOURNAMENT_LEAGUES
-            
+
+            if league_filter and league_key not in league_filter:
+                continue
+            if exclude_leagues and league_key in exclude_leagues:
+                continue
+
             if LEAGUE_WHITELIST_ENABLED and league_key and league_key not in VALUE_SINGLE_LEAGUE_WHITELIST:
                 print(f"⏭️ Skipping {home_team} vs {away_team} - league '{league_key}' not in whitelist")
                 continue
