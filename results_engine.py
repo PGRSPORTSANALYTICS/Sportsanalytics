@@ -778,7 +778,7 @@ class ResultsEngine:
         if market == 'corners':
             if total_corners is None:
                 return 'unknown'
-            return self._evaluate_corners_bet(selection, home_corners, away_corners, total_corners, bet.get('home_team', ''))
+            return self._evaluate_corners_bet(selection, home_corners, away_corners, total_corners, bet.get('home_team', ''), bet.get('away_team', ''))
         
         elif market == 'cards':
             if total_cards is None:
@@ -864,35 +864,39 @@ class ResultsEngine:
         
         return 'unknown'
     
-    def _evaluate_corners_bet(self, selection: str, home_corners: int, away_corners: int, total_corners: int, home_team: str) -> str:
+    def _evaluate_corners_bet(self, selection: str, home_corners: int, away_corners: int, total_corners: int, home_team: str, away_team: str = '') -> str:
         """Evaluate corners market bet."""
-        line_match = re.search(r'(over|under)\s*(\d+\.?\d*)', selection)
+        sel_lower = selection.lower()
+        home_match = home_team.lower()[:5] in sel_lower or 'home' in sel_lower
+        away_match = (away_team and away_team.lower()[:5] in sel_lower) or 'away' in sel_lower
+
+        line_match = re.search(r'(over|under)\s*(\d+\.?\d*)', sel_lower)
         if line_match:
             direction = line_match.group(1)
             line = float(line_match.group(2))
-            
-            if home_team.lower()[:4] in selection or 'home' in selection:
+
+            if home_match and not away_match:
                 actual = home_corners
-            elif 'away' in selection:
+            elif away_match and not home_match:
                 actual = away_corners
             else:
                 actual = total_corners
-            
+
             if direction == 'over':
                 return 'won' if actual > line else 'lost'
             else:
                 return 'won' if actual < line else 'lost'
-        
+
         handicap_match = re.search(r'([+-]\d+\.?\d*)', selection)
         if handicap_match:
             handicap = float(handicap_match.group(1))
-            if 'home' in selection or home_team.lower()[:4] in selection:
+            if home_match and not away_match:
                 adjusted = home_corners + handicap
                 return 'won' if adjusted > away_corners else 'lost'
             else:
                 adjusted = away_corners + handicap
                 return 'won' if adjusted > home_corners else 'lost'
-        
+
         return 'unknown'
     
     def _evaluate_cards_bet(self, selection: str, home_cards: int, away_cards: int, total_cards: int) -> str:
