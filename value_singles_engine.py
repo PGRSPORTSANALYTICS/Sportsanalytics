@@ -54,8 +54,8 @@ MIN_COMBINED_CONFIDENCE = 0.01
 # Lower bookmaker margins (4-8%) vs SGP (28-45%) = better ROI
 # ============================================================
 
-# Minimum Expected Value (EV) - 8% edge (Feb 23, 2026 - tightened for quality)
-MIN_VALUE_SINGLE_EV = 0.08  # 8% edge - stricter to reduce volume, only best picks
+# Minimum Expected Value (EV) - 22% edge (Mar 15, 2026 - data-driven: only 20%+ edge is profitable)
+MIN_VALUE_SINGLE_EV = 0.22  # 22% edge — 10-20% bracket lost -34.5u all-time, 20%+ is +14.6u
 
 # ============================================================
 # MARKET-SPECIFIC MIN_EV THRESHOLDS (Jan 11, 2026 v2)
@@ -67,8 +67,8 @@ MIN_VALUE_SINGLE_EV = 0.08  # 8% edge - stricter to reduce volume, only best pic
 # - Away Win: 29.4% hit, -5.45u, max DD -10.45u → LEARNING ONLY
 # ============================================================
 MARKET_SPECIFIC_MIN_EV = {
-    "FT_OVER_2_5": 0.12,   # 12% EV minimum (Feb 23, 2026 - raised for quality)
-    "FT_OVER_3_5": 0.12,   # 12% EV minimum (Feb 23, 2026 - raised for quality)
+    "FT_OVER_2_5": 0.22,   # 22% EV minimum (Mar 15, 2026 - aligned with global threshold)
+    "FT_OVER_3_5": 0.22,   # 22% EV minimum (Mar 15, 2026 - aligned with global threshold)
     # HOME_WIN: Now LEARNING_ONLY (Feb 6, 2026) - see filter below
     # FT_UNDER_2_5: Now LEARNING_ONLY (Feb 16, 2026) - 43.4% hit, -9.14u
     # FT_UNDER_3_5: Now LEARNING_ONLY (Feb 16, 2026) - 33.3% hit, -2.88u
