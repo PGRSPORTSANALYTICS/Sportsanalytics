@@ -1003,7 +1003,7 @@ class APIFootballClient:
         }
         
         cards_over_under_markets = {
-            'Cards Over/Under': 'CARDS',
+            'Cards Over/Under': 'MATCH_CARDS',
         }
         
         team_cards_markets = {
