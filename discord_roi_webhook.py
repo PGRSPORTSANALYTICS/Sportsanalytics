@@ -46,6 +46,7 @@ def get_roi_stats() -> Dict[str, Any]:
                     END), 0) as units_profit
                 FROM all_bets
                 WHERE result IN ('WON', 'WIN', 'LOST', 'LOSS')
+                AND (mode = 'PROD' OR mode IS NULL)
             """)
             all_time = conn.execute(all_time_query).fetchone()
             
@@ -62,6 +63,7 @@ def get_roi_stats() -> Dict[str, Any]:
                     COUNT(CASE WHEN result IS NULL OR result = '' THEN 1 END) as pending
                 FROM all_bets
                 WHERE DATE(created_at) = CURRENT_DATE
+                AND (mode = 'PROD' OR mode IS NULL)
             """)
             today_stats = conn.execute(today_placed_query).fetchone()
             
@@ -77,6 +79,7 @@ def get_roi_stats() -> Dict[str, Any]:
                 FROM all_bets
                 WHERE result IN ('WON', 'WIN', 'LOST', 'LOSS')
                 AND DATE(settled_at) = CURRENT_DATE
+                AND (mode = 'PROD' OR mode IS NULL)
             """)
             today_settled = conn.execute(today_settled_query).fetchone()
             
@@ -93,6 +96,7 @@ def get_roi_stats() -> Dict[str, Any]:
                 FROM all_bets
                 WHERE result IN ('WON', 'WIN', 'LOST', 'LOSS')
                 AND DATE(settled_at) >= CURRENT_DATE - INTERVAL '7 days'
+                AND (mode = 'PROD' OR mode IS NULL)
             """)
             week_stats = conn.execute(week_query).fetchone()
             
@@ -109,13 +113,14 @@ def get_roi_stats() -> Dict[str, Any]:
                 FROM all_bets
                 WHERE result IN ('WON', 'WIN', 'LOST', 'LOSS')
                 AND DATE(settled_at) >= DATE_TRUNC('month', CURRENT_DATE)
+                AND (mode = 'PROD' OR mode IS NULL)
             """)
             month_stats = conn.execute(month_query).fetchone()
             
             pending_query = text("""
                 SELECT 
-                    (SELECT COUNT(*) FROM all_bets WHERE result IS NULL OR result = '') +
-                    (SELECT COUNT(*) FROM football_opportunities WHERE UPPER(status) IN ('PENDING', 'IN_PROGRESS') AND mode != 'TEST')
+                    (SELECT COUNT(*) FROM all_bets WHERE (result IS NULL OR result = '') AND (mode = 'PROD' OR mode IS NULL)) +
+                    (SELECT COUNT(*) FROM football_opportunities WHERE UPPER(status) IN ('PENDING', 'IN_PROGRESS') AND mode = 'PROD')
                 as pending
             """)
             pending = conn.execute(pending_query).fetchone()
@@ -124,6 +129,7 @@ def get_roi_stats() -> Dict[str, Any]:
                 SELECT home_team, away_team, selection, odds, result, product, settled_at
                 FROM all_bets
                 WHERE result IN ('WON', 'WIN', 'LOST', 'LOSS')
+                AND (mode = 'PROD' OR mode IS NULL)
                 ORDER BY settled_at DESC NULLS LAST, id DESC
                 LIMIT 10
             """)
