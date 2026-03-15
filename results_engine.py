@@ -48,6 +48,7 @@ class ResultsEngine:
         self._match_cache = {}
         self._manual_results = None
         self._verification_metrics = None
+        self._roi_sent_date = None
     
     def _get_manual_results_manager(self):
         """Lazy load manual results manager."""
@@ -1027,11 +1028,18 @@ class ResultsEngine:
         logger.info(f"📤 Discord result sent: {bet_data.get('home_team')} vs {bet_data.get('away_team')} = {outcome.upper()}")
     
     def _send_discord_update(self):
-        """Send Discord ROI update ONLY when all today's matches are settled."""
+        """Send Discord ROI update ONLY when all today's matches are settled — max once per day."""
+        from datetime import date as _date
+        today = _date.today()
+
+        if self._roi_sent_date == today:
+            logger.debug("📊 ROI webhook already sent today — skipping")
+            return
+
         try:
             from sqlalchemy import create_engine, text
             engine = create_engine(self.database_url)
-            
+
             with engine.connect() as conn:
                 result = conn.execute(text("""
                     SELECT COUNT(*) FROM all_bets 
@@ -1039,14 +1047,15 @@ class ResultsEngine:
                     AND DATE(created_at) = CURRENT_DATE
                 """))
                 pending_count = result.scalar() or 0
-            
+
             if pending_count > 0:
                 logger.info(f"📊 {pending_count} bets still pending - ROI webhook deferred")
                 return
-            
-            # All settled - send ROI update
+
+            # All settled - send ROI update (once per day)
             from discord_roi_webhook import send_discord_stats
             send_discord_stats(f"📊 All today's matches settled - Final ROI update")
+            self._roi_sent_date = today
             logger.info("📤 Discord ROI stats sent (all matches settled)")
         except Exception as e:
             logger.warning(f"⚠️ Discord ROI update skipped: {e}")
