@@ -147,6 +147,7 @@ class DailyCardSelector:
                     fair_odds
                 FROM football_opportunities 
                 WHERE status = 'pending'
+                AND mode = 'PROD'
                 AND market NOT IN ('exact_score', 'correct_score')
                 AND kickoff_time IS NOT NULL
             """, fetch='all')
