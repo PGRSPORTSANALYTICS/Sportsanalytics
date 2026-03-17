@@ -3724,7 +3724,7 @@ class RealFootballChampion:
         return saved
 
     def _save_data_picks(self, data_picks: list) -> int:
-        """Save near-miss picks (positive EV but below PROD threshold) as mode='DATA' for Discord publishing."""
+        """Save near-miss picks (positive EV but below PROD threshold) as mode='LEARNING' for Discord publishing."""
         saved = 0
         for pick in data_picks:
             try:
@@ -3734,6 +3734,7 @@ class RealFootballChampion:
                 model_prob_value = analysis_data.get('p_model', 0)
                 odds_by_bookmaker = pick.get('odds_by_bookmaker')
                 odds_by_bookmaker_json = json.dumps(odds_by_bookmaker) if odds_by_bookmaker else None
+                pick_mode = pick.get('mode', 'LEARNING')
 
                 db_helper.execute('''
                     INSERT INTO football_opportunities 
@@ -3770,13 +3771,13 @@ class RealFootballChampion:
                     pick.get('created_at_utc'),
                     float(quality_score),
                     datetime.now().strftime('%Y-%m-%d'),
-                    'DATA',
+                    pick_mode,
                     999,
-                    'DATA',
+                    pick_mode,
                     False,
                     odds_value,
                     pick.get('odds_source', 'the_odds_api'),
-                    pick.get('trust_level', 'DATA'),
+                    pick.get('trust_level', pick_mode),
                     odds_by_bookmaker_json,
                     pick.get('best_odds_value'),
                     pick.get('best_odds_bookmaker'),

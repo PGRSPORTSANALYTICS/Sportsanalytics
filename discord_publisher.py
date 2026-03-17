@@ -367,7 +367,7 @@ def fetch_analysis_picks() -> List[dict]:
                odds_by_bookmaker, best_odds_value, best_odds_bookmaker
         FROM football_opportunities
         WHERE status = 'pending'
-          AND mode = 'PROD'
+          AND mode IN ('PROD', 'LEARNING')
           AND edge_percentage > 0
           AND odds > 1.0
           AND match_date::date >= CURRENT_DATE

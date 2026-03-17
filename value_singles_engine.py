@@ -452,7 +452,7 @@ class ValueSinglesEngine:
     ) -> List[Dict[str, Any]]:
         avoid_match_ids = avoid_match_ids or set()
         picks: List[Dict[str, Any]] = []
-        data_picks: List[Dict[str, Any]] = []  # Near-miss picks for Discord data publishing
+        data_picks: List[Dict[str, Any]] = []  # LEARNING picks for Discord publishing (ev > 0, below PROD threshold)
 
         print("🔥 VALUE SINGLES START (HARD FILTERS ACTIVE)")
         print(f"   min_ev = {MIN_VALUE_SINGLE_EV*100:.0f}%")
@@ -613,10 +613,9 @@ class ValueSinglesEngine:
                 # Use market-specific threshold if defined, else fall back to match threshold
                 market_min_ev = MARKET_SPECIFIC_MIN_EV.get(market_key, match_ev_threshold)
                 if ev < market_min_ev:
-                    # Near-miss: positive EV but below PROD threshold → Discord data pick
-                    if (0 < ev
-                            and MIN_VALUE_SINGLE_ODDS <= odds <= MAX_VALUE_SINGLE_ODDS
-                            and market_key not in LEARNING_ONLY_MARKETS):
+                    # Fallback: positive EV but below PROD threshold → save as LEARNING pick
+                    # Covers all leagues (MLS, J-League, K-League, Allsvenskan, etc.) and all markets
+                    if ev > 0.0:
                         _sel = {
                             "FT_OVER_2_5": "Over 2.5 Goals", "FT_UNDER_2_5": "Under 2.5 Goals",
                             "FT_OVER_1_5": "Over 1.5 Goals", "FT_UNDER_1_5": "Under 1.5 Goals",
@@ -646,13 +645,14 @@ class ValueSinglesEngine:
                                 "p_model": float(raw_prob),
                                 "calibrated_prob": float(calibrated_prob),
                                 "ev": float(ev),
-                                "data_note": "Near-miss: positive EV below PROD threshold"
+                                "data_note": "Learning signal: positive EV below PROD threshold"
                             }),
                             "match_date": match_date,
                             "kickoff_utc": _ko_utc,
                             "kickoff_epoch": _ko_epoch,
                             "created_at_utc": to_iso_utc(now_utc()),
-                            "mode": "DATA",
+                            "mode": "LEARNING",
+                            "stake": 0,
                             "bet_placed": False,
                             "odds_by_bookmaker": bookmaker_data.get('odds_by_bookmaker'),
                             "best_odds_value": bookmaker_data.get('best_odds_value'),
@@ -660,7 +660,7 @@ class ValueSinglesEngine:
                             "avg_odds": bookmaker_data.get('avg_odds'),
                             "fair_odds": round(1.0 / raw_prob, 3) if raw_prob > 0 else None,
                             "fixture_id": match.get("fixture_id"),
-                            "trust_level": "DATA",
+                            "trust_level": "LEARNING",
                             "sim_probability": float(calibrated_prob),
                             "ev_sim": float(ev),
                             "model_prob": float(raw_prob),
@@ -956,7 +956,7 @@ class ValueSinglesEngine:
 
         self._learning_picks = learning_picks
         self._data_picks = data_picks
-        print(f"📡 DATA PICKS (Discord only): {len(data_picks)} near-miss opportunities queued for publishing")
+        print(f"📡 LEARNING PICKS (Discord only): {len(data_picks)} positive-EV signals queued for publishing")
 
         return unique
 
