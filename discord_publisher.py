@@ -237,7 +237,8 @@ def _build_analysis_line(pick: dict) -> str:
         except Exception:
             pass
 
-    model_prob = pick.get("model_prob") or pick.get("calibrated_prob")
+    # Prefer calibrated_prob (adjusted) over raw model_prob for accuracy
+    model_prob = pick.get("calibrated_prob") or pick.get("model_prob")
     odds = float(pick.get("odds", 0) or 0)
     if model_prob and odds > 1:
         mp = float(model_prob)
@@ -364,13 +365,15 @@ def fetch_analysis_picks() -> List[dict]:
         SELECT id, league, home_team, away_team, market, selection, odds,
                edge_percentage, match_date, confidence, mode, status,
                model_prob, calibrated_prob, analysis, discord_sent,
-               odds_by_bookmaker, best_odds_value, best_odds_bookmaker
+               odds_by_bookmaker, best_odds_value, best_odds_bookmaker,
+               kickoff_epoch
         FROM football_opportunities
         WHERE status = 'pending'
           AND mode IN ('PROD', 'LEARNING')
           AND (mode = 'PROD' OR edge_percentage >= 3)
           AND odds > 1.0
           AND match_date::date >= CURRENT_DATE
+          AND (kickoff_epoch IS NULL OR kickoff_epoch > EXTRACT(EPOCH FROM NOW())::bigint)
           AND (discord_sent IS NULL OR discord_sent = false)
           AND ({blocked_clauses})
         ORDER BY match_date ASC, edge_percentage DESC
