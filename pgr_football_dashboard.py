@@ -849,7 +849,13 @@ def get_free_predictions() -> list:
           AND odds >= :min_odds
           AND odds <= :max_odds
           AND market = 'Value Single'
-          AND selection NOT IN ('Under 2.5 Goals', 'Under 3.5 Goals')
+          AND mode = 'PROD'
+          AND selection NOT IN ('Under 2.5 Goals', 'Under 3.5 Goals', 'Under 1.5 Goals')
+          AND selection NOT ILIKE '%AH%'
+          AND selection NOT ILIKE '%Asian%'
+          AND selection NOT ILIKE '%-0.5%'
+          AND selection NOT ILIKE '%-1.0%'
+          AND selection NOT ILIKE '%-1.5%'
         ORDER BY edge_percentage DESC
         LIMIT :max_picks
     """)
@@ -947,41 +953,24 @@ def render_free_predictions_tab():
             except:
                 odds_by_bookmaker = {}
         
-        # Get best and 2nd best odds
+        # Get best and 2nd best odds — compact single-line HTML to avoid markdown code-block
         bookmaker_html = ""
         if odds_by_bookmaker and isinstance(odds_by_bookmaker, dict):
             sorted_books = sorted(odds_by_bookmaker.items(), key=lambda x: float(x[1]) if x[1] else 0, reverse=True)
-            best_book = sorted_books[0] if len(sorted_books) > 0 else None
+            best_book = sorted_books[0] if sorted_books else None
             second_best = sorted_books[1] if len(sorted_books) > 1 else None
-            
-            bookmaker_html = '<div style="display:flex;gap:8px;margin-top:12px;">'
+            inner = ""
             if best_book:
-                bookmaker_html += f'''
-                <div style="padding:8px 14px;border-radius:8px;background:linear-gradient(135deg, rgba(34,197,94,0.3), rgba(16,185,129,0.2));border:1px solid rgba(34,197,94,0.6);">
-                    <div style="font-size:9px;color:#22C55E;font-weight:600;">BEST</div>
-                    <div style="font-size:18px;font-weight:700;color:#22C55E;">{float(best_book[1]):.2f}</div>
-                </div>'''
+                inner += f'<div style="padding:8px 14px;border-radius:8px;background:linear-gradient(135deg,rgba(34,197,94,0.3),rgba(16,185,129,0.2));border:1px solid rgba(34,197,94,0.6);"><div style="font-size:9px;color:#22C55E;font-weight:600;">BEST</div><div style="font-size:18px;font-weight:700;color:#22C55E;">{float(best_book[1]):.2f}</div></div>'
             if second_best:
-                bookmaker_html += f'''
-                <div style="padding:8px 14px;border-radius:8px;background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.4);">
-                    <div style="font-size:9px;color:#60A5FA;font-weight:600;">2ND</div>
-                    <div style="font-size:18px;font-weight:700;color:#60A5FA;">{float(second_best[1]):.2f}</div>
-                </div>'''
-            bookmaker_html += '</div>'
+                inner += f'<div style="padding:8px 14px;border-radius:8px;background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.4);"><div style="font-size:9px;color:#60A5FA;font-weight:600;">2ND</div><div style="font-size:18px;font-weight:700;color:#60A5FA;">{float(second_best[1]):.2f}</div></div>'
+            bookmaker_html = f'<div style="display:flex;gap:8px;margin-top:12px;">{inner}</div>'
         elif odds > 0:
-            bookmaker_html = f'''
-            <div style="display:flex;gap:8px;margin-top:12px;">
-                <div style="padding:8px 14px;border-radius:8px;background:linear-gradient(135deg, rgba(34,197,94,0.3), rgba(16,185,129,0.2));border:1px solid rgba(34,197,94,0.6);">
-                    <div style="font-size:9px;color:#22C55E;font-weight:600;">ODDS</div>
-                    <div style="font-size:18px;font-weight:700;color:#22C55E;">{odds:.2f}</div>
-                </div>
-            </div>'''
-        
-        # Generate why bullets
+            bookmaker_html = f'<div style="display:flex;gap:8px;margin-top:12px;"><div style="padding:8px 14px;border-radius:8px;background:linear-gradient(135deg,rgba(34,197,94,0.3),rgba(16,185,129,0.2));border:1px solid rgba(34,197,94,0.6);"><div style="font-size:9px;color:#22C55E;font-weight:600;">ODDS</div><div style="font-size:18px;font-weight:700;color:#22C55E;">{odds:.2f}</div></div></div>'
+
+        # Generate why bullets — compact single-line HTML
         bullets = generate_why_bullets(pick)
-        bullets_html = ""
-        for bullet in bullets:
-            bullets_html += f'<div style="font-size:12px;color:#9CA3AF;margin-top:4px;">• {bullet}</div>'
+        bullets_html = "".join(f'<div style="font-size:12px;color:#9CA3AF;margin-top:4px;">&#8226; {b}</div>' for b in bullets)
         
         # Main card
         st.markdown(f"""
