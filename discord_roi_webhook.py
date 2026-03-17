@@ -231,88 +231,43 @@ def build_discord_embed(stats: Dict[str, Any]) -> Dict[str, Any]:
                 "timestamp": datetime.utcnow().isoformat()
             }]
         }
-    
+
     all_time = stats.get("all_time", {})
-    today = stats.get("today", {})
     settled_today = stats.get("settled_today", {})
     week = stats.get("week", {})
     month = stats.get("month", {})
-    pending = stats.get("pending", 0)
     recent = stats.get("recent", [])
-    
+
     roi = all_time.get("roi", 0)
-    if roi >= 10:
-        color = 0x00FF00  # Green
-        status_emoji = "🚀"
-    elif roi >= 0:
-        color = 0x22C55E  # Light green
-        status_emoji = "✅"
-    elif roi >= -10:
-        color = 0xFFA500  # Orange
-        status_emoji = "⚠️"
-    else:
-        color = 0xFF5555  # Red
-        status_emoji = "📉"
-    
-    units_display = f"+{all_time.get('units', 0):.1f}" if all_time.get('units', 0) >= 0 else f"{all_time.get('units', 0):.1f}"
-    
-    fields = [
-        {
-            "name": "📊 All-Time Performance",
-            "value": f"**ROI:** {roi:+.1f}%\n**Units:** {units_display}u\n**Record:** {all_time.get('wins', 0)}W-{all_time.get('losses', 0)}L ({all_time.get('hit_rate', 0):.1f}%)",
-            "inline": True
-        },
-        {
-            "name": "📅 This Month",
-            "value": f"**ROI:** {month.get('roi', 0):+.1f}%\n**Units:** {month.get('units', 0):+.1f}u\n**Bets:** {month.get('total', 0)} ({month.get('hit_rate', 0):.1f}%)",
-            "inline": True
-        },
-        {
-            "name": "📆 Last 7 Days",
-            "value": f"**ROI:** {week.get('roi', 0):+.1f}%\n**Units:** {week.get('units', 0):+.1f}u\n**Bets:** {week.get('total', 0)} ({week.get('hit_rate', 0):.1f}%)",
-            "inline": True
-        },
-        {
-            "name": "🎯 Picks Today",
-            "value": f"**Placed:** {today.get('total', 0)} bets\n**Settled:** {today.get('wins', 0)}W-{today.get('losses', 0)}L\n**Pending:** {today.get('pending', 0)}",
-            "inline": True
-        },
-        {
-            "name": "✅ Settled Today",
-            "value": f"**Bets:** {settled_today.get('total', 0)}\n**Units:** {settled_today.get('units', 0):+.1f}u\n**Wins:** {settled_today.get('wins', 0)}",
-            "inline": True
-        }
-    ]
-    
+    color = 0x00FFA6 if roi >= 10 else 0x22C55E if roi >= 0 else 0xFFA500 if roi >= -10 else 0xFF5555
+
+    # Recent results as emoji row
+    recent_row = ""
     if recent:
-        recent_lines = []
-        for r in recent[:10]:
-            emoji = "✅" if r["result"] in ["WON", "WIN"] else "❌"
-            product = r.get("product", "BET")
-            product_emoji = {"CORNERS": "🔢", "CARDS": "🟨", "VALUE_SINGLE": "⚽", "BASKET_SINGLE": "🏀", "BASKET_PARLAY": "🏀", "SGP": "🎲", "EXACT_SCORE": "🎯"}.get(product, "📊")
-            match_short = r['match'][:20] + "..." if len(r['match']) > 20 else r['match']
-            pick_short = r['pick'][:15] + "..." if len(r['pick']) > 15 else r['pick']
-            recent_lines.append(f"{emoji}{product_emoji} {match_short} - {pick_short} @ {r['odds']:.2f}")
-        fields.append({
-            "name": "🔄 Last 10 Results",
-            "value": "\n".join(recent_lines),
-            "inline": False
-        })
-    
-    embed = {
+        recent_row = " ".join("✅" if r["result"] in ["WON", "WIN"] else "❌" for r in recent[:10])
+
+    date_str = datetime.utcnow().strftime("%d %b")
+
+    desc = (
+        f"**All-time** — {roi:+.1f}% ROI  |  {all_time.get('units', 0):+.1f}u  |  "
+        f"{all_time.get('wins', 0)}W-{all_time.get('losses', 0)}L  ({all_time.get('hit_rate', 0):.1f}%)\n"
+        f"**This month** — {month.get('roi', 0):+.1f}% ROI  |  {month.get('units', 0):+.1f}u  |  {month.get('total', 0)} bets\n"
+        f"**Last 7 days** — {week.get('roi', 0):+.1f}% ROI  |  {week.get('units', 0):+.1f}u  |  {week.get('total', 0)} bets\n"
+        f"**Today** — {settled_today.get('wins', 0)}W-{settled_today.get('total', 0) - settled_today.get('wins', 0)}L  |  {settled_today.get('units', 0):+.1f}u settled"
+    )
+
+    if recent_row:
+        desc += f"\n\n**Last {len(recent[:10])} results:** {recent_row}"
+
+    return {
         "embeds": [{
-            "title": f"{status_emoji} PGR Performance Report",
-            "description": f"**{all_time.get('total', 0)}** total bets tracked | Updated {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC",
+            "title": f"📊 PGR Daily ROI — {date_str}",
+            "description": desc,
             "color": color,
-            "fields": fields,
-            "footer": {
-                "text": "PGR Sports Analytics • Value Betting System"
-            },
+            "footer": {"text": f"PGR Sports Analytics  •  {all_time.get('total', 0)} bets tracked"},
             "timestamp": datetime.utcnow().isoformat()
         }]
     }
-    
-    return embed
 
 
 def send_discord_stats(custom_message: Optional[str] = None) -> bool:
