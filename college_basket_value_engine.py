@@ -171,13 +171,11 @@ MAX_LEGS_HARD_CAP = 7
 def allowed_parlays(num_singles: int) -> int:
     """
     Returns max number of parlays based on how many singles we have.
-    Rules:
-    - Under 10 singles -> max 2 parlays
-    - 10 or more singles -> max 5 parlays
+    Rules: max 3 parlays regardless of singles count.
     """
-    if num_singles < 10:
-        return 2
-    return 5
+    if num_singles < 4:
+        return 1
+    return 3
 
 
 def parlay_score(parlay: BasketPick) -> float:
@@ -537,16 +535,13 @@ class CollegeBasketValueEngine:
         if self.allow_parlays and singles:
             # Build parlays from balanced picks (one per game)
             top_for_parlay = selected[:25]
+            parlays_2 = build_parlays(top_for_parlay, legs=2, min_parlay_ev=0.02)
             parlays_3 = build_parlays(top_for_parlay, legs=3, min_parlay_ev=0.02)
-            parlays_4 = build_parlays(top_for_parlay, legs=4, min_parlay_ev=0.03)
-            
-            # Combine all parlay candidates
-            all_parlays = parlays_3 + parlays_4
-            
-            # Select parlays with diversity constraints:
-            # - Uses allowed_parlays() for dynamic limit (2 if <10 singles, else 5)
-            # - Each match can only appear in MAX_PARLAYS_PER_MATCH parlays
-            # - Picks best by score (EV + odds bonus)
+
+            # Combine 2-leg and 3-leg candidates, max 3 total
+            all_parlays = parlays_2 + parlays_3
+
+            # Select parlays with diversity constraints — max 3/day
             parlays = pick_parlays_for_today(len(singles), all_parlays)
             
             # Combine singles and parlays

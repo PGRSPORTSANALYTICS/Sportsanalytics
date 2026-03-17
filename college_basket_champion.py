@@ -30,7 +30,7 @@ def run_prediction_cycle():
             max_singles=5,
             min_odds=1.75,   # Win machine: tight odds window
             max_odds=2.00,   # Win machine: high hit-rate zone
-            allow_parlays=False
+            allow_parlays=True
         )
         
         logger.info("📊 Fetching NCAAB games and analyzing value...")

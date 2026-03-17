@@ -47,6 +47,7 @@ def get_roi_stats() -> Dict[str, Any]:
                 FROM all_bets
                 WHERE result IN ('WON', 'WIN', 'LOST', 'LOSS')
                 AND (mode = 'PROD' OR mode IS NULL)
+                AND product != 'BASKET_SINGLE'
             """)
             all_time = conn.execute(all_time_query).fetchone()
             
@@ -64,6 +65,7 @@ def get_roi_stats() -> Dict[str, Any]:
                 FROM all_bets
                 WHERE DATE(created_at) = CURRENT_DATE
                 AND (mode = 'PROD' OR mode IS NULL)
+                AND product != 'BASKET_SINGLE'
             """)
             today_stats = conn.execute(today_placed_query).fetchone()
             
@@ -80,6 +82,7 @@ def get_roi_stats() -> Dict[str, Any]:
                 WHERE result IN ('WON', 'WIN', 'LOST', 'LOSS')
                 AND DATE(settled_at) = CURRENT_DATE
                 AND (mode = 'PROD' OR mode IS NULL)
+                AND product != 'BASKET_SINGLE'
             """)
             today_settled = conn.execute(today_settled_query).fetchone()
             
@@ -97,6 +100,7 @@ def get_roi_stats() -> Dict[str, Any]:
                 WHERE result IN ('WON', 'WIN', 'LOST', 'LOSS')
                 AND DATE(settled_at) >= CURRENT_DATE - INTERVAL '7 days'
                 AND (mode = 'PROD' OR mode IS NULL)
+                AND product != 'BASKET_SINGLE'
             """)
             week_stats = conn.execute(week_query).fetchone()
             
@@ -114,6 +118,7 @@ def get_roi_stats() -> Dict[str, Any]:
                 WHERE result IN ('WON', 'WIN', 'LOST', 'LOSS')
                 AND DATE(settled_at) >= DATE_TRUNC('month', CURRENT_DATE)
                 AND (mode = 'PROD' OR mode IS NULL)
+                AND product != 'BASKET_SINGLE'
             """)
             month_stats = conn.execute(month_query).fetchone()
             
@@ -130,6 +135,7 @@ def get_roi_stats() -> Dict[str, Any]:
                 FROM all_bets
                 WHERE result IN ('WON', 'WIN', 'LOST', 'LOSS')
                 AND (mode = 'PROD' OR mode IS NULL)
+                AND product != 'BASKET_SINGLE'
                 ORDER BY settled_at DESC NULLS LAST, id DESC
                 LIMIT 10
             """)

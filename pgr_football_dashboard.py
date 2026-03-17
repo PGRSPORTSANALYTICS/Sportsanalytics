@@ -2258,15 +2258,15 @@ def render_daily_card_tab():
                 football_stats = calc_stats(football_df)
                 basketball_stats = calc_stats(basketball_df)
                 
-                # Combined stats
-                combined_bets = football_stats['bets'] + basketball_stats['bets']
-                combined_wins = football_stats['wins'] + basketball_stats['wins']
-                combined_units = football_stats['units_pl'] + basketball_stats['units_pl']
+                # Combined stats — basketball excluded from overall
+                combined_bets = football_stats['bets']
+                combined_wins = football_stats['wins']
+                combined_units = football_stats['units_pl']
                 combined_hit = (combined_wins / combined_bets * 100) if combined_bets > 0 else 0
                 combined_roi = (combined_units / combined_bets * 100) if combined_bets > 0 else 0
-                
+
                 # Display overall stats
-                st.markdown("#### Last 30 Days Performance")
+                st.markdown("#### Last 30 Days Performance (Football only)")
                 overall_cols = st.columns(5)
                 with overall_cols[0]:
                     st.metric("Total Bets", combined_bets)
