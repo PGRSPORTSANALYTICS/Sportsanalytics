@@ -1726,19 +1726,21 @@ async def get_today_picks():
         epoch_start = int(day_start.timestamp())
         epoch_end = int(day_end.timestamp())
 
+        today_str = day_start.strftime('%Y-%m-%d')
+        tomorrow_str = day_end.strftime('%Y-%m-%d')
+
         rows = db_helper.execute("""
             SELECT id, home_team, away_team, market, selection, odds,
                    edge_percentage, confidence, outcome, profit_loss,
                    odds_by_bookmaker, best_odds_value, best_odds_bookmaker,
-                   league, trust_level, kickoff_epoch, match_date, product,
-                   open_odds, clv_pct, mode, bet_placed
+                   league, trust_level, kickoff_time, match_date,
+                   open_odds, clv_pct, mode
             FROM football_opportunities
             WHERE mode = 'PROD'
               AND bet_placed = true
-              AND product != 'BASKET_SINGLE'
-              AND kickoff_epoch BETWEEN %s AND %s
-            ORDER BY kickoff_epoch ASC
-        """, (epoch_start, epoch_end), fetch='all') or []
+              AND match_date >= %s AND match_date < %s
+            ORDER BY kickoff_time ASC NULLS LAST
+        """, (today_str, tomorrow_str), fetch='all') or []
 
         picks = []
         for r in rows:
@@ -1751,13 +1753,13 @@ async def get_today_picks():
             elif outcome == 'VOID':
                 status = 'void'
 
-            ko = r[15]
+            ko_time = r[15]
+            match_date = str(r[16]) if r[16] else ''
             ko_str = ''
-            if ko:
-                try:
-                    ko_str = datetime.utcfromtimestamp(ko).strftime('%H:%M UTC')
-                except Exception:
-                    pass
+            if ko_time:
+                ko_str = str(ko_time)[:5] + ' UTC' if len(str(ko_time)) >= 5 else str(ko_time)
+            elif match_date:
+                ko_str = match_date
 
             market_icons = {
                 'OVER_UNDER': '⚽', 'CORNERS': '⛳', 'CARDS': '🟨',
@@ -1784,12 +1786,10 @@ async def get_today_picks():
                 'best_odds_bookmaker': r[12],
                 'league': r[13] or '',
                 'trust_level': r[14] or '',
-                'kickoff_epoch': r[15],
                 'kickoff_str': ko_str,
-                'match_date': str(r[16]) if r[16] else '',
-                'product': r[17] or '',
-                'open_odds': float(r[18]) if r[18] else None,
-                'clv_pct': round(float(r[19]), 2) if r[19] else None,
+                'match_date': match_date,
+                'open_odds': float(r[17]) if r[17] else None,
+                'clv_pct': round(float(r[18]), 2) if r[18] else None,
                 'icon': icon,
             })
 
