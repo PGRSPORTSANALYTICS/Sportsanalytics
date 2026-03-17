@@ -157,7 +157,8 @@ table.dt tr:hover td{background:var(--card2)}
 </div>
 
 <div class="nav">
-<div class="nav-item active" onclick="nav('live')">Live Picks</div>
+<div class="nav-item active" onclick="nav('today')">&#127919; Today's Picks</div>
+<div class="nav-item" onclick="nav('live')">&#128308; Live Tracker</div>
 <div class="nav-item" onclick="nav('bets')">Bets Feed</div>
 <div class="nav-item" onclick="nav('clv')">CLV Analytics</div>
 <div class="nav-item" onclick="nav('discovery')">Discovery</div>
@@ -165,7 +166,20 @@ table.dt tr:hover td{background:var(--card2)}
 <div class="nav-item" onclick="nav('report')">Weekly Report</div>
 </div>
 
-<div id="p-live" class="page active">
+<div id="p-today" class="page active">
+<div id="todaySummaryBar" style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.75rem"></div>
+<div style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.75rem;align-items:center">
+<span style="font-size:.72rem;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-right:.2rem">Filter:</span>
+<button class="win-btn active" id="tf-all" onclick="filterToday('all',this)">All</button>
+<button class="win-btn" id="tf-singles" onclick="filterToday('singles',this)">&#9917; Singles</button>
+<button class="win-btn" id="tf-corners" onclick="filterToday('corners',this)">&#9971; Corners</button>
+<button class="win-btn" id="tf-cards" onclick="filterToday('cards',this)">&#127183; Cards</button>
+<span style="margin-left:auto;font-size:.72rem;color:var(--text3)" id="todayLastRefresh"></span>
+</div>
+<div id="todayPicksList" class="bet-list"><div class="loading">Loading today's picks...</div></div>
+</div>
+
+<div id="p-live" class="page">
 <div class="section-hdr"><h2>&#9917; Live Picks Tracker</h2>
 <div class="window-btns">
 <div class="win-btn active" onclick="filterLive('all')">All</div>
@@ -229,21 +243,186 @@ table.dt tr:hover td{background:var(--card2)}
 <script>
 const API=window.location.origin+'/api/pgr';
 const LIVE_API=window.location.origin+'/api/live_tracker';
+const TODAY_API=window.location.origin+'/api/picks/today';
+const ROI_API=window.location.origin+'/api/stats/roi';
 let offset=0,total=0;
 const PS=30;
 let liveFilter='all';
 let liveInterval=null;
+let todayAllPicks=[];
+let todayFilter='all';
 
 function nav(p){
 document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
 document.querySelector(`.nav-item[onclick="nav('${p}')"]`).classList.add('active');
 document.querySelectorAll('.page').forEach(pg=>pg.classList.remove('active'));
 document.getElementById('p-'+p).classList.add('active');
+if(p==='today')loadTodayPicks();
 if(p==='live')loadLivePicks();
 if(p==='clv')loadCLV();
 if(p==='discovery')loadDiscovery();
 if(p==='timing')loadTiming();
 if(p==='report')loadReport();
+}
+
+function filterToday(f,btn){
+todayFilter=f;
+document.querySelectorAll('#p-today .win-btn').forEach(b=>b.classList.remove('active'));
+btn.classList.add('active');
+renderTodayPicks(todayAllPicks);
+}
+
+async function loadTodayPicks(){
+const c=document.getElementById('todayPicksList');
+c.innerHTML='<div class="loading">Loading today\'s picks...</div>';
+try{
+const r=await fetch(TODAY_API);
+const d=await r.json();
+todayAllPicks=d.picks||[];
+
+const sb=document.getElementById('todaySummaryBar');
+const total=d.total||0;
+const won=d.won||0;
+const lost=d.lost||0;
+const upcoming=total-won-lost-(d.void||0);
+const hr=d.hit_rate;
+sb.innerHTML=`
+<div class="stat-pill a"><div class="val">${total}</div><div class="lbl">Today's Picks</div></div>
+<div class="stat-pill"><div class="val" style="color:var(--accent)">${upcoming}</div><div class="lbl">Upcoming</div></div>
+<div class="stat-pill g"><div class="val">${won}</div><div class="lbl">Won</div></div>
+<div class="stat-pill r"><div class="val">${lost}</div><div class="lbl">Lost</div></div>
+${hr!=null?`<div class="stat-pill ${hr>=55?'g':hr>=45?'':'r'}"><div class="val">${hr}%</div><div class="lbl">Hit Rate</div></div>`:''}
+`;
+
+document.getElementById('todayLastRefresh').textContent='Updated '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+renderTodayPicks(todayAllPicks);
+}catch(e){c.innerHTML=`<div class="empty">Error loading picks: ${e.message}</div>`;}
+}
+
+function renderTodayPicks(picks){
+const c=document.getElementById('todayPicksList');
+let filtered=picks;
+if(todayFilter==='corners')filtered=picks.filter(p=>(p.market||'').toLowerCase().includes('corner'));
+else if(todayFilter==='cards')filtered=picks.filter(p=>(p.market||'').toLowerCase().includes('card'));
+else if(todayFilter==='singles')filtered=picks.filter(p=>!((p.market||'').toLowerCase().includes('corner')||(p.market||'').toLowerCase().includes('card')));
+
+if(!filtered.length){
+c.innerHTML='<div class="empty" style="padding:2.5rem;text-align:center"><div style="font-size:2rem;margin-bottom:.5rem">&#127919;</div><div style="color:var(--text2)">No picks for today yet</div><div style="color:var(--text3);font-size:.75rem;margin-top:.3rem">New picks appear here as engines run throughout the day</div></div>';
+return;
+}
+
+const groups={upcoming:[],live:[],won:[],lost:[],void:[]};
+filtered.forEach(p=>{
+const s=p.status||'upcoming';
+if(groups[s])groups[s].push(p);else groups.upcoming.push(p);
+});
+
+let html='';
+if(groups.upcoming.length){html+=`<div style="margin-bottom:.4rem"><span style="color:var(--accent);font-weight:700;font-size:.82rem">&#9202; UPCOMING (${groups.upcoming.length})</span></div>`;html+=groups.upcoming.map(renderTodayCard).join('');}
+if(groups.live&&groups.live.length){html+=`<div style="margin:.75rem 0 .4rem"><span style="color:var(--blue);font-weight:700;font-size:.82rem">&#128308; LIVE (${groups.live.length})</span></div>`;html+=groups.live.map(renderTodayCard).join('');}
+if(groups.won.length){html+=`<div style="margin:.75rem 0 .4rem"><span style="color:var(--green);font-weight:700;font-size:.82rem">&#9989; WON (${groups.won.length})</span></div>`;html+=groups.won.map(renderTodayCard).join('');}
+if(groups.lost.length){html+=`<div style="margin:.75rem 0 .4rem"><span style="color:var(--red);font-weight:700;font-size:.82rem">&#10060; LOST (${groups.lost.length})</span></div>`;html+=groups.lost.map(renderTodayCard).join('');}
+if(groups.void&&groups.void.length){html+=`<div style="margin:.75rem 0 .4rem"><span style="color:var(--text3);font-weight:700;font-size:.82rem">VOID (${groups.void.length})</span></div>`;html+=groups.void.map(renderTodayCard).join('');}
+c.innerHTML=html;
+}
+
+function renderTodayCard(p,i){
+const s=p.status||'upcoming';
+const rowCls=s==='won'?'s-won':s==='lost'?'s-lost':s==='void'?'s-void':'s-upcoming';
+const badge=s==='won'?'<span class="badge badge-won">WON &#10003;</span>':s==='lost'?'<span class="badge badge-lost">LOST &#10007;</span>':s==='void'?'<span class="badge" style="background:rgba(148,163,184,.1);color:var(--text3)">VOID</span>':'<span class="badge badge-upcoming">UPCOMING</span>';
+const plStr=p.profit_loss!=null?`<div style="font-size:.75rem;font-weight:700;color:${p.profit_loss>=0?'var(--green)':'var(--red)'">${p.profit_loss>=0?'+':''}${p.profit_loss.toFixed(2)}u</div>`:'';
+const edgeColor=p.edge_pct>0?'var(--green)':'var(--red)';
+const mktLower=(p.market||'').toLowerCase();
+const mktColor=mktLower.includes('card')?'var(--yellow)':mktLower.includes('corner')?'var(--cyan)':'var(--accent)';
+
+let oddsShopHtml='';
+if(p.odds_by_bookmaker){
+try{
+const books=typeof p.odds_by_bookmaker==='string'?JSON.parse(p.odds_by_bookmaker):p.odds_by_bookmaker;
+const entries=Object.entries(books).filter(([,v])=>v&&v>0).sort((a,b)=>b[1]-a[1]).slice(0,4);
+if(entries.length>0){
+oddsShopHtml=`<div style="margin-top:.4rem;padding:.35rem .5rem;background:var(--bg);border-radius:5px;border:1px solid var(--border)">
+<div style="font-size:.62rem;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:.3rem">&#128269; Odds by Book</div>
+<div style="display:flex;flex-wrap:wrap;gap:.25rem">`;
+entries.forEach(([book,odds],idx)=>{
+const isBest=idx===0;
+oddsShopHtml+=`<span style="font-size:.72rem;padding:.15rem .4rem;border-radius:4px;font-weight:${isBest?700:400};background:${isBest?'var(--green-bg)':'rgba(148,163,184,.08)'};color:${isBest?'var(--green)':'var(--text2)'}">${book}: ${odds.toFixed(2)}${isBest?' &#9650;':''}</span>`;
+});
+oddsShopHtml+=`</div></div>`;
+}
+}catch(e){}
+}else if(p.best_odds_value&&p.best_odds_bookmaker){
+oddsShopHtml=`<div style="margin-top:.3rem;font-size:.72rem;color:var(--green)">&#9650; Best: ${p.best_odds_bookmaker} @ ${p.best_odds_value.toFixed(2)}</div>`;
+}
+
+const uid='td-'+p.id;
+return`
+<div class="bet-row ${rowCls}" onclick="document.getElementById('${uid}').classList.toggle('open')" style="cursor:pointer">
+<div class="bet-icon" style="font-size:1.15rem">${p.icon||'⚽'}</div>
+<div class="bet-main">
+<h4>${p.home_team} vs ${p.away_team}</h4>
+<div class="mkt" style="color:${mktColor}">${p.market}: ${p.selection}</div>
+<div class="meta">${p.league||''} | ${p.kickoff_str||p.match_date||''} | ${p.trust_level||''}</div>
+</div>
+<div class="bet-odds"><div class="big">${(p.odds||0).toFixed(2)}</div><div class="fair" style="color:${edgeColor}">Edge ${p.edge_pct>=0?'+':''}${p.edge_pct}%</div></div>
+<div class="bet-edge" style="text-align:center">
+${p.clv_pct!=null?`<div style="font-size:.72rem;color:var(--text3)">CLV ${p.clv_pct>=0?'+':''}${p.clv_pct}%</div>`:''}
+<div style="font-size:.72rem;color:var(--text3)">${Math.round((p.confidence||0)*100)}% conf</div>
+</div>
+<div class="bet-status">${badge}${plStr}</div>
+</div>
+<div class="bet-detail" id="${uid}">
+<div class="detail-grid">
+<div>
+<h5 style="color:var(--text3);font-size:.72rem;text-transform:uppercase;margin-bottom:.4rem">Pick Details</h5>
+<table class="book-table">
+<tr><td style="color:var(--text3)">Market</td><td>${p.market}</td></tr>
+<tr><td style="color:var(--text3)">Selection</td><td style="font-weight:700">${p.selection}</td></tr>
+<tr><td style="color:var(--text3)">Odds</td><td style="font-weight:700">${(p.odds||0).toFixed(2)}</td></tr>
+${p.open_odds?`<tr><td style="color:var(--text3)">Open Odds</td><td>${p.open_odds.toFixed(2)}</td></tr>`:''}
+<tr><td style="color:var(--text3)">Edge</td><td style="color:${edgeColor}">${p.edge_pct>=0?'+':''}${p.edge_pct}%</td></tr>
+<tr><td style="color:var(--text3)">Confidence</td><td>${Math.round((p.confidence||0)*100)}%</td></tr>
+${p.trust_level?`<tr><td style="color:var(--text3)">Trust</td><td>${p.trust_level}</td></tr>`:''}
+${p.clv_pct!=null?`<tr><td style="color:var(--text3)">CLV</td><td style="color:${p.clv_pct>=0?'var(--green)':'var(--red)'">${p.clv_pct>=0?'+':''}${p.clv_pct}%</td></tr>`:''}
+${p.profit_loss!=null?`<tr><td style="color:var(--text3)">P/L</td><td style="color:${p.profit_loss>=0?'var(--green)':'var(--red)'">${p.profit_loss>=0?'+':''}${p.profit_loss.toFixed(2)}u</td></tr>`:''}
+</table>
+</div>
+<div>
+<h5 style="color:var(--text3);font-size:.72rem;text-transform:uppercase;margin-bottom:.4rem">Odds Shopping</h5>
+${oddsShopHtml||'<div style="color:var(--text3);font-size:.75rem">No multi-book data available</div>'}
+</div>
+</div>
+</div>`;
+}
+
+async function loadROIStats(){
+try{
+const r=await fetch(ROI_API);
+const d=await r.json();
+const at=d.all_time||{};
+const mo=d.month||{};
+const wk=d.week||{};
+const td=d.today||{};
+const pill=(val,lbl,forceColor)=>{
+const v=typeof val==='number'?val:0;
+const cls=forceColor||(v>=0?'g':'r');
+const sign=v>=0?'+':'';
+return`<div class="stat-pill ${cls}"><div class="val">${sign}${v.toFixed?v.toFixed(1):v}%</div><div class="lbl">${lbl}</div></div>`;
+};
+const roiBar=document.createElement('div');
+roiBar.style.cssText='display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.75rem;padding:.5rem .75rem;background:var(--card);border:1px solid var(--border);border-radius:8px;align-items:center';
+roiBar.innerHTML=`<span style="font-size:.68rem;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-right:.25rem">ROI</span>`+
+pill(at.roi,'All-Time')+
+pill(mo.roi,'30 Days')+
+pill(wk.roi,'7 Days')+
+pill(td.roi,'Today')+
+`<div class="stat-pill" style="margin-left:.5rem"><div class="val" style="color:var(--accent)">${at.bets||0}</div><div class="lbl">Total Bets</div></div>`;
+const container=document.querySelector('.container');
+const statsBarEl=document.getElementById('statsBar');
+if(statsBarEl&&statsBarEl.parentNode===container){
+container.insertBefore(roiBar,statsBarEl.nextSibling);
+}
+}catch(e){console.error('ROI stats error:',e);}
 }
 
 function filterLive(f){
@@ -617,8 +796,13 @@ rc.innerHTML=`
 }
 
 loadStats();
-loadLivePicks();
-setInterval(()=>{loadStats();if(document.getElementById('p-live').classList.contains('active'))loadLivePicks()},120000);
+loadROIStats();
+loadTodayPicks();
+setInterval(()=>{
+loadStats();
+if(document.getElementById('p-today').classList.contains('active'))loadTodayPicks();
+if(document.getElementById('p-live').classList.contains('active'))loadLivePicks();
+},120000);
 </script>
 </body>
 </html>
