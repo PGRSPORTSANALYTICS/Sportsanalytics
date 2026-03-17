@@ -368,7 +368,7 @@ def fetch_analysis_picks() -> List[dict]:
         FROM football_opportunities
         WHERE status = 'pending'
           AND mode IN ('PROD', 'LEARNING')
-          AND edge_percentage > 0
+          AND (mode = 'PROD' OR edge_percentage >= 3)
           AND odds > 1.0
           AND match_date::date >= CURRENT_DATE
           AND (discord_sent IS NULL OR discord_sent = false)
