@@ -251,6 +251,42 @@ def _build_analysis_line(pick: dict) -> str:
     return "_" + " | ".join(parts) + "_"
 
 
+def _format_odds_shopping(pick: dict) -> str:
+    """Format top bookmaker odds as a compact shopping line for Discord."""
+    odds_by_book = pick.get("odds_by_bookmaker")
+    best_value = pick.get("best_odds_value")
+    best_book = pick.get("best_odds_bookmaker")
+    model_odds = float(pick.get("odds", 0) or 0)
+
+    if not odds_by_book:
+        return ""
+    try:
+        if isinstance(odds_by_book, str):
+            odds_by_book = json.loads(odds_by_book)
+    except Exception:
+        return ""
+    if not isinstance(odds_by_book, dict) or not odds_by_book:
+        return ""
+
+    sorted_books = sorted(
+        [(b, float(o)) for b, o in odds_by_book.items() if o],
+        key=lambda x: x[1], reverse=True
+    )
+    if not sorted_books:
+        return ""
+
+    top3 = sorted_books[:3]
+    parts = [f"**{o:.2f}** {b}" for b, o in top3]
+    line = "🔍 " + " · ".join(parts)
+
+    if best_value and best_book:
+        bv = float(best_value)
+        if bv > model_odds * 1.02:
+            line += f"\n🔝 Best: **{bv:.2f}** @ {best_book}"
+
+    return line
+
+
 def format_analysis_embed(pick: dict) -> dict:
     home = pick.get("home_team", "?")
     away = pick.get("away_team", "?")
@@ -271,6 +307,11 @@ def format_analysis_embed(pick: dict) -> dict:
     lines.append(f"**{home}** vs **{away}**")
     lines.append(f"Market: {display_market}")
     lines.append(f"Odds: {odds:.2f}")
+
+    odds_line = _format_odds_shopping(pick)
+    if odds_line:
+        lines.append(odds_line)
+
     lines.append(f"Edge: +{edge:.1f}%")
     if trust:
         lines.append(f"Trust: {trust}")
@@ -322,7 +363,8 @@ def fetch_analysis_picks() -> List[dict]:
     query = f"""
         SELECT id, league, home_team, away_team, market, selection, odds,
                edge_percentage, match_date, confidence, mode, status,
-               model_prob, calibrated_prob, analysis, discord_sent
+               model_prob, calibrated_prob, analysis, discord_sent,
+               odds_by_bookmaker, best_odds_value, best_odds_bookmaker
         FROM football_opportunities
         WHERE status = 'pending'
           AND mode = 'PROD'
