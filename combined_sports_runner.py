@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 # ============================================================
 ENABLE_VALUE_SINGLES = True          # Core product - AI picks for 1X2, O/U, BTTS, etc.
 ENABLE_COLLEGE_BASKETBALL = True     # ACTIVE - 63.3% hit rate, +$3,446 profit
-ENABLE_PLAYER_PROPS = True           # LEARNING MODE - player props data collection (Feb 2026)
+ENABLE_PLAYER_PROPS = False          # DISABLED - paused until next season evaluation
 
 # ============================================================
 # DAILY STOP-LOSS (Jan 28, 2026)
@@ -708,7 +708,7 @@ def main():
     # Schedule result verification - Every 5 minutes for FAST results
     schedule.every(5).minutes.do(run_results_engine)  # Unified Results Engine
     schedule.every(5).minutes.do(verify_basketball_results)  # Basketball separate
-    schedule.every(30).minutes.do(run_player_props_settlement)  # Player props settlement
+    # schedule.every(30).minutes.do(run_player_props_settlement)  # DISABLED - paused until next season
     schedule.every(30).minutes.do(run_multi_sport_settlement)  # Multi-sport settlement
     
     # Schedule CLV update - Every 5 minutes for closing odds capture
