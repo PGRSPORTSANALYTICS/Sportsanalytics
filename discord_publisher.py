@@ -375,6 +375,7 @@ def fetch_analysis_picks() -> List[dict]:
           AND match_date::date >= CURRENT_DATE
           AND (kickoff_epoch IS NULL OR kickoff_epoch > EXTRACT(EPOCH FROM NOW())::bigint)
           AND (discord_sent IS NULL OR discord_sent = false)
+          AND selection NOT IN ('Home Win', 'Away Win', 'Draw')
           AND ({blocked_clauses})
         ORDER BY match_date ASC, edge_percentage DESC
     """
