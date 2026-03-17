@@ -1,9 +1,8 @@
 [server]
 headless = true
 address = "0.0.0.0"
-port = 5000
+port = 3000
 websocketPingInterval = 30
-websocketPingTimeout = 30
 
 [browser]
 gatherUsageStats = false
