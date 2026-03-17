@@ -370,7 +370,7 @@ def fetch_analysis_picks() -> List[dict]:
         FROM football_opportunities
         WHERE status = 'pending'
           AND mode IN ('PROD', 'LEARNING')
-          AND (mode = 'PROD' OR edge_percentage >= 3)
+          AND (mode = 'PROD' OR edge_percentage >= 5)
           AND odds > 1.0
           AND match_date::date >= CURRENT_DATE
           AND (kickoff_epoch IS NULL OR kickoff_epoch > EXTRACT(EPOCH FROM NOW())::bigint)
@@ -425,6 +425,31 @@ def post_to_discord(webhook_url: str, payload: dict) -> bool:
         return False
 
 
+def _best_pick_per_match(picks: List[dict]) -> List[dict]:
+    """Keep only the highest-EV pick per match. PROD picks always beat LEARNING picks."""
+    seen: Dict[str, dict] = {}
+    for pick in picks:
+        key = (
+            (pick.get("home_team") or "").lower().strip(),
+            (pick.get("away_team") or "").lower().strip(),
+            pick.get("match_date", ""),
+        )
+        ev = float(pick.get("edge_percentage") or 0)
+        mode = (pick.get("mode") or "").upper()
+        existing = seen.get(key)
+        if not existing:
+            seen[key] = pick
+        else:
+            existing_mode = (existing.get("mode") or "").upper()
+            existing_ev = float(existing.get("edge_percentage") or 0)
+            # PROD always beats LEARNING; within same mode, higher EV wins
+            if mode == "PROD" and existing_mode != "PROD":
+                seen[key] = pick
+            elif mode == existing_mode and ev > existing_ev:
+                seen[key] = pick
+    return list(seen.values())
+
+
 def run_publish_cycle():
     logger.info("--- Analysis publish cycle start ---")
 
@@ -433,7 +458,18 @@ def run_publish_cycle():
         logger.info("No new analysis data to publish")
         return 0
 
-    logger.info(f"Found {len(picks)} analysis opportunities to publish")
+    logger.info(f"Found {len(picks)} analysis opportunities before match-dedup")
+
+    # One best pick per match (highest EV, PROD > LEARNING)
+    all_picks = picks
+    picks = _best_pick_per_match(all_picks)
+    logger.info(f"After match-dedup: {len(picks)} picks to publish")
+
+    # Mark non-winners as discord_sent so they don't repeat next cycle
+    winner_ids = {p["id"] for p in picks}
+    for skipped in all_picks:
+        if skipped["id"] not in winner_ids:
+            mark_discord_sent(skipped["id"])
 
     leagues_found = sorted(set(p.get("league", "?") for p in picks))
     modes = {}
