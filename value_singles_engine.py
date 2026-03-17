@@ -568,6 +568,7 @@ class ValueSinglesEngine:
 
             # 4) Evaluate each market
             for market_key, p_model in probs.items():
+                bookmaker_data = {}  # Reset per market to avoid stale data leaking between markets
                 odds = odds_dict.get(market_key)
                 if odds is None:
                     continue
@@ -616,6 +617,29 @@ class ValueSinglesEngine:
                     # Fallback: positive EV but below PROD threshold → save as LEARNING pick
                     # Covers all leagues (MLS, J-League, K-League, Allsvenskan, etc.) and all markets
                     if ev > 0.0:
+                        # Collect correct bookmaker odds for this specific market before saving
+                        if hasattr(self.champion, 'collect_bookmaker_odds'):
+                            _api_mkt = 'h2h' if market_key in ('HOME_WIN', 'AWAY_WIN', 'DRAW') else \
+                                       'totals' if ('OVER' in market_key or 'UNDER' in market_key) else \
+                                       'btts' if 'BTTS' in market_key else None
+                            _pt = None
+                            if _api_mkt == 'totals':
+                                _parts = market_key.split('_')
+                                try: _pt = float(f"{_parts[-2]}.{_parts[-1]}")
+                                except: _pt = 2.5
+                            _sel_txt = {
+                                "FT_OVER_2_5": "Over 2.5 Goals", "FT_UNDER_2_5": "Under 2.5 Goals",
+                                "FT_OVER_1_5": "Over 1.5 Goals", "FT_UNDER_1_5": "Under 1.5 Goals",
+                                "FT_OVER_3_5": "Over 3.5 Goals", "HOME_WIN": "Home Win",
+                                "AWAY_WIN": "Away Win", "DRAW": "Draw",
+                                "BTTS_YES": "BTTS Yes", "BTTS_NO": "BTTS No",
+                            }.get(market_key, market_key.replace("_", " ").title())
+                            if _api_mkt:
+                                try:
+                                    bookmaker_data = self.champion.collect_bookmaker_odds(
+                                        match, _sel_txt, _api_mkt, _pt)
+                                except Exception:
+                                    bookmaker_data = {}
                         _sel = {
                             "FT_OVER_2_5": "Over 2.5 Goals", "FT_UNDER_2_5": "Under 2.5 Goals",
                             "FT_OVER_1_5": "Over 1.5 Goals", "FT_UNDER_1_5": "Under 1.5 Goals",
