@@ -369,8 +369,8 @@ def fetch_analysis_picks() -> List[dict]:
                kickoff_epoch
         FROM football_opportunities
         WHERE status = 'pending'
-          AND mode IN ('PROD', 'LEARNING')
-          AND (mode = 'PROD' OR edge_percentage >= 5)
+          AND mode = 'PROD'
+          AND edge_percentage >= 10
           AND odds > 1.0
           AND match_date::date >= CURRENT_DATE
           AND (kickoff_epoch IS NULL OR kickoff_epoch > EXTRACT(EPOCH FROM NOW())::bigint)
