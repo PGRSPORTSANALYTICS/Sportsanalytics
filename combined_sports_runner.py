@@ -417,39 +417,87 @@ def run_daily_games_reminder():
         logger.error(f"❌ Daily reminder error: {e}")
 
 
-def _recap_marker_path(d=None):
+def _recap_already_sent_today() -> bool:
+    """Check PostgreSQL if daily recap was already sent today (persists across restarts)."""
     import datetime as _dt
-    if d is None:
-        d = _dt.date.today()
-    return f"/tmp/daily_recap_sent_{d.isoformat()}.marker"
+    try:
+        from db_utils import get_db_connection
+        today = _dt.date.today().isoformat()
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT 1 FROM system_flags
+            WHERE flag_key = %s AND flag_date = %s
+            LIMIT 1
+        """, ("daily_recap_sent", today))
+        result = cur.fetchone()
+        cur.close()
+        conn.close()
+        return result is not None
+    except Exception as e:
+        logger.warning(f"⚠️ Could not check recap flag in DB: {e} — falling back to /tmp/")
+        import os as _os
+        import datetime as _dt
+        return _os.path.exists(f"/tmp/daily_recap_sent_{_dt.date.today().isoformat()}.marker")
+
+
+def _mark_recap_sent_today():
+    """Persist in PostgreSQL that daily recap was sent today."""
+    import datetime as _dt
+    try:
+        from db_utils import get_db_connection
+        today = _dt.date.today().isoformat()
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS system_flags (
+                flag_key VARCHAR(100) NOT NULL,
+                flag_date DATE NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW(),
+                PRIMARY KEY (flag_key, flag_date)
+            )
+        """)
+        cur.execute("""
+            INSERT INTO system_flags (flag_key, flag_date)
+            VALUES (%s, %s)
+            ON CONFLICT (flag_key, flag_date) DO NOTHING
+        """, ("daily_recap_sent", today))
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        logger.warning(f"⚠️ Could not write recap flag to DB: {e} — using /tmp/ fallback")
+        import os as _os
+        import datetime as _dt
+        with open(f"/tmp/daily_recap_sent_{_dt.date.today().isoformat()}.marker", "w") as f:
+            f.write("sent")
 
 
 def run_daily_recap():
-    """Send daily recap of all results at 22:30"""
+    """Send daily recap of all results at 23:00 CET (22:00 UTC)."""
+    if _recap_already_sent_today():
+        logger.info("📊 Daily recap already sent today — skipping duplicate.")
+        return
     try:
         from daily_recap import send_daily_discord_recap
-        import os as _os
         logger.info("📊 Running daily Discord recap...")
         send_daily_discord_recap()
-        # Mark as sent so catch-up doesn't double-send
-        with open(_recap_marker_path(), "w") as f:
-            f.write("sent")
+        _mark_recap_sent_today()
     except Exception as e:
         logger.error(f"❌ Daily recap error: {e}")
 
 
 def _catchup_daily_recap():
-    """On engine startup: if it's past 22:30 and recap not yet sent today, send it."""
+    """On engine startup: if it's past 22:00 UTC and recap not yet sent today, send it."""
     import datetime as _dt
-    import os as _os
     now_utc = _dt.datetime.utcnow()
-    # 22:30 CET = 21:30 UTC
-    cutoff = now_utc.replace(hour=21, minute=30, second=0, microsecond=0)
-    if now_utc >= cutoff and not _os.path.exists(_recap_marker_path()):
-        logger.info("📊 Catch-up: engine started after 22:30 — sending missed daily recap...")
+    # 23:00 CET = 22:00 UTC
+    cutoff = now_utc.replace(hour=22, minute=0, second=0, microsecond=0)
+    if now_utc >= cutoff and not _recap_already_sent_today():
+        logger.info("📊 Catch-up: engine started after 23:00 CET — sending missed daily recap...")
         run_daily_recap()
     else:
-        logger.info("📊 Recap catch-up: not needed (before 22:30 or already sent)")
+        logger.info("📊 Recap catch-up: not needed (before 23:00 CET or already sent)")
 
 
 def run_daily_analysis():
@@ -735,8 +783,8 @@ def main():
     
     schedule.every(2).hours.do(run_learning_update)
     
-    schedule.every().day.at("21:30").do(run_daily_recap)
-    schedule.every().sunday.at("21:30").do(run_weekly_recap)
+    schedule.every().day.at("22:00").do(run_daily_recap)      # 23:00 CET
+    schedule.every().sunday.at("22:00").do(run_weekly_recap)  # 23:00 CET
     schedule.every().sunday.at("23:00").do(run_weekly_learning_report)
     schedule.every().day.at("23:00").do(run_daily_categorizer)
     schedule.every().day.at("22:45").do(run_end_of_day_results)  # Results summary after all games
