@@ -270,7 +270,7 @@ class ResultsEngine:
                             self._update_training_data(update_cursor, training_key, result['home_goals'], result['away_goals'])
                         logger.info(f"✅ Settled football #{bet_id}: {outcome.upper()}")
                         if outcome in ['won', 'lost', 'void']:
-                            settled_for_discord.append((bet_data, outcome, result))
+                            settled_for_discord.append((bet_id, bet_data, outcome, result))
                     except Exception as e:
                         logger.warning(f"⚠️ Error updating bet {bet_id}: {e}")
                 
@@ -278,13 +278,13 @@ class ResultsEngine:
                 update_cursor.close()
                 update_conn.close()
                 
-                for bet_data, outcome, result in settled_for_discord:
+                for bet_id, bet_data, outcome, result in settled_for_discord:
                     try:
                         bet_mode = str(bet_data.get('mode', '')).upper()
                         if bet_mode not in ('PROD', 'PRODUCTION'):
                             logger.debug(f"⏭️ Skipping Discord result for {bet_mode or 'UNKNOWN'} mode bet: {bet_data.get('home_team')} vs {bet_data.get('away_team')}")
                             continue
-                        self._send_discord_result(bet_data, outcome, result)
+                        self._send_discord_result(bet_id, bet_data, outcome, result)
                     except Exception as e:
                         logger.warning(f"⚠️ Discord result notification failed: {e}")
             
@@ -990,8 +990,22 @@ class ResultsEngine:
         except Exception as e:
             logger.warning(f"⚠️ Training data update failed for {match_id}: {e}")
     
-    def _send_discord_result(self, bet_data: Dict, outcome: str, result: Dict):
-        """Send individual settled bet result to Discord."""
+    def _send_discord_result(self, bet_id: int, bet_data: Dict, outcome: str, result: Dict):
+        """Send individual settled bet result to Discord — deduped via result_discord_sent flag."""
+        # Check if already notified (prevents duplicates on engine restart)
+        try:
+            check_conn = self._get_db_connection()
+            check_cur = check_conn.cursor()
+            check_cur.execute("SELECT result_discord_sent FROM football_opportunities WHERE id = %s", (bet_id,))
+            row = check_cur.fetchone()
+            check_cur.close()
+            check_conn.close()
+            if row and row[0]:
+                logger.debug(f"⏭️ Result already Discord-notified for bet #{bet_id} — skipping")
+                return
+        except Exception as e:
+            logger.warning(f"⚠️ Could not check result_discord_sent for #{bet_id}: {e}")
+
         market = (bet_data.get('market') or '').upper()
         if market in ['CORNERS', 'CORNER']:
             product_type = 'CORNERS'
@@ -1024,7 +1038,20 @@ class ResultsEngine:
             'league': bet_data.get('league', ''),
         }
         
-        send_result_to_discord(discord_info, product_type)
+        sent = send_result_to_discord(discord_info, product_type)
+        if sent:
+            try:
+                mark_conn = self._get_db_connection()
+                mark_cur = mark_conn.cursor()
+                mark_cur.execute(
+                    "UPDATE football_opportunities SET result_discord_sent = TRUE WHERE id = %s",
+                    (bet_id,)
+                )
+                mark_conn.commit()
+                mark_cur.close()
+                mark_conn.close()
+            except Exception as e:
+                logger.warning(f"⚠️ Could not mark result_discord_sent for #{bet_id}: {e}")
         logger.info(f"📤 Discord result sent: {bet_data.get('home_team')} vs {bet_data.get('away_team')} = {outcome.upper()}")
     
     def _send_discord_update(self):
