@@ -37,7 +37,7 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "streamlit run pgr_dashboard.py --server.port 5000 --server.address 0.0.0.0"
+args = "fuser -k 5000/tcp 2>/dev/null; streamlit run pgr_dashboard.py --server.port 5000 --server.address 0.0.0.0"
 waitForPort = 5000
 
 [[workflows.workflow]]
