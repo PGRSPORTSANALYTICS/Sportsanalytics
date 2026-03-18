@@ -386,12 +386,28 @@ def format_analysis_embed(pick: dict) -> dict:
     else:
         title = f"Value Opportunity — {league}"
 
+    # Show when odds were collected so users know data freshness
+    raw_ts = pick.get("timestamp") or pick.get("open_ts")
+    if raw_ts:
+        try:
+            from datetime import timezone as _tz
+            odds_dt = datetime.fromtimestamp(float(raw_ts), tz=_tz.utc)
+            odds_time_str = odds_dt.strftime("%H:%M UTC")
+        except Exception:
+            odds_time_str = None
+    else:
+        odds_time_str = None
+
+    footer_text = "PGR Sports Analytics | Data Analysis Only — Not Financial Advice"
+    if odds_time_str:
+        footer_text += f" | Odds from {odds_time_str}"
+
     embed = {
         "title": title,
         "description": "\n".join(lines),
         "color": color,
         "footer": {
-            "text": "PGR Sports Analytics | Data Analysis Only — Not Financial Advice"
+            "text": footer_text
         },
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
