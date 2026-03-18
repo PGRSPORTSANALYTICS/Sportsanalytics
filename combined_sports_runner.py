@@ -88,16 +88,16 @@ def run_value_singles():
     """Run Value Singles predictions (core product)"""
     if check_daily_stoploss():
         logger.warning("⏭️ Value Singles SKIPPED - Daily stop-loss active")
-        return
-    
-    try:
-        import real_football_champion
-        logger.info("💰 Starting Value Singles cycle...")
-        real_football_champion.run_single_cycle()
-        logger.info("✅ Value Singles cycle complete")
-    except Exception as e:
-        logger.error(f"❌ Value Singles prediction error: {e}")
-    
+    else:
+        try:
+            import real_football_champion
+            logger.info("💰 Starting Value Singles cycle...")
+            real_football_champion.run_single_cycle()
+            logger.info("✅ Value Singles cycle complete")
+        except Exception as e:
+            logger.error(f"❌ Value Singles prediction error: {e}")
+
+    # Always publish analysis — Discord publisher runs regardless of stop-loss
     run_discord_analysis_publisher()
 
 
@@ -105,18 +105,18 @@ def run_corners():
     """Run Corners predictions (independent cycle with own cap)"""
     if check_daily_stoploss():
         logger.warning("⏭️ Corners SKIPPED - Daily stop-loss active")
-        return
-    
-    try:
-        import real_football_champion
-        logger.info("🔢 Starting Corners cycle (independent)...")
-        real_football_champion.run_corners_cards_cycle()
-        logger.info("✅ Corners cycle complete")
-    except Exception as e:
-        logger.error(f"❌ Corners prediction error: {e}")
-        import traceback
-        traceback.print_exc()
-    
+    else:
+        try:
+            import real_football_champion
+            logger.info("🔢 Starting Corners cycle (independent)...")
+            real_football_champion.run_corners_cards_cycle()
+            logger.info("✅ Corners cycle complete")
+        except Exception as e:
+            logger.error(f"❌ Corners prediction error: {e}")
+            import traceback
+            traceback.print_exc()
+
+    # Always publish analysis — Discord publisher runs regardless of stop-loss
     run_discord_analysis_publisher()
 
 
