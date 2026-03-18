@@ -535,13 +535,14 @@ def run_daily_free_pick():
 
 def run_smart_picks():
     """Generate and post Smart Picks — Daily Top 10 at 10:00"""
+    import traceback
     try:
         from smart_picks_engine import run_smart_picks as smart_picks_cycle
         logger.info("🧠 Running Smart Picks Engine...")
         picks = smart_picks_cycle()
         logger.info(f"🧠 Smart Picks complete: {len(picks) if picks else 0} picks")
     except Exception as e:
-        logger.error(f"❌ Smart Picks error: {e}")
+        logger.error(f"❌ Smart Picks error: {e}\n{traceback.format_exc()}")
 
 
 def run_weekly_recap():

@@ -221,11 +221,11 @@ def _fetch_candidates() -> List[Dict]:
         AND mode = 'PROD'
         AND odds >= 1.75 AND odds <= 2.10
         AND status = 'pending'
-        AND selection NOT ILIKE '%AH%'
-        AND selection NOT ILIKE '%Asian%'
-        AND selection NOT ILIKE '%Under 1.5%'
-        AND selection NOT ILIKE '%Under 2.5%'
-        AND selection NOT ILIKE '%Under 3.5%'
+        AND selection NOT ILIKE '%%AH%%'
+        AND selection NOT ILIKE '%%Asian%%'
+        AND selection NOT ILIKE '%%Under 1.5%%'
+        AND selection NOT ILIKE '%%Under 2.5%%'
+        AND selection NOT ILIKE '%%Under 3.5%%'
         ORDER BY id
     """, (today,), fetch='all')
 
