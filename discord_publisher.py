@@ -172,6 +172,59 @@ def _conflict_group_key(pick: dict) -> Optional[str]:
     return hashlib.md5(raw.encode()).hexdigest()
 
 
+def _db_contradicts_already_sent(pick: dict) -> bool:
+    """DB-based contradiction check — survives engine restarts.
+    Blocks Over/Under same line, BTTS Yes/No, and 1X2 opposites for the same match."""
+    selection = (pick.get("selection") or "").strip()
+    home = pick.get("home_team", "")
+    away = pick.get("away_team", "")
+    match_date = pick.get("match_date", "")
+    pick_id = pick.get("id", -1)
+
+    if not selection or not home or not away:
+        return False
+
+    try:
+        with DatabaseConnection.get_cursor() as cur:
+            cur.execute("""
+                SELECT COUNT(*) FROM football_opportunities
+                WHERE home_team = %s AND away_team = %s AND match_date = %s
+                  AND discord_sent = true
+                  AND id != %s
+                  AND (
+                    (
+                      %s ILIKE '%%Over%%' AND selection ILIKE '%%Under%%'
+                      AND REGEXP_REPLACE(%s, '[^0-9.]', '', 'g') != ''
+                      AND REGEXP_REPLACE(%s, '[^0-9.]', '', 'g') =
+                          REGEXP_REPLACE(selection, '[^0-9.]', '', 'g')
+                    ) OR (
+                      %s ILIKE '%%Under%%' AND selection ILIKE '%%Over%%'
+                      AND REGEXP_REPLACE(%s, '[^0-9.]', '', 'g') != ''
+                      AND REGEXP_REPLACE(%s, '[^0-9.]', '', 'g') =
+                          REGEXP_REPLACE(selection, '[^0-9.]', '', 'g')
+                    )
+                    OR (%s = 'BTTS Yes' AND selection = 'BTTS No')
+                    OR (%s = 'BTTS No'  AND selection = 'BTTS Yes')
+                    OR (
+                      %s IN ('Home Win','Away Win','Draw')
+                      AND selection IN ('Home Win','Away Win','Draw')
+                      AND selection != %s
+                    )
+                  )
+            """, (
+                home, away, match_date, pick_id,
+                selection, selection, selection,
+                selection, selection, selection,
+                selection, selection,
+                selection, selection,
+            ))
+            count = cur.fetchone()[0]
+            return count > 0
+    except Exception as e:
+        logger.error(f"Contradiction DB check error: {e}")
+        return False
+
+
 def route_webhook(league: str) -> str:
     url = LEAGUE_WEBHOOKS.get(league, "")
     if url:
@@ -497,8 +550,19 @@ def run_publish_cycle():
             stats["deduped"] += 1
             market = pick.get("selection") or pick.get("market", "")
             logger.info(
-                f"  CONFLICT BLOCKED: {pick.get('home_team')} vs {pick.get('away_team')} "
+                f"  CONFLICT BLOCKED (cache): {pick.get('home_team')} vs {pick.get('away_team')} "
                 f"— {market} conflicts with already-published pick for this match"
+            )
+            mark_discord_sent(pick["id"])
+            continue
+
+        # DB-based contradiction check — catches conflicts across engine restarts
+        if _db_contradicts_already_sent(pick):
+            stats["deduped"] += 1
+            market = pick.get("selection") or pick.get("market", "")
+            logger.info(
+                f"  CONTRADICTION BLOCKED (DB): {pick.get('home_team')} vs {pick.get('away_team')} "
+                f"— {market} contradicts an already-sent pick for this match"
             )
             mark_discord_sent(pick["id"])
             continue
