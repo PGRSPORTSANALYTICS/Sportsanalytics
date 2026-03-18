@@ -104,7 +104,7 @@ def render_smart_picks_tab():
     today_pending_cnt = int(today_pending[0]) if today_pending else 0
 
     if not picks:
-        st.info("No Smart Picks available for today. The engine runs daily at 10:00 — check back then.")
+        st.info("No Smart Picks available for today. The engine runs daily at 08:00 UTC (09:00 CET) — check back then.")
 
     st.markdown(f"""
     <div style="font-size:0.85rem;color:#9CA3AF;margin-bottom:6px;">Today's Results</div>

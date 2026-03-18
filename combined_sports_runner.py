@@ -625,7 +625,7 @@ def main():
     _now_utc = _dt.datetime.utcnow()
     if _now_utc.hour >= 8:
         def _smart_picks_catchup():
-            time.sleep(15)  # brief delay to let DB settle
+            time.sleep(120)  # wait for Value Singles engine to populate DB first
             try:
                 logger.info("🧠 Smart Picks catchup: running missed 08:00 cycle...")
                 run_smart_picks()
