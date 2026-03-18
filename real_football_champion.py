@@ -588,7 +588,11 @@ class RealFootballChampion:
                     
         except Exception as e:
             print(f"❌ Error fetching from The Odds API: {e}")
-        
+
+        # Enrich all matches with Pinnacle (sharp reference) — separate bookmakers= call
+        if all_matches:
+            self._enrich_matches_with_pinnacle(all_matches, football_sports)
+
         # FALLBACK TO API-FOOTBALL if no odds retrieved
         if not all_matches:
             print("🎯 USING API-FOOTBALL FALLBACK - No odds from The Odds API")
@@ -2087,6 +2091,53 @@ class RealFootballChampion:
         
         return []
     
+    def _enrich_matches_with_pinnacle(self, all_matches: List[Dict], sport_keys: List[str]) -> None:
+        """Fetch Pinnacle odds separately and merge into existing match bookmakers data.
+        Uses event_id for exact matching — zero false merges."""
+        if not self.odds_api_key or not all_matches:
+            return
+
+        event_index = {m['id']: m for m in all_matches if 'id' in m}
+        if not event_index:
+            return
+
+        merged_count = 0
+        for sport_key in sport_keys:
+            try:
+                url = f"{self.odds_base_url}/sports/{sport_key}/odds"
+                params = {
+                    'apiKey': self.odds_api_key,
+                    'bookmakers': 'pinnacle',
+                    'markets': 'h2h,totals,spreads',
+                    'oddsFormat': 'decimal',
+                    'dateFormat': 'iso'
+                }
+                resp = requests.get(url, params=params, timeout=8)
+                if resp.status_code == 200:
+                    for event in resp.json():
+                        event_id = event.get('id')
+                        pinnacle_books = event.get('bookmakers', [])
+                        if not pinnacle_books or not event_id:
+                            continue
+                        if event_id in event_index:
+                            existing = event_index[event_id].setdefault('bookmakers', [])
+                            existing_keys = {b.get('key') for b in existing}
+                            for pb in pinnacle_books:
+                                if pb.get('key') not in existing_keys:
+                                    existing.append(pb)
+                                    merged_count += 1
+                elif resp.status_code == 422:
+                    pass  # Pinnacle not available for this sport — normal
+                elif resp.status_code == 429:
+                    print("⚠️ Odds API quota exhausted during Pinnacle fetch")
+                    break
+            except Exception as e:
+                print(f"⚠️ Pinnacle enrich error ({sport_key}): {e}")
+                continue
+
+        if merged_count:
+            print(f"📌 Pinnacle data merged into {merged_count} market(s)")
+
     def _fetch_bookmaker_odds_for_match(self, home_team: str, away_team: str, sport_key: str = None, market_key: str = 'h2h') -> List[Dict]:
         """
         Fetch bookmaker odds from The Odds API for a specific match.
@@ -2138,7 +2189,32 @@ class RealFootballChampion:
                             
                             if home_match and away_match:
                                 print(f"📊 Found bookmaker odds for {home_team} vs {away_team} via The Odds API")
-                                return event.get('bookmakers', [])
+                                bookmakers = list(event.get('bookmakers', []))
+
+                                # Also fetch Pinnacle separately for this event
+                                try:
+                                    p_resp = requests.get(url, params={
+                                        'apiKey': self.odds_api_key,
+                                        'bookmakers': 'pinnacle',
+                                        'markets': market_param,
+                                        'oddsFormat': 'decimal',
+                                        'dateFormat': 'iso'
+                                    }, timeout=6)
+                                    if p_resp.status_code == 200:
+                                        existing_keys = {b.get('key') for b in bookmakers}
+                                        for p_event in p_resp.json():
+                                            ph = p_event.get('home_team', '')
+                                            pa = p_event.get('away_team', '')
+                                            if (home_team.lower() in ph.lower() or ph.lower() in home_team.lower()) and \
+                                               (away_team.lower() in pa.lower() or pa.lower() in away_team.lower()):
+                                                for pb in p_event.get('bookmakers', []):
+                                                    if pb.get('key') not in existing_keys:
+                                                        bookmakers.append(pb)
+                                                        print(f"📌 Pinnacle merged for {home_team} vs {away_team}")
+                                except Exception:
+                                    pass
+
+                                return bookmakers
                     elif response.status_code == 429:
                         print("⚠️ Odds API quota exhausted during bookmaker fetch")
                         return []
