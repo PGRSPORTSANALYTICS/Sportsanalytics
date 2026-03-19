@@ -486,6 +486,8 @@ class ResultsEngine:
                 self._match_cache[cache_key] = result
                 return result
         
+        api_football_partial = None  # goals known but corners/cards missing
+
         if self.api_football_key:
             result = self._get_api_football_result(home_team, away_team, match_date, match_id)
             if result:
@@ -494,7 +496,7 @@ class ResultsEngine:
                     self._log_verification(metrics, bet_id, market, 'api-football', True, result)
                     self._match_cache[cache_key] = result
                     return result
-                
+
                 if needs_stats:
                     if market == 'corners' and result.get('total_corners') is not None:
                         self._log_verification(metrics, bet_id, market, 'api-football', True, result)
@@ -504,16 +506,59 @@ class ResultsEngine:
                         self._log_verification(metrics, bet_id, market, 'api-football', True, result)
                         self._match_cache[cache_key] = result
                         return result
-                    self._log_verification(metrics, bet_id, market, 'api-football', False, None, 'Stats not available')
+                    # API-Football had goals but no corners/cards — save for possible merge
+                    api_football_partial = result
+                    self._log_verification(metrics, bet_id, market, 'api-football', False, None, 'Stats not available — trying SofaScore')
                 else:
                     self._log_verification(metrics, bet_id, market, 'api-football', True, result)
                     self._match_cache[cache_key] = result
                     return result
-        
+
+        # ── SofaScore fallback for corners / cards ─────────────────────────────
         if needs_stats:
+            try:
+                from sofascore_scraper import SofaScoreScraper
+                ss = SofaScoreScraper()
+                ss_result = ss.get_match_statistics(home_team, away_team, match_date)
+
+                if ss_result:
+                    # Normalise key names: SofaScore uses corners_total, engine uses total_corners
+                    if ss_result.get('corners_total') is not None:
+                        ss_result['total_corners'] = ss_result['corners_total']
+                    if ss_result.get('home_corners') is not None and ss_result.get('away_corners') is not None:
+                        ss_result['total_corners'] = (
+                            ss_result.get('home_corners', 0) + ss_result.get('away_corners', 0)
+                        )
+
+                    # Merge with API-Football's goals if we have a partial result
+                    if api_football_partial:
+                        merged = {**api_football_partial, **{
+                            k: v for k, v in ss_result.items()
+                            if v is not None
+                        }}
+                        merged['source'] = 'api-football+sofascore'
+                    else:
+                        merged = ss_result
+
+                    if market == 'corners' and merged.get('total_corners') is not None:
+                        self._log_verification(metrics, bet_id, market, 'sofascore', True, merged)
+                        self._match_cache[cache_key] = merged
+                        logger.info(f"✅ SofaScore corners fallback: {home_team} vs {away_team} — {merged['total_corners']} corners")
+                        return merged
+
+                    if market == 'cards' and merged.get('total_cards') is not None:
+                        self._log_verification(metrics, bet_id, market, 'sofascore', True, merged)
+                        self._match_cache[cache_key] = merged
+                        return merged
+
+                    self._log_verification(metrics, bet_id, market, 'sofascore', False, None, 'SofaScore had no corners/cards data')
+
+            except Exception as _ss_err:
+                logger.warning(f"⚠️ SofaScore corners fallback error: {_ss_err}")
+
             self._log_verification(metrics, bet_id, market, 'all-sources', False, None, 'No stats data available from any source')
             return None
-        
+
         return None
     
     def _log_verification(self, metrics, bet_id, market, source, success, data, error=None):
