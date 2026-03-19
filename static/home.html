@@ -269,17 +269,17 @@ function fmtDetected(iso) {
 /* ── HeaderStats ────────────────────────────────────────────── */
 function HeaderStats({ stats }) {
   const items = [
-    { label: "ROI", value: stats ? `+${Number(stats.roi || 0).toFixed(1)}%` : "+22.7%" },
-    { label: "Units", value: stats ? `+${Number(stats.units || 0).toFixed(0)}u` : "+829u" },
-    { label: "Bets Tracked", value: stats ? Number(stats.bets || 0).toLocaleString() : "4,258" },
-    { label: "Hit Rate", value: stats ? `${Number(stats.hit_rate || 0).toFixed(1)}%` : "54.5%" },
+    { label: "ROI",          value: stats ? `+${Number(stats.roi || 0).toFixed(1)}%` : "+22.7%", color: "text-green-400" },
+    { label: "Units",        value: stats ? `+${Number(stats.units || 0).toFixed(0)}u` : "+829u",  color: "text-green-400" },
+    { label: "Bets Tracked", value: stats ? Number(stats.bets || 0).toLocaleString() : "4,258",   color: "text-white" },
+    { label: "Hit Rate",     value: stats ? `${Number(stats.hit_rate || 0).toFixed(1)}%` : "54.5%", color: "text-white" },
   ];
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <div className="flex flex-wrap gap-2">
       {items.map((item) => (
-        <div key={item.label} className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
-          <div className="text-sm text-zinc-400">{item.label}</div>
-          <div className="mt-1 text-2xl font-semibold text-white">{item.value}</div>
+        <div key={item.label} className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2">
+          <span className="text-xs text-zinc-500 uppercase tracking-widest whitespace-nowrap">{item.label}</span>
+          <span className={`text-base font-bold ${item.color}`}>{item.value}</span>
         </div>
       ))}
     </div>
@@ -456,12 +456,19 @@ function DashboardPage() {
 
         {/* ── Header ── */}
         <header className="mb-8">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div>
-              <h1 className="text-3xl md:text-4xl font-bold">PGR Sports Analytics</h1>
-              <p className="mt-2 text-zinc-400">We identify value — not just picks.</p>
+          <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-black shrink-0" style={{background:"linear-gradient(135deg,#22c55e,#16a34a)"}}>P</div>
+              <div>
+                <h1 className="text-lg font-bold leading-tight">PGR Sports Analytics</h1>
+                <p className="text-xs text-zinc-500">We identify value — not just picks.</p>
+              </div>
             </div>
-            <div className="flex gap-3 items-center">
+            <div className="flex gap-2 items-center">
+              <div className="flex items-center gap-1.5 text-xs text-zinc-500 mr-1">
+                <span className="live-dot w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
+                Live
+              </div>
               {isMock && (
                 <span className="text-xs text-yellow-400 border border-yellow-400/30 bg-yellow-400/10 px-2 py-1 rounded-full">
                   DEMO
@@ -469,18 +476,16 @@ function DashboardPage() {
               )}
               <button
                 onClick={fetchData}
-                className="rounded-xl border border-zinc-700 px-4 py-2 hover:bg-zinc-900 text-sm"
+                className="rounded-xl border border-zinc-700 px-3 py-1.5 hover:bg-zinc-900 text-xs"
               >
                 ↻ Refresh
               </button>
-              <button className="rounded-xl bg-green-500 px-4 py-2 font-medium text-black hover:bg-green-400 text-sm">
-                Join Discord
+              <button className="rounded-xl bg-green-500 px-3 py-1.5 font-medium text-black hover:bg-green-400 text-xs">
+                Discord
               </button>
             </div>
           </div>
-          <div className="mt-6">
-            <HeaderStats stats={apiStats} />
-          </div>
+          <HeaderStats stats={apiStats} />
         </header>
 
         {/* ── Top Value Picks ── */}
