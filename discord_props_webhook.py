@@ -3,9 +3,10 @@ Discord Props Webhook - Sends Corners, Cards, and Shots picks to Discord
 """
 
 import os
+import json
 import requests
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 from sqlalchemy import create_engine, text
 
@@ -57,18 +58,52 @@ def send_props_picks_to_discord(picks: List[Dict], market_type: str = "PROPS") -
                 color = 0x9b59b6
             
             ev_bullets = "🔥🔥🔥" if ev >= 8 else "🔥🔥" if ev >= 5 else "🔥" if ev >= 3 else ""
-            
+
+            # Build odds shopping line from bookmaker data
+            odds_by_book = pick.get('odds_by_bookmaker')
+            best_odds_val = pick.get('best_odds_value')
+            best_odds_book = pick.get('best_odds_bookmaker')
+            odds_shopping_parts = []
+            if odds_by_book:
+                try:
+                    if isinstance(odds_by_book, str):
+                        odds_by_book = json.loads(odds_by_book)
+                    if isinstance(odds_by_book, dict) and odds_by_book:
+                        sorted_books = sorted(odds_by_book.items(), key=lambda x: float(x[1] or 0), reverse=True)
+                        for book, o in sorted_books[:3]:
+                            if o:
+                                odds_shopping_parts.append(f"**{float(o):.2f}** {book}")
+                except Exception:
+                    pass
+
+            # Build footer with odds timestamp
+            open_ts = pick.get('open_ts')
+            odds_time_str = None
+            if open_ts:
+                try:
+                    odds_dt = datetime.fromtimestamp(float(open_ts), tz=timezone.utc)
+                    odds_time_str = odds_dt.strftime("%H:%M UTC")
+                except Exception:
+                    pass
+            footer_text = f"{league} • {kickoff[:10] if kickoff else 'TBD'}"
+            if odds_time_str:
+                footer_text += f" | Odds from {odds_time_str}"
+
+            fields = [
+                {"name": "📊 Odds", "value": f"`{odds:.2f}`", "inline": True},
+                {"name": "💎 EV", "value": f"`+{ev:.1f}%` {ev_bullets}", "inline": True},
+                {"name": "🎯 Confidence", "value": f"`{confidence:.0f}%`", "inline": True},
+            ]
+            if len(odds_shopping_parts) >= 2:
+                fields.append({"name": "🔍 Best odds", "value": " · ".join(odds_shopping_parts), "inline": False})
+
             embed = {
                 "title": f"{emoji} {market.upper()} | {selection}",
                 "description": f"**{home_team}** vs **{away_team}**",
                 "color": color,
-                "fields": [
-                    {"name": "📊 Odds", "value": f"`{odds:.2f}`", "inline": True},
-                    {"name": "💎 EV", "value": f"`+{ev:.1f}%` {ev_bullets}", "inline": True},
-                    {"name": "🎯 Confidence", "value": f"`{confidence:.0f}%`", "inline": True},
-                ],
-                "footer": {"text": f"{league} • {kickoff[:16] if kickoff else 'TBD'}"},
-                "timestamp": datetime.utcnow().isoformat()
+                "fields": fields,
+                "footer": {"text": footer_text},
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }
             
             embeds.append(embed)
@@ -107,7 +142,8 @@ def send_new_props_picks() -> Dict[str, int]:
         with engine.connect() as conn:
             query = text("""
                 SELECT id, home_team, away_team, match_date, market, selection, 
-                       odds, edge_percentage, confidence, league, trust_level
+                       odds, edge_percentage, confidence, league, trust_level,
+                       open_ts, odds_by_bookmaker, best_odds_value, best_odds_bookmaker
                 FROM football_opportunities 
                 WHERE market IN ('Corners', 'Cards', 'Shots')
                   AND mode = 'PROD'
@@ -138,7 +174,11 @@ def send_new_props_picks() -> Dict[str, int]:
                     'ev': float(row[7]) if row[7] else 0,
                     'confidence': float(row[8]) if row[8] else 0,
                     'league': row[9] or '',
-                    'trust_level': row[10] or ''
+                    'trust_level': row[10] or '',
+                    'open_ts': row[11],
+                    'odds_by_bookmaker': row[12],
+                    'best_odds_value': float(row[13]) if row[13] else None,
+                    'best_odds_bookmaker': row[14] or '',
                 })
                 ids_to_update.append(row[0])
             
