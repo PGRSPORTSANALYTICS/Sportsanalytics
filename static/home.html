@@ -32,16 +32,25 @@
   .opp-row.active { background: rgba(99,102,241,0.08); border-left-color: #6366f1 !important; }
   .feat-btn { transition: border-color .15s, background .15s; }
   .feat-btn:hover { background: rgba(255,255,255,0.04); }
-  .tab-btn { font-size:11px; padding:5px 12px; border:none; border-bottom:2px solid transparent; background:transparent; cursor:pointer; color:#71717a; font-weight:600; transition:color .12s,border-color .12s; white-space:nowrap; }
-  .tab-btn.on { color:#e4e4e7; border-bottom-color:#4ade80; }
-  .tab-btn:hover:not(.on) { color:#a1a1aa; }
+  .dp-tab-btn { border-radius:10px; padding:6px 14px; font-size:13px; font-weight:500; border:none; cursor:pointer; transition:background .12s,color .12s; white-space:nowrap; }
+  .dp-tab-btn.on  { background:#e4e4e7; color:#000; }
+  .dp-tab-btn.off { background:#18181b; color:#a1a1aa; }
+  .dp-tab-btn.off:hover { background:#27272a; }
+  .metric-tile { border-radius:12px; border:1px solid #27272a; background:rgba(0,0,0,0.4); padding:12px; }
+  .metric-tile .mt-lbl { font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:#52525b; margin-bottom:4px; }
+  .metric-tile .mt-val { font-size:18px; font-weight:600; margin-top:2px; }
+  .prog-card { border-radius:12px; border:1px solid #27272a; background:rgba(0,0,0,0.4); padding:12px; }
+  .prog-track { height:10px; border-radius:99px; background:#27272a; overflow:hidden; margin-top:8px; }
+  .prog-fill  { height:100%; border-radius:99px; }
+  .bm-grid-row { display:grid; grid-template-columns:1.4fr 0.8fr 0.9fr 0.8fr; align-items:center; padding:10px 12px; border-bottom:1px solid #18181b; font-size:13px; }
+  .bm-grid-row:last-child { border-bottom:none; }
+  .bm-grid-hdr { display:grid; grid-template-columns:1.4fr 0.8fr 0.9fr 0.8fr; padding:7px 12px; background:#18181b; font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:#52525b; border-radius:10px 10px 0 0; }
+  .form-pill { width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700; }
+  .form-pill.W { background:rgba(34,197,94,.2); color:#4ade80; }
+  .form-pill.D { background:rgba(234,179,8,.15); color:#fbbf24; }
+  .form-pill.L { background:rgba(239,68,68,.15); color:#f87171; }
   .stat-card { background:rgba(0,0,0,0.4); border:1px solid #27272a; border-radius:12px; padding:12px; }
   .stat-lbl { font-size:9px; text-transform:uppercase; letter-spacing:.08em; color:#52525b; margin-bottom:4px; }
-  .bm-row { display:flex; align-items:center; justify-content:space-between; padding:7px 12px; border-bottom:1px solid rgba(255,255,255,0.05); }
-  .bm-row:last-child { border-bottom:none; }
-  .form-w { width:24px;height:24px;border-radius:50%;background:#22c55e;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#000; }
-  .form-d { width:24px;height:24px;border-radius:50%;background:#3f3f46;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#a1a1aa; }
-  .form-l { width:24px;height:24px;border-radius:50%;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#f87171; }
   @media(max-width:1024px){ .right-panel{ display:none !important; } }
 </style>
 </head>
@@ -135,24 +144,54 @@ function EvBadge({ev, large}) {
   );
 }
 
-/* ── FormDots ─────────────────────────────────────────────────── */
-function FormDots({w,d,l}) {
-  const dots = [];
-  for(let i=0;i<(w||0);i++) dots.push("W");
-  for(let i=0;i<(d||0);i++) dots.push("D");
-  for(let i=0;i<(l||0);i++) dots.push("L");
+/* ── Panel helpers ─────────────────────────────────────────────── */
+function MetricTile({label, value, color}) {
+  const c = color || (label==="EV %"?"#4ade80":label==="Model Edge"?"#6ee7b7":label==="Fair Odds"?"#c4b5fd":"#f4f4f5");
   return (
-    <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-      {dots.map((r,i)=>(
-        <div key={i} className={r==="W"?"form-w":r==="D"?"form-d":"form-l"}>{r}</div>
+    <div className="metric-tile">
+      <div className="mt-lbl">{label}</div>
+      <div className="mt-val" style={{color:c}}>{value}</div>
+    </div>
+  );
+}
+
+function ProgressBar({label, value, color}) {
+  const bg = color || "#818cf8";
+  return (
+    <div className="prog-card">
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <span style={{fontSize:13,color:"#d4d4d8"}}>{label}</span>
+        <span style={{fontSize:13,fontWeight:600,color:"#f4f4f5"}}>{value != null ? Math.round(value)+"%" : "—"}</span>
+      </div>
+      <div className="prog-track">
+        <div className="prog-fill" style={{width:`${Math.min(100,value||0)}%`,background:bg}} />
+      </div>
+    </div>
+  );
+}
+
+function FormPills({values}) {
+  if (!values || !values.length) return <span style={{fontSize:12,color:"#52525b"}}>No data</span>;
+  return (
+    <div style={{display:"flex",gap:6}}>
+      {values.map((v,i)=>(
+        <div key={i} className={`form-pill ${v}`}>{v}</div>
       ))}
     </div>
   );
 }
 
+function buildFormArray(wins, draws, losses) {
+  const arr = [];
+  for (let i=0;i<(wins||0);i++) arr.push("W");
+  for (let i=0;i<(draws||0);i++) arr.push("D");
+  for (let i=0;i<(losses||0);i++) arr.push("L");
+  return arr.slice(0,5);
+}
+
 /* ── DetailPanel ───────────────────────────────────────────────── */
 function DetailPanel({pick}) {
-  const [tab, setTab]   = useState("intel");
+  const [tab, setTab]   = useState("intelligence");
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr]   = useState(false);
@@ -171,284 +210,298 @@ function DetailPanel({pick}) {
   },[pick]);
 
   if (!pick) return (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-6 text-zinc-500 text-sm">
+    <div style={{borderRadius:16,border:"1px solid #27272a",background:"#09090b",padding:24,color:"#52525b",fontSize:14,textAlign:"center"}}>
       Select a play to view intelligence
     </div>
   );
 
-  const tone = evTone(pick.ev);
-  const mainPick = data?.picks?.[0] || null;
+  const TABS = [
+    {id:"intelligence",label:"Intelligence"},
+    {id:"form",label:"Form & xG"},
+    {id:"h2h",label:"H2H"},
+    {id:"odds",label:"Odds Board"},
+  ];
 
-  const TABS = [{id:"intel",label:"Intelligence"},{id:"form",label:"Form & xG"},{id:"h2h",label:"H2H"},{id:"odds",label:"Odds Board"}];
+  const mp = data?.picks?.[0] || null;
+
+  const poissonPct    = mp?.model_prob     != null ? mp.model_prob * 100     : null;
+  const calibPct      = mp?.calibrated_prob!= null ? mp.calibrated_prob * 100: null;
+  const mcPct         = mp?.sim_prob       != null ? mp.sim_prob * 100       : null;
+  const disagreePct   = mp?.disagreement   != null ? mp.disagreement * 100   : null;
+  const currentOdds   = pick.odds;
+  const openOdds      = mp?.open_odds      || null;
+  const clvPct        = mp?.clv_pct        || null;
+  const fairOdds      = mp?.fair_odds      ?? pick.fairOdds;
+  const modelEdge     = pick.modelEdge;
+
+  const aiScore = data?.prediction?.score ||
+    (data?.prediction?.home_goals != null
+      ? `${fmt2(data.prediction.home_goals)} – ${fmt2(data.prediction.away_goals)}`
+      : null);
+
+  const oddsBoard = useMemo(()=>{
+    if (!mp?.bookmakers) return [];
+    const entries = Object.entries(mp.bookmakers).sort((a,b)=>b[1]-a[1]);
+    const avg = entries.length ? entries.reduce((s,[,o])=>s+o,0)/entries.length : 0;
+    return entries.map(([bm,odds],i)=>({
+      bookmaker:bm, odds,
+      diff: avg ? ((odds/avg-1)*100) : 0,
+      is_best: i===0,
+    }));
+  },[mp]);
+
+  const marketAvg = oddsBoard.length ? oddsBoard.reduce((s,r)=>s+r.odds,0)/oddsBoard.length : null;
 
   return (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-950 overflow-hidden fadein">
-      {/* Header */}
-      <div className="p-4 border-b border-zinc-800">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-xs tracking-[.25em] text-zinc-500">MATCH INTEL</span>
-          <EvBadge ev={pick.ev} />
-        </div>
-        <div className="text-xl font-semibold leading-snug mt-2">{pick.match}</div>
-        <div className="text-sm text-zinc-400 mt-1">{pick.league} · {pick.bookmaker}</div>
-        {data?.prediction?.score && (
-          <div className="mt-2 inline-flex items-center gap-2 rounded-lg border border-violet-500/20 bg-violet-500/10 px-3 py-1">
-            <span className="text-xs text-violet-400">AI Score</span>
-            <span className="text-sm font-bold text-violet-200">{data.prediction.score}</span>
+    <div style={{borderRadius:16,border:"1px solid #27272a",background:"#09090b",overflow:"hidden"}} className="fadein">
+
+      {/* ── Sticky Header ── */}
+      <div style={{position:"sticky",top:0,zIndex:20,borderBottom:"1px solid #27272a",background:"rgba(9,9,11,0.97)",backdropFilter:"blur(8px)"}}>
+        <div style={{padding:"14px 16px 10px"}}>
+          {/* badges row */}
+          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:10}}>
+            <span style={{
+              borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:600,border:"1px solid",
+              ...(pick.status==="LIVE"
+                ?{borderColor:"rgba(248,113,113,.35)",background:"rgba(239,68,68,.12)",color:"#fca5a5"}
+                :pick.status==="EARLY"
+                ?{borderColor:"rgba(125,211,252,.3)",background:"rgba(14,165,233,.12)",color:"#7dd3fc"}
+                :{borderColor:"#3f3f46",background:"rgba(39,39,42,.6)",color:"#a1a1aa"})
+            }}>{pick.status||"PRE"}</span>
+            {aiScore && (
+              <span style={{borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:600,border:"1px solid rgba(196,181,253,.3)",background:"rgba(139,92,246,.12)",color:"#c4b5fd"}}>
+                AI Score {aiScore}
+              </span>
+            )}
+            <span style={{borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:600,border:"1px solid rgba(74,222,128,.3)",background:"rgba(34,197,94,.1)",color:"#4ade80"}}>
+              +{Number(pick.ev).toFixed(1)}% EV
+            </span>
           </div>
-        )}
+          <div style={{fontSize:20,fontWeight:700,lineHeight:1.25}}>{pick.match}</div>
+          <div style={{fontSize:13,color:"#71717a",marginTop:4}}>{pick.league} · {pick.bookmaker}</div>
+        </div>
+        {/* tab row */}
+        <div style={{display:"flex",gap:6,padding:"0 16px 12px",overflowX:"auto"}}>
+          {TABS.map(t=>(
+            <button key={t.id} className={`dp-tab-btn ${tab===t.id?"on":"off"}`} onClick={()=>setTab(t.id)}>
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Tabs */}
-      <div style={{display:"flex",borderBottom:"1px solid #27272a",overflowX:"auto"}}>
-        {TABS.map(t=>(
-          <button key={t.id} className={`tab-btn${tab===t.id?" on":""}`} onClick={()=>setTab(t.id)}>{t.label}</button>
-        ))}
-      </div>
+      {/* ── Body ── */}
+      <div style={{maxHeight:"calc(100vh - 300px)",overflowY:"auto",padding:"14px",display:"flex",flexDirection:"column",gap:10}}>
+        {busy && <div style={{textAlign:"center",padding:"60px 0",color:"#3f3f46",fontSize:13}}>Loading…</div>}
+        {err  && <div style={{textAlign:"center",padding:"60px 0",color:"#3f3f46",fontSize:13}}>Data unavailable for this match.</div>}
 
-      {/* Body */}
-      <div style={{maxHeight:"calc(100vh - 360px)",overflowY:"auto",padding:"14px"}}>
-        {busy && <div className="text-center text-zinc-600 text-sm py-10">Loading…</div>}
-        {err  && <div className="text-center text-zinc-600 text-sm py-10">Data unavailable for this match.</div>}
-
-        {/* ── INTELLIGENCE ── */}
-        {!busy && tab==="intel" && (
-          <div>
-            <div className="grid grid-cols-2 gap-2 mb-4">
-              {[
-                ["Market",      pick.market],
-                ["Odds",        String(pick.odds)],
-                ["Fair Odds",   fmt2(mainPick?.fair_odds ?? pick.fairOdds)],
-                ["Model Edge",  pick.modelEdge!=null ? `+${Number(pick.modelEdge).toFixed(1)}%` : "—"],
-                ["Confidence",  `${pick.confidence}%`],
-                ["EV",          `+${Number(pick.ev).toFixed(1)}%`],
-              ].map(([l,v])=>(
-                <div key={l} className="stat-card">
-                  <div className="stat-lbl">{l}</div>
-                  <div className="text-base font-semibold">{v}</div>
-                </div>
-              ))}
+        {/* ══ INTELLIGENCE ══ */}
+        {!busy && tab==="intelligence" && (
+          <>
+            {/* 2×3 metric grid */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              <MetricTile label="Market"     value={pick.market} />
+              <MetricTile label="Odds"       value={Number(currentOdds).toFixed(2)} />
+              <MetricTile label="Fair Odds"  value={fairOdds ? fmt2(fairOdds) : "—"} color="#c4b5fd" />
+              <MetricTile label="Model Edge" value={modelEdge!=null?`+${Number(modelEdge).toFixed(1)}%`:"—"} color="#6ee7b7" />
+              <MetricTile label="Confidence" value={`${pick.confidence}%`} />
+              <MetricTile label="EV %"       value={`+${Number(pick.ev).toFixed(1)}%`} color="#4ade80" />
             </div>
 
-            {/* Model probabilities */}
-            {mainPick && (mainPick.model_prob || mainPick.calibrated_prob || mainPick.sim_prob) && (
-              <div className="stat-card mb-4">
-                <div className="stat-lbl mb-3">Model Probabilities</div>
-                {[["Poisson",mainPick.model_prob],["Calibrated",mainPick.calibrated_prob],["Monte Carlo",mainPick.sim_prob]].map(([l,v])=> v ? (
-                  <div key={l} className="flex items-center justify-between mb-2">
-                    <span className="text-xs text-zinc-400">{l}</span>
-                    <div className="flex items-center gap-3">
-                      <div className="w-20 h-1.5 rounded-full bg-zinc-800 overflow-hidden">
-                        <div className="h-full rounded-full bg-indigo-400" style={{width:`${Math.min(100,v*100)}%`}} />
-                      </div>
-                      <span className="text-sm font-medium w-10 text-right">{pct(v)}</span>
-                    </div>
-                  </div>
-                ) : null)}
-                {mainPick.disagreement != null && (
-                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-zinc-800">
-                    <span className="text-xs text-zinc-400">Model Disagreement</span>
-                    <span className={`text-sm font-medium ${mainPick.disagreement>0.15?"text-yellow-300":"text-zinc-400"}`}>{fmt2(mainPick.disagreement)}</span>
+            {/* Model Probabilities */}
+            {(poissonPct!=null||calibPct!=null||mcPct!=null) && (
+              <div style={{borderRadius:14,border:"1px solid #27272a",background:"rgba(0,0,0,.3)",padding:14}}>
+                <div style={{fontSize:13,fontWeight:600,color:"#e4e4e7",marginBottom:10}}>Model Probabilities</div>
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  {poissonPct!=null && <ProgressBar label="Poisson"     value={poissonPct} color="#818cf8" />}
+                  {calibPct!=null   && <ProgressBar label="Calibrated"  value={calibPct}   color="#38bdf8" />}
+                  {mcPct!=null      && <ProgressBar label="Monte Carlo" value={mcPct}       color="#34d399" />}
+                </div>
+                {disagreePct!=null && (
+                  <div style={{marginTop:10,borderRadius:12,border:"1px solid rgba(251,146,60,.2)",background:"rgba(249,115,22,.08)",padding:10}}>
+                    <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:".08em",color:"rgba(254,215,170,.7)"}}>Model Disagreement</div>
+                    <div style={{fontSize:18,fontWeight:600,color:"#fed7aa",marginTop:2}}>{disagreePct.toFixed(1)}%</div>
                   </div>
                 )}
               </div>
             )}
 
             {/* CLV */}
-            {mainPick?.open_odds && (
-              <div className="stat-card mb-4">
-                <div className="stat-lbl mb-3">CLV · Closing Line Value</div>
-                <div className="flex items-center gap-3">
-                  <div>
-                    <div className="text-xs text-zinc-500">Open</div>
-                    <div className="text-base font-bold">{fmt2(mainPick.open_odds)}</div>
+            {(openOdds||clvPct!=null) && (
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                <div className="metric-tile">
+                  <div className="mt-lbl">Open Odds</div>
+                  <div className="mt-val">{openOdds ? fmt2(openOdds) : "—"}</div>
+                </div>
+                <div className="metric-tile">
+                  <div className="mt-lbl">Current Odds</div>
+                  <div className="mt-val">{fmt2(currentOdds)}</div>
+                </div>
+                <div style={{borderRadius:12,border:"1px solid rgba(74,222,128,.2)",background:"rgba(34,197,94,.08)",padding:12}}>
+                  <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:".08em",color:"rgba(187,247,208,.6)"}}>CLV</div>
+                  <div style={{fontSize:18,fontWeight:600,color:clvPct>0?"#4ade80":"#f87171",marginTop:2}}>
+                    {clvPct!=null ? (clvPct>0?"+":"")+clvPct.toFixed(1)+"%" : "Pending"}
                   </div>
-                  <div className="text-zinc-700">→</div>
-                  <div>
-                    <div className="text-xs text-zinc-500">Close</div>
-                    <div className="text-base font-bold">{mainPick.close_odds ? fmt2(mainPick.close_odds) : "Pending"}</div>
-                  </div>
-                  {mainPick.clv_pct != null && (
-                    <span className={`ml-auto rounded-lg border px-2 py-1 text-sm font-bold ${mainPick.clv_pct>0?"bg-green-500/10 text-green-300 border-green-500/20":"bg-red-500/10 text-red-300 border-red-500/20"}`}>
-                      CLV {mainPick.clv_pct>0?"+":""}{fmt1(mainPick.clv_pct)}%
-                    </span>
-                  )}
                 </div>
               </div>
             )}
 
             {/* xG quick view */}
             {data?.xg && (
-              <div className="stat-card">
-                <div className="stat-lbl mb-3">Expected Goals</div>
-                <div className="grid grid-cols-3 gap-3 text-center">
-                  <div><div className="text-xs text-zinc-500 mb-1">Home xG</div><div className="text-lg font-bold text-green-300">{fmt2(data.xg.home_xg)}</div></div>
-                  <div><div className="text-xs text-zinc-500 mb-1">Total xG</div><div className="text-lg font-bold">{fmt2(data.xg.total_xg)}</div></div>
-                  <div><div className="text-xs text-zinc-500 mb-1">Away xG</div><div className="text-lg font-bold text-red-300">{fmt2(data.xg.away_xg)}</div></div>
-                </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                <MetricTile label="Home xG"  value={fmt2(data.xg.home_xg)}   color="#4ade80" />
+                <MetricTile label="Total xG" value={fmt2(data.xg.total_xg)} />
+                <MetricTile label="Away xG"  value={fmt2(data.xg.away_xg)}   color="#f87171" />
               </div>
             )}
 
-            {/* No data fallback */}
-            {!mainPick && !data?.xg && !err && (
-              <div className="rounded-2xl border border-violet-500/20 bg-violet-500/10 p-4">
-                <div className="text-sm font-semibold text-violet-200">Premium depth</div>
-                <p className="mt-2 text-sm text-violet-300/80">Full models, form, xG, H2H and odds board load here for tracked picks.</p>
+            {!mp && !data?.xg && !err && (
+              <div style={{borderRadius:14,border:"1px solid rgba(139,92,246,.25)",background:"rgba(139,92,246,.08)",padding:14}}>
+                <div style={{fontSize:13,fontWeight:600,color:"#c4b5fd"}}>Premium depth</div>
+                <div style={{fontSize:12,color:"rgba(196,181,253,.7)",marginTop:6}}>Full models, form, xG, H2H and odds board load here for tracked picks.</div>
               </div>
             )}
-          </div>
+          </>
         )}
 
-        {/* ── FORM & xG ── */}
+        {/* ══ FORM & xG ══ */}
         {!busy && tab==="form" && (
-          <div>
-            {data?.prediction && (
-              <div className="stat-card mb-4">
-                <div className="stat-lbl mb-3">AI Predicted Score</div>
-                <div className="flex items-center justify-center gap-4">
-                  <div className="text-center">
-                    <div className="text-xs text-zinc-500 mb-1">{pick.home_team||"Home"}</div>
-                    <div className="text-3xl font-black text-green-300">{fmt2(data.prediction.home_goals)}</div>
-                  </div>
-                  <div className="text-zinc-600 text-lg">—</div>
-                  <div className="text-center">
-                    <div className="text-xs text-zinc-500 mb-1">{pick.away_team||"Away"}</div>
-                    <div className="text-3xl font-black text-red-300">{fmt2(data.prediction.away_goals)}</div>
-                  </div>
-                  {data.prediction.score && (
-                    <div className="ml-4 text-center stat-card">
-                      <div className="stat-lbl">Most Likely</div>
-                      <div className="text-xl font-bold text-violet-300">{data.prediction.score}</div>
-                    </div>
-                  )}
-                </div>
+          <>
+            {aiScore && (
+              <div style={{borderRadius:14,border:"1px solid rgba(196,181,253,.2)",background:"rgba(139,92,246,.08)",padding:14}}>
+                <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:".08em",color:"rgba(196,181,253,.6)"}}>AI Suggested Score</div>
+                <div style={{fontSize:24,fontWeight:700,color:"#c4b5fd",marginTop:4}}>{aiScore}</div>
               </div>
             )}
             {data?.xg && (
-              <div className="stat-card mb-4">
-                <div className="stat-lbl mb-3">Expected Goals (Season avg)</div>
-                <div className="grid grid-cols-3 gap-3 text-center">
-                  <div><div className="text-xs text-zinc-500 mb-1">Home xG</div><div className="text-xl font-bold text-green-300">{fmt2(data.xg.home_xg)}</div></div>
-                  <div><div className="text-xs text-zinc-500 mb-1">Total xG</div><div className="text-xl font-bold">{fmt2(data.xg.total_xg)}</div></div>
-                  <div><div className="text-xs text-zinc-500 mb-1">Away xG</div><div className="text-xl font-bold text-red-300">{fmt2(data.xg.away_xg)}</div></div>
-                </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                <MetricTile label="Home xG" value={fmt2(data.xg.home_xg)} color="#4ade80" />
+                <MetricTile label="Away xG" value={fmt2(data.xg.away_xg)} color="#f87171" />
               </div>
             )}
             {data?.form ? (
-              [["home", pick.home_team||"Home"],["away", pick.away_team||"Away"]].map(([side,label])=>{
+              [["home",pick.home_team||"Home"],["away",pick.away_team||"Away"]].map(([side,label])=>{
                 const f = data.form[side]; if (!f) return null;
+                const pills = buildFormArray(f.wins, f.draws, f.losses);
                 return (
-                  <div key={side} className="stat-card mb-3">
-                    <div className="stat-lbl mb-2">{label} — Last 5</div>
-                    <div className="flex items-center gap-3 flex-wrap mb-3">
-                      <FormDots w={f.wins} d={f.draws} l={f.losses} />
-                    </div>
-                    <div className="grid grid-cols-4 gap-2 text-center">
-                      <div><div className="stat-lbl">PPG</div><div className="text-sm font-bold" style={{color:f.ppg>=2?"#4ade80":f.ppg>=1?"#fbbf24":"#f87171"}}>{fmt2(f.ppg)}</div></div>
-                      <div><div className="stat-lbl">GF</div><div className="text-sm font-bold">{fmt1(f.goals_scored)}</div></div>
-                      <div><div className="stat-lbl">GA</div><div className="text-sm font-bold">{fmt1(f.goals_conceded)}</div></div>
-                      <div><div className="stat-lbl">CS</div><div className="text-sm font-bold">{f.clean_sheets ?? "—"}</div></div>
+                  <div key={side} style={{borderRadius:14,border:"1px solid #27272a",background:"rgba(0,0,0,.3)",padding:14}}>
+                    <div style={{fontSize:13,fontWeight:600,marginBottom:10}}>{label} Form</div>
+                    <FormPills values={pills} />
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8,marginTop:12}}>
+                      <MetricTile label="PPG"          value={fmt2(f.ppg)}           color={f.ppg>=2?"#4ade80":f.ppg>=1?"#fbbf24":"#f87171"} />
+                      <MetricTile label="GF"           value={fmt1(f.goals_scored)} />
+                      <MetricTile label="GA"           value={fmt1(f.goals_conceded)} />
+                      <MetricTile label="Clean Sheets" value={f.clean_sheets ?? "—"} />
                     </div>
                   </div>
                 );
               })
             ) : (
-              <div className="text-center text-zinc-600 text-sm py-8">Form data not available.</div>
+              !err && <div style={{textAlign:"center",color:"#3f3f46",fontSize:13,padding:"40px 0"}}>Form data not available.</div>
             )}
             {data?.standings?.home_pos && (
-              <div className="stat-card">
-                <div className="stat-lbl mb-3">Table Standings</div>
-                <div className="grid grid-cols-2 gap-3">
-                  {[["home",pick.home_team||"Home"],["away",pick.away_team||"Away"]].map(([s,l])=>(
-                    <div key={s}>
-                      <div className="text-xs text-zinc-500 mb-2">{l}</div>
-                      <div className="flex gap-4">
-                        <div><div className="stat-lbl">Pos</div><div className="text-sm font-bold">#{data.standings[`${s}_pos`]}</div></div>
-                        <div><div className="stat-lbl">Pts</div><div className="text-sm font-bold">{data.standings[`${s}_pts`]}</div></div>
-                        <div><div className="stat-lbl">GD</div><div className={`text-sm font-bold ${data.standings[`${s}_gd`]>0?"text-green-400":data.standings[`${s}_gd`]<0?"text-red-400":"text-zinc-400"}`}>{data.standings[`${s}_gd`]>0?"+":""}{data.standings[`${s}_gd`]}</div></div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                {[["home",pick.home_team||"Home"],["away",pick.away_team||"Away"]].map(([s,l])=>(
+                  <div key={s} style={{borderRadius:14,border:"1px solid #27272a",background:"rgba(0,0,0,.3)",padding:14}}>
+                    <div style={{fontSize:13,fontWeight:600,marginBottom:10}}>{l} Table</div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+                      <MetricTile label="Pos" value={"#"+data.standings[`${s}_pos`]} />
+                      <MetricTile label="Pts" value={data.standings[`${s}_pts`]} />
+                      <MetricTile label="GD"  value={(data.standings[`${s}_gd`]>0?"+":"")+data.standings[`${s}_gd`]}
+                        color={data.standings[`${s}_gd`]>0?"#4ade80":data.standings[`${s}_gd`]<0?"#f87171":"#a1a1aa"} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ══ H2H ══ */}
+        {!busy && tab==="h2h" && (
+          <>
+            {data?.h2h ? (
+              <>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                  <div style={{borderRadius:14,border:"1px solid rgba(74,222,128,.2)",background:"rgba(34,197,94,.08)",padding:14,textAlign:"center"}}>
+                    <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:".08em",color:"rgba(187,247,208,.6)"}}>Home Wins</div>
+                    <div style={{fontSize:26,fontWeight:700,color:"#4ade80",marginTop:4}}>
+                      {data.h2h.matches>0?((data.h2h.home_wins/data.h2h.matches)*100).toFixed(0):0}%
+                    </div>
+                  </div>
+                  <div style={{borderRadius:14,border:"1px solid rgba(234,179,8,.2)",background:"rgba(234,179,8,.07)",padding:14,textAlign:"center"}}>
+                    <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:".08em",color:"rgba(253,230,138,.6)"}}>Draws</div>
+                    <div style={{fontSize:26,fontWeight:700,color:"#fbbf24",marginTop:4}}>
+                      {data.h2h.matches>0?((data.h2h.draws/data.h2h.matches)*100).toFixed(0):0}%
+                    </div>
+                  </div>
+                  <div style={{borderRadius:14,border:"1px solid rgba(125,211,252,.2)",background:"rgba(14,165,233,.08)",padding:14,textAlign:"center"}}>
+                    <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:".08em",color:"rgba(186,230,253,.6)"}}>Away Wins</div>
+                    <div style={{fontSize:26,fontWeight:700,color:"#7dd3fc",marginTop:4}}>
+                      {data.h2h.matches>0?((data.h2h.away_wins/data.h2h.matches)*100).toFixed(0):0}%
+                    </div>
+                  </div>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                  <MetricTile label="Total Meetings" value={data.h2h.matches} />
+                  <MetricTile label="Avg Goals"      value={fmt2(data.h2h.avg_goals)}
+                    color={data.h2h.avg_goals>2.5?"#4ade80":"#f4f4f5"} />
+                  <MetricTile label="BTTS Rate"      value={data.h2h.btts_rate!=null?`${data.h2h.btts_rate}%`:"—"}
+                    color={data.h2h.btts_rate>50?"#4ade80":"#f4f4f5"} />
+                  <MetricTile label="Over 2.5 Rate"  value={data.h2h.over25_rate!=null?`${data.h2h.over25_rate}%`:"—"}
+                    color={data.h2h.over25_rate>50?"#4ade80":"#f4f4f5"} />
+                </div>
+              </>
+            ) : (
+              !err && <div style={{textAlign:"center",color:"#3f3f46",fontSize:13,padding:"40px 0"}}>H2H data not available.</div>
+            )}
+          </>
+        )}
+
+        {/* ══ ODDS BOARD ══ */}
+        {!busy && tab==="odds" && (
+          <>
+            {oddsBoard.length > 0 ? (
+              <div style={{borderRadius:14,border:"1px solid #27272a",background:"rgba(0,0,0,.3)",padding:14}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+                  <span style={{fontSize:13,fontWeight:600}}>Odds Board</span>
+                  {fairOdds && (
+                    <span style={{borderRadius:99,padding:"3px 10px",fontSize:11,border:"1px solid rgba(196,181,253,.25)",background:"rgba(139,92,246,.1)",color:"#c4b5fd"}}>
+                      Fair {fmt2(fairOdds)}
+                    </span>
+                  )}
+                </div>
+                <div style={{borderRadius:10,border:"1px solid #27272a",overflow:"hidden"}}>
+                  <div className="bm-grid-hdr">
+                    <div>Bookmaker</div><div>Odds</div><div>vs Avg</div><div>Status</div>
+                  </div>
+                  {oddsBoard.map((row)=>(
+                    <div key={row.bookmaker} className="bm-grid-row"
+                      style={{background:row.is_best?"rgba(34,197,94,.04)":"transparent",
+                        boxShadow:row.is_best?"inset 0 0 0 1px rgba(34,197,94,.12)":"none"}}>
+                      <div style={{fontWeight:row.is_best?600:400,color:row.is_best?"#f4f4f5":"#a1a1aa"}}>{row.bookmaker}</div>
+                      <div style={{fontWeight:600,color:row.is_best?"#4ade80":"#e4e4e7",textShadow:row.is_best?"0 0 10px rgba(74,222,128,.35)":"none"}}>
+                        {Number(row.odds).toFixed(2)}
+                      </div>
+                      <div style={{color:row.diff>0?"#4ade80":"#71717a"}}>
+                        {row.diff>0?"+":""}{row.diff.toFixed(1)}%
+                      </div>
+                      <div>
+                        {row.is_best
+                          ? <span style={{borderRadius:99,padding:"2px 8px",fontSize:11,fontWeight:600,border:"1px solid rgba(74,222,128,.3)",background:"rgba(34,197,94,.1)",color:"#4ade80"}}>BEST</span>
+                          : <span style={{color:"#3f3f46"}}>—</span>}
                       </div>
                     </div>
                   ))}
                 </div>
+                {marketAvg && (
+                  <div style={{marginTop:8,fontSize:12,color:"#52525b"}}>Market average: {marketAvg.toFixed(2)}</div>
+                )}
               </div>
-            )}
-          </div>
-        )}
-
-        {/* ── H2H ── */}
-        {!busy && tab==="h2h" && (
-          <div>
-            {data?.h2h ? (
-              <>
-                <div className="grid grid-cols-3 gap-2 mb-4">
-                  <div className="stat-card text-center">
-                    <div className="stat-lbl">{pick.home_team||"Home"} Wins</div>
-                    <div className="text-2xl font-black text-green-300">{data.h2h.home_wins}</div>
-                    <div className="text-xs text-zinc-600">{data.h2h.matches>0?((data.h2h.home_wins/data.h2h.matches)*100).toFixed(0):0}%</div>
-                  </div>
-                  <div className="stat-card text-center">
-                    <div className="stat-lbl">Draws</div>
-                    <div className="text-2xl font-black text-zinc-400">{data.h2h.draws}</div>
-                    <div className="text-xs text-zinc-600">{data.h2h.matches>0?((data.h2h.draws/data.h2h.matches)*100).toFixed(0):0}%</div>
-                  </div>
-                  <div className="stat-card text-center">
-                    <div className="stat-lbl">{pick.away_team||"Away"} Wins</div>
-                    <div className="text-2xl font-black text-red-300">{data.h2h.away_wins}</div>
-                    <div className="text-xs text-zinc-600">{data.h2h.matches>0?((data.h2h.away_wins/data.h2h.matches)*100).toFixed(0):0}%</div>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="stat-card"><div className="stat-lbl">Total Meetings</div><div className="text-xl font-bold">{data.h2h.matches}</div></div>
-                  <div className="stat-card"><div className="stat-lbl">Avg Goals</div><div className={`text-xl font-bold ${data.h2h.avg_goals>2.5?"text-green-300":"text-zinc-300"}`}>{fmt2(data.h2h.avg_goals)}</div></div>
-                  <div className="stat-card"><div className="stat-lbl">BTTS Rate</div><div className={`text-xl font-bold ${data.h2h.btts_rate>50?"text-green-300":"text-zinc-300"}`}>{data.h2h.btts_rate!=null?`${data.h2h.btts_rate}%`:"—"}</div></div>
-                  <div className="stat-card"><div className="stat-lbl">Over 2.5 Rate</div><div className={`text-xl font-bold ${data.h2h.over25_rate>50?"text-green-300":"text-zinc-300"}`}>{data.h2h.over25_rate!=null?`${data.h2h.over25_rate}%`:"—"}</div></div>
-                </div>
-              </>
             ) : (
-              <div className="text-center text-zinc-600 text-sm py-8">H2H data not available.</div>
+              !err && <div style={{textAlign:"center",color:"#3f3f46",fontSize:13,padding:"40px 0"}}>No odds board data available.</div>
             )}
-          </div>
-        )}
-
-        {/* ── ODDS BOARD ── */}
-        {!busy && tab==="odds" && (
-          <div>
-            {(data?.picks||[pick]).map((pk,pi)=>{
-              const bms = pk.bookmakers || {};
-              const entries = Object.entries(bms).sort((a,b)=>b[1]-a[1]);
-              if (pi>0 && entries.length===0) return null;
-              const best = entries[0];
-              return (
-                <div key={pi} className="mb-5">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-sm font-semibold text-zinc-200">{pk.selection||pick.selection}</span>
-                    <span className="text-xs text-zinc-500 bg-zinc-800/60 border border-zinc-700 rounded px-2 py-0.5">{pk.market||pick.market}</span>
-                    {pk.fair_odds && <span className="ml-auto text-xs text-violet-400">Fair {fmt2(pk.fair_odds)}</span>}
-                  </div>
-                  {entries.length>0 ? (
-                    <div className="stat-card p-0 overflow-hidden">
-                      {entries.map(([bm,odds],bi)=>{
-                        const isBest = bm===best[0];
-                        const vsAvg = pk.avg_odds ? ((odds/pk.avg_odds-1)*100).toFixed(1) : null;
-                        return (
-                          <div key={bm} className="bm-row">
-                            <span className={`text-sm ${isBest?"text-zinc-100 font-semibold":"text-zinc-400"}`}>{bm}</span>
-                            <div className="flex items-center gap-2">
-                              {vsAvg&&parseFloat(vsAvg)>0&&<span className="text-xs text-green-400">+{vsAvg}%</span>}
-                              <span className={`text-sm font-bold ${isBest?"text-green-300":"text-zinc-300"}`} style={{textShadow:isBest?"0 0 8px rgba(74,222,128,0.4)":"none"}}>{Number(odds).toFixed(2)}</span>
-                              {isBest&&<span className="text-[9px] bg-green-500/10 text-green-400 border border-green-500/20 rounded px-1">BEST</span>}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="text-sm text-zinc-600 py-2">No bookmaker data available.</div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+          </>
         )}
       </div>
     </div>
