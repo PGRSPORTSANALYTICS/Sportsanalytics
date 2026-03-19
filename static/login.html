@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PGR Analytics — Login</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: #0b0e14;
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+    color: #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100%;
+  }
+
+  .card {
+    width: 100%;
+    max-width: 400px;
+    padding: 40px 36px;
+    background: #0f1219;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px;
+    text-align: center;
+  }
+
+  .logo {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    font-weight: 900;
+    color: #fff;
+    margin: 0 auto 20px;
+  }
+
+  h1 {
+    font-size: 20px;
+    font-weight: 700;
+    color: #f1f5f9;
+    margin-bottom: 8px;
+    letter-spacing: -0.02em;
+  }
+
+  p {
+    font-size: 13px;
+    color: #52525b;
+    line-height: 1.6;
+    margin-bottom: 32px;
+  }
+
+  .discord-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 13px 20px;
+    background: #5865f2;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background .15s, transform .1s;
+  }
+  .discord-btn:hover {
+    background: #4752c4;
+    transform: translateY(-1px);
+  }
+  .discord-btn svg {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+  }
+
+  .divider {
+    margin: 24px 0;
+    border: none;
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .footer-note {
+    font-size: 11px;
+    color: #3f3f46;
+    line-height: 1.5;
+  }
+
+  .kpis {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    margin-bottom: 32px;
+  }
+  .kpi-item { text-align: center; }
+  .kpi-val { font-size: 18px; font-weight: 800; color: #4ade80; }
+  .kpi-lbl { font-size: 10px; color: #52525b; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">P</div>
+  <h1>PGR Sports Analytics</h1>
+  <p>Log in with Discord to access your premium dashboard — value bets, corners, cards and more.</p>
+
+  <div class="kpis">
+    <div class="kpi-item">
+      <div class="kpi-val">+22.7%</div>
+      <div class="kpi-lbl">ROI</div>
+    </div>
+    <div class="kpi-item">
+      <div class="kpi-val">54.5%</div>
+      <div class="kpi-lbl">Hit Rate</div>
+    </div>
+    <div class="kpi-item">
+      <div class="kpi-val">4,258</div>
+      <div class="kpi-lbl">Bets tracked</div>
+    </div>
+  </div>
+
+  <a href="/auth/discord/login" class="discord-btn">
+    <svg viewBox="0 0 71 55" fill="white" xmlns="http://www.w3.org/2000/svg">
+      <path d="M60.1 4.9A58.6 58.6 0 0 0 45.5 0a40.3 40.3 0 0 0-1.8 3.7 54.2 54.2 0 0 0-16.3 0A38.8 38.8 0 0 0 25.5 0 58.5 58.5 0 0 0 10.9 4.9C1.6 18.6-.9 32 .3 45.2a59 59 0 0 0 18 9.1 44 44 0 0 0 3.8-6.2 38.4 38.4 0 0 1-6-2.9l1.5-1.1a42 42 0 0 0 35.8 0l1.5 1.1a38.4 38.4 0 0 1-6 2.9 44 44 0 0 0 3.8 6.2 58.8 58.8 0 0 0 18-9.1C72 29.8 68.2 16.5 60.1 4.9ZM23.7 37c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2 6.5 3.2 6.4 7.2c0 4-2.8 7.2-6.4 7.2Zm23.6 0c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2 6.5 3.2 6.4 7.2c0 4-2.8 7.2-6.4 7.2Z"/>
+    </svg>
+    Continue with Discord
+  </a>
+
+  <hr class="divider">
+  <p class="footer-note">
+    Your Discord account is only used for authentication.<br>
+    We never post on your behalf.
+  </p>
+</div>
+</body>
+</html>

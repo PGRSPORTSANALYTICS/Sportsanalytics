@@ -23,18 +23,27 @@ DATABASE: PostgreSQL via SQLAlchemy (read-only queries)
 import os
 import json
 import logging
+import hmac
+import hashlib
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 
 from pathlib import Path
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
 from db_helper import db_helper
 from auth_discord import router as discord_auth_router
+from auth_premium import (
+    premium_middleware,
+    ensure_users_table,
+    activate_premium,
+    deactivate_by_stripe_customer,
+    activate_by_stripe_customer,
+)
 from api_staking import router as staking_router
 from modules.stryktipset.stryktipset_router import router as stryk_router
 from bets_feed import router as bets_feed_router
@@ -60,14 +69,23 @@ app = FastAPI(
     redoc_url="/api/redoc"
 )
 
-# CORS middleware for frontend access
+# CORS middleware (must be added before custom middleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, restrict to your domain
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+
+# Premium auth middleware — protects /home, /preview, /api/bets, /bets
+app.middleware("http")(premium_middleware)
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Bootstrap DB tables required for auth."""
+    ensure_users_table()
 
 # Include Discord OAuth router
 app.include_router(discord_auth_router)
@@ -2157,6 +2175,103 @@ async def live_tracker_api(market: str = "all"):
 
 
 STATIC_DIR = Path(__file__).parent / "static"
+
+# =============================================================================
+# Stripe Webhook
+# =============================================================================
+
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+
+@app.post("/webhook/stripe", include_in_schema=False)
+async def stripe_webhook(request: Request):
+    """
+    Receive Stripe events and update premium status.
+
+    Supported events:
+      checkout.session.completed        → activate premium (discord_user_id in metadata)
+      customer.subscription.deleted     → deactivate premium
+      invoice.payment_failed            → deactivate premium
+      invoice.payment_succeeded         → re-activate / extend premium
+
+    Your Stripe checkout session must include:
+      metadata: { discord_user_id: "<user's Discord ID>" }
+    """
+    payload = await request.body()
+    sig     = request.headers.get("stripe-signature", "")
+
+    # Verify webhook signature if secret is configured
+    if STRIPE_WEBHOOK_SECRET:
+        try:
+            import stripe as stripe_lib
+            event = stripe_lib.Webhook.construct_event(
+                payload, sig, STRIPE_WEBHOOK_SECRET
+            )
+        except Exception as e:
+            logger.warning(f"Stripe webhook signature invalid: {e}")
+            raise HTTPException(status_code=400, detail="Invalid Stripe signature")
+    else:
+        # No secret configured — parse raw JSON (dev mode)
+        try:
+            event = json.loads(payload)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON payload")
+
+    event_type = event.get("type", "")
+    data_obj   = event.get("data", {}).get("object", {})
+    logger.info(f"Stripe event received: {event_type}")
+
+    try:
+        if event_type == "checkout.session.completed":
+            metadata       = data_obj.get("metadata", {})
+            discord_id     = metadata.get("discord_user_id")
+            customer_id    = data_obj.get("customer")
+            subscription_id = data_obj.get("subscription")
+
+            if discord_id:
+                activate_premium(
+                    discord_id=discord_id,
+                    stripe_customer_id=customer_id,
+                    stripe_subscription_id=subscription_id,
+                )
+                logger.info(f"Premium activated via checkout for discord={discord_id}")
+            else:
+                logger.warning("checkout.session.completed missing discord_user_id in metadata")
+
+        elif event_type in ("customer.subscription.deleted", "invoice.payment_failed"):
+            customer_id = data_obj.get("customer")
+            if customer_id:
+                deactivate_by_stripe_customer(customer_id)
+                logger.info(f"Premium deactivated for stripe_customer={customer_id}")
+
+        elif event_type == "invoice.payment_succeeded":
+            customer_id     = data_obj.get("customer")
+            subscription_id = data_obj.get("subscription")
+            if customer_id:
+                activate_by_stripe_customer(customer_id, subscription_id)
+                logger.info(f"Premium re-activated for stripe_customer={customer_id}")
+
+    except Exception as e:
+        logger.error(f"Stripe webhook handler error: {e}")
+
+    return JSONResponse({"received": True})
+
+
+# =============================================================================
+# Auth pages (public — no premium required)
+# =============================================================================
+
+@app.get("/login", include_in_schema=False)
+async def login_page():
+    return FileResponse(str(STATIC_DIR / "login.html"))
+
+@app.get("/upgrade", include_in_schema=False)
+async def upgrade_page():
+    return FileResponse(str(STATIC_DIR / "upgrade.html"))
+
+
+# =============================================================================
+# Dashboard routes
+# =============================================================================
 
 @app.get("/", include_in_schema=False)
 async def root_dashboard():
