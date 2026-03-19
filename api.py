@@ -42,11 +42,22 @@ from auth_premium import (
     premium_middleware,
     ensure_users_table,
     activate_premium,
+    deactivate_premium,
     deactivate_by_stripe_customer,
     activate_by_stripe_customer,
     is_admin_session,
     get_discord_id,
     is_premium,
+)
+from stripe_service import (
+    ensure_stripe_events_table,
+    is_duplicate_event,
+    extract_discord_id,
+    create_checkout_session,
+    create_customer_portal,
+    resolve_discord_id_from_subscription,
+    grant_discord_role,
+    revoke_discord_role,
 )
 from api_staking import router as staking_router
 from modules.stryktipset.stryktipset_router import router as stryk_router
@@ -88,8 +99,9 @@ app.middleware("http")(premium_middleware)
 
 @app.on_event("startup")
 async def startup_event():
-    """Bootstrap DB tables required for auth."""
+    """Bootstrap DB tables required for auth and payments."""
     ensure_users_table()
+    ensure_stripe_events_table()
 
 # Include Discord OAuth router
 app.include_router(discord_auth_router)
@@ -2354,54 +2366,128 @@ async def live_tracker_api(market: str = "all"):
 STATIC_DIR = Path(__file__).parent / "static"
 
 # =============================================================================
-# Stripe Webhook
+# Stripe — Checkout, Portal, Webhook
 # =============================================================================
 
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 
+
+@app.get("/stripe/checkout", include_in_schema=False)
+async def stripe_checkout_redirect(request: Request):
+    """
+    GET /stripe/checkout  →  redirect straight to Stripe Checkout.
+    Reads discord_id from the session cookie so the user doesn't need to
+    pass anything — just click "Subscribe" on the upgrade page.
+    """
+    discord_id = get_discord_id(request)
+    if not discord_id:
+        return RedirectResponse("/login", status_code=302)
+    try:
+        url = create_checkout_session(discord_id)
+        return RedirectResponse(url, status_code=303)
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/stripe/checkout", include_in_schema=False)
+async def stripe_checkout_json(request: Request):
+    """
+    POST /stripe/checkout  →  return JSON { checkout_url: "..." }.
+    Accepts optional body: { discord_id, plan }.
+    Falls back to reading discord_id from session cookie.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    discord_id = body.get("discord_id") or get_discord_id(request)
+    plan = body.get("plan", "premium")
+
+    if not discord_id:
+        raise HTTPException(status_code=400, detail="discord_id required")
+    try:
+        url = create_checkout_session(discord_id, plan)
+        return JSONResponse({"checkout_url": url})
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/stripe/portal", include_in_schema=False)
+async def stripe_portal(request: Request):
+    """
+    POST /stripe/portal  →  return JSON { portal_url: "..." }.
+    Accepts optional body: { stripe_customer_id }.
+    Falls back to looking up the customer ID from the DB via discord_id.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    customer_id = body.get("stripe_customer_id")
+    if not customer_id:
+        discord_id = get_discord_id(request)
+        if discord_id:
+            row = db_helper.execute(
+                "SELECT stripe_customer_id FROM pgr_users WHERE discord_user_id = %s",
+                (discord_id,), fetch='one'
+            )
+            customer_id = row[0] if row else None
+
+    if not customer_id:
+        raise HTTPException(status_code=400, detail="stripe_customer_id not found")
+    try:
+        url = create_customer_portal(customer_id)
+        return JSONResponse({"portal_url": url})
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/webhook/stripe", include_in_schema=False)
 async def stripe_webhook(request: Request):
     """
-    Receive Stripe events and update premium status.
+    Receive Stripe events and update premium status + Discord role.
 
     Supported events:
-      checkout.session.completed        → activate premium (discord_user_id in metadata)
-      customer.subscription.deleted     → deactivate premium
+      checkout.session.completed        → activate premium + grant Discord role
+      invoice.paid / payment_succeeded  → re-activate / extend premium + grant role
+      customer.subscription.deleted     → deactivate + revoke role
+      customer.subscription.updated     → handle status changes
       invoice.payment_failed            → deactivate premium
-      invoice.payment_succeeded         → re-activate / extend premium
-
-    Your Stripe checkout session must include:
-      metadata: { discord_user_id: "<user's Discord ID>" }
     """
+    import stripe as stripe_lib
+
     payload = await request.body()
     sig     = request.headers.get("stripe-signature", "")
 
-    # Verify webhook signature if secret is configured
     if STRIPE_WEBHOOK_SECRET:
         try:
-            import stripe as stripe_lib
-            event = stripe_lib.Webhook.construct_event(
-                payload, sig, STRIPE_WEBHOOK_SECRET
-            )
+            event = stripe_lib.Webhook.construct_event(payload, sig, STRIPE_WEBHOOK_SECRET)
         except Exception as e:
             logger.warning(f"Stripe webhook signature invalid: {e}")
             raise HTTPException(status_code=400, detail="Invalid Stripe signature")
     else:
-        # No secret configured — parse raw JSON (dev mode)
         try:
             event = json.loads(payload)
         except Exception:
             raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
+    event_id   = event.get("id")
     event_type = event.get("type", "")
     data_obj   = event.get("data", {}).get("object", {})
-    logger.info(f"Stripe event received: {event_type}")
+    logger.info(f"Stripe event received: {event_type} ({event_id})")
+
+    # Idempotency guard
+    if event_id and is_duplicate_event(event_id):
+        logger.info(f"Duplicate Stripe event ignored: {event_id}")
+        return JSONResponse({"received": True, "duplicate": True})
 
     try:
+        # ── 1. Checkout completed ──────────────────────────────────────────
         if event_type == "checkout.session.completed":
-            metadata       = data_obj.get("metadata", {})
-            discord_id     = metadata.get("discord_user_id")
-            customer_id    = data_obj.get("customer")
+            discord_id      = extract_discord_id(data_obj)
+            customer_id     = data_obj.get("customer")
             subscription_id = data_obj.get("subscription")
 
             if discord_id:
@@ -2410,25 +2496,80 @@ async def stripe_webhook(request: Request):
                     stripe_customer_id=customer_id,
                     stripe_subscription_id=subscription_id,
                 )
+                await grant_discord_role(discord_id)
                 logger.info(f"Premium activated via checkout for discord={discord_id}")
             else:
-                logger.warning("checkout.session.completed missing discord_user_id in metadata")
+                logger.warning("checkout.session.completed: no discord_id found in metadata")
 
-        elif event_type in ("customer.subscription.deleted", "invoice.payment_failed"):
-            customer_id = data_obj.get("customer")
-            if customer_id:
-                deactivate_by_stripe_customer(customer_id)
-                logger.info(f"Premium deactivated for stripe_customer={customer_id}")
-
-        elif event_type == "invoice.payment_succeeded":
+        # ── 2. Invoice paid (renewal) ──────────────────────────────────────
+        elif event_type in ("invoice.paid", "invoice.payment_succeeded"):
             customer_id     = data_obj.get("customer")
             subscription_id = data_obj.get("subscription")
-            if customer_id:
+            discord_id      = extract_discord_id(data_obj)
+
+            if not discord_id and subscription_id:
+                discord_id = resolve_discord_id_from_subscription(subscription_id)
+
+            if discord_id:
+                activate_premium(
+                    discord_id=discord_id,
+                    stripe_customer_id=customer_id,
+                    stripe_subscription_id=subscription_id,
+                )
+                await grant_discord_role(discord_id)
+                logger.info(f"Premium renewed for discord={discord_id}")
+            elif customer_id:
                 activate_by_stripe_customer(customer_id, subscription_id)
-                logger.info(f"Premium re-activated for stripe_customer={customer_id}")
+                logger.info(f"Premium renewed for stripe_customer={customer_id}")
+
+        # ── 3. Subscription deleted ────────────────────────────────────────
+        elif event_type == "customer.subscription.deleted":
+            customer_id = data_obj.get("customer")
+            discord_id  = extract_discord_id(data_obj)
+
+            if discord_id:
+                deactivate_premium(discord_id)
+                await revoke_discord_role(discord_id)
+                logger.info(f"Premium revoked for discord={discord_id}")
+            elif customer_id:
+                deactivate_by_stripe_customer(customer_id)
+                logger.info(f"Premium revoked for stripe_customer={customer_id}")
+
+        # ── 4. Subscription updated ────────────────────────────────────────
+        elif event_type == "customer.subscription.updated":
+            status      = data_obj.get("status")
+            customer_id = data_obj.get("customer")
+            discord_id  = extract_discord_id(data_obj)
+            subscription_id = data_obj.get("id")
+
+            if status in ("canceled", "unpaid", "past_due"):
+                if discord_id:
+                    deactivate_premium(discord_id)
+                    await revoke_discord_role(discord_id)
+                elif customer_id:
+                    deactivate_by_stripe_customer(customer_id)
+                logger.info(f"Premium deactivated (status={status}) for discord={discord_id}")
+            elif status == "active" and discord_id:
+                activate_premium(
+                    discord_id=discord_id,
+                    stripe_customer_id=customer_id,
+                    stripe_subscription_id=subscription_id,
+                )
+                await grant_discord_role(discord_id)
+                logger.info(f"Premium re-activated (subscription updated) for discord={discord_id}")
+
+        # ── 5. Payment failed ──────────────────────────────────────────────
+        elif event_type == "invoice.payment_failed":
+            customer_id = data_obj.get("customer")
+            discord_id  = extract_discord_id(data_obj)
+            if discord_id:
+                deactivate_premium(discord_id)
+            elif customer_id:
+                deactivate_by_stripe_customer(customer_id)
+            logger.info(f"Premium deactivated (payment_failed) for discord={discord_id or customer_id}")
 
     except Exception as e:
-        logger.error(f"Stripe webhook handler error: {e}")
+        logger.error(f"Stripe webhook handler error: {e}", exc_info=True)
 
     return JSONResponse({"received": True})
 
@@ -2456,14 +2597,7 @@ async def login_page():
 
 @app.get("/upgrade", include_in_schema=False)
 async def upgrade_page():
-    """
-    Serve upgrade page with Stripe payment link injected from env var.
-    Set STRIPE_PAYMENT_LINK in Railway environment variables.
-    """
-    html = (STATIC_DIR / "upgrade.html").read_text()
-    stripe_link = os.getenv("STRIPE_PAYMENT_LINK", "#upgrade")
-    html = html.replace("{{STRIPE_PAYMENT_LINK}}", stripe_link)
-    return HTMLResponse(html)
+    return FileResponse(str(STATIC_DIR / "upgrade.html"))
 
 
 # =============================================================================
