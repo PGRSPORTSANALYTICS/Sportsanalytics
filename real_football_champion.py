@@ -566,7 +566,7 @@ class RealFootballChampion:
                 params = {
                     'apiKey': self.odds_api_key,
                     'regions': 'uk,eu,us',
-                    'markets': 'h2h,totals,spreads',
+                    'markets': 'h2h,totals,btts,spreads',
                     'oddsFormat': 'decimal',
                     'dateFormat': 'iso'
                 }
@@ -2108,7 +2108,7 @@ class RealFootballChampion:
                 params = {
                     'apiKey': self.odds_api_key,
                     'bookmakers': 'pinnacle',
-                    'markets': 'h2h,totals,spreads',
+                    'markets': 'h2h,totals,btts,spreads',
                     'oddsFormat': 'decimal',
                     'dateFormat': 'iso'
                 }
