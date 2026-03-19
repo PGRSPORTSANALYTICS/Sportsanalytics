@@ -2182,6 +2182,10 @@ async def edge_finder_alias():
 async def value_dashboard():
     return FileResponse(str(STATIC_DIR / "value_dashboard.html"))
 
+@app.get("/home", include_in_schema=False)
+async def home_dashboard():
+    return FileResponse(str(STATIC_DIR / "home.html"))
+
 @app.get("/opportunities", include_in_schema=False)
 async def opportunities_alias():
     return FileResponse(str(STATIC_DIR / "value_dashboard.html"))
