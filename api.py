@@ -714,12 +714,14 @@ async def get_match_scout(match_id: str):
         #       11=model_prob 12=calibrated_prob 13=sim_probability 14=ev_sim
         #       15=trust_level 16=tier 17=disagreement 18=profile_boost_score
         #       19=open_odds 20=close_odds 21=clv_pct 22=analysis
+        #       23=odds_by_bookmaker 24=odds_source 25=best_odds_bookmaker 26=best_odds_value
         opp_rows = db_helper.execute("""
             SELECT match_id, home_team, away_team, league, match_date, kickoff_time,
                    market, selection, odds, edge_percentage, confidence,
                    model_prob, calibrated_prob, sim_probability, ev_sim,
                    trust_level, tier, disagreement, profile_boost_score,
-                   open_odds, close_odds, clv_pct, analysis
+                   open_odds, close_odds, clv_pct, analysis,
+                   odds_by_bookmaker, odds_source, best_odds_bookmaker, best_odds_value
             FROM football_opportunities
             WHERE (match_id = %s OR (home_team || '_' || away_team) = %s
                    OR (home_team || ' vs ' || away_team) = %s)
@@ -736,6 +738,27 @@ async def get_match_scout(match_id: str):
         league     = first[3] or ""
         match_date = str(first[4]) if first[4] else ""
         kickoff    = first[5] or match_date
+
+        def _build_bookmakers(r):
+            """Build bookmakers dict from odds_by_bookmaker column or single-entry fallback."""
+            bk_raw = r[23]
+            if bk_raw and isinstance(bk_raw, dict) and len(bk_raw) > 0:
+                return {k: float(v) for k, v in bk_raw.items() if v}
+            # Fallback: use best_odds_bookmaker if available, else odds_source label
+            odds_val = float(r[8]) if r[8] else None
+            if not odds_val:
+                return {}
+            best_bm   = r[25]  # best_odds_bookmaker
+            best_val  = float(r[26]) if r[26] else None
+            src       = r[24] or ""  # odds_source
+            result = {}
+            if best_bm and best_val:
+                result[best_bm] = best_val
+            # If pick odds differ from best (or no best), add pick's line
+            label = src.replace("_", " ").title() if src and src != "the_odds_api" else "Best Line"
+            if label not in result:
+                result[label] = odds_val
+            return result
 
         # Build picks list
         picks = []
@@ -755,7 +778,7 @@ async def get_match_scout(match_id: str):
                 "calibrated_prob": round(float(r[12]), 3) if r[12] else None,
                 "sim_prob":        round(float(r[13]), 3) if r[13] else None,
                 "ev_sim":          round(float(r[14]), 1) if r[14] else None,
-                "bookmakers":      {},
+                "bookmakers":      _build_bookmakers(r),
                 "trust_level":     r[15],
                 "tier":            r[16],
                 "disagreement":    round(float(r[17]), 2) if r[17] else None,
@@ -794,34 +817,39 @@ async def get_match_scout(match_id: str):
         prediction = None
 
         if td:
-            form_stats = {
-                "home": {
-                    "goals_scored":    round(float(td[0]), 2) if td[0] else None,
-                    "goals_conceded":  round(float(td[1]), 2) if td[1] else None,
-                    "clean_sheets":    td[2],
-                    "ppg":             round(float(td[3]), 2) if td[3] else None,
-                    "wins":            td[4], "draws": td[5], "losses": td[6],
-                },
-                "away": {
-                    "goals_scored":    round(float(td[7]), 2) if td[7] else None,
-                    "goals_conceded":  round(float(td[8]), 2) if td[8] else None,
-                    "clean_sheets":    td[9],
-                    "ppg":             round(float(td[10]), 2) if td[10] else None,
-                    "wins":            td[11], "draws": td[12], "losses": td[13],
+            # Only populate form if at least one form field has real data
+            _form_has_data = any(td[i] is not None for i in [0, 1, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13])
+            if _form_has_data:
+                form_stats = {
+                    "home": {
+                        "goals_scored":    round(float(td[0]), 2) if td[0] else None,
+                        "goals_conceded":  round(float(td[1]), 2) if td[1] else None,
+                        "clean_sheets":    td[2],
+                        "ppg":             round(float(td[3]), 2) if td[3] else None,
+                        "wins":            td[4], "draws": td[5], "losses": td[6],
+                    },
+                    "away": {
+                        "goals_scored":    round(float(td[7]), 2) if td[7] else None,
+                        "goals_conceded":  round(float(td[8]), 2) if td[8] else None,
+                        "clean_sheets":    td[9],
+                        "ppg":             round(float(td[10]), 2) if td[10] else None,
+                        "wins":            td[11], "draws": td[12], "losses": td[13],
+                    }
                 }
-            }
             xg_stats = {
                 "home_xg":  round(float(td[14]), 2) if td[14] else None,
                 "away_xg":  round(float(td[15]), 2) if td[15] else None,
                 "total_xg": round(float(td[16]), 2) if td[16] else None,
             }
-            h2h_stats = {
-                "matches":      td[17],
-                "home_wins":    td[18], "away_wins": td[19], "draws": td[20],
-                "avg_goals":    round(float(td[21]), 2) if td[21] else None,
-                "btts_rate":    round(float(td[22]) * 100, 1) if td[22] else None,
-                "over25_rate":  round(float(td[23]) * 100, 1) if td[23] else None,
-            }
+            # Only populate h2h if there's actual historical data
+            if td[17]:  # h2h_matches_count must be non-null and > 0
+                h2h_stats = {
+                    "matches":      td[17],
+                    "home_wins":    td[18], "away_wins": td[19], "draws": td[20],
+                    "avg_goals":    round(float(td[21]), 2) if td[21] else None,
+                    "btts_rate":    round(float(td[22]) * 100, 1) if td[22] else None,
+                    "over25_rate":  round(float(td[23]) * 100, 1) if td[23] else None,
+                }
             standings = {
                 "home_pos":  td[24], "away_pos":  td[25],
                 "home_pts":  td[26], "away_pts":  td[27],

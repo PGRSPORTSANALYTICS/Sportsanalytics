@@ -237,7 +237,21 @@ function DetailPanel({pick}) {
     {id:"odds",label:"Odds Board"},
   ];
 
-  const mp = data?.picks?.[0] || null;
+  // Match the tapped pick to the correct API pick (by odds, then by selection, then first)
+  const mp = useMemo(()=>{
+    if (!data?.picks?.length) return null;
+    // Try match by odds first (most precise)
+    let found = data.picks.find(p => p.odds != null && Math.abs(p.odds - pick.odds) < 0.005);
+    if (!found) {
+      // Try match by selection string (API selection may equal card market or selection)
+      found = data.picks.find(p =>
+        p.selection === pick.selection ||
+        p.selection === pick.market ||
+        p.market === pick.market
+      );
+    }
+    return found || data.picks[0];
+  },[data, pick]);
 
   const poissonPct    = mp?.model_prob     != null ? mp.model_prob * 100     : null;
   const calibPct      = mp?.calibrated_prob!= null ? mp.calibrated_prob * 100: null;
@@ -436,7 +450,10 @@ function DetailPanel({pick}) {
                 );
               })
             ) : (
-              !err && <div style={{textAlign:"center",color:"#3f3f46",fontSize:13,padding:"40px 0"}}>Form data not available.</div>
+              <div style={{textAlign:"center",padding:"24px 16px"}}>
+                <div style={{fontSize:13,color:"#52525b",marginBottom:6}}>Form stats not yet collected</div>
+                <div style={{fontSize:12,color:"#3f3f46"}}>Team form is built up over the season as matches are tracked</div>
+              </div>
             )}
             {data?.standings?.home_pos && (
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
@@ -492,7 +509,10 @@ function DetailPanel({pick}) {
                 </div>
               </>
             ) : (
-              !err && <div style={{textAlign:"center",color:"#3f3f46",fontSize:13,padding:"40px 0"}}>H2H data not available.</div>
+              <div style={{textAlign:"center",padding:"40px 16px"}}>
+                <div style={{fontSize:13,color:"#52525b",marginBottom:6}}>No historical H2H data</div>
+                <div style={{fontSize:12,color:"#3f3f46"}}>Head-to-head records are collected as results come in</div>
+              </div>
             )}
           </>
         )}
