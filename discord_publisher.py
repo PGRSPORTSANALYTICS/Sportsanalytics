@@ -435,7 +435,7 @@ def fetch_analysis_picks() -> List[dict]:
                edge_percentage, match_date, confidence, mode, status,
                model_prob, calibrated_prob, analysis, discord_sent,
                odds_by_bookmaker, best_odds_value, best_odds_bookmaker,
-               kickoff_epoch
+               kickoff_epoch, open_ts
         FROM football_opportunities
         WHERE status = 'pending'
           AND mode = 'PROD'
