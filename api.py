@@ -684,6 +684,178 @@ async def get_bookmaker_odds(match_id: str):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@app.get("/api/match-scout/{match_id}", tags=["Matches"])
+async def get_match_scout(match_id: str):
+    """
+    Full bettor intelligence for a single match:
+    all markets, bookmaker odds, model probs, H2H, form, xG, standings, CLV, predicted score.
+    """
+    try:
+        # ── 1. All opportunities for this match ──────────────────
+        opp_rows = db_helper.execute("""
+            SELECT match_id, home_team, away_team, league, match_date, kickoff_time,
+                   market, selection, odds, edge_percentage, confidence,
+                   model_prob, calibrated_prob, sim_probability, ev_sim,
+                   odds_by_bookmaker, best_odds_value, best_odds_bookmaker,
+                   avg_odds, fair_odds, trust_level, tier, disagreement,
+                   profile_boost_score, hidden_value_score,
+                   open_odds, close_odds, clv_pct, clv_status,
+                   analysis, fixture_id, kickoff_epoch
+            FROM football_opportunities
+            WHERE (match_id = %s OR (home_team || '_' || away_team) = %s)
+              AND mode != 'TEST'
+            ORDER BY timestamp DESC
+        """, (match_id, match_id), fetch='all') or []
+
+        if not opp_rows:
+            raise HTTPException(status_code=404, detail={"error": "match_not_found"})
+
+        first = opp_rows[0]
+        home_team  = first[1]
+        away_team  = first[2]
+        league     = first[3] or ""
+        match_date = str(first[4]) if first[4] else ""
+        kickoff    = first[5] or match_date
+        fixture_id = first[30]
+        kickoff_epoch = first[31]
+
+        # Build picks list
+        picks = []
+        seen_sel = set()
+        for r in opp_rows:
+            key = f"{r[6]}|{r[7]}"
+            if key in seen_sel:
+                continue
+            seen_sel.add(key)
+            bm_odds = {}
+            try:
+                raw = r[15]
+                if isinstance(raw, str):
+                    import json as _json
+                    bm_odds = _json.loads(raw) if raw else {}
+                elif isinstance(raw, dict):
+                    bm_odds = raw
+            except:
+                pass
+            picks.append({
+                "market":          r[6],
+                "selection":       r[7],
+                "odds":            round(float(r[8]), 2) if r[8] else None,
+                "ev_pct":          round(float(r[9]), 1) if r[9] else None,
+                "confidence":      r[10],
+                "model_prob":      round(float(r[11]), 3) if r[11] else None,
+                "calibrated_prob": round(float(r[12]), 3) if r[12] else None,
+                "sim_prob":        round(float(r[13]), 3) if r[13] else None,
+                "ev_sim":          round(float(r[14]), 1) if r[14] else None,
+                "bookmakers":      bm_odds,
+                "best_odds":       round(float(r[16]), 2) if r[16] else None,
+                "best_book":       r[17],
+                "avg_odds":        round(float(r[18]), 2) if r[18] else None,
+                "fair_odds":       round(float(r[19]), 2) if r[19] else None,
+                "trust_level":     r[20],
+                "tier":            r[21],
+                "disagreement":    round(float(r[22]), 2) if r[22] else None,
+                "boost_score":     round(float(r[23]), 2) if r[23] else None,
+                "hidden_value":    round(float(r[24]), 2) if r[24] else None,
+                "open_odds":       round(float(r[25]), 2) if r[25] else None,
+                "close_odds":      round(float(r[26]), 2) if r[26] else None,
+                "clv_pct":         round(float(r[27]), 1) if r[27] else None,
+                "clv_status":      r[28],
+                "analysis_raw":    r[29],
+            })
+
+        # ── 2. Training data for this match ──────────────────────
+        td = db_helper.execute("""
+            SELECT home_form_goals_scored, home_form_goals_conceded,
+                   home_form_clean_sheets, home_form_ppg,
+                   home_form_wins, home_form_draws, home_form_losses,
+                   away_form_goals_scored, away_form_goals_conceded,
+                   away_form_clean_sheets, away_form_ppg,
+                   away_form_wins, away_form_draws, away_form_losses,
+                   home_xg, away_xg, total_xg,
+                   h2h_matches_count, h2h_home_wins, h2h_away_wins, h2h_draws,
+                   h2h_avg_goals, h2h_btts_rate, h2h_over25_rate,
+                   home_position, away_position, home_points, away_points,
+                   home_goal_diff, away_goal_diff,
+                   predicted_home_goals, predicted_away_goals, predicted_score,
+                   model_probability
+            FROM training_data
+            WHERE home_team = %s AND away_team = %s AND match_date = %s
+            ORDER BY created_at DESC
+            LIMIT 1
+        """, (home_team, away_team, match_date), fetch='one')
+
+        form_stats = None
+        h2h_stats  = None
+        standings  = None
+        xg_stats   = None
+        prediction = None
+
+        if td:
+            form_stats = {
+                "home": {
+                    "goals_scored":    round(float(td[0]), 2) if td[0] else None,
+                    "goals_conceded":  round(float(td[1]), 2) if td[1] else None,
+                    "clean_sheets":    td[2],
+                    "ppg":             round(float(td[3]), 2) if td[3] else None,
+                    "wins":            td[4], "draws": td[5], "losses": td[6],
+                },
+                "away": {
+                    "goals_scored":    round(float(td[7]), 2) if td[7] else None,
+                    "goals_conceded":  round(float(td[8]), 2) if td[8] else None,
+                    "clean_sheets":    td[9],
+                    "ppg":             round(float(td[10]), 2) if td[10] else None,
+                    "wins":            td[11], "draws": td[12], "losses": td[13],
+                }
+            }
+            xg_stats = {
+                "home_xg":  round(float(td[14]), 2) if td[14] else None,
+                "away_xg":  round(float(td[15]), 2) if td[15] else None,
+                "total_xg": round(float(td[16]), 2) if td[16] else None,
+            }
+            h2h_stats = {
+                "matches":      td[17],
+                "home_wins":    td[18], "away_wins": td[19], "draws": td[20],
+                "avg_goals":    round(float(td[21]), 2) if td[21] else None,
+                "btts_rate":    round(float(td[22]) * 100, 1) if td[22] else None,
+                "over25_rate":  round(float(td[23]) * 100, 1) if td[23] else None,
+            }
+            standings = {
+                "home_pos":  td[24], "away_pos":  td[25],
+                "home_pts":  td[26], "away_pts":  td[27],
+                "home_gd":   td[28], "away_gd":   td[29],
+            }
+            prediction = {
+                "home_goals": round(float(td[30]), 2) if td[30] else None,
+                "away_goals": round(float(td[31]), 2) if td[31] else None,
+                "score":      td[32],
+                "model_prob": round(float(td[33]), 3) if td[33] else None,
+            }
+
+        return {
+            "match_id":    match_id,
+            "home_team":   home_team,
+            "away_team":   away_team,
+            "league":      league,
+            "match_date":  match_date,
+            "kickoff":     kickoff,
+            "kickoff_epoch": kickoff_epoch,
+            "fixture_id":  fixture_id,
+            "picks":       picks,
+            "form":        form_stats,
+            "h2h":         h2h_stats,
+            "xg":          xg_stats,
+            "standings":   standings,
+            "prediction":  prediction,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in match_scout {match_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
 @app.get("/api/best-odds/today", tags=["Odds"])
 async def get_today_best_odds():
     """

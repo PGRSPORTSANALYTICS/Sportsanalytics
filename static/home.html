@@ -16,20 +16,17 @@
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 3px; }
 
-  /* ── 4-tier EV row colours ───────────────────────────── */
   .row-neon { border-left: 2px solid #22c55e !important; background: linear-gradient(90deg,rgba(34,197,94,0.11) 0%,transparent 55%); }
   .row-high { border-left: 2px solid #16a34a !important; background: linear-gradient(90deg,rgba(34,197,94,0.06) 0%,transparent 55%); }
   .row-med  { border-left: 2px solid #eab308 !important; background: linear-gradient(90deg,rgba(234,179,8,0.05) 0%,transparent 55%); }
   .row-low  { border-left: 2px solid transparent; }
 
-  /* ── 4-tier EV badge colours ─────────────────────────── */
   .ev-neon { background: rgba(34,197,94,0.20); color: #86efac; border: 1px solid rgba(34,197,94,0.55); box-shadow: 0 0 10px rgba(34,197,94,0.40); }
   .ev-high { background: rgba(34,197,94,0.12); color: #4ade80; border: 1px solid rgba(34,197,94,0.30); }
   .ev-med  { background: rgba(234,179,8,0.11); color: #fbbf24; border: 1px solid rgba(234,179,8,0.25); }
   .ev-low  { background: rgba(255,255,255,0.04); color: #52525b; border: 1px solid rgba(255,255,255,0.07); }
 
-  /* ── Locked card ──────────────────────────────────────── */
-  .row-locked { border-left: 2px solid #6366f1 !important; background: linear-gradient(90deg,rgba(99,102,241,0.07) 0%,transparent 55%); filter: blur(0px); }
+  .row-locked { border-left: 2px solid #6366f1 !important; background: linear-gradient(90deg,rgba(99,102,241,0.07) 0%,transparent 55%); }
   .locked-blur td { filter: blur(3.5px); user-select: none; pointer-events: none; }
 
   .sth { position: sticky; top: 0; z-index: 20; background: #0f1219; }
@@ -38,10 +35,14 @@
   @keyframes fadein  { from{opacity:0;transform:translateY(-5px)} to{opacity:1;transform:none} }
   @keyframes glide   { 0%{transform:translateX(-100%)} 100%{transform:translateX(400%)} }
   @keyframes scanpop { 0%{opacity:0;transform:scale(.9)} 15%{opacity:1;transform:scale(1)} 85%{opacity:1} 100%{opacity:0} }
+  @keyframes slideUp { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:none} }
+  @keyframes drawerIn { from{transform:translateX(100%)} to{transform:translateX(0)} }
 
   .pulse  { animation: pulse 2s infinite; }
   .fadein { animation: fadein .3s ease; }
   .scan-pop { animation: scanpop 3.5s ease forwards; }
+  .slide-up { animation: slideUp .22s ease; }
+  .drawer-in { animation: drawerIn .25s ease; }
 
   input[type=range] { -webkit-appearance:none; appearance:none; background:transparent; cursor:pointer; width:80px; }
   input[type=range]::-webkit-slider-runnable-track { background:#27272a; border-radius:4px; height:3px; }
@@ -51,7 +52,7 @@
     background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%2352525b' viewBox='0 0 20 20'%3E%3Cpath d='M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z'/%3E%3C/svg%3E");
     background-repeat:no-repeat; background-position:right 6px center; background-size:14px; padding-right:24px !important; }
 
-  .feat-card { flex-shrink:0; display:flex; flex-direction:column; gap:5px; padding:8px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.03); cursor:default; min-width:170px; transition:background .12s; }
+  .feat-card { flex-shrink:0; display:flex; flex-direction:column; gap:5px; padding:8px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.03); cursor:pointer; min-width:170px; transition:background .12s; }
   .feat-card:hover { background:rgba(255,255,255,0.055); }
   .feat-card.neon-card { border-color:rgba(34,197,94,0.25); box-shadow:0 0 16px rgba(34,197,94,0.10); }
 
@@ -59,10 +60,30 @@
   .tog button { font-size:11px; padding:4px 10px; transition:background .12s,color .12s; background:transparent; border:none; cursor:pointer; }
   .tb-sep { width:1px; background:rgba(255,255,255,0.07); margin:4px 0; flex-shrink:0; }
 
+  .modal-tab { font-size:11px; padding:6px 14px; border:none; border-bottom:2px solid transparent; background:transparent; cursor:pointer; color:#71717a; font-weight:600; transition:color .12s,border-color .12s; }
+  .modal-tab.active { color:#e2e8f0; border-bottom-color:#22c55e; }
+  .modal-tab:hover:not(.active) { color:#a1a1aa; }
+
+  .stat-block { background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07); border-radius:8px; padding:10px 14px; }
+  .stat-label { font-size:9px; color:#52525b; text-transform:uppercase; letter-spacing:.06em; margin-bottom:3px; }
+  .stat-val { font-size:15px; font-weight:700; color:#e2e8f0; }
+
+  .form-dot-w { width:22px;height:22px;border-radius:50%;background:#22c55e;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#000;flex-shrink:0; }
+  .form-dot-d { width:22px;height:22px;border-radius:50%;background:#3f3f46;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#a1a1aa;flex-shrink:0; }
+  .form-dot-l { width:22px;height:22px;border-radius:50%;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#f87171;flex-shrink:0; }
+
+  .bm-row:hover { background:rgba(255,255,255,0.03); }
+  .pick-row { cursor:pointer; border-radius:6px; padding:8px 10px; border:1px solid rgba(255,255,255,0.06); margin-bottom:4px; transition:background .1s; }
+  .pick-row:hover { background:rgba(255,255,255,0.04); }
+
+  .overlay { position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:100;display:flex;justify-content:flex-end; }
+  .drawer { width:min(640px,100vw);height:100%;background:#0d1117;border-left:1px solid rgba(255,255,255,0.08);display:flex;flex-direction:column;overflow:hidden; }
+
   @media(max-width:768px){
     body { overflow: auto; }
     .desktop-table { display:none; }
     .mobile-cards { display:flex !important; }
+    .drawer { width:100vw; }
   }
   @media(min-width:769px){
     .mobile-cards { display:none; }
@@ -74,7 +95,6 @@
 <script type="text/babel">
 const { useMemo, useState, useEffect, useCallback, useRef } = React;
 
-/* ─── Mock data ─────────────────────────────────────────────── */
 const mockPicks = [
   { sport:"Football", league:"2. Bundesliga",    match:"Hannover 96 vs Braunschweig",     market:"Over 3.5 Corners",   selection:"Over",  odds:2.02, bookmaker:"Bet365",    ev:25.0, confidence:65,  model_probability:65, kickoff_time:"2026-03-20 18:30", detected_at:"2026-03-19 09:05", featured:true,  badge:"High EV" },
   { sport:"Football", league:"Europa League",    match:"AS Roma vs Bologna",              market:"Over 2.5 Goals",     selection:"Over",  odds:2.27, bookmaker:"Pinnacle",   ev:25.0, confidence:100, model_probability:71, kickoff_time:"2026-03-19 20:00", detected_at:"2026-03-19 06:19", featured:true,  badge:"High EV" },
@@ -93,12 +113,14 @@ const mockPicks = [
   { sport:"Basketball",league:"NCAAB",           match:"Kansas vs Gonzaga",               market:"Moneyline Kansas",   selection:"Home",  odds:2.10, bookmaker:"FanDuel",   ev:14.2, confidence:77,  model_probability:59, kickoff_time:"2026-03-20 02:00", detected_at:"2026-03-19 09:00", featured:false, badge:"High EV" },
 ];
 
-/* ─── Helpers ─────────────────────────────────────────────── */
 function normalizePick(b) {
   return {
+    id: b.id || b.match_id || (b.home_team ? `${b.home_team}_${b.away_team}` : null),
     sport: b.sport || "Football",
     league: b.league || "",
     match: b.match || `${b.home_team||""} vs ${b.away_team||""}`,
+    home_team: b.home_team || (b.match||"").split(" vs ")[0] || "",
+    away_team: b.away_team || (b.match||"").split(" vs ")[1] || "",
     market: b.market || "",
     selection: b.selection || "",
     odds: b.odds || 0,
@@ -114,21 +136,17 @@ function normalizePick(b) {
   };
 }
 
-/* EV tier: neon ≥20, high 10-20, med 5-10, low <5 */
 function evTier(ev) {
   if (ev >= 20) return "neon";
   if (ev >= 10) return "high";
   if (ev >= 5)  return "med";
   return "low";
 }
-
 function modelEdge(p) {
   const implied = p.odds > 0 ? (1/p.odds)*100 : 0;
   const model   = p.model_probability || p.confidence || 0;
-  const edge    = model - implied;
-  return edge;
+  return model - implied;
 }
-
 function fmtKickoff(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -142,9 +160,7 @@ function fmtKickoff(iso) {
 }
 function fmtDetected(iso) {
   if (!iso) return "—";
-  const d = new Date(iso);
-  if (isNaN(d)) return iso;
-  return d.toLocaleTimeString("sv-SE",{hour:"2-digit",minute:"2-digit"});
+  return new Date(iso).toLocaleTimeString("sv-SE",{hour:"2-digit",minute:"2-digit"});
 }
 function fmtAgo(ts) {
   if (!ts) return "—";
@@ -154,12 +170,13 @@ function fmtAgo(ts) {
   return `${Math.floor(s/3600)}h ago`;
 }
 
-/* ─── Sub-components ─────────────────────────────────────── */
+/* ─── EvBadge ─────────────────────────────────────────────── */
 function EvBadge({ ev }) {
   const t = evTier(ev);
   return <span className={`ev-${t}`} style={{fontSize:11,fontWeight:700,padding:"2px 7px",borderRadius:5,display:"inline-block",whiteSpace:"nowrap"}}>+{Number(ev).toFixed(1)}%</span>;
 }
 
+/* ─── MiniConf ────────────────────────────────────────────── */
 function MiniConf({ v }) {
   return (
     <div style={{display:"flex",alignItems:"center",gap:5}}>
@@ -171,6 +188,363 @@ function MiniConf({ v }) {
   );
 }
 
+/* ─── FormDots ────────────────────────────────────────────── */
+function FormDots({ w, d, l }) {
+  const dots = [];
+  for (let i=0;i<(w||0);i++) dots.push("W");
+  for (let i=0;i<(d||0);i++) dots.push("D");
+  for (let i=0;i<(l||0);i++) dots.push("L");
+  return (
+    <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
+      {dots.map((r,i) => (
+        <div key={i} className={r==="W"?"form-dot-w":r==="D"?"form-dot-d":"form-dot-l"}>{r}</div>
+      ))}
+    </div>
+  );
+}
+
+/* ─── MatchModal ──────────────────────────────────────────── */
+function MatchModal({ pick, onClose }) {
+  const [tab, setTab]   = useState("picks");
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr]   = useState(false);
+
+  useEffect(() => {
+    if (!pick) return;
+    setLoading(true); setErr(false); setData(null);
+    const matchId = pick.id || `${pick.home_team}_${pick.away_team}`;
+    fetch(`/api/match-scout/${encodeURIComponent(matchId)}`)
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+      .then(d => { setData(d); setLoading(false); })
+      .catch(() => { setErr(true); setLoading(false); });
+  }, [pick]);
+
+  if (!pick) return null;
+
+  const pct = v => v != null ? `${(v*100).toFixed(1)}%` : "—";
+  const fmt2 = v => v != null ? Number(v).toFixed(2) : "—";
+  const fmt1 = v => v != null ? Number(v).toFixed(1) : "—";
+
+  const TABS = [
+    { id:"picks",  label:"Picks & EV" },
+    { id:"form",   label:"Form & xG" },
+    { id:"h2h",    label:"H2H" },
+    { id:"odds",   label:"Odds Board" },
+  ];
+
+  return (
+    <div className="overlay" onClick={e=>{ if(e.target===e.currentTarget) onClose(); }}>
+      <div className="drawer drawer-in">
+
+        {/* Header */}
+        <div style={{padding:"14px 18px",borderBottom:"1px solid rgba(255,255,255,0.07)",flexShrink:0}}>
+          <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:6}}>
+            <div>
+              <div style={{fontSize:11,color:"#52525b",textTransform:"uppercase",letterSpacing:".06em",marginBottom:4}}>{pick.league}</div>
+              <div style={{fontSize:18,fontWeight:800,color:"#f1f5f9",letterSpacing:"-.02em"}}>
+                {pick.home_team || pick.match.split(" vs ")[0]}
+                <span style={{color:"#3f3f46",fontWeight:400,margin:"0 8px"}}>vs</span>
+                {pick.away_team || pick.match.split(" vs ")[1]}
+              </div>
+              <div style={{fontSize:11,color:"#71717a",marginTop:4}}>
+                Kickoff {fmtKickoff(pick.kickoff_time)}
+                {data?.prediction?.score && <span style={{marginLeft:12,color:"#6366f1",fontWeight:600}}>AI Score: {data.prediction.score}</span>}
+              </div>
+            </div>
+            <button onClick={onClose} style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:6,color:"#71717a",fontSize:16,padding:"4px 10px",cursor:"pointer",flexShrink:0}}>✕</button>
+          </div>
+
+          {/* Quick KPIs from data */}
+          {data && (
+            <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:6}}>
+              {data.prediction?.home_goals != null && (
+                <div className="stat-block" style={{padding:"5px 10px",display:"flex",gap:16}}>
+                  <div><div className="stat-label">xG Home</div><div style={{fontSize:13,fontWeight:700,color:"#4ade80"}}>{fmt2(data.xg?.home_xg ?? data.prediction.home_goals)}</div></div>
+                  <div><div className="stat-label">xG Away</div><div style={{fontSize:13,fontWeight:700,color:"#f87171"}}>{fmt2(data.xg?.away_xg ?? data.prediction.away_goals)}</div></div>
+                  <div><div className="stat-label">Total xG</div><div style={{fontSize:13,fontWeight:700,color:"#a1a1aa"}}>{fmt2(data.xg?.total_xg)}</div></div>
+                </div>
+              )}
+              {data.standings?.home_pos && (
+                <div className="stat-block" style={{padding:"5px 10px",display:"flex",gap:16}}>
+                  <div><div className="stat-label">Home Pos</div><div style={{fontSize:13,fontWeight:700,color:"#e2e8f0"}}>#{data.standings.home_pos}</div></div>
+                  <div><div className="stat-label">Away Pos</div><div style={{fontSize:13,fontWeight:700,color:"#e2e8f0"}}>#{data.standings.away_pos}</div></div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Tabs */}
+        <div style={{display:"flex",borderBottom:"1px solid rgba(255,255,255,0.07)",flexShrink:0,overflowX:"auto"}}>
+          {TABS.map(t => (
+            <button key={t.id} className={`modal-tab${tab===t.id?" active":""}`} onClick={()=>setTab(t.id)}>{t.label}</button>
+          ))}
+        </div>
+
+        {/* Body */}
+        <div style={{flex:1,overflowY:"auto",padding:"14px 18px"}}>
+          {loading && <div style={{textAlign:"center",paddingTop:60,color:"#3f3f46",fontSize:13}}>Loading match intelligence…</div>}
+          {err && <div style={{textAlign:"center",paddingTop:60,color:"#52525b",fontSize:13}}>Could not load data for this match.</div>}
+
+          {/* ── TAB: Picks & EV ──────────────────────────── */}
+          {!loading && !err && tab === "picks" && (
+            <div className="slide-up">
+              {(data?.picks || [pick]).map((pk, i) => {
+                const ev = pk.ev_pct ?? pick.ev ?? 0;
+                const t  = evTier(ev);
+                const modelP = pk.model_prob ? (pk.model_prob*100).toFixed(1) : null;
+                const fairO  = pk.fair_odds;
+                const impliedP = pk.odds ? (100/pk.odds).toFixed(1) : null;
+                const edge = modelP && impliedP ? (parseFloat(modelP) - parseFloat(impliedP)).toFixed(1) : null;
+                return (
+                  <div key={i} className="pick-row" style={{borderColor: t==="neon"?"rgba(34,197,94,0.25)":t==="high"?"rgba(34,197,94,0.15)":t==="med"?"rgba(234,179,8,0.15)":"rgba(255,255,255,0.06)"}}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <span style={{fontSize:12,fontWeight:700,color:"#f1f5f9"}}>{pk.selection || pick.selection}</span>
+                        <span style={{fontSize:10,color:"#71717a",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:3,padding:"1px 6px"}}>{pk.market || pick.market}</span>
+                        {pk.trust_level && <span style={{fontSize:9,color:"#818cf8",border:"1px solid rgba(129,140,248,0.2)",borderRadius:3,padding:"1px 5px"}}>{pk.trust_level}</span>}
+                      </div>
+                      <EvBadge ev={ev} />
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+                      <div><div className="stat-label">Odds</div><div style={{fontSize:16,fontWeight:800,color:t==="neon"?"#86efac":t==="high"?"#4ade80":"#c4b5fd"}}>{fmt2(pk.odds ?? pick.odds)}</div></div>
+                      <div><div className="stat-label">Fair Odds</div><div style={{fontSize:14,fontWeight:700,color:"#e2e8f0"}}>{fmt2(fairO)}</div></div>
+                      <div><div className="stat-label">Model Prob</div><div style={{fontSize:14,fontWeight:700,color:"#a1a1aa"}}>{modelP ? `${modelP}%` : "—"}</div></div>
+                      <div><div className="stat-label">Model Edge</div><div style={{fontSize:14,fontWeight:700,color:edge>0?"#4ade80":"#52525b"}}>{edge != null ? `${edge>0?"+":""}${edge}%` : "—"}</div></div>
+                    </div>
+                    {/* 3 model probabilities */}
+                    {(pk.model_prob || pk.calibrated_prob || pk.sim_prob) && (
+                      <div style={{display:"flex",gap:8,marginTop:8,flexWrap:"wrap"}}>
+                        {pk.model_prob      && <span style={{fontSize:10,color:"#71717a",background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:4,padding:"2px 7px"}}>Poisson {pct(pk.model_prob)}</span>}
+                        {pk.calibrated_prob && <span style={{fontSize:10,color:"#71717a",background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:4,padding:"2px 7px"}}>Calibrated {pct(pk.calibrated_prob)}</span>}
+                        {pk.sim_prob        && <span style={{fontSize:10,color:"#71717a",background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:4,padding:"2px 7px"}}>Monte Carlo {pct(pk.sim_prob)}</span>}
+                        {pk.disagreement != null && <span style={{fontSize:10,color:pk.disagreement>0.15?"#fbbf24":"#52525b",background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:4,padding:"2px 7px"}}>Disagreement {fmt2(pk.disagreement)}</span>}
+                      </div>
+                    )}
+                    {/* CLV */}
+                    {pk.open_odds && (
+                      <div style={{display:"flex",gap:10,marginTop:8,alignItems:"center"}}>
+                        <span style={{fontSize:10,color:"#52525b"}}>Open {fmt2(pk.open_odds)}</span>
+                        <span style={{fontSize:10,color:"#3f3f46"}}>→</span>
+                        <span style={{fontSize:10,color:"#52525b"}}>Close {fmt2(pk.close_odds) ?? "pending"}</span>
+                        {pk.clv_pct != null && (
+                          <span style={{fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:4,
+                            background: pk.clv_pct>0?"rgba(34,197,94,0.12)":"rgba(239,68,68,0.10)",
+                            color: pk.clv_pct>0?"#4ade80":"#f87171"}}>
+                            CLV {pk.clv_pct>0?"+":""}{fmt1(pk.clv_pct)}%
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {/* Best book */}
+                    {pk.best_book && (
+                      <div style={{marginTop:6,fontSize:10,color:"#52525b"}}>
+                        Best line: <b style={{color:"#a1a1aa"}}>{fmt2(pk.best_odds)}</b> @ <b style={{color:"#818cf8"}}>{pk.best_book}</b>
+                        {pk.avg_odds && <span style={{marginLeft:8}}>· Avg {fmt2(pk.avg_odds)}</span>}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              {(!data?.picks || data.picks.length === 0) && (
+                <div style={{color:"#52525b",fontSize:12,textAlign:"center",paddingTop:20}}>No detailed pick data available — showing summary only.</div>
+              )}
+            </div>
+          )}
+
+          {/* ── TAB: Form & xG ───────────────────────────── */}
+          {!loading && !err && tab === "form" && (
+            <div className="slide-up">
+              {data?.form ? (
+                <>
+                  {/* xG */}
+                  {data.xg && (
+                    <div style={{marginBottom:16}}>
+                      <div style={{fontSize:10,color:"#52525b",textTransform:"uppercase",letterSpacing:".06em",marginBottom:8}}>Expected Goals (Season avg)</div>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                        <div className="stat-block"><div className="stat-label">Home xG</div><div className="stat-val" style={{color:"#4ade80"}}>{fmt2(data.xg.home_xg)}</div></div>
+                        <div className="stat-block"><div className="stat-label">Away xG</div><div className="stat-val" style={{color:"#f87171"}}>{fmt2(data.xg.away_xg)}</div></div>
+                        <div className="stat-block"><div className="stat-label">Total xG</div><div className="stat-val">{fmt2(data.xg.total_xg)}</div></div>
+                      </div>
+                    </div>
+                  )}
+                  {/* Predicted score */}
+                  {data.prediction && (
+                    <div style={{marginBottom:16}}>
+                      <div style={{fontSize:10,color:"#52525b",textTransform:"uppercase",letterSpacing:".06em",marginBottom:8}}>AI Prediction</div>
+                      <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                        <div className="stat-block" style={{flex:1,textAlign:"center"}}>
+                          <div className="stat-label">{pick.home_team || "Home"}</div>
+                          <div style={{fontSize:24,fontWeight:900,color:"#4ade80"}}>{fmt2(data.prediction.home_goals)}</div>
+                        </div>
+                        <div style={{fontSize:18,color:"#3f3f46",fontWeight:700}}>—</div>
+                        <div className="stat-block" style={{flex:1,textAlign:"center"}}>
+                          <div className="stat-label">{pick.away_team || "Away"}</div>
+                          <div style={{fontSize:24,fontWeight:900,color:"#f87171"}}>{fmt2(data.prediction.away_goals)}</div>
+                        </div>
+                        {data.prediction.score && (
+                          <div className="stat-block" style={{textAlign:"center",padding:"8px 18px"}}>
+                            <div className="stat-label">Most Likely</div>
+                            <div style={{fontSize:20,fontWeight:800,color:"#818cf8"}}>{data.prediction.score}</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {/* Form tables */}
+                  {[["home", pick.home_team||"Home"], ["away", pick.away_team||"Away"]].map(([side, label]) => {
+                    const f = data.form[side];
+                    if (!f) return null;
+                    return (
+                      <div key={side} style={{marginBottom:14}}>
+                        <div style={{fontSize:10,color:"#52525b",textTransform:"uppercase",letterSpacing:".06em",marginBottom:8}}>{label} — Last 5 Form</div>
+                        <div className="stat-block">
+                          <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+                            <FormDots w={f.wins} d={f.draws} l={f.losses} />
+                            <div style={{display:"flex",gap:14,marginLeft:"auto",flexWrap:"wrap"}}>
+                              <div><div className="stat-label">PPG</div><div style={{fontSize:13,fontWeight:700,color:f.ppg>=2?"#4ade80":f.ppg>=1?"#fbbf24":"#f87171"}}>{fmt2(f.ppg)}</div></div>
+                              <div><div className="stat-label">Goals Scored</div><div style={{fontSize:13,fontWeight:700,color:"#e2e8f0"}}>{fmt1(f.goals_scored)}</div></div>
+                              <div><div className="stat-label">Goals Conceded</div><div style={{fontSize:13,fontWeight:700,color:"#e2e8f0"}}>{fmt1(f.goals_conceded)}</div></div>
+                              <div><div className="stat-label">Clean Sheets</div><div style={{fontSize:13,fontWeight:700,color:"#e2e8f0"}}>{f.clean_sheets ?? "—"}</div></div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {/* Standings */}
+                  {data.standings?.home_pos && (
+                    <div>
+                      <div style={{fontSize:10,color:"#52525b",textTransform:"uppercase",letterSpacing:".06em",marginBottom:8}}>Table Position</div>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                        {[["home",pick.home_team||"Home"],["away",pick.away_team||"Away"]].map(([side,label]) => (
+                          <div key={side} className="stat-block">
+                            <div className="stat-label">{label}</div>
+                            <div style={{display:"flex",gap:14,marginTop:4}}>
+                              <div><div className="stat-label">Pos</div><div style={{fontSize:14,fontWeight:700,color:"#e2e8f0"}}>#{data.standings[`${side}_pos`]}</div></div>
+                              <div><div className="stat-label">Pts</div><div style={{fontSize:14,fontWeight:700,color:"#e2e8f0"}}>{data.standings[`${side}_pts`]}</div></div>
+                              <div><div className="stat-label">GD</div><div style={{fontSize:14,fontWeight:700,color:data.standings[`${side}_gd`]>0?"#4ade80":data.standings[`${side}_gd`]<0?"#f87171":"#a1a1aa"}}>{data.standings[`${side}_gd`]>0?"+":""}{data.standings[`${side}_gd`]}</div></div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div style={{textAlign:"center",paddingTop:40,color:"#52525b",fontSize:13}}>Form data not available for this match.</div>
+              )}
+            </div>
+          )}
+
+          {/* ── TAB: H2H ─────────────────────────────────── */}
+          {!loading && !err && tab === "h2h" && (
+            <div className="slide-up">
+              {data?.h2h ? (
+                <>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:16}}>
+                    <div className="stat-block" style={{textAlign:"center"}}>
+                      <div className="stat-label">{pick.home_team||"Home"} Wins</div>
+                      <div className="stat-val" style={{color:"#4ade80"}}>{data.h2h.home_wins}</div>
+                      <div style={{fontSize:10,color:"#52525b",marginTop:2}}>{data.h2h.matches>0?((data.h2h.home_wins/data.h2h.matches)*100).toFixed(0):0}%</div>
+                    </div>
+                    <div className="stat-block" style={{textAlign:"center"}}>
+                      <div className="stat-label">Draws</div>
+                      <div className="stat-val" style={{color:"#71717a"}}>{data.h2h.draws}</div>
+                      <div style={{fontSize:10,color:"#52525b",marginTop:2}}>{data.h2h.matches>0?((data.h2h.draws/data.h2h.matches)*100).toFixed(0):0}%</div>
+                    </div>
+                    <div className="stat-block" style={{textAlign:"center"}}>
+                      <div className="stat-label">{pick.away_team||"Away"} Wins</div>
+                      <div className="stat-val" style={{color:"#f87171"}}>{data.h2h.away_wins}</div>
+                      <div style={{fontSize:10,color:"#52525b",marginTop:2}}>{data.h2h.matches>0?((data.h2h.away_wins/data.h2h.matches)*100).toFixed(0):0}%</div>
+                    </div>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+                    <div className="stat-block" style={{textAlign:"center"}}>
+                      <div className="stat-label">Total Matches</div>
+                      <div className="stat-val">{data.h2h.matches}</div>
+                    </div>
+                    <div className="stat-block" style={{textAlign:"center"}}>
+                      <div className="stat-label">Avg Goals</div>
+                      <div className="stat-val" style={{color:data.h2h.avg_goals>2.5?"#4ade80":"#e2e8f0"}}>{fmt2(data.h2h.avg_goals)}</div>
+                    </div>
+                    <div className="stat-block" style={{textAlign:"center"}}>
+                      <div className="stat-label">BTTS Rate</div>
+                      <div className="stat-val" style={{color:data.h2h.btts_rate>50?"#4ade80":"#e2e8f0"}}>{data.h2h.btts_rate != null ? `${data.h2h.btts_rate}%` : "—"}</div>
+                    </div>
+                  </div>
+                  <div style={{marginTop:8,display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                    <div className="stat-block" style={{textAlign:"center"}}>
+                      <div className="stat-label">Over 2.5 Rate</div>
+                      <div className="stat-val" style={{color:data.h2h.over25_rate>50?"#4ade80":"#e2e8f0"}}>{data.h2h.over25_rate != null ? `${data.h2h.over25_rate}%` : "—"}</div>
+                    </div>
+                    {data.prediction?.home_goals != null && (
+                      <div className="stat-block" style={{textAlign:"center"}}>
+                        <div className="stat-label">Predicted Total</div>
+                        <div className="stat-val" style={{color:"#818cf8"}}>{fmt2((data.prediction.home_goals||0)+(data.prediction.away_goals||0))}</div>
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div style={{textAlign:"center",paddingTop:40,color:"#52525b",fontSize:13}}>H2H data not available for this match.</div>
+              )}
+            </div>
+          )}
+
+          {/* ── TAB: Odds Board ───────────────────────────── */}
+          {!loading && !err && tab === "odds" && (
+            <div className="slide-up">
+              {(data?.picks || [pick]).map((pk, pi) => {
+                const bms = pk.bookmakers || {};
+                const entries = Object.entries(bms).sort((a,b) => b[1]-a[1]);
+                if (entries.length === 0 && pi > 0) return null;
+                const fairO = pk.fair_odds;
+                const bestEntry = entries[0];
+                return (
+                  <div key={pi} style={{marginBottom:20}}>
+                    <div style={{fontSize:11,fontWeight:700,color:"#a1a1aa",marginBottom:8,display:"flex",alignItems:"center",gap:8}}>
+                      <span>{pk.selection || pick.selection}</span>
+                      <span style={{fontSize:10,color:"#52525b",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:3,padding:"1px 6px"}}>{pk.market || pick.market}</span>
+                      {fairO && <span style={{fontSize:10,marginLeft:"auto",color:"#6366f1"}}>Fair odds: {fmt2(fairO)}</span>}
+                    </div>
+                    {entries.length > 0 ? (
+                      <div className="stat-block" style={{padding:0,overflow:"hidden"}}>
+                        {entries.map(([bm, odds], bi) => {
+                          const isBest = bm === bestEntry[0];
+                          const vsAvg  = pk.avg_odds ? ((odds/pk.avg_odds-1)*100).toFixed(1) : null;
+                          return (
+                            <div key={bm} className="bm-row" style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 12px",borderBottom:bi<entries.length-1?"1px solid rgba(255,255,255,0.05)":"none"}}>
+                              <span style={{fontSize:12,color:isBest?"#e2e8f0":"#71717a",fontWeight:isBest?600:400}}>{bm}</span>
+                              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                                {vsAvg && parseFloat(vsAvg)>0 && <span style={{fontSize:10,color:"#4ade80"}}>+{vsAvg}%</span>}
+                                <span style={{fontSize:13,fontWeight:isBest?800:600,color:isBest?"#86efac":"#a1a1aa",
+                                  textShadow:isBest?"0 0 8px rgba(34,197,94,0.4)":"none"}}>
+                                  {Number(odds).toFixed(2)}
+                                </span>
+                                {isBest && <span style={{fontSize:9,color:"#22c55e",background:"rgba(34,197,94,0.1)",border:"1px solid rgba(34,197,94,0.2)",borderRadius:3,padding:"1px 5px"}}>BEST</span>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {entries.length === 0 && <div style={{padding:"12px",color:"#52525b",fontSize:12}}>No bookmaker odds data available.</div>}
+                      </div>
+                    ) : (
+                      <div style={{color:"#52525b",fontSize:12,padding:"8px 0"}}>No bookmaker odds data available for this pick.</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── LockedRow ───────────────────────────────────────────── */
 function LockedRow() {
   return (
     <tr className="row-locked" style={{borderBottom:"1px solid rgba(99,102,241,0.12)"}}>
@@ -190,26 +564,25 @@ function LockedRow() {
 
 /* ─── Main App ────────────────────────────────────────────── */
 function App() {
-  const [allPicks, setAllPicks]     = useState(mockPicks);
-  const [apiStats, setApiStats]     = useState(null);
-  const [loading, setLoading]       = useState(true);
-  const [isMock, setIsMock]         = useState(false);
-  const [lastFetch, setLastFetch]   = useState(null);
-  const [scanMsg, setScanMsg]       = useState(null);
-  const [ticker, setTicker]         = useState(0);
+  const [allPicks, setAllPicks]         = useState(mockPicks);
+  const [apiStats, setApiStats]         = useState(null);
+  const [loading, setLoading]           = useState(true);
+  const [isMock, setIsMock]             = useState(false);
+  const [lastFetch, setLastFetch]       = useState(null);
+  const [scanMsg, setScanMsg]           = useState(null);
+  const [ticker, setTicker]             = useState(0);
+  const [selectedPick, setSelectedPick] = useState(null);
 
-  const [sport, setSport]           = useState("All");
-  const [liveFilter, setLiveFilter] = useState("all");
-  const [evSlider, setEvSlider]     = useState(0);
-  const [minOdds, setMinOdds]       = useState("");
-  const [maxOdds, setMaxOdds]       = useState("");
-  const [q, setQ]                   = useState("");
-  const [sortBy, setSortBy]         = useState("ev_desc");
+  const [sport, setSport]               = useState("All");
+  const [liveFilter, setLiveFilter]     = useState("all");
+  const [evSlider, setEvSlider]         = useState(0);
+  const [minOdds, setMinOdds]           = useState("");
+  const [maxOdds, setMaxOdds]           = useState("");
+  const [q, setQ]                       = useState("");
+  const [sortBy, setSortBy]             = useState("ev_desc");
 
-  /* tick every 10s to keep "updated X ago" fresh */
   useEffect(() => { const t = setInterval(()=>setTicker(x=>x+1),10000); return()=>clearInterval(t); },[]);
 
-  /* occasional scan-pop message */
   useEffect(() => {
     const msgs = ["⚡ 2 new picks detected","🔍 Scanning 40+ bookmakers","✅ 3 lines updated","📡 Odds drift check complete"];
     const show = () => { setScanMsg(msgs[Math.floor(Math.random()*msgs.length)]); setTimeout(()=>setScanMsg(null),3200); };
@@ -239,6 +612,13 @@ function App() {
   }, []);
 
   useEffect(() => { fetchData(); const t = setInterval(fetchData, 5*60000); return () => clearInterval(t); }, []);
+
+  /* close modal on Escape */
+  useEffect(() => {
+    const h = e => { if (e.key === "Escape") setSelectedPick(null); };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, []);
 
   const allSports = useMemo(() => ["All",...new Set(allPicks.map(p=>p.sport).filter(Boolean))], [allPicks]);
 
@@ -273,7 +653,6 @@ function App() {
   const inputCls = "text-xs rounded px-2 py-1 text-zinc-200 placeholder-zinc-600 outline-none bg-transparent border border-zinc-700 focus:border-zinc-500";
   const selCls   = inputCls + " pr-5 cursor-pointer";
 
-  /* inject locked rows every 5 rows */
   const tableRows = useMemo(() => {
     const rows = [];
     filtered.forEach((p, i) => {
@@ -339,7 +718,7 @@ function App() {
           const t = evTier(p.ev);
           const edge = modelEdge(p);
           return (
-            <div key={i} className={`feat-card${t==="neon"?" neon-card":""}`}>
+            <div key={i} className={`feat-card${t==="neon"?" neon-card":""}`} onClick={()=>setSelectedPick(p)}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6}}>
                 <span style={{fontSize:9,fontWeight:700,padding:"2px 5px",borderRadius:3,
                   background: t==="neon"?"rgba(34,197,94,0.20)":t==="high"?"rgba(34,197,94,0.12)":t==="med"?"rgba(234,179,8,0.10)":"rgba(255,255,255,0.05)",
@@ -362,11 +741,9 @@ function App() {
 
       {/* ══ FILTER ROW ═════════════════════════════════════════ */}
       <div style={{display:"flex",alignItems:"center",gap:8,padding:"0 14px",height:38,borderBottom:"1px solid rgba(255,255,255,0.05)",background:"#0d1117",flexShrink:0,overflowX:"auto"}}>
-
         <select value={sport} onChange={e=>setSport(e.target.value)} className={selCls} style={{background:"#0d1117"}}>
           {allSports.map(s=><option key={s} style={{background:"#0d1117"}}>{s}</option>)}
         </select>
-
         <div className="tog">
           {[["all","All"],["prematch","Pre"],["live","🔴 Live"]].map(([k,l])=>(
             <button key={k} onClick={()=>setLiveFilter(k)}
@@ -376,16 +753,13 @@ function App() {
             </button>
           ))}
         </div>
-
         <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
           <span style={{fontSize:10,color:"#52525b",whiteSpace:"nowrap"}}>EV ≥ <b style={{color:"#4ade80"}}>{evSlider>0?`${evSlider}%`:"Any"}</b></span>
           <input type="range" min="0" max="30" step="1" value={evSlider} onChange={e=>setEvSlider(Number(e.target.value))} />
         </div>
-
         <input type="number" placeholder="Min odds" step="0.05" value={minOdds} onChange={e=>setMinOdds(e.target.value)} className={inputCls} style={{width:70,background:"transparent"}} />
         <input type="number" placeholder="Max odds" step="0.05" value={maxOdds} onChange={e=>setMaxOdds(e.target.value)} className={inputCls} style={{width:70,background:"transparent"}} />
         <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search…" className={inputCls} style={{width:120,flexShrink:1,background:"transparent"}} />
-
         <div style={{marginLeft:"auto",flexShrink:0}}>
           <select value={sortBy} onChange={e=>setSortBy(e.target.value)} className={selCls} style={{background:"#0d1117"}}>
             <option value="ev_desc"   style={{background:"#0d1117"}}>EV ↓</option>
@@ -412,6 +786,7 @@ function App() {
                     Showing <b style={{color:"#a1a1aa"}}>{filtered.length}</b> of <b style={{color:"#a1a1aa"}}>{allPicks.length}</b> opportunities
                     {evSlider > 0 && <span style={{color:"#4ade80"}}> · EV ≥ {evSlider}%</span>}
                     {sport !== "All" && <span style={{color:"#818cf8"}}> · {sport}</span>}
+                    <span style={{color:"#3f3f46",marginLeft:12}}>Click any row for full match intel</span>
                   </span>
                 </th>
               </tr>
@@ -432,10 +807,10 @@ function App() {
                 return (
                   <tr key={`${p.match}-${p.market}-${row.idx}`}
                     className={`row-${t}`}
-                    style={{borderBottom:"1px solid rgba(255,255,255,0.03)",cursor:"default",transition:"background .1s"}}
+                    style={{borderBottom:"1px solid rgba(255,255,255,0.03)",cursor:"pointer",transition:"background .1s"}}
+                    onClick={() => setSelectedPick(p)}
                     onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.025)"}
                     onMouseLeave={e=>e.currentTarget.style.background=""}>
-
                     <td style={{padding:"7px 12px",fontWeight:600,color:"#f1f5f9",maxWidth:195,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.match}</td>
                     <td style={{padding:"7px 12px",color:"#71717a",whiteSpace:"nowrap",fontSize:11}}>{p.league}</td>
                     <td style={{padding:"7px 12px",whiteSpace:"nowrap"}}>
@@ -483,7 +858,7 @@ function App() {
             </div>
           );
           return (
-            <div key={i} style={{border:`1px solid ${t==="neon"?"rgba(34,197,94,0.3)":t==="high"?"rgba(34,197,94,0.15)":t==="med"?"rgba(234,179,8,0.15)":"rgba(255,255,255,0.07)"}`,borderRadius:8,padding:"10px 12px",
+            <div key={i} onClick={()=>setSelectedPick(p)} style={{border:`1px solid ${t==="neon"?"rgba(34,197,94,0.3)":t==="high"?"rgba(34,197,94,0.15)":t==="med"?"rgba(234,179,8,0.15)":"rgba(255,255,255,0.07)"}`,borderRadius:8,padding:"10px 12px",cursor:"pointer",
               background:t==="neon"?"rgba(34,197,94,0.06)":t==="high"?"rgba(34,197,94,0.03)":t==="med"?"rgba(234,179,8,0.03)":"rgba(255,255,255,0.02)",
               borderLeft:`3px solid ${t==="neon"?"#22c55e":t==="high"?"#16a34a":t==="med"?"#eab308":"transparent"}`,
               boxShadow:t==="neon"?"0 0 18px rgba(34,197,94,0.10)":"none"}}>
@@ -496,37 +871,26 @@ function App() {
               <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
                 <div>
                   <div style={{fontSize:9,color:"#52525b",marginBottom:2}}>ODDS</div>
-                  <div style={{fontSize:14,fontWeight:800,color:t==="neon"?"#86efac":t==="high"?"#4ade80":"#c4b5fd",textShadow:t==="neon"?"0 0 6px rgba(34,197,94,0.5)":"none"}}>{Number(p.odds).toFixed(2)}</div>
+                  <div style={{fontSize:14,fontWeight:800,color:t==="neon"?"#86efac":t==="high"?"#4ade80":"#c4b5fd"}}>{Number(p.odds).toFixed(2)}</div>
                 </div>
                 <div>
                   <div style={{fontSize:9,color:"#52525b",marginBottom:2}}>MODEL EDGE</div>
-                  <div style={{fontSize:12,fontWeight:600,color:edge>0?"#4ade80":"#52525b"}}>{edge>0?`+${edge.toFixed(1)}%`:"—"}</div>
+                  <div style={{fontSize:13,fontWeight:700,color:edge>5?"#4ade80":edge>0?"#a3e635":"#52525b"}}>{edge>0?`+${edge.toFixed(1)}%`:"—"}</div>
                 </div>
                 <div>
                   <div style={{fontSize:9,color:"#52525b",marginBottom:2}}>CONF</div>
-                  <MiniConf v={p.confidence} />
+                  <div style={{fontSize:13,fontWeight:700,color:"#818cf8"}}>{Math.round(p.confidence)}%</div>
                 </div>
               </div>
+              <div style={{marginTop:8,fontSize:10,color:"#3f3f46",textAlign:"right"}}>Tap for full intel →</div>
             </div>
           );
         })}
       </div>
 
-      {/* ══ STATUS BAR ═════════════════════════════════════════ */}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 14px",height:24,borderTop:"1px solid rgba(255,255,255,0.05)",background:"#0d1117",flexShrink:0}}>
-        <span style={{fontSize:10,color:"#3f3f46"}}>PGR Sports Analytics · Data analysis only · Not financial advice</span>
-        <div style={{display:"flex",alignItems:"center",gap:10,fontSize:10,color:"#3f3f46"}}>
-          <span style={{display:"flex",alignItems:"center",gap:4}}>
-            <span style={{width:7,height:7,borderRadius:1,display:"inline-block",background:"rgba(134,239,172,0.5)",boxShadow:"0 0 4px rgba(34,197,94,0.5)"}}/>EV ≥ 20%
-          </span>
-          <span style={{display:"flex",alignItems:"center",gap:4}}>
-            <span style={{width:7,height:7,borderRadius:1,display:"inline-block",background:"rgba(34,197,94,0.4)"}}/>10–20%
-          </span>
-          <span style={{display:"flex",alignItems:"center",gap:4}}>
-            <span style={{width:7,height:7,borderRadius:1,display:"inline-block",background:"rgba(234,179,8,0.35)"}}/>5–10%
-          </span>
-        </div>
-      </div>
+      {/* ══ MATCH MODAL ═════════════════════════════════════════ */}
+      {selectedPick && <MatchModal pick={selectedPick} onClose={()=>setSelectedPick(null)} />}
+
     </div>
   );
 }
