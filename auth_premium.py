@@ -25,8 +25,10 @@ logger = logging.getLogger(__name__)
 
 JWT_SECRET    = os.getenv("JWT_SECRET", "CHANGEME_pgr_secret")
 JWT_ALGORITHM = "HS256"
-COOKIE_NAME   = "pgr_session"
-COOKIE_MAX_AGE = 60 * 60 * 24 * 30   # 30 days
+COOKIE_NAME        = "pgr_session"
+ADMIN_COOKIE_NAME  = "pgr_admin_session"
+COOKIE_MAX_AGE     = 60 * 60 * 24 * 30   # 30 days
+ADMIN_COOKIE_MAX_AGE = 60 * 60 * 8       # 8 hours
 
 # Routes that require an active premium session (HTML pages)
 PROTECTED_HTML = {"/home", "/preview", "/value", "/opportunities"}
@@ -176,13 +178,24 @@ def activate_by_stripe_customer(stripe_customer_id: str, stripe_subscription_id:
 # ─── Session cookie helpers ───────────────────────────────────────────────────
 
 def make_session_token(discord_id: str, username: str = None, email: str = None) -> str:
-    """Encode a JWT session token."""
+    """Encode a JWT session token for a Discord-authenticated user."""
     payload = {
         "sub":      discord_id,
         "username": username,
         "email":    email,
         "iat":      int(time.time()),
         "exp":      int(time.time()) + COOKIE_MAX_AGE,
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+def make_admin_token() -> str:
+    """Encode a short-lived JWT for the site owner admin session."""
+    payload = {
+        "sub":      "admin",
+        "is_admin": True,
+        "iat":      int(time.time()),
+        "exp":      int(time.time()) + ADMIN_COOKIE_MAX_AGE,
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
@@ -196,12 +209,24 @@ def decode_session_token(token: str) -> Optional[dict]:
 
 
 def get_discord_id(request: Request) -> Optional[str]:
-    """Extract discord_user_id from the session cookie."""
+    """Extract discord_user_id from the regular session cookie."""
     token = request.cookies.get(COOKIE_NAME)
     if not token:
         return None
     payload = decode_session_token(token)
     return payload.get("sub") if payload else None
+
+
+def is_admin_session(request: Request) -> bool:
+    """
+    Return True if the request carries a valid admin session cookie.
+    Checks ADMIN_COOKIE_NAME (pgr_admin_session) for is_admin=True claim.
+    """
+    token = request.cookies.get(ADMIN_COOKIE_NAME)
+    if not token:
+        return False
+    payload = decode_session_token(token)
+    return bool(payload and payload.get("is_admin") is True)
 
 
 # ─── FastAPI middleware ───────────────────────────────────────────────────────
@@ -210,8 +235,12 @@ async def premium_middleware(request: Request, call_next):
     """
     Protect HTML pages and API endpoints.
 
+    Access is granted when ANY of the following is true:
+      1. Request carries a valid admin session cookie (is_admin=True)
+      2. Request carries a valid Discord session AND user has active premium in DB
+
     HTML protected paths  → redirect to /login (no cookie) or /upgrade (no premium)
-    API protected paths   → return 401 JSON
+    API protected paths   → return 401/403 JSON
     Everything else       → pass through
     """
     path = request.url.path
@@ -222,16 +251,19 @@ async def premium_middleware(request: Request, call_next):
     if not (is_html_protected or is_api_protected):
         return await call_next(request)
 
+    # ── Gate 1: admin bypass ──────────────────────────────────────────────────
+    if is_admin_session(request):
+        return await call_next(request)
+
+    # ── Gate 2: Discord + premium ─────────────────────────────────────────────
     discord_id = get_discord_id(request)
 
     if not discord_id:
-        # Not logged in at all
         if is_api_protected:
             return JSONResponse({"error": "authentication_required"}, status_code=401)
         return RedirectResponse("/login")
 
     if not is_premium(discord_id):
-        # Logged in but no premium
         if is_api_protected:
             return JSONResponse({"error": "premium_required"}, status_code=403)
         return RedirectResponse("/upgrade")

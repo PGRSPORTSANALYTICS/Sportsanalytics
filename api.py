@@ -37,6 +37,7 @@ from pydantic import BaseModel
 
 from db_helper import db_helper
 from auth_discord import router as discord_auth_router
+from auth_admin import router as admin_auth_router
 from auth_premium import (
     premium_middleware,
     ensure_users_table,
@@ -89,6 +90,7 @@ async def startup_event():
 
 # Include Discord OAuth router
 app.include_router(discord_auth_router)
+app.include_router(admin_auth_router)
 
 # Include staking router
 app.include_router(staking_router)
