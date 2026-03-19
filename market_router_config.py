@@ -16,77 +16,77 @@ from typing import Dict, Any
 
 MARKET_CAPS: Dict[str, Dict[str, Any]] = {
     "TOTALS": {
-        "max_picks": 10,
+        "max_picks": 15,
         "per_market_caps": {
-            "FT_OVER_2_5": 3,
-            "FT_UNDER_2_5": 3,
-            "FT_OVER_3_5": 2,
-            "FT_UNDER_3_5": 2,
-            "FT_OVER_1_5": 2,
-            "FT_UNDER_1_5": 1,
-            "FT_OVER_4_5": 1,
-            "FT_UNDER_4_5": 1,
-            "OTHER_TOTALS": 2,
+            "FT_OVER_2_5": 5,
+            "FT_UNDER_2_5": 0,   # BLOCKED Mar 19, 2026: -38u all-time
+            "FT_OVER_3_5": 4,
+            "FT_UNDER_3_5": 0,   # BLOCKED Mar 19, 2026: losing
+            "FT_OVER_1_5": 3,
+            "FT_UNDER_1_5": 0,   # BLOCKED: too rare, low volume
+            "FT_OVER_4_5": 2,
+            "FT_UNDER_4_5": 0,   # BLOCKED: no edge proven
+            "OTHER_TOTALS": 3,
         },
     },
     "BTTS": {
-        "max_picks": 8,
+        "max_picks": 15,         # Scaled up: BTTS Yes 73% hit rate, +13u
         "per_market_caps": {
-            "BTTS_YES": 5,
+            "BTTS_YES": 12,      # Best performer in Value Singles, 73% hit rate
             "BTTS_NO": 3,
         },
     },
     "ML_AH": {
-        "max_picks": 15,
+        "max_picks": 20,
         "per_market_caps": {
-            "HOME_WIN": 4,
-            "AWAY_WIN": 4,
-            "DRAW": 2,
+            "HOME_WIN": 0,       # BLOCKED: -11u all-time
+            "AWAY_WIN": 0,       # BLOCKED: -2u, no consistent edge
+            "DRAW": 0,           # BLOCKED: 12.5% hit rate
             "AH_HOME": 3,
             "AH_AWAY": 3,
-            "DC_HOME_DRAW": 2,
-            "DC_DRAW_AWAY": 2,
-            "DC_HOME_AWAY": 1,
-            "DNB_HOME": 2,
-            "DNB_AWAY": 2,
+            "DC_HOME_DRAW": 3,
+            "DC_DRAW_AWAY": 10,  # Scaled up: X2 64% hit rate, +12.8u
+            "DC_HOME_AWAY": 2,
+            "DNB_HOME": 3,
+            "DNB_AWAY": 3,
             "OTHER_ML_AH": 2,
         },
     },
     "CORNERS_MATCH": {
-        "max_picks": 6,
+        "max_picks": 15,         # Scaled up: 62% hit rate PROD, +389u all-time
         "per_market_caps": {
-            "CORNERS_OVER": 4,
-            "CORNERS_UNDER": 2,
+            "CORNERS_OVER": 12,
+            "CORNERS_UNDER": 3,
         },
     },
     "CORNERS_TEAM": {
-        "max_picks": 4,
+        "max_picks": 10,         # Scaled up: team corners positive in LEARNING
         "per_market_caps": {
-            "HOME_CORNERS_OVER": 2,
-            "AWAY_CORNERS_OVER": 2,
+            "HOME_CORNERS_OVER": 5,
+            "AWAY_CORNERS_OVER": 5,
         },
     },
     "CORNERS_HANDICAP": {
-        "max_picks": 6,
+        "max_picks": 12,
         "per_market_caps": {
-            "CORNERS_HC_HOME": 3,
-            "CORNERS_HC_AWAY": 3,
+            "CORNERS_HC_HOME": 6,
+            "CORNERS_HC_AWAY": 6,
         },
     },
     "CARDS_MATCH": {
-        "max_picks": 6,
+        "max_picks": 15,         # Scaled up: 87.2% hit rate PROD, +289u all-time
         "per_market_caps": {
-            "MATCH_CARDS_OVER": 4,
-            "MATCH_CARDS_UNDER": 2,
-            "BOOKING_POINTS_OVER": 2,
+            "MATCH_CARDS_OVER": 10,
+            "MATCH_CARDS_UNDER": 3,
+            "BOOKING_POINTS_OVER": 3,
             "BOOKING_POINTS_UNDER": 1,
         },
     },
     "CARDS_TEAM": {
-        "max_picks": 4,
+        "max_picks": 10,         # Scaled up with Cards
         "per_market_caps": {
-            "HOME_CARDS_OVER": 2,
-            "AWAY_CARDS_OVER": 2,
+            "HOME_CARDS_OVER": 5,
+            "AWAY_CARDS_OVER": 5,
         },
     },
     "SHOTS_TEAM": {
@@ -101,23 +101,23 @@ MARKET_CAPS: Dict[str, Dict[str, Any]] = {
         },
     },
     "VALUE_SINGLES": {
-        "max_picks": 15,
+        "max_picks": 20,
         "per_market_caps": {
-            "HOME_WIN": 4,
-            "AWAY_WIN": 4,
-            "DRAW": 2,
+            "HOME_WIN": 0,       # BLOCKED: -11u all-time
+            "AWAY_WIN": 0,       # BLOCKED: -2u all-time
+            "DRAW": 0,           # BLOCKED: 12.5% hit rate
             "AH_HOME": 3,
             "AH_AWAY": 3,
-            "DC_HOME_DRAW": 2,
-            "DC_DRAW_AWAY": 2,
-            "DNB_HOME": 2,
-            "DNB_AWAY": 2,
-            "OTHER": 3,
+            "DC_HOME_DRAW": 3,
+            "DC_DRAW_AWAY": 10,  # 64% hit rate, +12.8u
+            "DNB_HOME": 3,
+            "DNB_AWAY": 3,
+            "OTHER": 4,
         },
     },
 }
 
-GLOBAL_DAILY_MAX_PICKS = 25
+GLOBAL_DAILY_MAX_PICKS = 80   # Scaled up Mar 19, 2026: targeting 150 opportunities/day
 
 
 def get_market_cap_key(market_key: str, product: str) -> str:

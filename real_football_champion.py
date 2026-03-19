@@ -4173,12 +4173,12 @@ def get_pending_match_ids() -> set:
         return set()
 
 
-DAILY_BET_CAP = 8
+DAILY_BET_CAP = 20           # Mar 19, 2026: scaled up for volume growth
 SUMMER_DAILY_BET_CAP = 3
 # Per-match-date caps: max PROD picks for any single match day (regardless of when created)
-MATCH_DATE_CAP_VALUE_SINGLES = 8
-MATCH_DATE_CAP_CORNERS = 10
-MATCH_DATE_CAP_CARDS = 5
+MATCH_DATE_CAP_VALUE_SINGLES = 20
+MATCH_DATE_CAP_CORNERS = 25   # Mar 19, 2026: scaled up, 62% hit rate proven
+MATCH_DATE_CAP_CARDS = 15     # Mar 19, 2026: scaled up, 87.2% hit rate proven
 
 SUMMER_LEAGUE_KEYS = {
     'soccer_usa_mls',
@@ -4344,7 +4344,7 @@ def run_single_cycle():
         return False
 
 
-CORNERS_CARDS_DAILY_CAP = 10
+CORNERS_CARDS_DAILY_CAP = 25
 
 def run_corners_cards_cycle():
     """Run corners as INDEPENDENT cycle with own daily cap. Cards are handled separately by run_late_cards_cycle() (2-3h before kickoff only)."""
@@ -4502,7 +4502,7 @@ def run_corners_cards_cycle():
         print(f"   ⚠️ Discord props webhook error: {e}")
 
 
-CARDS_DAILY_CAP = 5
+CARDS_DAILY_CAP = 15
 
 def run_late_cards_cycle():
     """

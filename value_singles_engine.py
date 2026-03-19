@@ -122,7 +122,7 @@ MAX_LEARNING_ODDS = 4.00      # Collect predictions up to 4.00 for AI training
 MIN_VALUE_SINGLE_CONFIDENCE = 0.55  # 55% - tightened for quality (Feb 23, 2026)
 
 # Maximum number of value singles per day - CORE PRODUCT
-MAX_VALUE_SINGLES_PER_DAY = 6  # Feb 23, 2026 - strict cap, only best picks (20-30% of total)
+MAX_VALUE_SINGLES_PER_DAY = 15  # Mar 19, 2026 - scaled up: BTTS Yes (73% hit) + X2 (64% hit) driving volume
 
 # Tournament filter mode: relaxed thresholds for UCL/UEL
 TOURNAMENT_LEAGUES = {

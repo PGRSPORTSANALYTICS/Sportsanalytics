@@ -54,7 +54,7 @@ from collections import defaultdict
 from bet_filter import BetCandidate
 from multimarket_config import PRODUCT_CONFIGS, get_market_label, MarketType
 
-CORNERS_GLOBAL_DAILY_CAP = 10
+CORNERS_GLOBAL_DAILY_CAP = 25
 CORNERS_MAX_PICKS_PER_MATCH = 3
 
 try:
