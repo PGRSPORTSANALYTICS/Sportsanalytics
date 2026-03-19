@@ -3,193 +3,83 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PGR Sports Analytics</title>
+<title>PGR Analytics</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-<script>
-tailwind.config = {
-  theme: {
-    extend: {
-      colors: {
-        zinc: {
-          950: '#09090b',
-        }
-      }
-    }
-  }
-}
-</script>
 <style>
-  body { background: #000; }
-  ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { background: #000; }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body, #root { height: 100%; margin: 0; }
+  body { background: #0b0e14; font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif; color: #e2e8f0; overflow: hidden; }
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 3px; }
-  .row-ev-high { border-left: 3px solid #22c55e; background: linear-gradient(90deg,rgba(34,197,94,0.06) 0%,transparent 60%); }
-  .row-ev-med  { border-left: 3px solid #eab308; background: linear-gradient(90deg,rgba(234,179,8,0.05) 0%,transparent 60%); }
-  .row-ev-low  { border-left: 3px solid transparent; }
-  .sticky-th { position: sticky; top: 0; z-index: 10; background: #09090b; }
-  .conf-track { background: rgba(255,255,255,0.08); border-radius: 999px; overflow: hidden; }
-  .conf-fill-bar { border-radius: 999px; background: linear-gradient(90deg,#6366f1,#818cf8); height: 100%; }
-  .ev-pill-high { background: rgba(34,197,94,0.15); color: #4ade80; border: 1px solid rgba(34,197,94,0.3); }
-  .ev-pill-med  { background: rgba(234,179,8,0.12);  color: #fbbf24; border: 1px solid rgba(234,179,8,0.25); }
-  .ev-pill-low  { background: rgba(255,255,255,0.05); color: #94a3b8; border: 1px solid rgba(255,255,255,0.1); }
-  @keyframes live-pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
-  .live-dot { animation: live-pulse 2s infinite; }
+
+  .row-high { border-left: 2px solid #22c55e !important; background: linear-gradient(90deg,rgba(34,197,94,0.07) 0%,transparent 55%); }
+  .row-med  { border-left: 2px solid #eab308 !important; background: linear-gradient(90deg,rgba(234,179,8,0.05) 0%,transparent 55%); }
+  .row-low  { border-left: 2px solid transparent; }
+
+  .ev-high { background: rgba(34,197,94,0.15); color: #4ade80; border: 1px solid rgba(34,197,94,0.3); }
+  .ev-med  { background: rgba(234,179,8,0.12);  color: #fbbf24; border: 1px solid rgba(234,179,8,0.25); }
+  .ev-low  { background: rgba(255,255,255,0.05); color: #71717a; border: 1px solid rgba(255,255,255,0.08); }
+
+  .sth { position: sticky; top: 0; z-index: 20; background: #0f1219; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+  .pulse { animation: pulse 2s infinite; }
+
+  input[type=range] { -webkit-appearance:none; appearance:none; background:transparent; cursor:pointer; width:80px; }
+  input[type=range]::-webkit-slider-runnable-track { background:#27272a; border-radius:4px; height:3px; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:12px; height:12px; border-radius:50%; background:#22c55e; margin-top:-4.5px; }
+
+  select { -webkit-appearance:none; appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%2352525b' viewBox='0 0 20 20'%3E%3Cpath d='M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 6px center; background-size:14px; padding-right:24px !important; }
+
+  .feat-card { flex-shrink:0; display:flex; align-items:center; gap:8px; padding:5px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.03); cursor:default; white-space:nowrap; }
+  .feat-card:hover { background:rgba(255,255,255,0.06); }
+  .tog { display:flex; border-radius:6px; overflow:hidden; border:1px solid rgba(255,255,255,0.1); }
+  .tog button { font-size:11px; padding:4px 10px; transition:background .12s,color .12s; }
+  .tb-sep { width:1px; background:rgba(255,255,255,0.07); margin:4px 0; }
+
+  @media(max-width:768px){
+    body { overflow: auto; }
+    .desktop-table { display:none; }
+    .mobile-cards { display:flex !important; }
+  }
+  @media(min-width:769px){
+    .mobile-cards { display:none; }
+  }
 </style>
 </head>
-<body class="bg-black text-white">
-<div id="root"></div>
+<body>
+<div id="root" style="height:100%"></div>
 <script type="text/babel">
 const { useMemo, useState, useEffect, useCallback } = React;
 
-/* ── Mock data ─────────────────────────────────────────────── */
+/* ─── Mock data ─────────────────────────────────────────────── */
 const mockPicks = [
-  {
-    sport: "Football",
-    league: "Champions League",
-    match: "Aston Villa vs Lille",
-    market: "Corners Over 9.5",
-    selection: "Over",
-    odds: 1.99,
-    bookmaker: "Pinnacle",
-    ev: 12.8,
-    confidence: 56,
-    model_probability: 56,
-    implied_probability: 50.3,
-    kickoff_time: "2026-03-20 20:00",
-    detected_at: "2026-03-19 09:05",
-    featured: true,
-    badge: "Top Value",
-  },
-  {
-    sport: "Football",
-    league: "2. Bundesliga",
-    match: "Hannover 96 vs Braunschweig",
-    market: "Braunschweig Over 3.5 Corners",
-    selection: "Over",
-    odds: 2.02,
-    bookmaker: "Bet365",
-    ev: 25.0,
-    confidence: 65,
-    model_probability: 65,
-    implied_probability: 49.5,
-    kickoff_time: "2026-03-20 18:30",
-    detected_at: "2026-03-19 09:05",
-    featured: true,
-    badge: "High EV",
-  },
-  {
-    sport: "Football",
-    league: "National",
-    match: "Boulogne vs Nancy",
-    market: "Corners Over 9.5",
-    selection: "Over",
-    odds: 2.02,
-    bookmaker: "Unibet",
-    ev: 14.9,
-    confidence: 56,
-    model_probability: 56,
-    implied_probability: 49.5,
-    kickoff_time: "2026-03-20 19:00",
-    detected_at: "2026-03-19 09:10",
-    featured: true,
-    badge: "Early Line",
-  },
-  {
-    sport: "Football",
-    league: "A-League",
-    match: "WS Wanderers vs Adelaide United",
-    market: "Corners Under 10.5",
-    selection: "Under",
-    odds: 1.87,
-    bookmaker: "Kambi",
-    ev: 4.7,
-    confidence: 55,
-    model_probability: 55,
-    implied_probability: 53.5,
-    kickoff_time: "2026-03-20 10:00",
-    detected_at: "2026-03-19 09:12",
-    featured: true,
-    badge: "Top Confidence",
-  },
-  {
-    sport: "Football",
-    league: "Europa League",
-    match: "AS Roma vs Bologna",
-    market: "Over 2.5 Goals",
-    selection: "Over",
-    odds: 2.27,
-    bookmaker: "Pinnacle",
-    ev: 25.0,
-    confidence: 100,
-    model_probability: 71,
-    implied_probability: 44.1,
-    kickoff_time: "2026-03-19 20:00",
-    detected_at: "2026-03-19 06:19",
-    featured: false,
-    badge: "High EV",
-  },
-  {
-    sport: "Football",
-    league: "Turkish Super League",
-    match: "Besiktas vs Kasimpasa",
-    market: "Over 3.5 Goals",
-    selection: "Over",
-    odds: 2.25,
-    bookmaker: "Unibet",
-    ev: 25.0,
-    confidence: 100,
-    model_probability: 70,
-    implied_probability: 44.4,
-    kickoff_time: "2026-03-19 17:00",
-    detected_at: "2026-03-19 06:20",
-    featured: false,
-    badge: "High EV",
-  },
-  {
-    sport: "Football",
-    league: "Europa League",
-    match: "FC Midtjylland vs Nottingham Forest",
-    market: "Home or Draw",
-    selection: "X2",
-    odds: 1.74,
-    bookmaker: "Pinnacle",
-    ev: 17.5,
-    confidence: 93,
-    model_probability: 71,
-    implied_probability: 57.5,
-    kickoff_time: "2026-03-19 17:45",
-    detected_at: "2026-03-19 06:21",
-    featured: false,
-    badge: "Top Confidence",
-  },
-  {
-    sport: "Basketball",
-    league: "NCAAB",
-    match: "Duke vs North Carolina",
-    market: "Total Over 148.5",
-    selection: "Over",
-    odds: 1.87,
-    bookmaker: "DraftKings",
-    ev: 8.3,
-    confidence: 72,
-    model_probability: 63,
-    implied_probability: 53.5,
-    kickoff_time: "2026-03-19 22:00",
-    detected_at: "2026-03-19 08:00",
-    featured: false,
-    badge: "Value",
-  },
+  { sport:"Football", league:"2. Bundesliga",    match:"Hannover 96 vs Braunschweig",          market:"Over 3.5 Corners",  selection:"Over",  odds:2.02, bookmaker:"Bet365",    ev:25.0, confidence:65,  model_probability:65, kickoff_time:"2026-03-20 18:30", detected_at:"2026-03-19 09:05", featured:true,  badge:"High EV" },
+  { sport:"Football", league:"Europa League",    match:"AS Roma vs Bologna",                   market:"Over 2.5 Goals",    selection:"Over",  odds:2.27, bookmaker:"Pinnacle",   ev:25.0, confidence:100, model_probability:71, kickoff_time:"2026-03-19 20:00", detected_at:"2026-03-19 06:19", featured:true,  badge:"High EV" },
+  { sport:"Football", league:"Europa League",    match:"FC Midtjylland vs Nott'm Forest",      market:"Home or Draw",      selection:"X2",    odds:1.74, bookmaker:"Pinnacle",   ev:17.5, confidence:93,  model_probability:71, kickoff_time:"2026-03-19 17:45", detected_at:"2026-03-19 06:21", featured:true,  badge:"Top Conf" },
+  { sport:"Football", league:"National",         match:"Boulogne vs Nancy",                    market:"Corners Over 9.5",  selection:"Over",  odds:2.02, bookmaker:"Unibet",    ev:14.9, confidence:56,  model_probability:56, kickoff_time:"2026-03-20 19:00", detected_at:"2026-03-19 09:10", featured:true,  badge:"Early Line" },
+  { sport:"Football", league:"Champions League", match:"Aston Villa vs Lille",                 market:"Corners Over 9.5",  selection:"Over",  odds:1.99, bookmaker:"Pinnacle",   ev:12.8, confidence:56,  model_probability:56, kickoff_time:"2026-03-20 20:00", detected_at:"2026-03-19 09:05", featured:false, badge:"Top Value" },
+  { sport:"Football", league:"Turkish SL",       match:"Besiktas vs Kasimpasa",                market:"Over 3.5 Goals",    selection:"Over",  odds:2.25, bookmaker:"Unibet",    ev:25.0, confidence:100, model_probability:70, kickoff_time:"2026-03-19 17:00", detected_at:"2026-03-19 06:20", featured:false, badge:"High EV" },
+  { sport:"Football", league:"A-League",         match:"WS Wanderers vs Adelaide",             market:"Corners Under 10.5",selection:"Under", odds:1.87, bookmaker:"Kambi",    ev:4.7,  confidence:55,  model_probability:55, kickoff_time:"2026-03-20 10:00", detected_at:"2026-03-19 09:12", featured:false, badge:"Value" },
+  { sport:"Basketball",league:"NCAAB",           match:"Duke vs North Carolina",               market:"Total Over 148.5",  selection:"Over",  odds:1.87, bookmaker:"DraftKings",ev:8.3,  confidence:72,  model_probability:63, kickoff_time:"2026-03-19 22:00", detected_at:"2026-03-19 08:00", featured:false, badge:"Value" },
+  { sport:"Football", league:"Bundesliga",       match:"Bayern Munich vs Dortmund",            market:"Home Win",          selection:"Home",  odds:1.54, bookmaker:"Unibet",    ev:11.5, confidence:88,  model_probability:72, kickoff_time:"2026-03-20 15:30", detected_at:"2026-03-19 07:00", featured:false, badge:"High EV" },
+  { sport:"Football", league:"La Liga",          match:"Real Madrid vs Barcelona",             market:"BTTS Yes",          selection:"Yes",   odds:1.68, bookmaker:"Pinnacle",   ev:6.2,  confidence:81,  model_probability:67, kickoff_time:"2026-03-20 21:00", detected_at:"2026-03-19 08:30", featured:false, badge:"Value" },
+  { sport:"Football", league:"Serie A",          match:"Juventus vs AC Milan",                 market:"Draw No Bet Home",  selection:"Home",  odds:1.82, bookmaker:"Bet365",    ev:9.4,  confidence:75,  model_probability:65, kickoff_time:"2026-03-20 20:45", detected_at:"2026-03-19 07:45", featured:false, badge:"Value" },
+  { sport:"Football", league:"Premier League",   match:"Arsenal vs Chelsea",                   market:"Over 2.5 Goals",   selection:"Over",  odds:1.72, bookmaker:"Pinnacle",   ev:4.1,  confidence:65,  model_probability:62, kickoff_time:"2026-03-22 14:00", detected_at:"2026-03-19 10:00", featured:false, badge:"Value" },
+  { sport:"Football", league:"Ligue 1",          match:"PSG vs Olympique Lyon",                market:"Over 2.5 Goals",   selection:"Over",  odds:1.62, bookmaker:"Betsson",    ev:7.8,  confidence:84,  model_probability:69, kickoff_time:"2026-03-21 21:00", detected_at:"2026-03-19 09:30", featured:false, badge:"Value" },
+  { sport:"Football", league:"Eredivisie",       match:"Ajax vs PSV Eindhoven",                market:"Over 3.5 Goals",   selection:"Over",  odds:2.15, bookmaker:"Unibet",    ev:16.5, confidence:79,  model_probability:67, kickoff_time:"2026-03-22 16:30", detected_at:"2026-03-19 08:15", featured:false, badge:"High EV" },
+  { sport:"Basketball",league:"NCAAB",           match:"Kansas vs Gonzaga",                    market:"Moneyline Kansas",  selection:"Home",  odds:2.10, bookmaker:"FanDuel",   ev:14.2, confidence:77,  model_probability:59, kickoff_time:"2026-03-20 02:00", detected_at:"2026-03-19 09:00", featured:false, badge:"High EV" },
 ];
 
-/* ── helpers ────────────────────────────────────────────────── */
+/* ─── Helpers ───────────────────────────────────────────────── */
 function normalizePick(b) {
   return {
     sport: b.sport || "Football",
     league: b.league || "",
-    match: b.match || `${b.home_team || ""} vs ${b.away_team || ""}`,
+    match: b.match || `${b.home_team||""} vs ${b.away_team||""}`,
     market: b.market || "",
     selection: b.selection || "",
     odds: b.odds || 0,
@@ -197,476 +87,303 @@ function normalizePick(b) {
     ev: b.ev_pct ?? b.ev ?? 0,
     confidence: b.confidence || 0,
     model_probability: b.model_prob ? b.model_prob * 100 : 0,
-    implied_probability: b.odds > 0 ? (1 / b.odds) * 100 : 0,
+    implied_probability: b.odds > 0 ? (1/b.odds)*100 : 0,
     kickoff_time: b.kickoff || b.kickoff_time || "",
     detected_at: b.created_at || b.detected_at || "",
     featured: b.featured || false,
-    badge: b.badge || (b.ev_pct >= 10 ? "High EV" : b.confidence >= 85 ? "Top Confidence" : "Value"),
+    badge: b.badge || (b.ev_pct >= 15 ? "High EV" : b.confidence >= 85 ? "Top Conf" : "Value"),
   };
 }
 
-function getEvClass(ev) {
-  if (ev > 10) return "border-green-500 bg-green-500/5";
-  if (ev >= 5) return "border-yellow-500 bg-yellow-500/5";
-  return "border-zinc-700 bg-zinc-900";
-}
-
-function getEvPillClass(ev) {
-  if (ev > 10) return "ev-pill-high";
-  if (ev >= 5)  return "ev-pill-med";
-  return "ev-pill-low";
-}
-
-function getRowClass(ev) {
-  if (ev >= 15) return "row-ev-high";
-  if (ev >= 5)  return "row-ev-med";
-  return "row-ev-low";
-}
-
-function ConfBar({ v }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs text-zinc-300 w-8 shrink-0">{Math.round(v)}%</span>
-      <div className="conf-track flex-1 h-1.5" style={{maxWidth: 48}}>
-        <div className="conf-fill-bar" style={{width: `${Math.min(100, v)}%`}} />
-      </div>
-    </div>
-  );
-}
-
-function EvPill({ ev }) {
-  return (
-    <span className={`${getEvPillClass(ev)} text-xs font-bold px-2 py-0.5 rounded-full`}>
-      +{Number(ev).toFixed(1)}%
-    </span>
-  );
-}
+function evTier(ev) { return ev >= 15 ? "high" : ev >= 5 ? "med" : "low"; }
 
 function fmtKickoff(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
   if (isNaN(d)) return iso;
   const diff = d - Date.now();
-  const time = d.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
+  const t = d.toLocaleTimeString("sv-SE", { hour:"2-digit", minute:"2-digit" });
   const today = d.toDateString() === new Date().toDateString();
-  if (!today) {
-    return d.toLocaleDateString("sv-SE", { month: "short", day: "numeric" }) + " " + time;
-  }
-  if (diff > 0 && diff < 7200000) {
-    const m = Math.floor(diff / 60000);
-    return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`;
-  }
-  return time;
+  if (!today) return d.toLocaleDateString("sv-SE",{month:"short",day:"numeric"})+" "+t;
+  if (diff > 0 && diff < 3600000) return `${Math.floor(diff/60000)}m · ${t}`;
+  return t;
 }
-
 function fmtDetected(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
   if (isNaN(d)) return iso;
-  return d.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleTimeString("sv-SE",{hour:"2-digit",minute:"2-digit"});
 }
 
-/* ── HeaderStats ────────────────────────────────────────────── */
-function HeaderStats({ stats }) {
-  const items = [
-    { label: "ROI",          value: stats ? `+${Number(stats.roi || 0).toFixed(1)}%` : "+22.7%", color: "text-green-400" },
-    { label: "Units",        value: stats ? `+${Number(stats.units || 0).toFixed(0)}u` : "+829u",  color: "text-green-400" },
-    { label: "Bets Tracked", value: stats ? Number(stats.bets || 0).toLocaleString() : "4,258",   color: "text-white" },
-    { label: "Hit Rate",     value: stats ? `${Number(stats.hit_rate || 0).toFixed(1)}%` : "54.5%", color: "text-white" },
-  ];
-  return (
-    <div className="flex flex-wrap gap-2">
-      {items.map((item) => (
-        <div key={item.label} className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2">
-          <span className="text-xs text-zinc-500 uppercase tracking-widest whitespace-nowrap">{item.label}</span>
-          <span className={`text-base font-bold ${item.color}`}>{item.value}</span>
-        </div>
-      ))}
-    </div>
-  );
+/* ─── Sub-components ────────────────────────────────────────── */
+function EvBadge({ ev }) {
+  const t = evTier(ev);
+  return <span className={`ev-${t} text-xs font-bold px-1.5 py-px rounded`}>+{Number(ev).toFixed(1)}%</span>;
 }
 
-/* ── PickCard ───────────────────────────────────────────────── */
-function PickCard({ pick }) {
-  const badgeColor = pick.ev > 10
-    ? "bg-green-500/10 text-green-400 border border-green-500/20"
-    : pick.ev >= 5
-    ? "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20"
-    : "bg-zinc-800 text-zinc-300";
+function MiniConf({ v }) {
   return (
-    <div className={`rounded-2xl border p-4 flex flex-col gap-3 ${getEvClass(pick.ev)}`}>
-      <div className="flex items-center justify-between">
-        <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${badgeColor}`}>{pick.badge}</span>
-        <span className="text-xs text-zinc-500 truncate ml-2 max-w-[120px]">{pick.league}</span>
-      </div>
-      <div>
-        <div className="text-white font-semibold text-sm leading-snug">{pick.match}</div>
-        <div className="mt-0.5 text-xs text-zinc-400">{pick.market}</div>
-      </div>
-      <div className="grid grid-cols-3 gap-2 text-sm border-t border-zinc-800 pt-3">
-        <div>
-          <div className="text-zinc-500 text-xs mb-0.5">Odds</div>
-          <div className="text-white font-semibold">{Number(pick.odds).toFixed(2)}</div>
-        </div>
-        <div>
-          <div className="text-zinc-500 text-xs mb-0.5">EV</div>
-          <EvPill ev={pick.ev} />
-        </div>
-        <div>
-          <div className="text-zinc-500 text-xs mb-0.5">Conf.</div>
-          <ConfBar v={pick.confidence} />
-        </div>
-      </div>
-      <div className="text-xs text-zinc-500 flex justify-between">
-        <span>{pick.bookmaker}</span>
-        <span>⏱ {fmtKickoff(pick.kickoff_time)}</span>
+    <div style={{display:"flex",alignItems:"center",gap:5}}>
+      <span style={{fontSize:11,color:"#a1a1aa",width:26}}>{Math.round(v)}%</span>
+      <div style={{width:36,height:3,background:"rgba(255,255,255,0.08)",borderRadius:99,overflow:"hidden"}}>
+        <div style={{width:`${Math.min(100,v)}%`,height:"100%",background:"linear-gradient(90deg,#6366f1,#818cf8)",borderRadius:99}} />
       </div>
     </div>
   );
 }
 
-/* ── PremiumTeaser ──────────────────────────────────────────── */
-function PremiumTeaser() {
-  return (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
-      <div className="text-lg font-semibold text-white">Unlock Full Access</div>
-      <p className="mt-2 text-zinc-400">
-        More live value spots, earlier lines, and full dashboard access are available inside Discord.
-      </p>
-      <button className="mt-4 rounded-xl bg-green-500 px-4 py-2 font-medium text-black hover:bg-green-400">
-        Join Discord
-      </button>
-    </div>
-  );
-}
+/* ─── Main App ──────────────────────────────────────────────── */
+function App() {
+  const [allPicks, setAllPicks]   = useState(mockPicks);
+  const [apiStats, setApiStats]   = useState(null);
+  const [loading, setLoading]     = useState(true);
+  const [isMock, setIsMock]       = useState(false);
 
-/* ── DashboardPage ──────────────────────────────────────────── */
-function DashboardPage() {
-  const [allPicks, setAllPicks] = useState(mockPicks);
-  const [apiStats, setApiStats] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [isMock, setIsMock] = useState(false);
-
-  const [sport, setSport] = useState("All");
-  const [marketSearch, setMarketSearch] = useState("");
-  const [minOdds, setMinOdds] = useState("");
-  const [maxOdds, setMaxOdds] = useState("");
-  const [minEv, setMinEv] = useState("");
-  const [onlyToday, setOnlyToday] = useState(false);
-  const [onePerMatch, setOnePerMatch] = useState(false);
-  const [sortBy, setSortBy] = useState("ev_desc");
-  const [quickFilter, setQuickFilter] = useState("all");
+  const [sport, setSport]         = useState("All");
   const [liveFilter, setLiveFilter] = useState("all");
-  const [evSlider, setEvSlider] = useState(0);
+  const [evSlider, setEvSlider]   = useState(0);
+  const [minOdds, setMinOdds]     = useState("");
+  const [maxOdds, setMaxOdds]     = useState("");
+  const [q, setQ]                 = useState("");
+  const [sortBy, setSortBy]       = useState("ev_desc");
 
   const fetchData = useCallback(async () => {
-    setLoading(true);
     try {
       const [bRes, sRes] = await Promise.all([
         fetch("/bets?status=upcoming&limit=200&sort=ev"),
         fetch("/bets/stats"),
       ]);
-      if (!bRes.ok) throw new Error("API error");
+      if (!bRes.ok) throw new Error();
       const bData = await bRes.json();
-      const items = (bData.bets || []).filter(
-        (b) => !b.status || b.status === "pending"
-      );
-      if (items.length > 0) {
-        setAllPicks(items.map(normalizePick));
-        setIsMock(false);
-      } else {
-        setAllPicks(mockPicks);
-        setIsMock(true);
-      }
+      const items = (bData.bets||[]).filter(b => !b.status || b.status === "pending");
+      if (items.length > 0) { setAllPicks(items.map(normalizePick)); setIsMock(false); }
+      else { setAllPicks(mockPicks); setIsMock(true); }
       if (sRes.ok) {
         const sd = await sRes.json();
-        setApiStats({
-          roi: sd.roi ?? 22.7,
-          units: sd.profit_units ?? 829,
-          bets: sd.total ?? 4258,
-          hit_rate: sd.hit_rate ?? 54.5,
-        });
+        setApiStats({ roi: sd.roi??22.7, units: sd.profit_units??829, bets: sd.total??4258, hit_rate: sd.hit_rate??54.5 });
       }
-    } catch {
-      setAllPicks(mockPicks);
-      setIsMock(true);
-    }
+    } catch { setAllPicks(mockPicks); setIsMock(true); }
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    fetchData();
-    const t = setInterval(fetchData, 5 * 60000);
-    return () => clearInterval(t);
-  }, []);
+  useEffect(() => { fetchData(); const t = setInterval(fetchData, 5*60000); return () => clearInterval(t); }, []);
 
-  const allSports = useMemo(
-    () => ["All", ...new Set(allPicks.map((p) => p.sport).filter(Boolean))],
-    [allPicks]
-  );
-
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const allSports = useMemo(() => ["All",...new Set(allPicks.map(p=>p.sport).filter(Boolean))], [allPicks]);
+  const todayStr  = new Date().toISOString().slice(0,10);
 
   const filtered = useMemo(() => {
-    let rows = [...allPicks];
-    if (sport !== "All") rows = rows.filter((p) => p.sport === sport);
-    if (marketSearch.trim()) {
-      rows = rows.filter((p) =>
-        `${p.match} ${p.market} ${p.league}`
-          .toLowerCase()
-          .includes(marketSearch.toLowerCase())
-      );
-    }
-    if (minOdds) rows = rows.filter((p) => p.odds >= Number(minOdds));
-    if (maxOdds) rows = rows.filter((p) => p.odds <= Number(maxOdds));
-    if (minEv) rows = rows.filter((p) => p.ev >= Number(minEv));
-    if (quickFilter === "high_ev") rows = rows.filter((p) => p.ev > 10);
-    if (quickFilter === "top_conf") rows = rows.filter((p) => p.confidence >= 80);
-    if (evSlider > 0) rows = rows.filter((p) => p.ev >= evSlider);
-    if (liveFilter === "prematch") rows = rows.filter((p) => (p.status || "prematch") === "prematch");
-    if (liveFilter === "live") rows = rows.filter((p) => p.status === "live");
-    if (onlyToday) {
-      rows = rows.filter(
-        (p) => (p.kickoff_time || "").startsWith(todayStr)
-      );
-    }
-    if (onePerMatch) {
-      const seen = new Set();
-      rows = rows.filter((p) => {
-        if (seen.has(p.match)) return false;
-        seen.add(p.match);
-        return true;
-      });
-    }
-    const sorters = {
-      ev_desc:   (a, b) => b.ev - a.ev,
-      ev_asc:    (a, b) => a.ev - b.ev,
-      conf_desc: (a, b) => b.confidence - a.confidence,
-      odds_desc: (a, b) => b.odds - a.odds,
-      kickoff:   (a, b) => new Date(a.kickoff_time) - new Date(b.kickoff_time),
-    };
-    return rows.sort(sorters[sortBy] || sorters.ev_desc);
-  }, [allPicks, sport, marketSearch, minOdds, maxOdds, minEv, onlyToday, onePerMatch, sortBy, quickFilter, todayStr]);
+    let r = [...allPicks];
+    if (sport !== "All") r = r.filter(p => p.sport === sport);
+    if (liveFilter === "prematch") r = r.filter(p => (p.status||"prematch")==="prematch");
+    if (liveFilter === "live")     r = r.filter(p => p.status === "live");
+    if (evSlider > 0)  r = r.filter(p => p.ev >= evSlider);
+    if (minOdds)       r = r.filter(p => p.odds >= Number(minOdds));
+    if (maxOdds)       r = r.filter(p => p.odds <= Number(maxOdds));
+    if (q.trim()) { const qL = q.toLowerCase(); r = r.filter(p => `${p.match} ${p.market} ${p.league}`.toLowerCase().includes(qL)); }
+    const sorters = { ev_desc:(a,b)=>b.ev-a.ev, ev_asc:(a,b)=>a.ev-b.ev, conf_desc:(a,b)=>b.confidence-a.confidence, odds_desc:(a,b)=>b.odds-a.odds, kickoff:(a,b)=>new Date(a.kickoff_time)-new Date(b.kickoff_time) };
+    return r.sort(sorters[sortBy]||sorters.ev_desc);
+  }, [allPicks, sport, liveFilter, evSlider, minOdds, maxOdds, q, sortBy]);
 
   const featured = useMemo(() => {
-    const f = filtered.filter((p) => p.featured).slice(0, 4);
-    if (f.length >= 4) return f;
-    const extra = filtered.filter((p) => !p.featured).slice(0, 4 - f.length);
-    return [...f, ...extra];
-  }, [filtered]);
+    const f = allPicks.filter(p=>p.featured).slice(0,6);
+    if (f.length >= 3) return f;
+    return [...f, ...allPicks.filter(p=>!p.featured).slice(0,6-f.length)];
+  }, [allPicks]);
+
+  const S = apiStats;
+  const kpis = [
+    { label:"ROI",         val: S ? `+${Number(S.roi).toFixed(1)}%` : "+22.7%",  green:true },
+    { label:"Profit",      val: S ? `+${Number(S.units).toFixed(0)}u` : "+829u",  green:true },
+    { label:"Bets",        val: S ? Number(S.bets).toLocaleString() : "4,258",    green:false },
+    { label:"Hit Rate",    val: S ? `${Number(S.hit_rate).toFixed(1)}%` : "54.5%",green:false },
+    { label:"Today",       val: filtered.length,                                   green:false },
+  ];
+
+  const inputCls = "text-xs rounded px-2 py-1 text-zinc-200 placeholder-zinc-600 outline-none bg-transparent border border-zinc-700 focus:border-zinc-500";
+  const selCls   = inputCls + " pr-5 cursor-pointer";
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <div className="mx-auto max-w-7xl px-4 py-8">
+    <div style={{display:"flex",flexDirection:"column",height:"100%",background:"#0b0e14",overflow:"hidden"}}>
 
-        {/* ── Header ── */}
-        <header className="mb-8">
-          <div className="flex items-center justify-between mb-5">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-black shrink-0" style={{background:"linear-gradient(135deg,#22c55e,#16a34a)"}}>P</div>
-              <div>
-                <h1 className="text-lg font-bold leading-tight">PGR Sports Analytics</h1>
-                <p className="text-xs text-zinc-500">We identify value — not just picks.</p>
-              </div>
+      {/* ══ TOPBAR ══════════════════════════════════════════════ */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 14px",height:40,borderBottom:"1px solid rgba(255,255,255,0.07)",background:"#0d1117",flexShrink:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:22,height:22,borderRadius:5,background:"linear-gradient(135deg,#22c55e,#16a34a)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,color:"#fff",flexShrink:0}}>P</div>
+          <span style={{fontSize:13,fontWeight:700,color:"#f1f5f9",letterSpacing:"-0.02em"}}>PGR Analytics</span>
+          <span style={{fontSize:10,color:"#3f3f46",marginLeft:2}}>/ Value Scanner</span>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <span className="pulse" style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",display:"inline-block"}} />
+          <span style={{fontSize:10,color:"#52525b"}}>Live</span>
+          {isMock && <span style={{fontSize:10,color:"#fbbf24",border:"1px solid rgba(251,191,36,0.3)",borderRadius:4,padding:"1px 6px",background:"rgba(251,191,36,0.08)"}}>DEMO</span>}
+          <button onClick={fetchData} style={{fontSize:10,color:"#71717a",border:"1px solid rgba(255,255,255,0.1)",borderRadius:5,padding:"3px 8px",background:"transparent",cursor:"pointer"}}>↻ Refresh</button>
+          <button style={{fontSize:10,fontWeight:600,color:"#000",borderRadius:5,padding:"3px 10px",background:"#22c55e",border:"none",cursor:"pointer"}}>Discord</button>
+        </div>
+      </div>
+
+      {/* ══ KPI STRIP ══════════════════════════════════════════ */}
+      <div style={{display:"flex",alignItems:"center",gap:0,padding:"0 14px",height:36,borderBottom:"1px solid rgba(255,255,255,0.05)",background:"rgba(255,255,255,0.015)",flexShrink:0,overflowX:"auto"}}>
+        {kpis.map((k,i) => (
+          <React.Fragment key={k.label}>
+            {i>0 && <div className="tb-sep" />}
+            <div style={{display:"flex",alignItems:"center",gap:6,padding:"0 14px",flexShrink:0}}>
+              <span style={{fontSize:10,color:"#52525b",textTransform:"uppercase",letterSpacing:"0.06em"}}>{k.label}</span>
+              <span style={{fontSize:12,fontWeight:700,color:k.green?"#4ade80":"#e2e8f0"}}>{k.val}</span>
             </div>
-            <div className="flex gap-2 items-center">
-              <div className="flex items-center gap-1.5 text-xs text-zinc-500 mr-1">
-                <span className="live-dot w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
-                Live
-              </div>
-              {isMock && (
-                <span className="text-xs text-yellow-400 border border-yellow-400/30 bg-yellow-400/10 px-2 py-1 rounded-full">
-                  DEMO
-                </span>
-              )}
-              <button
-                onClick={fetchData}
-                className="rounded-xl border border-zinc-700 px-3 py-1.5 hover:bg-zinc-900 text-xs"
-              >
-                ↻ Refresh
-              </button>
-              <button className="rounded-xl bg-green-500 px-3 py-1.5 font-medium text-black hover:bg-green-400 text-xs">
-                Discord
-              </button>
+          </React.Fragment>
+        ))}
+      </div>
+
+      {/* ══ FEATURED STRIP ═════════════════════════════════════ */}
+      <div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 14px",borderBottom:"1px solid rgba(255,255,255,0.05)",background:"rgba(255,255,255,0.01)",flexShrink:0,overflowX:"auto"}}>
+        <span style={{fontSize:10,color:"#52525b",textTransform:"uppercase",letterSpacing:"0.06em",flexShrink:0,marginRight:4}}>Top picks</span>
+        {featured.map((p,i) => {
+          const t = evTier(p.ev);
+          return (
+            <div key={i} className="feat-card">
+              <span style={{fontSize:9,fontWeight:700,padding:"1px 5px",borderRadius:3,
+                background: t==="high"?"rgba(34,197,94,0.15)":t==="med"?"rgba(234,179,8,0.12)":"rgba(255,255,255,0.06)",
+                color: t==="high"?"#4ade80":t==="med"?"#fbbf24":"#a1a1aa",
+                border: `1px solid ${t==="high"?"rgba(34,197,94,0.25)":t==="med"?"rgba(234,179,8,0.2)":"rgba(255,255,255,0.08)"}`
+              }}>{p.badge}</span>
+              <span style={{fontSize:11,fontWeight:600,color:"#e2e8f0"}}>{p.match}</span>
+              <span style={{fontSize:10,color:"#52525b"}}>{p.market}</span>
+              <span style={{fontSize:11,fontWeight:700,color:t==="high"?"#4ade80":"#c4b5fd"}}>{Number(p.odds).toFixed(2)}</span>
+              <EvBadge ev={p.ev} />
             </div>
-          </div>
-          <HeaderStats stats={apiStats} />
-        </header>
+          );
+        })}
+      </div>
 
-        {/* ── Top Value Picks ── */}
-        <section className="mb-10">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-2xl font-semibold">Top Value Picks</h2>
-            <span className="text-sm text-zinc-400">Featured model selections</span>
-          </div>
-          {loading ? (
-            <div className="text-center py-12 text-zinc-400">Loading picks…</div>
-          ) : (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-              {featured.map((pick, i) => (
-                <PickCard key={`${pick.match}-${pick.market}-${i}`} pick={pick} />
-              ))}
-            </div>
-          )}
-        </section>
+      {/* ══ FILTER ROW ═════════════════════════════════════════ */}
+      <div style={{display:"flex",alignItems:"center",gap:8,padding:"0 14px",height:38,borderBottom:"1px solid rgba(255,255,255,0.05)",background:"#0d1117",flexShrink:0,flexWrap:"nowrap",overflowX:"auto"}}>
 
-        {/* ── Live Value Scanner ── */}
-        <section className="mb-8 rounded-2xl border border-zinc-800 overflow-hidden" style={{background:"#0a0d14"}}>
+        <select value={sport} onChange={e=>setSport(e.target.value)} className={selCls}>
+          {allSports.map(s=><option key={s} style={{background:"#0d1117"}}>{s}</option>)}
+        </select>
 
-          {/* Scanner header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800" style={{background:"rgba(255,255,255,0.02)"}}>
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-bold text-white">Live Value Scanner</span>
-              <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{background:"rgba(34,197,94,0.12)",color:"#4ade80",border:"1px solid rgba(34,197,94,0.2)"}}>
-                {filtered.length} opportunities
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5 text-xs text-zinc-500">
-              <span className="live-dot w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
-              Auto-refresh 5 min
-            </div>
-          </div>
+        <div className="tog">
+          {[["all","All"],["prematch","Pre"],["live","🔴 Live"]].map(([k,l])=>(
+            <button key={k} onClick={()=>setLiveFilter(k)} style={{background:liveFilter===k?"#22c55e":"transparent",color:liveFilter===k?"#000":"#71717a",fontWeight:liveFilter===k?700:400,border:"none",cursor:"pointer"}}>
+              {l}
+            </button>
+          ))}
+        </div>
 
-          {/* Filter bar */}
-          <div className="flex flex-wrap gap-3 px-4 py-3 border-b border-zinc-800/60" style={{background:"rgba(255,255,255,0.01)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
+          <span style={{fontSize:10,color:"#52525b",whiteSpace:"nowrap"}}>EV ≥ <b style={{color:"#4ade80"}}>{evSlider>0?`${evSlider}%`:"Any"}</b></span>
+          <input type="range" min="0" max="30" step="1" value={evSlider} onChange={e=>setEvSlider(Number(e.target.value))} />
+        </div>
 
-            {/* Sport */}
-            <select value={sport} onChange={(e) => setSport(e.target.value)}
-              className="text-xs rounded-lg px-3 py-1.5 text-zinc-200 outline-none"
-              style={{background:"#111827",border:"1px solid rgba(255,255,255,0.1)"}}>
-              {allSports.map((s) => <option key={s} className="bg-zinc-900">{s}</option>)}
-            </select>
+        <input type="number" placeholder="Min odds" step="0.05" value={minOdds} onChange={e=>setMinOdds(e.target.value)} className={inputCls} style={{width:70}} />
+        <input type="number" placeholder="Max odds" step="0.05" value={maxOdds} onChange={e=>setMaxOdds(e.target.value)} className={inputCls} style={{width:70}} />
 
-            {/* Live / Prematch toggle */}
-            <div className="flex rounded-lg overflow-hidden text-xs" style={{border:"1px solid rgba(255,255,255,0.1)"}}>
-              {[["all","All"],["prematch","Prematch"],["live","🔴 Live"]].map(([k,l]) => (
-                <button key={k} onClick={() => setLiveFilter(k)}
-                  className="px-3 py-1.5 transition-colors"
-                  style={{background: liveFilter===k ? "#22c55e" : "#111827", color: liveFilter===k ? "#000" : "#94a3b8", fontWeight: liveFilter===k ? 700 : 400}}>
-                  {l}
-                </button>
-              ))}
-            </div>
+        <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search…" className={inputCls} style={{width:120,flexShrink:1}} />
 
-            {/* EV slider */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-zinc-500 whitespace-nowrap">EV ≥ <span className="text-green-400 font-bold">{evSlider > 0 ? `${evSlider}%` : "Any"}</span></span>
-              <input type="range" min="0" max="30" step="1" value={evSlider} onChange={(e) => setEvSlider(Number(e.target.value))}
-                className="w-24 accent-green-500" />
-            </div>
+        <div style={{marginLeft:"auto",flexShrink:0}}>
+          <select value={sortBy} onChange={e=>setSortBy(e.target.value)} className={selCls}>
+            <option value="ev_desc"   style={{background:"#0d1117"}}>EV ↓</option>
+            <option value="ev_asc"    style={{background:"#0d1117"}}>EV ↑</option>
+            <option value="conf_desc" style={{background:"#0d1117"}}>Confidence ↓</option>
+            <option value="odds_desc" style={{background:"#0d1117"}}>Odds ↓</option>
+            <option value="kickoff"   style={{background:"#0d1117"}}>Kickoff ↑</option>
+          </select>
+        </div>
 
-            {/* Odds range */}
-            <div className="flex items-center gap-1.5">
-              <input type="number" placeholder="Min odds" step="0.05" value={minOdds} onChange={(e) => setMinOdds(e.target.value)}
-                className="text-xs rounded-lg px-2 py-1.5 text-zinc-200 placeholder-zinc-600 outline-none w-20"
-                style={{background:"#111827",border:"1px solid rgba(255,255,255,0.1)"}} />
-              <span className="text-zinc-600 text-xs">–</span>
-              <input type="number" placeholder="Max odds" step="0.05" value={maxOdds} onChange={(e) => setMaxOdds(e.target.value)}
-                className="text-xs rounded-lg px-2 py-1.5 text-zinc-200 placeholder-zinc-600 outline-none w-20"
-                style={{background:"#111827",border:"1px solid rgba(255,255,255,0.1)"}} />
-            </div>
+        <span style={{fontSize:10,color:"#3f3f46",flexShrink:0}}>{filtered.length} results</span>
+      </div>
 
-            {/* Sort */}
-            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
-              className="text-xs rounded-lg px-3 py-1.5 text-zinc-200 outline-none ml-auto"
-              style={{background:"#111827",border:"1px solid rgba(255,255,255,0.1)"}}>
-              <option value="ev_desc"   className="bg-zinc-900">EV — High to Low</option>
-              <option value="ev_asc"    className="bg-zinc-900">EV — Low to High</option>
-              <option value="conf_desc" className="bg-zinc-900">Confidence ↓</option>
-              <option value="odds_desc" className="bg-zinc-900">Odds ↓</option>
-              <option value="kickoff"   className="bg-zinc-900">Kickoff ↑</option>
-            </select>
-          </div>
+      {/* ══ TABLE ═══════════════════════════════════════════════ */}
+      <div className="desktop-table" style={{flex:1,overflowY:"auto",overflowX:"auto"}}>
+        {loading ? (
+          <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:200,color:"#52525b",fontSize:13}}>Loading…</div>
+        ) : filtered.length === 0 ? (
+          <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:200,color:"#3f3f46",fontSize:13}}>No results match your filters</div>
+        ) : (
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:820}}>
+            <thead>
+              <tr style={{borderBottom:"1px solid rgba(255,255,255,0.07)"}}>
+                {["Match","League","Market","Odds","EV %","Conf.","Kickoff","Bookmaker","Found"].map(h=>(
+                  <th key={h} className="sth" style={{padding:"7px 12px",textAlign:"left",fontSize:10,fontWeight:600,color:"#52525b",textTransform:"uppercase",letterSpacing:"0.07em",whiteSpace:"nowrap"}}>
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((p,i) => {
+                const t = evTier(p.ev);
+                return (
+                  <tr key={`${p.match}-${p.market}-${i}`}
+                    className={t==="high"?"row-high":t==="med"?"row-med":"row-low"}
+                    style={{borderBottom:"1px solid rgba(255,255,255,0.035)",cursor:"default",transition:"background .1s"}}
+                    onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.025)"}
+                    onMouseLeave={e=>e.currentTarget.style.background=""}>
 
-          {/* Table */}
-          {loading ? (
-            <div className="py-16 text-center text-zinc-500 text-sm">Loading scanner…</div>
-          ) : filtered.length === 0 ? (
-            <div className="py-16 text-center text-zinc-600">No opportunities match your filters</div>
-          ) : (
-            <div className="overflow-x-auto" style={{maxHeight: 520, overflowY:"auto"}}>
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr style={{background:"#0d1117",borderBottom:"1px solid rgba(255,255,255,0.07)"}}>
-                    {["Match","Market","Odds","EV %","Confidence","Kickoff"].map(h => (
-                      <th key={h} className="sticky-th px-4 py-2.5 text-left text-xs font-semibold text-zinc-500 uppercase tracking-widest whitespace-nowrap"
-                        style={{background:"#0d1117"}}>{h}</th>
-                    ))}
+                    <td style={{padding:"7px 12px",fontWeight:600,color:"#f1f5f9",maxWidth:190,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                      {p.match}
+                    </td>
+                    <td style={{padding:"7px 12px",color:"#71717a",whiteSpace:"nowrap",fontSize:11}}>{p.league}</td>
+                    <td style={{padding:"7px 12px",whiteSpace:"nowrap"}}>
+                      <span style={{color:"#a1a1aa",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:4,padding:"1px 6px",fontSize:11}}>
+                        {p.market}
+                      </span>
+                    </td>
+                    <td style={{padding:"7px 12px",fontWeight:700,color:t==="high"?"#4ade80":"#c4b5fd",fontSize:13}}>
+                      {Number(p.odds).toFixed(2)}
+                    </td>
+                    <td style={{padding:"7px 12px"}}><EvBadge ev={p.ev} /></td>
+                    <td style={{padding:"7px 12px"}}><MiniConf v={p.confidence} /></td>
+                    <td style={{padding:"7px 12px",color:t==="high"?"#4ade80":"#71717a",whiteSpace:"nowrap",fontSize:11,fontWeight:t==="high"?600:400}}>
+                      {fmtKickoff(p.kickoff_time)}
+                    </td>
+                    <td style={{padding:"7px 12px",color:"#52525b",fontSize:11,whiteSpace:"nowrap"}}>{p.bookmaker}</td>
+                    <td style={{padding:"7px 12px",color:"#3f3f46",fontSize:10,whiteSpace:"nowrap"}}>{fmtDetected(p.detected_at)}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((pick, i) => {
-                    const isHighEv = pick.ev >= 15;
-                    return (
-                      <tr key={`${pick.match}-${pick.market}-${i}`}
-                        className={`transition-all ${getRowClass(pick.ev)}`}
-                        style={{borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
 
-                        {/* Match + league */}
-                        <td className="px-4 py-3">
-                          <div className="font-semibold text-xs text-white leading-tight truncate max-w-[180px]">{pick.match}</div>
-                          <div className="text-xs text-zinc-500 mt-0.5 truncate max-w-[180px]">{pick.league} · {pick.bookmaker}</div>
-                        </td>
-
-                        {/* Market */}
-                        <td className="px-4 py-3">
-                          <span className="text-xs text-zinc-300 px-2 py-0.5 rounded whitespace-nowrap"
-                            style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.07)"}}>
-                            {pick.market}
-                          </span>
-                        </td>
-
-                        {/* Odds */}
-                        <td className="px-4 py-3">
-                          <span className="text-sm font-bold" style={{color: isHighEv ? "#4ade80" : "#c4b5fd"}}>{Number(pick.odds).toFixed(2)}</span>
-                        </td>
-
-                        {/* EV */}
-                        <td className="px-4 py-3">
-                          <EvPill ev={pick.ev} />
-                        </td>
-
-                        {/* Confidence */}
-                        <td className="px-4 py-3">
-                          <ConfBar v={pick.confidence} />
-                        </td>
-
-                        {/* Kickoff */}
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <span className={`text-xs font-medium ${isHighEv ? "text-green-400" : "text-zinc-400"}`}>
-                            {fmtKickoff(pick.kickoff_time)}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+      {/* ══ MOBILE CARDS (stacked) ══════════════════════════════ */}
+      <div className="mobile-cards" style={{flexDirection:"column",gap:6,padding:10,overflowY:"auto",flex:1,display:"none"}}>
+        {filtered.map((p,i) => {
+          const t = evTier(p.ev);
+          return (
+            <div key={i} style={{border:"1px solid rgba(255,255,255,0.08)",borderRadius:8,padding:"10px 12px",background:t==="high"?"rgba(34,197,94,0.04)":t==="med"?"rgba(234,179,8,0.03)":"rgba(255,255,255,0.02)",borderLeft:`3px solid ${t==="high"?"#22c55e":t==="med"?"#eab308":"transparent"}`}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+                <div>
+                  <div style={{fontSize:12,fontWeight:700,color:"#f1f5f9"}}>{p.match}</div>
+                  <div style={{fontSize:10,color:"#52525b",marginTop:1}}>{p.league} · {p.bookmaker}</div>
+                </div>
+                <EvBadge ev={p.ev} />
+              </div>
+              <div style={{fontSize:11,color:"#a1a1aa",marginBottom:8}}>{p.market}</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+                <div><div style={{fontSize:9,color:"#52525b",marginBottom:2}}>ODDS</div><div style={{fontSize:13,fontWeight:700,color:t==="high"?"#4ade80":"#c4b5fd"}}>{Number(p.odds).toFixed(2)}</div></div>
+                <div><div style={{fontSize:9,color:"#52525b",marginBottom:2}}>CONF</div><MiniConf v={p.confidence} /></div>
+                <div><div style={{fontSize:9,color:"#52525b",marginBottom:2}}>KICKOFF</div><div style={{fontSize:11,color:t==="high"?"#4ade80":"#71717a",fontWeight:600}}>{fmtKickoff(p.kickoff_time)}</div></div>
+              </div>
             </div>
-          )}
+          );
+        })}
+      </div>
 
-          {/* Footer legend */}
-          <div className="flex items-center justify-between px-4 py-2.5 border-t border-zinc-800/60" style={{background:"rgba(255,255,255,0.01)"}}>
-            <div className="flex items-center gap-4 text-xs text-zinc-600">
-              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm inline-block" style={{background:"rgba(34,197,94,0.4)"}} /> EV ≥ 15%</span>
-              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm inline-block" style={{background:"rgba(234,179,8,0.3)"}} /> EV 5–15%</span>
-            </div>
-            <span className="text-xs text-zinc-600">Sorted by {sortBy === "ev_desc" ? "EV ↓" : sortBy === "ev_asc" ? "EV ↑" : sortBy === "conf_desc" ? "Confidence ↓" : sortBy === "odds_desc" ? "Odds ↓" : "Kickoff ↑"}</span>
-          </div>
-        </section>
-
-        {/* ── Premium Teaser ── */}
-        <PremiumTeaser />
-
-        <footer className="mt-10 text-center text-xs text-zinc-600">
-          PGR Sports Analytics · Data analysis only · Not financial advice
-        </footer>
+      {/* ══ STATUS BAR ═════════════════════════════════════════ */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 14px",height:24,borderTop:"1px solid rgba(255,255,255,0.05)",background:"#0d1117",flexShrink:0}}>
+        <span style={{fontSize:10,color:"#3f3f46"}}>PGR Sports Analytics · Data analysis only · Not financial advice</span>
+        <div style={{display:"flex",alignItems:"center",gap:10,fontSize:10,color:"#3f3f46"}}>
+          <span style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:7,height:7,borderRadius:1,display:"inline-block",background:"rgba(34,197,94,0.4)"}}/>EV ≥ 15%</span>
+          <span style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:7,height:7,borderRadius:1,display:"inline-block",background:"rgba(234,179,8,0.3)"}}/>EV 5–15%</span>
+        </div>
       </div>
     </div>
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<DashboardPage />);
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
 </script>
 </body>
 </html>
