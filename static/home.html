@@ -52,6 +52,18 @@
   .stat-card { background:rgba(0,0,0,0.4); border:1px solid #27272a; border-radius:12px; padding:12px; }
   .stat-lbl { font-size:9px; text-transform:uppercase; letter-spacing:.08em; color:#52525b; margin-bottom:4px; }
   @media(max-width:1024px){ .right-panel{ display:none !important; } }
+  @keyframes slideup { from{transform:translateY(100%)} to{transform:translateY(0)} }
+  .mobile-sheet { display:none; position:fixed; inset:0; z-index:999; }
+  @media(max-width:1024px){ .mobile-sheet{ display:block; } }
+  .sheet-overlay { position:absolute; inset:0; background:rgba(0,0,0,.7); backdrop-filter:blur(4px); }
+  .sheet-body {
+    position:absolute; bottom:0; left:0; right:0;
+    background:#09090b; border-radius:22px 22px 0 0;
+    border-top:1px solid #27272a;
+    max-height:92vh; overflow-y:auto;
+    animation:slideup .28s cubic-bezier(.32,0,.67,0) forwards;
+  }
+  .sheet-handle { width:36px;height:4px;border-radius:99px;background:#3f3f46;margin:12px auto 0; }
 </style>
 </head>
 <body>
@@ -508,6 +520,35 @@ function DetailPanel({pick}) {
   );
 }
 
+/* ── MobileSheet ───────────────────────────────────────────────── */
+function MobileSheet({pick, onClose}) {
+  // Prevent body scroll while open
+  useEffect(()=>{
+    document.body.style.overflow = pick ? "hidden" : "";
+    return ()=>{ document.body.style.overflow = ""; };
+  },[pick]);
+
+  if (!pick) return null;
+  return (
+    <div className="mobile-sheet">
+      <div className="sheet-overlay" onClick={onClose} />
+      <div className="sheet-body">
+        <div className="sheet-handle" />
+        {/* Close pill */}
+        <div style={{display:"flex",justifyContent:"flex-end",padding:"8px 16px 0"}}>
+          <button onClick={onClose}
+            style={{background:"#27272a",border:"none",borderRadius:99,padding:"5px 14px",fontSize:12,color:"#a1a1aa",cursor:"pointer",fontWeight:600}}>
+            Close ✕
+          </button>
+        </div>
+        <div style={{padding:"0 0 24px"}}>
+          <DetailPanel pick={pick} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Main App ──────────────────────────────────────────────────── */
 function App() {
   const [allPicks, setAllPicks]   = useState(mockData.map(normalizePick));
@@ -517,6 +558,7 @@ function App() {
   const [lastFetch, setLastFetch] = useState(null);
   const [scanMsg, setScanMsg]     = useState(null);
   const [selected, setSelected]   = useState(mockData[0]);
+  const [showSheet, setShowSheet] = useState(false);
 
   const [sport, setSport]         = useState("All");
   const [statusF, setStatusF]     = useState("all");
@@ -635,7 +677,7 @@ function App() {
                 const t=evTone(p.ev);
                 const isSel=selected?.id===p.id;
                 return (
-                  <button key={p.id} onClick={()=>setSelected(p)} className="feat-btn"
+                  <button key={p.id} onClick={()=>{ setSelected(p); setShowSheet(true); }} className="feat-btn"
                     style={{textAlign:"left",borderRadius:16,border:`1px solid ${isSel?"rgba(99,102,241,.5)":"#27272a"}`,background:isSel?"rgba(99,102,241,.08)":"#09090b",padding:14,cursor:"pointer",color:"inherit"}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
                       <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${t.badge}`}>{p.badge}</span>
@@ -725,7 +767,7 @@ function App() {
                         style={{position:"relative",borderLeft:`4px solid`,borderLeftColor:isSel?"#6366f1":t.border.includes("green")?"#22c55e":t.border.includes("emerald")?"#10b981":t.border.includes("yellow")?"#eab308":"#27272a",
                           display:"grid",gridTemplateColumns:"1.8fr 1.2fr 0.7fr 0.9fr 1fr 1fr",gap:12,padding:"18px 16px",cursor:"pointer",
                           borderBottom:"1px solid #18181b",filter:locked?"blur(1.5px)":"none",opacity:locked?0.5:1}}
-                        onClick={()=>!locked&&setSelected(row)}>
+                        onClick={()=>{ if(!locked){ setSelected(row); setShowSheet(true); } }}>
 
                         {locked&&i===5&&(
                           <div style={{position:"absolute",top:-12,left:"50%",transform:"translateX(-50%)",zIndex:5,
@@ -790,6 +832,11 @@ function App() {
 
         </div>
       </div>
+
+      {/* Mobile bottom sheet — only visible on small screens */}
+      {showSheet && (
+        <MobileSheet pick={selected} onClose={()=>setShowSheet(false)} />
+      )}
     </div>
   );
 }
