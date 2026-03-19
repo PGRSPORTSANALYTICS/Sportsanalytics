@@ -211,7 +211,10 @@ function DetailPanel({pick}) {
 
   useEffect(()=>{
     if (!pick) return;
-    const mid = pick.id || `${pick.home_team}_${pick.away_team}`;
+    // Prefer team-name lookup (works for both real + demo picks)
+    const mid = (pick.home_team && pick.away_team)
+      ? `${pick.home_team}_${pick.away_team}`
+      : pick.id;
     if (mid === prevId.current) return;
     prevId.current = mid;
     setBusy(true); setErr(false); setData(null);
@@ -304,23 +307,38 @@ function DetailPanel({pick}) {
 
       {/* ── Body ── */}
       <div style={{maxHeight:"calc(100vh - 300px)",overflowY:"auto",padding:"14px",display:"flex",flexDirection:"column",gap:10}}>
-        {busy && <div style={{textAlign:"center",padding:"60px 0",color:"#3f3f46",fontSize:13}}>Loading…</div>}
-        {err  && <div style={{textAlign:"center",padding:"60px 0",color:"#3f3f46",fontSize:13}}>Data unavailable for this match.</div>}
+        {busy && <div style={{textAlign:"center",padding:"60px 0",color:"#3f3f46",fontSize:13}}>Loading intelligence…</div>}
 
-        {/* ══ INTELLIGENCE ══ */}
+        {/* ══ INTELLIGENCE — always visible, even without API ══ */}
         {!busy && tab==="intelligence" && (
           <>
-            {/* 2×3 metric grid */}
+            {/* Core pick metrics — always available */}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
               <MetricTile label="Market"     value={pick.market} />
-              <MetricTile label="Odds"       value={Number(currentOdds).toFixed(2)} />
-              <MetricTile label="Fair Odds"  value={fairOdds ? fmt2(fairOdds) : "—"} color="#c4b5fd" />
-              <MetricTile label="Model Edge" value={modelEdge!=null?`+${Number(modelEdge).toFixed(1)}%`:"—"} color="#6ee7b7" />
-              <MetricTile label="Confidence" value={`${pick.confidence}%`} />
+              <MetricTile label="Selection"  value={pick.selection||"—"} color="#f4f4f5" />
+              <MetricTile label="Odds"       value={Number(currentOdds).toFixed(2)} color="#4ade80" />
               <MetricTile label="EV %"       value={`+${Number(pick.ev).toFixed(1)}%`} color="#4ade80" />
+              <MetricTile label="Confidence" value={`${pick.confidence}%`} color={pick.confidence>=80?"#4ade80":pick.confidence>=60?"#fbbf24":"#f87171"} />
+              <MetricTile label="Bookmaker"  value={pick.bookmaker||"—"} />
             </div>
 
-            {/* Model Probabilities */}
+            {/* Fair Odds + Model Edge when available */}
+            {(fairOdds||modelEdge!=null) && (
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                {fairOdds && <MetricTile label="Fair Odds"  value={fmt2(fairOdds)}  color="#c4b5fd" />}
+                {modelEdge!=null && <MetricTile label="Model Edge" value={`+${Number(modelEdge).toFixed(1)}%`} color="#6ee7b7" />}
+              </div>
+            )}
+
+            {/* Trust level + Tier from API */}
+            {mp && (mp.trust_level || mp.tier) && (
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                {mp.trust_level && <MetricTile label="Trust Level" value={mp.trust_level} color="#7dd3fc" />}
+                {mp.tier && <MetricTile label="Tier" value={mp.tier} />}
+              </div>
+            )}
+
+            {/* Model Probabilities from API */}
             {(poissonPct!=null||calibPct!=null||mcPct!=null) && (
               <div style={{borderRadius:14,border:"1px solid #27272a",background:"rgba(0,0,0,.3)",padding:14}}>
                 <div style={{fontSize:13,fontWeight:600,color:"#e4e4e7",marginBottom:10}}>Model Probabilities</div>
@@ -338,7 +356,7 @@ function DetailPanel({pick}) {
               </div>
             )}
 
-            {/* CLV */}
+            {/* CLV row */}
             {(openOdds||clvPct!=null) && (
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
                 <div className="metric-tile">
@@ -367,12 +385,21 @@ function DetailPanel({pick}) {
               </div>
             )}
 
-            {!mp && !data?.xg && !err && (
-              <div style={{borderRadius:14,border:"1px solid rgba(139,92,246,.25)",background:"rgba(139,92,246,.08)",padding:14}}>
-                <div style={{fontSize:13,fontWeight:600,color:"#c4b5fd"}}>Premium depth</div>
-                <div style={{fontSize:12,color:"rgba(196,181,253,.7)",marginTop:6}}>Full models, form, xG, H2H and odds board load here for tracked picks.</div>
+            {/* Analysis text from DB */}
+            {mp?.analysis_raw && (
+              <div style={{borderRadius:14,border:"1px solid #27272a",background:"rgba(0,0,0,.3)",padding:14}}>
+                <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:".08em",color:"#52525b",marginBottom:8}}>Analysis</div>
+                <div style={{fontSize:13,color:"#a1a1aa",lineHeight:1.6}}>{mp.analysis_raw}</div>
               </div>
             )}
+
+            {/* Kickoff info */}
+            <div style={{borderRadius:14,border:"1px solid #27272a",background:"rgba(0,0,0,.3)",padding:14}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                <div><div className="stat-lbl">League</div><div style={{fontSize:13,color:"#d4d4d8",marginTop:4}}>{pick.league||"—"}</div></div>
+                <div><div className="stat-lbl">Kickoff</div><div style={{fontSize:13,color:"#d4d4d8",marginTop:4}}>{fmtKickoff(pick.kickoff_time)}</div></div>
+              </div>
+            </div>
           </>
         )}
 

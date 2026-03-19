@@ -709,20 +709,23 @@ async def get_match_scout(match_id: str):
     """
     try:
         # ── 1. All opportunities for this match ──────────────────
+        # cols: 0=match_id 1=home 2=away 3=league 4=match_date 5=kickoff_time
+        #       6=market 7=selection 8=odds 9=edge_pct 10=confidence
+        #       11=model_prob 12=calibrated_prob 13=sim_probability 14=ev_sim
+        #       15=trust_level 16=tier 17=disagreement 18=profile_boost_score
+        #       19=open_odds 20=close_odds 21=clv_pct 22=analysis
         opp_rows = db_helper.execute("""
             SELECT match_id, home_team, away_team, league, match_date, kickoff_time,
                    market, selection, odds, edge_percentage, confidence,
                    model_prob, calibrated_prob, sim_probability, ev_sim,
-                   odds_by_bookmaker, best_odds_value, best_odds_bookmaker,
-                   avg_odds, fair_odds, trust_level, tier, disagreement,
-                   profile_boost_score, hidden_value_score,
-                   open_odds, close_odds, clv_pct, clv_status,
-                   analysis, fixture_id, kickoff_epoch
+                   trust_level, tier, disagreement, profile_boost_score,
+                   open_odds, close_odds, clv_pct, analysis
             FROM football_opportunities
-            WHERE (match_id = %s OR (home_team || '_' || away_team) = %s)
+            WHERE (match_id = %s OR (home_team || '_' || away_team) = %s
+                   OR (home_team || ' vs ' || away_team) = %s)
               AND mode != 'TEST'
             ORDER BY timestamp DESC
-        """, (match_id, match_id), fetch='all') or []
+        """, (match_id, match_id, match_id), fetch='all') or []
 
         if not opp_rows:
             raise HTTPException(status_code=404, detail={"error": "match_not_found"})
@@ -733,8 +736,6 @@ async def get_match_scout(match_id: str):
         league     = first[3] or ""
         match_date = str(first[4]) if first[4] else ""
         kickoff    = first[5] or match_date
-        fixture_id = first[30]
-        kickoff_epoch = first[31]
 
         # Build picks list
         picks = []
@@ -744,16 +745,6 @@ async def get_match_scout(match_id: str):
             if key in seen_sel:
                 continue
             seen_sel.add(key)
-            bm_odds = {}
-            try:
-                raw = r[15]
-                if isinstance(raw, str):
-                    import json as _json
-                    bm_odds = _json.loads(raw) if raw else {}
-                elif isinstance(raw, dict):
-                    bm_odds = raw
-            except:
-                pass
             picks.append({
                 "market":          r[6],
                 "selection":       r[7],
@@ -764,21 +755,15 @@ async def get_match_scout(match_id: str):
                 "calibrated_prob": round(float(r[12]), 3) if r[12] else None,
                 "sim_prob":        round(float(r[13]), 3) if r[13] else None,
                 "ev_sim":          round(float(r[14]), 1) if r[14] else None,
-                "bookmakers":      bm_odds,
-                "best_odds":       round(float(r[16]), 2) if r[16] else None,
-                "best_book":       r[17],
-                "avg_odds":        round(float(r[18]), 2) if r[18] else None,
-                "fair_odds":       round(float(r[19]), 2) if r[19] else None,
-                "trust_level":     r[20],
-                "tier":            r[21],
-                "disagreement":    round(float(r[22]), 2) if r[22] else None,
-                "boost_score":     round(float(r[23]), 2) if r[23] else None,
-                "hidden_value":    round(float(r[24]), 2) if r[24] else None,
-                "open_odds":       round(float(r[25]), 2) if r[25] else None,
-                "close_odds":      round(float(r[26]), 2) if r[26] else None,
-                "clv_pct":         round(float(r[27]), 1) if r[27] else None,
-                "clv_status":      r[28],
-                "analysis_raw":    r[29],
+                "bookmakers":      {},
+                "trust_level":     r[15],
+                "tier":            r[16],
+                "disagreement":    round(float(r[17]), 2) if r[17] else None,
+                "boost_score":     round(float(r[18]), 2) if r[18] else None,
+                "open_odds":       round(float(r[19]), 2) if r[19] else None,
+                "close_odds":      round(float(r[20]), 2) if r[20] else None,
+                "clv_pct":         round(float(r[21]), 1) if r[21] else None,
+                "analysis_raw":    r[22],
             })
 
         # ── 2. Training data for this match ──────────────────────
@@ -850,20 +835,18 @@ async def get_match_scout(match_id: str):
             }
 
         return {
-            "match_id":    match_id,
-            "home_team":   home_team,
-            "away_team":   away_team,
-            "league":      league,
-            "match_date":  match_date,
-            "kickoff":     kickoff,
-            "kickoff_epoch": kickoff_epoch,
-            "fixture_id":  fixture_id,
-            "picks":       picks,
-            "form":        form_stats,
-            "h2h":         h2h_stats,
-            "xg":          xg_stats,
-            "standings":   standings,
-            "prediction":  prediction,
+            "match_id":   match_id,
+            "home_team":  home_team,
+            "away_team":  away_team,
+            "league":     league,
+            "match_date": match_date,
+            "kickoff":    kickoff,
+            "picks":      picks,
+            "form":       form_stats,
+            "h2h":        h2h_stats,
+            "xg":         xg_stats,
+            "standings":  standings,
+            "prediction": prediction,
         }
 
     except HTTPException:
