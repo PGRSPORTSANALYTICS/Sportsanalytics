@@ -25,6 +25,7 @@ from auth_premium import (
     decode_session_token,
     upsert_user,
     is_premium,
+    is_production,
     COOKIE_NAME,
     COOKIE_MAX_AGE,
 )
@@ -119,7 +120,7 @@ async def discord_callback(code: str):
         max_age=COOKIE_MAX_AGE,
         httponly=True,
         samesite="lax",
-        secure=os.getenv("ENV", "dev") == "production",
+        secure=is_production(),
     )
     return response
 

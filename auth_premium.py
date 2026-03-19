@@ -30,8 +30,16 @@ ADMIN_COOKIE_NAME  = "pgr_admin_session"
 COOKIE_MAX_AGE     = 60 * 60 * 24 * 30   # 30 days
 ADMIN_COOKIE_MAX_AGE = 60 * 60 * 8       # 8 hours
 
+def is_production() -> bool:
+    """True when running on Railway or any explicit production environment."""
+    return (
+        os.getenv("ENV") == "production"
+        or os.getenv("RAILWAY_ENVIRONMENT") is not None
+        or os.getenv("RAILWAY_PROJECT_ID") is not None
+    )
+
 # Routes that require an active premium session (HTML pages)
-PROTECTED_HTML = {"/home", "/preview", "/value", "/opportunities"}
+PROTECTED_HTML = {"/home", "/app", "/preview", "/value", "/opportunities"}
 # API routes that require premium (return 401 JSON instead of redirect)
 PROTECTED_API  = {"/api/bets", "/bets"}
 

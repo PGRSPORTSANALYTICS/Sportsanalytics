@@ -32,7 +32,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 
 from db_helper import db_helper
@@ -44,6 +44,9 @@ from auth_premium import (
     activate_premium,
     deactivate_by_stripe_customer,
     activate_by_stripe_customer,
+    is_admin_session,
+    get_discord_id,
+    is_premium,
 )
 from api_staking import router as staking_router
 from modules.stryktipset.stryktipset_router import router as stryk_router
@@ -2431,6 +2434,19 @@ async def stripe_webhook(request: Request):
 
 
 # =============================================================================
+# Public config endpoint (non-sensitive config for frontend)
+# =============================================================================
+
+@app.get("/api/config", include_in_schema=False)
+async def public_config():
+    """Return non-sensitive public configuration used by frontend pages."""
+    return JSONResponse({
+        "stripe_payment_link": os.getenv("STRIPE_PAYMENT_LINK", ""),
+        "env": os.getenv("ENV", "dev"),
+    })
+
+
+# =============================================================================
 # Auth pages (public — no premium required)
 # =============================================================================
 
@@ -2440,24 +2456,65 @@ async def login_page():
 
 @app.get("/upgrade", include_in_schema=False)
 async def upgrade_page():
-    return FileResponse(str(STATIC_DIR / "upgrade.html"))
+    """
+    Serve upgrade page with Stripe payment link injected from env var.
+    Set STRIPE_PAYMENT_LINK in Railway environment variables.
+    """
+    html = (STATIC_DIR / "upgrade.html").read_text()
+    stripe_link = os.getenv("STRIPE_PAYMENT_LINK", "#upgrade")
+    html = html.replace("{{STRIPE_PAYMENT_LINK}}", stripe_link)
+    return HTMLResponse(html)
 
 
 # =============================================================================
-# Dashboard routes
+# Root — smart redirect based on auth state
 # =============================================================================
 
 @app.get("/", include_in_schema=False)
-async def root_dashboard():
-    return FileResponse(str(STATIC_DIR / "pgr_dashboard.html"))
+async def root_redirect(request: Request):
+    """
+    Redirect based on authentication state:
+    - Admin session      → /home
+    - Premium Discord    → /home
+    - Logged in, no sub  → /upgrade
+    - Not logged in      → /login
+    """
+    if is_admin_session(request):
+        return RedirectResponse("/home", status_code=302)
+    discord_id = get_discord_id(request)
+    if discord_id:
+        return RedirectResponse("/home" if is_premium(discord_id) else "/upgrade", status_code=302)
+    return RedirectResponse("/login", status_code=302)
 
-@app.get("/dashboard", include_in_schema=False)
-async def dashboard_alias():
-    return FileResponse(str(STATIC_DIR / "index.html"))
 
-@app.get("/analytics", include_in_schema=False)
-async def analytics_dashboard():
-    return FileResponse(str(STATIC_DIR / "index.html"))
+# =============================================================================
+# Protected app routes
+# =============================================================================
+
+@app.get("/home", include_in_schema=False)
+async def home_dashboard():
+    return FileResponse(str(STATIC_DIR / "home.html"))
+
+@app.get("/app", include_in_schema=False)
+async def app_alias():
+    return FileResponse(str(STATIC_DIR / "home.html"))
+
+@app.get("/preview", include_in_schema=False)
+async def preview_dashboard():
+    return FileResponse(str(STATIC_DIR / "preview.html"))
+
+@app.get("/value", include_in_schema=False)
+async def value_dashboard():
+    return FileResponse(str(STATIC_DIR / "value_dashboard.html"))
+
+@app.get("/opportunities", include_in_schema=False)
+async def opportunities_alias():
+    return FileResponse(str(STATIC_DIR / "value_dashboard.html"))
+
+
+# =============================================================================
+# Internal / legacy routes (not user-facing)
+# =============================================================================
 
 @app.get("/pgr", include_in_schema=False)
 async def pgr_dashboard():
@@ -2466,22 +2523,6 @@ async def pgr_dashboard():
 @app.get("/edge-finder", include_in_schema=False)
 async def edge_finder_alias():
     return FileResponse(str(STATIC_DIR / "pgr_dashboard.html"))
-
-@app.get("/value", include_in_schema=False)
-async def value_dashboard():
-    return FileResponse(str(STATIC_DIR / "value_dashboard.html"))
-
-@app.get("/home", include_in_schema=False)
-async def home_dashboard():
-    return FileResponse(str(STATIC_DIR / "home.html"))
-
-@app.get("/preview", include_in_schema=False)
-async def preview_dashboard():
-    return FileResponse(str(STATIC_DIR / "preview.html"))
-
-@app.get("/opportunities", include_in_schema=False)
-async def opportunities_alias():
-    return FileResponse(str(STATIC_DIR / "value_dashboard.html"))
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 

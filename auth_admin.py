@@ -27,6 +27,7 @@ from fastapi.responses import RedirectResponse, JSONResponse, HTMLResponse
 from auth_premium import (
     make_admin_token,
     is_admin_session,
+    is_production,
     ADMIN_COOKIE_NAME,
     ADMIN_COOKIE_MAX_AGE,
 )
@@ -179,7 +180,7 @@ async def admin_login(password: str = Form(...)):
         max_age=ADMIN_COOKIE_MAX_AGE,
         httponly=True,
         samesite="lax",
-        secure=os.getenv("ENV", "dev") == "production",
+        secure=is_production(),
     )
     logger.info("Admin session started")
     return response
