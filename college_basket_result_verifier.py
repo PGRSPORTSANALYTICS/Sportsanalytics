@@ -190,22 +190,7 @@ class CollegeBasketballResultVerifier:
             home_score, away_score = self._extract_scores(game_result)
             actual_score = f"{home_score}-{away_score}"
             
-            # Send Discord notification
-            try:
-                discord_info = {
-                    'outcome': 'WIN' if outcome == 'won' else 'LOSS',
-                    'home_team': pick['match'].split(' vs ')[0] if ' vs ' in pick['match'] else pick['match'],
-                    'away_team': pick['match'].split(' vs ')[1] if ' vs ' in pick['match'] else '',
-                    'selection': pick['selection'],
-                    'actual_score': actual_score,
-                    'odds': pick['odds'],
-                    'profit_loss': profit_loss,
-                    'product_type': 'BASKETBALL',
-                    'league': 'NCAAB'
-                }
-                send_result_to_discord(discord_info, 'BASKETBALL')
-            except Exception as e:
-                logger.warning(f"⚠️ Discord notification failed: {e}")
+            # Discord notifications disabled for college basketball
             
             self.verified_count += 1
             return True
@@ -288,22 +273,7 @@ class CollegeBasketballResultVerifier:
             status_emoji = "✅" if outcome == "won" else "❌"
             logger.info(f"{status_emoji} PARLAY {pick['match']}: {outcome.upper()} (P&L: ${profit_loss:.2f})")
             
-            # Send Discord notification
-            try:
-                discord_info = {
-                    'outcome': 'WIN' if outcome == 'won' else 'LOSS',
-                    'home_team': pick['match'].replace('PARLAY: ', ''),
-                    'away_team': '',
-                    'selection': pick['selection'],
-                    'actual_score': 'Parlay',
-                    'odds': pick['odds'],
-                    'profit_loss': profit_loss,  # Already in SEK (173 stake)
-                    'product_type': 'BASKET_PARLAY',
-                    'league': 'NCAAB'
-                }
-                send_result_to_discord(discord_info, 'BASKET_PARLAY')
-            except Exception as e:
-                logger.warning(f"⚠️ Discord notification failed: {e}")
+            # Discord notifications disabled for college basketball
             
             self.verified_count += 1
             return True

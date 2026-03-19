@@ -717,21 +717,8 @@ class CollegeBasketValueEngine:
                         else:
                             singles_placed += 1
                         print(f"✅ BET PLACED: {p.match} -> {p.selection} @ {p.odds:.2f}")
-                        try:
-                            product_type = "BASKET_PARLAY" if is_parlay else "BASKET_SINGLE"
-                            send_bet_to_discord({
-                                'league': 'NCAAB',
-                                'home_team': p.match.split(' vs ')[0] if ' vs ' in p.match else p.match,
-                                'away_team': p.match.split(' vs ')[1] if ' vs ' in p.match else '',
-                                'match_date': str(commence_time) if commence_time else '',
-                                'product': product_type,
-                                'selection': p.selection,
-                                'odds': p.odds,
-                                'ev': p.ev * 100,
-                                'stake': kelly_stake
-                            }, product_type=product_type)
-                        except Exception as e:
-                            print(f"Discord notification failed: {e}")
+                        # Discord notifications disabled for college basketball
+                        pass
                     else:
                         print(f"📊 PREDICTION ONLY: {p.match} -> {p.selection} @ {p.odds:.2f}")
                 except Exception as e:
