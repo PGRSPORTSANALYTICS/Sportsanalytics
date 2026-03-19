@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PGR — Value Dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { background: #080b11; margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif; }
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: #080b11; }
+  ::-webkit-scrollbar-thumb { background: #1e2535; border-radius: 4px; }
+  .glow-green { box-shadow: 0 0 0 1px rgba(34,197,94,0.3), 0 2px 12px rgba(34,197,94,0.08); }
+  .glow-yellow { box-shadow: 0 0 0 1px rgba(234,179,8,0.25), 0 2px 12px rgba(234,179,8,0.06); }
+  .row-high { background: linear-gradient(90deg, rgba(34,197,94,0.06) 0%, transparent 100%); border-left: 2px solid rgba(34,197,94,0.5) !important; }
+  .row-med  { background: linear-gradient(90deg, rgba(234,179,8,0.05) 0%, transparent 100%); border-left: 2px solid rgba(234,179,8,0.4) !important; }
+  .row-norm { border-left: 2px solid transparent; }
+  table tr { border-left: 2px solid transparent; }
+  .ev-pill-high { background: rgba(34,197,94,0.15); color: #4ade80; border: 1px solid rgba(34,197,94,0.3); }
+  .ev-pill-med  { background: rgba(234,179,8,0.12); color: #fbbf24; border: 1px solid rgba(234,179,8,0.25); }
+  .ev-pill-low  { background: rgba(255,255,255,0.05); color: #94a3b8; border: 1px solid rgba(255,255,255,0.08); }
+  .conf-track { background: rgba(255,255,255,0.08); border-radius: 999px; overflow: hidden; }
+  .conf-fill  { border-radius: 999px; background: linear-gradient(90deg, #6366f1, #818cf8); height: 100%; }
+  input[type=range] { -webkit-appearance: none; appearance: none; background: transparent; cursor: pointer; }
+  input[type=range]::-webkit-slider-runnable-track { background: #1e2535; border-radius: 4px; height: 4px; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #6366f1; margin-top: -5px; }
+  .sticky-header th { position: sticky; top: 0; z-index: 10; }
+  select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%2364748b' viewBox='0 0 20 20'%3E%3Cpath d='M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right .5rem center; background-size: 1rem; padding-right: 2rem !important; -webkit-appearance: none; appearance: none; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+  .live-dot { animation: pulse 2s infinite; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useMemo, useEffect, useCallback } = React;
+
+/* ─── MOCK DATA ──────────────────────────────────────────────── */
+const now = Date.now();
+const ko = (h, m = 0) => new Date(now + h * 3600000 + m * 60000).toISOString();
+const PICKS = [
+  { id:1,  sport:"Football",   league:"UEFA Europa League",    match:"AS Roma vs Bologna",                   market:"Over 2.5 Goals",          selection:"Over",  odds:2.27, bookmaker:"Pinnacle",   ev:25.0, confidence:100, model_prob:71, kickoff:ko(8),    status:"prematch", badge:"High EV" },
+  { id:2,  sport:"Football",   league:"UEFA Europa League",    match:"FC Midtjylland vs Nottingham Forest",  market:"Home or Draw",             selection:"X2",    odds:1.74, bookmaker:"Pinnacle",   ev:17.5, confidence:93,  model_prob:71, kickoff:ko(6),    status:"prematch", badge:"Top Confidence" },
+  { id:3,  sport:"Football",   league:"2. Bundesliga",         match:"Hannover 96 vs Eintracht Braunschweig",market:"Over 3.5 Corners",         selection:"Over",  odds:2.02, bookmaker:"Bet365",     ev:25.0, confidence:65,  model_prob:65, kickoff:ko(9.5),  status:"prematch", badge:"High EV" },
+  { id:4,  sport:"Football",   league:"Turkish Super League",  match:"Besiktas vs Kasimpasa",               market:"Over 3.5 Goals",           selection:"Over",  odds:2.25, bookmaker:"Unibet",     ev:25.0, confidence:100, model_prob:70, kickoff:ko(4),    status:"prematch", badge:"High EV" },
+  { id:5,  sport:"Football",   league:"UEFA Europa League",    match:"Aston Villa vs Lille",                market:"Corners Over 9.5",         selection:"Over",  odds:1.99, bookmaker:"Betsson",    ev:12.8, confidence:56,  model_prob:61, kickoff:ko(8),    status:"prematch", badge:"Early Line" },
+  { id:6,  sport:"Football",   league:"Ligue Nationale",       match:"Boulogne vs Nancy",                   market:"Corners Over 9.5",         selection:"Over",  odds:2.02, bookmaker:"Unibet",     ev:14.9, confidence:56,  model_prob:56, kickoff:ko(9),    status:"prematch", badge:"Value" },
+  { id:7,  sport:"Football",   league:"A-League",              match:"WS Wanderers vs Adelaide United",     market:"Corners Under 10.5",       selection:"Under", odds:1.87, bookmaker:"Kambi",      ev:4.7,  confidence:55,  model_prob:55, kickoff:ko(1),    status:"prematch", badge:"Value" },
+  { id:8,  sport:"Football",   league:"UEFA Europa League",    match:"AS Roma vs Bologna",                  market:"Corners Over 8.5",         selection:"Over",  odds:1.91, bookmaker:"API-Football",ev:25.0, confidence:69,  model_prob:68, kickoff:ko(8),    status:"prematch", badge:"High EV" },
+  { id:9,  sport:"Basketball", league:"NCAAB",                 match:"Duke vs North Carolina",              market:"Total Over 148.5",         selection:"Over",  odds:1.87, bookmaker:"DraftKings", ev:8.3,  confidence:72,  model_prob:63, kickoff:ko(10),   status:"prematch", badge:"Value" },
+  { id:10, sport:"Football",   league:"Bundesliga",            match:"Bayern Munich vs Dortmund",           market:"Home Win",                 selection:"Home",  odds:1.54, bookmaker:"Unibet",     ev:11.5, confidence:88,  model_prob:72, kickoff:ko(3),    status:"prematch", badge:"High EV" },
+  { id:11, sport:"Football",   league:"La Liga",               match:"Real Madrid vs Barcelona",            market:"BTTS Yes",                 selection:"Yes",   odds:1.68, bookmaker:"Pinnacle",   ev:6.2,  confidence:81,  model_prob:67, kickoff:ko(19),   status:"prematch", badge:"Value" },
+  { id:12, sport:"Football",   league:"Serie A",               match:"Juventus vs AC Milan",               market:"Draw No Bet — Home",       selection:"Home",  odds:1.82, bookmaker:"Bet365",     ev:9.4,  confidence:75,  model_prob:65, kickoff:ko(14),   status:"prematch", badge:"Value" },
+  { id:13, sport:"Football",   league:"Champions League",      match:"Real Madrid vs Man City",             market:"BTTS Yes",                 selection:"Yes",   odds:1.75, bookmaker:"Pinnacle",   ev:16.3, confidence:91,  model_prob:73, kickoff:ko(47),   status:"prematch", badge:"High EV" },
+  { id:14, sport:"Football",   league:"Eredivisie",            match:"Ajax vs PSV Eindhoven",               market:"Over 3.5 Goals",           selection:"Over",  odds:2.15, bookmaker:"Unibet",     ev:16.5, confidence:79,  model_prob:67, kickoff:ko(31),   status:"prematch", badge:"High EV" },
+  { id:15, sport:"Basketball", league:"NCAAB",                 match:"Kansas vs Gonzaga",                   market:"Moneyline — Kansas",       selection:"Home",  odds:2.10, bookmaker:"FanDuel",    ev:14.2, confidence:77,  model_prob:59, kickoff:ko(13),   status:"prematch", badge:"High EV" },
+  { id:16, sport:"Football",   league:"Premier League",        match:"Arsenal vs Chelsea",                  market:"Over 2.5 Goals",           selection:"Over",  odds:1.72, bookmaker:"Pinnacle",   ev:4.1,  confidence:65,  model_prob:62, kickoff:ko(27),   status:"prematch", badge:"Value" },
+  { id:17, sport:"Football",   league:"Ligue 1",               match:"PSG vs Olympique Lyon",               market:"Over 2.5 Goals",           selection:"Over",  odds:1.62, bookmaker:"Betsson",    ev:7.8,  confidence:84,  model_prob:69, kickoff:ko(23),   status:"prematch", badge:"Value" },
+  { id:18, sport:"Football",   league:"Scottish Premiership",  match:"Celtic vs Rangers",                   market:"Home Win",                 selection:"Home",  odds:1.95, bookmaker:"Pinnacle",   ev:18.2, confidence:82,  model_prob:68, kickoff:ko(36),   status:"prematch", badge:"High EV" },
+  { id:19, sport:"Football",   league:"Primeira Liga",         match:"Benfica vs Porto",                    market:"Over 2.5 Goals",           selection:"Over",  odds:1.85, bookmaker:"Bet365",     ev:10.4, confidence:78,  model_prob:66, kickoff:ko(44),   status:"prematch", badge:"High EV" },
+  { id:20, sport:"Football",   league:"MLS",                   match:"Inter Miami vs LA Galaxy",            market:"BTTS Yes",                 selection:"Yes",   odds:1.90, bookmaker:"DraftKings", ev:5.5,  confidence:70,  model_prob:64, kickoff:ko(52),   status:"prematch", badge:"Value" },
+];
+
+/* ─── helpers ────────────────────────────────────────────────── */
+function evTier(ev) { return ev >= 15 ? "high" : ev >= 5 ? "med" : "low"; }
+function fmtKo(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso), diff = d - Date.now();
+  const t = d.toLocaleTimeString("sv-SE", { hour:"2-digit", minute:"2-digit" });
+  const today = d.toDateString() === new Date().toDateString();
+  if (!today) return d.toLocaleDateString("sv-SE",{month:"short",day:"numeric"}) + " " + t;
+  if (diff < 0) return "Started";
+  if (diff < 3600000) return `${Math.floor(diff/60000)}m · ${t}`;
+  if (diff < 7200000) return `${Math.floor(diff/3600000)}h ${Math.floor((diff%3600000)/60000)}m`;
+  return t;
+}
+function sportEmoji(s) { return s==="Football" ? "⚽" : s==="Basketball" ? "🏀" : "🎯"; }
+
+/* ─── StatPill ───────────────────────────────────────────────── */
+function StatPill({ label, value, color }) {
+  return (
+    <div className="flex flex-col items-center justify-center px-5 py-2.5 rounded-xl" style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.07)"}}>
+      <span className="text-xs text-slate-500 uppercase tracking-widest mb-0.5">{label}</span>
+      <span className={`text-lg font-bold ${color}`}>{value}</span>
+    </div>
+  );
+}
+
+/* ─── FilterBar ──────────────────────────────────────────────── */
+function FilterBar({ picks, filters, onChange }) {
+  const sports = ["All", ...new Set(picks.map(p=>p.sport))];
+  const set = (k,v) => onChange({...filters, [k]:v});
+  return (
+    <div className="flex flex-wrap gap-2.5 items-end px-4 py-3 rounded-xl" style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)"}}>
+
+      {/* Sport */}
+      <div className="flex flex-col gap-1">
+        <span className="text-xs text-slate-500 uppercase tracking-wider">Sport</span>
+        <select value={filters.sport} onChange={e=>set("sport",e.target.value)}
+          className="text-sm rounded-lg px-3 py-1.5 text-slate-200 outline-none"
+          style={{background:"#111827",border:"1px solid rgba(255,255,255,0.1)"}}>
+          {sports.map(s=><option key={s} className="bg-gray-900">{s}</option>)}
+        </select>
+      </div>
+
+      {/* Status */}
+      <div className="flex flex-col gap-1">
+        <span className="text-xs text-slate-500 uppercase tracking-wider">Status</span>
+        <div className="flex rounded-lg overflow-hidden" style={{border:"1px solid rgba(255,255,255,0.1)"}}>
+          {["All","Prematch","Live"].map(s=>(
+            <button key={s} onClick={()=>set("status",s)}
+              className="text-xs px-3 py-1.5 transition-colors"
+              style={{background: filters.status===s ? "#6366f1" : "#111827", color: filters.status===s ? "#fff" : "#94a3b8"}}>
+              {s==="Live" ? "🔴 Live" : s}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Min EV */}
+      <div className="flex flex-col gap-1">
+        <span className="text-xs text-slate-500 uppercase tracking-wider">Min EV% <span className="text-indigo-400 font-bold">{filters.minEv > 0 ? `>${filters.minEv}%` : "Any"}</span></span>
+        <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg" style={{background:"#111827",border:"1px solid rgba(255,255,255,0.1)",minWidth:140}}>
+          <span className="text-xs text-slate-500">0</span>
+          <input type="range" min="0" max="30" step="1" value={filters.minEv} onChange={e=>set("minEv",Number(e.target.value))} className="flex-1" />
+          <span className="text-xs text-slate-500">30%</span>
+        </div>
+      </div>
+
+      {/* Odds range */}
+      <div className="flex flex-col gap-1">
+        <span className="text-xs text-slate-500 uppercase tracking-wider">Odds Range</span>
+        <div className="flex items-center gap-1.5">
+          <input type="number" placeholder="1.50" step="0.05" value={filters.oddsMin} onChange={e=>set("oddsMin",e.target.value)}
+            className="text-sm text-slate-200 rounded-lg px-2 py-1.5 outline-none w-16 text-center"
+            style={{background:"#111827",border:"1px solid rgba(255,255,255,0.1)"}} />
+          <span className="text-slate-600 text-xs">–</span>
+          <input type="number" placeholder="10.0" step="0.05" value={filters.oddsMax} onChange={e=>set("oddsMax",e.target.value)}
+            className="text-sm text-slate-200 rounded-lg px-2 py-1.5 outline-none w-16 text-center"
+            style={{background:"#111827",border:"1px solid rgba(255,255,255,0.1)"}} />
+        </div>
+      </div>
+
+      {/* Search */}
+      <div className="flex flex-col gap-1 flex-1" style={{minWidth:160}}>
+        <span className="text-xs text-slate-500 uppercase tracking-wider">Search</span>
+        <input value={filters.q} onChange={e=>set("q",e.target.value)} placeholder="Team, league, market…"
+          className="text-sm text-slate-200 rounded-lg px-3 py-1.5 outline-none w-full"
+          style={{background:"#111827",border:"1px solid rgba(255,255,255,0.1)"}} />
+      </div>
+
+      {/* Sort */}
+      <div className="flex flex-col gap-1">
+        <span className="text-xs text-slate-500 uppercase tracking-wider">Sort</span>
+        <select value={filters.sort} onChange={e=>set("sort",e.target.value)}
+          className="text-sm rounded-lg px-3 py-1.5 text-slate-200 outline-none"
+          style={{background:"#111827",border:"1px solid rgba(255,255,255,0.1)"}}>
+          <option value="ev_desc">EV (High → Low)</option>
+          <option value="ev_asc">EV (Low → High)</option>
+          <option value="conf_desc">Confidence ↓</option>
+          <option value="odds_desc">Odds ↓</option>
+          <option value="kickoff_asc">Kickoff ↑</option>
+        </select>
+      </div>
+
+      {/* Reset */}
+      <button onClick={()=>onChange({sport:"All",status:"All",minEv:0,oddsMin:"",oddsMax:"",q:"",sort:"ev_desc"})}
+        className="text-xs text-slate-500 hover:text-slate-300 px-3 py-1.5 rounded-lg transition-colors self-end"
+        style={{border:"1px solid rgba(255,255,255,0.08)"}}>Reset</button>
+    </div>
+  );
+}
+
+/* ─── EV Pill ────────────────────────────────────────────────── */
+function EvPill({ ev }) {
+  const tier = evTier(ev);
+  return (
+    <span className={`ev-pill-${tier} text-xs font-bold px-2 py-0.5 rounded-full`}>
+      +{ev.toFixed(1)}%
+    </span>
+  );
+}
+
+/* ─── Conf Bar ───────────────────────────────────────────────── */
+function ConfBar({ v }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs font-medium text-slate-300 w-8">{Math.round(v)}%</span>
+      <div className="conf-track flex-1 h-1.5" style={{maxWidth:56}}>
+        <div className="conf-fill" style={{width:`${Math.min(100,v)}%`}} />
+      </div>
+    </div>
+  );
+}
+
+/* ─── Main App ───────────────────────────────────────────────── */
+function App() {
+  const [picks, setPicks]   = useState(PICKS);
+  const [loading, setLoad]  = useState(true);
+  const [isMock, setIsMock] = useState(false);
+  const [filters, setFilters] = useState({ sport:"All", status:"All", minEv:0, oddsMin:"", oddsMax:"", q:"", sort:"ev_desc" });
+  const [hovRow, setHov] = useState(null);
+
+  /* fetch live data */
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch("/bets?status=upcoming&limit=200&sort=ev");
+        if (!r.ok) throw new Error();
+        const d = await r.json();
+        const items = (d.bets||[]).filter(b=>!b.status||b.status==="pending");
+        if (items.length > 0) {
+          setPicks(items.map(b=>({
+            id: b.id,
+            sport: b.sport||"Football",
+            league: b.league||"",
+            match: b.match||`${b.home_team||""} vs ${b.away_team||""}`,
+            market: b.market||"",
+            selection: b.selection||"",
+            odds: b.odds||0,
+            bookmaker: b.bookmaker||"—",
+            ev: b.ev_pct??b.ev??0,
+            confidence: b.confidence||0,
+            model_prob: b.model_prob?b.model_prob*100:0,
+            kickoff: b.kickoff||"",
+            status:"prematch",
+            badge: (b.ev_pct??0)>=15?"High EV":(b.confidence??0)>=85?"Top Confidence":"Value",
+          })));
+        } else setIsMock(true);
+      } catch { setIsMock(true); }
+      setLoad(false);
+    })();
+  }, []);
+
+  const stats = useMemo(()=>({
+    total: picks.length,
+    highEv: picks.filter(p=>p.ev>=15).length,
+    avgEv: picks.length ? (picks.reduce((s,p)=>s+p.ev,0)/picks.length).toFixed(1) : 0,
+    avgConf: picks.length ? Math.round(picks.reduce((s,p)=>s+p.confidence,0)/picks.length) : 0,
+  }), [picks]);
+
+  const filtered = useMemo(()=>{
+    let r=[...picks];
+    if(filters.sport!=="All") r=r.filter(p=>p.sport===filters.sport);
+    if(filters.status!=="All") r=r.filter(p=>(p.status||"prematch").toLowerCase()===filters.status.toLowerCase());
+    if(filters.minEv>0) r=r.filter(p=>p.ev>=filters.minEv);
+    if(filters.oddsMin!=="") r=r.filter(p=>p.odds>=parseFloat(filters.oddsMin));
+    if(filters.oddsMax!=="") r=r.filter(p=>p.odds<=parseFloat(filters.oddsMax));
+    if(filters.q.trim()){const q=filters.q.toLowerCase();r=r.filter(p=>`${p.match} ${p.market} ${p.league}`.toLowerCase().includes(q));}
+    const sorts = { ev_desc:(a,b)=>b.ev-a.ev, ev_asc:(a,b)=>a.ev-b.ev, conf_desc:(a,b)=>b.confidence-a.confidence, odds_desc:(a,b)=>b.odds-a.odds, kickoff_asc:(a,b)=>new Date(a.kickoff)-new Date(b.kickoff) };
+    return r.sort(sorts[filters.sort]||sorts.ev_desc);
+  }, [picks, filters]);
+
+  return (
+    <div className="min-h-screen text-slate-100" style={{background:"#080b11"}}>
+
+      {/* ── Top bar ── */}
+      <div className="flex items-center justify-between px-5 py-3" style={{background:"rgba(255,255,255,0.025)",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
+        <div className="flex items-center gap-3">
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-black" style={{background:"linear-gradient(135deg,#6366f1,#a855f7)"}}>P</div>
+          <div>
+            <span className="font-bold text-sm tracking-tight">PGR Sports Analytics</span>
+            <span className="text-xs text-slate-500 ml-2">Value Intelligence</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-4">
+          {isMock && <span className="text-xs text-yellow-400 px-2 py-0.5 rounded-full" style={{background:"rgba(234,179,8,0.1)",border:"1px solid rgba(234,179,8,0.2)"}}>DEMO DATA</span>}
+          <div className="flex items-center gap-1.5 text-xs text-slate-500">
+            <span className="live-dot w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
+            Live feed
+          </div>
+          <button className="text-xs text-slate-300 px-3 py-1.5 rounded-lg font-medium" style={{background:"rgba(99,102,241,0.15)",border:"1px solid rgba(99,102,241,0.3)"}}>
+            Join Discord
+          </button>
+        </div>
+      </div>
+
+      <div className="px-5 py-4 space-y-4">
+
+        {/* ── Stats row ── */}
+        <div className="flex flex-wrap gap-3">
+          <StatPill label="Opportunities" value={filtered.length} color="text-indigo-400" />
+          <StatPill label="EV > 15%" value={filtered.filter(p=>p.ev>=15).length} color="text-emerald-400" />
+          <StatPill label={`Avg EV`} value={`+${(filtered.length?filtered.reduce((s,p)=>s+p.ev,0)/filtered.length:0).toFixed(1)}%`} color="text-emerald-400" />
+          <StatPill label="Avg Conf" value={`${filtered.length?Math.round(filtered.reduce((s,p)=>s+p.confidence,0)/filtered.length):0}%`} color="text-slate-300" />
+          <StatPill label="Total in DB" value={picks.length} color="text-slate-400" />
+        </div>
+
+        {/* ── Filters ── */}
+        <FilterBar picks={picks} filters={filters} onChange={setFilters} />
+
+        {/* ── Table ── */}
+        <div className="rounded-xl overflow-hidden" style={{border:"1px solid rgba(255,255,255,0.07)"}}>
+          {/* Table header info */}
+          <div className="flex items-center justify-between px-4 py-2.5" style={{background:"rgba(255,255,255,0.025)"}}>
+            <span className="text-sm font-semibold text-slate-200">All Value Opportunities</span>
+            <span className="text-xs text-slate-500">{filtered.length} results · sorted by {filters.sort==="ev_desc"?"EV ↓":filters.sort==="ev_asc"?"EV ↑":filters.sort==="conf_desc"?"Confidence ↓":filters.sort==="odds_desc"?"Odds ↓":"Kickoff ↑"}</span>
+          </div>
+
+          {loading ? (
+            <div className="py-20 text-center text-slate-500 text-sm">Loading live data…</div>
+          ) : filtered.length === 0 ? (
+            <div className="py-20 text-center text-slate-600">
+              <div className="text-3xl mb-3 opacity-30">📊</div>
+              No picks match your filters
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[820px]">
+                <thead className="sticky-header">
+                  <tr style={{background:"#0f1420",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
+                    {[
+                      ["", "w-6"],
+                      ["Match", "min-w-[180px]"],
+                      ["League", "min-w-[130px]"],
+                      ["Market", "min-w-[160px]"],
+                      ["Odds", "w-16 text-right"],
+                      ["Bookmaker", "w-28"],
+                      ["EV %", "w-24"],
+                      ["Confidence", "w-32"],
+                      ["Kickoff", "w-28"],
+                    ].map(([label, cls]) => (
+                      <th key={label} className={`px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-widest ${cls||""}`}>
+                        {label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((p, i) => {
+                    const tier = evTier(p.ev);
+                    const ko = fmtKickoff(p.kickoff);
+                    const isHov = hovRow === p.id;
+                    return (
+                      <tr
+                        key={p.id}
+                        className={tier==="high"?"row-high":tier==="med"?"row-med":"row-norm"}
+                        onMouseEnter={()=>setHov(p.id)}
+                        onMouseLeave={()=>setHov(null)}
+                        style={{
+                          borderBottom:"1px solid rgba(255,255,255,0.04)",
+                          background: isHov ? "rgba(255,255,255,0.025)" : undefined,
+                          transition:"background .1s",
+                        }}
+                      >
+                        {/* Sport icon */}
+                        <td className="px-3 py-2.5 text-center">
+                          <span className="text-base">{sportEmoji(p.sport)}</span>
+                        </td>
+
+                        {/* Match */}
+                        <td className="px-3 py-2.5">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="font-semibold text-slate-100 text-xs leading-tight">{p.match}</span>
+                            {p.badge && (
+                              <span className="text-xs px-1.5 py-px rounded-sm self-start font-medium"
+                                style={{
+                                  background: tier==="high"?"rgba(34,197,94,0.1)":tier==="med"?"rgba(234,179,8,0.1)":"rgba(99,102,241,0.1)",
+                                  color: tier==="high"?"#4ade80":tier==="med"?"#fbbf24":"#818cf8",
+                                  fontSize:"0.6rem",
+                                }}>
+                                {p.badge}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* League */}
+                        <td className="px-3 py-2.5">
+                          <span className="text-xs text-slate-400">{p.league}</span>
+                        </td>
+
+                        {/* Market */}
+                        <td className="px-3 py-2.5">
+                          <span className="text-xs px-2 py-0.5 rounded text-slate-300"
+                            style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.07)"}}>
+                            {p.market}
+                          </span>
+                        </td>
+
+                        {/* Odds */}
+                        <td className="px-3 py-2.5 text-right">
+                          <span className="font-bold text-indigo-300">{Number(p.odds).toFixed(2)}</span>
+                        </td>
+
+                        {/* Bookmaker */}
+                        <td className="px-3 py-2.5 text-xs text-slate-400">{p.bookmaker}</td>
+
+                        {/* EV */}
+                        <td className="px-3 py-2.5">
+                          <EvPill ev={p.ev} />
+                        </td>
+
+                        {/* Confidence */}
+                        <td className="px-3 py-2.5">
+                          <ConfBar v={p.confidence} />
+                        </td>
+
+                        {/* Kickoff */}
+                        <td className="px-3 py-2.5">
+                          <span className={`text-xs ${p.ev>=15?"text-emerald-400":tier==="med"?"text-yellow-400":"text-slate-400"}`}>
+                            {fmtKo(p.kickoff)}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Table footer */}
+          <div className="flex items-center justify-between px-4 py-2.5" style={{borderTop:"1px solid rgba(255,255,255,0.05)",background:"rgba(255,255,255,0.015)"}}>
+            <span className="text-xs text-slate-600">Data refreshes automatically every 5 min</span>
+            <span className="text-xs" style={{
+              background:"rgba(34,197,94,0.08)",color:"#4ade80",
+              border:"1px solid rgba(34,197,94,0.2)",padding:"2px 10px",borderRadius:999
+            }}>
+              ■ &gt;15% EV &nbsp;|&nbsp; <span style={{color:"#fbbf24"}}>■</span> 5–15% EV
+            </span>
+          </div>
+        </div>
+
+        {/* ── Premium teaser ── */}
+        <div className="flex items-center justify-between px-5 py-4 rounded-xl flex-wrap gap-3"
+          style={{background:"linear-gradient(135deg, rgba(99,102,241,0.08), rgba(168,85,247,0.06))", border:"1px solid rgba(99,102,241,0.2)"}}>
+          <div>
+            <div className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-1">🔒 Premium Access</div>
+            <div className="text-sm font-semibold text-slate-100">+12 more picks live in Discord right now</div>
+            <div className="text-xs text-slate-400 mt-0.5">Real-time alerts · CLV tracking · 30+ league channels</div>
+          </div>
+          <button className="text-sm font-bold px-5 py-2 rounded-xl text-white whitespace-nowrap transition-opacity hover:opacity-90"
+            style={{background:"linear-gradient(135deg,#6366f1,#a855f7)"}}>
+            Unlock Full Access →
+          </button>
+        </div>
+
+        <div className="text-center text-xs text-slate-700 pb-2">
+          PGR Sports Analytics · Data analysis only · Not financial advice
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

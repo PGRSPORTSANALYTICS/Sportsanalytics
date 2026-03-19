@@ -2186,6 +2186,10 @@ async def value_dashboard():
 async def home_dashboard():
     return FileResponse(str(STATIC_DIR / "home.html"))
 
+@app.get("/preview", include_in_schema=False)
+async def preview_dashboard():
+    return FileResponse(str(STATIC_DIR / "preview.html"))
+
 @app.get("/opportunities", include_in_schema=False)
 async def opportunities_alias():
     return FileResponse(str(STATIC_DIR / "value_dashboard.html"))
