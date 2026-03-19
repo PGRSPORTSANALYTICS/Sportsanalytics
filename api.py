@@ -2178,6 +2178,14 @@ async def pgr_dashboard():
 async def edge_finder_alias():
     return FileResponse(str(STATIC_DIR / "pgr_dashboard.html"))
 
+@app.get("/value", include_in_schema=False)
+async def value_dashboard():
+    return FileResponse(str(STATIC_DIR / "value_dashboard.html"))
+
+@app.get("/opportunities", include_in_schema=False)
+async def opportunities_alias():
+    return FileResponse(str(STATIC_DIR / "value_dashboard.html"))
+
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":

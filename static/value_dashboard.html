@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PGR Value Dashboard</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0d1117;--surface:#161b27;--card:#1c2333;--card2:#212840;
+  --accent:#6366f1;--accent2:#818cf8;--green:#22c55e;--green-dim:#15803d22;
+  --yellow:#eab308;--yellow-dim:#a1620722;--red:#ef4444;
+  --text:#e2e8f0;--text2:#94a3b8;--text3:#64748b;
+  --border:#2d3748;--border2:#374151;
+  --radius:8px;--radius-sm:5px;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px}
+/* layout */
+.app{display:flex;flex-direction:column;min-height:100vh}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:.75rem 1.5rem;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.topbar-brand{display:flex;align-items:center;gap:.6rem}
+.topbar-logo{width:28px;height:28px;background:var(--accent);border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.9rem}
+.topbar-title{font-weight:700;font-size:1rem;letter-spacing:-.3px}
+.topbar-sub{font-size:.72rem;color:var(--text3)}
+.topbar-right{display:flex;align-items:center;gap:1rem}
+.live-dot{width:7px;height:7px;background:var(--green);border-radius:50%;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.main{flex:1;padding:1.25rem 1.5rem;max-width:1600px;margin:0 auto;width:100%}
+/* stats row */
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.75rem;margin-bottom:1.25rem}
+.stat{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:.75rem 1rem;text-align:center}
+.stat-val{font-size:1.4rem;font-weight:700}
+.stat-val.green{color:var(--green)}
+.stat-val.yellow{color:var(--yellow)}
+.stat-val.accent{color:var(--accent2)}
+.stat-val.red{color:var(--red)}
+.stat-label{font-size:.7rem;color:var(--text3);margin-top:.2rem;text-transform:uppercase;letter-spacing:.5px}
+/* filter panel */
+.filter-panel{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1rem 1.25rem;margin-bottom:1rem}
+.filter-panel-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem}
+.filter-panel-top h3{font-size:.8rem;font-weight:600;text-transform:uppercase;letter-spacing:.7px;color:var(--text2)}
+.filter-reset{font-size:.75rem;color:var(--accent2);cursor:pointer;background:none;border:none;padding:.2rem .5rem;border-radius:4px}
+.filter-reset:hover{background:var(--card2)}
+.filter-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:.75rem}
+.filter-group{display:flex;flex-direction:column;gap:.3rem}
+.filter-label{font-size:.7rem;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.5px}
+.filter-row-range{display:flex;gap:.4rem;align-items:center}
+.filter-row-range span{color:var(--text3);font-size:.75rem}
+input[type="text"],input[type="number"],select{
+  background:var(--card2);color:var(--text);border:1px solid var(--border2);
+  border-radius:var(--radius-sm);padding:.42rem .65rem;font-size:.82rem;width:100%;outline:none;
+  -webkit-appearance:none;
+}
+input:focus,select:focus{border-color:var(--accent)}
+select option{background:var(--card)}
+/* multi-select tags */
+.multiselect{position:relative}
+.ms-trigger{background:var(--card2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:.38rem .65rem;font-size:.82rem;cursor:pointer;min-height:32px;display:flex;flex-wrap:wrap;gap:.25rem;align-items:center}
+.ms-trigger:hover{border-color:var(--accent2)}
+.ms-tag{background:var(--accent);color:#fff;border-radius:3px;padding:.1rem .4rem;font-size:.7rem;font-weight:600;display:flex;align-items:center;gap:.25rem;white-space:nowrap}
+.ms-tag-x{cursor:pointer;opacity:.7}
+.ms-tag-x:hover{opacity:1}
+.ms-placeholder{color:var(--text3);font-size:.82rem}
+.ms-dropdown{position:absolute;top:100%;left:0;right:0;background:var(--card);border:1px solid var(--border2);border-radius:var(--radius-sm);z-index:200;max-height:200px;overflow-y:auto;margin-top:2px;box-shadow:0 8px 32px rgba(0,0,0,.5)}
+.ms-option{padding:.45rem .75rem;cursor:pointer;font-size:.82rem;display:flex;align-items:center;gap:.5rem}
+.ms-option:hover{background:var(--card2)}
+.ms-option.selected{color:var(--accent2)}
+.ms-option input[type=checkbox]{accent-color:var(--accent);width:13px;height:13px;cursor:pointer}
+/* toggles */
+.toggle-row{display:flex;flex-wrap:wrap;gap:.75rem;margin-top:.75rem;align-items:center}
+.toggle{display:flex;align-items:center;gap:.45rem;cursor:pointer;user-select:none}
+.toggle-switch{width:32px;height:18px;background:var(--border2);border-radius:999px;position:relative;transition:.2s;flex-shrink:0}
+.toggle-switch.on{background:var(--accent)}
+.toggle-switch::after{content:'';width:12px;height:12px;background:#fff;border-radius:50%;position:absolute;top:3px;left:3px;transition:.2s}
+.toggle-switch.on::after{left:17px}
+.toggle-label{font-size:.78rem;color:var(--text2)}
+/* search */
+.search-bar{display:flex;align-items:center;gap:.5rem;margin-bottom:1rem}
+.search-bar input{max-width:280px}
+.result-count{font-size:.78rem;color:var(--text3);margin-left:auto}
+/* sort select in search bar */
+.sort-select{width:auto;min-width:160px}
+/* table */
+.table-wrap{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.table-scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:780px}
+thead tr{background:var(--card2);border-bottom:1px solid var(--border)}
+th{padding:.55rem .9rem;text-align:left;font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);white-space:nowrap;cursor:pointer;user-select:none}
+th:hover{color:var(--text2)}
+th .sort-icon{margin-left:.3rem;opacity:.5}
+th.sorted .sort-icon{opacity:1;color:var(--accent2)}
+td{padding:.6rem .9rem;border-bottom:1px solid var(--border);font-size:.82rem;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,.02)}
+tr.ev-high td{background:var(--green-dim)}
+tr.ev-med td{background:var(--yellow-dim)}
+/* badges */
+.badge{display:inline-flex;align-items:center;padding:.15rem .45rem;border-radius:3px;font-size:.68rem;font-weight:700;white-space:nowrap}
+.badge.sport-football{background:#1e3a5f;color:#60a5fa}
+.badge.sport-basketball{background:#3b1f1a;color:#fb923c}
+.badge.sport-props{background:#1f2e1a;color:#86efac}
+.badge.ev-high{background:#14532d;color:#4ade80}
+.badge.ev-med{background:#422006;color:#fbbf24}
+.badge.ev-low{background:#1c1f2e;color:var(--text3)}
+.badge.market{background:var(--card2);color:var(--text2)}
+/* ev cell */
+.ev-val{font-weight:700}
+.ev-val.high{color:var(--green)}
+.ev-val.med{color:var(--yellow)}
+.ev-val.low{color:var(--text2)}
+/* odds */
+.odds-val{font-weight:700;color:var(--accent2)}
+/* conf bar */
+.conf-bar-wrap{display:flex;align-items:center;gap:.4rem}
+.conf-bar{height:5px;background:var(--border2);border-radius:999px;flex:1;min-width:40px;max-width:70px;overflow:hidden}
+.conf-fill{height:100%;border-radius:999px;background:var(--accent)}
+/* kickoff */
+.kickoff-soon{color:var(--yellow);font-weight:600}
+/* empty state */
+.empty{text-align:center;padding:4rem 2rem;color:var(--text3)}
+.empty-icon{font-size:2.5rem;margin-bottom:.75rem;opacity:.4}
+/* loading */
+.loading{text-align:center;padding:4rem;color:var(--text3)}
+.spinner{width:28px;height:28px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 1rem}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* pagination */
+.pagination{display:flex;align-items:center;justify-content:center;gap:.5rem;padding:.75rem;border-top:1px solid var(--border)}
+.page-btn{background:var(--card2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:.35rem .7rem;font-size:.78rem;cursor:pointer;color:var(--text2)}
+.page-btn:hover:not(:disabled){border-color:var(--accent);color:var(--text)}
+.page-btn:disabled{opacity:.35;cursor:default}
+.page-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+/* refresh btn */
+.refresh-btn{background:var(--card2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:.38rem .8rem;font-size:.78rem;cursor:pointer;color:var(--text2);display:flex;align-items:center;gap:.35rem}
+.refresh-btn:hover{border-color:var(--accent2);color:var(--text)}
+@media(max-width:768px){
+  .main{padding:.75rem}
+  .topbar{padding:.6rem 1rem}
+  .filter-grid{grid-template-columns:1fr 1fr}
+  .stats-row{grid-template-columns:repeat(3,1fr)}
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useCallback, useRef, useMemo } = React;
+
+/* ── helpers ─────────────────────────────────────── */
+const fmt = {
+  ev: v => v != null ? `+${v.toFixed(1)}%` : '—',
+  odds: v => v ? v.toFixed(2) : '—',
+  conf: v => v != null ? `${Math.round(v)}%` : '—',
+  kickoff(iso){
+    if(!iso) return '—';
+    const d = new Date(iso);
+    const now = new Date();
+    const diff = d - now;
+    if(diff < 0) return d.toLocaleDateString('sv-SE',{month:'short',day:'numeric'}) + ' ' + d.toLocaleTimeString('sv-SE',{hour:'2-digit',minute:'2-digit'});
+    const h = Math.floor(diff/3600000), m = Math.floor((diff%3600000)/60000);
+    const time = d.toLocaleTimeString('sv-SE',{hour:'2-digit',minute:'2-digit'});
+    const today = d.toDateString() === now.toDateString();
+    const label = today ? time : d.toLocaleDateString('sv-SE',{month:'short',day:'numeric'}) + ' ' + time;
+    return { label, diff, soon: diff < 3600000 * 2 };
+  },
+  detectedAt(iso){ if(!iso) return '—'; const d=new Date(iso); return d.toLocaleTimeString('sv-SE',{hour:'2-digit',minute:'2-digit'}); }
+};
+
+function evClass(ev){
+  if(ev == null) return 'low';
+  if(ev >= 10) return 'high';
+  if(ev >= 5) return 'med';
+  return 'low';
+}
+
+function isToday(iso){
+  if(!iso) return false;
+  return new Date(iso).toDateString() === new Date().toDateString();
+}
+
+function isWithinHours(iso, h){
+  if(!iso) return false;
+  const diff = new Date(iso) - new Date();
+  return diff > 0 && diff <= h * 3600000;
+}
+
+/* ── MultiSelect ─────────────────────────────────── */
+function MultiSelect({ options, value, onChange, placeholder }){
+  const [open, setOpen] = useState(false);
+  const ref = useRef();
+
+  useEffect(() => {
+    const handler = e => { if(ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const toggle = opt => {
+    const next = value.includes(opt) ? value.filter(v=>v!==opt) : [...value, opt];
+    onChange(next);
+  };
+
+  return (
+    <div className="multiselect" ref={ref}>
+      <div className="ms-trigger" onClick={() => setOpen(!open)}>
+        {value.length === 0
+          ? <span className="ms-placeholder">{placeholder}</span>
+          : value.map(v => (
+              <span key={v} className="ms-tag">
+                {v}
+                <span className="ms-tag-x" onClick={e=>{e.stopPropagation();toggle(v);}}>×</span>
+              </span>
+            ))
+        }
+      </div>
+      {open && (
+        <div className="ms-dropdown">
+          {options.map(opt => (
+            <label key={opt} className={`ms-option ${value.includes(opt)?'selected':''}`}>
+              <input type="checkbox" checked={value.includes(opt)} onChange={()=>toggle(opt)} />
+              {opt}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Toggle ──────────────────────────────────────── */
+function Toggle({ label, value, onChange }){
+  return (
+    <label className="toggle" onClick={() => onChange(!value)}>
+      <span className={`toggle-switch ${value?'on':''}`} />
+      <span className="toggle-label">{label}</span>
+    </label>
+  );
+}
+
+/* ── StatCard ────────────────────────────────────── */
+function StatCard({ value, label, cls }){
+  return (
+    <div className="stat">
+      <div className={`stat-val ${cls||''}`}>{value}</div>
+      <div className="stat-label">{label}</div>
+    </div>
+  );
+}
+
+/* ── MOCK DATA (fallback) ────────────────────────── */
+const MOCK = [
+  {id:'m1',sport:'football',league:'Europa League',match:'AS Roma vs Bologna',market:'Over 2.5 Goals',selection:'Over',odds:2.27,bookmaker:'Pinnacle',ev_pct:25.0,confidence:100,model_prob:0.71,kickoff:new Date(Date.now()+6*3600000).toISOString(),created_at:new Date().toISOString(),status:'pending'},
+  {id:'m2',sport:'football',league:'Europa League',match:'Aston Villa vs Lille',market:'Corners Over 9.5',selection:'Over',odds:1.99,bookmaker:'Betsson',ev_pct:12.8,confidence:56,model_prob:0.61,kickoff:new Date(Date.now()+7*3600000).toISOString(),created_at:new Date().toISOString(),status:'pending'},
+  {id:'m3',sport:'football',league:'Turkish Super League',match:'Besiktas vs Kasimpasa',market:'Over 3.5 Goals',selection:'Over',odds:2.25,bookmaker:'Unibet',ev_pct:25.0,confidence:100,model_prob:0.70,kickoff:new Date(Date.now()+4*3600000).toISOString(),created_at:new Date().toISOString(),status:'pending'},
+  {id:'m4',sport:'football',league:'Europa League',match:'FC Midtjylland vs Nottingham Forest',market:'Home or Draw',selection:'Home or Draw',odds:1.74,bookmaker:'Pinnacle',ev_pct:17.5,confidence:93,model_prob:0.71,kickoff:new Date(Date.now()+5*3600000).toISOString(),created_at:new Date().toISOString(),status:'pending'},
+  {id:'m5',sport:'football',league:'Europa League',match:'AS Roma vs Bologna',market:'Corners Over 8.5',selection:'Over',odds:1.91,bookmaker:'API-Football',ev_pct:25.0,confidence:69,model_prob:0.68,kickoff:new Date(Date.now()+7*3600000).toISOString(),created_at:new Date().toISOString(),status:'pending'},
+  {id:'m6',sport:'basketball',league:'NCAAB',match:'Duke vs North Carolina',market:'Total Points Over',selection:'Over',odds:1.85,bookmaker:'DraftKings',ev_pct:8.3,confidence:72,model_prob:0.63,kickoff:new Date(Date.now()+9*3600000).toISOString(),created_at:new Date().toISOString(),status:'pending'},
+  {id:'m7',sport:'football',league:'La Liga',match:'Real Madrid vs Barcelona',market:'BTTS',selection:'Yes',odds:1.65,bookmaker:'Bet365',ev_pct:6.2,confidence:81,model_prob:0.67,kickoff:new Date(Date.now()+18*3600000).toISOString(),created_at:new Date().toISOString(),status:'pending'},
+  {id:'m8',sport:'football',league:'Premier League',match:'Arsenal vs Chelsea',market:'Over 2.5 Goals',selection:'Over',odds:1.72,bookmaker:'Pinnacle',ev_pct:4.1,confidence:65,model_prob:0.62,kickoff:new Date(Date.now()+26*3600000).toISOString(),created_at:new Date().toISOString(),status:'pending'},
+  {id:'m9',sport:'football',league:'Bundesliga',match:'Bayern vs Dortmund',market:'Home Win',selection:'Home',odds:1.54,bookmaker:'Unibet',ev_pct:11.5,confidence:88,model_prob:0.72,kickoff:new Date(Date.now()+3*3600000).toISOString(),created_at:new Date().toISOString(),status:'pending'},
+  {id:'m10',sport:'basketball',league:'NCAAB',match:'Kansas vs Gonzaga',market:'Moneyline',selection:'Kansas',odds:2.10,bookmaker:'FanDuel',ev_pct:14.2,confidence:77,model_prob:0.59,kickoff:new Date(Date.now()+12*3600000).toISOString(),created_at:new Date().toISOString(),status:'pending'},
+];
+
+/* ── KickoffCell ─────────────────────────────────── */
+function KickoffCell({ iso }){
+  if(!iso) return <span style={{color:'var(--text3)'}}>—</span>;
+  const r = fmt.kickoff(iso);
+  if(typeof r === 'string') return <span style={{color:'var(--text3)'}}>{r}</span>;
+  return <span className={r.soon?'kickoff-soon':''}>{r.label}</span>;
+}
+
+/* ── SortHeader ──────────────────────────────────── */
+function SortHeader({ col, label, sort, onSort }){
+  const active = sort.col === col;
+  return (
+    <th className={active?'sorted':''} onClick={() => onSort(col)}>
+      {label}
+      <span className="sort-icon">{active ? (sort.dir==='asc'?'▲':'▼') : '⇅'}</span>
+    </th>
+  );
+}
+
+/* ── Main App ────────────────────────────────────── */
+function App(){
+  const [bets, setBets] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const [useMock, setUseMock] = useState(false);
+  const PAGE_SIZE = 25;
+
+  /* filters */
+  const [search, setSearch] = useState('');
+  const [sports, setSports] = useState([]);
+  const [markets, setMarkets] = useState([]);
+  const [leagues, setLeagues] = useState([]);
+  const [oddsMin, setOddsMin] = useState('');
+  const [oddsMax, setOddsMax] = useState('');
+  const [evMin, setEvMin] = useState('');
+  const [evMax, setEvMax] = useState('');
+  const [confMin, setConfMin] = useState('');
+  const [confMax, setConfMax] = useState('');
+  const [kickoffWindow, setKickoffWindow] = useState('all');
+
+  /* toggles */
+  const [onlyToday, setOnlyToday] = useState(false);
+  const [onePick, setOnePick] = useState(false);
+  const [highValueOnly, setHighValueOnly] = useState(false);
+
+  /* sort + pagination */
+  const [sort, setSort] = useState({ col: 'ev_pct', dir: 'desc' });
+  const [page, setPage] = useState(0);
+
+  /* fetch */
+  const fetchBets = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/bets?status=upcoming&limit=200&sort=ev');
+      if(!res.ok) throw new Error('API error');
+      const data = await res.json();
+      const items = (data.bets || []).filter(b => b.status === 'pending' || !b.status);
+      setBets(items.length > 0 ? items : MOCK);
+      setUseMock(items.length === 0);
+    } catch(e){
+      setBets(MOCK);
+      setUseMock(true);
+    }
+    setLastUpdated(new Date());
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchBets(); }, []);
+  useEffect(() => { setPage(0); }, [search, sports, markets, leagues, oddsMin, oddsMax, evMin, evMax, confMin, confMax, kickoffWindow, onlyToday, onePick, highValueOnly]);
+
+  /* derived option lists */
+  const allSports = useMemo(() => [...new Set(bets.map(b=>b.sport).filter(Boolean))].sort(), [bets]);
+  const allMarkets = useMemo(() => [...new Set(bets.map(b=>b.market).filter(Boolean))].sort(), [bets]);
+  const allLeagues = useMemo(() => [...new Set(bets.map(b=>b.league).filter(Boolean))].sort(), [bets]);
+
+  /* filtering */
+  const filtered = useMemo(() => {
+    let list = [...bets];
+
+    if(search.trim()){
+      const q = search.toLowerCase();
+      list = list.filter(b => (b.match||'').toLowerCase().includes(q) || (b.league||'').toLowerCase().includes(q));
+    }
+    if(sports.length) list = list.filter(b => sports.includes(b.sport));
+    if(markets.length) list = list.filter(b => markets.includes(b.market));
+    if(leagues.length) list = list.filter(b => leagues.includes(b.league));
+    if(oddsMin !== '') list = list.filter(b => (b.odds||0) >= parseFloat(oddsMin));
+    if(oddsMax !== '') list = list.filter(b => (b.odds||0) <= parseFloat(oddsMax));
+    if(evMin !== '') list = list.filter(b => (b.ev_pct||0) >= parseFloat(evMin));
+    if(evMax !== '') list = list.filter(b => (b.ev_pct||0) <= parseFloat(evMax));
+    if(confMin !== '') list = list.filter(b => (b.confidence||0) >= parseFloat(confMin));
+    if(confMax !== '') list = list.filter(b => (b.confidence||0) <= parseFloat(confMax));
+
+    if(kickoffWindow === 'today') list = list.filter(b => isToday(b.kickoff));
+    else if(kickoffWindow === '6h') list = list.filter(b => isWithinHours(b.kickoff, 6));
+    else if(kickoffWindow === '12h') list = list.filter(b => isWithinHours(b.kickoff, 12));
+    else if(kickoffWindow === '24h') list = list.filter(b => isWithinHours(b.kickoff, 24));
+
+    if(onlyToday) list = list.filter(b => isToday(b.kickoff));
+    if(highValueOnly) list = list.filter(b => (b.ev_pct||0) >= 5);
+
+    if(onePick){
+      const seen = new Set();
+      list = list.filter(b => {
+        if(seen.has(b.match)) return false;
+        seen.add(b.match); return true;
+      });
+    }
+
+    /* sort */
+    list.sort((a,b_) => {
+      let av = a[sort.col], bv = b_[sort.col];
+      if(av == null) av = sort.dir==='asc' ? Infinity : -Infinity;
+      if(bv == null) bv = sort.dir==='asc' ? Infinity : -Infinity;
+      if(sort.col === 'kickoff') { av = a.kickoff_epoch||0; bv = b_.kickoff_epoch||0; }
+      if(sort.col === 'created_at') { av = a.created_at||''; bv = b_.created_at||''; }
+      if(typeof av === 'string') return sort.dir==='asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+      return sort.dir==='asc' ? av - bv : bv - av;
+    });
+
+    return list;
+  }, [bets, search, sports, markets, leagues, oddsMin, oddsMax, evMin, evMax, confMin, confMax, kickoffWindow, onlyToday, onePick, highValueOnly, sort]);
+
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const pageItems = filtered.slice(page * PAGE_SIZE, (page+1) * PAGE_SIZE);
+
+  const handleSort = col => {
+    setSort(s => s.col === col ? { col, dir: s.dir==='desc'?'asc':'desc' } : { col, dir: 'desc' });
+  };
+
+  const resetFilters = () => {
+    setSearch(''); setSports([]); setMarkets([]); setLeagues([]);
+    setOddsMin(''); setOddsMax(''); setEvMin(''); setEvMax('');
+    setConfMin(''); setConfMax(''); setKickoffWindow('all');
+    setOnlyToday(false); setOnePick(false); setHighValueOnly(false);
+  };
+
+  /* stats */
+  const evHigh = filtered.filter(b => (b.ev_pct||0) >= 10).length;
+  const evMed = filtered.filter(b => (b.ev_pct||0) >= 5 && (b.ev_pct||0) < 10).length;
+  const avgEv = filtered.length ? (filtered.reduce((s,b) => s+(b.ev_pct||0), 0)/filtered.length).toFixed(1) : '—';
+  const avgConf = filtered.length ? Math.round(filtered.reduce((s,b) => s+(b.confidence||0), 0)/filtered.length) : '—';
+
+  return (
+    <div className="app">
+      <div className="topbar">
+        <div className="topbar-brand">
+          <div className="topbar-logo">P</div>
+          <div>
+            <div className="topbar-title">PGR Value Dashboard</div>
+            <div className="topbar-sub">Sports Betting Analytics</div>
+          </div>
+        </div>
+        <div className="topbar-right">
+          {useMock && <span style={{fontSize:'.7rem',color:'var(--yellow)',background:'#422006',padding:'.15rem .5rem',borderRadius:3}}>DEMO DATA</span>}
+          <span className="live-dot" />
+          <button className="refresh-btn" onClick={fetchBets}>↻ Refresh</button>
+          {lastUpdated && <span style={{fontSize:'.7rem',color:'var(--text3)'}}>Updated {fmt.detectedAt(lastUpdated.toISOString())}</span>}
+        </div>
+      </div>
+
+      <div className="main">
+        {/* Stats row */}
+        <div className="stats-row">
+          <StatCard value={filtered.length} label="Opportunities" cls="accent" />
+          <StatCard value={evHigh} label="EV > 10%" cls="green" />
+          <StatCard value={evMed} label="EV 5–10%" cls="yellow" />
+          <StatCard value={avgEv !== '—' ? `${avgEv}%` : '—'} label="Avg EV" cls="accent" />
+          <StatCard value={avgConf !== '—' ? `${avgConf}%` : '—'} label="Avg Conf" />
+          <StatCard value={bets.length} label="Total Loaded" />
+        </div>
+
+        {/* Filter panel */}
+        <div className="filter-panel">
+          <div className="filter-panel-top">
+            <h3>Filters</h3>
+            <button className="filter-reset" onClick={resetFilters}>Reset all</button>
+          </div>
+
+          <div className="filter-grid">
+            <div className="filter-group">
+              <span className="filter-label">Sport</span>
+              <MultiSelect options={allSports} value={sports} onChange={setSports} placeholder="All sports" />
+            </div>
+            <div className="filter-group">
+              <span className="filter-label">Market</span>
+              <MultiSelect options={allMarkets} value={markets} onChange={setMarkets} placeholder="All markets" />
+            </div>
+            <div className="filter-group">
+              <span className="filter-label">League</span>
+              <MultiSelect options={allLeagues} value={leagues} onChange={setLeagues} placeholder="All leagues" />
+            </div>
+            <div className="filter-group">
+              <span className="filter-label">Odds range</span>
+              <div className="filter-row-range">
+                <input type="number" placeholder="1.00" step="0.05" value={oddsMin} onChange={e=>setOddsMin(e.target.value)} />
+                <span>–</span>
+                <input type="number" placeholder="20.0" step="0.05" value={oddsMax} onChange={e=>setOddsMax(e.target.value)} />
+              </div>
+            </div>
+            <div className="filter-group">
+              <span className="filter-label">EV% range</span>
+              <div className="filter-row-range">
+                <input type="number" placeholder="0" step="1" value={evMin} onChange={e=>setEvMin(e.target.value)} />
+                <span>–</span>
+                <input type="number" placeholder="100" step="1" value={evMax} onChange={e=>setEvMax(e.target.value)} />
+              </div>
+            </div>
+            <div className="filter-group">
+              <span className="filter-label">Confidence%</span>
+              <div className="filter-row-range">
+                <input type="number" placeholder="0" step="5" value={confMin} onChange={e=>setConfMin(e.target.value)} />
+                <span>–</span>
+                <input type="number" placeholder="100" step="5" value={confMax} onChange={e=>setConfMax(e.target.value)} />
+              </div>
+            </div>
+            <div className="filter-group">
+              <span className="filter-label">Kickoff window</span>
+              <select value={kickoffWindow} onChange={e=>setKickoffWindow(e.target.value)}>
+                <option value="all">All upcoming</option>
+                <option value="today">Today</option>
+                <option value="6h">Next 6 hours</option>
+                <option value="12h">Next 12 hours</option>
+                <option value="24h">Next 24 hours</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="toggle-row">
+            <Toggle label="Only today's matches" value={onlyToday} onChange={setOnlyToday} />
+            <Toggle label="One pick per match" value={onePick} onChange={setOnePick} />
+            <Toggle label="Only high value (EV > 5%)" value={highValueOnly} onChange={setHighValueOnly} />
+          </div>
+        </div>
+
+        {/* Search + sort bar */}
+        <div className="search-bar">
+          <input
+            type="text"
+            placeholder="🔍  Search team or league…"
+            value={search}
+            onChange={e=>setSearch(e.target.value)}
+          />
+          <select className="sort-select" value={`${sort.col}:${sort.dir}`} onChange={e=>{
+            const [col,dir] = e.target.value.split(':');
+            setSort({col,dir});
+          }}>
+            <option value="ev_pct:desc">Highest EV</option>
+            <option value="confidence:desc">Highest Confidence</option>
+            <option value="odds:desc">Highest Odds</option>
+            <option value="kickoff:asc">Earliest Kickoff</option>
+            <option value="created_at:desc">Newest Detected</option>
+          </select>
+          <span className="result-count">{filtered.length} result{filtered.length!==1?'s':''}</span>
+        </div>
+
+        {/* Table */}
+        <div className="table-wrap">
+          {loading ? (
+            <div className="loading">
+              <div className="spinner" />
+              Loading opportunities…
+            </div>
+          ) : pageItems.length === 0 ? (
+            <div className="empty">
+              <div className="empty-icon">📊</div>
+              No opportunities match your filters.<br/>
+              <span style={{fontSize:'.75rem'}}>Try adjusting the filters or resetting.</span>
+            </div>
+          ) : (
+            <div className="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th style={{width:28}} />
+                    <SortHeader col="match" label="Match" sort={sort} onSort={handleSort} />
+                    <SortHeader col="league" label="League" sort={sort} onSort={handleSort} />
+                    <SortHeader col="market" label="Market" sort={sort} onSort={handleSort} />
+                    <SortHeader col="odds" label="Odds" sort={sort} onSort={handleSort} />
+                    <th>Bookmaker</th>
+                    <SortHeader col="ev_pct" label="EV%" sort={sort} onSort={handleSort} />
+                    <SortHeader col="confidence" label="Confidence" sort={sort} onSort={handleSort} />
+                    <SortHeader col="kickoff" label="Kickoff" sort={sort} onSort={handleSort} />
+                    <SortHeader col="created_at" label="Detected" sort={sort} onSort={handleSort} />
+                  </tr>
+                </thead>
+                <tbody>
+                  {pageItems.map(bet => {
+                    const ec = evClass(bet.ev_pct);
+                    const rowCls = ec==='high' ? 'ev-high' : ec==='med' ? 'ev-med' : '';
+                    return (
+                      <tr key={bet.id} className={rowCls}>
+                        <td>
+                          <span className={`badge sport-${bet.sport}`}>
+                            {bet.sport === 'football' ? '⚽' : bet.sport === 'basketball' ? '🏀' : '🎯'}
+                          </span>
+                        </td>
+                        <td style={{fontWeight:600,maxWidth:220,overflow:'hidden',textOverflow:'ellipsis'}}>
+                          {bet.match}
+                        </td>
+                        <td style={{color:'var(--text3)',maxWidth:150,overflow:'hidden',textOverflow:'ellipsis'}}>
+                          {bet.league}
+                        </td>
+                        <td>
+                          <span className="badge market">{bet.market}</span>
+                        </td>
+                        <td><span className="odds-val">{fmt.odds(bet.odds)}</span></td>
+                        <td style={{color:'var(--text3)'}}>{bet.bookmaker || '—'}</td>
+                        <td>
+                          <span className={`ev-val ${ec}`}>
+                            {bet.ev_pct != null ? `+${bet.ev_pct.toFixed(1)}%` : '—'}
+                          </span>
+                        </td>
+                        <td>
+                          {bet.confidence != null ? (
+                            <div className="conf-bar-wrap">
+                              <span style={{minWidth:30}}>{Math.round(bet.confidence)}%</span>
+                              <div className="conf-bar">
+                                <div className="conf-fill" style={{width:`${Math.min(100,bet.confidence)}%`}} />
+                              </div>
+                            </div>
+                          ) : '—'}
+                        </td>
+                        <td><KickoffCell iso={bet.kickoff} /></td>
+                        <td style={{color:'var(--text3)'}}>{fmt.detectedAt(bet.created_at)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Pagination */}
+          {!loading && totalPages > 1 && (
+            <div className="pagination">
+              <button className="page-btn" disabled={page===0} onClick={()=>setPage(p=>p-1)}>← Prev</button>
+              {Array.from({length:Math.min(7,totalPages)},(_,i)=>{
+                let p;
+                if(totalPages<=7) p=i;
+                else if(page<4) p=i;
+                else if(page>totalPages-4) p=totalPages-7+i;
+                else p=page-3+i;
+                return(
+                  <button key={p} className={`page-btn ${page===p?'active':''}`} onClick={()=>setPage(p)}>
+                    {p+1}
+                  </button>
+                );
+              })}
+              <button className="page-btn" disabled={page===totalPages-1} onClick={()=>setPage(p=>p+1)}>Next →</button>
+            </div>
+          )}
+        </div>
+
+        <div style={{marginTop:'.75rem',textAlign:'center',fontSize:'.7rem',color:'var(--text3)'}}>
+          PGR Sports Analytics · Data analysis only · Not financial advice
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
