@@ -1109,11 +1109,75 @@ def _auto_void_old_player_props():
         logger.warning(f"Player props auto-void error: {e}")
 
 
+def catchup_discord_notifications():
+    """
+    Send Discord result notifications for any settled PROD bets that were
+    missed (e.g. engine was down, webhook was misconfigured).
+    Called automatically on every engine startup via run_results_engine().
+    """
+    try:
+        from discord_notifier import send_result_to_discord
+        from db_helper import db_helper as _db
+
+        pending = _db.execute("""
+            SELECT id, home_team, away_team, market, selection, odds, status
+            FROM football_opportunities
+            WHERE status IN ('win', 'loss', 'void')
+              AND (result_discord_sent IS NULL OR result_discord_sent = FALSE)
+              AND mode IN ('PROD', 'PRODUCTION')
+            ORDER BY id DESC
+            LIMIT 50
+        """, fetch='all')
+
+        if not pending:
+            return
+
+        logger.info(f"📤 Catchup: sending {len(pending)} missed Discord result notifications")
+
+        for row in pending:
+            bet_id, home, away, market, selection, odds, status = row
+            market_upper = (market or '').upper()
+            if market_upper in ('CORNERS', 'CORNER'):
+                product_type = 'CORNERS'
+            elif market_upper in ('CARDS', 'CARD'):
+                product_type = 'CARDS'
+            else:
+                product_type = 'VALUE_SINGLE'
+
+            outcome = {'win': 'WIN', 'loss': 'LOSS', 'void': 'VOID'}.get(status, status.upper())
+
+            info = {
+                'outcome': outcome,
+                'home_team': home or '',
+                'away_team': away or '',
+                'selection': selection or '',
+                'actual_score': outcome,
+                'odds': odds or 0,
+                'product_type': product_type,
+                'league': '',
+            }
+
+            try:
+                sent = send_result_to_discord(info, product_type)
+                if sent:
+                    _db.execute(
+                        "UPDATE football_opportunities SET result_discord_sent = TRUE WHERE id = %s",
+                        (bet_id,)
+                    )
+                    logger.info(f"✅ Catchup sent: #{bet_id} {home} vs {away} — {outcome}")
+            except Exception as e:
+                logger.warning(f"⚠️ Catchup failed for #{bet_id}: {e}")
+
+    except Exception as e:
+        logger.warning(f"⚠️ Discord catchup error: {e}")
+
+
 def run_results_engine():
     """Run the results engine cycle."""
     engine = ResultsEngine()
     stats = engine.run_cycle()
     _auto_void_old_player_props()
+    catchup_discord_notifications()
     return stats
 
 

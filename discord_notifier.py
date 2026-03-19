@@ -273,18 +273,21 @@ def format_odds_comparison(model_odds: float, live_data: dict) -> str:
 
 
 PRODUCT_WEBHOOKS = {
-    "EXACT_SCORE": os.getenv("WEBHOOK_Final_score"),
-    "ML_PARLAY": os.getenv("WEBHOOK_ML_PARLAYS"),
+    # Main results channel — value singles, basketball, exact score
+    "VALUE_SINGLE": os.getenv("DISCORD_RESULTS_WEBHOOK"),
+    "EXACT_SCORE":  os.getenv("DISCORD_RESULTS_WEBHOOK"),
+    "BASKETBALL":   os.getenv("DISCORD_RESULTS_WEBHOOK"),
+    "BASKETBALL_SINGLE": os.getenv("DISCORD_RESULTS_WEBHOOK"),
+    "BASKET_SINGLE": os.getenv("DISCORD_RESULTS_WEBHOOK"),
+    "BASKET_PARLAY": os.getenv("DISCORD_RESULTS_WEBHOOK"),
+    # Parlays channel
+    "ML_PARLAY":         os.getenv("WEBHOOK_PARLAYS"),
     "MULTI_MATCH_PARLAY": os.getenv("WEBHOOK_PARLAYS"),
-    "PARLAY": os.getenv("WEBHOOK_PARLAYS"),
-    "VALUE_SINGLE": os.getenv("WEBHOOK_Value_singles"),
-    "BASKETBALL_SINGLE": os.getenv("WEB_HOOK_College_basket"),
-    "BASKETBALL": os.getenv("WEB_HOOK_College_basket"),
-    "BASKET_SINGLE": os.getenv("WEB_HOOK_College_basket"),
-    "BASKET_PARLAY": os.getenv("WEB_HOOK_College_basket"),
+    "PARLAY":            os.getenv("WEBHOOK_PARLAYS"),
+    # Props channel — corners, cards, shots
     "CORNERS": os.getenv("DISCORD_PROPS_WEBHOOK_URL"),
-    "CARDS": os.getenv("DISCORD_PROPS_WEBHOOK_URL"),
-    "SHOTS": os.getenv("DISCORD_PROPS_WEBHOOK_URL"),
+    "CARDS":   os.getenv("DISCORD_PROPS_WEBHOOK_URL"),
+    "SHOTS":   os.getenv("DISCORD_PROPS_WEBHOOK_URL"),
 }
 
 
