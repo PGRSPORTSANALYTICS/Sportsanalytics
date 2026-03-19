@@ -16,29 +16,48 @@
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 3px; }
 
-  .row-high { border-left: 2px solid #22c55e !important; background: linear-gradient(90deg,rgba(34,197,94,0.07) 0%,transparent 55%); }
+  /* ── 4-tier EV row colours ───────────────────────────── */
+  .row-neon { border-left: 2px solid #22c55e !important; background: linear-gradient(90deg,rgba(34,197,94,0.11) 0%,transparent 55%); }
+  .row-high { border-left: 2px solid #16a34a !important; background: linear-gradient(90deg,rgba(34,197,94,0.06) 0%,transparent 55%); }
   .row-med  { border-left: 2px solid #eab308 !important; background: linear-gradient(90deg,rgba(234,179,8,0.05) 0%,transparent 55%); }
   .row-low  { border-left: 2px solid transparent; }
 
-  .ev-high { background: rgba(34,197,94,0.15); color: #4ade80; border: 1px solid rgba(34,197,94,0.3); }
-  .ev-med  { background: rgba(234,179,8,0.12);  color: #fbbf24; border: 1px solid rgba(234,179,8,0.25); }
-  .ev-low  { background: rgba(255,255,255,0.05); color: #71717a; border: 1px solid rgba(255,255,255,0.08); }
+  /* ── 4-tier EV badge colours ─────────────────────────── */
+  .ev-neon { background: rgba(34,197,94,0.20); color: #86efac; border: 1px solid rgba(34,197,94,0.55); box-shadow: 0 0 10px rgba(34,197,94,0.40); }
+  .ev-high { background: rgba(34,197,94,0.12); color: #4ade80; border: 1px solid rgba(34,197,94,0.30); }
+  .ev-med  { background: rgba(234,179,8,0.11); color: #fbbf24; border: 1px solid rgba(234,179,8,0.25); }
+  .ev-low  { background: rgba(255,255,255,0.04); color: #52525b; border: 1px solid rgba(255,255,255,0.07); }
+
+  /* ── Locked card ──────────────────────────────────────── */
+  .row-locked { border-left: 2px solid #6366f1 !important; background: linear-gradient(90deg,rgba(99,102,241,0.07) 0%,transparent 55%); filter: blur(0px); }
+  .locked-blur td { filter: blur(3.5px); user-select: none; pointer-events: none; }
 
   .sth { position: sticky; top: 0; z-index: 20; background: #0f1219; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
-  .pulse { animation: pulse 2s infinite; }
+
+  @keyframes pulse   { 0%,100%{opacity:1} 50%{opacity:.25} }
+  @keyframes fadein  { from{opacity:0;transform:translateY(-5px)} to{opacity:1;transform:none} }
+  @keyframes glide   { 0%{transform:translateX(-100%)} 100%{transform:translateX(400%)} }
+  @keyframes scanpop { 0%{opacity:0;transform:scale(.9)} 15%{opacity:1;transform:scale(1)} 85%{opacity:1} 100%{opacity:0} }
+
+  .pulse  { animation: pulse 2s infinite; }
+  .fadein { animation: fadein .3s ease; }
+  .scan-pop { animation: scanpop 3.5s ease forwards; }
 
   input[type=range] { -webkit-appearance:none; appearance:none; background:transparent; cursor:pointer; width:80px; }
   input[type=range]::-webkit-slider-runnable-track { background:#27272a; border-radius:4px; height:3px; }
   input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:12px; height:12px; border-radius:50%; background:#22c55e; margin-top:-4.5px; }
 
-  select { -webkit-appearance:none; appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%2352525b' viewBox='0 0 20 20'%3E%3Cpath d='M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 6px center; background-size:14px; padding-right:24px !important; }
+  select { -webkit-appearance:none; appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%2352525b' viewBox='0 0 20 20'%3E%3Cpath d='M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right 6px center; background-size:14px; padding-right:24px !important; }
 
-  .feat-card { flex-shrink:0; display:flex; align-items:center; gap:8px; padding:5px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.03); cursor:default; white-space:nowrap; }
-  .feat-card:hover { background:rgba(255,255,255,0.06); }
+  .feat-card { flex-shrink:0; display:flex; flex-direction:column; gap:5px; padding:8px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.03); cursor:default; min-width:170px; transition:background .12s; }
+  .feat-card:hover { background:rgba(255,255,255,0.055); }
+  .feat-card.neon-card { border-color:rgba(34,197,94,0.25); box-shadow:0 0 16px rgba(34,197,94,0.10); }
+
   .tog { display:flex; border-radius:6px; overflow:hidden; border:1px solid rgba(255,255,255,0.1); }
-  .tog button { font-size:11px; padding:4px 10px; transition:background .12s,color .12s; }
-  .tb-sep { width:1px; background:rgba(255,255,255,0.07); margin:4px 0; }
+  .tog button { font-size:11px; padding:4px 10px; transition:background .12s,color .12s; background:transparent; border:none; cursor:pointer; }
+  .tb-sep { width:1px; background:rgba(255,255,255,0.07); margin:4px 0; flex-shrink:0; }
 
   @media(max-width:768px){
     body { overflow: auto; }
@@ -53,28 +72,28 @@
 <body>
 <div id="root" style="height:100%"></div>
 <script type="text/babel">
-const { useMemo, useState, useEffect, useCallback } = React;
+const { useMemo, useState, useEffect, useCallback, useRef } = React;
 
 /* ─── Mock data ─────────────────────────────────────────────── */
 const mockPicks = [
-  { sport:"Football", league:"2. Bundesliga",    match:"Hannover 96 vs Braunschweig",          market:"Over 3.5 Corners",  selection:"Over",  odds:2.02, bookmaker:"Bet365",    ev:25.0, confidence:65,  model_probability:65, kickoff_time:"2026-03-20 18:30", detected_at:"2026-03-19 09:05", featured:true,  badge:"High EV" },
-  { sport:"Football", league:"Europa League",    match:"AS Roma vs Bologna",                   market:"Over 2.5 Goals",    selection:"Over",  odds:2.27, bookmaker:"Pinnacle",   ev:25.0, confidence:100, model_probability:71, kickoff_time:"2026-03-19 20:00", detected_at:"2026-03-19 06:19", featured:true,  badge:"High EV" },
-  { sport:"Football", league:"Europa League",    match:"FC Midtjylland vs Nott'm Forest",      market:"Home or Draw",      selection:"X2",    odds:1.74, bookmaker:"Pinnacle",   ev:17.5, confidence:93,  model_probability:71, kickoff_time:"2026-03-19 17:45", detected_at:"2026-03-19 06:21", featured:true,  badge:"Top Conf" },
-  { sport:"Football", league:"National",         match:"Boulogne vs Nancy",                    market:"Corners Over 9.5",  selection:"Over",  odds:2.02, bookmaker:"Unibet",    ev:14.9, confidence:56,  model_probability:56, kickoff_time:"2026-03-20 19:00", detected_at:"2026-03-19 09:10", featured:true,  badge:"Early Line" },
-  { sport:"Football", league:"Champions League", match:"Aston Villa vs Lille",                 market:"Corners Over 9.5",  selection:"Over",  odds:1.99, bookmaker:"Pinnacle",   ev:12.8, confidence:56,  model_probability:56, kickoff_time:"2026-03-20 20:00", detected_at:"2026-03-19 09:05", featured:false, badge:"Top Value" },
-  { sport:"Football", league:"Turkish SL",       match:"Besiktas vs Kasimpasa",                market:"Over 3.5 Goals",    selection:"Over",  odds:2.25, bookmaker:"Unibet",    ev:25.0, confidence:100, model_probability:70, kickoff_time:"2026-03-19 17:00", detected_at:"2026-03-19 06:20", featured:false, badge:"High EV" },
-  { sport:"Football", league:"A-League",         match:"WS Wanderers vs Adelaide",             market:"Corners Under 10.5",selection:"Under", odds:1.87, bookmaker:"Kambi",    ev:4.7,  confidence:55,  model_probability:55, kickoff_time:"2026-03-20 10:00", detected_at:"2026-03-19 09:12", featured:false, badge:"Value" },
-  { sport:"Basketball",league:"NCAAB",           match:"Duke vs North Carolina",               market:"Total Over 148.5",  selection:"Over",  odds:1.87, bookmaker:"DraftKings",ev:8.3,  confidence:72,  model_probability:63, kickoff_time:"2026-03-19 22:00", detected_at:"2026-03-19 08:00", featured:false, badge:"Value" },
-  { sport:"Football", league:"Bundesliga",       match:"Bayern Munich vs Dortmund",            market:"Home Win",          selection:"Home",  odds:1.54, bookmaker:"Unibet",    ev:11.5, confidence:88,  model_probability:72, kickoff_time:"2026-03-20 15:30", detected_at:"2026-03-19 07:00", featured:false, badge:"High EV" },
-  { sport:"Football", league:"La Liga",          match:"Real Madrid vs Barcelona",             market:"BTTS Yes",          selection:"Yes",   odds:1.68, bookmaker:"Pinnacle",   ev:6.2,  confidence:81,  model_probability:67, kickoff_time:"2026-03-20 21:00", detected_at:"2026-03-19 08:30", featured:false, badge:"Value" },
-  { sport:"Football", league:"Serie A",          match:"Juventus vs AC Milan",                 market:"Draw No Bet Home",  selection:"Home",  odds:1.82, bookmaker:"Bet365",    ev:9.4,  confidence:75,  model_probability:65, kickoff_time:"2026-03-20 20:45", detected_at:"2026-03-19 07:45", featured:false, badge:"Value" },
-  { sport:"Football", league:"Premier League",   match:"Arsenal vs Chelsea",                   market:"Over 2.5 Goals",   selection:"Over",  odds:1.72, bookmaker:"Pinnacle",   ev:4.1,  confidence:65,  model_probability:62, kickoff_time:"2026-03-22 14:00", detected_at:"2026-03-19 10:00", featured:false, badge:"Value" },
-  { sport:"Football", league:"Ligue 1",          match:"PSG vs Olympique Lyon",                market:"Over 2.5 Goals",   selection:"Over",  odds:1.62, bookmaker:"Betsson",    ev:7.8,  confidence:84,  model_probability:69, kickoff_time:"2026-03-21 21:00", detected_at:"2026-03-19 09:30", featured:false, badge:"Value" },
-  { sport:"Football", league:"Eredivisie",       match:"Ajax vs PSV Eindhoven",                market:"Over 3.5 Goals",   selection:"Over",  odds:2.15, bookmaker:"Unibet",    ev:16.5, confidence:79,  model_probability:67, kickoff_time:"2026-03-22 16:30", detected_at:"2026-03-19 08:15", featured:false, badge:"High EV" },
-  { sport:"Basketball",league:"NCAAB",           match:"Kansas vs Gonzaga",                    market:"Moneyline Kansas",  selection:"Home",  odds:2.10, bookmaker:"FanDuel",   ev:14.2, confidence:77,  model_probability:59, kickoff_time:"2026-03-20 02:00", detected_at:"2026-03-19 09:00", featured:false, badge:"High EV" },
+  { sport:"Football", league:"2. Bundesliga",    match:"Hannover 96 vs Braunschweig",     market:"Over 3.5 Corners",   selection:"Over",  odds:2.02, bookmaker:"Bet365",    ev:25.0, confidence:65,  model_probability:65, kickoff_time:"2026-03-20 18:30", detected_at:"2026-03-19 09:05", featured:true,  badge:"High EV" },
+  { sport:"Football", league:"Europa League",    match:"AS Roma vs Bologna",              market:"Over 2.5 Goals",     selection:"Over",  odds:2.27, bookmaker:"Pinnacle",   ev:25.0, confidence:100, model_probability:71, kickoff_time:"2026-03-19 20:00", detected_at:"2026-03-19 06:19", featured:true,  badge:"High EV" },
+  { sport:"Football", league:"Europa League",    match:"FC Midtjylland vs Nott'm Forest", market:"Home or Draw",       selection:"X2",    odds:1.74, bookmaker:"Pinnacle",   ev:17.5, confidence:93,  model_probability:71, kickoff_time:"2026-03-19 17:45", detected_at:"2026-03-19 06:21", featured:true,  badge:"Top Conf" },
+  { sport:"Football", league:"National",         match:"Boulogne vs Nancy",               market:"Corners Over 9.5",   selection:"Over",  odds:2.02, bookmaker:"Unibet",    ev:14.9, confidence:56,  model_probability:56, kickoff_time:"2026-03-20 19:00", detected_at:"2026-03-19 09:10", featured:true,  badge:"Early Line" },
+  { sport:"Football", league:"Champions League", match:"Aston Villa vs Lille",            market:"Corners Over 9.5",   selection:"Over",  odds:1.99, bookmaker:"Pinnacle",   ev:12.8, confidence:56,  model_probability:56, kickoff_time:"2026-03-20 20:00", detected_at:"2026-03-19 09:05", featured:false, badge:"Top Value" },
+  { sport:"Football", league:"Turkish SL",       match:"Besiktas vs Kasimpasa",           market:"Over 3.5 Goals",     selection:"Over",  odds:2.25, bookmaker:"Unibet",    ev:22.0, confidence:100, model_probability:70, kickoff_time:"2026-03-19 17:00", detected_at:"2026-03-19 06:20", featured:false, badge:"High EV" },
+  { sport:"Football", league:"A-League",         match:"WS Wanderers vs Adelaide",        market:"Corners Under 10.5", selection:"Under", odds:1.87, bookmaker:"Kambi",     ev:4.7,  confidence:55,  model_probability:55, kickoff_time:"2026-03-20 10:00", detected_at:"2026-03-19 09:12", featured:false, badge:"Value" },
+  { sport:"Basketball",league:"NCAAB",           match:"Duke vs North Carolina",          market:"Total Over 148.5",   selection:"Over",  odds:1.87, bookmaker:"DraftKings", ev:8.3,  confidence:72,  model_probability:63, kickoff_time:"2026-03-19 22:00", detected_at:"2026-03-19 08:00", featured:false, badge:"Value" },
+  { sport:"Football", league:"Bundesliga",       match:"Bayern Munich vs Dortmund",       market:"Home Win",           selection:"Home",  odds:1.54, bookmaker:"Unibet",    ev:11.5, confidence:88,  model_probability:72, kickoff_time:"2026-03-20 15:30", detected_at:"2026-03-19 07:00", featured:false, badge:"High EV" },
+  { sport:"Football", league:"La Liga",          match:"Real Madrid vs Barcelona",        market:"BTTS Yes",           selection:"Yes",   odds:1.68, bookmaker:"Pinnacle",   ev:6.2,  confidence:81,  model_probability:67, kickoff_time:"2026-03-20 21:00", detected_at:"2026-03-19 08:30", featured:false, badge:"Value" },
+  { sport:"Football", league:"Serie A",          match:"Juventus vs AC Milan",            market:"Draw No Bet Home",   selection:"Home",  odds:1.82, bookmaker:"Bet365",    ev:9.4,  confidence:75,  model_probability:65, kickoff_time:"2026-03-20 20:45", detected_at:"2026-03-19 07:45", featured:false, badge:"Value" },
+  { sport:"Football", league:"Premier League",   match:"Arsenal vs Chelsea",              market:"Over 2.5 Goals",     selection:"Over",  odds:1.72, bookmaker:"Pinnacle",   ev:4.1,  confidence:65,  model_probability:62, kickoff_time:"2026-03-22 14:00", detected_at:"2026-03-19 10:00", featured:false, badge:"Value" },
+  { sport:"Football", league:"Ligue 1",          match:"PSG vs Olympique Lyon",           market:"Over 2.5 Goals",     selection:"Over",  odds:1.62, bookmaker:"Betsson",    ev:7.8,  confidence:84,  model_probability:69, kickoff_time:"2026-03-21 21:00", detected_at:"2026-03-19 09:30", featured:false, badge:"Value" },
+  { sport:"Football", league:"Eredivisie",       match:"Ajax vs PSV Eindhoven",           market:"Over 3.5 Goals",     selection:"Over",  odds:2.15, bookmaker:"Unibet",    ev:16.5, confidence:79,  model_probability:67, kickoff_time:"2026-03-22 16:30", detected_at:"2026-03-19 08:15", featured:false, badge:"High EV" },
+  { sport:"Basketball",league:"NCAAB",           match:"Kansas vs Gonzaga",               market:"Moneyline Kansas",   selection:"Home",  odds:2.10, bookmaker:"FanDuel",   ev:14.2, confidence:77,  model_probability:59, kickoff_time:"2026-03-20 02:00", detected_at:"2026-03-19 09:00", featured:false, badge:"High EV" },
 ];
 
-/* ─── Helpers ───────────────────────────────────────────────── */
+/* ─── Helpers ─────────────────────────────────────────────── */
 function normalizePick(b) {
   return {
     sport: b.sport || "Football",
@@ -91,11 +110,24 @@ function normalizePick(b) {
     kickoff_time: b.kickoff || b.kickoff_time || "",
     detected_at: b.created_at || b.detected_at || "",
     featured: b.featured || false,
-    badge: b.badge || (b.ev_pct >= 15 ? "High EV" : b.confidence >= 85 ? "Top Conf" : "Value"),
+    badge: b.badge || (b.ev_pct >= 20 ? "Neon EV" : b.ev_pct >= 15 ? "High EV" : b.confidence >= 85 ? "Top Conf" : "Value"),
   };
 }
 
-function evTier(ev) { return ev >= 15 ? "high" : ev >= 5 ? "med" : "low"; }
+/* EV tier: neon ≥20, high 10-20, med 5-10, low <5 */
+function evTier(ev) {
+  if (ev >= 20) return "neon";
+  if (ev >= 10) return "high";
+  if (ev >= 5)  return "med";
+  return "low";
+}
+
+function modelEdge(p) {
+  const implied = p.odds > 0 ? (1/p.odds)*100 : 0;
+  const model   = p.model_probability || p.confidence || 0;
+  const edge    = model - implied;
+  return edge;
+}
 
 function fmtKickoff(iso) {
   if (!iso) return "—";
@@ -114,17 +146,24 @@ function fmtDetected(iso) {
   if (isNaN(d)) return iso;
   return d.toLocaleTimeString("sv-SE",{hour:"2-digit",minute:"2-digit"});
 }
+function fmtAgo(ts) {
+  if (!ts) return "—";
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60)  return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s/60)}m ago`;
+  return `${Math.floor(s/3600)}h ago`;
+}
 
-/* ─── Sub-components ────────────────────────────────────────── */
+/* ─── Sub-components ─────────────────────────────────────── */
 function EvBadge({ ev }) {
   const t = evTier(ev);
-  return <span className={`ev-${t} text-xs font-bold px-1.5 py-px rounded`}>+{Number(ev).toFixed(1)}%</span>;
+  return <span className={`ev-${t}`} style={{fontSize:11,fontWeight:700,padding:"2px 7px",borderRadius:5,display:"inline-block",whiteSpace:"nowrap"}}>+{Number(ev).toFixed(1)}%</span>;
 }
 
 function MiniConf({ v }) {
   return (
     <div style={{display:"flex",alignItems:"center",gap:5}}>
-      <span style={{fontSize:11,color:"#a1a1aa",width:26}}>{Math.round(v)}%</span>
+      <span style={{fontSize:11,color:"#a1a1aa",width:26,flexShrink:0}}>{Math.round(v)}%</span>
       <div style={{width:36,height:3,background:"rgba(255,255,255,0.08)",borderRadius:99,overflow:"hidden"}}>
         <div style={{width:`${Math.min(100,v)}%`,height:"100%",background:"linear-gradient(90deg,#6366f1,#818cf8)",borderRadius:99}} />
       </div>
@@ -132,20 +171,52 @@ function MiniConf({ v }) {
   );
 }
 
-/* ─── Main App ──────────────────────────────────────────────── */
-function App() {
-  const [allPicks, setAllPicks]   = useState(mockPicks);
-  const [apiStats, setApiStats]   = useState(null);
-  const [loading, setLoading]     = useState(true);
-  const [isMock, setIsMock]       = useState(false);
+function LockedRow() {
+  return (
+    <tr className="row-locked" style={{borderBottom:"1px solid rgba(99,102,241,0.12)"}}>
+      <td colSpan={9} style={{padding:"9px 14px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <span style={{fontSize:14}}>🔒</span>
+          <span style={{fontSize:12,fontWeight:600,color:"#818cf8"}}>Premium Pick</span>
+          <span style={{fontSize:11,color:"#52525b",marginLeft:2}}>— high-confidence opportunity hidden</span>
+          <span style={{marginLeft:"auto",fontSize:10,fontWeight:700,color:"#fff",background:"linear-gradient(90deg,#6366f1,#8b5cf6)",borderRadius:20,padding:"3px 12px",cursor:"pointer",border:"none"}}>
+            Unlock full board →
+          </span>
+        </div>
+      </td>
+    </tr>
+  );
+}
 
-  const [sport, setSport]         = useState("All");
+/* ─── Main App ────────────────────────────────────────────── */
+function App() {
+  const [allPicks, setAllPicks]     = useState(mockPicks);
+  const [apiStats, setApiStats]     = useState(null);
+  const [loading, setLoading]       = useState(true);
+  const [isMock, setIsMock]         = useState(false);
+  const [lastFetch, setLastFetch]   = useState(null);
+  const [scanMsg, setScanMsg]       = useState(null);
+  const [ticker, setTicker]         = useState(0);
+
+  const [sport, setSport]           = useState("All");
   const [liveFilter, setLiveFilter] = useState("all");
-  const [evSlider, setEvSlider]   = useState(0);
-  const [minOdds, setMinOdds]     = useState("");
-  const [maxOdds, setMaxOdds]     = useState("");
-  const [q, setQ]                 = useState("");
-  const [sortBy, setSortBy]       = useState("ev_desc");
+  const [evSlider, setEvSlider]     = useState(0);
+  const [minOdds, setMinOdds]       = useState("");
+  const [maxOdds, setMaxOdds]       = useState("");
+  const [q, setQ]                   = useState("");
+  const [sortBy, setSortBy]         = useState("ev_desc");
+
+  /* tick every 10s to keep "updated X ago" fresh */
+  useEffect(() => { const t = setInterval(()=>setTicker(x=>x+1),10000); return()=>clearInterval(t); },[]);
+
+  /* occasional scan-pop message */
+  useEffect(() => {
+    const msgs = ["⚡ 2 new picks detected","🔍 Scanning 40+ bookmakers","✅ 3 lines updated","📡 Odds drift check complete"];
+    const show = () => { setScanMsg(msgs[Math.floor(Math.random()*msgs.length)]); setTimeout(()=>setScanMsg(null),3200); };
+    const t1 = setTimeout(show, 8000);
+    const t2 = setInterval(show, 45000);
+    return () => { clearTimeout(t1); clearInterval(t2); };
+  },[]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -163,13 +234,13 @@ function App() {
         setApiStats({ roi: sd.roi??22.7, units: sd.profit_units??829, bets: sd.total??4258, hit_rate: sd.hit_rate??54.5 });
       }
     } catch { setAllPicks(mockPicks); setIsMock(true); }
+    setLastFetch(Date.now());
     setLoading(false);
   }, []);
 
   useEffect(() => { fetchData(); const t = setInterval(fetchData, 5*60000); return () => clearInterval(t); }, []);
 
   const allSports = useMemo(() => ["All",...new Set(allPicks.map(p=>p.sport).filter(Boolean))], [allPicks]);
-  const todayStr  = new Date().toISOString().slice(0,10);
 
   const filtered = useMemo(() => {
     let r = [...allPicks];
@@ -192,15 +263,25 @@ function App() {
 
   const S = apiStats;
   const kpis = [
-    { label:"ROI",         val: S ? `+${Number(S.roi).toFixed(1)}%` : "+22.7%",  green:true },
-    { label:"Profit",      val: S ? `+${Number(S.units).toFixed(0)}u` : "+829u",  green:true },
-    { label:"Bets",        val: S ? Number(S.bets).toLocaleString() : "4,258",    green:false },
-    { label:"Hit Rate",    val: S ? `${Number(S.hit_rate).toFixed(1)}%` : "54.5%",green:false },
-    { label:"Today",       val: filtered.length,                                   green:false },
+    { label:"ROI",      val: S ? `+${Number(S.roi).toFixed(1)}%`      : "+22.7%",  green:true },
+    { label:"Profit",   val: S ? `+${Number(S.units).toFixed(0)}u`    : "+829u",   green:true },
+    { label:"Bets",     val: S ? Number(S.bets).toLocaleString()       : "4,258",   green:false },
+    { label:"Hit Rate", val: S ? `${Number(S.hit_rate).toFixed(1)}%`  : "54.5%",   green:false },
+    { label:"Today",    val: allPicks.length,                                        green:false },
   ];
 
   const inputCls = "text-xs rounded px-2 py-1 text-zinc-200 placeholder-zinc-600 outline-none bg-transparent border border-zinc-700 focus:border-zinc-500";
   const selCls   = inputCls + " pr-5 cursor-pointer";
+
+  /* inject locked rows every 5 rows */
+  const tableRows = useMemo(() => {
+    const rows = [];
+    filtered.forEach((p, i) => {
+      rows.push({ type:"pick", data:p, idx:i });
+      if ((i+1) % 5 === 0) rows.push({ type:"locked", idx:i });
+    });
+    return rows;
+  }, [filtered]);
 
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100%",background:"#0b0e14",overflow:"hidden"}}>
@@ -213,16 +294,33 @@ function App() {
           <span style={{fontSize:10,color:"#3f3f46",marginLeft:2}}>/ Value Scanner</span>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <span className="pulse" style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",display:"inline-block"}} />
-          <span style={{fontSize:10,color:"#52525b"}}>Live</span>
           {isMock && <span style={{fontSize:10,color:"#fbbf24",border:"1px solid rgba(251,191,36,0.3)",borderRadius:4,padding:"1px 6px",background:"rgba(251,191,36,0.08)"}}>DEMO</span>}
           <button onClick={fetchData} style={{fontSize:10,color:"#71717a",border:"1px solid rgba(255,255,255,0.1)",borderRadius:5,padding:"3px 8px",background:"transparent",cursor:"pointer"}}>↻ Refresh</button>
-          <button style={{fontSize:10,fontWeight:600,color:"#000",borderRadius:5,padding:"3px 10px",background:"#22c55e",border:"none",cursor:"pointer"}}>Discord</button>
+          <button style={{fontSize:10,fontWeight:700,color:"#fff",borderRadius:5,padding:"3px 12px",background:"linear-gradient(90deg,#6366f1,#8b5cf6)",border:"none",cursor:"pointer",whiteSpace:"nowrap"}}>
+            Unlock 100+ value bets daily
+          </button>
         </div>
       </div>
 
+      {/* ══ LIVE STATUS LINE ════════════════════════════════════ */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 14px",height:28,background:"rgba(34,197,94,0.05)",borderBottom:"1px solid rgba(34,197,94,0.12)",flexShrink:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <span className="pulse" style={{width:7,height:7,borderRadius:"50%",background:"#22c55e",display:"inline-block",flexShrink:0}} />
+          <span style={{fontSize:11,color:"#4ade80",fontWeight:600}}>LIVE</span>
+          <span style={{fontSize:11,color:"#52525b"}}>·</span>
+          <span style={{fontSize:11,color:"#a1a1aa"}}><b style={{color:"#e2e8f0"}}>{allPicks.length}</b> opportunities found</span>
+          <span style={{fontSize:11,color:"#52525b"}}>·</span>
+          <span style={{fontSize:11,color:"#3f3f46"}}>Updated {fmtAgo(lastFetch) || "—"}</span>
+        </div>
+        {scanMsg && (
+          <span key={scanMsg} className="scan-pop fadein" style={{fontSize:10,color:"#4ade80",border:"1px solid rgba(34,197,94,0.25)",borderRadius:20,padding:"2px 10px",background:"rgba(34,197,94,0.07)"}}>
+            {scanMsg}
+          </span>
+        )}
+      </div>
+
       {/* ══ KPI STRIP ══════════════════════════════════════════ */}
-      <div style={{display:"flex",alignItems:"center",gap:0,padding:"0 14px",height:36,borderBottom:"1px solid rgba(255,255,255,0.05)",background:"rgba(255,255,255,0.015)",flexShrink:0,overflowX:"auto"}}>
+      <div style={{display:"flex",alignItems:"center",padding:"0 14px",height:34,borderBottom:"1px solid rgba(255,255,255,0.05)",background:"rgba(255,255,255,0.01)",flexShrink:0,overflowX:"auto",gap:0}}>
         {kpis.map((k,i) => (
           <React.Fragment key={k.label}>
             {i>0 && <div className="tb-sep" />}
@@ -235,36 +333,45 @@ function App() {
       </div>
 
       {/* ══ FEATURED STRIP ═════════════════════════════════════ */}
-      <div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 14px",borderBottom:"1px solid rgba(255,255,255,0.05)",background:"rgba(255,255,255,0.01)",flexShrink:0,overflowX:"auto"}}>
-        <span style={{fontSize:10,color:"#52525b",textTransform:"uppercase",letterSpacing:"0.06em",flexShrink:0,marginRight:4}}>Top picks</span>
+      <div style={{display:"flex",alignItems:"flex-start",gap:6,padding:"7px 14px",borderBottom:"1px solid rgba(255,255,255,0.05)",background:"rgba(255,255,255,0.01)",flexShrink:0,overflowX:"auto"}}>
+        <span style={{fontSize:10,color:"#52525b",textTransform:"uppercase",letterSpacing:"0.06em",flexShrink:0,marginRight:2,marginTop:2}}>Top</span>
         {featured.map((p,i) => {
           const t = evTier(p.ev);
+          const edge = modelEdge(p);
           return (
-            <div key={i} className="feat-card">
-              <span style={{fontSize:9,fontWeight:700,padding:"1px 5px",borderRadius:3,
-                background: t==="high"?"rgba(34,197,94,0.15)":t==="med"?"rgba(234,179,8,0.12)":"rgba(255,255,255,0.06)",
-                color: t==="high"?"#4ade80":t==="med"?"#fbbf24":"#a1a1aa",
-                border: `1px solid ${t==="high"?"rgba(34,197,94,0.25)":t==="med"?"rgba(234,179,8,0.2)":"rgba(255,255,255,0.08)"}`
-              }}>{p.badge}</span>
-              <span style={{fontSize:11,fontWeight:600,color:"#e2e8f0"}}>{p.match}</span>
-              <span style={{fontSize:10,color:"#52525b"}}>{p.market}</span>
-              <span style={{fontSize:11,fontWeight:700,color:t==="high"?"#4ade80":"#c4b5fd"}}>{Number(p.odds).toFixed(2)}</span>
-              <EvBadge ev={p.ev} />
+            <div key={i} className={`feat-card${t==="neon"?" neon-card":""}`}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6}}>
+                <span style={{fontSize:9,fontWeight:700,padding:"2px 5px",borderRadius:3,
+                  background: t==="neon"?"rgba(34,197,94,0.20)":t==="high"?"rgba(34,197,94,0.12)":t==="med"?"rgba(234,179,8,0.10)":"rgba(255,255,255,0.05)",
+                  color: t==="neon"?"#86efac":t==="high"?"#4ade80":t==="med"?"#fbbf24":"#71717a",
+                  border: `1px solid ${t==="neon"?"rgba(34,197,94,0.45)":t==="high"?"rgba(34,197,94,0.25)":t==="med"?"rgba(234,179,8,0.20)":"rgba(255,255,255,0.07)"}`,
+                  boxShadow: t==="neon"?"0 0 8px rgba(34,197,94,0.3)":"none"
+                }}>{p.badge}</span>
+                <EvBadge ev={p.ev} />
+              </div>
+              <div style={{fontSize:11,fontWeight:700,color:"#f1f5f9",lineHeight:1.2}}>{p.match}</div>
+              <div style={{fontSize:10,color:"#71717a"}}>{p.market}</div>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:2}}>
+                <span style={{fontSize:12,fontWeight:800,color:t==="neon"?"#86efac":t==="high"?"#4ade80":"#c4b5fd"}}>{Number(p.odds).toFixed(2)}</span>
+                {edge > 0 && <span style={{fontSize:9,color:"#52525b"}}>Edge +{edge.toFixed(1)}%</span>}
+              </div>
             </div>
           );
         })}
       </div>
 
       {/* ══ FILTER ROW ═════════════════════════════════════════ */}
-      <div style={{display:"flex",alignItems:"center",gap:8,padding:"0 14px",height:38,borderBottom:"1px solid rgba(255,255,255,0.05)",background:"#0d1117",flexShrink:0,flexWrap:"nowrap",overflowX:"auto"}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,padding:"0 14px",height:38,borderBottom:"1px solid rgba(255,255,255,0.05)",background:"#0d1117",flexShrink:0,overflowX:"auto"}}>
 
-        <select value={sport} onChange={e=>setSport(e.target.value)} className={selCls}>
+        <select value={sport} onChange={e=>setSport(e.target.value)} className={selCls} style={{background:"#0d1117"}}>
           {allSports.map(s=><option key={s} style={{background:"#0d1117"}}>{s}</option>)}
         </select>
 
         <div className="tog">
           {[["all","All"],["prematch","Pre"],["live","🔴 Live"]].map(([k,l])=>(
-            <button key={k} onClick={()=>setLiveFilter(k)} style={{background:liveFilter===k?"#22c55e":"transparent",color:liveFilter===k?"#000":"#71717a",fontWeight:liveFilter===k?700:400,border:"none",cursor:"pointer"}}>
+            <button key={k} onClick={()=>setLiveFilter(k)}
+              style={{color:liveFilter===k?"#000":"#71717a",fontWeight:liveFilter===k?700:400,
+                background:liveFilter===k?"#22c55e":"transparent"}}>
               {l}
             </button>
           ))}
@@ -275,13 +382,12 @@ function App() {
           <input type="range" min="0" max="30" step="1" value={evSlider} onChange={e=>setEvSlider(Number(e.target.value))} />
         </div>
 
-        <input type="number" placeholder="Min odds" step="0.05" value={minOdds} onChange={e=>setMinOdds(e.target.value)} className={inputCls} style={{width:70}} />
-        <input type="number" placeholder="Max odds" step="0.05" value={maxOdds} onChange={e=>setMaxOdds(e.target.value)} className={inputCls} style={{width:70}} />
-
-        <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search…" className={inputCls} style={{width:120,flexShrink:1}} />
+        <input type="number" placeholder="Min odds" step="0.05" value={minOdds} onChange={e=>setMinOdds(e.target.value)} className={inputCls} style={{width:70,background:"transparent"}} />
+        <input type="number" placeholder="Max odds" step="0.05" value={maxOdds} onChange={e=>setMaxOdds(e.target.value)} className={inputCls} style={{width:70,background:"transparent"}} />
+        <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search…" className={inputCls} style={{width:120,flexShrink:1,background:"transparent"}} />
 
         <div style={{marginLeft:"auto",flexShrink:0}}>
-          <select value={sortBy} onChange={e=>setSortBy(e.target.value)} className={selCls}>
+          <select value={sortBy} onChange={e=>setSortBy(e.target.value)} className={selCls} style={{background:"#0d1117"}}>
             <option value="ev_desc"   style={{background:"#0d1117"}}>EV ↓</option>
             <option value="ev_asc"    style={{background:"#0d1117"}}>EV ↑</option>
             <option value="conf_desc" style={{background:"#0d1117"}}>Confidence ↓</option>
@@ -289,56 +395,66 @@ function App() {
             <option value="kickoff"   style={{background:"#0d1117"}}>Kickoff ↑</option>
           </select>
         </div>
-
-        <span style={{fontSize:10,color:"#3f3f46",flexShrink:0}}>{filtered.length} results</span>
       </div>
 
       {/* ══ TABLE ═══════════════════════════════════════════════ */}
       <div className="desktop-table" style={{flex:1,overflowY:"auto",overflowX:"auto"}}>
         {loading ? (
-          <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:200,color:"#52525b",fontSize:13}}>Loading…</div>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:200,color:"#52525b",fontSize:13}}>Scanning markets…</div>
         ) : filtered.length === 0 ? (
           <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:200,color:"#3f3f46",fontSize:13}}>No results match your filters</div>
         ) : (
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:820}}>
             <thead>
               <tr style={{borderBottom:"1px solid rgba(255,255,255,0.07)"}}>
-                {["Match","League","Market","Odds","EV %","Conf.","Kickoff","Bookmaker","Found"].map(h=>(
-                  <th key={h} className="sth" style={{padding:"7px 12px",textAlign:"left",fontSize:10,fontWeight:600,color:"#52525b",textTransform:"uppercase",letterSpacing:"0.07em",whiteSpace:"nowrap"}}>
+                <th colSpan={9} className="sth" style={{padding:"5px 12px",textAlign:"left",background:"#0b0e14",fontWeight:400}}>
+                  <span style={{fontSize:10,color:"#52525b"}}>
+                    Showing <b style={{color:"#a1a1aa"}}>{filtered.length}</b> of <b style={{color:"#a1a1aa"}}>{allPicks.length}</b> opportunities
+                    {evSlider > 0 && <span style={{color:"#4ade80"}}> · EV ≥ {evSlider}%</span>}
+                    {sport !== "All" && <span style={{color:"#818cf8"}}> · {sport}</span>}
+                  </span>
+                </th>
+              </tr>
+              <tr style={{borderBottom:"1px solid rgba(255,255,255,0.07)"}}>
+                {["Match","League","Market","Odds","EV %","Model Edge","Conf.","Kickoff","Book"].map(h=>(
+                  <th key={h} className="sth" style={{padding:"6px 12px",textAlign:"left",fontSize:10,fontWeight:600,color:"#52525b",textTransform:"uppercase",letterSpacing:"0.07em",whiteSpace:"nowrap"}}>
                     {h}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {filtered.map((p,i) => {
+              {tableRows.map((row, ri) => {
+                if (row.type === "locked") return <LockedRow key={`locked-${ri}`} />;
+                const p = row.data;
                 const t = evTier(p.ev);
+                const edge = modelEdge(p);
                 return (
-                  <tr key={`${p.match}-${p.market}-${i}`}
-                    className={t==="high"?"row-high":t==="med"?"row-med":"row-low"}
-                    style={{borderBottom:"1px solid rgba(255,255,255,0.035)",cursor:"default",transition:"background .1s"}}
+                  <tr key={`${p.match}-${p.market}-${row.idx}`}
+                    className={`row-${t}`}
+                    style={{borderBottom:"1px solid rgba(255,255,255,0.03)",cursor:"default",transition:"background .1s"}}
                     onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.025)"}
                     onMouseLeave={e=>e.currentTarget.style.background=""}>
 
-                    <td style={{padding:"7px 12px",fontWeight:600,color:"#f1f5f9",maxWidth:190,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                      {p.match}
-                    </td>
+                    <td style={{padding:"7px 12px",fontWeight:600,color:"#f1f5f9",maxWidth:195,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.match}</td>
                     <td style={{padding:"7px 12px",color:"#71717a",whiteSpace:"nowrap",fontSize:11}}>{p.league}</td>
                     <td style={{padding:"7px 12px",whiteSpace:"nowrap"}}>
-                      <span style={{color:"#a1a1aa",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:4,padding:"1px 6px",fontSize:11}}>
-                        {p.market}
-                      </span>
+                      <span style={{color:"#a1a1aa",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:4,padding:"2px 7px",fontSize:11}}>{p.market}</span>
                     </td>
-                    <td style={{padding:"7px 12px",fontWeight:700,color:t==="high"?"#4ade80":"#c4b5fd",fontSize:13}}>
+                    <td style={{padding:"7px 12px",fontWeight:800,fontSize:13,
+                      color: t==="neon"?"#86efac":t==="high"?"#4ade80":"#c4b5fd",
+                      textShadow: t==="neon"?"0 0 8px rgba(34,197,94,0.5)":"none"}}>
                       {Number(p.odds).toFixed(2)}
                     </td>
                     <td style={{padding:"7px 12px"}}><EvBadge ev={p.ev} /></td>
+                    <td style={{padding:"7px 12px",fontSize:11,color:edge>5?"#4ade80":edge>0?"#a3e635":"#52525b",fontWeight:edge>0?600:400}}>
+                      {edge > 0 ? `+${edge.toFixed(1)}%` : "—"}
+                    </td>
                     <td style={{padding:"7px 12px"}}><MiniConf v={p.confidence} /></td>
-                    <td style={{padding:"7px 12px",color:t==="high"?"#4ade80":"#71717a",whiteSpace:"nowrap",fontSize:11,fontWeight:t==="high"?600:400}}>
+                    <td style={{padding:"7px 12px",color:t==="neon"?"#4ade80":"#71717a",whiteSpace:"nowrap",fontSize:11,fontWeight:t==="neon"?600:400}}>
                       {fmtKickoff(p.kickoff_time)}
                     </td>
                     <td style={{padding:"7px 12px",color:"#52525b",fontSize:11,whiteSpace:"nowrap"}}>{p.bookmaker}</td>
-                    <td style={{padding:"7px 12px",color:"#3f3f46",fontSize:10,whiteSpace:"nowrap"}}>{fmtDetected(p.detected_at)}</td>
                   </tr>
                 );
               })}
@@ -347,24 +463,49 @@ function App() {
         )}
       </div>
 
-      {/* ══ MOBILE CARDS (stacked) ══════════════════════════════ */}
+      {/* ══ MOBILE CARDS ════════════════════════════════════════ */}
       <div className="mobile-cards" style={{flexDirection:"column",gap:6,padding:10,overflowY:"auto",flex:1,display:"none"}}>
+        <div style={{fontSize:10,color:"#52525b",marginBottom:2}}>
+          Showing <b style={{color:"#a1a1aa"}}>{filtered.length}</b> of <b style={{color:"#a1a1aa"}}>{allPicks.length}</b> opportunities
+        </div>
         {filtered.map((p,i) => {
           const t = evTier(p.ev);
-          return (
-            <div key={i} style={{border:"1px solid rgba(255,255,255,0.08)",borderRadius:8,padding:"10px 12px",background:t==="high"?"rgba(34,197,94,0.04)":t==="med"?"rgba(234,179,8,0.03)":"rgba(255,255,255,0.02)",borderLeft:`3px solid ${t==="high"?"#22c55e":t==="med"?"#eab308":"transparent"}`}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
-                <div>
-                  <div style={{fontSize:12,fontWeight:700,color:"#f1f5f9"}}>{p.match}</div>
-                  <div style={{fontSize:10,color:"#52525b",marginTop:1}}>{p.league} · {p.bookmaker}</div>
-                </div>
-                <EvBadge ev={p.ev} />
+          const edge = modelEdge(p);
+          const isLocked = (i+1) % 5 === 0;
+          if (isLocked) return (
+            <div key={`locked-m-${i}`} style={{border:"1px solid rgba(99,102,241,0.25)",borderRadius:8,padding:"10px 14px",background:"rgba(99,102,241,0.06)",display:"flex",alignItems:"center",gap:10}}>
+              <span style={{fontSize:16}}>🔒</span>
+              <div>
+                <div style={{fontSize:12,fontWeight:700,color:"#818cf8"}}>Premium Pick</div>
+                <div style={{fontSize:10,color:"#52525b",marginTop:2}}>Unlock full board to view</div>
               </div>
-              <div style={{fontSize:11,color:"#a1a1aa",marginBottom:8}}>{p.market}</div>
+              <span style={{marginLeft:"auto",fontSize:10,fontWeight:700,color:"#fff",background:"linear-gradient(90deg,#6366f1,#8b5cf6)",borderRadius:20,padding:"4px 12px",cursor:"pointer"}}>Unlock →</span>
+            </div>
+          );
+          return (
+            <div key={i} style={{border:`1px solid ${t==="neon"?"rgba(34,197,94,0.3)":t==="high"?"rgba(34,197,94,0.15)":t==="med"?"rgba(234,179,8,0.15)":"rgba(255,255,255,0.07)"}`,borderRadius:8,padding:"10px 12px",
+              background:t==="neon"?"rgba(34,197,94,0.06)":t==="high"?"rgba(34,197,94,0.03)":t==="med"?"rgba(234,179,8,0.03)":"rgba(255,255,255,0.02)",
+              borderLeft:`3px solid ${t==="neon"?"#22c55e":t==="high"?"#16a34a":t==="med"?"#eab308":"transparent"}`,
+              boxShadow:t==="neon"?"0 0 18px rgba(34,197,94,0.10)":"none"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+                <EvBadge ev={p.ev} />
+                <span style={{fontSize:10,color:"#52525b"}}>{fmtKickoff(p.kickoff_time)}</span>
+              </div>
+              <div style={{fontSize:13,fontWeight:700,color:"#f1f5f9",marginBottom:2}}>{p.match}</div>
+              <div style={{fontSize:11,color:"#71717a",marginBottom:8}}>{p.league} · {p.market}</div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
-                <div><div style={{fontSize:9,color:"#52525b",marginBottom:2}}>ODDS</div><div style={{fontSize:13,fontWeight:700,color:t==="high"?"#4ade80":"#c4b5fd"}}>{Number(p.odds).toFixed(2)}</div></div>
-                <div><div style={{fontSize:9,color:"#52525b",marginBottom:2}}>CONF</div><MiniConf v={p.confidence} /></div>
-                <div><div style={{fontSize:9,color:"#52525b",marginBottom:2}}>KICKOFF</div><div style={{fontSize:11,color:t==="high"?"#4ade80":"#71717a",fontWeight:600}}>{fmtKickoff(p.kickoff_time)}</div></div>
+                <div>
+                  <div style={{fontSize:9,color:"#52525b",marginBottom:2}}>ODDS</div>
+                  <div style={{fontSize:14,fontWeight:800,color:t==="neon"?"#86efac":t==="high"?"#4ade80":"#c4b5fd",textShadow:t==="neon"?"0 0 6px rgba(34,197,94,0.5)":"none"}}>{Number(p.odds).toFixed(2)}</div>
+                </div>
+                <div>
+                  <div style={{fontSize:9,color:"#52525b",marginBottom:2}}>MODEL EDGE</div>
+                  <div style={{fontSize:12,fontWeight:600,color:edge>0?"#4ade80":"#52525b"}}>{edge>0?`+${edge.toFixed(1)}%`:"—"}</div>
+                </div>
+                <div>
+                  <div style={{fontSize:9,color:"#52525b",marginBottom:2}}>CONF</div>
+                  <MiniConf v={p.confidence} />
+                </div>
               </div>
             </div>
           );
@@ -375,8 +516,15 @@ function App() {
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 14px",height:24,borderTop:"1px solid rgba(255,255,255,0.05)",background:"#0d1117",flexShrink:0}}>
         <span style={{fontSize:10,color:"#3f3f46"}}>PGR Sports Analytics · Data analysis only · Not financial advice</span>
         <div style={{display:"flex",alignItems:"center",gap:10,fontSize:10,color:"#3f3f46"}}>
-          <span style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:7,height:7,borderRadius:1,display:"inline-block",background:"rgba(34,197,94,0.4)"}}/>EV ≥ 15%</span>
-          <span style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:7,height:7,borderRadius:1,display:"inline-block",background:"rgba(234,179,8,0.3)"}}/>EV 5–15%</span>
+          <span style={{display:"flex",alignItems:"center",gap:4}}>
+            <span style={{width:7,height:7,borderRadius:1,display:"inline-block",background:"rgba(134,239,172,0.5)",boxShadow:"0 0 4px rgba(34,197,94,0.5)"}}/>EV ≥ 20%
+          </span>
+          <span style={{display:"flex",alignItems:"center",gap:4}}>
+            <span style={{width:7,height:7,borderRadius:1,display:"inline-block",background:"rgba(34,197,94,0.4)"}}/>10–20%
+          </span>
+          <span style={{display:"flex",alignItems:"center",gap:4}}>
+            <span style={{width:7,height:7,borderRadius:1,display:"inline-block",background:"rgba(234,179,8,0.35)"}}/>5–10%
+          </span>
         </div>
       </div>
     </div>
