@@ -662,7 +662,6 @@ function App() {
   },[filtered]);
 
   const S = apiStats;
-  const LOCKED_COUNT = 18;
 
   const inp = "rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm text-zinc-200 placeholder-zinc-600 outline-none focus:border-zinc-500";
 
@@ -695,7 +694,7 @@ function App() {
               <div style={{display:"flex",alignItems:"center",gap:10,fontSize:13}}>
                 <span className="pulse" style={{width:9,height:9,borderRadius:"50%",background:"#22c55e",display:"inline-block"}} />
                 <span style={{color:"#4ade80",fontWeight:700}}>LIVE</span>
-                <span style={{color:"#a1a1aa"}}>{filtered.length + LOCKED_COUNT} opportunities found</span>
+                <span style={{color:"#a1a1aa"}}>{filtered.length} opportunities found</span>
                 <span style={{color:"#3f3f46"}}>·</span>
                 <span style={{color:"#52525b"}}>Updated {fmtAgo(lastFetch)||"—"}</span>
               </div>
@@ -794,7 +793,7 @@ function App() {
             <div style={{borderRight:"1px solid #27272a",minHeight:400}}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 16px",fontSize:12}}>
                 <span style={{color:"#71717a"}}>
-                  Showing <b style={{color:"#e4e4e7"}}>{filtered.length}</b> of <b style={{color:"#e4e4e7"}}>{filtered.length+LOCKED_COUNT}</b> opportunities
+                  Showing <b style={{color:"#e4e4e7"}}>{filtered.length}</b> opportunities
                 </span>
                 <span style={{color:"#3f3f46",fontSize:11}}>Click row for full intel</span>
               </div>
@@ -807,22 +806,13 @@ function App() {
                 <div style={{borderTop:"1px solid #18181b"}}>
                   {filtered.map((row,i)=>{
                     const t=evTone(row.ev);
-                    const locked=i>=5;
                     const isSel=selected?.id===row.id;
                     return (
                       <div key={row.id} className={`opp-row${isSel?" active":""}`}
                         style={{position:"relative",borderLeft:`4px solid`,borderLeftColor:isSel?"#6366f1":t.border.includes("green")?"#22c55e":t.border.includes("emerald")?"#10b981":t.border.includes("yellow")?"#eab308":"#27272a",
                           display:"grid",gridTemplateColumns:"1.8fr 1.2fr 0.7fr 0.9fr 1fr 1fr",gap:12,padding:"18px 16px",cursor:"pointer",
-                          borderBottom:"1px solid #18181b",filter:locked?"blur(1.5px)":"none",opacity:locked?0.5:1}}
-                        onClick={()=>{ if(!locked){ setSelected(row); setShowSheet(true); } }}>
-
-                        {locked&&i===5&&(
-                          <div style={{position:"absolute",top:-12,left:"50%",transform:"translateX(-50%)",zIndex:5,
-                            background:"rgba(109,40,217,.9)",border:"1px solid rgba(139,92,246,.4)",borderRadius:20,padding:"3px 14px",
-                            fontSize:11,fontWeight:600,color:"#c4b5fd",whiteSpace:"nowrap"}}>
-                            +{LOCKED_COUNT} more value bets locked — Upgrade
-                          </div>
-                        )}
+                          borderBottom:"1px solid #18181b"}}
+                        onClick={()=>{ setSelected(row); setShowSheet(true); }}>
 
                         <div>
                           <div style={{display:"flex",gap:6,marginBottom:8,flexWrap:"wrap"}}>
