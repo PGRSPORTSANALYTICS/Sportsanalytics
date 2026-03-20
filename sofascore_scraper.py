@@ -86,6 +86,54 @@ class SofaScoreScraper:
         conn.close()
         logger.info("✅ SofaScore cache database initialized")
     
+    @staticmethod
+    def _name_matches(team_lower: str, event_team: str) -> bool:
+        """
+        Robust team name matching that handles:
+          - "AS Roma" ↔ "Roma"              (shared word)
+          - "Wolverhampton Wanderers" ↔ "Wolverhampton"  (shared long word)
+          - "Borussia Monchengladbach" ↔ "Borussia M'gladbach"  (shared word)
+        And avoids false matches like:
+          - "Angers" ↔ "Rangers FC"         (different words, no overlap)
+          - "Paris FC" ↔ "Paris Saint Germain"  (city name only → skip)
+        """
+        import re
+        e = event_team.lower()
+        if team_lower == e:
+            return True
+
+        # Tokenize: split on spaces/apostrophes/hyphens, keep words ≥ 4 chars
+        def _words(s):
+            return {w for w in re.split(r"[\s'\-]+", s) if len(w) >= 4}
+
+        t_words = _words(team_lower)
+        e_words = _words(e)
+
+        # Remove pure geography words that many clubs share
+        # (prevents "Paris FC" ↔ "Paris Saint Germain", "Real X" ↔ "Real Y", etc.)
+        GENERIC = {"real", "club", "city", "town", "park", "port", "paris",
+                   "united", "sport", "athletic", "atletico", "sporting"}
+        meaningful_t = t_words - GENERIC
+        meaningful_e = e_words - GENERIC
+
+        # Must share at least one NON-generic significant word
+        if meaningful_t and meaningful_e and meaningful_t & meaningful_e:
+            return True
+
+        # Whole-string containment only when the whole team name (≥7 chars)
+        # appears as a complete token run in the event name
+        # e.g. "bournemouth" in "bournemouth" but NOT "angers" in "rangers"
+        if len(team_lower) >= 7:
+            pattern = r'(?<![a-z])' + re.escape(team_lower) + r'(?![a-z])'
+            if re.search(pattern, e):
+                return True
+        if len(e) >= 7:
+            pattern = r'(?<![a-z])' + re.escape(e) + r'(?![a-z])'
+            if re.search(pattern, team_lower):
+                return True
+
+        return False
+
     def _rate_limit(self, min_delay: float = 2.0):
         """Rate limiting to avoid getting blocked"""
         elapsed = time.time() - self.last_request_time
@@ -301,11 +349,8 @@ class SofaScoreScraper:
             home_score = event.get('homeScore', {}).get('current', 0)
             away_score = event.get('awayScore', {}).get('current', 0)
 
-            # Fuzzy name match: handles "AS Roma" vs "Roma", "Man Utd" vs "Manchester United"
-            is_home = (
-                team_lower in home_team_name.lower() or
-                home_team_name.lower() in team_lower
-            )
+            # Word-based name match: handles "AS Roma"↔"Roma", avoids "Angers"↔"Rangers"
+            is_home = self._name_matches(team_lower, home_team_name)
             opponent = away_team_name if is_home else home_team_name
 
             if is_home:
