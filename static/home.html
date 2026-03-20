@@ -435,10 +435,13 @@ function DetailPanel({pick}) {
             {data?.form ? (
               [["home",pick.home_team||"Home"],["away",pick.away_team||"Away"]].map(([side,label])=>{
                 const f = data.form[side]; if (!f) return null;
-                const pills = buildFormArray(f.wins, f.draws, f.losses);
+                const pills = f.form_sequence || buildFormArray(f.wins, f.draws, f.losses);
                 return (
                   <div key={side} style={{borderRadius:14,border:"1px solid #27272a",background:"rgba(0,0,0,.3)",padding:14}}>
-                    <div style={{fontSize:13,fontWeight:600,marginBottom:10}}>{label} Form</div>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                      <div style={{fontSize:13,fontWeight:600}}>{label} Form</div>
+                      {f.source==="sofascore"&&<span style={{fontSize:10,color:"#3f3f46"}}>via SofaScore</span>}
+                    </div>
                     <FormPills values={pills} />
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8,marginTop:12}}>
                       <MetricTile label="PPG"          value={fmt2(f.ppg)}           color={f.ppg>=2?"#4ade80":f.ppg>=1?"#fbbf24":"#f87171"} />
@@ -446,6 +449,26 @@ function DetailPanel({pick}) {
                       <MetricTile label="GA"           value={fmt1(f.goals_conceded)} />
                       <MetricTile label="Clean Sheets" value={f.clean_sheets ?? "—"} />
                     </div>
+                    {f.recent_matches?.length>0 && (
+                      <div style={{marginTop:12,borderTop:"1px solid #27272a",paddingTop:10}}>
+                        <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:".08em",color:"#52525b",marginBottom:8}}>Last 5 Matches</div>
+                        {f.recent_matches.map((m,i)=>{
+                          const resColor = m.result==="W"?"#4ade80":m.result==="D"?"#fbbf24":"#f87171";
+                          return (
+                            <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"5px 0",borderBottom:"1px solid rgba(39,39,42,.5)",fontSize:12}}>
+                              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                                <span style={{width:20,height:20,borderRadius:4,background:`${resColor}22`,color:resColor,fontWeight:700,fontSize:11,display:"flex",alignItems:"center",justifyContent:"center"}}>{m.result}</span>
+                                <span style={{color:"#71717a"}}>{m.venue==="H"?"vs":"@"} {m.opponent}</span>
+                              </div>
+                              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                                <span style={{color:"#d4d4d8",fontWeight:500}}>{m.score}</span>
+                                <span style={{color:"#52525b",fontSize:10}}>{m.date}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 );
               })
@@ -507,6 +530,27 @@ function DetailPanel({pick}) {
                   <MetricTile label="Over 2.5 Rate"  value={data.h2h.over25_rate!=null?`${data.h2h.over25_rate}%`:"—"}
                     color={data.h2h.over25_rate>50?"#4ade80":"#f4f4f5"} />
                 </div>
+                {data.h2h.recent_matches?.length>0 && (
+                  <div style={{borderRadius:14,border:"1px solid #27272a",background:"rgba(0,0,0,.3)",padding:14}}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                      <div style={{fontSize:13,fontWeight:600}}>Recent H2H</div>
+                      {data.h2h.source==="sofascore"&&<span style={{fontSize:10,color:"#3f3f46"}}>via SofaScore</span>}
+                    </div>
+                    {data.h2h.recent_matches.map((m,i)=>{
+                      const hWin=m.score.split("-")[0]>m.score.split("-")[1];
+                      const aWin=m.score.split("-")[1]>m.score.split("-")[0];
+                      const homeColor=hWin?"#4ade80":aWin?"#f87171":"#fbbf24";
+                      const awayColor=aWin?"#4ade80":hWin?"#f87171":"#fbbf24";
+                      return (
+                        <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 0",borderBottom:i<data.h2h.recent_matches.length-1?"1px solid rgba(39,39,42,.5)":"none",fontSize:12}}>
+                          <span style={{color:homeColor,fontWeight:500,flex:1}}>{m.home}</span>
+                          <span style={{color:"#d4d4d8",fontWeight:700,padding:"2px 10px",background:"rgba(39,39,42,.6)",borderRadius:6,margin:"0 6px"}}>{m.score}</span>
+                          <span style={{color:awayColor,fontWeight:500,flex:1,textAlign:"right"}}>{m.away}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </>
             ) : (
               <div style={{textAlign:"center",padding:"40px 16px"}}>

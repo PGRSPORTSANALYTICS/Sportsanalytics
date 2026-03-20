@@ -701,6 +701,106 @@ async def get_bookmaker_odds(match_id: str):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+async def _fetch_sofascore_data(home_team: str, away_team: str, league: str):
+    """Fetch form + H2H from SofaScore in threads (non-blocking). Returns (form_stats, h2h_stats)."""
+    import asyncio
+
+    def _sync_form():
+        try:
+            from sofascore_scraper import SofaScoreScraper
+            scraper = SofaScoreScraper()
+            return (scraper.get_team_form(home_team, league, last_n=5),
+                    scraper.get_team_form(away_team, league, last_n=5))
+        except Exception as e:
+            logger.warning(f"SofaScore form error: {e}")
+            return [], []
+
+    def _sync_h2h():
+        try:
+            from sofascore_scraper import SofaScoreScraper
+            scraper = SofaScoreScraper()
+            return scraper.get_h2h_data(home_team, away_team, league)
+        except Exception as e:
+            logger.warning(f"SofaScore H2H error: {e}")
+            return []
+
+    # Run form (fast, ~5s) and H2H (slower, ~15s) with separate timeouts
+    home_form, away_form, h2h_raw = [], [], []
+    try:
+        home_form, away_form = await asyncio.wait_for(
+            asyncio.to_thread(_sync_form), timeout=12.0
+        )
+    except asyncio.TimeoutError:
+        logger.warning("SofaScore form fetch timed out")
+
+    try:
+        h2h_raw = await asyncio.wait_for(
+            asyncio.to_thread(_sync_h2h), timeout=20.0
+        )
+    except asyncio.TimeoutError:
+        logger.warning("SofaScore H2H fetch timed out")
+
+    def _agg_form(matches):
+        if not matches:
+            return None
+        wins = sum(1 for m in matches if m['result'] == 'W')
+        draws = sum(1 for m in matches if m['result'] == 'D')
+        losses = sum(1 for m in matches if m['result'] == 'L')
+        goals_for = goals_against = clean_sheets = 0
+        for m in matches:
+            try:
+                hg, ag = map(int, m['score'].split('-'))
+                gf, ga = (hg, ag) if m['home_away'] == 'H' else (ag, hg)
+                goals_for += gf; goals_against += ga
+                if ga == 0: clean_sheets += 1
+            except Exception:
+                pass
+        n = len(matches)
+        ppg = round((wins * 3 + draws) / n, 2) if n else 0
+        return {
+            "wins":           wins,
+            "draws":          draws,
+            "losses":         losses,
+            "ppg":            ppg,
+            "goals_scored":   round(goals_for / n, 2) if n else None,
+            "goals_conceded": round(goals_against / n, 2) if n else None,
+            "clean_sheets":   clean_sheets,
+            "form_sequence":  [m['result'] for m in matches],
+            "recent_matches": [{"date": m['date'], "opponent": m['opponent'],
+                                "venue": m['home_away'], "score": m['score'],
+                                "result": m['result']} for m in matches],
+            "source":         "sofascore",
+        }
+
+    home_agg = _agg_form(home_form)
+    away_agg = _agg_form(away_form)
+    form_stats = {"home": home_agg, "away": away_agg} if (home_agg or away_agg) else None
+
+    h2h_stats = None
+    if h2h_raw:
+        n = len(h2h_raw)
+        hw = sum(1 for m in h2h_raw if m['home_team'] == home_team and m['home_score'] > m['away_score'])
+        aw = sum(1 for m in h2h_raw if m['away_team'] == away_team and m['away_score'] > m['home_score'])
+        dw = n - hw - aw
+        total_g = sum(m['home_score'] + m['away_score'] for m in h2h_raw)
+        btts    = sum(1 for m in h2h_raw if m['home_score'] > 0 and m['away_score'] > 0)
+        over25  = sum(1 for m in h2h_raw if m['home_score'] + m['away_score'] > 2.5)
+        h2h_stats = {
+            "matches":        n,
+            "home_wins":      hw,
+            "away_wins":      aw,
+            "draws":          dw,
+            "avg_goals":      round(total_g / n, 2) if n else None,
+            "btts_rate":      round(btts / n * 100, 1) if n else None,
+            "over25_rate":    round(over25 / n * 100, 1) if n else None,
+            "recent_matches": [{"date": m['date'], "home": m['home_team'], "away": m['away_team'],
+                                "score": f"{m['home_score']}-{m['away_score']}"} for m in h2h_raw[:6]],
+            "source":         "sofascore",
+        }
+
+    return form_stats, h2h_stats
+
+
 @app.get("/api/match-scout/{match_id}", tags=["Matches"])
 async def get_match_scout(match_id: str):
     """
@@ -861,6 +961,17 @@ async def get_match_scout(match_id: str):
                 "score":      td[32],
                 "model_prob": round(float(td[33]), 3) if td[33] else None,
             }
+
+        # ── 3. SofaScore fallback for form + H2H ─────────────────
+        if form_stats is None or h2h_stats is None:
+            try:
+                ss_form, ss_h2h = await _fetch_sofascore_data(home_team, away_team, league)
+                if form_stats is None and ss_form:
+                    form_stats = ss_form
+                if h2h_stats is None and ss_h2h:
+                    h2h_stats = ss_h2h
+            except Exception as ss_err:
+                logger.warning(f"SofaScore fallback failed: {ss_err}")
 
         return {
             "match_id":   match_id,
