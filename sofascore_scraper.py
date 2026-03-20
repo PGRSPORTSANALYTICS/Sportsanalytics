@@ -264,54 +264,75 @@ class SofaScoreScraper:
         if not team_id:
             logger.error(f"❌ Could not find team ID for {team}")
             return []
-        
-        endpoint = f"team/{team_id}/events/last/{last_n * 2}"
-        data = self._make_request(endpoint)
-        
-        if not data or 'events' not in data:
+
+        # SofaScore: last/{page} is a PAGE NUMBER (0 = most recent).
+        # Collect from page 0 upwards until we have enough finished matches.
+        all_events = []
+        pages_needed = max(1, (last_n // 8) + 1)   # ~8 events per page
+        for page in range(pages_needed):
+            endpoint = f"team/{team_id}/events/last/{page}"
+            data = self._make_request(endpoint)
+            if not data or 'events' not in data:
+                break
+            all_events.extend(data['events'])
+
+        if not all_events:
             logger.warning(f"⚠️ No form data found for {team}")
             return []
-        
+
+        # Sort newest-first
+        team_lower = team.lower()
+        all_events.sort(key=lambda e: e.get('startTimestamp', 0), reverse=True)
+
         matches = []
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         scraped_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        
-        for event in data['events'][:last_n]:
-            home_team = event.get('homeTeam', {}).get('name', '')
-            away_team = event.get('awayTeam', {}).get('name', '')
+
+        for event in all_events:
+            if event.get('status', {}).get('type') != 'finished':
+                continue
+            if len(matches) >= last_n:
+                break
+
+            ts = event.get('startTimestamp', 0)
+            home_team_name = event.get('homeTeam', {}).get('name', '')
+            away_team_name = event.get('awayTeam', {}).get('name', '')
             home_score = event.get('homeScore', {}).get('current', 0)
             away_score = event.get('awayScore', {}).get('current', 0)
-            
-            is_home = home_team == team
-            opponent = away_team if is_home else home_team
-            
+
+            # Fuzzy name match: handles "AS Roma" vs "Roma", "Man Utd" vs "Manchester United"
+            is_home = (
+                team_lower in home_team_name.lower() or
+                home_team_name.lower() in team_lower
+            )
+            opponent = away_team_name if is_home else home_team_name
+
             if is_home:
                 result = 'W' if home_score > away_score else 'D' if home_score == away_score else 'L'
             else:
                 result = 'W' if away_score > home_score else 'D' if home_score == away_score else 'L'
-            
+
+            match_date = datetime.fromtimestamp(ts).strftime('%Y-%m-%d')
             match = {
-                'date': datetime.fromtimestamp(event.get('startTimestamp')).strftime('%Y-%m-%d'),
+                'date': match_date,
                 'opponent': opponent,
                 'home_away': 'H' if is_home else 'A',
                 'score': f"{home_score}-{away_score}",
                 'result': result
             }
-            
-            if event.get('status', {}).get('type') == 'finished':
-                matches.append(match)
-                
-                cursor.execute('''
-                    INSERT OR REPLACE INTO sofascore_form_cache 
-                    (team, league, match_date, opponent, home_away, score, result, scraped_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (team, league, match['date'], opponent, match['home_away'], 
-                      match['score'], result, scraped_at))
-        
+            matches.append(match)
+
+            cursor.execute('''
+                INSERT OR REPLACE INTO sofascore_form_cache 
+                (team, league, match_date, opponent, home_away, score, result, scraped_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (team, league, match_date, opponent, match['home_away'],
+                  match['score'], result, scraped_at))
+
         conn.commit()
         conn.close()
-        
+
         logger.info(f"✅ Scraped {len(matches)} recent matches for {team}")
         return matches
     

@@ -332,7 +332,7 @@ function DetailPanel({pick}) {
               <MetricTile label="Selection"  value={pick.selection||"—"} color="#f4f4f5" />
               <MetricTile label="Odds"       value={Number(currentOdds).toFixed(2)} color="#4ade80" />
               <MetricTile label="EV %"       value={`+${Number(pick.ev).toFixed(1)}%`} color="#4ade80" />
-              <MetricTile label="Confidence" value={`${pick.confidence}%`} color={pick.confidence>=80?"#4ade80":pick.confidence>=60?"#fbbf24":"#f87171"} />
+              <MetricTile label="Edge Score" value={`${pick.confidence}%`} color={pick.confidence>=80?"#4ade80":pick.confidence>=60?"#fbbf24":"#f87171"} />
               <MetricTile label="Bookmaker"  value={pick.bookmaker||"—"} />
             </div>
 
@@ -821,7 +821,7 @@ function App() {
 
               <select value={sortBy} onChange={e=>setSortBy(e.target.value)} className={inp} style={{minWidth:130}}>
                 <option value="ev">EV ↓</option>
-                <option value="confidence">Confidence ↓</option>
+                <option value="confidence">Edge Score ↓</option>
                 <option value="odds">Odds ↓</option>
                 <option value="kickoff">Kickoff ↑</option>
               </select>
@@ -881,7 +881,7 @@ function App() {
                         </div>
 
                         <div>
-                          <div style={{fontSize:9,textTransform:"uppercase",letterSpacing:".08em",color:"#52525b",marginBottom:6}}>Confidence</div>
+                          <div style={{fontSize:9,textTransform:"uppercase",letterSpacing:".08em",color:"#52525b",marginBottom:6}}>Edge Score</div>
                           <div style={{display:"flex",alignItems:"center",gap:8,marginTop:4}}>
                             <span style={{fontSize:13,fontWeight:600}}>{row.confidence}%</span>
                             <div style={{height:6,width:60,borderRadius:99,background:"#27272a",overflow:"hidden"}}>
