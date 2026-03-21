@@ -618,10 +618,23 @@ class ValueSinglesEngine:
                     # Covers all leagues (MLS, J-League, K-League, Allsvenskan, etc.) and all markets
                     if ev > 0.0:
                         # Collect correct bookmaker odds for this specific market before saving
-                        if hasattr(self.champion, 'collect_bookmaker_odds'):
+                        bookmaker_data = {}
+                        # 1) API-Football per-bookmaker data (DC, BTTS, AH, FT totals)
+                        _mbb = match.get('markets_by_bookmaker', {})
+                        if market_key in _mbb and _mbb[market_key]:
+                            _bk = _mbb[market_key]
+                            _vals = [v for v in _bk.values() if v > 0]
+                            if _vals:
+                                bookmaker_data = {
+                                    'odds_by_bookmaker': _bk,
+                                    'best_odds_value': max(_vals),
+                                    'best_odds_bookmaker': max(_bk, key=lambda k: _bk[k]),
+                                    'avg_odds': round(sum(_vals) / len(_vals), 3),
+                                }
+                        # 2) Fall back to The Odds API bookmaker data (h2h / totals)
+                        if not bookmaker_data and hasattr(self.champion, 'collect_bookmaker_odds'):
                             _api_mkt = 'h2h' if market_key in ('HOME_WIN', 'AWAY_WIN', 'DRAW') else \
-                                       'totals' if ('OVER' in market_key or 'UNDER' in market_key) else \
-                                       'btts' if 'BTTS' in market_key else None
+                                       'totals' if ('OVER' in market_key or 'UNDER' in market_key) else None
                             _pt = None
                             if _api_mkt == 'totals':
                                 _parts = market_key.split('_')

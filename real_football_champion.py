@@ -847,7 +847,82 @@ class RealFootballChampion:
         
         except Exception as e:
             pass
-        
+
+        # Build markets_by_bookmaker from ALL The Odds API bookmakers (h2h, totals, btts, dc, spreads)
+        try:
+            home_team_name = match.get('home_team', '')
+            away_team_name = match.get('away_team', '')
+            oa_bookmakers = match.get('bookmakers', [])
+            if oa_bookmakers:
+                oa_mbb = match.setdefault('markets_by_bookmaker', {})
+                for bk in oa_bookmakers:
+                    bk_name = bk.get('title') or bk.get('key', 'Unknown')
+                    for mkt in bk.get('markets', []):
+                        mkt_key = mkt.get('key', '')
+                        outcomes = mkt.get('outcomes', [])
+                        if mkt_key == 'h2h':
+                            for o in outcomes:
+                                name = o.get('name', '')
+                                price = float(o.get('price', 0))
+                                if price <= 0:
+                                    continue
+                                if name == home_team_name:
+                                    oa_mbb.setdefault('HOME_WIN', {})[bk_name] = price
+                                elif name == away_team_name:
+                                    oa_mbb.setdefault('AWAY_WIN', {})[bk_name] = price
+                                elif name == 'Draw':
+                                    oa_mbb.setdefault('DRAW', {})[bk_name] = price
+                        elif mkt_key == 'totals':
+                            for o in outcomes:
+                                name = o.get('name', '')
+                                price = float(o.get('price', 0))
+                                point = o.get('point', 0)
+                                if price <= 0:
+                                    continue
+                                lk = f"{str(point).replace('.', '_')}"
+                                if name == 'Over':
+                                    oa_mbb.setdefault(f'FT_OVER_{lk}', {})[bk_name] = price
+                                elif name == 'Under':
+                                    oa_mbb.setdefault(f'FT_UNDER_{lk}', {})[bk_name] = price
+                        elif mkt_key == 'btts':
+                            for o in outcomes:
+                                name = o.get('name', '')
+                                price = float(o.get('price', 0))
+                                if price <= 0:
+                                    continue
+                                if name == 'Yes':
+                                    oa_mbb.setdefault('BTTS_YES', {})[bk_name] = price
+                                elif name == 'No':
+                                    oa_mbb.setdefault('BTTS_NO', {})[bk_name] = price
+                        elif mkt_key == 'double_chance':
+                            for o in outcomes:
+                                name = o.get('name', '')
+                                price = float(o.get('price', 0))
+                                if price <= 0:
+                                    continue
+                                if name == f'{home_team_name} or Draw' or ('Home' in name and 'Draw' in name):
+                                    oa_mbb.setdefault('DC_HOME_DRAW', {})[bk_name] = price
+                                elif name == f'{home_team_name} or {away_team_name}' or ('Home' in name and 'Away' in name):
+                                    oa_mbb.setdefault('DC_HOME_AWAY', {})[bk_name] = price
+                                elif name == f'Draw or {away_team_name}' or ('Draw' in name and 'Away' in name):
+                                    oa_mbb.setdefault('DC_DRAW_AWAY', {})[bk_name] = price
+                        elif mkt_key == 'spreads':
+                            for o in outcomes:
+                                name = o.get('name', '')
+                                price = float(o.get('price', 0))
+                                point = o.get('point', 0)
+                                if price <= 0 or abs(float(point)) > 2.0:
+                                    continue
+                                pt = float(point)
+                                pt_str = f"{int(pt)}.0" if pt == int(pt) else str(pt)
+                                sign = f"+{pt_str}" if pt > 0 else f"{pt_str}"
+                                if name == home_team_name:
+                                    oa_mbb.setdefault(f'AH_HOME_{sign}', {})[bk_name] = price
+                                elif name == away_team_name:
+                                    oa_mbb.setdefault(f'AH_AWAY_{sign}', {})[bk_name] = price
+        except Exception:
+            pass
+
         if self.api_football_client:
             try:
                 home_team = match.get('home_team', '')
