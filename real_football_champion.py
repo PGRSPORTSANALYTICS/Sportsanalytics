@@ -565,8 +565,8 @@ class RealFootballChampion:
                 url = f"{self.odds_base_url}/sports/{sport_key}/odds"
                 params = {
                     'apiKey': self.odds_api_key,
-                    'regions': 'uk,eu,us',
-                    'markets': 'h2h,totals,btts,spreads',
+                    'regions': 'uk,eu',
+                    'markets': 'h2h,totals',
                     'oddsFormat': 'decimal',
                     'dateFormat': 'iso'
                 }
