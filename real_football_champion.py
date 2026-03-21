@@ -863,6 +863,7 @@ class RealFootballChampion:
                         if fid:
                             af_odds = self.api_football_client.get_fixture_odds(fid)
                             af_markets = af_odds.get('markets', {})
+                            af_mbb = af_odds.get('markets_by_bookmaker', {})
                             enriched = 0
                             af_to_engine = {
                                 'BTTS_YES': 'BTTS_YES', 'BTTS_NO': 'BTTS_NO',
@@ -888,6 +889,14 @@ class RealFootballChampion:
                                     enriched += 1
                             if enriched:
                                 print(f"   🔄 API-Football enriched {enriched} market odds for {home_team} vs {away_team}")
+                            if af_mbb:
+                                engine_mbb = match.setdefault('markets_by_bookmaker', {})
+                                for af_key, engine_key in af_to_engine.items():
+                                    if af_key in af_mbb:
+                                        engine_mbb[engine_key] = af_mbb[af_key]
+                                for k, bk_data in af_mbb.items():
+                                    if k.startswith('AH_') or k.startswith('FT_'):
+                                        engine_mbb[k] = bk_data
             except Exception as e:
                 pass
         

@@ -964,6 +964,7 @@ class APIFootballClient:
         """
         result = {
             'markets': {},
+            'markets_by_bookmaker': {},
             'bookmakers': [],
             'raw_bets': []
         }
@@ -1032,6 +1033,8 @@ class APIFootballClient:
                                 market_key = market_mapping[bet_name][selection]
                                 if market_key not in result['markets'] or odds > result['markets'][market_key]:
                                     result['markets'][market_key] = odds
+                                if odds > 0:
+                                    result['markets_by_bookmaker'].setdefault(market_key, {})[bookie_name] = odds
                     
                     elif bet_name == 'Asian Handicap':
                         for value in values:
@@ -1052,6 +1055,7 @@ class APIFootballClient:
                                     market_key = f"AH_{side}_{sign}"
                                     if market_key not in result['markets'] or odds > result['markets'][market_key]:
                                         result['markets'][market_key] = odds
+                                    result['markets_by_bookmaker'].setdefault(market_key, {})[bookie_name] = odds
 
                     elif bet_name in totals_markets:
                         prefix = totals_markets[bet_name]
@@ -1064,11 +1068,15 @@ class APIFootballClient:
                                 market_key = f"{prefix}_OVER_{line.replace('.', '_')}"
                                 if market_key not in result['markets'] or odds > result['markets'][market_key]:
                                     result['markets'][market_key] = odds
+                                if odds > 0:
+                                    result['markets_by_bookmaker'].setdefault(market_key, {})[bookie_name] = odds
                             elif 'Under' in selection:
                                 line = selection.replace('Under ', '')
                                 market_key = f"{prefix}_UNDER_{line.replace('.', '_')}"
                                 if market_key not in result['markets'] or odds > result['markets'][market_key]:
                                     result['markets'][market_key] = odds
+                                if odds > 0:
+                                    result['markets_by_bookmaker'].setdefault(market_key, {})[bookie_name] = odds
                     
                     elif bet_name in corners_over_under_markets:
                         prefix = corners_over_under_markets[bet_name]

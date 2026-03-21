@@ -805,25 +805,32 @@ class ValueSinglesEngine:
                 
                 # Collect bookmaker odds for this selection
                 bookmaker_data = {}
-                if hasattr(self.champion, 'collect_bookmaker_odds'):
-                    # Map internal market_key to Odds API market format
+                # 1) Use API-Football per-bookmaker data (covers DC, BTTS, AH, FT totals)
+                _mbb = match.get('markets_by_bookmaker', {})
+                if market_key in _mbb and _mbb[market_key]:
+                    _bk = _mbb[market_key]
+                    _vals = [v for v in _bk.values() if v > 0]
+                    if _vals:
+                        bookmaker_data = {
+                            'odds_by_bookmaker': _bk,
+                            'best_odds_value': max(_vals),
+                            'best_odds_bookmaker': max(_bk, key=lambda k: _bk[k]),
+                            'avg_odds': round(sum(_vals) / len(_vals), 3),
+                        }
+                # 2) Fall back to The Odds API bookmaker data (h2h / totals)
+                if not bookmaker_data and hasattr(self.champion, 'collect_bookmaker_odds'):
                     api_market_key = None
                     point_val = None
-                    
                     if market_key in ('HOME_WIN', 'AWAY_WIN', 'DRAW'):
                         api_market_key = 'h2h'
                     elif 'OVER' in market_key or 'UNDER' in market_key:
                         api_market_key = 'totals'
-                        # Extract point from market_key (e.g., FT_OVER_2_5 -> 2.5)
                         parts = market_key.split('_')
                         if len(parts) >= 3:
                             try:
                                 point_val = float(f"{parts[-2]}.{parts[-1]}")
                             except:
                                 point_val = 2.5
-                    elif 'BTTS' in market_key:
-                        api_market_key = 'btts'
-                    
                     if api_market_key:
                         bookmaker_data = self.champion.collect_bookmaker_odds(
                             match, selection_text, api_market_key, point_val
