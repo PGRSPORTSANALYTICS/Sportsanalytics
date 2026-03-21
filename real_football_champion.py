@@ -3973,6 +3973,15 @@ class RealFootballChampion:
                 if existing >= MATCH_DATE_CAP_VALUE_SINGLES:
                     print(f"🛑 Match-date cap: {pick_match_date} already has {existing}/{MATCH_DATE_CAP_VALUE_SINGLES} PROD Value Singles — skipping")
                     return False
+
+            # ── Cross-engine per-match cap ────────────────────────────────────
+            if pick_mode == 'PROD':
+                match_home = opp_dict.get('home_team', '')
+                match_away = opp_dict.get('away_team', '')
+                match_existing = _count_prod_picks_for_match(match_home, match_away, pick_match_date)
+                if match_existing >= MAX_PROD_PICKS_PER_MATCH:
+                    print(f"🛑 Per-match cap: {match_home} vs {match_away} already has {match_existing}/{MAX_PROD_PICKS_PER_MATCH} PROD picks — skipping {opp_dict.get('selection','')}")
+                    return False
             # ─────────────────────────────────────────────────────────────────
 
             # Get bet_placed flag from value singles engine
@@ -4263,6 +4272,7 @@ SUMMER_DAILY_BET_CAP = 3
 MATCH_DATE_CAP_VALUE_SINGLES = 20
 MATCH_DATE_CAP_CORNERS = 25   # Mar 19, 2026: scaled up, 62% hit rate proven
 MATCH_DATE_CAP_CARDS = 15     # Mar 19, 2026: scaled up, 87.2% hit rate proven
+MAX_PROD_PICKS_PER_MATCH = 2  # Mar 21, 2026: cross-engine cap — max 2 PROD picks per match total
 
 SUMMER_LEAGUE_KEYS = {
     'soccer_usa_mls',
@@ -4335,6 +4345,20 @@ def get_match_date_count(match_date: str, market: str = None) -> int:
     except Exception as e:
         print(f"⚠️ Could not check match_date count: {e}")
         return 999
+
+def _count_prod_picks_for_match(home_team: str, away_team: str, match_date: str) -> int:
+    """Count existing PROD picks for a specific match on a given date, across ALL markets."""
+    try:
+        result = db_helper.execute('''
+            SELECT COUNT(*) FROM football_opportunities
+            WHERE home_team = %s AND away_team = %s
+              AND match_date = %s AND mode = 'PROD'
+              AND match_id NOT LIKE 'seed_%%'
+        ''', (home_team, away_team, match_date), fetch='one')
+        return result[0] if result and result[0] else 0
+    except Exception as e:
+        print(f"⚠️ Could not check per-match PROD count: {e}")
+        return 0
 
 def get_daily_remaining_slots(summer: bool = False) -> int:
     """Get how many bet slots remain for today."""
@@ -4852,6 +4876,16 @@ def _save_bet_candidates_to_db(candidates, market_label: str) -> int:
                     if existing >= cap:
                         print(f"🛑 Match-date cap ({market_label}): {cand_match_date} already has {existing}/{cap} — skipping {getattr(candidate, 'match', '')}")
                         continue
+
+                # ── Cross-engine per-match cap ────────────────────────────────
+                cand_match_date = getattr(candidate, 'match_date', today)
+                match_home = getattr(candidate, 'home_team', '')
+                match_away = getattr(candidate, 'away_team', '')
+                match_existing = _count_prod_picks_for_match(match_home, match_away, cand_match_date)
+                if match_existing >= MAX_PROD_PICKS_PER_MATCH:
+                    print(f"🛑 Per-match cap: {match_home} vs {match_away} already has {match_existing}/{MAX_PROD_PICKS_PER_MATCH} PROD picks — skipping {getattr(candidate, 'selection', '')}")
+                    continue
+                # ─────────────────────────────────────────────────────────────
 
             quality_score = (candidate.ev_sim * 100 * 0.6) + (candidate.confidence * 100 * 0.4)
             
