@@ -219,7 +219,7 @@ def _fetch_candidates() -> List[Dict]:
         FROM football_opportunities
         WHERE match_date = %s
         AND mode = 'PROD'
-        AND odds >= 1.75 AND odds <= 2.10
+        AND odds >= 1.75 AND odds <= 2.30
         AND status = 'pending'
         AND selection NOT ILIKE '%%AH%%'
         AND selection NOT ILIKE '%%Asian%%'
@@ -243,7 +243,7 @@ def _fetch_candidates() -> List[Dict]:
                mode, true as bet_placed
         FROM all_bets
         WHERE DATE(created_at AT TIME ZONE 'UTC') = %s::date
-        AND odds >= 1.75 AND odds <= 2.10
+        AND odds >= 1.75 AND odds <= 2.30
         AND product = 'VALUE_SINGLE'
         AND mode = 'PROD'
         ORDER BY id ASC
