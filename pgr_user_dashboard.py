@@ -413,32 +413,25 @@ def _render_value_explanation(
 ):
     market_implied = round((1 / book_odds) * 100, 1) if book_odds else None
     model_prob_pct = round(model_prob * 100, 1) if model_prob and model_prob <= 1 else (round(float(model_prob), 1) if model_prob else None)
-    diff = round(model_prob_pct - market_implied, 1) if (model_prob_pct and market_implied) else None
 
     st.markdown(f"""
-**Why this is value**
+**🧠 EDGE**
 
-The {bk_name} odds of **{book_odds:.2f}** imply the market thinks this outcome
-has a **{market_implied}%** chance of happening.
+Market: **{market_implied}%** &nbsp;→&nbsp; Model: **{model_prob_pct}%**
 
-Our model puts the real probability at **{model_prob_pct}%**
-— a difference of **{f'+{diff}%' if diff and diff > 0 else f'{diff}%' if diff else f'{edge:+.1f}% edge'}**.
+👉 **+{edge:.1f}% edge**
 
-That gap is what creates the value: the market is underpricing this outcome
-by **{edge:+.1f}%** compared to our fair odds of **{fair_odds:.2f}**.
-""")
-
-    c1, c2 = st.columns(2)
-    c1.metric("Book Odds", f"{book_odds:.2f}", help="Best available price")
-    c2.metric("Model Fair Odds", f"{fair_odds:.2f}",
-              delta=f"{edge:+.1f}% edge",
-              delta_color="normal")
-
-    st.markdown("""
 ---
-⚠️ **This does not guarantee a win.**
-Value means profitable over many bets — not every single game.
-No hype, no guarantees. Just data.
+
+**💰 PRICE**
+
+`{book_odds:.2f}` book &nbsp;vs&nbsp; `{fair_odds:.2f}` fair
+
+👉 This price is too high.
+
+---
+
+⚠️ Wins don't matter short term. Beating the price does.
 """)
 
 
