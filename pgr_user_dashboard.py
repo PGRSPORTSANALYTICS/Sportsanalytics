@@ -163,7 +163,9 @@ def load_todays_picks():
     db = DatabaseHelper()
     rows = db.execute("""
         SELECT home_team, away_team, league, market, selection, odds,
-               confidence, edge_percentage, status, result, kickoff_time
+               confidence, edge_percentage, status, result, kickoff_time,
+               fair_odds, model_prob, best_odds_value, best_odds_bookmaker,
+               odds_by_bookmaker
         FROM football_opportunities
         WHERE mode = 'PROD'
           AND match_date = CURRENT_DATE::text
@@ -171,6 +173,25 @@ def load_todays_picks():
             CASE WHEN UPPER(status)='PENDING' THEN 0 ELSE 1 END,
             timestamp DESC
         LIMIT 40
+    """, fetch='all')
+    return rows or []
+
+
+@st.cache_data(ttl=120)
+def load_market_scanner():
+    db = DatabaseHelper()
+    rows = db.execute("""
+        SELECT home_team, away_team, league, market, selection, odds,
+               fair_odds, model_prob, edge_percentage,
+               best_odds_value, best_odds_bookmaker, odds_by_bookmaker,
+               confidence, status, match_date, kickoff_time
+        FROM football_opportunities
+        WHERE mode = 'PROD'
+          AND match_date = CURRENT_DATE::text
+          AND fair_odds IS NOT NULL
+          AND fair_odds > 0
+        ORDER BY COALESCE(edge_percentage, 0) DESC
+        LIMIT 100
     """, fetch='all')
     return rows or []
 
@@ -328,8 +349,9 @@ st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)
 # ─────────────────────────────────────────────────────────────────────────────
 # TABS
 # ─────────────────────────────────────────────────────────────────────────────
-tab_today, tab_smart, tab_track = st.tabs([
+tab_today, tab_scanner, tab_smart, tab_track = st.tabs([
     "⚡ Today's Picks",
+    "🔍 Market Scanner",
     "🧠 Smart Picks",
     "📈 Track Record",
 ])
@@ -367,7 +389,8 @@ with tab_today:
     else:
         col_a, col_b = st.columns(2)
         for i, pick in enumerate(picks):
-            home, away, league, market, selection, odds, conf, ev, status, result, ko_time = pick
+            (home, away, league, market, selection, odds, conf, ev, status, result, ko_time,
+             fair_odds, model_prob, best_odds_value, best_odds_bookmaker, odds_by_bookmaker) = pick
             conf_label, conf_cls = _clean_confidence(conf)
             card_cls = _pick_card_class(result)
             badge = _result_badge(status, result)
@@ -378,6 +401,19 @@ with tab_today:
                     ko_str = f"KO {str(ko_time)[:5]}"
                 except Exception:
                     pass
+
+            fair_html = ""
+            edge_html = ""
+            if fair_odds and float(fair_odds) > 0:
+                fo = float(fair_odds)
+                bk_odds = float(best_odds_value) if best_odds_value else float(odds)
+                edge = (bk_odds / fo - 1) * 100
+                edge_color = "#00F59D" if edge >= 10 else ("#FBBF24" if edge >= 5 else "#9BA0B5")
+                edge_weight = "700" if edge >= 5 else "400"
+                bk_name = str(best_odds_bookmaker) if best_odds_bookmaker else "Best"
+                fair_html = f'<span>Fair <b style="color:#60A5FA;">{fo:.2f}</b></span>'
+                edge_html = f'<span>Edge <b style="color:{edge_color};font-weight:{edge_weight};">{edge:+.1f}%</b></span>'
+                fair_html += f'<span style="font-size:0.72rem;">{bk_name} <b style="color:#F2F5F8;">{bk_odds:.2f}</b></span>'
 
             html = f"""
             <div class="{card_cls}">
@@ -392,6 +428,8 @@ with tab_today:
                 <div class="pick-selection">{selection}</div>
                 <div class="pick-meta">
                     <span>Odds <b style="color:#F2F5F8;">{float(odds):.2f}</b></span>
+                    {fair_html}
+                    {edge_html}
                     <span>{market_clean}</span>
                 </div>
             </div>
@@ -403,7 +441,162 @@ with tab_today:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TAB 2 — SMART PICKS
+# TAB 2 — MARKET SCANNER
+# ─────────────────────────────────────────────────────────────────────────────
+with tab_scanner:
+    scanner_rows = load_market_scanner()
+
+    st.markdown("""
+    <div style="padding:10px 16px;border-radius:10px;
+                background:rgba(59,130,246,0.06);
+                border:1px solid rgba(59,130,246,0.2);
+                margin-bottom:20px;">
+        <span style="color:#60A5FA;font-size:0.82rem;font-weight:600;">🔍 Market Scanner</span>
+        <span style="color:#9BA0B5;font-size:0.82rem;">
+            &nbsp;— All scanned markets today, sorted by edge. Green = edge &gt;10%, grey = &lt;5%.
+            Edge = (Best odds / Fair odds − 1) × 100.
+        </span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if not scanner_rows:
+        st.markdown("""
+        <div class="empty-state">
+            <div class="big">🔍</div>
+            <p>No market data with fair odds available yet.<br>
+            Markets are scanned as the engine runs throughout the day.</p>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        import json as _json
+
+        rows_with_edge = []
+        for r in scanner_rows:
+            (s_home, s_away, s_league, s_market, s_selection, s_odds,
+             s_fair, s_model_prob, s_edge, s_best_val, s_best_bk,
+             s_odds_by_bk, s_conf, s_status, s_match_date, s_ko_time) = r
+            try:
+                fo = float(s_fair) if s_fair else None
+                bk = float(s_best_val) if s_best_val else float(s_odds)
+                edge_val = (bk / fo - 1) * 100 if fo and fo > 0 else (float(s_edge) if s_edge else None)
+            except Exception:
+                edge_val = float(s_edge) if s_edge else None
+            rows_with_edge.append((r, edge_val))
+
+        rows_with_edge.sort(key=lambda x: x[1] if x[1] is not None else -999, reverse=True)
+
+        has_edge = [x for x in rows_with_edge if x[1] is not None and x[1] >= 5]
+        no_edge = [x for x in rows_with_edge if x[1] is None or x[1] < 5]
+
+        total_scanned = len(rows_with_edge)
+        edge_5 = sum(1 for x in rows_with_edge if x[1] is not None and x[1] >= 5)
+        edge_10 = sum(1 for x in rows_with_edge if x[1] is not None and x[1] >= 10)
+
+        st.markdown(f"""
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 20px 0;">
+            <span class="stat-pill">Scanned <b>{total_scanned}</b></span>
+            <span class="stat-pill">Edge ≥5% <b style="color:#FBBF24;">{edge_5}</b></span>
+            <span class="stat-pill">Edge ≥10% <b style="color:#00F59D;">{edge_10}</b></span>
+        </div>
+        """, unsafe_allow_html=True)
+
+        def _scanner_row_html(r, edge_val):
+            (s_home, s_away, s_league, s_market, s_selection, s_odds,
+             s_fair, s_model_prob, s_edge, s_best_val, s_best_bk,
+             s_odds_by_bk, s_conf, s_status, s_match_date, s_ko_time) = r
+
+            fo = float(s_fair) if s_fair else None
+            bk_odds = float(s_best_val) if s_best_val else float(s_odds)
+            mkt_clean = _clean_market(s_market)
+
+            if edge_val is None or edge_val < 5:
+                card_bg = "rgba(15,20,36,0.6)"
+                border_color = "rgba(28,32,48,0.7)"
+                edge_color = "#9BA0B5"
+                edge_weight = "400"
+                row_opacity = "opacity:0.65;"
+            elif edge_val >= 10:
+                card_bg = "rgba(0,245,157,0.05)"
+                border_color = "rgba(0,245,157,0.35)"
+                edge_color = "#00F59D"
+                edge_weight = "700"
+                row_opacity = ""
+            else:
+                card_bg = "rgba(251,191,36,0.04)"
+                border_color = "rgba(251,191,36,0.25)"
+                edge_color = "#FBBF24"
+                edge_weight = "600"
+                row_opacity = ""
+
+            fair_str = f"{fo:.2f}" if fo else "—"
+            bk_name = str(s_best_bk) if s_best_bk else "Best"
+            edge_str = f"{edge_val:+.1f}%" if edge_val is not None else "—"
+            prob_str = f"{float(s_model_prob)*100:.1f}%" if s_model_prob else "—"
+
+            bk_breakdown = ""
+            spread_html = ""
+            if s_odds_by_bk and fo and fo > 0:
+                try:
+                    bk_data = _json.loads(s_odds_by_bk) if isinstance(s_odds_by_bk, str) else s_odds_by_bk
+                    if isinstance(bk_data, dict) and bk_data:
+                        items = sorted(bk_data.items(), key=lambda x: float(x[1]) if x[1] else 0, reverse=True)[:5]
+                        parts = []
+                        edge_vals_bk = []
+                        for k, v in items:
+                            try:
+                                bk_o = float(v)
+                                bk_edge = (bk_o / fo - 1) * 100
+                                edge_vals_bk.append(bk_edge)
+                                ec = "#00F59D" if bk_edge >= 10 else ("#FBBF24" if bk_edge >= 5 else "#9BA0B5")
+                                parts.append(
+                                    f'<span style="font-size:0.7rem;color:#9BA0B5;">'
+                                    f'{k}: <b style="color:#F2F5F8;">{bk_o:.2f}</b>'
+                                    f' <b style="color:{ec};">({bk_edge:+.0f}%)</b></span>'
+                                )
+                            except Exception:
+                                pass
+                        bk_breakdown = ' &nbsp;'.join(parts)
+                        if len(edge_vals_bk) >= 2:
+                            spread = max(edge_vals_bk) - min(edge_vals_bk)
+                            spread_html = f'<span style="font-size:0.72rem;color:#9BA0B5;">Spread <b style="color:#F2F5F8;">{spread:.1f}pp</b></span>'
+                except Exception:
+                    pass
+
+            return f"""
+            <div style="padding:12px 16px;margin:6px 0;border-radius:12px;
+                        background:{card_bg};border:1px solid {border_color};{row_opacity}">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                    <div style="font-size:0.75rem;color:#9BA0B5;">{s_league} · {mkt_clean}</div>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        {spread_html}
+                        <b style="color:{edge_color};font-weight:{edge_weight};font-size:0.95rem;">{edge_str}</b>
+                    </div>
+                </div>
+                <div style="font-size:0.95rem;font-weight:600;color:#F2F5F8;">{s_home} vs {s_away}</div>
+                <div style="font-size:0.88rem;color:#00F59D;margin:2px 0 6px 0;">{s_selection}</div>
+                <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:0.78rem;color:#9BA0B5;align-items:center;">
+                    <span>Model odds <b style="color:#F2F5F8;">{float(s_odds):.2f}</b></span>
+                    <span>Fair <b style="color:#60A5FA;">{fair_str}</b></span>
+                    <span>{bk_name} <b style="color:#F2F5F8;">{bk_odds:.2f}</b></span>
+                    <span>Model prob <b style="color:#9BA0B5;">{prob_str}</b></span>
+                </div>
+                {f'<div style="margin-top:5px;display:flex;gap:8px;flex-wrap:wrap;">{bk_breakdown}</div>' if bk_breakdown else ""}
+            </div>
+            """
+
+        if has_edge:
+            st.markdown("#### Value Markets")
+            for row, ev in has_edge:
+                st.markdown(_scanner_row_html(row, ev), unsafe_allow_html=True)
+
+        if no_edge:
+            with st.expander(f"No significant edge ({len(no_edge)} markets)", expanded=False):
+                for row, ev in no_edge:
+                    st.markdown(_scanner_row_html(row, ev), unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TAB 3 — SMART PICKS
 # ─────────────────────────────────────────────────────────────────────────────
 with tab_smart:
     smart = load_smart_picks()
