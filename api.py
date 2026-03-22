@@ -2715,11 +2715,11 @@ async def public_config():
 
 @app.get("/login", include_in_schema=False)
 async def login_page():
-    return FileResponse(str(STATIC_DIR / "login.html"))
+    return HTMLResponse(content=(STATIC_DIR / "login.html").read_text())
 
 @app.get("/upgrade", include_in_schema=False)
 async def upgrade_page():
-    return FileResponse(str(STATIC_DIR / "upgrade.html"))
+    return HTMLResponse(content=(STATIC_DIR / "upgrade.html").read_text())
 
 
 # =============================================================================
@@ -2749,23 +2749,23 @@ async def root_redirect(request: Request):
 
 @app.get("/home", include_in_schema=False)
 async def home_dashboard():
-    return FileResponse(str(STATIC_DIR / "home.html"))
+    return HTMLResponse(content=(STATIC_DIR / "home.html").read_text())
 
 @app.get("/app", include_in_schema=False)
 async def app_alias():
-    return FileResponse(str(STATIC_DIR / "home.html"))
+    return HTMLResponse(content=(STATIC_DIR / "home.html").read_text())
 
 @app.get("/preview", include_in_schema=False)
 async def preview_dashboard():
-    return FileResponse(str(STATIC_DIR / "preview.html"))
+    return HTMLResponse(content=(STATIC_DIR / "preview.html").read_text())
 
 @app.get("/value", include_in_schema=False)
 async def value_dashboard():
-    return FileResponse(str(STATIC_DIR / "value_dashboard.html"))
+    return HTMLResponse(content=(STATIC_DIR / "value_dashboard.html").read_text())
 
 @app.get("/opportunities", include_in_schema=False)
 async def opportunities_alias():
-    return FileResponse(str(STATIC_DIR / "value_dashboard.html"))
+    return HTMLResponse(content=(STATIC_DIR / "value_dashboard.html").read_text())
 
 
 # =============================================================================
@@ -2774,11 +2774,11 @@ async def opportunities_alias():
 
 @app.get("/pgr", include_in_schema=False)
 async def pgr_dashboard():
-    return FileResponse(str(STATIC_DIR / "pgr_dashboard.html"))
+    return HTMLResponse(content=(STATIC_DIR / "pgr_dashboard.html").read_text())
 
 @app.get("/edge-finder", include_in_schema=False)
 async def edge_finder_alias():
-    return FileResponse(str(STATIC_DIR / "pgr_dashboard.html"))
+    return HTMLResponse(content=(STATIC_DIR / "pgr_dashboard.html").read_text())
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
