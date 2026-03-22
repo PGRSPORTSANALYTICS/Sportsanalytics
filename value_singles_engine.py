@@ -54,8 +54,8 @@ MIN_COMBINED_CONFIDENCE = 0.01
 # Lower bookmaker margins (4-8%) vs SGP (28-45%) = better ROI
 # ============================================================
 
-# Minimum Expected Value (EV) - 28% edge (Mar 22, 2026 - raised from 22% to enforce max 10 picks/day quality filter)
-MIN_VALUE_SINGLE_EV = 0.28  # 28% edge — only absolute best opportunities qualify
+# Minimum Expected Value (EV) - 32% edge (Mar 22, 2026 v2 - raised from 28% to max 4 Value Singles/day, rest to Discord)
+MIN_VALUE_SINGLE_EV = 0.32  # 32% edge — only elite opportunities qualify; rest published as Discord value opportunities
 
 # ============================================================
 # MARKET-SPECIFIC MIN_EV THRESHOLDS (Jan 11, 2026 v2)
@@ -67,8 +67,8 @@ MIN_VALUE_SINGLE_EV = 0.28  # 28% edge — only absolute best opportunities qual
 # - Away Win: 29.4% hit, -5.45u, max DD -10.45u → LEARNING ONLY
 # ============================================================
 MARKET_SPECIFIC_MIN_EV = {
-    "FT_OVER_2_5": 0.22,   # 22% EV minimum (Mar 15, 2026 - aligned with global threshold)
-    "FT_OVER_3_5": 0.22,   # 22% EV minimum (Mar 15, 2026 - aligned with global threshold)
+    "FT_OVER_2_5": 0.28,   # 28% EV minimum (Mar 22, 2026 v2 - raised from 22% to align closer to global 32% threshold)
+    "FT_OVER_3_5": 0.28,   # 28% EV minimum (Mar 22, 2026 v2 - raised from 22% to align closer to global 32% threshold)
     # HOME_WIN: Now LEARNING_ONLY (Feb 6, 2026) - see filter below
     # FT_UNDER_2_5: Now LEARNING_ONLY (Feb 16, 2026) - 43.4% hit, -9.14u
     # FT_UNDER_3_5: Now LEARNING_ONLY (Feb 16, 2026) - 33.3% hit, -2.88u
@@ -113,16 +113,16 @@ MARKET_SPECIFIC_MIN_ODDS = {
     # HOME_WIN: Removed — now LEARNING_ONLY (Feb 6, 2026)
 }
 
-# Odds range filter - Quality filter update (Mar 22, 2026)
-MIN_VALUE_SINGLE_ODDS = 1.75  # Mar 22, 2026: raised from 1.70 — tighter odds interval for quality
+# Odds range filter - Quality filter update (Mar 22, 2026 v2)
+MIN_VALUE_SINGLE_ODDS = 1.80  # Mar 22, 2026 v2: raised from 1.75 — eliminate low-margin bets
 MAX_VALUE_SINGLE_ODDS = 2.30  # Mar 22, 2026: tightened from 2.40 — sweet spot for mispricing
 MAX_LEARNING_ODDS = 4.00      # Collect predictions up to 4.00 for AI training
 
 # Minimum model confidence/probability required
-MIN_VALUE_SINGLE_CONFIDENCE = 0.72  # Mar 22, 2026: raised from 55% to 72% — max 10 picks/day quality gate
+MIN_VALUE_SINGLE_CONFIDENCE = 0.78  # Mar 22, 2026 v2: raised from 72% to 78% — fewer, higher-quality PROD picks
 
 # Maximum number of value singles per day - CORE PRODUCT
-MAX_VALUE_SINGLES_PER_DAY = 10  # Mar 22, 2026: lowered from 15 — aligned with 10 PROD picks/day quality gate
+MAX_VALUE_SINGLES_PER_DAY = 4  # Mar 22, 2026 v2: lowered from 10 — max 4 PROD picks; rest goes to Discord as value opportunities
 
 # Tournament filter mode: relaxed thresholds for UCL/UEL
 TOURNAMENT_LEAGUES = {
@@ -455,10 +455,10 @@ class ValueSinglesEngine:
         data_picks: List[Dict[str, Any]] = []  # LEARNING picks for Discord publishing (ev > 0, below PROD threshold)
 
         print("🔥 VALUE SINGLES START (HARD FILTERS ACTIVE)")
-        print(f"   min_ev = {MIN_VALUE_SINGLE_EV*100:.0f}%")
-        print(f"   betting_odds = {MIN_VALUE_SINGLE_ODDS} - {MAX_VALUE_SINGLE_ODDS} | learning_odds = {MIN_VALUE_SINGLE_ODDS} - {MAX_LEARNING_ODDS}")
-        print(f"   min_model_prob = {MIN_VALUE_SINGLE_CONFIDENCE*100:.0f}%")
-        print(f"   max_picks/day = {MAX_VALUE_SINGLES_PER_DAY}")
+        print(f"   min_ev (global) = {MIN_VALUE_SINGLE_EV*100:.0f}% | Over2.5/3.5 = {MARKET_SPECIFIC_MIN_EV.get('FT_OVER_2_5',0)*100:.0f}%")
+        print(f"   PROD odds = {MIN_VALUE_SINGLE_ODDS} - {MAX_VALUE_SINGLE_ODDS} | learning_odds = {MIN_VALUE_SINGLE_ODDS} - {MAX_LEARNING_ODDS}")
+        print(f"   min_confidence = {MIN_VALUE_SINGLE_CONFIDENCE*100:.0f}%")
+        print(f"   max PROD picks/day = {MAX_VALUE_SINGLES_PER_DAY} | rest → Discord value opportunities")
         print(f"   leagues = {len(VALUE_SINGLE_LEAGUE_WHITELIST)} whitelisted")
 
         # 1) Get fixtures
@@ -1018,6 +1018,44 @@ class ValueSinglesEngine:
         self._learning_picks = learning_picks
         self._data_picks = data_picks
         print(f"📡 LEARNING PICKS (Discord only): {len(data_picks)} positive-EV signals queued for publishing")
+
+        # ── 👉 MISSADE SPEL (value opportunities som EJ blev PROD picks) ──────────────
+        all_missed = []
+        # 1) Picks below PROD EV threshold but positive EV (data_picks list)
+        for dp in data_picks:
+            try:
+                analysis = json.loads(dp.get("analysis", "{}"))
+                all_missed.append({
+                    "match": f"{dp.get('home_team','?')} vs {dp.get('away_team','?')}",
+                    "selection": dp.get("selection", "?"),
+                    "odds": dp.get("odds", 0),
+                    "ev": dp.get("edge_percentage", 0),
+                    "reason": f"EV {dp.get('edge_percentage',0):.1f}% — below PROD threshold ({analysis.get('market_key','?')} market min)",
+                    "league": dp.get("league", "?"),
+                })
+            except Exception:
+                pass
+        # 2) Picks from the PROD pool that passed EV but were dropped by unique-match cap or daily cap
+        prod_dropped = [p for p in production_picks if p not in unique]
+        for dp in prod_dropped:
+            all_missed.append({
+                "match": f"{dp.get('home_team','?')} vs {dp.get('away_team','?')}",
+                "selection": dp.get("selection", "?"),
+                "odds": dp.get("odds", 0),
+                "ev": dp.get("edge_percentage", 0),
+                "reason": f"EV {dp.get('edge_percentage',0):.1f}% ✅ — dropped by daily cap ({MAX_VALUE_SINGLES_PER_DAY}/day) or duplicate match",
+                "league": dp.get("league", "?"),
+            })
+        all_missed.sort(key=lambda x: x["ev"], reverse=True)
+        if all_missed:
+            print(f"\n👉 MISSADE SPEL — {len(all_missed)} value opportunities (EJ PROD picks):")
+            for i, m in enumerate(all_missed[:20], 1):
+                print(f"   #{i}: [{m['league']}] {m['match']} | {m['selection']} @ {m['odds']:.2f} | {m['reason']}")
+            if len(all_missed) > 20:
+                print(f"   ... och {len(all_missed)-20} till")
+        else:
+            print("👉 MISSADE SPEL: Inga missade value opportunities denna cykel")
+        # ─────────────────────────────────────────────────────────────────────────────
 
         return unique
 
