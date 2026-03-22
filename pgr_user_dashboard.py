@@ -158,6 +158,54 @@ def load_hero_stats():
     return row or (0, 0, 0.0, 0)
 
 
+@st.cache_data(ttl=300)
+def load_clv_hero_stats():
+    db = DatabaseHelper()
+    row = db.execute("""
+        SELECT
+            COUNT(*) FILTER (WHERE clv_pct IS NOT NULL)                          AS clv_total,
+            COUNT(*) FILTER (WHERE clv_pct > 0)                                  AS clv_positive,
+            COALESCE(AVG(clv_pct) FILTER (WHERE clv_pct IS NOT NULL), 0)         AS avg_clv,
+            COUNT(*) FILTER (WHERE mode = 'PROD')                                AS total_prod
+        FROM football_opportunities
+        WHERE mode = 'PROD'
+    """, fetch='one')
+    return row or (0, 0, 0.0, 0)
+
+
+@st.cache_data(ttl=300)
+def load_clv_proof_of_edge(days: int = 30):
+    db = DatabaseHelper()
+    rows = db.execute("""
+        SELECT
+            clv_pct,
+            match_date,
+            market,
+            league,
+            clv_status
+        FROM football_opportunities
+        WHERE mode = 'PROD'
+          AND clv_pct IS NOT NULL
+          AND timestamp >= NOW() - (%s || ' days')::INTERVAL
+        ORDER BY timestamp DESC
+    """, (str(days),), fetch='all')
+    return rows or []
+
+
+@st.cache_data(ttl=300)
+def load_clv_coverage():
+    db = DatabaseHelper()
+    row = db.execute("""
+        SELECT
+            COUNT(*) FILTER (WHERE UPPER(status) = 'SETTLED')          AS total_settled,
+            COUNT(*) FILTER (WHERE clv_pct IS NOT NULL
+                             AND UPPER(status) = 'SETTLED')             AS clv_covered
+        FROM football_opportunities
+        WHERE mode = 'PROD'
+    """, fetch='one')
+    return row or (0, 0)
+
+
 @st.cache_data(ttl=120)
 def load_todays_picks():
     db = DatabaseHelper()
@@ -317,6 +365,10 @@ wins, settled, profit_units, pending = load_hero_stats()
 hit_rate = (wins / settled * 100) if settled > 0 else 0.0
 roi = (profit_units / settled * 100) if settled > 0 else 0.0
 
+clv_total, clv_positive, avg_clv, _ = load_clv_hero_stats()
+clv_hit_rate = (clv_positive / clv_total * 100) if clv_total > 0 else 0.0
+total_settled_hero, clv_covered_hero = load_clv_coverage()
+
 st.markdown("""
 <div class="pgr-hero">
     <div class="pgr-logo-text">PGR Sports Analytics</div>
@@ -329,7 +381,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-c1, c2, c3, c4 = st.columns(4)
+c1, c2, c3, c4, c5, c6 = st.columns(6)
 with c1:
     metric_card("All-Time ROI", f"{roi:+.1f}%", kicker=f"{settled} settled picks",
                 variant="good" if roi >= 0 else "bad")
@@ -343,17 +395,50 @@ with c3:
 with c4:
     metric_card("Live Picks", str(pending), kicker="Pending today",
                 variant="default")
+with c5:
+    metric_card(
+        "CLV Hit Rate",
+        f"{clv_hit_rate:.1f}%" if clv_total > 0 else "—",
+        kicker=f"{clv_positive} of {clv_total} picks beat closing line",
+        variant="good" if clv_hit_rate >= 50 else ("bad" if clv_total > 0 else "default"),
+    )
+with c6:
+    metric_card(
+        "Avg CLV%",
+        f"{avg_clv:+.2f}%" if clv_total > 0 else "—",
+        kicker="vs closing market price",
+        variant="good" if avg_clv >= 0 else ("bad" if clv_total > 0 else "default"),
+    )
+
+if clv_total > 0:
+    hero_cov_pct = (clv_covered_hero / total_settled_hero * 100) if total_settled_hero > 0 else 0
+    hero_cov_color = "#00F59D" if hero_cov_pct >= 50 else "#FBBF24"
+    hero_cov_label = "" if hero_cov_pct >= 50 else f' · <span style="color:#FBBF24;font-size:0.78rem;">⚠ Preliminary — CLV coverage below 50%</span>'
+    st.markdown(f"""
+    <div style="margin:12px 0 4px 0;padding:10px 18px;border-radius:10px;
+                background:rgba(0,245,157,0.06);border:1px solid rgba(0,245,157,0.18);
+                font-size:0.85rem;color:#9BA0B5;text-align:center;">
+        <span style="color:#00F59D;font-weight:600;">{clv_hit_rate:.0f}% of our picks</span>
+        got a better price than what the market settled on —
+        verified against closing odds from sharp bookmakers.
+        <span style="color:{hero_cov_color};font-size:0.78rem;margin-left:8px;">
+            CLV coverage: {hero_cov_pct:.0f}%
+        </span>
+        {hero_cov_label}
+    </div>
+    """, unsafe_allow_html=True)
 
 st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TABS
 # ─────────────────────────────────────────────────────────────────────────────
-tab_today, tab_scanner, tab_smart, tab_track = st.tabs([
+tab_today, tab_scanner, tab_smart, tab_track, tab_clv = st.tabs([
     "⚡ Today's Picks",
     "🔍 Market Scanner",
     "🧠 Smart Picks",
     "📈 Track Record",
+    "🎯 Proof of Edge",
 ])
 
 
@@ -783,6 +868,207 @@ with tab_track:
             mdf["Units"] = mdf["Units"].apply(lambda x: f"{x:+.1f}u")
             mdf = mdf.drop(columns=["Wins"])
             st.dataframe(mdf, use_container_width=True, hide_index=True)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TAB 4 — PROOF OF EDGE (CLV)
+# ─────────────────────────────────────────────────────────────────────────────
+with tab_clv:
+    # ── CLV explanation ──────────────────────────────────────────────────────
+    st.markdown("""
+    <div style="padding:16px 20px;border-radius:12px;
+                background:rgba(0,245,157,0.05);
+                border:1px solid rgba(0,245,157,0.2);
+                margin-bottom:24px;">
+        <div style="font-size:1.05rem;font-weight:700;color:#00F59D;margin-bottom:8px;">
+            What is Closing Line Value (CLV)?
+        </div>
+        <div style="font-size:0.88rem;color:#C4C9DC;line-height:1.65;">
+            When you place a bet, the odds you get are compared to the odds right before the match
+            starts — the <b style="color:#F2F5F8;">closing line</b>. Sharp bookmakers set extremely
+            accurate prices as kick-off approaches, because they've absorbed all public and sharp money.
+            <br><br>
+            If you consistently get <b style="color:#00F59D;">better odds than the closing price</b>,
+            it means the market agreed with you — and priced the bet even lower later.
+            That's positive CLV: the clearest, most objective proof that a system finds mispriced markets.
+            <br><br>
+            <span style="color:#9BA0B5;">
+                A sustained CLV of +3–5%+ across a large sample is statistically significant
+                evidence of genuine edge — independent of short-term win/loss results.
+            </span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── CLV coverage banner ──────────────────────────────────────────────────
+    total_settled_cov, clv_covered = load_clv_coverage()
+    if total_settled_cov > 0:
+        coverage_pct = clv_covered / total_settled_cov * 100
+        cov_color = "#00F59D" if coverage_pct >= 50 else "#FBBF24"
+        cov_label = "Solid CLV sample" if coverage_pct >= 50 else "Preliminary data — CLV coverage below 50%"
+        st.markdown(f"""
+        <div style="padding:8px 16px;border-radius:8px;margin-bottom:20px;
+                    background:rgba(0,0,0,0.2);border:1px solid #1C2030;
+                    display:flex;align-items:center;gap:12px;font-size:0.82rem;">
+            <span style="color:{cov_color};font-weight:700;">{coverage_pct:.0f}% CLV coverage</span>
+            <span style="color:#9BA0B5;">{clv_covered} of {total_settled_cov} settled picks have closing line data</span>
+            <span style="color:{cov_color};font-size:0.75rem;">· {cov_label}</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ── Period selector ──────────────────────────────────────────────────────
+    clv_period = st.radio(
+        "CLV period",
+        ["30 days", "90 days"],
+        index=0,
+        horizontal=True,
+        label_visibility="collapsed",
+    )
+    clv_days = 30 if clv_period == "30 days" else 90
+
+    clv_rows = load_clv_proof_of_edge(clv_days)
+
+    if not clv_rows:
+        st.markdown("""
+        <div class="empty-state">
+            <div class="big">🎯</div>
+            <p>No CLV data yet for this period.<br>
+            CLV is captured automatically as matches approach kick-off.</p>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        clv_df = pd.DataFrame(clv_rows, columns=["clv_pct", "match_date", "market", "league", "clv_status"])
+        clv_df["clv_pct"] = clv_df["clv_pct"].astype(float)
+        clv_df["match_date"] = pd.to_datetime(clv_df["match_date"], errors="coerce")
+
+        total_clv = len(clv_df)
+        pos_clv = int((clv_df["clv_pct"] > 0).sum())
+        avg_clv_period = float(clv_df["clv_pct"].mean())
+        clv_hr_period = pos_clv / total_clv * 100 if total_clv > 0 else 0.0
+
+        # Summary KPIs
+        k1, k2, k3, k4 = st.columns(4)
+        with k1:
+            metric_card("CLV Hit Rate", f"{clv_hr_period:.1f}%",
+                        kicker=f"{pos_clv} of {total_clv} beat closing",
+                        variant="good" if clv_hr_period >= 50 else "bad")
+        with k2:
+            metric_card("Avg CLV%", f"{avg_clv_period:+.2f}%",
+                        kicker="Mean vs closing line",
+                        variant="good" if avg_clv_period >= 0 else "bad")
+        with k3:
+            best_clv = float(clv_df["clv_pct"].max())
+            metric_card("Best CLV", f"{best_clv:+.2f}%",
+                        kicker="Top single pick",
+                        variant="good")
+        with k4:
+            metric_card("Picks", str(total_clv),
+                        kicker=f"Last {clv_days} days with CLV",
+                        variant="default")
+
+        st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
+
+        # ── CLV distribution histogram ────────────────────────────────────────
+        section_title("CLV Distribution", icon="📊")
+        clv_vals = clv_df["clv_pct"].tolist()
+        fig_hist = go.Figure()
+        fig_hist.add_trace(go.Histogram(
+            x=clv_vals,
+            nbinsx=30,
+            marker_color=[
+                "#00F59D" if v > 0 else "#FF4B6B"
+                for v in clv_vals
+            ],
+            opacity=0.8,
+            hovertemplate="CLV: %{x:.1f}%<br>Count: %{y}<extra></extra>",
+        ))
+        fig_hist.add_vline(x=0, line_dash="dot", line_color="#9BA0B5", line_width=1.5)
+        fig_hist.add_vline(x=avg_clv_period, line_dash="dash",
+                           line_color="#00F59D", line_width=1.5,
+                           annotation_text=f"Avg {avg_clv_period:+.1f}%",
+                           annotation_font_color="#00F59D",
+                           annotation_position="top right")
+        fig_hist.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#9BA0B5", size=12),
+            margin=dict(l=10, r=10, t=20, b=10),
+            height=250,
+            showlegend=False,
+            xaxis=dict(gridcolor="#1C2030", showgrid=True, zeroline=False,
+                       ticksuffix="%", title="CLV%"),
+            yaxis=dict(gridcolor="#1C2030", showgrid=True, zeroline=False,
+                       title="Picks"),
+            bargap=0.05,
+        )
+        st.plotly_chart(fig_hist, use_container_width=True, config={"displayModeBar": False})
+
+        # ── CLV trend over time ───────────────────────────────────────────────
+        clv_time = clv_df.dropna(subset=["match_date"]).copy()
+        if not clv_time.empty:
+            st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)
+            section_title(f"CLV Trend — Last {clv_days} Days", icon="📈")
+            clv_daily = (
+                clv_time.groupby("match_date")["clv_pct"]
+                .mean()
+                .reset_index()
+                .rename(columns={"clv_pct": "avg_clv"})
+                .sort_values("match_date")
+            )
+            clv_daily["rolling_avg"] = clv_daily["avg_clv"].rolling(window=7, min_periods=1).mean()
+
+            fig_trend = go.Figure()
+            bar_clr = ["#00F59D" if v >= 0 else "#FF4B6B" for v in clv_daily["avg_clv"]]
+            fig_trend.add_trace(go.Bar(
+                x=clv_daily["match_date"],
+                y=clv_daily["avg_clv"],
+                marker_color=bar_clr,
+                opacity=0.5,
+                name="Daily avg CLV",
+                hovertemplate="%{x|%b %d}<br>%{y:+.2f}%<extra></extra>",
+            ))
+            fig_trend.add_trace(go.Scatter(
+                x=clv_daily["match_date"],
+                y=clv_daily["rolling_avg"],
+                mode="lines",
+                line=dict(color="#00F59D", width=2.5),
+                name="7-day rolling avg",
+                hovertemplate="%{x|%b %d}<br>Rolling: %{y:+.2f}%<extra></extra>",
+            ))
+            fig_trend.add_hline(y=0, line_dash="dot", line_color="#1C2030", line_width=1)
+            fig_trend.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#9BA0B5", size=12),
+                margin=dict(l=10, r=10, t=10, b=10),
+                height=240,
+                legend=dict(orientation="h", yanchor="bottom", y=1.02,
+                            xanchor="right", x=1, font=dict(size=11)),
+                xaxis=dict(gridcolor="#1C2030", showgrid=False, zeroline=False),
+                yaxis=dict(gridcolor="#1C2030", showgrid=True, zeroline=False,
+                           ticksuffix="%"),
+            )
+            st.plotly_chart(fig_trend, use_container_width=True, config={"displayModeBar": False})
+
+        # ── CLV by market ─────────────────────────────────────────────────────
+        st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)
+        section_title("CLV by Market", icon="🎯")
+        mkt_grp = (
+            clv_df.groupby("market")["clv_pct"]
+            .agg(["mean", "count", lambda x: (x > 0).sum()])
+            .reset_index()
+        )
+        mkt_grp.columns = ["Market", "Avg CLV%", "Picks", "Positive"]
+        mkt_grp = mkt_grp[mkt_grp["Picks"] >= 3].sort_values("Avg CLV%", ascending=False)
+        mkt_grp["Market"] = mkt_grp["Market"].apply(_clean_market)
+        mkt_grp["Hit Rate"] = mkt_grp.apply(
+            lambda r: f"{r['Positive']/r['Picks']*100:.0f}%" if r["Picks"] > 0 else "-", axis=1
+        )
+        mkt_grp["Avg CLV%"] = mkt_grp["Avg CLV%"].apply(lambda x: f"{x:+.2f}%")
+        mkt_grp = mkt_grp.drop(columns=["Positive"])
+        if not mkt_grp.empty:
+            st.dataframe(mkt_grp, use_container_width=True, hide_index=True)
+        else:
+            st.info("Not enough picks per market yet (minimum 3 required).")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # FOOTER
