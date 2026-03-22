@@ -1157,11 +1157,13 @@ class APIFootballClient:
                                 market_key = f"{prefix}_OVER_{line.replace('.', '_')}"
                                 if market_key not in result['markets'] or odds > result['markets'][market_key]:
                                     result['markets'][market_key] = odds
+                                result['markets_by_bookmaker'].setdefault(market_key, {})[bookie_name] = odds
                             elif 'Under' in selection:
                                 line = selection.replace('Under ', '')
                                 market_key = f"{prefix}_UNDER_{line.replace('.', '_')}"
                                 if market_key not in result['markets'] or odds > result['markets'][market_key]:
                                     result['markets'][market_key] = odds
+                                result['markets_by_bookmaker'].setdefault(market_key, {})[bookie_name] = odds
                     
                     elif bet_name in team_cards_markets:
                         prefix = team_cards_markets[bet_name]
@@ -1175,11 +1177,13 @@ class APIFootballClient:
                                 market_key = f"{prefix}_OVER_{line.replace('.', '_')}"
                                 if market_key not in result['markets'] or odds > result['markets'][market_key]:
                                     result['markets'][market_key] = odds
+                                result['markets_by_bookmaker'].setdefault(market_key, {})[bookie_name] = odds
                             elif 'Under' in selection:
                                 line = selection.replace('Under ', '')
                                 market_key = f"{prefix}_UNDER_{line.replace('.', '_')}"
                                 if market_key not in result['markets'] or odds > result['markets'][market_key]:
                                     result['markets'][market_key] = odds
+                                result['markets_by_bookmaker'].setdefault(market_key, {})[bookie_name] = odds
                     
                     result['raw_bets'].append({
                         'bookmaker': bookie_name,

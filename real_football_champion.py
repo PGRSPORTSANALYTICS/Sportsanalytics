@@ -4670,6 +4670,7 @@ def run_late_cards_cycle():
     
     fixtures = []
     odds_data = {}
+    cards_bookmaker_data = {}  # fixture_id -> markets_by_bookmaker dict
     corners_fixtures = []
     corners_odds_data = {}
     today = datetime.now().strftime('%Y-%m-%d')
@@ -4729,11 +4730,14 @@ def run_late_cards_cycle():
                     if af_id:
                         af_odds = af_client.get_fixture_odds(af_id)
                         af_markets = af_odds.get('markets', {})
+                        af_mbb = af_odds.get('markets_by_bookmaker', {})
                         for key, val in af_markets.items():
                             if 'CARDS' in key and not skip_cards:
                                 real_cards_odds[key] = val
                             elif 'CORNER' in key or 'corner' in key:
                                 real_corners_odds[key] = val
+                        if real_cards_odds and af_mbb:
+                            cards_bookmaker_data[fixture_id] = af_mbb
             except Exception as e:
                 print(f"   ⚠️ Odds fetch failed for {home_team} vs {away_team}: {e}")
                 continue
@@ -4785,12 +4789,40 @@ def run_late_cards_cycle():
                 return x.get('ev', x.get('edge', 0))
             return 0
         
+        CARDS_REAL_BOOKMAKERS = {
+            'bet365', 'pinnacle', 'unibet', 'betsson',
+            'william hill', 'betway', '1xbet', 'betfair',
+        }
+
+        def _has_real_bookmaker(candidate) -> bool:
+            """Return True if at least one real bookmaker offers odds for this market."""
+            fixture_mbb = cards_bookmaker_data.get(getattr(candidate, 'fixture_id', ''), {})
+            if not fixture_mbb:
+                return False
+            market_books = fixture_mbb.get(getattr(candidate, 'market_key', ''), {})
+            if not market_books:
+                return False
+            for bk in market_books:
+                if bk.lower() in CARDS_REAL_BOOKMAKERS:
+                    return True
+            return False
+
         if cards_fixtures_found > 0:
             try:
                 all_cards = run_cards_cycle(fixtures, odds_data)
                 if all_cards:
                     learning_cards = [c for c in all_cards if getattr(c, 'trust_tier', '') == 'LEARNING']
-                    prod_cards = [c for c in all_cards if getattr(c, 'trust_tier', '') != 'LEARNING']
+                    prod_cards_raw = [c for c in all_cards if getattr(c, 'trust_tier', '') != 'LEARNING']
+                    prod_cards = []
+                    for c in prod_cards_raw:
+                        if _has_real_bookmaker(c):
+                            prod_cards.append(c)
+                        else:
+                            print(
+                                f"   🚫 BOOKMAKER FILTER blocked: {getattr(c, 'home_team', '')} vs "
+                                f"{getattr(c, 'away_team', '')} | {getattr(c, 'selection', '')} "
+                                f"— only API-Football odds, no real bookmaker found"
+                            )
                     if remaining > 0 and prod_cards:
                         prod_cards = sorted(prod_cards, key=_get_ev, reverse=True)[:remaining]
                     elif remaining <= 0:
@@ -4992,7 +5024,7 @@ def _save_bet_candidates_to_db(candidates, market_label: str) -> int:
             continue
     
     if learning_saved > 0:
-        print(f"   📚 Saved {learning_saved} LEARNING cards picks (Over 3.5/4.5 — data collection only)")
+        print(f"   📚 Saved {learning_saved} LEARNING cards picks")
     return saved
 
 

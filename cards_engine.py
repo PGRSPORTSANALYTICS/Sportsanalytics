@@ -186,7 +186,7 @@ class CardsCandidate:
 MIN_MATCH_CARDS_LINE = 3.5
 MIN_TEAM_CARDS_LINE = 2.5  # 1.5 removed — not available at major bookmakers (bet365 etc.)
 
-CARDS_LEARNING_LINES = {3.5, 4.5}
+CARDS_LEARNING_LINES = set()  # 3.5 and 4.5 promoted to PROD
 
 CARDS_LEARNING_MIN_EV = 0.0
 CARDS_LEARNING_MIN_CONF = 0.40
