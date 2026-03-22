@@ -642,13 +642,13 @@ function MobileSheet({pick, onClose}) {
 
 /* ── Main App ──────────────────────────────────────────────────── */
 function App() {
-  const [allPicks, setAllPicks]   = useState(mockData.map(normalizePick));
+  const [allPicks, setAllPicks]   = useState([]);
   const [apiStats, setApiStats]   = useState(null);
   const [loading, setLoading]     = useState(true);
-  const [isMock, setIsMock]       = useState(true);
+  const [isMock, setIsMock]       = useState(false);
   const [lastFetch, setLastFetch] = useState(null);
   const [scanMsg, setScanMsg]     = useState(null);
-  const [selected, setSelected]   = useState(mockData[0]);
+  const [selected, setSelected]   = useState(null);
   const [showSheet, setShowSheet] = useState(false);
 
   const [sport, setSport]         = useState("All");
@@ -668,14 +668,33 @@ function App() {
 
   const fetchData = useCallback(async()=>{
     try {
-      const [bRes,sRes] = await Promise.all([fetch("/bets?status=upcoming&limit=200&sort=ev"),fetch("/bets/stats")]);
-      if(!bRes.ok) throw 0;
-      const bd = await bRes.json();
-      const items = (bd.bets||[]).filter(b=>!b.status||b.status==="pending");
-      if(items.length>0){ setAllPicks(items.map(normalizePick)); setIsMock(false); if(!selected) setSelected(items[0]); }
-      else { setAllPicks(mockData.map(normalizePick)); setIsMock(true); }
-      if(sRes.ok){ const sd=await sRes.json(); setApiStats({roi:sd.roi??22.7,units:sd.profit_units??829,bets:sd.total??4258,hit_rate:sd.hit_rate??54.5}); }
-    } catch { setAllPicks(mockData.map(normalizePick)); setIsMock(true); }
+      const [pRes,sRes] = await Promise.all([
+        fetch("/api/picks/today"),
+        fetch("/api/stats/roi")
+      ]);
+      if(!pRes.ok) throw 0;
+      const pd = await pRes.json();
+      const items = (pd.picks||[]).map(b=>({
+        ...b,
+        match: `${b.home_team||""} vs ${b.away_team||""}`,
+        ev: b.edge_pct ?? 0,
+        bookmaker: b.best_odds_bookmaker || "—",
+        kickoff_time: b.kickoff_str || b.match_date || "",
+        fair_odds: b.best_odds_value || null,
+        featured: (b.edge_pct||0) >= 20,
+        status: b.status === "upcoming" ? "PRE" : (b.status||"PRE").toUpperCase(),
+      }));
+      if(items.length>0){
+        setAllPicks(items.map(normalizePick));
+        setIsMock(false);
+        setSelected(s => s && items.find(i=>i.id===s.id) ? s : normalizePick(items[0]));
+      } else {
+        setAllPicks([]);
+        setIsMock(false);
+        setSelected(null);
+      }
+      if(sRes.ok){ const sd=await sRes.json(); const at=sd.all_time||{}; setApiStats({roi:at.roi??0,units:at.units??0,bets:at.total??0,hit_rate:at.hit_rate??0}); }
+    } catch(e) { setAllPicks(mockData.map(normalizePick)); setIsMock(true); }
     setLastFetch(Date.now()); setLoading(false);
   },[]);
 
@@ -843,7 +862,15 @@ function App() {
               {loading ? (
                 <div style={{textAlign:"center",padding:"60px 0",color:"#3f3f46",fontSize:13}}>Scanning markets…</div>
               ) : filtered.length===0 ? (
-                <div style={{textAlign:"center",padding:"60px 0",color:"#3f3f46",fontSize:13}}>No results match your filters</div>
+                <div style={{textAlign:"center",padding:"60px 0"}}>
+                  <div style={{fontSize:32,marginBottom:12}}>🔍</div>
+                  <div style={{color:"#52525b",fontSize:14,fontWeight:600,marginBottom:6}}>
+                    {allPicks.length===0 ? "No picks for today yet" : "No results match your filters"}
+                  </div>
+                  <div style={{color:"#3f3f46",fontSize:12}}>
+                    {allPicks.length===0 ? "The engine scans every 12 min — check back shortly" : "Try adjusting your filter settings"}
+                  </div>
+                </div>
               ) : (
                 <div style={{borderTop:"1px solid #18181b"}}>
                   {filtered.map((row,i)=>{
