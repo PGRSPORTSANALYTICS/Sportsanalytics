@@ -124,7 +124,7 @@ const mockData = [
 ───────────────────────────────────────────────────────────── */
 function normalizePick(b) {
   return {
-    id: b.id || b.match_id || (b.home_team + "_" + b.away_team),
+    id: String(b.id || b.match_id || (b.home_team + "_" + b.away_team)),
     sport: b.sport || "Football",
     league: b.league || "",
     match: b.match || ((b.home_team || "") + " vs " + (b.away_team || "")),
@@ -221,7 +221,9 @@ function getAllSports() {
 }
 
 function getSelectedPick() {
-  return state.allPicks.find(p => p.id === state.selectedId) || null;
+  if (!state.selectedId) return null;
+  const sid = String(state.selectedId);
+  return state.allPicks.find(p => String(p.id) === sid) || null;
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -876,7 +878,7 @@ function isMobileViewport() {
 }
 
 function selectPick(id) {
-  state.selectedId = id;
+  state.selectedId = String(id);
   state.dpTab = "intelligence";
   state.dpData = null;
   state.dpBusy = false;
