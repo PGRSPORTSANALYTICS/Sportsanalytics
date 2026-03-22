@@ -4269,7 +4269,7 @@ def get_pending_match_ids() -> set:
 DAILY_BET_CAP = 20           # Mar 19, 2026: scaled up for volume growth
 SUMMER_DAILY_BET_CAP = 3
 # Per-match-date caps: max PROD picks for any single match day (regardless of when created)
-MATCH_DATE_CAP_VALUE_SINGLES = 20
+MATCH_DATE_CAP_VALUE_SINGLES = 10  # Mar 22, 2026: lowered from 20 — max 10 PROD picks/day quality gate
 MATCH_DATE_CAP_CORNERS = 25   # Mar 19, 2026: scaled up, 62% hit rate proven
 MATCH_DATE_CAP_CARDS = 15     # Mar 19, 2026: scaled up, 87.2% hit rate proven
 MAX_PROD_PICKS_PER_MATCH = 2  # Mar 21, 2026: cross-engine cap — max 2 PROD picks per match total

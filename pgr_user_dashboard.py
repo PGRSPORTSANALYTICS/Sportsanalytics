@@ -371,7 +371,7 @@ with tab_today:
 
     st.markdown(f"""
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 20px 0;">
-        <span class="stat-pill">Total <b>{len(picks)}</b></span>
+        <span class="stat-pill"><b>{len(picks)}</b> av max 10 möjligheter identifierade idag</span>
         <span class="stat-pill">Wins <b style="color:#00F59D;">{today_wins}</b></span>
         <span class="stat-pill">Losses <b style="color:#FF4B6B;">{today_losses}</b></span>
         <span class="stat-pill">Pending <b style="color:#FBBF24;">{today_pend}</b></span>

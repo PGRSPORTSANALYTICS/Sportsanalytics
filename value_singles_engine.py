@@ -54,8 +54,8 @@ MIN_COMBINED_CONFIDENCE = 0.01
 # Lower bookmaker margins (4-8%) vs SGP (28-45%) = better ROI
 # ============================================================
 
-# Minimum Expected Value (EV) - 22% edge (Mar 15, 2026 - data-driven: only 20%+ edge is profitable)
-MIN_VALUE_SINGLE_EV = 0.22  # 22% edge — 10-20% bracket lost -34.5u all-time, 20%+ is +14.6u
+# Minimum Expected Value (EV) - 28% edge (Mar 22, 2026 - raised from 22% to enforce max 10 picks/day quality filter)
+MIN_VALUE_SINGLE_EV = 0.28  # 28% edge — only absolute best opportunities qualify
 
 # ============================================================
 # MARKET-SPECIFIC MIN_EV THRESHOLDS (Jan 11, 2026 v2)
@@ -113,16 +113,16 @@ MARKET_SPECIFIC_MIN_ODDS = {
     # HOME_WIN: Removed — now LEARNING_ONLY (Feb 6, 2026)
 }
 
-# Odds range filter - Stable 2.0 (Feb 19, 2026)
-MIN_VALUE_SINGLE_ODDS = 1.70  # Mar 9, 2026: raised from 1.40 — sub-1.70 has -18.7% ROI historically
-MAX_VALUE_SINGLE_ODDS = 2.40  # Stable 2.0 - expanded from 2.20 (no longshots beyond 2.40)
+# Odds range filter - Quality filter update (Mar 22, 2026)
+MIN_VALUE_SINGLE_ODDS = 1.75  # Mar 22, 2026: raised from 1.70 — tighter odds interval for quality
+MAX_VALUE_SINGLE_ODDS = 2.30  # Mar 22, 2026: tightened from 2.40 — sweet spot for mispricing
 MAX_LEARNING_ODDS = 4.00      # Collect predictions up to 4.00 for AI training
 
 # Minimum model confidence/probability required
-MIN_VALUE_SINGLE_CONFIDENCE = 0.55  # 55% - tightened for quality (Feb 23, 2026)
+MIN_VALUE_SINGLE_CONFIDENCE = 0.72  # Mar 22, 2026: raised from 55% to 72% — max 10 picks/day quality gate
 
 # Maximum number of value singles per day - CORE PRODUCT
-MAX_VALUE_SINGLES_PER_DAY = 15  # Mar 19, 2026 - scaled up: BTTS Yes (73% hit) + X2 (64% hit) driving volume
+MAX_VALUE_SINGLES_PER_DAY = 10  # Mar 22, 2026: lowered from 15 — aligned with 10 PROD picks/day quality gate
 
 # Tournament filter mode: relaxed thresholds for UCL/UEL
 TOURNAMENT_LEAGUES = {
