@@ -4522,6 +4522,16 @@ def run_corners_cards_cycle():
                 if fixture_id in odds_data:
                     continue
                 
+                # Per-match cooldown: skip re-scanning the same match within 30 min
+                # to avoid burning API quota on repeated identical requests.
+                try:
+                    from combined_sports_runner import is_match_on_cooldown, mark_match_scanned
+                    if is_match_on_cooldown(fixture_id):
+                        print(f"   ⏭️ COOLDOWN: {home_team} vs {away_team} scanned <30min ago — skipping")
+                        continue
+                except ImportError:
+                    pass  # Runner not available (standalone run) — skip cooldown guard
+                
                 real_odds = {}
                 if af_client:
                     try:
@@ -4538,6 +4548,13 @@ def run_corners_cards_cycle():
                                         real_odds[key] = val
                     except Exception as e:
                         print(f"   ⚠️ Odds fetch failed for {home_team} vs {away_team}: {e}")
+                
+                # Mark this match as scanned regardless of whether odds were found
+                try:
+                    from combined_sports_runner import mark_match_scanned
+                    mark_match_scanned(fixture_id)
+                except ImportError:
+                    pass
                 
                 has_corners = any('CORNERS' in k for k in real_odds)
                 

@@ -8,7 +8,7 @@ import logging
 import time
 import os
 import schedule
-from datetime import datetime
+from datetime import datetime, timedelta
 import threading
 
 IS_RAILWAY = bool(
@@ -50,6 +50,74 @@ LIVE_LEARNING_CLV_TRACKING = True    # Track opening/closing odds for every pick
 # ============================================================
 ENABLE_PGR_ANALYTICS = True          # Odds ingestion, bet sync, CLV tracking
 
+# ============================================================
+# SCAN INTERVALS — Mispricing Detection (Mar 2026)
+# ============================================================
+VALUE_SINGLES_INTERVAL_MINUTES = 12   # Down from 60 min — catch windows when lines open
+CORNERS_INTERVAL_MINUTES = 15         # Down from 60 min — corners markets move fast
+MATCH_COOLDOWN_MINUTES = 30           # Don't re-scan the same match within this window
+
+# Per-match cooldown tracking: {match_key: last_scanned_datetime}
+_match_cooldown_registry: dict = {}
+_match_cooldown_lock = threading.Lock()
+
+# Scan-event log for dashboard: list of {"type": str, "ts": datetime, "count": int}
+_scan_event_log: list = []
+_scan_log_lock = threading.Lock()
+
+
+def _record_scan_event(scan_type: str, match_count: int = 0):
+    """Record a scan event so the dashboard can show status."""
+    with _scan_log_lock:
+        _scan_event_log.append({
+            "type": scan_type,
+            "ts": datetime.utcnow(),
+            "count": match_count,
+        })
+        # Keep only last 500 events to avoid unbounded growth
+        if len(_scan_event_log) > 500:
+            _scan_event_log[:] = _scan_event_log[-500:]
+
+    # Persist to DB so the dashboard (different process) can read it
+    try:
+        from db_helper import DatabaseHelper
+        db = DatabaseHelper()
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS scan_events (
+                id SERIAL PRIMARY KEY,
+                scan_type VARCHAR(50) NOT NULL,
+                scanned_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                match_count INTEGER NOT NULL DEFAULT 0
+            )
+        """, fetch=None)
+        db.execute("""
+            INSERT INTO scan_events (scan_type, scanned_at, match_count)
+            VALUES (%s, NOW(), %s)
+        """, (scan_type, match_count), fetch=None)
+    except Exception:
+        pass  # Non-critical — dashboard falls back gracefully
+
+
+def is_match_on_cooldown(match_key: str) -> bool:
+    """Return True if this match was already scanned within the cooldown window."""
+    with _match_cooldown_lock:
+        last_scan = _match_cooldown_registry.get(match_key)
+        if last_scan is None:
+            return False
+        age = (datetime.utcnow() - last_scan).total_seconds() / 60
+        return age < MATCH_COOLDOWN_MINUTES
+
+
+def mark_match_scanned(match_key: str):
+    """Record that this match was just scanned."""
+    with _match_cooldown_lock:
+        _match_cooldown_registry[match_key] = datetime.utcnow()
+        # Purge stale entries older than 2× the cooldown window
+        cutoff = datetime.utcnow() - timedelta(minutes=MATCH_COOLDOWN_MINUTES * 2)
+        stale = [k for k, v in _match_cooldown_registry.items() if v < cutoff]
+        for k in stale:
+            del _match_cooldown_registry[k]
+
 
 def check_daily_stoploss() -> bool:
     """
@@ -86,16 +154,20 @@ def run_discord_analysis_publisher():
 
 def run_value_singles():
     """Run Value Singles predictions (core product)"""
+    _record_scan_event("value_singles_start")
     if check_daily_stoploss():
         logger.warning("⏭️ Value Singles SKIPPED - Daily stop-loss active")
+        _record_scan_event("value_singles_skipped")
     else:
         try:
             import real_football_champion
             logger.info("💰 Starting Value Singles cycle...")
             real_football_champion.run_single_cycle()
             logger.info("✅ Value Singles cycle complete")
+            _record_scan_event("value_singles_done")
         except Exception as e:
             logger.error(f"❌ Value Singles prediction error: {e}")
+            _record_scan_event("value_singles_error")
 
     # Always publish analysis — Discord publisher runs regardless of stop-loss
     run_discord_analysis_publisher()
@@ -103,16 +175,20 @@ def run_value_singles():
 
 def run_corners():
     """Run Corners predictions (independent cycle with own cap)"""
+    _record_scan_event("corners_start")
     if check_daily_stoploss():
         logger.warning("⏭️ Corners SKIPPED - Daily stop-loss active")
+        _record_scan_event("corners_skipped")
     else:
         try:
             import real_football_champion
             logger.info("🔢 Starting Corners cycle (independent)...")
             real_football_champion.run_corners_cards_cycle()
             logger.info("✅ Corners cycle complete")
+            _record_scan_event("corners_done")
         except Exception as e:
             logger.error(f"❌ Corners prediction error: {e}")
+            _record_scan_event("corners_error")
             import traceback
             traceback.print_exc()
 
@@ -595,8 +671,8 @@ def main():
     logger.info("   • CLV tracking: ENABLED")
     logger.info("="*80)
     
-    logger.info("💰 Value Singles - Every 1 hour (Core Product)")
-    logger.info("🔢 Corners - Every 1 hour (Independent, own cap: 10/day)")
+    logger.info(f"💰 Value Singles - Every {VALUE_SINGLES_INTERVAL_MINUTES} min (Core Product)")
+    logger.info(f"🔢 Corners - Every {CORNERS_INTERVAL_MINUTES} min (Independent, own cap: 10/day)")
     logger.info("🟨 Cards - Every 30 min (2-3h before kickoff only, cap: 5/day)")
     logger.info("🎲 Multi-Match Parlays - Every 2 hours (after Value Singles)")
     logger.info("🏀 College Basketball - Every 2 hours")
@@ -743,8 +819,8 @@ def main():
     
     # Schedule recurring prediction tasks (only enabled products)
     if ENABLE_VALUE_SINGLES:
-        schedule.every(1).hours.do(run_value_singles)
-        schedule.every(1).hours.do(run_corners)
+        schedule.every(VALUE_SINGLES_INTERVAL_MINUTES).minutes.do(run_value_singles)
+        schedule.every(CORNERS_INTERVAL_MINUTES).minutes.do(run_corners)
         schedule.every(30).minutes.do(run_cards)
     if ENABLE_COLLEGE_BASKETBALL:
         schedule.every(2).hours.do(run_college_basketball)

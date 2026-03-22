@@ -486,6 +486,23 @@ class ValueSinglesEngine:
             if not home_team or not away_team:
                 continue
             
+            # Per-match cooldown: skip matches already scanned within the last 30 min.
+            # With the new 12-minute cycle this prevents duplicate processing of the
+            # same fixture across consecutive scans and conserves API quota.
+            # Mark as scanned immediately on attempt so empty-odds matches are not
+            # retried every 12 min — they'll re-enter after the cooldown window expires.
+            # Build a date-scoped cooldown key to avoid conflating different-day fixtures
+            _ck_date = (match.get('formatted_date') or match.get('match_date') or
+                        (match.get('commence_time', '')[:10] if match.get('commence_time') else ''))
+            cooldown_key = f"vs_{home_team}_{away_team}_{_ck_date}".replace(' ', '_')
+            try:
+                from combined_sports_runner import is_match_on_cooldown, mark_match_scanned
+                if is_match_on_cooldown(cooldown_key):
+                    continue  # Silently skip — will pick up next cycle
+                mark_match_scanned(cooldown_key)  # Record attempt before odds/API calls
+            except ImportError:
+                pass  # Runner not loaded (standalone/test run) — skip cooldown guard
+            
             # LOOKAHEAD FILTER: Generate predictions for matches in the next few days
             commence_time = match.get('commence_time', '')
             match_date = match.get('formatted_date') or match.get('match_date')

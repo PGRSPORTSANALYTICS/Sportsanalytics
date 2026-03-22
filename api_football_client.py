@@ -935,9 +935,21 @@ class APIFootballClient:
         if bookmaker_id:
             params['bookmaker'] = bookmaker_id
         
+        # Budget-aware freshness gate (Mar 2026):
+        # Odds TTL is set to 20 min, matching the tighter scan cycles.
+        # If odds were fetched <20 min ago, serve from cache directly without
+        # touching the quota counter so consecutive 12/15-min scans stay cheap.
+        ODDS_TTL_HOURS = 20 / 60  # 20 minutes expressed in hours for cache_response
+        if self.cache_manager.is_cache_fresh(cache_key, fresh_window_minutes=20):
+            cached = self.cache_manager.get_cached_response(cache_key, 'odds')
+            if cached is not None:
+                logger.debug(f"🕐 Odds cache fresh for fixture {fixture_id} — skipping live fetch")
+                return self._parse_odds_response(cached)
+        
         # _fetch_with_cache handles caching internally — always parse the raw response
         # (the old early-return bypass caused 'list has no .get()' on cache hits)
-        odds_data = self._fetch_with_cache('odds', params, cache_key, ttl_hours=2)
+        # TTL = 20 min so stale odds are refetched on the next scan cycle (not after 2h)
+        odds_data = self._fetch_with_cache('odds', params, cache_key, ttl_hours=ODDS_TTL_HOURS)
         
         if not odds_data:
             logger.warning(f"⚠️ No odds data for fixture {fixture_id}")

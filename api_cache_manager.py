@@ -77,6 +77,9 @@ class APICacheManager:
         request_count, quota_limit = result
         return request_count < quota_limit
     
+    # Budget threshold at which a warning is emitted (fraction of quota_limit)
+    BUDGET_WARNING_THRESHOLD = 5000
+
     def increment_request_count(self):
         """Increment the request counter after making an API call"""
         db_helper.execute('''
@@ -95,6 +98,18 @@ class APICacheManager:
             request_count, quota_limit = result
             if request_count % 10 == 0:
                 logger.info(f"📊 {self.api_name}: {request_count}/{quota_limit} requests today")
+            # Budget warning when crossing the 5000-request threshold
+            if request_count >= self.BUDGET_WARNING_THRESHOLD and (request_count - 1) < self.BUDGET_WARNING_THRESHOLD:
+                logger.warning(
+                    f"⚠️ API BUDGET WARNING: {self.api_name} has used {request_count}/{quota_limit} requests today "
+                    f"({request_count/quota_limit*100:.0f}%). Approaching daily limit — cache will be prioritised."
+                )
+            elif request_count > self.BUDGET_WARNING_THRESHOLD and request_count % 100 == 0:
+                remaining = quota_limit - request_count
+                logger.warning(
+                    f"⚠️ API BUDGET HIGH: {self.api_name} {request_count}/{quota_limit} requests today. "
+                    f"{remaining} remaining."
+                )
     
     def get_cached_response(self, cache_key: str, endpoint: str) -> Optional[Dict]:
         """
@@ -156,17 +171,69 @@ class APICacheManager:
         
         expires_at = datetime.now() + timedelta(hours=ttl_hours)
         
+        # Ensure the cache table has a cached_at column (added Mar 2026 for freshness checks)
+        try:
+            db_helper.execute(f'''
+                ALTER TABLE {self.cache_table}
+                ADD COLUMN IF NOT EXISTS cached_at TIMESTAMP DEFAULT NOW()
+            ''', fetch=None)
+        except Exception:
+            pass  # Column may already exist or table not created yet — handled below
+        
         db_helper.execute(f'''
-            INSERT INTO {self.cache_table} (cache_key, response_data, api_endpoint, expires_at)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO {self.cache_table} (cache_key, response_data, api_endpoint, expires_at, cached_at)
+            VALUES (%s, %s, %s, %s, NOW())
             ON CONFLICT (cache_key) DO UPDATE SET
                 response_data = EXCLUDED.response_data,
                 expires_at = EXCLUDED.expires_at,
+                cached_at = NOW(),
                 hit_count = 0
         ''', (cache_key, json.dumps(response_data), endpoint, expires_at), fetch=None)
         
         logger.info(f"💾 CACHED: {endpoint} ({cache_key[:30]}...) expires in {ttl_hours}h")
     
+    def is_cache_fresh(self, cache_key: str, fresh_window_minutes: int = 20) -> bool:
+        """
+        Check whether a cached entry was stored within the freshness window.
+
+        Returns True if the cached entry exists AND was stored within
+        ``fresh_window_minutes`` minutes (default: 20).  The scan runner
+        uses this to skip a live API call when recent odds are already cached,
+        saving quota budget on the tighter 12/15-minute cycle.
+
+        Args:
+            cache_key: The same key used when caching the response.
+            fresh_window_minutes: How old (in minutes) an entry can be and
+                still be considered "fresh". Default 20 min.
+        """
+        try:
+            result = db_helper.execute(f'''
+                SELECT cached_at FROM {self.cache_table}
+                WHERE cache_key = %s
+                LIMIT 1
+            ''', (cache_key,), fetch='one')
+        except Exception:
+            # cached_at column may not exist on pre-existing tables
+            # (added in cache_response; safe to return False here — caller will do a normal fetch)
+            return False
+
+        if not result or result[0] is None:
+            return False
+
+        cached_at = result[0]
+        if isinstance(cached_at, str):
+            cached_at = datetime.fromisoformat(cached_at)
+
+        age_minutes = (datetime.now() - cached_at).total_seconds() / 60
+        is_fresh = age_minutes < fresh_window_minutes
+
+        if is_fresh:
+            logger.debug(
+                f"🕐 FRESH CACHE ({age_minutes:.1f}min < {fresh_window_minutes}min): "
+                f"skipping live fetch for {cache_key[:40]}..."
+            )
+        return is_fresh
+
     def get_quota_stats(self) -> Dict:
         """Get current quota usage statistics"""
         result = db_helper.execute('''

@@ -278,6 +278,49 @@ def load_performance(days: int = 30):
     return rows or []
 
 
+@st.cache_data(ttl=60)
+def load_scan_status():
+    """Load the latest scan events from the DB for the status bar."""
+    db = DatabaseHelper()
+    try:
+        rows = db.execute("""
+            SELECT scan_type, scanned_at
+            FROM scan_events
+            WHERE scanned_at >= NOW() - INTERVAL '24 hours'
+            ORDER BY scanned_at DESC
+            LIMIT 200
+        """, fetch='all')
+    except Exception:
+        return None
+    if not rows:
+        return None
+
+    now = datetime.utcnow()
+
+    def _latest(scan_types):
+        for row in rows:
+            if row[0] in scan_types:
+                return row[1]
+        return None
+
+    def _count_today(scan_types):
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        return sum(
+            1 for row in rows
+            if row[0] in scan_types and row[1] >= today_start
+        )
+
+    vs_last = _latest({"value_singles_done", "value_singles_skipped", "value_singles_error"})
+    co_last = _latest({"corners_done", "corners_skipped", "corners_error"})
+    vs_count = _count_today({"value_singles_done", "value_singles_skipped"})
+    co_count = _count_today({"corners_done", "corners_skipped"})
+
+    return {
+        "value_singles": {"last": vs_last, "count_today": vs_count, "interval_min": 12},
+        "corners": {"last": co_last, "count_today": co_count, "interval_min": 15},
+    }
+
+
 @st.cache_data(ttl=300)
 def load_all_time_summary():
     db = DatabaseHelper()
@@ -470,6 +513,87 @@ if clv_total > 0:
     """, unsafe_allow_html=True)
 
 st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SCAN STATUS BAR
+# ─────────────────────────────────────────────────────────────────────────────
+scan_status = load_scan_status()
+
+def _fmt_ago(ts) -> str:
+    """Return a human-friendly 'X min ago' string for a timestamp."""
+    if ts is None:
+        return "never"
+    if hasattr(ts, 'tzinfo') and ts.tzinfo is not None:
+        from datetime import timezone
+        now_aware = datetime.now(timezone.utc)
+        diff = now_aware - ts
+    else:
+        diff = datetime.utcnow() - ts
+    secs = int(diff.total_seconds())
+    if secs < 60:
+        return f"{secs}s ago"
+    if secs < 3600:
+        return f"{secs // 60}min ago"
+    return f"{secs // 3600}h ago"
+
+
+def _next_scan_str(last_ts, interval_min: int) -> str:
+    """Return how long until the next scheduled scan."""
+    if last_ts is None:
+        return "soon"
+    if hasattr(last_ts, 'tzinfo') and last_ts.tzinfo is not None:
+        from datetime import timezone
+        now_aware = datetime.now(timezone.utc)
+        diff = now_aware - last_ts
+    else:
+        diff = datetime.utcnow() - last_ts
+    elapsed_min = diff.total_seconds() / 60
+    remaining_min = interval_min - elapsed_min
+    if remaining_min <= 0:
+        return "now"
+    remaining_sec = int(remaining_min * 60)
+    if remaining_sec < 60:
+        return f"~{remaining_sec}s"
+    return f"~{int(remaining_min)}min"
+
+
+if scan_status:
+    vs = scan_status["value_singles"]
+    co = scan_status["corners"]
+    vs_ago = _fmt_ago(vs["last"])
+    co_ago = _fmt_ago(co["last"])
+    vs_next = _next_scan_str(vs["last"], vs["interval_min"])
+    co_next = _next_scan_str(co["last"], co["interval_min"])
+    st.markdown(f"""
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin:0 0 18px 0;align-items:center;">
+        <span style="font-size:0.72rem;letter-spacing:0.08em;text-transform:uppercase;
+                     color:#9BA0B5;margin-right:4px;">Scan status</span>
+        <span class="stat-pill">
+            💰 Value Singles &nbsp;·&nbsp;
+            <b>Last:</b>&nbsp;<b style="color:#F2F5F8;">{vs_ago}</b>
+            &nbsp;·&nbsp;
+            <b>Next:</b>&nbsp;<b style="color:#00F59D;">{vs_next}</b>
+            &nbsp;·&nbsp;
+            <b>Today:</b>&nbsp;<b style="color:#F2F5F8;">{vs["count_today"]}</b>
+        </span>
+        <span class="stat-pill">
+            🔢 Corners &nbsp;·&nbsp;
+            <b>Last:</b>&nbsp;<b style="color:#F2F5F8;">{co_ago}</b>
+            &nbsp;·&nbsp;
+            <b>Next:</b>&nbsp;<b style="color:#00F59D;">{co_next}</b>
+            &nbsp;·&nbsp;
+            <b>Today:</b>&nbsp;<b style="color:#F2F5F8;">{co["count_today"]}</b>
+        </span>
+    </div>
+    """, unsafe_allow_html=True)
+else:
+    st.markdown("""
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin:0 0 18px 0;align-items:center;">
+        <span style="font-size:0.72rem;letter-spacing:0.08em;text-transform:uppercase;
+                     color:#9BA0B5;margin-right:4px;">Scan status</span>
+        <span class="stat-pill" style="color:#9BA0B5;">Engine starting up — first scan pending</span>
+    </div>
+    """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TABS
