@@ -358,6 +358,47 @@ def _pick_card_class(result) -> str:
     return "pick-card pick-card-pending"
 
 
+def _render_value_explanation(
+    match: str,
+    market: str,
+    book_odds: float,
+    fair_odds: float,
+    model_prob: float | None,
+    edge: float,
+    league: str,
+    bk_name: str,
+):
+    market_implied = round((1 / book_odds) * 100, 1) if book_odds else None
+    model_prob_pct = round(model_prob * 100, 1) if model_prob and model_prob <= 1 else (round(float(model_prob), 1) if model_prob else None)
+    diff = round(model_prob_pct - market_implied, 1) if (model_prob_pct and market_implied) else None
+
+    st.markdown(f"""
+**Why this is value**
+
+The {bk_name} odds of **{book_odds:.2f}** imply the market thinks this outcome
+has a **{market_implied}%** chance of happening.
+
+Our model puts the real probability at **{model_prob_pct}%**
+— a difference of **{f'+{diff}%' if diff and diff > 0 else f'{diff}%' if diff else f'{edge:+.1f}% edge'}**.
+
+That gap is what creates the value: the market is underpricing this outcome
+by **{edge:+.1f}%** compared to our fair odds of **{fair_odds:.2f}**.
+""")
+
+    c1, c2 = st.columns(2)
+    c1.metric("Book Odds", f"{book_odds:.2f}", help="Best available price")
+    c2.metric("Model Fair Odds", f"{fair_odds:.2f}",
+              delta=f"{edge:+.1f}% edge",
+              delta_color="normal")
+
+    st.markdown("""
+---
+⚠️ **This does not guarantee a win.**
+Value means profitable over many bets — not every single game.
+No hype, no guarantees. Just data.
+""")
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # HERO
 # ─────────────────────────────────────────────────────────────────────────────
@@ -489,15 +530,19 @@ with tab_today:
 
             fair_html = ""
             edge_html = ""
+            edge_val = None
+            fo = None
+            bk_odds = None
+            bk_name = "Best"
             if fair_odds and float(fair_odds) > 0:
                 fo = float(fair_odds)
                 bk_odds = float(best_odds_value) if best_odds_value else float(odds)
-                edge = (bk_odds / fo - 1) * 100
-                edge_color = "#00F59D" if edge >= 10 else ("#FBBF24" if edge >= 5 else "#9BA0B5")
-                edge_weight = "700" if edge >= 5 else "400"
+                edge_val = (bk_odds / fo - 1) * 100
+                edge_color = "#00F59D" if edge_val >= 10 else ("#FBBF24" if edge_val >= 5 else "#9BA0B5")
+                edge_weight = "700" if edge_val >= 5 else "400"
                 bk_name = str(best_odds_bookmaker) if best_odds_bookmaker else "Best"
                 fair_html = f'<span>Fair <b style="color:#60A5FA;">{fo:.2f}</b></span>'
-                edge_html = f'<span>Edge <b style="color:{edge_color};font-weight:{edge_weight};">{edge:+.1f}%</b></span>'
+                edge_html = f'<span>Edge <b style="color:{edge_color};font-weight:{edge_weight};">{edge_val:+.1f}%</b></span>'
                 fair_html += f'<span style="font-size:0.72rem;">{bk_name} <b style="color:#F2F5F8;">{bk_odds:.2f}</b></span>'
 
             html = f"""
@@ -519,10 +564,22 @@ with tab_today:
                 </div>
             </div>
             """
-            if i % 2 == 0:
-                col_a.markdown(html, unsafe_allow_html=True)
-            else:
-                col_b.markdown(html, unsafe_allow_html=True)
+
+            col = col_a if i % 2 == 0 else col_b
+            with col:
+                st.markdown(html, unsafe_allow_html=True)
+                if fo is not None and edge_val is not None:
+                    with st.expander("🧠 Why is this value?"):
+                        _render_value_explanation(
+                            match=f"{home} vs {away}",
+                            market=market_clean,
+                            book_odds=bk_odds,
+                            fair_odds=fo,
+                            model_prob=float(model_prob) if model_prob else None,
+                            edge=edge_val,
+                            league=league,
+                            bk_name=bk_name,
+                        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
