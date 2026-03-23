@@ -1096,6 +1096,7 @@ async function fetchData() {
       status: b.status === "upcoming" ? "PRE" : (b.status || "PRE").toUpperCase(),
     }));
 
+    const isRealData = pd.is_demo === false || items.length > 0;
     if (items.length > 0) {
       const prevCount = state.allPicks.length;
       state.allPicks = items.map(normalizePick);
@@ -1110,8 +1111,13 @@ async function fetchData() {
       if (prevCount > 0 && state.allPicks.length > prevCount) {
         showScanPop("⚡ " + (state.allPicks.length - prevCount) + " new picks detected");
       }
+    } else if (isRealData) {
+      // API confirmed real data but no picks for this window — show empty state, not demo
+      state.allPicks = [];
+      state.isMock = false;
+      state.selectedId = null;
     } else {
-      // API returned empty picks — show demo data clearly labeled
+      // No API data at all — show demo data clearly labeled
       state.allPicks = mockData.map(normalizePick);
       state.isMock = true;
       if (!state.selectedId || !state.allPicks.find(p => p.id === state.selectedId)) {

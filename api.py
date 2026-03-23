@@ -2052,11 +2052,11 @@ async def get_today_picks():
         now_utc = datetime.utcnow()
         day_start = datetime(now_utc.year, now_utc.month, now_utc.day, 0, 0, 0)
         day_end = day_start + timedelta(days=1)
-        epoch_start = int(day_start.timestamp())
-        epoch_end = int(day_end.timestamp())
+        yesterday_start = day_start - timedelta(days=1)
 
         today_str = day_start.strftime('%Y-%m-%d')
         tomorrow_str = day_end.strftime('%Y-%m-%d')
+        yesterday_str = yesterday_start.strftime('%Y-%m-%d')
 
         rows = db_helper.execute("""
             SELECT id, home_team, away_team, market, selection, odds,
@@ -2068,8 +2068,10 @@ async def get_today_picks():
             WHERE mode = 'PROD'
               AND bet_placed = true
               AND match_date >= %s AND match_date < %s
-            ORDER BY kickoff_time ASC NULLS LAST
-        """, (today_str, tomorrow_str), fetch='all') or []
+            ORDER BY
+              CASE WHEN match_date >= %s THEN 0 ELSE 1 END ASC,
+              kickoff_time ASC NULLS LAST
+        """, (yesterday_str, tomorrow_str, today_str), fetch='all') or []
 
         picks = []
         for r in rows:
@@ -2098,6 +2100,8 @@ async def get_today_picks():
             mkt = (r[3] or '').upper()
             icon = next((v for k, v in market_icons.items() if k in mkt), '⚽')
 
+            ev_val = round(float(r[6]), 1) if r[6] else 0
+            book = r[12] or ''
             picks.append({
                 'id': r[0],
                 'home_team': r[1] or '',
@@ -2105,17 +2109,23 @@ async def get_today_picks():
                 'market': r[3] or '',
                 'selection': r[4] or '',
                 'odds': float(r[5]) if r[5] else 0,
-                'edge_pct': round(float(r[6]), 1) if r[6] else 0,
+                'edge_pct': ev_val,
+                'ev_pct': ev_val,
+                'ev': ev_val,
                 'confidence': round(float(r[7]), 2) if r[7] else 0,
                 'outcome': outcome,
                 'status': status,
                 'profit_loss': round(float(r[9]), 2) if r[9] else None,
                 'odds_by_bookmaker': r[10],
                 'best_odds_value': float(r[11]) if r[11] else None,
-                'best_odds_bookmaker': r[12],
+                'best_odds_bookmaker': book,
+                'bookmaker': book,
+                'best_book': book,
                 'league': r[13] or '',
                 'trust_level': r[14] or '',
                 'kickoff_str': ko_str,
+                'kickoff': ko_str,
+                'kickoff_time': ko_str,
                 'match_date': match_date,
                 'open_odds': float(r[17]) if r[17] else None,
                 'clv_pct': round(float(r[18]), 2) if r[18] else None,
@@ -2128,6 +2138,7 @@ async def get_today_picks():
         settled = won + lost
         hit_rate = round(won / settled * 100, 1) if settled > 0 else None
 
+        today_picks = [p for p in picks if p['match_date'] == today_str]
         return {
             'picks': picks,
             'total': total,
@@ -2136,7 +2147,10 @@ async def get_today_picks():
             'settled': settled,
             'hit_rate': hit_rate,
             'date': day_start.strftime('%Y-%m-%d'),
-            'generated_at': datetime.utcnow().isoformat() + 'Z'
+            'generated_at': datetime.utcnow().isoformat() + 'Z',
+            'is_demo': False,
+            'has_today_picks': len(today_picks) > 0,
+            'today_count': len(today_picks),
         }
 
     except Exception as e:
