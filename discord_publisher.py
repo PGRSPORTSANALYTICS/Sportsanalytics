@@ -381,8 +381,10 @@ def format_analysis_embed(pick: dict) -> dict:
     if mode == "DATA":
         title = f"Match Analysis — {league}"
         color = 0x808080
-    elif mode == "LEARNING":
-        title = f"Learning Signal — {league}"
+    elif mode == "PROD":
+        title = f"PROD Signal — {league}"
+    elif mode == "VALUE_OPP":
+        title = f"Value Opportunity — {league}"
     else:
         title = f"Value Opportunity — {league}"
 
@@ -438,7 +440,7 @@ def fetch_analysis_picks() -> List[dict]:
                kickoff_epoch, open_ts
         FROM football_opportunities
         WHERE status = 'pending'
-          AND mode IN ('PROD', 'LEARNING')
+          AND mode IN ('PROD', 'VALUE_OPP')
           AND edge_percentage >= 10
           AND odds > 1.0
           AND match_date::date >= CURRENT_DATE
@@ -496,7 +498,8 @@ def post_to_discord(webhook_url: str, payload: dict) -> bool:
 
 
 def _best_pick_per_match(picks: List[dict]) -> List[dict]:
-    """Keep only the highest-EV pick per match. PROD picks always beat LEARNING picks."""
+    """Keep only the highest-EV pick per match. PROD > VALUE_OPP; within same mode, higher EV wins."""
+    MODE_PRIORITY = {"PROD": 2, "VALUE_OPP": 1}
     seen: Dict[str, dict] = {}
     for pick in picks:
         key = (
@@ -506,16 +509,18 @@ def _best_pick_per_match(picks: List[dict]) -> List[dict]:
         )
         ev = float(pick.get("edge_percentage") or 0)
         mode = (pick.get("mode") or "").upper()
+        mode_rank = MODE_PRIORITY.get(mode, 0)
         existing = seen.get(key)
         if not existing:
             seen[key] = pick
         else:
             existing_mode = (existing.get("mode") or "").upper()
+            existing_rank = MODE_PRIORITY.get(existing_mode, 0)
             existing_ev = float(existing.get("edge_percentage") or 0)
-            # PROD always beats LEARNING; within same mode, higher EV wins
-            if mode == "PROD" and existing_mode != "PROD":
+            # Higher mode priority wins; within same priority, higher EV wins
+            if mode_rank > existing_rank:
                 seen[key] = pick
-            elif mode == existing_mode and ev > existing_ev:
+            elif mode_rank == existing_rank and ev > existing_ev:
                 seen[key] = pick
     return list(seen.values())
 

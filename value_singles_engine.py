@@ -631,9 +631,11 @@ class ValueSinglesEngine:
                 # Use market-specific threshold if defined, else fall back to match threshold
                 market_min_ev = MARKET_SPECIFIC_MIN_EV.get(market_key, match_ev_threshold)
                 if ev < market_min_ev:
-                    # Fallback: positive EV but below PROD threshold → save as LEARNING pick
-                    # Covers all leagues (MLS, J-League, K-League, Allsvenskan, etc.) and all markets
+                    # Fallback: positive EV but below PROD threshold
+                    # PROD-quality markets (not LEARNING_ONLY) → VALUE_OPP
+                    # LEARNING_ONLY markets → LEARNING (training data only, never posted to Discord)
                     if ev > 0.0:
+                        _is_learning_only_market = market_key in LEARNING_ONLY_MARKETS
                         # Collect correct bookmaker odds for this specific market before saving
                         bookmaker_data = {}
                         # 1) API-Football per-bookmaker data (DC, BTTS, AH, FT totals)
@@ -699,13 +701,13 @@ class ValueSinglesEngine:
                                 "p_model": float(raw_prob),
                                 "calibrated_prob": float(calibrated_prob),
                                 "ev": float(ev),
-                                "data_note": "Learning signal: positive EV below PROD threshold"
+                                "data_note": "Value opportunity: positive EV below PROD threshold in PROD-quality market" if not _is_learning_only_market else "Learning signal: positive EV below PROD threshold"
                             }),
                             "match_date": match_date,
                             "kickoff_utc": _ko_utc,
                             "kickoff_epoch": _ko_epoch,
                             "created_at_utc": to_iso_utc(now_utc()),
-                            "mode": "LEARNING",
+                            "mode": "VALUE_OPP" if not _is_learning_only_market else "LEARNING",
                             "stake": 0,
                             "bet_placed": False,
                             "odds_by_bookmaker": bookmaker_data.get('odds_by_bookmaker'),
@@ -714,7 +716,7 @@ class ValueSinglesEngine:
                             "avg_odds": bookmaker_data.get('avg_odds'),
                             "fair_odds": round(1.0 / raw_prob, 3) if raw_prob > 0 else None,
                             "fixture_id": match.get("fixture_id"),
-                            "trust_level": "LEARNING",
+                            "trust_level": "VALUE_OPP" if not _is_learning_only_market else "LEARNING",
                             "sim_probability": float(calibrated_prob),
                             "ev_sim": float(ev),
                             "model_prob": float(raw_prob),
