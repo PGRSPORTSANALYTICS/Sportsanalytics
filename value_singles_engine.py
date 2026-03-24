@@ -70,9 +70,8 @@ MARKET_SPECIFIC_MIN_EV = {
     "FT_OVER_2_5": 0.28,   # 28% EV minimum (Mar 22, 2026 v2 - raised from 22% to align closer to global 32% threshold)
     "FT_OVER_3_5": 0.28,   # 28% EV minimum (Mar 22, 2026 v2 - raised from 22% to align closer to global 32% threshold)
     # HOME_WIN: Now LEARNING_ONLY (Feb 6, 2026) - see filter below
-    # FT_UNDER_2_5: Now LEARNING_ONLY (Feb 16, 2026) - 43.4% hit, -9.14u
-    # FT_UNDER_3_5: Now LEARNING_ONLY (Feb 16, 2026) - 33.3% hit, -2.88u
     # AWAY_WIN: Now LEARNING_ONLY - see filter below
+    # FT_UNDER_*: Removed entirely (Mar 24, 2026) - systematic xG bias, -32.55u total
 }
 
 # ============================================================
@@ -85,9 +84,7 @@ LEARNING_ONLY_MARKETS = {
     "HOME_WIN",      # 36.6% hit rate, -12.5u — blocked Feb 6, 2026
     "AWAY_WIN",      # 31.6% hit rate, -10.1u — blocked Feb 6, 2026
     "DRAW",          # 12.5% hit rate, -5.0u — blocked Feb 6, 2026
-    "FT_UNDER_1_5",  # blocked Mar 15, 2026 — too rare, low volume market
-    "FT_UNDER_2_5",  # 47.5% hit rate, -32.55u — blocked Mar 9, 2026 (was in comment only, now enforced)
-    "FT_UNDER_3_5",  # 54.0% hit rate, -5.16u — blocked Mar 9, 2026
+    # FT_UNDER_* removed entirely Mar 24, 2026 — systematic xG calibration bias
     # AH Minus sides blocked (Mar 9, 2026): 25% hit rate all-time, -12.06u
     # AH Plus sides blocked (Mar 14, 2026): no proven edge yet, collecting data
     # Entire AH market family now in LEARNING_ONLY.
@@ -287,7 +284,6 @@ class ValueSinglesEngine:
             p_over35 = mc.over_35_prob
             
             # Derive other markets from simulation
-            p_under25 = 1 - p_over25
             p_btts_no = 1 - p_btts_yes
             
             print(f"🎲 Monte Carlo: HW={p_hw:.1%} D={p_d:.1%} AW={p_aw:.1%} O2.5={p_over25:.1%} BTTS={p_btts_yes:.1%}")
@@ -297,17 +293,12 @@ class ValueSinglesEngine:
             p_btts_yes = prob_btts(lh, la)
             p_over25 = prob_total_over(lh, la, 2.5)
             p_over35 = prob_total_over(lh, la, 3.5)
-            p_under25 = 1 - p_over25
             p_btts_no = 1 - p_btts_yes
         
-        # Over/Under Goals (0.5 - 4.5) - keep Poisson for less common lines
+        # Over Goals (0.5 - 4.5) - keep Poisson for less common lines
         p_over05 = prob_total_over(lh, la, 0.5)
-        p_under05 = 1 - p_over05
         p_over15 = prob_total_over(lh, la, 1.5)
-        p_under15 = 1 - p_over15
         p_over45 = prob_total_over(lh, la, 4.5)
-        p_under45 = 1 - p_over45
-        p_under35 = 1 - p_over35
         
         # 1H Over/Under
         p_over05_1h = prob_total_over(lh * 0.45, la * 0.45, 0.5)
@@ -375,17 +366,12 @@ class ValueSinglesEngine:
             p_ah_away_p15 = p_draw_or_away + p_hw * 0.5
 
         return {
-            # Over/Under Goals
+            # Over Goals (Under markets removed Mar 24, 2026 — systematic xG bias)
             "FT_OVER_0_5": p_over05,
-            "FT_UNDER_0_5": p_under05,
             "FT_OVER_1_5": p_over15,
-            "FT_UNDER_1_5": p_under15,
             "FT_OVER_2_5": p_over25,
-            "FT_UNDER_2_5": p_under25,
             "FT_OVER_3_5": p_over35,
-            "FT_UNDER_3_5": p_under35,
             "FT_OVER_4_5": p_over45,
-            "FT_UNDER_4_5": p_under45,
             
             # 1H Goals
             "1H_OVER_0_5": p_over05_1h,
@@ -653,15 +639,15 @@ class ValueSinglesEngine:
                         # 2) Fall back to The Odds API bookmaker data (h2h / totals)
                         if not bookmaker_data and hasattr(self.champion, 'collect_bookmaker_odds'):
                             _api_mkt = 'h2h' if market_key in ('HOME_WIN', 'AWAY_WIN', 'DRAW') else \
-                                       'totals' if ('OVER' in market_key or 'UNDER' in market_key) else None
+                                       'totals' if 'OVER' in market_key else None
                             _pt = None
                             if _api_mkt == 'totals':
                                 _parts = market_key.split('_')
                                 try: _pt = float(f"{_parts[-2]}.{_parts[-1]}")
                                 except: _pt = 2.5
                             _sel_txt = {
-                                "FT_OVER_2_5": "Over 2.5 Goals", "FT_UNDER_2_5": "Under 2.5 Goals",
-                                "FT_OVER_1_5": "Over 1.5 Goals", "FT_UNDER_1_5": "Under 1.5 Goals",
+                                "FT_OVER_2_5": "Over 2.5 Goals",
+                                "FT_OVER_1_5": "Over 1.5 Goals",
                                 "FT_OVER_3_5": "Over 3.5 Goals", "HOME_WIN": "Home Win",
                                 "AWAY_WIN": "Away Win", "DRAW": "Draw",
                                 "BTTS_YES": "BTTS Yes", "BTTS_NO": "BTTS No",
@@ -673,10 +659,11 @@ class ValueSinglesEngine:
                                 except Exception:
                                     bookmaker_data = {}
                         _sel = {
-                            "FT_OVER_2_5": "Over 2.5 Goals", "FT_UNDER_2_5": "Under 2.5 Goals",
-                            "FT_OVER_1_5": "Over 1.5 Goals", "FT_UNDER_1_5": "Under 1.5 Goals",
-                            "FT_OVER_3_5": "Over 3.5 Goals", "FT_UNDER_3_5": "Under 3.5 Goals",
-                            "FT_OVER_0_5": "Over 0.5 Goals", "FT_OVER_4_5": "Over 4.5 Goals",
+                            "FT_OVER_0_5": "Over 0.5 Goals",
+                            "FT_OVER_1_5": "Over 1.5 Goals",
+                            "FT_OVER_2_5": "Over 2.5 Goals",
+                            "FT_OVER_3_5": "Over 3.5 Goals",
+                            "FT_OVER_4_5": "Over 4.5 Goals",
                             "BTTS_YES": "BTTS Yes", "BTTS_NO": "BTTS No",
                             "HOME_WIN": "Home Win", "AWAY_WIN": "Away Win", "DRAW": "Draw",
                             "DOUBLE_CHANCE_1X": "Double Chance 1X", "DOUBLE_CHANCE_X2": "Double Chance X2",
@@ -725,11 +712,6 @@ class ValueSinglesEngine:
                         })
                     continue
 
-                # UNIVERSAL UNDER PROTECTION: All UNDER markets require 8% EV minimum
-                # This catches Under 0.5, 1.5, 4.5 etc. that aren't in MARKET_SPECIFIC_MIN_EV
-                if 'UNDER' in market_key and ev < 0.08:
-                    continue
-                
                 # Smart conflict resolution for Over/Under goals vs Exact Score
                 conflict_result = self._check_conflict_with_ev_comparison(home_team, away_team, market_key, ev)
                 if conflict_result == 'skip':
@@ -757,17 +739,12 @@ class ValueSinglesEngine:
                 print(f"   🏷️ Trust: {trust_level} | EV={ev:.1%} | Conf={sim_prob:.0%}")
 
                 selection_text = {
-                    # Over/Under Goals
+                    # Over Goals (Under markets removed Mar 24, 2026)
                     "FT_OVER_0_5": "Over 0.5 Goals",
-                    "FT_UNDER_0_5": "Under 0.5 Goals",
                     "FT_OVER_1_5": "Over 1.5 Goals",
-                    "FT_UNDER_1_5": "Under 1.5 Goals",
                     "FT_OVER_2_5": "Over 2.5 Goals",
-                    "FT_UNDER_2_5": "Under 2.5 Goals",
                     "FT_OVER_3_5": "Over 3.5 Goals",
-                    "FT_UNDER_3_5": "Under 3.5 Goals",
                     "FT_OVER_4_5": "Over 4.5 Goals",
-                    "FT_UNDER_4_5": "Under 4.5 Goals",
                     # 1H Goals
                     "1H_OVER_0_5": "1H Over 0.5 Goals",
                     # BTTS
@@ -855,7 +832,7 @@ class ValueSinglesEngine:
                     point_val = None
                     if market_key in ('HOME_WIN', 'AWAY_WIN', 'DRAW'):
                         api_market_key = 'h2h'
-                    elif 'OVER' in market_key or 'UNDER' in market_key:
+                    elif 'OVER' in market_key:
                         api_market_key = 'totals'
                         parts = market_key.split('_')
                         if len(parts) >= 3:
