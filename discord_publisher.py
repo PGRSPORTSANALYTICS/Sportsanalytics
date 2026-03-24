@@ -382,11 +382,11 @@ def format_analysis_embed(pick: dict) -> dict:
         title = f"Match Analysis — {league}"
         color = 0x808080
     elif mode == "PROD":
-        title = f"PROD Signal — {league}"
+        title = f"PRO PICK — {league}"
     elif mode == "VALUE_OPP":
-        title = f"Value Opportunity — {league}"
+        title = f"VALUE OPPORTUNITY — {league}"
     else:
-        title = f"Value Opportunity — {league}"
+        title = f"VALUE OPPORTUNITY — {league}"
 
     # Show when odds were collected so users know data freshness
     raw_ts = pick.get("timestamp") or pick.get("open_ts")
