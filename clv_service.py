@@ -131,16 +131,27 @@ def _is_supported(market: str) -> bool:
     return not any(u in m for u in UNSUPPORTED_MARKETS)
 
 
-def _market_type(market: str) -> Optional[str]:
+def _market_type(market: str, selection: str = '') -> Optional[str]:
+    """Determine Odds API market type from market name AND selection text.
+
+    The DB stores market as 'Value Single' for all value-single picks, so we
+    must inspect the selection text to find the correct market endpoint.
+    """
     if not _is_supported(market):
         return None
-    m = market.lower()
-    if 'over' in m or 'under' in m:
+    # Combine both fields for matching — selection text is more specific
+    combined = (market + ' ' + selection).lower()
+    if 'over' in combined or 'under' in combined:
         return 'totals'
-    if 'btts' in m or 'both teams' in m:
-        return 'btts'
-    if 'asian' in m or 'handicap' in m:
+    if 'btts' in combined or 'both teams' in combined:
+        return 'h2h'   # Pinnacle/sharp books include BTTS inside h2h response
+    if ('ah' in combined or 'asian' in combined or 'handicap' in combined
+            or re.search(r'[+-]\d+(\.\d+)?\s*(ah|\(ah\))', combined)):
         return 'spreads'
+    if 'home win' in combined or 'away win' in combined or 'draw' in combined:
+        return 'h2h'
+    if 'double chance' in combined:
+        return 'h2h'
     return 'h2h'
 
 
@@ -234,6 +245,7 @@ class CLVService:
             return None
 
         market = bet.get('market', '')
+        selection = bet.get('selection', '')
         if not _is_supported(market):
             logger.debug("CLV: unsupported market '%s' for %s vs %s",
                          market, bet['home_team'], bet['away_team'])
@@ -244,7 +256,7 @@ class CLVService:
             logger.debug("CLV: no sport_key for league '%s'", bet.get('league'))
             return None
 
-        mtype = _market_type(market)
+        mtype = _market_type(market, selection)
         if not mtype:
             return None
 
@@ -537,7 +549,8 @@ class CLVService:
             else:
                 # Log what we attempted so it's traceable
                 db_market = bet.get('market', '?')
-                mtype = _market_type(db_market) or 'unsupported'
+                db_sel = bet.get('selection', '')
+                mtype = _market_type(db_market, db_sel) or 'unsupported'
                 sport = _sport_key(bet.get('league', '')) or 'no_sport_key'
                 logger.info(
                     "CLV: ⚪ NO ODDS  bet=%d  %s vs %s | "
