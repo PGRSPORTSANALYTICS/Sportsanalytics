@@ -533,10 +533,12 @@ class CollegeBasketValueEngine:
         singles = selected
 
         if self.allow_parlays and singles:
-            # Build parlays from balanced picks (one per game)
-            top_for_parlay = selected[:25]
-            parlays_2 = build_parlays(top_for_parlay, legs=2, min_parlay_ev=0.02)
-            parlays_3 = build_parlays(top_for_parlay, legs=3, min_parlay_ev=0.02)
+            # Build parlays from a broader pool (all valid picks, not just the
+            # capped selection). Win Machine picks are validated by hit-rate,
+            # so slightly negative EV is acceptable for parlay legs.
+            top_for_parlay = sorted(all_picks, key=lambda x: x.confidence, reverse=True)[:25]
+            parlays_2 = build_parlays(top_for_parlay, legs=2, min_parlay_ev=-0.05)
+            parlays_3 = build_parlays(top_for_parlay, legs=3, min_parlay_ev=-0.05)
 
             # Combine 2-leg and 3-leg candidates, max 3 total
             all_parlays = parlays_2 + parlays_3
