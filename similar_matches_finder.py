@@ -33,14 +33,14 @@ class SimilarMatchesFinder:
         self.ELITE_EUROPEAN = {
             'soccer_uefa_champs_league',
             'soccer_uefa_europa_league',
-            'soccer_uefa_conference_league'
+            'soccer_uefa_europa_conference_league'
         }
         
         self.SECOND_TIER = {
             'soccer_netherlands_eredivisie',
             'soccer_portugal_primeira_liga',
             'soccer_belgium_first_div',
-            'soccer_scotland_premiership',
+            'soccer_spl',
             'soccer_efl_champ'
         }
         

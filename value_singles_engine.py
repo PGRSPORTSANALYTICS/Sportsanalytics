@@ -158,7 +158,7 @@ VALUE_SINGLE_LEAGUE_WHITELIST = {
     "soccer_belgium_first_div",      # Belgian First Division
     "soccer_turkey_super_league",    # Turkish Super Lig
     "soccer_greece_super_league",    # Greek Super League
-    "soccer_scotland_premiership",   # Scottish Premiership
+    "soccer_spl",                    # Scottish Premiership
     # Nordic Leagues
     "soccer_sweden_allsvenskan",     # Allsvenskan
     "soccer_norway_eliteserien",     # Eliteserien

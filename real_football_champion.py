@@ -215,12 +215,12 @@ class RealFootballChampion:
             'soccer_netherlands_eredivisie': 'Eredivisie',
             'soccer_portugal_primeira_liga': 'Primeira Liga',
             'soccer_belgium_first_div': 'Belgian First Division',
-            'soccer_scotland_premiership': 'Scottish Premiership',
+            'soccer_spl': 'Scottish Premiership',
             
             # European Cups
             'soccer_uefa_champs_league': 'Champions League',
             'soccer_uefa_europa_league': 'Europa League',
-            'soccer_uefa_conference_league': 'Conference League',
+            'soccer_uefa_europa_conference_league': 'Conference League',
             
             # Nordic/Eastern Europe
             'soccer_sweden_allsvenskan': 'Swedish Allsvenskan',

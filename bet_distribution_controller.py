@@ -134,7 +134,7 @@ LEAGUE_TO_SPORT_KEY = {
     'Ligue 1': 'soccer_france_ligue_one',
     'Eredivisie': 'soccer_netherlands_eredivisie',
     'Primeira Liga': 'soccer_portugal_primeira_liga',
-    'Scottish Premiership': 'soccer_scotland_premiership',
+    'Scottish Premiership': 'soccer_spl',
     'Belgian Pro League': 'soccer_belgium_first_div',
     'League One': 'soccer_england_league1',
     'League Two': 'soccer_england_league2',

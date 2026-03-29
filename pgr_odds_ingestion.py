@@ -38,7 +38,7 @@ SPORT_KEYS = [
     'soccer_finland_veikkausliiga',
     'soccer_austria_bundesliga',
     'soccer_switzerland_superleague',
-    'soccer_scotland_premiership',
+    'soccer_spl',
     'soccer_england_league1',
     'soccer_england_league2',
     'soccer_england_efl_cup',

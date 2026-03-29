@@ -3999,7 +3999,7 @@ def render_system_status_tab():
             "soccer_belgium_first_div": "Belgian Pro League",
             "soccer_turkey_super_league": "Turkish Super Lig",
             "soccer_greece_super_league": "Greek Super League",
-            "soccer_scotland_premiership": "Scottish Premiership",
+            "soccer_spl": "Scottish Premiership",
             "soccer_switzerland_superleague": "Swiss Super League",
             "soccer_sweden_allsvenskan": "Allsvenskan",
             "soccer_denmark_superliga": "Danish Superliga",
