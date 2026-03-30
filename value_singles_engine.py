@@ -19,6 +19,7 @@ from monte_carlo_integration import run_monte_carlo, classify_trust_level, analy
 from discord_notifier import send_bet_to_discord
 from datetime_utils import normalize_kickoff, to_iso_utc, now_utc
 from probability_calibrator import calibrate_and_ev, log_calibration_batch
+from pgr_scoring import compute_pgr_score, get_league_tier, route_candidate
 
 try:
     from auto_promoter import get_promoter
@@ -50,76 +51,57 @@ MIN_COMBINED_CONFIDENCE = 0.01
 # ============================================================
 
 # ============================================================
-# VALUE SINGLES - CORE PRODUCT (Dec 9, 2025 Pivot)
-# Lower bookmaker margins (4-8%) vs SGP (28-45%) = better ROI
+# VALUE SINGLES — THREE-LAYER ARCHITECTURE (Mar 30, 2026)
+# PRO PICK / VALUE OPPORTUNITY / WATCHLIST
+# Single broad scan, then route by EV / confidence / odds / pgr_score
 # ============================================================
 
-# Minimum Expected Value (EV) - 32% edge (Mar 22, 2026 v2 - raised from 28% to max 4 Value Singles/day, rest to Discord)
-MIN_VALUE_SINGLE_EV = 0.32  # 32% edge — only elite opportunities qualify; rest published as Discord value opportunities
+# Layer 1: PRO PICK — official bets, count toward public ROI/units/record
+PRO_MIN_EV = 0.25              # 25% EV
+PRO_MIN_CONFIDENCE = 0.70      # 70% model confidence
+PRO_MIN_ODDS = 1.75
+PRO_MAX_ODDS = 2.30
+MAX_VALUE_SINGLES_PER_DAY = 5  # Max 5 PRO picks/day
 
-# ============================================================
-# MARKET-SPECIFIC MIN_EV THRESHOLDS (Jan 11, 2026 v2)
-# Updated based on live performance Dec 25 - Jan 11:
-# - Under 2.5: 57.1% hit, +1.20u → KEEP (profitable)
-# - Under 3.5: 60.0% hit, +0.64u → KEEP (profitable)
-# - Over 2.5: 39.3% hit, -6.28u, max DD -7.56u → RAISE to 12%
-# - Home Win: 36.6% hit, -12.5u → LEARNING ONLY (Feb 6, 2026)
-# - Away Win: 29.4% hit, -5.45u, max DD -10.45u → LEARNING ONLY
-# ============================================================
-MARKET_SPECIFIC_MIN_EV = {
-    "FT_OVER_2_5": 0.28,   # 28% EV minimum (Mar 22, 2026 v2 - raised from 22% to align closer to global 32% threshold)
-    "FT_OVER_3_5": 0.28,   # 28% EV minimum (Mar 22, 2026 v2 - raised from 22% to align closer to global 32% threshold)
-    # HOME_WIN: Now LEARNING_ONLY (Feb 6, 2026) - see filter below
-    # AWAY_WIN: Now LEARNING_ONLY - see filter below
-    # FT_UNDER_*: Removed entirely (Mar 24, 2026) - systematic xG bias, -32.55u total
+# Layer 2: VALUE OPPORTUNITY — published in dashboard + Discord, NOT official bets
+VALUE_MIN_EV = 0.12            # 12% EV
+VALUE_MIN_CONFIDENCE = 0.60    # 60% model confidence
+VALUE_MIN_ODDS = 1.60
+VALUE_MAX_ODDS = 4.00
+
+# Layer 3: WATCHLIST — saved internally for model learning, never public
+WATCHLIST_MIN_EV = 0.07        # 7% EV
+WATCHLIST_MIN_CONFIDENCE = 0.50
+
+# Broad scan floor — all candidates enter here, routing decides their layer
+MIN_VALUE_SINGLE_ODDS = 1.60   # Broadened from 1.80
+MAX_VALUE_SINGLE_ODDS = 2.30   # PRO upper bound (legacy compat)
+MAX_LEARNING_ODDS = 4.00       # Outer scan ceiling
+
+# Legacy aliases used elsewhere in this file
+MIN_VALUE_SINGLE_EV = PRO_MIN_EV
+MIN_VALUE_SINGLE_CONFIDENCE = PRO_MIN_CONFIDENCE
+
+# Market-specific EV floors (conservative overrides for high-volume markets)
+MARKET_SPECIFIC_MIN_EV: dict = {
+    "FT_OVER_2_5": 0.14,
+    "FT_OVER_3_5": 0.14,
 }
 
-# ============================================================
-# LEARNING ONLY MARKETS (Jan 11, 2026)
-# Markets that log data for AI training but DO NOT publish publicly.
-# Reason: Structural underperformance beyond acceptable variance.
-# Re-evaluate: Jan 25, 2026 or after +100 bets per market
-# ============================================================
+MARKET_SPECIFIC_MIN_ODDS: dict = {}  # Handled by pgr_scoring module
+
+# Learning-only markets — saved for AI training, never PRO or VALUE_OPP
 LEARNING_ONLY_MARKETS = {
     "HOME_WIN",      # 36.6% hit rate, -12.5u — blocked Feb 6, 2026
     "AWAY_WIN",      # 31.6% hit rate, -10.1u — blocked Feb 6, 2026
     "DRAW",          # 12.5% hit rate, -5.0u — blocked Feb 6, 2026
     # FT_UNDER_* removed entirely Mar 24, 2026 — systematic xG calibration bias
-    # AH Minus sides blocked (Mar 9, 2026): 25% hit rate all-time, -12.06u
-    # AH Plus sides blocked (Mar 14, 2026): no proven edge yet, collecting data
-    # Entire AH market family now in LEARNING_ONLY.
-    "AH_HOME_-0.5",
-    "AH_HOME_-1.0",
-    "AH_HOME_-1.5",
-    "AH_AWAY_-0.5",
-    "AH_AWAY_-1.0",
-    "AH_AWAY_-1.5",
-    "AH_HOME_+0.5",
-    "AH_HOME_+1.0",
-    "AH_HOME_+1.5",
-    "AH_AWAY_+0.5",
-    "AH_AWAY_+1.0",
-    "AH_AWAY_+1.5",
+    # AH: collecting data, not yet production-ready
+    "AH_HOME_-0.5", "AH_HOME_-1.0", "AH_HOME_-1.5",
+    "AH_AWAY_-0.5", "AH_AWAY_-1.0", "AH_AWAY_-1.5",
+    "AH_HOME_+0.5", "AH_HOME_+1.0", "AH_HOME_+1.5",
+    "AH_AWAY_+0.5", "AH_AWAY_+1.0", "AH_AWAY_+1.5",
 }
-
-# ============================================================
-# MARKET-SPECIFIC MIN_ODDS (Jan 11, 2026)
-# Require higher odds for markets showing value only at longer prices
-# ============================================================
-MARKET_SPECIFIC_MIN_ODDS = {
-    # HOME_WIN: Removed — now LEARNING_ONLY (Feb 6, 2026)
-}
-
-# Odds range filter - Quality filter update (Mar 22, 2026 v2)
-MIN_VALUE_SINGLE_ODDS = 1.80  # Mar 22, 2026 v2: raised from 1.75 — eliminate low-margin bets
-MAX_VALUE_SINGLE_ODDS = 2.30  # Mar 22, 2026: tightened from 2.40 — sweet spot for mispricing
-MAX_LEARNING_ODDS = 4.00      # Collect predictions up to 4.00 for AI training
-
-# Minimum model confidence/probability required
-MIN_VALUE_SINGLE_CONFIDENCE = 0.78  # Mar 22, 2026 v2: raised from 72% to 78% — fewer, higher-quality PROD picks
-
-# Maximum number of value singles per day - CORE PRODUCT
-MAX_VALUE_SINGLES_PER_DAY = 4  # Mar 22, 2026 v2: lowered from 10 — max 4 PROD picks; rest goes to Discord as value opportunities
 
 # Tournament filter mode: relaxed thresholds for UCL/UEL
 TOURNAMENT_LEAGUES = {
@@ -440,12 +422,12 @@ class ValueSinglesEngine:
         picks: List[Dict[str, Any]] = []
         data_picks: List[Dict[str, Any]] = []  # LEARNING picks for Discord publishing (ev > 0, below PROD threshold)
 
-        print("🔥 VALUE SINGLES START (HARD FILTERS ACTIVE)")
-        print(f"   min_ev (global) = {MIN_VALUE_SINGLE_EV*100:.0f}% | Over2.5/3.5 = {MARKET_SPECIFIC_MIN_EV.get('FT_OVER_2_5',0)*100:.0f}%")
-        print(f"   PROD odds = {MIN_VALUE_SINGLE_ODDS} - {MAX_VALUE_SINGLE_ODDS} | learning_odds = {MIN_VALUE_SINGLE_ODDS} - {MAX_LEARNING_ODDS}")
-        print(f"   min_confidence = {MIN_VALUE_SINGLE_CONFIDENCE*100:.0f}%")
-        print(f"   max PROD picks/day = {MAX_VALUE_SINGLES_PER_DAY} | rest → Discord value opportunities")
-        print(f"   leagues = {len(VALUE_SINGLE_LEAGUE_WHITELIST)} whitelisted")
+        print("🔥 VALUE SINGLES — THREE-LAYER SCAN")
+        print(f"   PRO: EV>={PRO_MIN_EV*100:.0f}% | Conf>={PRO_MIN_CONFIDENCE*100:.0f}% | Odds {PRO_MIN_ODDS}-{PRO_MAX_ODDS} | max {MAX_VALUE_SINGLES_PER_DAY}/day")
+        print(f"   VALUE: EV>={VALUE_MIN_EV*100:.0f}% | Conf>={VALUE_MIN_CONFIDENCE*100:.0f}% | Odds {VALUE_MIN_ODDS}-{VALUE_MAX_ODDS}")
+        print(f"   WATCHLIST: EV>={WATCHLIST_MIN_EV*100:.0f}% | Conf>={WATCHLIST_MIN_CONFIDENCE*100:.0f}% | internal only")
+        print(f"   Scan floor: odds {MIN_VALUE_SINGLE_ODDS}-{MAX_LEARNING_ODDS} | {len(VALUE_SINGLE_LEAGUE_WHITELIST)} leagues")
+        rejection_counts: dict = {}
 
         # 1) Get fixtures
         if not hasattr(self.champion, "get_todays_fixtures"):
@@ -576,25 +558,16 @@ class ValueSinglesEngine:
                 if odds is None:
                     continue
                 
-                # ODDS FILTER: Allow bets in configured range, learning extends to MAX_LEARNING_ODDS
-                if not (MIN_VALUE_SINGLE_ODDS <= odds <= MAX_LEARNING_ODDS):
-                    continue  # Skip bets outside learning range
-                
-                # MARKET-SPECIFIC MIN_ODDS FILTER (Jan 11, 2026)
-                # Some markets only profitable at longer odds
-                market_min_odds = MARKET_SPECIFIC_MIN_ODDS.get(market_key)
-                if market_min_odds and odds < market_min_odds:
-                    print(f"   ⚠️ FILTERED: {market_key} odds {odds:.2f} < min {market_min_odds:.2f}")
+                # BROAD SCAN FLOOR — all layers enter here; routing decides their tier
+                if not (VALUE_MIN_ODDS <= odds <= MAX_LEARNING_ODDS):
                     continue
-                
-                # HARD FILTER: Model probability >= threshold (dynamic for tournaments)
-                if p_model < match_confidence_threshold:
-                    continue  # Skip low-confidence predictions
+                if p_model < WATCHLIST_MIN_CONFIDENCE:
+                    continue  # Below even WATCHLIST threshold
 
                 # Check for conflict with exact score prediction (1X2 markets only)
                 if market_key in ("HOME_WIN", "AWAY_WIN", "DRAW"):
                     if self._is_1x2_conflicting(home_team, away_team, market_key):
-                        continue  # Skip conflicting 1X2 selections
+                        continue
 
                 cal_data = calibrate_and_ev(p_model, odds)
                 raw_prob = cal_data['raw_prob']
@@ -611,135 +584,90 @@ class ValueSinglesEngine:
                     print(f"   🚫 BLOCKED: {market_key} cal_ev={ev_after_cal:.1%} - {block_reason}")
                     continue
                 
+                # ── Three-layer routing ──────────────────────────────────────────────
                 ev = adj_ev
-                
-                # MARKET-SPECIFIC EV FILTER (Jan 11, 2026)
-                # Use market-specific threshold if defined, else fall back to match threshold
-                market_min_ev = MARKET_SPECIFIC_MIN_EV.get(market_key, match_ev_threshold)
-                if ev < market_min_ev:
-                    # Fallback: positive EV but below PROD threshold
-                    # PROD-quality markets (not LEARNING_ONLY) → VALUE_OPP
-                    # LEARNING_ONLY markets → LEARNING (training data only, never posted to Discord)
-                    if ev > 0.0:
-                        _is_learning_only_market = market_key in LEARNING_ONLY_MARKETS
-                        # Collect correct bookmaker odds for this specific market before saving
-                        bookmaker_data = {}
-                        # 1) API-Football per-bookmaker data (DC, BTTS, AH, FT totals)
-                        _mbb = match.get('markets_by_bookmaker', {})
-                        if market_key in _mbb and _mbb[market_key]:
-                            _bk = _mbb[market_key]
-                            _vals = [v for v in _bk.values() if v > 0]
-                            if _vals:
-                                bookmaker_data = {
-                                    'odds_by_bookmaker': _bk,
-                                    'best_odds_value': max(_vals),
-                                    'best_odds_bookmaker': max(_bk, key=lambda k: _bk[k]),
-                                    'avg_odds': round(sum(_vals) / len(_vals), 3),
-                                }
-                        # 2) Fall back to The Odds API bookmaker data (h2h / totals)
-                        if not bookmaker_data and hasattr(self.champion, 'collect_bookmaker_odds'):
-                            _api_mkt = 'h2h' if market_key in ('HOME_WIN', 'AWAY_WIN', 'DRAW') else \
-                                       'totals' if 'OVER' in market_key else None
-                            _pt = None
-                            if _api_mkt == 'totals':
-                                _parts = market_key.split('_')
-                                try: _pt = float(f"{_parts[-2]}.{_parts[-1]}")
-                                except: _pt = 2.5
-                            _sel_txt = {
-                                "FT_OVER_2_5": "Over 2.5 Goals",
-                                "FT_OVER_1_5": "Over 1.5 Goals",
-                                "FT_OVER_3_5": "Over 3.5 Goals", "HOME_WIN": "Home Win",
-                                "AWAY_WIN": "Away Win", "DRAW": "Draw",
-                                "BTTS_YES": "BTTS Yes", "BTTS_NO": "BTTS No",
-                            }.get(market_key, market_key.replace("_", " ").title())
-                            if _api_mkt:
-                                try:
-                                    bookmaker_data = self.champion.collect_bookmaker_odds(
-                                        match, _sel_txt, _api_mkt, _pt)
-                                except Exception:
-                                    bookmaker_data = {}
-                        _sel = {
-                            "FT_OVER_0_5": "Over 0.5 Goals",
-                            "FT_OVER_1_5": "Over 1.5 Goals",
-                            "FT_OVER_2_5": "Over 2.5 Goals",
-                            "FT_OVER_3_5": "Over 3.5 Goals",
-                            "FT_OVER_4_5": "Over 4.5 Goals",
-                            "BTTS_YES": "BTTS Yes", "BTTS_NO": "BTTS No",
-                            "HOME_WIN": "Home Win", "AWAY_WIN": "Away Win", "DRAW": "Draw",
-                            "DOUBLE_CHANCE_1X": "Double Chance 1X", "DOUBLE_CHANCE_X2": "Double Chance X2",
-                            "DOUBLE_CHANCE_12": "Double Chance 12",
-                            "AH_HOME": "Asian Handicap Home", "AH_AWAY": "Asian Handicap Away",
-                            "1H_OVER_0_5": "1H Over 0.5 Goals", "1H_OVER_1_5": "1H Over 1.5 Goals",
-                        }.get(market_key, market_key.replace("_", " ").title())
-                        _ko_utc, _ko_epoch = normalize_kickoff(commence_time)
-                        data_picks.append({
-                            "timestamp": int(time.time()),
-                            "match_id": match_id,
-                            "home_team": match.get("home_team"),
-                            "away_team": match.get("away_team"),
-                            "league": match.get("league_name") or match.get("league") or "Unknown",
-                            "market": "Value Single",
-                            "selection": _sel,
-                            "odds": float(odds),
-                            "edge_percentage": float(ev * 100),
-                            "confidence": int(min(100, max(0, 50 + ev * 250))),
-                            "analysis": json.dumps({
-                                "market_key": market_key,
-                                "p_model": float(raw_prob),
-                                "calibrated_prob": float(calibrated_prob),
-                                "ev": float(ev),
-                                "data_note": "Value opportunity: positive EV below PROD threshold in PROD-quality market" if not _is_learning_only_market else "Learning signal: positive EV below PROD threshold"
-                            }),
-                            "match_date": match_date,
-                            "kickoff_utc": _ko_utc,
-                            "kickoff_epoch": _ko_epoch,
-                            "created_at_utc": to_iso_utc(now_utc()),
-                            "mode": "VALUE_OPP" if not _is_learning_only_market else "LEARNING",
-                            "stake": 0,
-                            "bet_placed": False,
-                            "odds_by_bookmaker": bookmaker_data.get('odds_by_bookmaker'),
-                            "best_odds_value": bookmaker_data.get('best_odds_value'),
-                            "best_odds_bookmaker": bookmaker_data.get('best_odds_bookmaker'),
-                            "avg_odds": bookmaker_data.get('avg_odds'),
-                            "fair_odds": round(1.0 / raw_prob, 3) if raw_prob > 0 else None,
-                            "fixture_id": match.get("fixture_id"),
-                            "trust_level": "VALUE_OPP" if not _is_learning_only_market else "LEARNING",
-                            "sim_probability": float(calibrated_prob),
-                            "ev_sim": float(ev),
-                            "model_prob": float(raw_prob),
-                            "calibrated_prob": float(calibrated_prob),
-                            "disagreement": float(abs(raw_prob - calibrated_prob)),
-                        })
+
+                # Minimum scan floor — reject anything below WATCHLIST threshold
+                if ev < WATCHLIST_MIN_EV:
+                    rejection_counts["rejected_low_ev"] = rejection_counts.get("rejected_low_ev", 0) + 1
                     continue
+
+                # Market-specific EV floor for noisy high-volume markets
+                market_floor = MARKET_SPECIFIC_MIN_EV.get(market_key)
+                if market_floor and ev < market_floor and ev < VALUE_MIN_EV:
+                    rejection_counts["rejected_low_ev"] = rejection_counts.get("rejected_low_ev", 0) + 1
+                    continue
+
+                # Determine learning-only status (market type + auto-promoter)
+                is_learning_only = market_key in LEARNING_ONLY_MARKETS
+                if AUTO_PROMOTER_AVAILABLE:
+                    promoter = get_promoter()
+                    if promoter.has_explicit_status('football', league_key, market_key):
+                        dynamic_status = promoter.get_market_status('football', league_key, market_key)
+                        if dynamic_status == 'DISABLED':
+                            print(f"   🚫 DISABLED by auto-promoter: {league_key}/{market_key}")
+                            rejection_counts["rejected_market_type"] = rejection_counts.get("rejected_market_type", 0) + 1
+                            continue
+                        elif dynamic_status == 'PRODUCTION':
+                            is_learning_only = False
+                        elif dynamic_status == 'LEARNING_ONLY':
+                            is_learning_only = True
 
                 # Smart conflict resolution for Over/Under goals vs Exact Score
                 conflict_result = self._check_conflict_with_ev_comparison(home_team, away_team, market_key, ev)
                 if conflict_result == 'skip':
-                    continue  # Exact Score has better EV, skip this Value Single
-
-                confidence = int(min(100, max(0, 50 + ev * 250)))  # simple confidence proxy
-                if confidence < self.min_confidence:
+                    rejection_counts["rejected_low_ev"] = rejection_counts.get("rejected_low_ev", 0) + 1
                     continue
 
+                # Compute PGR Score and route to a layer
+                pgr_score = compute_pgr_score(ev, p_model, odds, market_key, league_key)
+                league_tier = get_league_tier(league_key)
+                layer, routing_reason = route_candidate(
+                    ev=ev,
+                    confidence=p_model,
+                    odds=odds,
+                    market_key=market_key,
+                    league_key=league_key,
+                    is_learning_only=is_learning_only,
+                    pgr_score=pgr_score,
+                    pro_min_ev=PRO_MIN_EV,
+                    pro_min_conf=PRO_MIN_CONFIDENCE,
+                    pro_min_odds=PRO_MIN_ODDS,
+                    pro_max_odds=PRO_MAX_ODDS,
+                    val_min_ev=VALUE_MIN_EV,
+                    val_min_conf=VALUE_MIN_CONFIDENCE,
+                    val_min_odds=VALUE_MIN_ODDS,
+                    val_max_odds=VALUE_MAX_ODDS,
+                    watch_min_ev=WATCHLIST_MIN_EV,
+                    watch_min_conf=WATCHLIST_MIN_CONFIDENCE,
+                )
+
+                if layer == "REJECTED":
+                    rejection_counts[routing_reason] = rejection_counts.get(routing_reason, 0) + 1
+                    continue
+
+                # Demote PRO → VALUE_OPP if learning engine confidence too low
+                if LEARNING_ENGINE_AVAILABLE and layer == "PROD":
+                    combined_conf = compute_bet_confidence(ev, league_key, market_key, 'football')
+                    if combined_conf < MIN_COMBINED_CONFIDENCE:
+                        print(f"   📉 LOW CONF: {league_key}/{market_key} {combined_conf:.4f} — demoting PRO → VALUE_OPP")
+                        layer = "VALUE_OPP"
+                        routing_reason = "value_opportunity"
+
+                confidence = int(min(100, max(0, 50 + ev * 250)))
                 sim_prob = calibrated_prob
                 ev_sim = ev
                 disagreement = abs(raw_prob - calibrated_prob)
-                sim_approved = ev_sim >= 0.03  # 3% EV threshold
-                
+                sim_approved = ev_sim >= 0.03
                 trust_level = classify_trust_level(
-                    ev_sim=ev_sim,
-                    ev_model=ev,
-                    confidence=sim_prob,
-                    disagreement=disagreement,
-                    sim_approved=sim_approved,
-                    odds=odds
+                    ev_sim=ev_sim, ev_model=ev, confidence=sim_prob,
+                    disagreement=disagreement, sim_approved=sim_approved, odds=odds
                 )
-                
-                # Print trust level for visibility
-                print(f"   🏷️ Trust: {trust_level} | EV={ev:.1%} | Conf={sim_prob:.0%}")
+
+                print(f"   [{layer}] {market_key} EV={ev:.1%} Conf={p_model:.0%} Odds={odds:.2f} PGR={pgr_score:.3f} Tier={league_tier}")
 
                 selection_text = {
-                    # Over Goals (Under markets removed Mar 24, 2026)
+                    # Over Goals
                     "FT_OVER_0_5": "Over 0.5 Goals",
                     "FT_OVER_1_5": "Over 1.5 Goals",
                     "FT_OVER_2_5": "Over 2.5 Goals",
@@ -776,14 +704,13 @@ class ValueSinglesEngine:
                     "HOME_OVER_1_5": f"{home_team} Over 1.5 Goals",
                     "AWAY_OVER_0_5": f"{away_team} Over 0.5 Goals",
                     "AWAY_OVER_1_5": f"{away_team} Over 1.5 Goals",
-                    # Asian Handicap - Home
+                    # Asian Handicap
                     "AH_HOME_-0.5": f"{home_team} -0.5 (AH)",
                     "AH_HOME_-1.0": f"{home_team} -1.0 (AH)",
                     "AH_HOME_-1.5": f"{home_team} -1.5 (AH)",
                     "AH_HOME_+0.5": f"{home_team} +0.5 (AH)",
                     "AH_HOME_+1.0": f"{home_team} +1.0 (AH)",
                     "AH_HOME_+1.5": f"{home_team} +1.5 (AH)",
-                    # Asian Handicap - Away
                     "AH_AWAY_-0.5": f"{away_team} -0.5 (AH)",
                     "AH_AWAY_-1.0": f"{away_team} -1.0 (AH)",
                     "AH_AWAY_-1.5": f"{away_team} -1.5 (AH)",
@@ -796,25 +723,22 @@ class ValueSinglesEngine:
                 commence_time = match.get('commence_time', '')
                 match_date = match.get('formatted_date') or match.get('match_date')
                 kickoff_time = match.get('formatted_time') or match.get('kickoff_time')
-                
-                # Parse from commence_time if date not available
                 if not match_date and commence_time:
                     from datetime import datetime
                     try:
                         dt = datetime.fromisoformat(commence_time.replace('Z', '+00:00'))
                         match_date = dt.strftime("%Y-%m-%d")
                         kickoff_time = dt.strftime("%H:%M")
-                    except:
-                        # Fallback: extract from string
+                    except Exception:
                         match_date = commence_time[:10] if len(commence_time) > 10 else ""
                         kickoff_time = commence_time[11:16] if len(commence_time) > 16 else ""
-                
-                # Flat 1-unit stake (Kelly is display-only, not for actual betting)
+
                 VALUE_SINGLES_STAKE = 1
-                
+                bet_placed = (layer == "PROD")
+                stake = VALUE_SINGLES_STAKE if bet_placed else 0
+
                 # Collect bookmaker odds for this selection
                 bookmaker_data = {}
-                # 1) Use API-Football per-bookmaker data (covers DC, BTTS, AH, FT totals)
                 _mbb = match.get('markets_by_bookmaker', {})
                 if market_key in _mbb and _mbb[market_key]:
                     _bk = _mbb[market_key]
@@ -826,7 +750,6 @@ class ValueSinglesEngine:
                             'best_odds_bookmaker': max(_bk, key=lambda k: _bk[k]),
                             'avg_odds': round(sum(_vals) / len(_vals), 3),
                         }
-                # 2) Fall back to The Odds API bookmaker data (h2h / totals)
                 if not bookmaker_data and hasattr(self.champion, 'collect_bookmaker_odds'):
                     api_market_key = None
                     point_val = None
@@ -838,47 +761,25 @@ class ValueSinglesEngine:
                         if len(parts) >= 3:
                             try:
                                 point_val = float(f"{parts[-2]}.{parts[-1]}")
-                            except:
+                            except Exception:
                                 point_val = 2.5
                     if api_market_key:
                         bookmaker_data = self.champion.collect_bookmaker_odds(
                             match, selection_text, api_market_key, point_val
                         )
-                
-                # Calculate fair_odds based on model probability
+
                 fair_odds = round(1.0 / p_model, 3) if p_model > 0 else None
-                
                 kickoff_utc, kickoff_epoch = normalize_kickoff(commence_time)
                 created_at_utc = to_iso_utc(now_utc())
-                
                 league_name = match.get("league_name") or match.get("league") or match.get("sport_title") or "Unknown League"
-                league_key = match.get('sport_key') or match.get('league_key') or match.get('odds_api_key') or league_name
-
-                is_learning_only = market_key in LEARNING_ONLY_MARKETS
-                if AUTO_PROMOTER_AVAILABLE:
-                    promoter = get_promoter()
-                    if promoter.has_explicit_status('football', league_key, market_key):
-                        dynamic_status = promoter.get_market_status('football', league_key, market_key)
-                        if dynamic_status == 'DISABLED':
-                            print(f"   🚫 DISABLED by auto-promoter: {league_key}/{market_key}")
-                            continue
-                        elif dynamic_status == 'PRODUCTION':
-                            is_learning_only = False
-                        elif dynamic_status == 'LEARNING_ONLY':
-                            is_learning_only = True
-
-                if LEARNING_ENGINE_AVAILABLE and not is_learning_only:
-                    combined_conf = compute_bet_confidence(ev, league_key, market_key, 'football')
-                    if combined_conf < MIN_COMBINED_CONFIDENCE:
-                        print(f"   📉 LOW CONFIDENCE: {league_key}/{market_key} conf={combined_conf:.4f} - skipping")
-                        continue
 
                 opportunity = {
                     "timestamp": int(time.time()),
+                    "open_ts": int(time.time()),
                     "match_id": match_id,
                     "home_team": match.get("home_team"),
                     "away_team": match.get("away_team"),
-                    "league": match.get("league_name") or match.get("league") or match.get("sport_title") or "Unknown League",
+                    "league": league_name,
                     "market": "Value Single",
                     "selection": selection_text,
                     "odds": float(odds),
@@ -892,11 +793,14 @@ class ValueSinglesEngine:
                         "ev": float(ev),
                         "raw_ev": float(raw_ev),
                         "expected_home_goals": float(lh),
-                        "expected_away_goals": float(la)
+                        "expected_away_goals": float(la),
                     }),
                     "model_prob": float(raw_prob),
                     "calibrated_prob": float(calibrated_prob),
-                    "stake": VALUE_SINGLES_STAKE,
+                    "stake": stake,
+                    "bet_placed": bet_placed,
+                    "mode": layer,            # PROD / VALUE_OPP / WATCHLIST
+                    "trust_level": trust_level,
                     "match_date": match_date,
                     "kickoff_time": kickoff_time,
                     "kickoff_utc": kickoff_utc,
@@ -905,30 +809,42 @@ class ValueSinglesEngine:
                     "quality_score": float(match.get("quality_score", 50)),
                     "recommended_tier": "SINGLE",
                     "daily_rank": 999,
-                    # Monte Carlo + Trust Level fields (Dec 2025)
-                    "trust_level": trust_level,
                     "sim_probability": float(sim_prob),
                     "ev_sim": float(ev_sim),
                     "disagreement": float(disagreement),
-                    # Bookmaker odds breakdown
                     "odds_by_bookmaker": bookmaker_data.get('odds_by_bookmaker'),
                     "best_odds_value": bookmaker_data.get('best_odds_value'),
                     "best_odds_bookmaker": bookmaker_data.get('best_odds_bookmaker'),
                     "avg_odds": bookmaker_data.get('avg_odds'),
                     "fair_odds": fair_odds,
-                    # API-Football fixture ID for result verification
                     "fixture_id": match.get("fixture_id"),
                     "is_learning_only": is_learning_only,
-                    "market_key_raw": market_key
+                    "market_key_raw": market_key,
+                    # Three-layer routing fields
+                    "pgr_score": pgr_score,
+                    "league_tier": league_tier,
+                    "routing_reason": routing_reason,
                 }
 
                 picks.append(opportunity)
 
-        learning_picks = [p for p in picks if p.get('is_learning_only')]
-        production_picks = [p for p in picks if not p.get('is_learning_only')]
+        # ── Three-layer separation ────────────────────────────────────────────────
+        pro_picks     = [p for p in picks if p.get('mode') == 'PROD']
+        value_picks   = [p for p in picks if p.get('mode') == 'VALUE_OPP']
+        watchlist_picks = [p for p in picks if p.get('mode') == 'WATCHLIST']
 
-        print(f"\n📊 VALUE SINGLES SUMMARY: {len(picks)} total ({len(production_picks)} production, {len(learning_picks)} learning)")
+        # ── Rejection summary ─────────────────────────────────────────────────────
+        total_candidates = len(picks) + sum(rejection_counts.values())
+        print(f"\n📊 CYCLE SUMMARY: {total_candidates} candidates scanned")
+        print(f"   PRO PICK:           {len(pro_picks)}")
+        print(f"   VALUE OPPORTUNITY:  {len(value_picks)}")
+        print(f"   WATCHLIST:          {len(watchlist_picks)}")
+        if rejection_counts:
+            print(f"   Rejections:")
+            for reason, cnt in sorted(rejection_counts.items(), key=lambda x: -x[1]):
+                print(f"      {reason}: {cnt}")
 
+        # ── Conflict resolution for PRO picks only ────────────────────────────────
         def _resolve_over_under_conflicts(pick_list):
             import re
             conflict_groups = {}
@@ -939,9 +855,7 @@ class ValueSinglesEngine:
                 m = re.match(r'(FT_)(OVER|UNDER)(_\d+_\d+)', mk)
                 if m:
                     group_key = f"{p['match_id']}_{m.group(1)}{m.group(3)}"
-                    if group_key not in conflict_groups:
-                        conflict_groups[group_key] = []
-                    conflict_groups[group_key].append(p)
+                    conflict_groups.setdefault(group_key, []).append(p)
                 else:
                     non_conflicting.append(p)
             resolved = list(non_conflicting)
@@ -951,124 +865,75 @@ class ValueSinglesEngine:
                 if len(group) > 1:
                     kept_sel = best.get('selection', '?')
                     dropped = [g.get('selection', '?') for g in group if g is not best]
-                    print(f"   🔀 CONFLICT: {best['home_team']} vs {best['away_team']} — kept {kept_sel}, dropped {', '.join(dropped)}")
+                    print(f"   🔀 CONFLICT: {best['home_team']} vs {best['away_team']} kept {kept_sel}, dropped {', '.join(dropped)}")
             return resolved
 
-        production_picks = _resolve_over_under_conflicts(production_picks)
-        print(f"📊 Production after Over/Under conflict resolution: {len(production_picks)} picks")
-        print(f"📚 Learning keeps ALL sides: {len(learning_picks)} picks (both Over & Under preserved)")
+        pro_picks = _resolve_over_under_conflicts(pro_picks)
 
-        if production_picks:
+        if pro_picks:
             log_calibration_batch(
                 [{'raw_prob': json.loads(c.get('analysis', '{}')).get('p_model', 0),
                   'calibrated_prob': c.get('calibrated_prob', 0),
                   'raw_ev': json.loads(c.get('analysis', '{}')).get('raw_ev', 0),
                   'calibrated_ev': c.get('edge_percentage', 0) / 100}
-                 for c in production_picks],
+                 for c in pro_picks],
                 label="VALUE_SINGLES"
             )
-            production_picks.sort(key=lambda x: x["edge_percentage"], reverse=True)
-            for c in production_picks[:5]:
-                ev_show = c.get("edge_percentage", 0)
-                analysis = json.loads(c.get("analysis", "{}"))
-                p_raw = analysis.get("p_model", 0)
-                p_cal = analysis.get("calibrated_prob", p_raw)
-                print(f"   CANDIDATE: {c['home_team']} vs {c['away_team']} | {c.get('selection')} | odds={c.get('odds', 0):.2f} p={p_raw:.2%}→{p_cal:.2%} EV={ev_show:.1f}%")
 
-        # 5) Sort by EV, enforce unique matches, and LIMIT TO MAX_VALUE_SINGLES_PER_DAY
-        production_picks.sort(key=lambda x: x["edge_percentage"], reverse=True)
-
+        # ── Sort PRO by pgr_score, enforce unique matches, apply daily cap ────────
+        pro_picks.sort(key=lambda x: x.get("pgr_score", 0), reverse=True)
         effective_limit = min(MAX_VALUE_SINGLES_PER_DAY, max_picks)
         unique: List[Dict[str, Any]] = []
         used_matches: Set[str] = set()
-        if effective_limit > 0:
-            for p in production_picks:
-                if p["match_id"] in used_matches:
-                    continue
-                unique.append(p)
-                used_matches.add(p["match_id"])
-                if len(unique) >= effective_limit:
-                    break
-        
-        print(f"🎯 SELECTED: Top {len(unique)} production singles (max_picks={max_picks}, daily_max={MAX_VALUE_SINGLES_PER_DAY})")
+        for p in pro_picks:
+            if p["match_id"] in used_matches:
+                continue
+            unique.append(p)
+            used_matches.add(p["match_id"])
+            if len(unique) >= effective_limit:
+                break
+
+        print(f"\n🎯 PRO PICKS SELECTED: {len(unique)} (cap {MAX_VALUE_SINGLES_PER_DAY}/day, max_picks={max_picks})")
         for i, p in enumerate(unique, 1):
-            print(f"   #{i}: {p['home_team']} vs {p['away_team']} | {p['selection']} @ {p['odds']:.2f} (EV {p['edge_percentage']:.1f}%)")
+            print(f"   #{i}: {p['home_team']} vs {p['away_team']} | {p['selection']} @ {p['odds']:.2f} EV={p['edge_percentage']:.1f}% PGR={p.get('pgr_score',0):.3f}")
 
-        self._learning_picks = learning_picks
-        self._data_picks = data_picks
-        print(f"📡 LEARNING PICKS (Discord only): {len(data_picks)} positive-EV signals queued for publishing")
+        print(f"📡 VALUE OPPORTUNITIES: {len(value_picks)} signals for Discord/dashboard")
+        print(f"🔍 WATCHLIST: {len(watchlist_picks)} internal signals")
 
-        # ── 👉 MISSADE SPEL (value opportunities som EJ blev PROD picks) ──────────────
-        all_missed = []
-        # 1) Picks below PROD EV threshold but positive EV (data_picks list)
-        for dp in data_picks:
-            try:
-                analysis = json.loads(dp.get("analysis", "{}"))
-                all_missed.append({
-                    "match": f"{dp.get('home_team','?')} vs {dp.get('away_team','?')}",
-                    "selection": dp.get("selection", "?"),
-                    "odds": dp.get("odds", 0),
-                    "ev": dp.get("edge_percentage", 0),
-                    "reason": f"EV {dp.get('edge_percentage',0):.1f}% — below PROD threshold ({analysis.get('market_key','?')} market min)",
-                    "league": dp.get("league", "?"),
-                })
-            except Exception:
-                pass
-        # 2) Picks from the PROD pool that passed EV but were dropped by unique-match cap or daily cap
-        prod_dropped = [p for p in production_picks if p not in unique]
-        for dp in prod_dropped:
-            all_missed.append({
-                "match": f"{dp.get('home_team','?')} vs {dp.get('away_team','?')}",
-                "selection": dp.get("selection", "?"),
-                "odds": dp.get("odds", 0),
-                "ev": dp.get("edge_percentage", 0),
-                "reason": f"EV {dp.get('edge_percentage',0):.1f}% ✅ — dropped by daily cap ({MAX_VALUE_SINGLES_PER_DAY}/day) or duplicate match",
-                "league": dp.get("league", "?"),
-            })
-        all_missed.sort(key=lambda x: x["ev"], reverse=True)
-        if all_missed:
-            print(f"\n👉 MISSADE SPEL — {len(all_missed)} value opportunities (EJ PROD picks):")
-            for i, m in enumerate(all_missed[:20], 1):
-                print(f"   #{i}: [{m['league']}] {m['match']} | {m['selection']} @ {m['odds']:.2f} | {m['reason']}")
-            if len(all_missed) > 20:
-                print(f"   ... och {len(all_missed)-20} till")
-        else:
-            print("👉 MISSADE SPEL: Inga missade value opportunities denna cykel")
-        # ─────────────────────────────────────────────────────────────────────────────
+        # Store non-PRO picks for the Discord publisher / dashboard
+        self._learning_picks = watchlist_picks
+        self._data_picks = value_picks + watchlist_picks
 
         return unique
 
     def save_value_singles(self, singles: List[Dict[str, Any]]) -> int:
+        """Save picks to DB. Mode/bet_placed already set by routing; bankroll check for PRO."""
         saved = 0
         bets_placed = 0
-        
-        # Check bankroll before saving any bets
+
         try:
             bankroll_mgr = get_bankroll_manager()
         except Exception as e:
             print(f"⚠️ Bankroll manager init failed: {e}")
             bankroll_mgr = None
-        
+
         for s in singles:
-            # Bankroll check for each bet - determines if actual bet placed
-            bet_placed = True
-            odds = s.get('odds', 0)
-            
-            # ODDS FILTER: Only bet 1.60-1.79, collect data for 1.80-2.50 (Dec 6, 2025)
-            if odds > MAX_VALUE_SINGLE_ODDS:
-                bet_placed = False
-                print(f"📊 LEARNING DATA: {s['home_team']} vs {s['away_team']} @ {odds:.2f} (odds > {MAX_VALUE_SINGLE_ODDS} - collecting for AI training)")
-            
-            if bankroll_mgr and bet_placed:
-                can_bet, reason = bankroll_mgr.can_place_bet(s.get("stake", 460.0))
+            # Respect mode set by three-layer router
+            mode = s.get('mode', 'PROD')
+            bet_placed = (mode == 'PROD')
+
+            # Bankroll check only for PRO picks
+            if bet_placed and bankroll_mgr:
+                can_bet, reason = bankroll_mgr.can_place_bet(s.get("stake", 1.0))
                 if not can_bet:
                     bet_placed = False
-                    print(f"⛔ BANKROLL LIMIT: {reason} - Saving prediction only (no bet)")
-            
-            # Add bet_placed flag to the single
-            s["bet_placed"] = bet_placed
+                    print(f"⛔ BANKROLL LIMIT: {reason} — saving as VALUE_OPP instead")
+                    s['mode'] = 'VALUE_OPP'
+                    s['routing_reason'] = 'bankroll_limit'
+
+            s['bet_placed'] = bet_placed
             if not bet_placed:
-                s["stake"] = 0  # Zero stake for prediction-only entries
+                s['stake'] = 0
             
             try:
                 # Prefer generic save_opportunity if it exists

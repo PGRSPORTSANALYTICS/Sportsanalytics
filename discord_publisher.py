@@ -378,15 +378,22 @@ def format_analysis_embed(pick: dict) -> dict:
 
     color = _edge_color(edge)
 
+    pgr_score = pick.get("pgr_score")
+    league_tier = pick.get("league_tier", "")
+    pgr_str = f" · PGR {pgr_score:.2f}" if pgr_score else ""
+    tier_str = f" [T{league_tier}]" if league_tier else ""
+
     if mode == "DATA":
         title = f"Match Analysis — {league}"
         color = 0x808080
     elif mode == "PROD":
-        title = f"PRO PICK — {league}"
+        title = f"\U0001f3af PRO PICK{pgr_str}{tier_str} — {league}"
+        color = 0x00C853
     elif mode == "VALUE_OPP":
-        title = f"VALUE OPPORTUNITY — {league}"
+        title = f"\U0001f4ca VALUE OPPORTUNITY{pgr_str}{tier_str} — {league}"
+        color = _edge_color(edge)
     else:
-        title = f"VALUE OPPORTUNITY — {league}"
+        title = f"\U0001f4ca VALUE OPPORTUNITY — {league}"
 
     # Show when odds were collected so users know data freshness
     raw_ts = pick.get("timestamp") or pick.get("open_ts")
@@ -437,7 +444,8 @@ def fetch_analysis_picks() -> List[dict]:
                edge_percentage, match_date, confidence, mode, status,
                model_prob, calibrated_prob, analysis, discord_sent,
                odds_by_bookmaker, best_odds_value, best_odds_bookmaker,
-               kickoff_epoch, open_ts
+               kickoff_epoch, open_ts,
+               pgr_score, league_tier, routing_reason
         FROM football_opportunities
         WHERE status = 'pending'
           AND mode IN ('PROD', 'VALUE_OPP')

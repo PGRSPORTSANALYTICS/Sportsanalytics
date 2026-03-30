@@ -3787,12 +3787,7 @@ def main():
         render_overview(prod_bets)
 
     with singles_tab:
-        render_product_tab(
-            prod_bets,
-            product_codes=["VALUE_SINGLE", "VALUE_SINGLES", "FOOTBALL_SINGLE", "CORNERS", "CARDS"],
-            title="Value Singles",
-            description="High-edge single bets across 1X2, over/under, BTTS, corners and cards.",
-        )
+        render_three_layer_tab()
 
     with odds_compare_tab:
         render_bookmaker_odds_section()
@@ -3834,6 +3829,80 @@ def _load_pipeline_stats():
             WHERE match_date::date = CURRENT_DATE
         """))
         return result.fetchone()
+
+
+def render_three_layer_tab():
+    """Three-layer signal view: PRO PICK / VALUE OPPORTUNITY / WATCHLIST."""
+    st.markdown("## Signal Routing — Three-Layer View")
+    st.caption(
+        "PRO PICK = official bets (count toward public ROI) · "
+        "VALUE OPPORTUNITY = analysis signals (not official bets) · "
+        "WATCHLIST = internal learning only"
+    )
+
+    try:
+        engine = get_dashboard_engine()
+        with engine.connect() as conn:
+            df = pd.read_sql(text("""
+                SELECT league, home_team, away_team, selection, odds, edge_percentage,
+                       confidence, mode, match_date, pgr_score, league_tier, routing_reason,
+                       model_prob, calibrated_prob, status, bet_placed
+                FROM football_opportunities
+                WHERE match_date::date >= CURRENT_DATE - 1
+                  AND mode IN ('PROD', 'VALUE_OPP', 'WATCHLIST')
+                ORDER BY match_date ASC, pgr_score DESC NULLS LAST
+            """), conn)
+    except Exception as e:
+        st.error(f"DB load error: {e}")
+        return
+
+    if df.empty:
+        st.info("No signals in the last 48 hours.")
+        return
+
+    pro = df[df["mode"] == "PROD"]
+    val = df[df["mode"] == "VALUE_OPP"]
+    watch = df[df["mode"] == "WATCHLIST"]
+
+    def _render_layer(layer_df, label, color):
+        st.markdown(f"### {label}  `{len(layer_df)}`")
+        if layer_df.empty:
+            st.caption("No signals in this layer right now.")
+            return
+        cols_show = ["league", "home_team", "away_team", "selection", "odds",
+                     "edge_percentage", "model_prob", "pgr_score", "league_tier", "match_date", "status"]
+        cols_show = [c for c in cols_show if c in layer_df.columns]
+        display = layer_df[cols_show].copy()
+        display.columns = [c.replace("_", " ").title() for c in display.columns]
+        if "Edge Percentage" in display.columns:
+            display["Edge Percentage"] = display["Edge Percentage"].map(lambda x: f"{x:.1f}%")
+        if "Odds" in display.columns:
+            display["Odds"] = display["Odds"].map(lambda x: f"{x:.2f}")
+        if "Model Prob" in display.columns:
+            display["Model Prob"] = display["Model Prob"].map(lambda x: f"{x:.0%}" if x else "")
+        if "Pgr Score" in display.columns:
+            display["Pgr Score"] = display["Pgr Score"].map(lambda x: f"{x:.3f}" if x else "")
+        st.dataframe(display, use_container_width=True)
+
+    # Official ROI stats (only PROD + bet_placed=True)
+    if not pro.empty:
+        won = pro[pro["status"] == "won"]
+        lost = pro[pro["status"] == "lost"]
+        total_settled = len(won) + len(lost)
+        hit_rate = len(won) / total_settled * 100 if total_settled > 0 else 0
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("PRO Picks (today+)", len(pro))
+        c2.metric("Official Hit Rate", f"{hit_rate:.0f}%" if total_settled > 0 else "—")
+        c3.metric("Won / Lost", f"{len(won)} / {len(lost)}")
+        c4.metric("Pending", len(pro[pro["status"] == "pending"]))
+        st.caption("Official record: only mode=PROD rows with bet_placed=True")
+
+    st.divider()
+    _render_layer(pro, "🎯 PRO PICK — Official Bets", "#00C853")
+    st.divider()
+    _render_layer(val, "📊 VALUE OPPORTUNITY — Analysis Signals", "#2196F3")
+    st.divider()
+    _render_layer(watch, "🔍 WATCHLIST — Internal Learning", "#9E9E9E")
 
 
 def render_clv_analytics_tab():

@@ -641,8 +641,24 @@ def run_weekly_learning_report():
         logger.error(f"❌ Weekly learning report error: {e}")
 
 
+def _migrate_pgr_columns():
+    """Add pgr_score, league_tier, routing_reason columns if not present."""
+    try:
+        from db_helper import DatabaseHelper
+        for stmt in [
+            "ALTER TABLE football_opportunities ADD COLUMN IF NOT EXISTS pgr_score real",
+            "ALTER TABLE football_opportunities ADD COLUMN IF NOT EXISTS league_tier text",
+            "ALTER TABLE football_opportunities ADD COLUMN IF NOT EXISTS routing_reason text",
+        ]:
+            DatabaseHelper.execute(stmt)
+        logger.info("✅ PGR scoring columns verified (pgr_score, league_tier, routing_reason)")
+    except Exception as e:
+        logger.warning(f"⚠️ PGR column migration skipped: {e}")
+
+
 def main():
     """Main orchestration loop"""
+    _migrate_pgr_columns()
     logger.info("="*80)
     logger.info("🚀 COMBINED SPORTS PREDICTION ENGINE")
     logger.info("="*80)

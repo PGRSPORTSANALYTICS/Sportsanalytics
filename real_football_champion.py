@@ -3905,8 +3905,8 @@ class RealFootballChampion:
                      open_odds, odds_source, trust_level,
                      odds_by_bookmaker, best_odds_value, best_odds_bookmaker, avg_odds, fair_odds, fixture_id,
                      model_prob, calibrated_prob, sim_probability, ev_sim, disagreement,
-                     open_ts)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                     open_ts, pgr_score, league_tier, routing_reason)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (home_team, away_team, selection, market, match_date, mode) DO UPDATE
                     SET odds = EXCLUDED.odds, edge_percentage = EXCLUDED.edge_percentage,
                         confidence = EXCLUDED.confidence, analysis = EXCLUDED.analysis,
@@ -3950,6 +3950,9 @@ class RealFootballChampion:
                     float(pick.get('ev_sim')) if pick.get('ev_sim') else None,
                     float(pick.get('disagreement')) if pick.get('disagreement') else None,
                     int(time.time()),
+                    pick.get('pgr_score'),
+                    pick.get('league_tier'),
+                    pick.get('routing_reason'),
                 ))
                 saved += 1
             except Exception as e:
@@ -4017,8 +4020,8 @@ class RealFootballChampion:
                  open_odds, odds_source, trust_level,
                  odds_by_bookmaker, best_odds_value, best_odds_bookmaker, avg_odds, fair_odds, fixture_id,
                  model_prob, calibrated_prob, sim_probability, ev_sim, disagreement,
-                 open_ts)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 open_ts, pgr_score, league_tier, routing_reason)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (home_team, away_team, selection, market, match_date, mode) DO NOTHING
                 RETURNING id
             ''', (
@@ -4033,7 +4036,7 @@ class RealFootballChampion:
                 float(opp_dict.get('edge_percentage', 0)),
                 int(opp_dict.get('confidence', 0)),
                 opp_dict.get('analysis', '{}'),
-                float(opp_dict.get('stake', 100)),
+                float(opp_dict.get('stake', 1)),
                 opp_dict.get('match_date'),
                 opp_dict.get('kickoff_time'),
                 kickoff_utc,
@@ -4043,7 +4046,7 @@ class RealFootballChampion:
                 today_date,
                 opp_dict.get('recommended_tier', 'SINGLE'),
                 opp_dict.get('daily_rank', 999),
-                'PROD',  # Production mode
+                pick_mode,
                 bet_placed,
                 odds_value,  # open_odds = odds at bet creation
                 opp_dict.get('odds_source', 'the_odds_api'),
@@ -4060,6 +4063,9 @@ class RealFootballChampion:
                 float(ev_sim) if ev_sim else None,
                 float(disagreement) if disagreement else None,
                 int(time.time()),  # open_ts = epoch when pick was created
+                opp_dict.get('pgr_score'),
+                opp_dict.get('league_tier'),
+                opp_dict.get('routing_reason'),
             ), fetch='one')
             
             # Only proceed if a new row was inserted (ON CONFLICT DO NOTHING returns NULL if duplicate)
