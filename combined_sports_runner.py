@@ -713,6 +713,14 @@ def main():
     logger.info("🎁 Free Picks - Daily at 08:00 (Discord)")
     logger.info("="*80)
     
+    # DB migration: ensure pgr_score, league_tier, routing_reason columns exist
+    try:
+        from pgr_scoring import ensure_pgr_columns
+        ensure_pgr_columns()
+        logger.info("✅ PGR columns migration check complete")
+    except Exception as _e:
+        logger.warning(f"⚠️ pgr_scoring migration check failed (non-fatal): {_e}")
+
     # Smart Picks catchup — if it's past 08:00 UTC and engine just started, run it now
     import datetime as _dt
     _now_utc = _dt.datetime.utcnow()

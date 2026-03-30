@@ -3884,7 +3884,7 @@ class RealFootballChampion:
         return saved
 
     def _save_data_picks(self, data_picks: list) -> int:
-        """Save near-miss picks (positive EV but below PROD threshold) as mode='LEARNING' for Discord publishing."""
+        """Save VALUE_OPP and WATCHLIST picks to DB with PGR routing fields."""
         saved = 0
         for pick in data_picks:
             try:
@@ -3894,7 +3894,10 @@ class RealFootballChampion:
                 model_prob_value = analysis_data.get('p_model', 0)
                 odds_by_bookmaker = pick.get('odds_by_bookmaker')
                 odds_by_bookmaker_json = json.dumps(odds_by_bookmaker) if odds_by_bookmaker else None
-                pick_mode = pick.get('mode', 'LEARNING')
+                pick_mode = pick.get('mode', 'VALUE_OPP')
+                pgr_score_val = pick.get('pgr_score') or analysis_data.get('pgr_score')
+                league_tier_val = pick.get('league_tier') or analysis_data.get('league_tier')
+                routing_reason_val = pick.get('routing_reason')
 
                 db_helper.execute('''
                     INSERT INTO football_opportunities 
@@ -3910,6 +3913,10 @@ class RealFootballChampion:
                     ON CONFLICT (home_team, away_team, selection, market, match_date, mode) DO UPDATE
                     SET odds = EXCLUDED.odds, edge_percentage = EXCLUDED.edge_percentage,
                         confidence = EXCLUDED.confidence, analysis = EXCLUDED.analysis,
+                        pgr_score = EXCLUDED.pgr_score, league_tier = EXCLUDED.league_tier,
+                        routing_reason = EXCLUDED.routing_reason,
+                        bet_placed = false,
+                        stake = 0,
                         discord_sent = false
                 ''', (
                     pick.get('timestamp', int(time.time())),
@@ -3950,9 +3957,9 @@ class RealFootballChampion:
                     float(pick.get('ev_sim')) if pick.get('ev_sim') else None,
                     float(pick.get('disagreement')) if pick.get('disagreement') else None,
                     int(time.time()),
-                    pick.get('pgr_score'),
-                    pick.get('league_tier'),
-                    pick.get('routing_reason'),
+                    float(pgr_score_val) if pgr_score_val is not None else None,
+                    league_tier_val,
+                    routing_reason_val,
                 ))
                 saved += 1
             except Exception as e:
@@ -4009,6 +4016,10 @@ class RealFootballChampion:
             ev_sim = opp_dict.get('ev_sim')
             disagreement = opp_dict.get('disagreement')
             
+            pgr_score_val = opp_dict.get('pgr_score')
+            league_tier_val = opp_dict.get('league_tier')
+            routing_reason_val = opp_dict.get('routing_reason')
+
             # Use ON CONFLICT to prevent race condition duplicates
             # Unique constraint: (home_team, away_team, selection, market, match_date, mode)
             result = db_helper.execute('''
@@ -4063,9 +4074,9 @@ class RealFootballChampion:
                 float(ev_sim) if ev_sim else None,
                 float(disagreement) if disagreement else None,
                 int(time.time()),  # open_ts = epoch when pick was created
-                opp_dict.get('pgr_score'),
-                opp_dict.get('league_tier'),
-                opp_dict.get('routing_reason'),
+                float(pgr_score_val) if pgr_score_val is not None else None,
+                league_tier_val,
+                routing_reason_val,
             ), fetch='one')
             
             # Only proceed if a new row was inserted (ON CONFLICT DO NOTHING returns NULL if duplicate)

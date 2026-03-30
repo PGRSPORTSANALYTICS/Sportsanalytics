@@ -378,9 +378,15 @@ def format_analysis_embed(pick: dict) -> dict:
 
     color = _edge_color(edge)
 
-    pgr_score = pick.get("pgr_score")
-    league_tier = pick.get("league_tier", "")
-    pgr_str = f" · PGR {pgr_score:.2f}" if pgr_score else ""
+    analysis_data = {}
+    try:
+        import json as _json
+        analysis_data = _json.loads(pick.get("analysis") or "{}") or {}
+    except Exception:
+        pass
+    pgr_score = pick.get("pgr_score") or analysis_data.get("pgr_score")
+    league_tier = pick.get("league_tier") or analysis_data.get("league_tier")
+    pgr_str = f" · PGR {float(pgr_score):.1f}" if pgr_score is not None else ""
     tier_str = f" [T{league_tier}]" if league_tier else ""
 
     if mode == "DATA":
@@ -391,9 +397,19 @@ def format_analysis_embed(pick: dict) -> dict:
         color = 0x00C853
     elif mode == "VALUE_OPP":
         title = f"\U0001f4ca VALUE OPPORTUNITY{pgr_str}{tier_str} — {league}"
-        color = _edge_color(edge)
+        color = 0xFFAA00
+    elif mode == "WATCHLIST":
+        return None
     else:
         title = f"\U0001f4ca VALUE OPPORTUNITY — {league}"
+
+    if pgr_score is not None:
+        try:
+            lines.append(f"PGR Score: {float(pgr_score):.1f}")
+        except Exception:
+            pass
+    if league_tier:
+        lines.append(f"League Tier: {league_tier}")
 
     # Show when odds were collected so users know data freshness
     raw_ts = pick.get("timestamp") or pick.get("open_ts")
@@ -611,6 +627,10 @@ def run_publish_cycle():
             time.sleep(wait)
 
         payload = format_analysis_embed(pick)
+        if payload is None:
+            stats["deduped"] = stats.get("deduped", 0) + 1
+            mark_discord_sent(pick["id"])
+            continue
         success = post_to_discord(webhook_url, payload)
 
         if success:

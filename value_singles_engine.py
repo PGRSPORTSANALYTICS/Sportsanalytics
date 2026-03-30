@@ -61,6 +61,9 @@ PRO_MIN_EV = 0.25              # 25% EV
 PRO_MIN_CONFIDENCE = 0.70      # 70% model confidence
 PRO_MIN_ODDS = 1.75
 PRO_MAX_ODDS = 2.30
+# Minimum Expected Value (EV) for candidate generation scan (three-layer routing, Mar 30 2026)
+# Candidates below 7% EV are rejected before PGR scoring.
+MIN_VALUE_SINGLE_EV = 0.07  # 7% floor — candidates then scored and routed to PRO/VALUE/WATCHLIST
 MAX_VALUE_SINGLES_PER_DAY = 5  # Max 5 PRO picks/day
 
 # Layer 2: VALUE OPPORTUNITY — published in dashboard + Discord, NOT official bets
@@ -103,6 +106,25 @@ LEARNING_ONLY_MARKETS = {
     "AH_AWAY_+0.5", "AH_AWAY_+1.0", "AH_AWAY_+1.5",
 }
 
+# ============================================================
+# MARKET-SPECIFIC MIN_ODDS (Jan 11, 2026)
+# Require higher odds for markets showing value only at longer prices
+# ============================================================
+MARKET_SPECIFIC_MIN_ODDS = {
+    # HOME_WIN: Removed — now LEARNING_ONLY (Feb 6, 2026)
+}
+
+# Odds range for candidate generation (three-layer routing, Mar 30 2026)
+# Routing tiers apply tighter filters: PRO 1.75-2.30, VALUE/WATCHLIST up to 4.00
+MIN_VALUE_SINGLE_ODDS = 1.60  # Candidate floor — PRO tier enforces 1.75 internally
+MAX_VALUE_SINGLE_ODDS = 2.30  # PRO PICK upper limit (kept for save_value_singles legacy usage)
+MAX_LEARNING_ODDS = 4.00      # Candidate ceiling
+
+# Minimum model confidence for candidate generation (loose floor; routing tiers enforce stricter thresholds)
+MIN_VALUE_SINGLE_CONFIDENCE = 0.50  # 50% floor — routing tiers enforce stricter per-tier minimums
+
+# Maximum PRO PICK per day (max 5 PRO_PICK; VALUE/WATCHLIST have no hard daily cap)
+MAX_VALUE_SINGLES_PER_DAY = 5  # Mar 30, 2026: aligned to PRO_PICK_MAX_PER_DAY = 5
 # Tournament filter mode: relaxed thresholds for UCL/UEL
 TOURNAMENT_LEAGUES = {
     "soccer_uefa_champs_league",
@@ -420,14 +442,46 @@ class ValueSinglesEngine:
     ) -> List[Dict[str, Any]]:
         avoid_match_ids = avoid_match_ids or set()
         picks: List[Dict[str, Any]] = []
-        data_picks: List[Dict[str, Any]] = []  # LEARNING picks for Discord publishing (ev > 0, below PROD threshold)
+        data_picks: List[Dict[str, Any]] = []  # VALUE_OPP + WATCHLIST candidates
 
-        print("🔥 VALUE SINGLES — THREE-LAYER SCAN")
-        print(f"   PRO: EV>={PRO_MIN_EV*100:.0f}% | Conf>={PRO_MIN_CONFIDENCE*100:.0f}% | Odds {PRO_MIN_ODDS}-{PRO_MAX_ODDS} | max {MAX_VALUE_SINGLES_PER_DAY}/day")
-        print(f"   VALUE: EV>={VALUE_MIN_EV*100:.0f}% | Conf>={VALUE_MIN_CONFIDENCE*100:.0f}% | Odds {VALUE_MIN_ODDS}-{VALUE_MAX_ODDS}")
-        print(f"   WATCHLIST: EV>={WATCHLIST_MIN_EV*100:.0f}% | Conf>={WATCHLIST_MIN_CONFIDENCE*100:.0f}% | internal only")
-        print(f"   Scan floor: odds {MIN_VALUE_SINGLE_ODDS}-{MAX_LEARNING_ODDS} | {len(VALUE_SINGLE_LEAGUE_WHITELIST)} leagues")
+        try:
+            from pgr_scoring import (
+                compute_pgr_score, route_candidate, get_league_tier,
+                PRO_PICK_MAX_PER_DAY,
+            )
+            PGR_SCORING_AVAILABLE = True
+        except ImportError:
+            PGR_SCORING_AVAILABLE = False
+            PRO_PICK_MAX_PER_DAY = MAX_VALUE_SINGLES_PER_DAY  # fallback
+
         rejection_counts: dict = {}
+        _candidates_evaluated = 0  # Total market evaluations (before any filter)
+
+        # Unified rejection helper — logs candidate identity + reason for every reject path.
+        def _reject(reason: str, home: str = "", away: str = "", market: str = "",
+                    ev: float = 0.0, odds: float = 0.0) -> None:
+            rejection_counts[reason] = rejection_counts.get(reason, 0) + 1
+            if home and away:
+                print(f"   ❌ [{reason}]: {home} vs {away} | {market} odds={odds:.2f} ev={ev:.1%}")
+
+        print("🔥 THREE-LAYER SIGNAL ROUTING START")
+        print(f"   candidate floor: EV≥{MIN_VALUE_SINGLE_EV*100:.0f}% | odds {MIN_VALUE_SINGLE_ODDS}-{MAX_LEARNING_ODDS}")
+        print(f"   PRO PICK: EV≥25%, Conf≥70%, Odds 1.75-2.30, Tier A/B, max {PRO_PICK_MAX_PER_DAY if PGR_SCORING_AVAILABLE else MAX_VALUE_SINGLES_PER_DAY}/day")
+        print(f"   VALUE OPP: EV≥12%, Conf≥60%, Odds 1.60-4.00")
+        print(f"   WATCHLIST: EV 7-12%, Conf≥50% (DB only, not public)")
+        print(f"   leagues = {len(VALUE_SINGLE_LEAGUE_WHITELIST)} whitelisted")
+
+        # ── Query DB for today's existing PRO PICK count (day-scope cap enforcement) ──
+        pro_picks_in_db = 0
+        try:
+            if hasattr(self.champion, 'get_todays_count'):
+                pro_picks_in_db = self.champion.get_todays_count() or 0
+                print(f"   DB: {pro_picks_in_db} existing PRO PICKs today")
+        except Exception as _e:
+            print(f"   ⚠️ Could not fetch today's PRO count from DB: {_e}")
+
+        # raw_candidates: all signals that pass hard pre-routing filters (PGR scored, not yet routed)
+        raw_candidates: List[Dict[str, Any]] = []
 
         # 1) Get fixtures
         if not hasattr(self.champion, "get_todays_fixtures"):
@@ -555,18 +609,33 @@ class ValueSinglesEngine:
             for market_key, p_model in probs.items():
                 bookmaker_data = {}  # Reset per market to avoid stale data leaking between markets
                 odds = odds_dict.get(market_key)
+                _candidates_evaluated += 1  # Count every market evaluation before any filter
                 if odds is None:
+                    _reject("rejected_no_odds", home_team, away_team, market_key, 0.0, 0.0)
                     continue
                 
-                # BROAD SCAN FLOOR — all layers enter here; routing decides their tier
-                if not (VALUE_MIN_ODDS <= odds <= MAX_LEARNING_ODDS):
+                # ODDS FILTER: Allow bets in candidate range (1.60–4.00)
+                if not (MIN_VALUE_SINGLE_ODDS <= odds <= MAX_LEARNING_ODDS):
+                    _rr = "rejected_low_odds" if odds < MIN_VALUE_SINGLE_ODDS else "rejected_high_odds"
+                    _reject(_rr, home_team, away_team, market_key, 0.0, float(odds))
                     continue
-                if p_model < WATCHLIST_MIN_CONFIDENCE:
-                    continue  # Below even WATCHLIST threshold
+                
+                # MARKET-SPECIFIC MIN_ODDS FILTER (Jan 11, 2026)
+                # Some markets only profitable at longer odds
+                market_min_odds = MARKET_SPECIFIC_MIN_ODDS.get(market_key)
+                if market_min_odds and odds < market_min_odds:
+                    _reject("rejected_low_odds", home_team, away_team, market_key, 0.0, float(odds))
+                    continue
+                
+                # CONFIDENCE FLOOR: Skip below candidate minimum (50%)
+                if p_model < MIN_VALUE_SINGLE_CONFIDENCE:
+                    _reject("rejected_low_confidence", home_team, away_team, market_key, 0.0, float(odds))
+                    continue
 
                 # Check for conflict with exact score prediction (1X2 markets only)
                 if market_key in ("HOME_WIN", "AWAY_WIN", "DRAW"):
                     if self._is_1x2_conflicting(home_team, away_team, market_key):
+                        _reject("rejected_1x2_conflict", home_team, away_team, market_key, 0.0, float(odds))
                         continue
 
                 cal_data = calibrate_and_ev(p_model, odds)
@@ -582,162 +651,32 @@ class ValueSinglesEngine:
                 adj_ev, is_blocked, block_reason = apply_ev_controls(ev_after_cal)
                 if is_blocked:
                     print(f"   🚫 BLOCKED: {market_key} cal_ev={ev_after_cal:.1%} - {block_reason}")
+                    _reject("rejected_ev_controls", home_team, away_team, market_key, float(ev_after_cal), float(odds))
                     continue
                 
                 # ── Three-layer routing ──────────────────────────────────────────────
                 ev = adj_ev
 
-                # Minimum scan floor — reject anything below WATCHLIST threshold
-                if ev < WATCHLIST_MIN_EV:
-                    rejection_counts["rejected_low_ev"] = rejection_counts.get("rejected_low_ev", 0) + 1
+                # Candidate EV floor
+                if ev < MIN_VALUE_SINGLE_EV:
+                    _reject("rejected_low_ev", home_team, away_team, market_key, float(ev), float(odds))
                     continue
 
-                # Market-specific EV floor for noisy high-volume markets
-                market_floor = MARKET_SPECIFIC_MIN_EV.get(market_key)
-                if market_floor and ev < market_floor and ev < VALUE_MIN_EV:
-                    rejection_counts["rejected_low_ev"] = rejection_counts.get("rejected_low_ev", 0) + 1
-                    continue
+                # ── PGR SCORE (Pass 1: compute only, no routing decision yet) ──────
+                _league_key_for_routing = match.get('sport_key') or match.get('league_key') or match.get('odds_api_key') or ''
+                if PGR_SCORING_AVAILABLE:
+                    pgr_score = compute_pgr_score(
+                        ev=ev,
+                        confidence=calibrated_prob,
+                        market_key=market_key,
+                        league_key=_league_key_for_routing,
+                    )
+                    _league_tier = get_league_tier(_league_key_for_routing)
+                else:
+                    pgr_score = ev * 100 + calibrated_prob * 20
+                    _league_tier = "B"
 
-                # Determine learning-only status (market type + auto-promoter)
-                is_learning_only = market_key in LEARNING_ONLY_MARKETS
-                if AUTO_PROMOTER_AVAILABLE:
-                    promoter = get_promoter()
-                    if promoter.has_explicit_status('football', league_key, market_key):
-                        dynamic_status = promoter.get_market_status('football', league_key, market_key)
-                        if dynamic_status == 'DISABLED':
-                            print(f"   🚫 DISABLED by auto-promoter: {league_key}/{market_key}")
-                            rejection_counts["rejected_market_type"] = rejection_counts.get("rejected_market_type", 0) + 1
-                            continue
-                        elif dynamic_status == 'PRODUCTION':
-                            is_learning_only = False
-                        elif dynamic_status == 'LEARNING_ONLY':
-                            is_learning_only = True
-
-                # Smart conflict resolution for Over/Under goals vs Exact Score
-                conflict_result = self._check_conflict_with_ev_comparison(home_team, away_team, market_key, ev)
-                if conflict_result == 'skip':
-                    rejection_counts["rejected_low_ev"] = rejection_counts.get("rejected_low_ev", 0) + 1
-                    continue
-
-                # Compute PGR Score and route to a layer
-                pgr_score = compute_pgr_score(ev, p_model, odds, market_key, league_key)
-                league_tier = get_league_tier(league_key)
-                layer, routing_reason = route_candidate(
-                    ev=ev,
-                    confidence=p_model,
-                    odds=odds,
-                    market_key=market_key,
-                    league_key=league_key,
-                    is_learning_only=is_learning_only,
-                    pgr_score=pgr_score,
-                    pro_min_ev=PRO_MIN_EV,
-                    pro_min_conf=PRO_MIN_CONFIDENCE,
-                    pro_min_odds=PRO_MIN_ODDS,
-                    pro_max_odds=PRO_MAX_ODDS,
-                    val_min_ev=VALUE_MIN_EV,
-                    val_min_conf=VALUE_MIN_CONFIDENCE,
-                    val_min_odds=VALUE_MIN_ODDS,
-                    val_max_odds=VALUE_MAX_ODDS,
-                    watch_min_ev=WATCHLIST_MIN_EV,
-                    watch_min_conf=WATCHLIST_MIN_CONFIDENCE,
-                )
-
-                if layer == "REJECTED":
-                    rejection_counts[routing_reason] = rejection_counts.get(routing_reason, 0) + 1
-                    continue
-
-                # Demote PRO → VALUE_OPP if learning engine confidence too low
-                if LEARNING_ENGINE_AVAILABLE and layer == "PROD":
-                    combined_conf = compute_bet_confidence(ev, league_key, market_key, 'football')
-                    if combined_conf < MIN_COMBINED_CONFIDENCE:
-                        print(f"   📉 LOW CONF: {league_key}/{market_key} {combined_conf:.4f} — demoting PRO → VALUE_OPP")
-                        layer = "VALUE_OPP"
-                        routing_reason = "value_opportunity"
-
-                confidence = int(min(100, max(0, 50 + ev * 250)))
-                sim_prob = calibrated_prob
-                ev_sim = ev
-                disagreement = abs(raw_prob - calibrated_prob)
-                sim_approved = ev_sim >= 0.03
-                trust_level = classify_trust_level(
-                    ev_sim=ev_sim, ev_model=ev, confidence=sim_prob,
-                    disagreement=disagreement, sim_approved=sim_approved, odds=odds
-                )
-
-                print(f"   [{layer}] {market_key} EV={ev:.1%} Conf={p_model:.0%} Odds={odds:.2f} PGR={pgr_score:.3f} Tier={league_tier}")
-
-                selection_text = {
-                    # Over Goals
-                    "FT_OVER_0_5": "Over 0.5 Goals",
-                    "FT_OVER_1_5": "Over 1.5 Goals",
-                    "FT_OVER_2_5": "Over 2.5 Goals",
-                    "FT_OVER_3_5": "Over 3.5 Goals",
-                    "FT_OVER_4_5": "Over 4.5 Goals",
-                    # 1H Goals
-                    "1H_OVER_0_5": "1H Over 0.5 Goals",
-                    # BTTS
-                    "BTTS_YES": "BTTS Yes",
-                    "BTTS_NO": "BTTS No",
-                    # 1X2
-                    "HOME_WIN": "Home Win",
-                    "DRAW": "Draw",
-                    "AWAY_WIN": "Away Win",
-                    # Double Chance
-                    "DC_HOME_DRAW": "Home or Draw",
-                    "DC_HOME_AWAY": "Home or Away",
-                    "DC_DRAW_AWAY": "Draw or Away",
-                    # Draw No Bet
-                    "DNB_HOME": "Draw No Bet - Home",
-                    "DNB_AWAY": "Draw No Bet - Away",
-                    # Corners
-                    "CORNERS_OVER_8_5": "Corners Over 8.5",
-                    "CORNERS_OVER_9_5": "Corners Over 9.5",
-                    "CORNERS_OVER_10_5": "Corners Over 10.5",
-                    "CORNERS_OVER_11_5": "Corners Over 11.5",
-                    # Cards
-                    "CARDS_OVER_2_5": "Cards Over 2.5",
-                    "CARDS_OVER_3_5": "Cards Over 3.5",
-                    "CARDS_OVER_4_5": "Cards Over 4.5",
-                    "CARDS_OVER_5_5": "Cards Over 5.5",
-                    # Team Totals
-                    "HOME_OVER_0_5": f"{home_team} Over 0.5 Goals",
-                    "HOME_OVER_1_5": f"{home_team} Over 1.5 Goals",
-                    "AWAY_OVER_0_5": f"{away_team} Over 0.5 Goals",
-                    "AWAY_OVER_1_5": f"{away_team} Over 1.5 Goals",
-                    # Asian Handicap
-                    "AH_HOME_-0.5": f"{home_team} -0.5 (AH)",
-                    "AH_HOME_-1.0": f"{home_team} -1.0 (AH)",
-                    "AH_HOME_-1.5": f"{home_team} -1.5 (AH)",
-                    "AH_HOME_+0.5": f"{home_team} +0.5 (AH)",
-                    "AH_HOME_+1.0": f"{home_team} +1.0 (AH)",
-                    "AH_HOME_+1.5": f"{home_team} +1.5 (AH)",
-                    "AH_AWAY_-0.5": f"{away_team} -0.5 (AH)",
-                    "AH_AWAY_-1.0": f"{away_team} -1.0 (AH)",
-                    "AH_AWAY_-1.5": f"{away_team} -1.5 (AH)",
-                    "AH_AWAY_+0.5": f"{away_team} +0.5 (AH)",
-                    "AH_AWAY_+1.0": f"{away_team} +1.0 (AH)",
-                    "AH_AWAY_+1.5": f"{away_team} +1.5 (AH)",
-                }.get(market_key, market_key)
-
-                # Extract match_date and kickoff_time from commence_time if not present
-                commence_time = match.get('commence_time', '')
-                match_date = match.get('formatted_date') or match.get('match_date')
-                kickoff_time = match.get('formatted_time') or match.get('kickoff_time')
-                if not match_date and commence_time:
-                    from datetime import datetime
-                    try:
-                        dt = datetime.fromisoformat(commence_time.replace('Z', '+00:00'))
-                        match_date = dt.strftime("%Y-%m-%d")
-                        kickoff_time = dt.strftime("%H:%M")
-                    except Exception:
-                        match_date = commence_time[:10] if len(commence_time) > 10 else ""
-                        kickoff_time = commence_time[11:16] if len(commence_time) > 16 else ""
-
-                VALUE_SINGLES_STAKE = 1
-                bet_placed = (layer == "PROD")
-                stake = VALUE_SINGLES_STAKE if bet_placed else 0
-
-                # Collect bookmaker odds for this selection
+                # ── Collect bookmaker data ────────────────────────────────────────
                 bookmaker_data = {}
                 _mbb = match.get('markets_by_bookmaker', {})
                 if market_key in _mbb and _mbb[market_key]:
@@ -751,98 +690,357 @@ class ValueSinglesEngine:
                             'avg_odds': round(sum(_vals) / len(_vals), 3),
                         }
                 if not bookmaker_data and hasattr(self.champion, 'collect_bookmaker_odds'):
-                    api_market_key = None
-                    point_val = None
-                    if market_key in ('HOME_WIN', 'AWAY_WIN', 'DRAW'):
-                        api_market_key = 'h2h'
-                    elif 'OVER' in market_key:
-                        api_market_key = 'totals'
-                        parts = market_key.split('_')
-                        if len(parts) >= 3:
-                            try:
-                                point_val = float(f"{parts[-2]}.{parts[-1]}")
-                            except Exception:
-                                point_val = 2.5
-                    if api_market_key:
-                        bookmaker_data = self.champion.collect_bookmaker_odds(
-                            match, selection_text, api_market_key, point_val
-                        )
+                    _api_mkt = 'h2h' if market_key in ('HOME_WIN', 'AWAY_WIN', 'DRAW') else \
+                               'totals' if 'OVER' in market_key else None
+                    _pt = None
+                    if _api_mkt == 'totals':
+                        _parts = market_key.split('_')
+                        try: _pt = float(f"{_parts[-2]}.{_parts[-1]}")
+                        except: _pt = 2.5
+                    if _api_mkt:
+                        try:
+                            bookmaker_data = self.champion.collect_bookmaker_odds(
+                                match, market_key.replace("_", " ").title(), _api_mkt, _pt)
+                        except Exception:
+                            bookmaker_data = {}
 
+                _ko_utc, _ko_epoch = normalize_kickoff(commence_time)
+                _league_display = match.get("league_name") or match.get("league") or match.get("sport_title") or "Unknown"
+
+                # ── Check learning-only / auto-promoter status (pre-routing) ──────
+                _lk = _league_key_for_routing or _league_display
+                is_learning_only = market_key in LEARNING_ONLY_MARKETS
+                if AUTO_PROMOTER_AVAILABLE:
+                    promoter = get_promoter()
+                    if promoter.has_explicit_status('football', _lk, market_key):
+                        dynamic_status = promoter.get_market_status('football', _lk, market_key)
+                        if dynamic_status == 'DISABLED':
+                            _reject("rejected_market_type", home_team, away_team, market_key, float(ev), float(odds))
+                            continue
+                        elif dynamic_status == 'PRODUCTION':
+                            is_learning_only = False
+                        elif dynamic_status == 'LEARNING_ONLY':
+                            is_learning_only = True
+
+                if is_learning_only:
+                    _reject("rejected_market_type", home_team, away_team, market_key, float(ev), float(odds))
+                    continue
+
+                if LEARNING_ENGINE_AVAILABLE:
+                    combined_conf = compute_bet_confidence(ev, _lk, market_key, 'football')
+                    if combined_conf < MIN_COMBINED_CONFIDENCE:
+                        _reject("rejected_low_confidence", home_team, away_team, market_key, float(ev), float(odds))
+                        continue
+
+                # ── Extract selection text and kickoff ───────────────────────────
+                _sel_map = {
+                    "FT_OVER_0_5": "Over 0.5 Goals", "FT_OVER_1_5": "Over 1.5 Goals",
+                    "FT_OVER_2_5": "Over 2.5 Goals", "FT_OVER_3_5": "Over 3.5 Goals",
+                    "FT_OVER_4_5": "Over 4.5 Goals", "BTTS_YES": "BTTS Yes", "BTTS_NO": "BTTS No",
+                    "HOME_WIN": "Home Win", "AWAY_WIN": "Away Win", "DRAW": "Draw",
+                    "DOUBLE_CHANCE_1X": "Double Chance 1X", "DOUBLE_CHANCE_X2": "Double Chance X2",
+                    "DOUBLE_CHANCE_12": "Double Chance 12", "1H_OVER_0_5": "1H Over 0.5 Goals",
+                    "1H_OVER_1_5": "1H Over 1.5 Goals",
+                    "DC_HOME_DRAW": "Home or Draw", "DC_HOME_AWAY": "Home or Away",
+                    "DC_DRAW_AWAY": "Draw or Away", "DNB_HOME": "Draw No Bet - Home",
+                    "DNB_AWAY": "Draw No Bet - Away",
+                    "CORNERS_OVER_8_5": "Corners Over 8.5", "CORNERS_OVER_9_5": "Corners Over 9.5",
+                    "CORNERS_OVER_10_5": "Corners Over 10.5", "CORNERS_OVER_11_5": "Corners Over 11.5",
+                    "CARDS_OVER_2_5": "Cards Over 2.5", "CARDS_OVER_3_5": "Cards Over 3.5",
+                    "CARDS_OVER_4_5": "Cards Over 4.5", "CARDS_OVER_5_5": "Cards Over 5.5",
+                    "HOME_OVER_0_5": f"{home_team} Over 0.5 Goals",
+                    "HOME_OVER_1_5": f"{home_team} Over 1.5 Goals",
+                    "AWAY_OVER_0_5": f"{away_team} Over 0.5 Goals",
+                    "AWAY_OVER_1_5": f"{away_team} Over 1.5 Goals",
+                    "AH_HOME_-0.5": f"{home_team} -0.5 (AH)", "AH_HOME_-1.0": f"{home_team} -1.0 (AH)",
+                    "AH_HOME_-1.5": f"{home_team} -1.5 (AH)", "AH_HOME_+0.5": f"{home_team} +0.5 (AH)",
+                    "AH_HOME_+1.0": f"{home_team} +1.0 (AH)", "AH_HOME_+1.5": f"{home_team} +1.5 (AH)",
+                    "AH_AWAY_-0.5": f"{away_team} -0.5 (AH)", "AH_AWAY_-1.0": f"{away_team} -1.0 (AH)",
+                    "AH_AWAY_-1.5": f"{away_team} -1.5 (AH)", "AH_AWAY_+0.5": f"{away_team} +0.5 (AH)",
+                    "AH_AWAY_+1.0": f"{away_team} +1.0 (AH)", "AH_AWAY_+1.5": f"{away_team} +1.5 (AH)",
+                }
+                selection_text = _sel_map.get(market_key, market_key.replace("_", " ").title())
+
+                kickoff_time = match.get('formatted_time') or match.get('kickoff_time')
+                if not match_date and commence_time:
+                    from datetime import datetime as _dt
+                    try:
+                        _d = _dt.fromisoformat(commence_time.replace('Z', '+00:00'))
+                        match_date = _d.strftime("%Y-%m-%d")
+                        kickoff_time = _d.strftime("%H:%M")
+                    except Exception:
+                        match_date = commence_time[:10] if len(commence_time) > 10 else ""
+                        kickoff_time = commence_time[11:16] if len(commence_time) > 16 else ""
+
+                sim_prob = calibrated_prob
+                ev_sim = ev
+                disagreement = abs(raw_prob - calibrated_prob)
+                sim_approved = ev_sim >= 0.03
+                trust_level = classify_trust_level(
+                    ev_sim=ev_sim, ev_model=ev, confidence=sim_prob,
+                    disagreement=disagreement, sim_approved=sim_approved, odds=odds
+                )
                 fair_odds = round(1.0 / p_model, 3) if p_model > 0 else None
-                kickoff_utc, kickoff_epoch = normalize_kickoff(commence_time)
-                created_at_utc = to_iso_utc(now_utc())
-                league_name = match.get("league_name") or match.get("league") or match.get("sport_title") or "Unknown League"
+                confidence = int(min(100, max(0, calibrated_prob * 100)))
 
-                opportunity = {
-                    "timestamp": int(time.time()),
-                    "open_ts": int(time.time()),
+                # ── Store as raw candidate (routing deferred to pass 2) ───────────
+                raw_candidates.append({
+                    # identity
                     "match_id": match_id,
                     "home_team": match.get("home_team"),
                     "away_team": match.get("away_team"),
-                    "league": league_name,
-                    "market": "Value Single",
+                    "league": _league_display,
+                    "market_key": market_key,
                     "selection": selection_text,
-                    "odds": float(odds),
-                    "edge_percentage": float(ev * 100),
-                    "confidence": int(confidence),
-                    "analysis": json.dumps({
-                        "market_key": market_key,
-                        "p_model": float(raw_prob),
-                        "calibrated_prob": float(calibrated_prob),
-                        "prob_shift_pp": float(prob_shift),
-                        "ev": float(ev),
-                        "raw_ev": float(raw_ev),
-                        "expected_home_goals": float(lh),
-                        "expected_away_goals": float(la),
-                    }),
-                    "model_prob": float(raw_prob),
+                    # probabilities & EV
+                    "ev": float(ev),
+                    "raw_prob": float(raw_prob),
                     "calibrated_prob": float(calibrated_prob),
-                    "stake": stake,
-                    "bet_placed": bet_placed,
-                    "mode": layer,            # PROD / VALUE_OPP / WATCHLIST
-                    "trust_level": trust_level,
+                    "raw_ev": float(raw_ev),
+                    "prob_shift": float(prob_shift),
+                    "confidence": confidence,
+                    # PGR scoring
+                    "pgr_score": float(pgr_score),
+                    "league_tier": _league_tier,
+                    "league_key": _lk,
+                    # odds
+                    "odds": float(odds),
+                    "fair_odds": fair_odds,
+                    "bookmaker_data": bookmaker_data,
+                    # match info
                     "match_date": match_date,
                     "kickoff_time": kickoff_time,
-                    "kickoff_utc": kickoff_utc,
-                    "kickoff_epoch": kickoff_epoch,
-                    "created_at_utc": created_at_utc,
+                    "kickoff_utc": _ko_utc,
+                    "kickoff_epoch": _ko_epoch,
                     "quality_score": float(match.get("quality_score", 50)),
-                    "recommended_tier": "SINGLE",
-                    "daily_rank": 999,
-                    "sim_probability": float(sim_prob),
+                    "fixture_id": match.get("fixture_id"),
+                    "lh": float(lh),
+                    "la": float(la),
+                    # trust / sim
+                    "trust_level": trust_level,
+                    "sim_prob": float(sim_prob),
                     "ev_sim": float(ev_sim),
                     "disagreement": float(disagreement),
+                    "is_learning_only": is_learning_only,
+                })
+                print(f"   📦 CANDIDATE: {market_key} EV={ev:.1%} Conf={calibrated_prob:.0%} Odds={float(odds):.2f} PGR={pgr_score:.1f} Tier={_league_tier}")
+
+        # ════════════════════════════════════════════════════════════════════
+        # PASS 2: Sort all raw candidates by PGR score (desc), then route
+        #         deterministically using DB-sourced pro_picks_in_db counter.
+        #         This ensures highest-quality candidates always get first access
+        #         to the PRO PICK slots before VALUE_OPP / WATCHLIST assignment.
+        # ════════════════════════════════════════════════════════════════════
+        raw_candidates.sort(key=lambda c: (c["pgr_score"], c["ev"]), reverse=True)
+        print(f"\n📊 PASS 2: Routing {len(raw_candidates)} candidates (sorted by PGR score)")
+        print(f"   Starting pro_picks_in_db = {pro_picks_in_db}")
+
+        _pro_cap = PRO_PICK_MAX_PER_DAY if PGR_SCORING_AVAILABLE else MAX_VALUE_SINGLES_PER_DAY
+        # NOTE: pro_picks_today is NOT used during routing (daily cap is applied at selection step).
+        # It's tracked here only for the telemetry summary.
+        pro_picks_today = pro_picks_in_db
+
+        for c in raw_candidates:
+            ev = c["ev"]
+            calibrated_prob = c["calibrated_prob"]
+            raw_prob = c["raw_prob"]
+            raw_ev = c["raw_ev"]
+            prob_shift = c["prob_shift"]
+            pgr_score = c["pgr_score"]
+            _league_tier = c["league_tier"]
+            odds = c["odds"]
+            market_key = c["market_key"]
+            _lk = c["league_key"]
+            match_id = c["match_id"]
+            home_team = c["home_team"]
+            away_team = c["away_team"]
+            bookmaker_data = c["bookmaker_data"]
+            match_date = c["match_date"]
+            kickoff_time = c["kickoff_time"]
+            _ko_utc = c["kickoff_utc"]
+            _ko_epoch = c["kickoff_epoch"]
+            lh = c["lh"]
+            la = c["la"]
+            trust_level = c["trust_level"]
+            sim_prob = c["sim_prob"]
+            ev_sim = c["ev_sim"]
+            disagreement = c["disagreement"]
+            fair_odds = c["fair_odds"]
+            confidence = c["confidence"]
+            is_learning_only = c["is_learning_only"]
+            selection_text = c["selection"]
+
+            # ── Determine routing tier ────────────────────────────────────────
+            # IMPORTANT: Pass pro_picks_today=0 here so routing is purely quality-based.
+            # The daily cap is enforced after unique-match dedup in the selection step,
+            # ensuring the best distinct matches fill available slots before overflow
+            # candidates are rerouted to VALUE_OPP.
+            if PGR_SCORING_AVAILABLE:
+                _routing, _routing_reason = route_candidate(
+                    ev=ev,
+                    confidence=calibrated_prob,
+                    odds=odds,
+                    market_key=market_key,
+                    league_key=_lk,
+                    pgr_score=pgr_score,
+                    pro_picks_today=0,  # Cap applied at selection step, not here
+                )
+            else:
+                if ev >= 0.25 and calibrated_prob >= 0.70 and 1.75 <= odds <= 2.30 and pgr_score >= 55.0:
+                    _routing, _routing_reason = "PRO_PICK", "routed_pro_pick"
+                elif ev >= 0.12 and calibrated_prob >= 0.60 and pgr_score >= 35.0:
+                    _routing, _routing_reason = "VALUE_OPP", "routed_value_opp"
+                elif pgr_score >= 20.0:
+                    _routing, _routing_reason = "WATCHLIST", "routed_watchlist"
+                else:
+                    _routing, _routing_reason = "REJECTED", "rejected_score_below_threshold"
+
+            if _routing == "REJECTED":
+                _reject(_routing_reason, home_team, away_team, market_key, float(ev), float(odds))
+                continue
+
+            print(f"   🏷️ [{_routing}] {market_key} EV={ev:.1%} Conf={calibrated_prob:.0%} Odds={odds:.2f} PGR={pgr_score:.1f} Tier={_league_tier}")
+
+            # ── Build analysis blob shared by both tier paths ─────────────────
+            _created = to_iso_utc(now_utc())
+
+            # ── VALUE_OPP and WATCHLIST → data_picks (never official P&L) ──────
+            if _routing in ("VALUE_OPP", "WATCHLIST"):
+                _mode = "VALUE_OPP" if _routing == "VALUE_OPP" else "WATCHLIST"
+                data_picks.append({
+                    "timestamp": int(time.time()),
+                    "match_id": match_id,
+                    "home_team": home_team,
+                    "away_team": away_team,
+                    "league": c["league"],
+                    "market": "Value Single",
+                    "selection": selection_text,
+                    "odds": odds,
+                    "edge_percentage": float(ev * 100),
+                    "confidence": confidence,
+                    "analysis": json.dumps({
+                        "market_key": market_key,
+                        "p_model": raw_prob,
+                        "calibrated_prob": calibrated_prob,
+                        "ev": ev,
+                        "pgr_score": pgr_score,
+                        "league_tier": _league_tier,
+                        "routing": _routing,
+                    }),
+                    "match_date": match_date,
+                    "kickoff_utc": _ko_utc,
+                    "kickoff_epoch": _ko_epoch,
+                    "created_at_utc": _created,
+                    "mode": _mode,
+                    "stake": 0,
+                    "bet_placed": False,
                     "odds_by_bookmaker": bookmaker_data.get('odds_by_bookmaker'),
                     "best_odds_value": bookmaker_data.get('best_odds_value'),
                     "best_odds_bookmaker": bookmaker_data.get('best_odds_bookmaker'),
                     "avg_odds": bookmaker_data.get('avg_odds'),
                     "fair_odds": fair_odds,
-                    "fixture_id": match.get("fixture_id"),
-                    "is_learning_only": is_learning_only,
-                    "market_key_raw": market_key,
-                    # Three-layer routing fields
+                    "fixture_id": c.get("fixture_id"),
+                    "trust_level": _routing,
+                    "sim_probability": sim_prob,
+                    "ev_sim": ev_sim,
+                    "model_prob": raw_prob,
+                    "calibrated_prob": calibrated_prob,
+                    "disagreement": disagreement,
                     "pgr_score": pgr_score,
-                    "league_tier": league_tier,
-                    "routing_reason": routing_reason,
-                }
+                    "league_tier": _league_tier,
+                    "routing_reason": _routing_reason,
+                })
+                continue
 
-                picks.append(opportunity)
+            # ── PRO PICK path ─────────────────────────────────────────────────
+            # Smart conflict resolution for Over/Under goals vs Exact Score
+            conflict_result = self._check_conflict_with_ev_comparison(home_team, away_team, market_key, ev)
+            if conflict_result == 'skip':
+                _reject("rejected_1x2_conflict", home_team, away_team, market_key, float(ev), float(odds))
+                continue
 
-        # ── Three-layer separation ────────────────────────────────────────────────
-        pro_picks     = [p for p in picks if p.get('mode') == 'PROD']
-        value_picks   = [p for p in picks if p.get('mode') == 'VALUE_OPP']
-        watchlist_picks = [p for p in picks if p.get('mode') == 'WATCHLIST']
+            if confidence < self.min_confidence:
+                _reject("rejected_low_confidence", home_team, away_team, market_key, float(ev), float(odds))
+                continue
 
-        # ── Rejection summary ─────────────────────────────────────────────────────
-        total_candidates = len(picks) + sum(rejection_counts.values())
-        print(f"\n📊 CYCLE SUMMARY: {total_candidates} candidates scanned")
-        print(f"   PRO PICK:           {len(pro_picks)}")
-        print(f"   VALUE OPPORTUNITY:  {len(value_picks)}")
-        print(f"   WATCHLIST:          {len(watchlist_picks)}")
-        if rejection_counts:
-            print(f"   Rejections:")
-            for reason, cnt in sorted(rejection_counts.items(), key=lambda x: -x[1]):
-                print(f"      {reason}: {cnt}")
+            pro_picks_today += 1
+
+            opportunity = {
+                "timestamp": int(time.time()),
+                "match_id": match_id,
+                "home_team": home_team,
+                "away_team": away_team,
+                "league": c["league"],
+                "market": "Value Single",
+                "selection": selection_text,
+                "odds": odds,
+                "edge_percentage": float(ev * 100),
+                "confidence": confidence,
+                "analysis": json.dumps({
+                    "market_key": market_key,
+                    "p_model": raw_prob,
+                    "calibrated_prob": calibrated_prob,
+                    "prob_shift_pp": prob_shift,
+                    "ev": ev,
+                    "raw_ev": raw_ev,
+                    "expected_home_goals": lh,
+                    "expected_away_goals": la,
+                    "pgr_score": pgr_score,
+                    "league_tier": _league_tier,
+                    "routing": "PRO_PICK",
+                }),
+                "model_prob": raw_prob,
+                "calibrated_prob": calibrated_prob,
+                "stake": 1,
+                "match_date": match_date,
+                "kickoff_time": kickoff_time,
+                "kickoff_utc": _ko_utc,
+                "kickoff_epoch": _ko_epoch,
+                "created_at_utc": _created,
+                "quality_score": c["quality_score"],
+                "recommended_tier": "SINGLE",
+                "daily_rank": 999,
+                "trust_level": trust_level,
+                "sim_probability": sim_prob,
+                "ev_sim": ev_sim,
+                "disagreement": disagreement,
+                "odds_by_bookmaker": bookmaker_data.get('odds_by_bookmaker'),
+                "best_odds_value": bookmaker_data.get('best_odds_value'),
+                "best_odds_bookmaker": bookmaker_data.get('best_odds_bookmaker'),
+                "avg_odds": bookmaker_data.get('avg_odds'),
+                "fair_odds": fair_odds,
+                "fixture_id": c.get("fixture_id"),
+                "is_learning_only": is_learning_only,
+                "market_key_raw": market_key,
+                "mode": "PROD",
+                "pgr_score": pgr_score,
+                "league_tier": _league_tier,
+                "routing_reason": _routing_reason,
+            }
+            picks.append(opportunity)
+
+        # ── Telemetry summary ─────────────────────────────────────────────────
+        # _candidates_evaluated: all market evaluations before any filter (true denominator)
+        # _total_pre_routing_candidates: passed all hard filters → entered pass-2 routing
+        # _total_routed: routed to a tier (PRO/VALUE_OPP/WATCHLIST)
+        # routing_rejects: failed pass-2 thresholds (PGR/EV/Conf/cap etc.)
+        # scan_rejects: failed pre-routing hard filters
+        _n_pro = len(picks)
+        _n_value_opp = sum(1 for d in data_picks if d.get('mode') == 'VALUE_OPP')
+        _n_watchlist = sum(1 for d in data_picks if d.get('mode') == 'WATCHLIST')
+        _total_pre_routing = len(raw_candidates)
+        _total_routed = _n_pro + _n_value_opp + _n_watchlist
+        _routing_rejects = _total_pre_routing - _total_routed
+        _scan_rejects = _candidates_evaluated - _total_pre_routing
+        print(f"\n📊 THREE-TIER ROUTING SUMMARY")
+        print(f"   Total evaluated: {_candidates_evaluated} | Hard-filter pass: {_total_pre_routing} | Scan rejects: {_scan_rejects}")
+        print(f"   Routed: PRO PICK={_n_pro} | VALUE OPP={_n_value_opp} | WATCHLIST={_n_watchlist} | Routing rejects={_routing_rejects}")
+        print(f"   PRO cap: {pro_picks_today}/{_pro_cap} (including {pro_picks_in_db} from earlier cycles today)")
+        print(f"   Rejection breakdown: {rejection_counts}")
+
+        production_picks = [p for p in picks if not p.get('is_learning_only')]
+        learning_picks = [p for p in picks if p.get('is_learning_only')]
+
 
         # ── Conflict resolution for PRO picks only ────────────────────────────────
         def _resolve_over_under_conflicts(pick_list):
@@ -879,30 +1077,106 @@ class ValueSinglesEngine:
                  for c in pro_picks],
                 label="VALUE_SINGLES"
             )
+            for c in production_picks[:5]:
+                ev_show = c.get("edge_percentage", 0)
+                pgr_show = c.get("pgr_score", 0) or 0
+                analysis = json.loads(c.get("analysis", "{}"))
+                p_raw = analysis.get("p_model", 0)
+                p_cal = analysis.get("calibrated_prob", p_raw)
+                print(f"   PRO CANDIDATE: {c['home_team']} vs {c['away_team']} | {c.get('selection')} | odds={c.get('odds', 0):.2f} p={p_raw:.2%}→{p_cal:.2%} EV={ev_show:.1f}% PGR={pgr_show:.1f}")
 
-        # ── Sort PRO by pgr_score, enforce unique matches, apply daily cap ────────
-        pro_picks.sort(key=lambda x: x.get("pgr_score", 0), reverse=True)
-        effective_limit = min(MAX_VALUE_SINGLES_PER_DAY, max_picks)
+        # Already sorted by PGR in pass 2, but apply one final sort to production_picks
+        # (conflict resolution may have dropped some items, re-sort to be safe)
+        production_picks.sort(key=lambda x: (x.get("pgr_score") or 0, x["edge_percentage"]), reverse=True)
+
+        # Apply unique-match cap + daily limit using remaining PRO slots
+        remaining_slots = max(0, _pro_cap - pro_picks_in_db)
+        effective_limit = min(remaining_slots, max_picks)
         unique: List[Dict[str, Any]] = []
         used_matches: Set[str] = set()
-        for p in pro_picks:
-            if p["match_id"] in used_matches:
-                continue
-            unique.append(p)
-            used_matches.add(p["match_id"])
-            if len(unique) >= effective_limit:
-                break
+        if effective_limit > 0:
+            for p in production_picks:
+                if p["match_id"] in used_matches:
+                    continue
+                unique.append(p)
+                used_matches.add(p["match_id"])
+                if len(unique) >= effective_limit:
+                    break
 
-        print(f"\n🎯 PRO PICKS SELECTED: {len(unique)} (cap {MAX_VALUE_SINGLES_PER_DAY}/day, max_picks={max_picks})")
+        print(f"🎯 SELECTED: Top {len(unique)} production singles (remaining_slots={remaining_slots}, max_picks={max_picks})")
         for i, p in enumerate(unique, 1):
-            print(f"   #{i}: {p['home_team']} vs {p['away_team']} | {p['selection']} @ {p['odds']:.2f} EV={p['edge_percentage']:.1f}% PGR={p.get('pgr_score',0):.3f}")
+            print(f"   #{i}: {p['home_team']} vs {p['away_team']} | {p['selection']} @ {p['odds']:.2f} (EV {p['edge_percentage']:.1f}% PGR={p.get('pgr_score',0):.1f})")
 
-        print(f"📡 VALUE OPPORTUNITIES: {len(value_picks)} signals for Discord/dashboard")
-        print(f"🔍 WATCHLIST: {len(watchlist_picks)} internal signals")
+        # ── Reroute PRO candidates dropped by uniqueness/daily cap → VALUE_OPP ──
+        # Any PRO-quality pick that didn't make the final selection is too good to
+        # discard — downgrade to VALUE_OPP so it still appears in the dashboard
+        # and Discord value channel rather than being silently lost.
+        prod_dropped = [p for p in production_picks if p not in unique]
+        for dp in prod_dropped:
+            _rr_reason = "routed_value_opp_from_pro_cap"
+            print(f"   🔄 REROUTE PRO→VALUE_OPP (cap/dup): {dp['home_team']} vs {dp['away_team']} | {dp.get('selection')} EV={dp.get('edge_percentage',0):.1f}% PGR={dp.get('pgr_score',0):.1f}")
+            data_picks.append({
+                "timestamp": int(time.time()),
+                "match_id": dp["match_id"],
+                "home_team": dp["home_team"],
+                "away_team": dp["away_team"],
+                "league": dp.get("league", ""),
+                "market": "Value Single",
+                "selection": dp.get("selection", ""),
+                "odds": dp.get("odds", 0),
+                "edge_percentage": dp.get("edge_percentage", 0),
+                "confidence": dp.get("confidence", 0),
+                "analysis": dp.get("analysis", "{}"),
+                "match_date": dp.get("match_date"),
+                "kickoff_utc": dp.get("kickoff_utc"),
+                "kickoff_epoch": dp.get("kickoff_epoch"),
+                "created_at_utc": dp.get("created_at_utc"),
+                "mode": "VALUE_OPP",
+                "stake": 0,
+                "bet_placed": False,
+                "odds_by_bookmaker": dp.get("odds_by_bookmaker"),
+                "best_odds_value": dp.get("best_odds_value"),
+                "best_odds_bookmaker": dp.get("best_odds_bookmaker"),
+                "avg_odds": dp.get("avg_odds"),
+                "fair_odds": dp.get("fair_odds"),
+                "fixture_id": dp.get("fixture_id"),
+                "trust_level": dp.get("trust_level"),
+                "sim_probability": dp.get("sim_probability"),
+                "ev_sim": dp.get("ev_sim"),
+                "model_prob": dp.get("model_prob"),
+                "calibrated_prob": dp.get("calibrated_prob"),
+                "disagreement": dp.get("disagreement"),
+                "pgr_score": dp.get("pgr_score"),
+                "league_tier": dp.get("league_tier"),
+                "routing_reason": _rr_reason,
+            })
 
-        # Store non-PRO picks for the Discord publisher / dashboard
-        self._learning_picks = watchlist_picks
-        self._data_picks = value_picks + watchlist_picks
+        self._learning_picks = learning_picks
+        self._data_picks = data_picks
+        _n_value_opp_final = sum(1 for d in data_picks if d.get('mode') == 'VALUE_OPP')
+        _n_watchlist_final = sum(1 for d in data_picks if d.get('mode') == 'WATCHLIST')
+        print(f"📡 SIGNAL PICKS (Discord): {len(data_picks)} signals queued (VALUE_OPP={_n_value_opp_final}, WATCHLIST={_n_watchlist_final})")
+
+        # ── MISSADE SPEL ──────────────────────────────────────────────────────
+        all_missed = []
+        for dp in data_picks:
+            all_missed.append({
+                "match": f"{dp.get('home_team','?')} vs {dp.get('away_team','?')}",
+                "selection": dp.get("selection", "?"),
+                "odds": dp.get("odds", 0),
+                "ev": dp.get("edge_percentage", 0),
+                "reason": f"Routed {dp.get('mode','?')} — {dp.get('routing_reason','?')}",
+                "league": dp.get("league", "?"),
+            })
+        all_missed.sort(key=lambda x: x["ev"], reverse=True)
+        if all_missed:
+            print(f"\n👉 MISSADE SPEL — {len(all_missed)} value opportunities (EJ PROD picks):")
+            for i, m in enumerate(all_missed[:20], 1):
+                print(f"   #{i}: [{m['league']}] {m['match']} | {m['selection']} @ {m['odds']:.2f} | {m['reason']}")
+            if len(all_missed) > 20:
+                print(f"   ... och {len(all_missed)-20} till")
+        else:
+            print("👉 MISSADE SPEL: Inga missade value opportunities denna cykel")
 
         return unique
 

@@ -1,165 +1,183 @@
 """
-PGR Scoring Module — Three-layer signal routing
-Weighted PGR Score: EV(40%) + Confidence(25%) + CLV potential(15%) + Market softness(10%) + League tier(10%)
+PGR Score — Weighted candidate ranking for three-layer signal routing.
+
+Formula (weights must sum to 1.0):
+  EV             40%
+  Confidence     25%
+  CLV Potential  15%
+  Market Softness 10%
+  League Tier    10%
+
+Each component is normalised to 0–100 before weighting.
 """
 
-from typing import Tuple
+from typing import Optional
+from league_config import get_league_by_odds_key
 
-# ── Market softness weights ────────────────────────────────────────────────────
-# Higher weight = softer market (more bookmaker margin, more model edge available)
-MARKET_WEIGHTS: dict = {
-    # Corners — very soft, low bookmaker competency
-    "CORNERS_OVER_8_5": 1.45,
-    "CORNERS_OVER_9_5": 1.45,
-    "CORNERS_OVER_10_5": 1.40,
-    "CORNERS_OVER_11_5": 1.35,
-    # Cards — also soft, sharp books underweight these
-    "CARDS_OVER_2_5": 1.40,
-    "CARDS_OVER_3_5": 1.40,
-    "CARDS_OVER_4_5": 1.35,
-    "CARDS_OVER_5_5": 1.30,
-    # Totals — moderate softness
-    "FT_OVER_4_5": 1.25,
-    "FT_OVER_3_5": 1.20,
+EV_WEIGHT = 0.40
+CONFIDENCE_WEIGHT = 0.25
+CLV_WEIGHT = 0.15
+MARKET_SOFTNESS_WEIGHT = 0.10
+LEAGUE_TIER_WEIGHT = 0.10
+
+MARKET_WEIGHTS: dict[str, float] = {
+    "CORNERS": 1.20,
+    "CARDS": 1.15,
     "FT_OVER_2_5": 1.10,
-    "FT_OVER_1_5": 1.05,
-    "FT_OVER_0_5": 1.00,
-    # BTTS — moderate
-    "BTTS_YES": 1.15,
-    "BTTS_NO": 1.10,
-    # Double Chance — slightly soft
-    "DOUBLE_CHANCE_1X": 1.05,
-    "DOUBLE_CHANCE_12": 1.05,
-    "DOUBLE_CHANCE_X2": 1.05,
-    "DC_HOME_DRAW": 1.05,
-    "DC_HOME_AWAY": 1.05,
-    "DC_DRAW_AWAY": 1.05,
-    # 1X2 — sharpest market, bookmakers best here
-    "HOME_WIN": 0.90,
-    "AWAY_WIN": 0.85,
-    "DRAW": 0.80,
-    # Asian Handicap — fairly efficient
-    "AH_HOME_-0.5": 0.90, "AH_HOME_+0.5": 0.90,
-    "AH_HOME_-1.0": 0.88, "AH_HOME_+1.0": 0.88,
-    "AH_HOME_-1.5": 0.85, "AH_HOME_+1.5": 0.85,
-    "AH_AWAY_-0.5": 0.90, "AH_AWAY_+0.5": 0.90,
-    "AH_AWAY_-1.0": 0.88, "AH_AWAY_+1.0": 0.88,
-    "AH_AWAY_-1.5": 0.85, "AH_AWAY_+1.5": 0.85,
+    "FT_OVER_1_5": 1.10,
+    "FT_OVER_3_5": 1.05,
+    "FT_OVER_4_5": 1.05,
+    "BTTS_YES": 1.05,
+    "BTTS_NO": 1.00,
+    "HOME_WIN": 0.95,
+    "AWAY_WIN": 0.95,
+    "DRAW": 0.90,
+    "DOUBLE_CHANCE_1X": 0.95,
+    "DOUBLE_CHANCE_X2": 0.95,
+    "DOUBLE_CHANCE_12": 0.95,
+    "DNB_HOME": 0.95,
+    "DNB_AWAY": 0.95,
+}
+MARKET_WEIGHT_DEFAULT = 1.00
+
+LEAGUE_TIER_LETTER_MAP: dict[int, str] = {
+    1: "A",
+    2: "B",
+    3: "C",
+}
+LEAGUE_TIER_SCORE_MAP: dict[str, float] = {
+    "A": 100.0,
+    "B": 65.0,
+    "C": 30.0,
 }
 
-# ── League tier classification ─────────────────────────────────────────────────
-# A = Strongest historical performance, high data quality, sharp markets (paradox: harder)
-#     Our model has strong calibration here → PRO eligible
-# B = Good performance, acceptable volatility → PRO + VALUE eligible
-# C = Volatile / thin data / lower market quality → VALUE + WATCHLIST only, not PRO
-LEAGUE_TIERS: dict = {
-    # Tier A — Top 5 + UCL
-    "soccer_epl": "A",
-    "soccer_spain_la_liga": "A",
-    "soccer_italy_serie_a": "A",
-    "soccer_germany_bundesliga": "A",
-    "soccer_france_ligue_one": "A",
-    "soccer_uefa_champs_league": "A",
-    # Tier B — Second-tier European + UEL/UECL
-    "soccer_efl_champ": "B",
-    "soccer_netherlands_eredivisie": "B",
-    "soccer_portugal_primeira_liga": "B",
-    "soccer_belgium_first_div": "B",
-    "soccer_spl": "B",
-    "soccer_uefa_europa_league": "B",
-    "soccer_uefa_europa_conference_league": "B",
-    "soccer_england_league1": "B",
-    "soccer_england_league2": "B",
-    "soccer_germany_bundesliga2": "B",
-    "soccer_italy_serie_b": "B",
-    "soccer_spain_segunda_division": "B",
-    "soccer_france_ligue_two": "B",
-    "soccer_turkey_super_league": "B",
-    "soccer_greece_super_league": "B",
-    "soccer_poland_ekstraklasa": "B",
-    "soccer_austria_bundesliga": "B",
-    "soccer_switzerland_superleague": "B",
-    "soccer_sweden_allsvenskan": "B",
-    "soccer_norway_eliteserien": "B",
-    "soccer_denmark_superliga": "B",
-    # Tier C — Americas / Asia / Lower data quality
-    "soccer_brazil_campeonato": "C",
-    "soccer_argentina_primera_division": "C",
-    "soccer_usa_mls": "C",
-    "soccer_mexico_ligamx": "C",
-    "soccer_japan_j_league": "C",
-    "soccer_korea_kleague1": "C",
-    "soccer_australia_aleague": "C",
-    "soccer_netherlands_eerste_divisie": "C",
-    "soccer_portugal_segunda_liga": "C",
-    "soccer_czech_liga": "C",
-    "soccer_conmebol_copa_libertadores": "C",
-    "soccer_conmebol_copa_sudamericana": "C",
-    "soccer_brazil_serie_b": "C",
-    "soccer_chile_campeonato": "C",
-}
 
-_TIER_SCORE = {"A": 1.0, "B": 0.70, "C": 0.35}
+def _normalize_league_key(league_key: str) -> str:
+    """Normalize a league key before lookup.
+
+    Strips leading/trailing whitespace and lowercases so that variant
+    forms of the same key (e.g. 'Soccer_epl' vs 'soccer_epl') resolve
+    to the same lookup.  Returns empty string for None/falsy input so
+    callers get a predictable B-tier fallback rather than a KeyError.
+    """
+    if not league_key:
+        return ""
+    return str(league_key).strip().lower()
 
 
 def get_league_tier(league_key: str) -> str:
-    """Return league tier A, B, or C. Defaults to B for unknown leagues."""
-    return LEAGUE_TIERS.get(str(league_key), "B")
+    """Return letter tier A/B/C for a league odds_api_key. Falls back to B."""
+    normalized = _normalize_league_key(league_key)
+    if not normalized:
+        return "B"
+    league = get_league_by_odds_key(normalized)
+    if league is None:
+        # Try stripping a common sport prefix ("soccer_") that some callers include
+        for prefix in ("soccer_", "football_"):
+            if normalized.startswith(prefix):
+                league = get_league_by_odds_key(normalized[len(prefix):])
+                if league is not None:
+                    break
+    if league is None:
+        return "B"
+    numeric = league.tier
+    return LEAGUE_TIER_LETTER_MAP.get(numeric, "B")
+
+
+def get_market_weight(market_key: str) -> float:
+    """Return market weight multiplier (affects score, not hard exclusion)."""
+    upper = market_key.upper()
+    if "CORNER" in upper:
+        return MARKET_WEIGHTS.get("CORNERS", MARKET_WEIGHT_DEFAULT)
+    if "CARD" in upper:
+        return MARKET_WEIGHTS.get("CARDS", MARKET_WEIGHT_DEFAULT)
+    return MARKET_WEIGHTS.get(market_key.upper(), MARKET_WEIGHT_DEFAULT)
 
 
 def compute_pgr_score(
     ev: float,
     confidence: float,
-    odds: float,
     market_key: str,
     league_key: str,
-    clv_pct: float = 0.0,
+    clv_potential: Optional[float] = None,
+    market_softness: Optional[float] = None,
 ) -> float:
     """
-    Compute weighted PGR Score in [0.0, 1.0].
+    Compute weighted PGR Score (0–100+).
 
-    Components:
-        EV score       40%  — normalized 0%→0, 50%→1
-        Confidence     25%  — model probability direct
-        CLV potential  15%  — from clv_pct or odds-range proxy
-        Market weight  10%  — softness of the market type
-        League tier    10%  — historical data quality
+    Args:
+        ev: Expected value as a decimal (e.g. 0.15 = 15%).
+        confidence: Model probability (0–1).
+        market_key: Market identifier (e.g. 'FT_OVER_2_5').
+        league_key: Odds API key (e.g. 'soccer_epl').
+        clv_potential: Optional CLV estimate (decimal).  Falls back to EV proxy.
+        market_softness: Optional market softness 0–1. Falls back to market weight proxy.
+
+    Returns:
+        Float PGR score.  Multiply by market weight before storing.
     """
-    # EV (40%)
-    ev_score = min(1.0, max(0.0, float(ev) / 0.50))
+    ev_score = min(max(ev * 200, 0.0), 100.0)
 
-    # Confidence (25%)
-    conf_score = min(1.0, max(0.0, float(confidence)))
+    conf_score = min(max(confidence * 100, 0.0), 100.0)
 
-    # CLV potential (15%)
-    if clv_pct != 0.0:
-        clv_score = min(1.0, max(0.0, (float(clv_pct) + 5.0) / 25.0))
+    if clv_potential is not None:
+        clv_score = min(max(clv_potential * 200, 0.0), 100.0)
     else:
-        # Proxy: sweet-spot odds have best CLV potential
-        o = float(odds)
-        if 1.75 <= o <= 2.10:
-            clv_score = 0.75
-        elif 1.60 <= o < 1.75 or 2.10 < o <= 2.50:
-            clv_score = 0.55
-        else:
-            clv_score = 0.30
+        clv_score = ev_score
 
-    # Market softness (10%)
-    mw = MARKET_WEIGHTS.get(str(market_key), 1.0)
-    market_score = min(1.0, max(0.0, (mw - 0.70) / 0.80))
+    if market_softness is not None:
+        soft_score = min(max(market_softness * 100, 0.0), 100.0)
+    else:
+        mw = get_market_weight(market_key)
+        soft_score = min(max((mw - 0.85) / 0.40 * 100, 0.0), 100.0)
 
-    # League tier (10%)
     tier = get_league_tier(league_key)
-    league_score = _TIER_SCORE.get(tier, 0.70)
+    tier_score = LEAGUE_TIER_SCORE_MAP.get(tier, 65.0)
 
-    pgr = (
-        0.40 * ev_score
-        + 0.25 * conf_score
-        + 0.15 * clv_score
-        + 0.10 * market_score
-        + 0.10 * league_score
+    raw_score = (
+        ev_score * EV_WEIGHT
+        + conf_score * CONFIDENCE_WEIGHT
+        + clv_score * CLV_WEIGHT
+        + soft_score * MARKET_SOFTNESS_WEIGHT
+        + tier_score * LEAGUE_TIER_WEIGHT
     )
-    return round(pgr, 4)
+
+    market_multiplier = get_market_weight(market_key)
+    final_score = round(raw_score * market_multiplier, 4)
+    return final_score
+
+
+PRO_PICK_MIN_EV = 0.25
+PRO_PICK_MIN_CONFIDENCE = 0.70
+PRO_PICK_MIN_ODDS = 1.75
+PRO_PICK_MAX_ODDS = 2.30
+PRO_PICK_MAX_PER_DAY = 5
+PRO_PICK_MIN_PGR_SCORE = 55.0   # Minimum weighted PGR score required for PRO PICK
+
+VALUE_OPP_MIN_EV = 0.12
+VALUE_OPP_MIN_CONFIDENCE = 0.60
+VALUE_OPP_MIN_ODDS = 1.60
+VALUE_OPP_MAX_ODDS = 4.00
+VALUE_OPP_MIN_PGR_SCORE = 35.0  # Minimum weighted PGR score required for VALUE OPP
+
+WATCHLIST_MIN_EV = 0.07
+WATCHLIST_MIN_CONFIDENCE = 0.50
+WATCHLIST_MIN_PGR_SCORE = 20.0  # Minimum PGR score for WATCHLIST (below this → REJECTED)
+
+CANDIDATE_MIN_EV = 0.07
+CANDIDATE_MIN_ODDS = 1.60
+CANDIDATE_MAX_ODDS = 4.00
+
+REJECTION_REASONS = [
+    "rejected_low_ev",
+    "rejected_low_confidence",
+    "rejected_low_odds",
+    "rejected_high_odds",
+    "rejected_market_type",
+    "rejected_league_tier",        # Reserved: Tier C is downgraded (not rejected) by current policy
+    "rejected_score_below_threshold",
+    "routed_value_opp_from_pro_cap",  # PRO candidate downgraded due to daily cap / unique-match rule
+]
 
 
 def route_candidate(
@@ -168,86 +186,78 @@ def route_candidate(
     odds: float,
     market_key: str,
     league_key: str,
-    is_learning_only: bool,
     pgr_score: float,
-    # PRO thresholds
-    pro_min_ev: float = 0.25,
-    pro_min_conf: float = 0.70,
-    pro_min_odds: float = 1.75,
-    pro_max_odds: float = 2.30,
-    # VALUE thresholds
-    val_min_ev: float = 0.12,
-    val_min_conf: float = 0.60,
-    val_min_odds: float = 1.60,
-    val_max_odds: float = 4.00,
-    # WATCHLIST thresholds
-    watch_min_ev: float = 0.07,
-    watch_min_conf: float = 0.50,
-) -> Tuple[str, str]:
+    pro_picks_today: int = 0,
+) -> tuple[str, str]:
     """
     Route a candidate into PRO_PICK, VALUE_OPP, WATCHLIST, or REJECTED.
 
-    Returns (layer, routing_reason) where layer is one of:
-        'PROD'       → PRO PICK  (bet_placed=True)
-        'VALUE_OPP'  → VALUE OPPORTUNITY (bet_placed=False, public)
-        'WATCHLIST'  → WATCHLIST (bet_placed=False, internal)
-        'REJECTED'   → dropped  (do not save)
+    The weighted PGR score gates each tier — candidates that satisfy EV/confidence/odds
+    hard limits but fall below the tier's minimum PGR score are downgraded to the next tier.
+
+    Returns (routing, reason) where routing is one of:
+        'PRO_PICK', 'VALUE_OPP', 'WATCHLIST', 'REJECTED'
+    and reason is one of the REJECTION_REASONS or 'routed_<tier>'.
     """
-    tier = get_league_tier(league_key)
+    league_tier = get_league_tier(league_key)
 
-    # ── Hard filters (apply to all layers) ────────────────────────────────────
-    if odds < val_min_odds:
-        return ("REJECTED", "rejected_low_odds")
-    if odds > val_max_odds:
-        return ("REJECTED", "rejected_high_odds")
-    if ev < watch_min_ev:
-        return ("REJECTED", "rejected_low_ev")
-    if confidence < watch_min_conf:
-        return ("REJECTED", "rejected_low_confidence")
+    if odds < CANDIDATE_MIN_ODDS:
+        return "REJECTED", "rejected_low_odds"
+    if odds > CANDIDATE_MAX_ODDS:
+        return "REJECTED", "rejected_high_odds"
+    if ev < WATCHLIST_MIN_EV:
+        return "REJECTED", "rejected_low_ev"
+    if confidence < WATCHLIST_MIN_CONFIDENCE:
+        return "REJECTED", "rejected_low_confidence"
 
-    # ── PRO PICK ───────────────────────────────────────────────────────────────
+    if pgr_score < WATCHLIST_MIN_PGR_SCORE:
+        return "REJECTED", "rejected_score_below_threshold"
+
+    # ── PRO PICK: all hard criteria + PGR score gate ─────────────────────────
+    # Tier C leagues cannot qualify for PRO PICK — they are downgraded, not rejected.
     if (
-        not is_learning_only
-        and ev >= pro_min_ev
-        and confidence >= pro_min_conf
-        and pro_min_odds <= odds <= pro_max_odds
-        and tier in ("A", "B")
+        ev >= PRO_PICK_MIN_EV
+        and confidence >= PRO_PICK_MIN_CONFIDENCE
+        and PRO_PICK_MIN_ODDS <= odds <= PRO_PICK_MAX_ODDS
+        and league_tier in ("A", "B")
+        and pgr_score >= PRO_PICK_MIN_PGR_SCORE
+        and pro_picks_today < PRO_PICK_MAX_PER_DAY
     ):
-        return ("PROD", "pro_pick")
+        return "PRO_PICK", "routed_pro_pick"
 
-    # ── VALUE OPPORTUNITY ──────────────────────────────────────────────────────
+    # ── VALUE OPP: relaxed criteria + PGR score gate ─────────────────────────
+    # Tier C candidates that meet PRO thresholds fall through to VALUE OPP here.
     if (
-        not is_learning_only
-        and ev >= val_min_ev
-        and confidence >= val_min_conf
-        and val_min_odds <= odds <= val_max_odds
+        ev >= VALUE_OPP_MIN_EV
+        and confidence >= VALUE_OPP_MIN_CONFIDENCE
+        and VALUE_OPP_MIN_ODDS <= odds <= VALUE_OPP_MAX_ODDS
+        and pgr_score >= VALUE_OPP_MIN_PGR_SCORE
     ):
-        return ("VALUE_OPP", "value_opportunity")
+        return "VALUE_OPP", "routed_value_opp"
 
-    # ── WATCHLIST (internal only) ──────────────────────────────────────────────
-    if ev >= watch_min_ev and confidence >= watch_min_conf:
-        return ("WATCHLIST", "watchlist")
+    # ── WATCHLIST: EV 7–12% band + confidence floor + PGR score gate ───────────
+    # Upper bound ensures EV>12% candidates are never silently filed as WATCHLIST;
+    # they are either routed VALUE_OPP (if confidence qualifies) or explicitly rejected.
+    if WATCHLIST_MIN_EV <= ev < VALUE_OPP_MIN_EV and confidence >= WATCHLIST_MIN_CONFIDENCE:
+        return "WATCHLIST", "routed_watchlist"
 
-    # ── Rejection reason ──────────────────────────────────────────────────────
-    if is_learning_only:
-        return ("REJECTED", "rejected_market_type")
-    if tier == "C" and ev < val_min_ev:
-        return ("REJECTED", "rejected_league_tier")
-    if ev < val_min_ev:
-        return ("REJECTED", "rejected_low_ev")
-    if confidence < val_min_conf:
-        return ("REJECTED", "rejected_low_confidence")
-    return ("REJECTED", "rejected_score_below_threshold")
+    return "REJECTED", "rejected_score_below_threshold"
 
 
-def ensure_db_columns(conn) -> None:
-    """Add pgr_score, league_tier, routing_reason columns if they don't exist."""
-    ddl = [
-        "ALTER TABLE football_opportunities ADD COLUMN IF NOT EXISTS pgr_score real",
-        "ALTER TABLE football_opportunities ADD COLUMN IF NOT EXISTS league_tier text",
-        "ALTER TABLE football_opportunities ADD COLUMN IF NOT EXISTS routing_reason text",
+def ensure_pgr_columns() -> None:
+    """Add pgr_score, league_tier, routing_reason columns to football_opportunities if missing."""
+    ddl_statements = [
+        "ALTER TABLE football_opportunities ADD COLUMN IF NOT EXISTS pgr_score REAL",
+        "ALTER TABLE football_opportunities ADD COLUMN IF NOT EXISTS league_tier TEXT",
+        "ALTER TABLE football_opportunities ADD COLUMN IF NOT EXISTS routing_reason TEXT",
     ]
-    with conn.cursor() as cur:
-        for stmt in ddl:
-            cur.execute(stmt)
-    conn.commit()
+    try:
+        from db_helper import DatabaseConnection
+        with DatabaseConnection.get_cursor() as cursor:
+            for stmt in ddl_statements:
+                try:
+                    cursor.execute(stmt)
+                except Exception as exc:
+                    print(f"[pgr_scoring] DDL warning: {exc}")
+    except Exception as e:
+        print(f"[pgr_scoring] ensure_pgr_columns failed: {e}")

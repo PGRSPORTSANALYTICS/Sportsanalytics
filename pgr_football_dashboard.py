@@ -2182,6 +2182,196 @@ def render_product_tab(
 
 
 
+def render_signal_routing_tab():
+    """Render the Signal Routing tab showing PRO PICK / VALUE OPP / WATCHLIST signals."""
+    st.markdown("## Signal Routing Intelligence")
+    st.caption(
+        "Three-tier signal classification: PRO PICK (official ROI), "
+        "VALUE OPPORTUNITY (analysis signals), WATCHLIST (internal DB only)."
+    )
+
+    today_str = datetime.now().strftime("%Y-%m-%d")
+
+    if st.button("Refresh", key="refresh_signal_routing"):
+        st.rerun()
+
+    try:
+        engine = get_dashboard_engine()
+        with engine.connect() as conn:
+            try:
+                result = conn.execute(text("""
+                    SELECT id, home_team, away_team, league, selection, odds,
+                           edge_percentage, confidence, mode, status, bet_placed,
+                           match_date, created_at_utc, analysis,
+                           pgr_score, league_tier, routing_reason
+                    FROM football_opportunities
+                    WHERE match_date::date >= CURRENT_DATE - INTERVAL '3 days'
+                    ORDER BY match_date DESC, COALESCE(pgr_score, edge_percentage) DESC
+                """))
+            except Exception:
+                result = conn.execute(text("""
+                    SELECT id, home_team, away_team, league, selection, odds,
+                           edge_percentage, confidence, mode, status, bet_placed,
+                           match_date, created_at_utc, analysis,
+                           NULL::float AS pgr_score, NULL::text AS league_tier, NULL::text AS routing_reason
+                    FROM football_opportunities
+                    WHERE match_date::date >= CURRENT_DATE - INTERVAL '3 days'
+                    ORDER BY match_date DESC, edge_percentage DESC
+                """))
+            rows = result.fetchall()
+            signal_df = pd.DataFrame(rows, columns=result.keys()) if rows else pd.DataFrame()
+            if not signal_df.empty:
+                signal_df["pgr_score"] = pd.to_numeric(signal_df["pgr_score"], errors="coerce")
+    except Exception as e:
+        st.error(f"Database error: {e}")
+        signal_df = pd.DataFrame()
+
+    if signal_df.empty:
+        st.info("No signal routing data found for the last 3 days.")
+        return
+
+    # Official P&L stats — only PROD + bet_placed = true
+    prod_placed = signal_df[(signal_df["mode"] == "PROD") & (signal_df["bet_placed"] == True)]
+
+    # Filter to today only for the KPI counts — normalize match_date to date string
+    # to handle both "YYYY-MM-DD" and timestamp variants from the DB.
+    if "match_date" in signal_df.columns:
+        _md_norm = pd.to_datetime(signal_df["match_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+        today_df = signal_df[_md_norm == today_str]
+    else:
+        today_df = signal_df
+    prod_placed_today = today_df[(today_df["mode"] == "PROD") & (today_df["bet_placed"] == True)]
+
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("PRO PICK Today", int((today_df["mode"] == "PROD").sum()))
+    with col2:
+        st.metric("VALUE OPP Today", int((today_df["mode"] == "VALUE_OPP").sum()))
+    with col3:
+        st.metric("WATCHLIST Today", int((today_df["mode"] == "WATCHLIST").sum()))
+    with col4:
+        st.metric("Official Bets Placed Today", len(prod_placed_today))
+
+    st.markdown("---")
+
+    # ── PRO PICK section ─────────────────────────────────────────────────────
+    pro_picks = signal_df[signal_df["mode"] == "PROD"].copy()
+    st.markdown("### PRO PICK")
+    st.caption("EV≥25%, Confidence≥70%, Odds 1.75–2.30, Tier A/B — counts toward official ROI")
+    if pro_picks.empty:
+        st.info("No PRO PICK signals found.")
+    else:
+        _display_routing_table(pro_picks, tier="PRO_PICK")
+
+    st.markdown("---")
+
+    # ── VALUE OPPORTUNITY section ─────────────────────────────────────────────
+    value_opp = signal_df[signal_df["mode"] == "VALUE_OPP"].copy()
+    st.markdown("### VALUE OPPORTUNITY")
+    st.caption("EV≥12%, Confidence≥60%, Odds 1.60–4.00 — shown in dashboard & Discord as analysis signals")
+    if value_opp.empty:
+        st.info("No VALUE OPPORTUNITY signals found.")
+    else:
+        _display_routing_table(value_opp, tier="VALUE_OPP")
+
+    st.markdown("---")
+
+    # ── WATCHLIST section ─────────────────────────────────────────────────────
+    watchlist = signal_df[signal_df["mode"] == "WATCHLIST"].copy()
+    st.markdown("### WATCHLIST (Internal Only)")
+    st.caption("EV 7–12%, Confidence≥50% — DB-only, never published publicly")
+    if watchlist.empty:
+        st.info("No WATCHLIST signals found.")
+    else:
+        _display_routing_table(watchlist, tier="WATCHLIST")
+
+
+def _display_routing_table(df: pd.DataFrame, tier: str):
+    """Display a routing tier table in the Signal Routing tab.
+
+    Columns shown: Home | Away | League | Market | Selection | Odds | Implied P |
+                   Model P | Cal P | Conf% | EV% | PGR Score | Tier | Routing Reason | Date
+    """
+    import json as _json
+
+    display = df.copy()
+
+    # Extract fields from analysis JSON blob
+    def _extract_analysis(row, key, fallback=None):
+        try:
+            return _json.loads(row.get("analysis") or "{}").get(key, fallback)
+        except Exception:
+            return fallback
+
+    # Model probability (raw, from analysis JSON)
+    if "model_prob" not in display.columns:
+        display["model_prob"] = display.apply(lambda r: _extract_analysis(r, "p_model"), axis=1)
+    # Calibrated probability (from analysis JSON, fall back to column)
+    if "calibrated_prob_val" not in display.columns:
+        display["calibrated_prob_val"] = display.apply(
+            lambda r: _extract_analysis(r, "calibrated_prob") or r.get("calibrated_prob"), axis=1)
+    # Market key (from analysis JSON)
+    if "market_key_col" not in display.columns:
+        display["market_key_col"] = display.apply(lambda r: _extract_analysis(r, "market_key"), axis=1)
+
+    # Implied probability = 1 / odds (no-vig bookmaker implied prob)
+    def _implied_prob(row):
+        try:
+            o = float(row.get("odds") or 0)
+            return round(1.0 / o * 100, 1) if o > 0 else None
+        except Exception:
+            return None
+
+    display["implied_prob"] = display.apply(_implied_prob, axis=1)
+
+    # Confidence from the confidence column (integer 0-100 or float 0-1)
+    if "confidence" not in display.columns:
+        display["confidence"] = None
+
+    cols = [
+        "home_team", "away_team", "league", "market_key_col", "selection", "odds",
+        "implied_prob", "model_prob", "calibrated_prob_val", "confidence",
+        "edge_percentage", "pgr_score", "league_tier", "routing_reason", "match_date",
+    ]
+    available = [c for c in cols if c in display.columns]
+    display = display[available].copy()
+
+    rename_map = {
+        "home_team": "Home", "away_team": "Away", "league": "League",
+        "market_key_col": "Market", "selection": "Selection",
+        "odds": "Odds", "implied_prob": "Impl P%",
+        "model_prob": "Model P", "calibrated_prob_val": "Cal P",
+        "confidence": "Conf%", "edge_percentage": "EV%",
+        "pgr_score": "PGR Score", "league_tier": "Tier",
+        "routing_reason": "Routing Reason", "match_date": "Date",
+    }
+    display.rename(columns={k: v for k, v in rename_map.items() if k in display.columns}, inplace=True)
+
+    # Format numeric columns
+    if "EV%" in display.columns:
+        display["EV%"] = display["EV%"].apply(lambda x: f"+{x:.1f}%" if x else "")
+    if "Odds" in display.columns:
+        display["Odds"] = display["Odds"].apply(lambda x: f"{x:.2f}" if x else "")
+    if "Impl P%" in display.columns:
+        display["Impl P%"] = display["Impl P%"].apply(lambda x: f"{x:.1f}%" if x is not None else "")
+    for col in ("Model P", "Cal P"):
+        if col in display.columns:
+            display[col] = display[col].apply(
+                lambda x: f"{float(x):.1%}" if x is not None and x != "" and not (isinstance(x, float) and pd.isna(x)) else "")
+    if "Conf%" in display.columns:
+        def _fmt_conf(x):
+            if x is None or (isinstance(x, float) and pd.isna(x)):
+                return ""
+            v = float(x)
+            return f"{v:.0f}%" if v > 1 else f"{v:.0%}"
+        display["Conf%"] = display["Conf%"].apply(_fmt_conf)
+    if "PGR Score" in display.columns:
+        display["PGR Score"] = display["PGR Score"].apply(
+            lambda x: f"{x:.1f}" if x is not None and not (isinstance(x, float) and pd.isna(x)) else "")
+
+    st.dataframe(display, use_container_width=True, hide_index=True)
+
+
 def render_daily_card_tab():
     """Render the Daily Betting Card tab with EV-filtered selections."""
     from daily_card_selector import DailyCardSelector
@@ -2202,7 +2392,7 @@ def render_daily_card_tab():
             else:
                 engine = get_dashboard_engine()
                 
-                # Get settled football bets (Value Singles)
+                # Get settled official football bets (mode='PROD', bet_placed=true)
                 football_query = """
                     SELECT 
                         DATE(match_date::timestamp) as date,
@@ -2215,6 +2405,8 @@ def render_daily_card_tab():
                     AND match_date IS NOT NULL
                     AND match_date != ''
                     AND match_date::timestamp >= NOW() - INTERVAL '30 days'
+                    AND mode = 'PROD'
+                    AND bet_placed = true
                     ORDER BY match_date DESC
                 """
                 football_df = pd.read_sql(football_query, engine)
@@ -3756,13 +3948,14 @@ def main():
     prod_bets, backtest_bets = split_bets_by_mode(all_bets)
 
     # Tabs for different products
-    smart_tab, free_tab, daily_card_tab, overview_tab, singles_tab, odds_compare_tab, props_tab, basket_tab, kelly_tab, backtest_tab, clv_tab, system_tab = st.tabs(
+    smart_tab, free_tab, daily_card_tab, overview_tab, singles_tab, signal_routing_tab, odds_compare_tab, props_tab, basket_tab, kelly_tab, backtest_tab, clv_tab, system_tab = st.tabs(
         [
             "Smart Picks",
             "Free Picks",
             "Daily Card",
             "Overview",
             "Value Singles",
+            "Signal Routing",
             "Odds Compare",
             "Props & Specials",
             "College Basketball",
@@ -3788,6 +3981,9 @@ def main():
 
     with singles_tab:
         render_three_layer_tab()
+
+    with signal_routing_tab:
+        render_signal_routing_tab()
 
     with odds_compare_tab:
         render_bookmaker_odds_section()
@@ -3827,6 +4023,8 @@ def _load_pipeline_stats():
                 COUNT(DISTINCT selection) as markets_used
             FROM football_opportunities
             WHERE match_date::date = CURRENT_DATE
+              AND mode = 'PROD'
+              AND bet_placed = true
         """))
         return result.fetchone()
 
