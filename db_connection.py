@@ -40,7 +40,7 @@ class DatabaseConnection:
     _connection_pool = None
     
     @classmethod
-    def initialize_pool(cls, minconn=1, maxconn=3):
+    def initialize_pool(cls, minconn=1, maxconn=10):
         """Initialize connection pool for concurrent access with TCP keepalives"""
         if cls._connection_pool is None:
             try:

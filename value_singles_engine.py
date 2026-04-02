@@ -1066,7 +1066,7 @@ class ValueSinglesEngine:
                     print(f"   🔀 CONFLICT: {best['home_team']} vs {best['away_team']} kept {kept_sel}, dropped {', '.join(dropped)}")
             return resolved
 
-        pro_picks = _resolve_over_under_conflicts(pro_picks)
+        pro_picks = _resolve_over_under_conflicts(picks)
 
         if pro_picks:
             log_calibration_batch(
