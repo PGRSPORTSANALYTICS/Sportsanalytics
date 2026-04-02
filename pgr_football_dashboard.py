@@ -10,6 +10,87 @@ from db_engine_singleton import get_dashboard_engine
 
 from kelly_engine import KellyEngine, suggest_stake, StakeConfig
 
+# ============ DASHBOARD AUTH GATE ============
+# Validate the one-time token passed via ?token= before rendering anything.
+# After a successful validation the result is stored in st.session_state so
+# subsequent Streamlit reruns (widget interactions, auto-refresh, etc.) do
+# not require the token again.
+
+def _show_locked_page(reason: str):
+    """Render a minimal locked page and stop execution."""
+    st.set_page_config(page_title="PGR Analytics – Åtkomst nekad", page_icon="🔒")
+    st.markdown(
+        """
+        <style>
+        body { background: #000; }
+        .pgr-lock { text-align: center; padding: 80px 20px; }
+        .pgr-lock h1 { color: #e4e4e7; font-size: 2rem; margin-bottom: 12px; }
+        .pgr-lock p  { color: #71717a; font-size: 1rem; margin-bottom: 24px; }
+        .pgr-lock a  {
+            display: inline-block;
+            padding: 10px 24px;
+            background: #22c55e;
+            color: #000;
+            border-radius: 10px;
+            font-weight: 700;
+            text-decoration: none;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f"""
+        <div class="pgr-lock">
+            <h1>🔒 Åtkomst nekad</h1>
+            <p>{reason}<br>Logga in via hemsidan för att öppna dashboarden.</p>
+            <a href="https://www.pgrsportsanalytics.com">Gå till pgrsportsanalytics.com</a>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.stop()
+
+
+def _check_dashboard_auth():
+    """
+    Enforce one-time token authentication for the dashboard.
+
+    On the first run (or a new browser session):
+    - Reads ?token= from query params
+    - Atomically validates and consumes the token against the DB
+    - On success: stores dashboard_authed=True in session_state and clears
+      the token from the URL
+    - On failure: renders a locked page and halts
+
+    On subsequent reruns within the same browser session:
+    - session_state.dashboard_authed is already True — access is granted
+      without touching the DB or requiring a new token
+    """
+    if st.session_state.get("dashboard_authed"):
+        return
+
+    token = st.query_params.get("token", "")
+    if not token:
+        _show_locked_page("Ingen åtkomstnyckel angiven.")
+        return
+
+    try:
+        from auth_premium import validate_and_consume_dashboard_token
+        valid = validate_and_consume_dashboard_token(token)
+    except Exception:
+        valid = False
+
+    if not valid:
+        _show_locked_page("Åtkomstnyckeln är ogiltig eller har gått ut.")
+        return
+
+    st.session_state.dashboard_authed = True
+    st.query_params.clear()
+
+
+_check_dashboard_auth()
+
 # ============ CURRENCY CONFIGURATION ============
 # All internal calculations use USD. Display shows USD with SEK equivalent.
 USD_TO_SEK = 10.8  # Adjust manually when exchange rate changes

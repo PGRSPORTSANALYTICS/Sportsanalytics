@@ -41,6 +41,8 @@ from auth_admin import router as admin_auth_router
 from auth_premium import (
     premium_middleware,
     ensure_users_table,
+    ensure_dashboard_tokens_table,
+    create_dashboard_token,
     activate_premium,
     deactivate_premium,
     deactivate_by_stripe_customer,
@@ -101,6 +103,7 @@ app.middleware("http")(premium_middleware)
 async def startup_event():
     """Bootstrap DB tables required for auth and payments."""
     ensure_users_table()
+    ensure_dashboard_tokens_table()
     ensure_stripe_events_table()
 
 # Include Discord OAuth router
@@ -2760,6 +2763,38 @@ async def root_redirect(request: Request):
 # =============================================================================
 # Protected app routes
 # =============================================================================
+
+STREAMLIT_DASHBOARD_URL = os.getenv(
+    "STREAMLIT_DASHBOARD_URL",
+    "http://localhost:8501",
+)
+
+
+@app.get("/goto-dashboard", include_in_schema=False)
+async def goto_dashboard(request: Request):
+    """
+    Token-based bridge to the Streamlit dashboard.
+
+    - Admin sessions bypass the premium check.
+    - Premium Discord users get a one-time token (valid 5 min) and are
+      redirected to the Streamlit URL with ?token=<uuid>.
+    - Non-premium authenticated users are sent to /upgrade.
+    - Unauthenticated requests are sent to /login.
+    """
+    if is_admin_session(request):
+        token = create_dashboard_token("admin")
+        return RedirectResponse(f"{STREAMLIT_DASHBOARD_URL}?token={token}", status_code=302)
+
+    discord_id = get_discord_id(request)
+    if not discord_id:
+        return RedirectResponse("/login", status_code=302)
+
+    if not is_premium(discord_id):
+        return RedirectResponse("/upgrade", status_code=302)
+
+    token = create_dashboard_token(discord_id)
+    return RedirectResponse(f"{STREAMLIT_DASHBOARD_URL}?token={token}", status_code=302)
+
 
 @app.get("/home", include_in_schema=False)
 async def home_dashboard():

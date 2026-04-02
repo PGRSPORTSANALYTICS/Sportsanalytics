@@ -11,8 +11,9 @@ Handles:
 
 import os
 import time
+import uuid
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 import jwt
@@ -65,6 +66,72 @@ def ensure_users_table():
         logger.info("pgr_users table ready")
     except Exception as e:
         logger.error(f"ensure_users_table error: {e}")
+
+
+def ensure_dashboard_tokens_table():
+    """Create pgr_dashboard_tokens table if it does not exist."""
+    try:
+        db_helper.execute("""
+            CREATE TABLE IF NOT EXISTS pgr_dashboard_tokens (
+                token       TEXT PRIMARY KEY,
+                discord_id  TEXT NOT NULL,
+                created_at  TIMESTAMP DEFAULT NOW(),
+                expires_at  TIMESTAMP NOT NULL,
+                used        BOOLEAN DEFAULT FALSE
+            )
+        """)
+        logger.info("pgr_dashboard_tokens table ready")
+    except Exception as e:
+        logger.error(f"ensure_dashboard_tokens_table error: {e}")
+
+
+# ─── Dashboard token helpers ──────────────────────────────────────────────────
+
+DASHBOARD_TOKEN_TTL_SECONDS = 300  # 5 minutes
+
+
+def create_dashboard_token(discord_id: str) -> str:
+    """Create a one-time dashboard access token for a premium user."""
+    token = str(uuid.uuid4())
+    expires_at = datetime.utcnow() + timedelta(seconds=DASHBOARD_TOKEN_TTL_SECONDS)
+    db_helper.execute(
+        """
+        INSERT INTO pgr_dashboard_tokens (token, discord_id, expires_at)
+        VALUES (%s, %s, %s)
+        """,
+        (token, discord_id, expires_at),
+    )
+    return token
+
+
+def validate_and_consume_dashboard_token(token: str) -> bool:
+    """
+    Atomically validate and consume a dashboard token in a single UPDATE.
+
+    The UPDATE only succeeds when:
+    - The token exists
+    - It has not been used
+    - It has not expired
+
+    Returns True if exactly one row was updated (i.e. token was valid).
+    """
+    try:
+        row = db_helper.execute(
+            """
+            UPDATE pgr_dashboard_tokens
+            SET used = TRUE
+            WHERE token = %s
+              AND used = FALSE
+              AND expires_at > NOW()
+            RETURNING token
+            """,
+            (token,),
+            fetch="one",
+        )
+        return row is not None
+    except Exception as e:
+        logger.error(f"validate_and_consume_dashboard_token error: {e}")
+        return False
 
 
 # ─── User helpers ─────────────────────────────────────────────────────────────
