@@ -2257,6 +2257,78 @@ async def get_picks_history(days: int = 90):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/stats/summary")
+async def get_stats_summary():
+    """
+    Unified performance stats from football_opportunities.
+    Uses identical filter to /api/picks/history so both KPI rows match.
+    Filter: (mode='PROD' AND bet_placed=true) OR mode='VALUE_OPP'
+    """
+    try:
+        rows = db_helper.execute("""
+            SELECT
+                COUNT(*)                                                          AS total,
+                COUNT(CASE WHEN UPPER(outcome) IN ('WON','WIN')  THEN 1 END)     AS won,
+                COUNT(CASE WHEN UPPER(outcome) IN ('LOST','LOSS') THEN 1 END)    AS lost,
+                COALESCE(SUM(profit_loss), 0)                                    AS total_pl,
+                COUNT(CASE WHEN match_date >= TO_CHAR(CURRENT_DATE - INTERVAL '30 days','YYYY-MM-DD') THEN 1 END) AS total_30,
+                COUNT(CASE WHEN UPPER(outcome) IN ('WON','WIN')
+                           AND match_date >= TO_CHAR(CURRENT_DATE - INTERVAL '30 days','YYYY-MM-DD') THEN 1 END)  AS won_30,
+                COUNT(CASE WHEN UPPER(outcome) IN ('LOST','LOSS')
+                           AND match_date >= TO_CHAR(CURRENT_DATE - INTERVAL '30 days','YYYY-MM-DD') THEN 1 END)  AS lost_30,
+                COALESCE(SUM(CASE WHEN match_date >= TO_CHAR(CURRENT_DATE - INTERVAL '30 days','YYYY-MM-DD')
+                                  THEN profit_loss ELSE 0 END), 0)               AS pl_30
+            FROM football_opportunities
+            WHERE (
+                (mode = 'PROD' AND bet_placed = true)
+                OR mode = 'VALUE_OPP'
+            )
+        """, fetch='one')
+
+        if not rows:
+            return JSONResponse({"error": "no data"})
+
+        total    = int(rows[0] or 0)
+        won      = int(rows[1] or 0)
+        lost     = int(rows[2] or 0)
+        total_pl = float(rows[3] or 0)
+        settled  = won + lost
+        hit_rate = round(won / settled * 100, 1) if settled > 0 else 0
+        roi      = round(total_pl / settled * 100, 1) if settled > 0 else 0
+
+        total_30  = int(rows[4] or 0)
+        won_30    = int(rows[5] or 0)
+        lost_30   = int(rows[6] or 0)
+        pl_30     = float(rows[7] or 0)
+        settled_30= won_30 + lost_30
+        hit_30    = round(won_30 / settled_30 * 100, 1) if settled_30 > 0 else 0
+        roi_30    = round(pl_30 / settled_30 * 100, 1) if settled_30 > 0 else 0
+
+        return JSONResponse({
+            "all_time": {
+                "total":    total,
+                "won":      won,
+                "lost":     lost,
+                "settled":  settled,
+                "total_pl": round(total_pl, 2),
+                "hit_rate": hit_rate,
+                "roi":      roi,
+            },
+            "last_30": {
+                "total":    total_30,
+                "won":      won_30,
+                "lost":     lost_30,
+                "settled":  settled_30,
+                "total_pl": round(pl_30, 2),
+                "hit_rate": hit_30,
+                "roi":      roi_30,
+            },
+        })
+    except Exception as e:
+        logger.error(f"Error in get_stats_summary: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/stats/roi")
 async def get_roi_stats_endpoint():
     """

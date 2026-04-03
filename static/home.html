@@ -689,9 +689,11 @@ function renderApp() {
   const S = state.apiStats;
   const selectedPick = getSelectedPick();
 
+  const fmtPL = v => (v >= 0 ? "+" : "") + Number(v).toFixed(1) + "u";
+  const fmtROI = v => (v >= 0 ? "+" : "") + Number(v).toFixed(1) + "%";
   const kpiData = [
-    ["ROI",      S ? "+" + Number(S.roi).toFixed(1) + "%" : "+22.7%"],
-    ["PROFIT",   S ? "+" + Number(S.units).toFixed(0) + "u" : "+829u"],
+    ["ROI",      S ? fmtROI(S.roi)        : "+22.7%"],
+    ["PROFIT",   S ? fmtPL(S.units)       : "+829u"],
     ["BETS",     S ? Number(S.bets).toLocaleString() : "4,258"],
     ["HIT RATE", S ? Number(S.hit_rate).toFixed(1) + "%" : "54.5%"],
     ["TODAY",    String(filtered.length)],
@@ -1226,7 +1228,7 @@ async function fetchData() {
   try {
     const [pRes, sRes] = await Promise.all([
       fetch("/api/picks/today"),
-      fetch("/api/stats/roi"),
+      fetch("/api/stats/summary"),
     ]);
     if (!pRes.ok) throw new Error("picks failed");
     const pd = await pRes.json();
@@ -1276,10 +1278,12 @@ async function fetchData() {
       const sd = await sRes.json();
       const at = sd.all_time || {};
       state.apiStats = {
-        roi: at.roi != null ? at.roi : 0,
-        units: at.units != null ? at.units : 0,
-        bets: at.total != null ? at.total : 0,
+        roi:      at.roi      != null ? at.roi      : 0,
+        units:    at.total_pl != null ? at.total_pl : 0,
+        bets:     at.total    != null ? at.total    : 0,
         hit_rate: at.hit_rate != null ? at.hit_rate : 0,
+        won:      at.won      != null ? at.won      : 0,
+        lost:     at.lost     != null ? at.lost     : 0,
       };
     }
   } catch (e) {
