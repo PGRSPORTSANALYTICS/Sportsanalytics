@@ -2066,8 +2066,10 @@ async def get_today_picks():
                    league, trust_level, kickoff_time, match_date,
                    open_odds, clv_pct, mode
             FROM football_opportunities
-            WHERE mode = 'PROD'
-              AND bet_placed = true
+            WHERE (
+                (mode = 'PROD' AND bet_placed = true)
+                OR mode = 'VALUE_OPP'
+            )
               AND match_date >= %s
             ORDER BY match_date ASC, kickoff_time ASC NULLS LAST
         """, (yesterday_str,), fetch='all') or []
@@ -2101,6 +2103,8 @@ async def get_today_picks():
 
             ev_val = round(float(r[6]), 1) if r[6] else 0
             book = r[12] or ''
+            mode_val = r[19] or 'PROD'
+            layer = 'PRO PICK' if mode_val == 'PROD' else 'VALUE OPP'
             picks.append({
                 'id': r[0],
                 'home_team': r[1] or '',
@@ -2129,6 +2133,9 @@ async def get_today_picks():
                 'open_odds': float(r[17]) if r[17] else None,
                 'clv_pct': round(float(r[18]), 2) if r[18] else None,
                 'icon': icon,
+                'layer': layer,
+                'badge': layer,
+                'mode': mode_val,
             })
 
         total = len(picks)
@@ -2176,8 +2183,10 @@ async def get_picks_history(days: int = 90):
                    league, trust_level, kickoff_time, match_date,
                    open_odds, clv_pct, mode
             FROM football_opportunities
-            WHERE mode = 'PROD'
-              AND bet_placed = true
+            WHERE (
+                (mode = 'PROD' AND bet_placed = true)
+                OR mode = 'VALUE_OPP'
+            )
               AND match_date >= %s
               AND match_date < %s
             ORDER BY match_date DESC, kickoff_time DESC NULLS LAST
@@ -2198,6 +2207,8 @@ async def get_picks_history(days: int = 90):
             match_date = str(r[16]) if r[16] else ''
             ko_str = str(ko_time)[:5] + ' UTC' if ko_time and len(str(ko_time)) >= 5 else str(ko_time or match_date)
 
+            mode_val = r[19] or 'PROD'
+            layer = 'PRO PICK' if mode_val == 'PROD' else 'VALUE OPP'
             picks.append({
                 'id': r[0],
                 'home_team': r[1] or '',
@@ -2216,6 +2227,8 @@ async def get_picks_history(days: int = 90):
                 'kickoff_str': ko_str,
                 'match_date': match_date,
                 'clv_pct': round(float(r[18]), 2) if r[18] else None,
+                'layer': layer,
+                'mode': mode_val,
             })
 
         total = len(picks)

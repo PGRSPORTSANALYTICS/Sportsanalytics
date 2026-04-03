@@ -165,6 +165,15 @@ function statusPillClass(st) {
   return "bg-zinc-800/60 text-zinc-400 border-zinc-700";
 }
 
+function layerBadgeHtml(layer) {
+  if (!layer) return "";
+  const isPro = layer === "PRO PICK";
+  const bg    = isPro ? "rgba(99,102,241,.15)"  : "rgba(234,179,8,.1)";
+  const color = isPro ? "#a78bfa"               : "#fbbf24";
+  const border= isPro ? "rgba(139,92,246,.35)"  : "rgba(251,191,36,.3)";
+  return `<span style="display:inline-flex;align-items:center;border-radius:99px;border:1px solid ${border};background:${bg};color:${color};font-size:10px;font-weight:700;padding:2px 8px;letter-spacing:.04em;white-space:nowrap">${esc(layer)}</span>`;
+}
+
 function fmtKickoff(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -606,6 +615,7 @@ function renderHistoryTab() {
     <tr style="border-bottom:1px solid #18181b">
       <td style="padding:10px 12px;font-size:12px;color:#71717a;white-space:nowrap">${esc(p.match_date)}</td>
       <td style="padding:10px 12px;font-size:13px;font-weight:600">${esc(p.match)}</td>
+      <td style="padding:10px 8px">${layerBadgeHtml(p.layer)}</td>
       <td style="padding:10px 8px;font-size:12px;color:#a1a1aa">${esc(p.league)}</td>
       <td style="padding:10px 8px;font-size:12px;color:#d4d4d8">${esc(p.market)}</td>
       <td style="padding:10px 8px;font-size:13px;font-weight:600;color:#4ade80">${Number(p.odds).toFixed(2)}</td>
@@ -617,7 +627,7 @@ function renderHistoryTab() {
     </tr>`).join("");
 
   const emptyHtml = rows.length === 0 ? `
-    <tr><td colspan="8" style="text-align:center;padding:60px;color:#52525b;font-size:14px">
+    <tr><td colspan="9" style="text-align:center;padding:60px;color:#52525b;font-size:14px">
       ${state.historyPicks.length === 0 ? "No historical picks yet" : "No results match your search"}
     </td></tr>` : "";
 
@@ -644,6 +654,7 @@ function renderHistoryTab() {
             <tr style="background:#18181b">
               <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;white-space:nowrap">Date</th>
               <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#52525b">Match</th>
+              <th style="padding:8px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#52525b">Type</th>
               <th style="padding:8px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#52525b">League</th>
               <th style="padding:8px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#52525b">Market</th>
               <th style="padding:8px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#52525b">Odds</th>
@@ -742,9 +753,9 @@ function renderApp() {
       return `<div class="opp-row${isSel ? " active" : ""}" data-pickid="${esc(row.id)}"
         style="position:relative;border-left:4px solid ${blColor};display:grid;grid-template-columns:1.8fr 1.2fr 0.7fr 0.9fr 1fr 1fr;gap:12px;padding:18px 16px;cursor:pointer;border-bottom:1px solid #18181b">
         <div>
-          <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+          <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
             <span class="inline-flex rounded-full border px-2 py-0.5 text-xs ${esc(statusPillClass(row.status))}">${esc(row.status || "PRE")}</span>
-            ${row.badge ? `<span class="inline-flex rounded-full border px-2 py-0.5 text-xs ${esc(t.badge)}">${esc(row.badge)}</span>` : ""}
+            ${layerBadgeHtml(row.layer)}
           </div>
           <div style="font-size:15px;font-weight:700;line-height:1.25">${esc(row.match)}</div>
           <div style="font-size:11px;color:#71717a;margin-top:4px">${esc(row.league)} · ${esc(row.bookmaker)}</div>
@@ -1118,9 +1129,9 @@ function renderPickList() {
       return `<div class="opp-row${isSel ? " active" : ""}" data-pickid="${esc(row.id)}"
         style="position:relative;border-left:4px solid ${blColor};display:grid;grid-template-columns:1.8fr 1.2fr 0.7fr 0.9fr 1fr 1fr;gap:12px;padding:18px 16px;cursor:pointer;border-bottom:1px solid #18181b">
         <div>
-          <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+          <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
             <span class="inline-flex rounded-full border px-2 py-0.5 text-xs ${esc(statusPillClass(row.status))}">${esc(row.status || "PRE")}</span>
-            ${row.badge ? `<span class="inline-flex rounded-full border px-2 py-0.5 text-xs ${esc(t.badge)}">${esc(row.badge)}</span>` : ""}
+            ${layerBadgeHtml(row.layer)}
           </div>
           <div style="font-size:15px;font-weight:700;line-height:1.25">${esc(row.match)}</div>
           <div style="font-size:11px;color:#71717a;margin-top:4px">${esc(row.league)} · ${esc(row.bookmaker)}</div>
