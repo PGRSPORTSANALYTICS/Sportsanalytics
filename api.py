@@ -2860,27 +2860,27 @@ async def root_redirect(request: Request):
 # Protected app routes
 # =============================================================================
 
-STREAMLIT_DASHBOARD_URL = os.getenv(
-    "STREAMLIT_DASHBOARD_URL",
-    "http://localhost:8501",
-)
+_raw_streamlit_url = os.getenv("STREAMLIT_DASHBOARD_URL", "")
+if _raw_streamlit_url and not _raw_streamlit_url.startswith("http"):
+    _raw_streamlit_url = "https://" + _raw_streamlit_url
+STREAMLIT_DASHBOARD_URL = _raw_streamlit_url or None
 
 
 @app.get("/pgrdashboard", include_in_schema=False)
 @app.get("/goto-dashboard", include_in_schema=False)
 async def goto_dashboard(request: Request):
     """
-    Token-based bridge to the Streamlit dashboard.
+    Token-based bridge to the dashboard.
 
-    - Admin sessions bypass the premium check.
-    - Premium Discord users get a one-time token (valid 5 min) and are
-      redirected to the Streamlit URL with ?token=<uuid>.
+    - Admin sessions go directly to /home (FastAPI-served dashboard).
+    - Premium Discord users get a one-time token and are redirected to
+      the Streamlit URL if configured, otherwise /home.
     - Non-premium authenticated users are sent to /upgrade.
     - Unauthenticated requests are sent to /login.
     """
     if is_admin_session(request):
-        token = create_dashboard_token("admin")
-        return RedirectResponse(f"{STREAMLIT_DASHBOARD_URL}?token={token}", status_code=302)
+        # Admins go directly to the FastAPI home dashboard — no Streamlit needed
+        return RedirectResponse("/home", status_code=302)
 
     discord_id = get_discord_id(request)
     if not discord_id:
@@ -2890,7 +2890,10 @@ async def goto_dashboard(request: Request):
         return RedirectResponse("/upgrade", status_code=302)
 
     token = create_dashboard_token(discord_id)
-    return RedirectResponse(f"{STREAMLIT_DASHBOARD_URL}?token={token}", status_code=302)
+    if STREAMLIT_DASHBOARD_URL:
+        return RedirectResponse(f"{STREAMLIT_DASHBOARD_URL}?token={token}", status_code=302)
+    # Fallback if Streamlit URL not configured
+    return RedirectResponse("/home", status_code=302)
 
 
 @app.get("/home", include_in_schema=False)
