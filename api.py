@@ -2054,10 +2054,10 @@ async def get_today_picks():
 
         now_utc = datetime.utcnow()
         day_start = datetime(now_utc.year, now_utc.month, now_utc.day, 0, 0, 0)
-        window_start = day_start - timedelta(days=30)
+        yesterday_start = day_start - timedelta(days=1)
 
         today_str = day_start.strftime('%Y-%m-%d')
-        window_start_str = window_start.strftime('%Y-%m-%d')
+        yesterday_str = yesterday_start.strftime('%Y-%m-%d')
 
         rows = db_helper.execute("""
             SELECT id, home_team, away_team, market, selection, odds,
@@ -2069,12 +2069,8 @@ async def get_today_picks():
             WHERE mode = 'PROD'
               AND bet_placed = true
               AND match_date >= %s
-            ORDER BY
-              CASE WHEN match_date >= %s THEN 0 ELSE 1 END ASC,
-              CASE WHEN match_date >= %s THEN kickoff_time END ASC NULLS LAST,
-              CASE WHEN match_date < %s THEN match_date END DESC NULLS LAST,
-              kickoff_time ASC NULLS LAST
-        """, (window_start_str, today_str, today_str, today_str), fetch='all') or []
+            ORDER BY match_date ASC, kickoff_time ASC NULLS LAST
+        """, (yesterday_str,), fetch='all') or []
 
         picks = []
         for r in rows:
@@ -2158,6 +2154,93 @@ async def get_today_picks():
 
     except Exception as e:
         logger.error(f"Error in get_today_picks: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/picks/history")
+async def get_picks_history(days: int = 90):
+    """
+    Get historical PROD picks (settled) from the last N days (default 90).
+    Used for the History tab in the dashboard.
+    """
+    try:
+        now_utc = datetime.utcnow()
+        day_start = datetime(now_utc.year, now_utc.month, now_utc.day, 0, 0, 0)
+        today_str = day_start.strftime('%Y-%m-%d')
+        window_start = (day_start - timedelta(days=min(days, 365))).strftime('%Y-%m-%d')
+
+        rows = db_helper.execute("""
+            SELECT id, home_team, away_team, market, selection, odds,
+                   edge_percentage, confidence, outcome, profit_loss,
+                   odds_by_bookmaker, best_odds_value, best_odds_bookmaker,
+                   league, trust_level, kickoff_time, match_date,
+                   open_odds, clv_pct, mode
+            FROM football_opportunities
+            WHERE mode = 'PROD'
+              AND bet_placed = true
+              AND match_date >= %s
+              AND match_date < %s
+            ORDER BY match_date DESC, kickoff_time DESC NULLS LAST
+        """, (window_start, today_str), fetch='all') or []
+
+        picks = []
+        for r in rows:
+            outcome = (r[8] or '').upper()
+            status = 'pending'
+            if outcome in ('WON', 'WIN'):
+                status = 'won'
+            elif outcome in ('LOST', 'LOSS'):
+                status = 'lost'
+            elif outcome == 'VOID':
+                status = 'void'
+
+            ko_time = r[15]
+            match_date = str(r[16]) if r[16] else ''
+            ko_str = str(ko_time)[:5] + ' UTC' if ko_time and len(str(ko_time)) >= 5 else str(ko_time or match_date)
+
+            picks.append({
+                'id': r[0],
+                'home_team': r[1] or '',
+                'away_team': r[2] or '',
+                'match': (r[1] or '') + ' vs ' + (r[2] or ''),
+                'market': r[3] or '',
+                'selection': r[4] or '',
+                'odds': float(r[5]) if r[5] else 0,
+                'ev_pct': round(float(r[6]), 1) if r[6] else 0,
+                'confidence': round(float(r[7]), 1) if r[7] else 0,
+                'outcome': outcome,
+                'status': status,
+                'profit_loss': round(float(r[9]), 2) if r[9] else None,
+                'best_odds_bookmaker': r[12] or '',
+                'league': r[13] or '',
+                'kickoff_str': ko_str,
+                'match_date': match_date,
+                'clv_pct': round(float(r[18]), 2) if r[18] else None,
+            })
+
+        total = len(picks)
+        won = sum(1 for p in picks if p['status'] == 'won')
+        lost = sum(1 for p in picks if p['status'] == 'lost')
+        void_ = sum(1 for p in picks if p['status'] == 'void')
+        settled = won + lost
+        hit_rate = round(won / settled * 100, 1) if settled > 0 else None
+        total_pl = round(sum(p['profit_loss'] for p in picks if p['profit_loss'] is not None), 2)
+
+        return {
+            'picks': picks,
+            'total': total,
+            'won': won,
+            'lost': lost,
+            'void': void_,
+            'settled': settled,
+            'hit_rate': hit_rate,
+            'total_pl': total_pl,
+            'days': days,
+            'generated_at': datetime.utcnow().isoformat() + 'Z',
+        }
+
+    except Exception as e:
+        logger.error(f"Error in get_picks_history: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

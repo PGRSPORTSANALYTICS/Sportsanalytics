@@ -82,6 +82,7 @@
    STATE
 ───────────────────────────────────────────────────────────── */
 const state = {
+  mainTab: "picks",
   allPicks: [],
   apiStats: null,
   loading: true,
@@ -101,6 +102,11 @@ const state = {
   dpData: null,
   dpBusy: false,
   dpPickId: null,
+  historyPicks: [],
+  historyLoading: false,
+  historyFetched: false,
+  historyQ: "",
+  historyDays: 90,
 };
 
 /* ─────────────────────────────────────────────────────────────
@@ -569,6 +575,90 @@ function detailPanelHtml(pick, data, busy, tab) {
 }
 
 /* ─────────────────────────────────────────────────────────────
+   HISTORY TAB
+───────────────────────────────────────────────────────────── */
+function renderHistoryTab() {
+  if (state.historyLoading) {
+    return `<div style="text-align:center;padding:80px 0;color:#52525b;font-size:14px">Loading history…</div>`;
+  }
+
+  const q = (state.historyQ || "").toLowerCase();
+  let rows = state.historyPicks.filter(p => {
+    if (!q) return true;
+    return (p.match + " " + p.market + " " + p.league + " " + p.selection).toLowerCase().includes(q);
+  });
+
+  const total = rows.length;
+  const won   = rows.filter(r => r.status === "won").length;
+  const lost  = rows.filter(r => r.status === "lost").length;
+  const settled = won + lost;
+  const hitRate = settled > 0 ? (won / settled * 100).toFixed(1) + "%" : "—";
+  const totalPl = rows.reduce((s, r) => s + (r.profit_loss || 0), 0);
+  const plStr = (totalPl >= 0 ? "+" : "") + totalPl.toFixed(2) + "u";
+  const plColor = totalPl >= 0 ? "#4ade80" : "#f87171";
+
+  const outcomeIcon = s => s === "won" ? `<span style="color:#4ade80;font-weight:700">✓ Won</span>` :
+                           s === "lost" ? `<span style="color:#f87171;font-weight:700">✗ Lost</span>` :
+                           s === "void" ? `<span style="color:#a1a1aa">○ Void</span>` :
+                           `<span style="color:#71717a">– Pending</span>`;
+
+  const tableRows = rows.map(p => `
+    <tr style="border-bottom:1px solid #18181b">
+      <td style="padding:10px 12px;font-size:12px;color:#71717a;white-space:nowrap">${esc(p.match_date)}</td>
+      <td style="padding:10px 12px;font-size:13px;font-weight:600">${esc(p.match)}</td>
+      <td style="padding:10px 8px;font-size:12px;color:#a1a1aa">${esc(p.league)}</td>
+      <td style="padding:10px 8px;font-size:12px;color:#d4d4d8">${esc(p.market)}</td>
+      <td style="padding:10px 8px;font-size:13px;font-weight:600;color:#4ade80">${Number(p.odds).toFixed(2)}</td>
+      <td style="padding:10px 8px;font-size:12px;color:#a1a1aa">${esc(p.selection)}</td>
+      <td style="padding:10px 8px">${outcomeIcon(p.status)}</td>
+      <td style="padding:10px 8px;font-size:12px;font-weight:600;color:${(p.profit_loss||0)>=0?'#4ade80':'#f87171'}">
+        ${p.profit_loss != null ? ((p.profit_loss>=0?"+":"")+p.profit_loss.toFixed(2)+"u") : "—"}
+      </td>
+    </tr>`).join("");
+
+  const emptyHtml = rows.length === 0 ? `
+    <tr><td colspan="8" style="text-align:center;padding:60px;color:#52525b;font-size:14px">
+      ${state.historyPicks.length === 0 ? "No historical picks yet" : "No results match your search"}
+    </td></tr>` : "";
+
+  return `
+    <div style="padding:16px">
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px">
+        ${[["TOTAL",total],["WON",won],["LOST",lost],["HIT RATE",hitRate],["P&L",plStr]].map(([l,v]) => `
+        <div style="border-radius:12px;border:1px solid #27272a;background:#09090b;padding:10px 14px">
+          <div style="font-size:9px;letter-spacing:.12em;color:#52525b;text-transform:uppercase">${l}</div>
+          <div style="font-size:20px;font-weight:700;margin-top:4px;color:${l==='P&L'?plColor:'#f4f4f5'}">${v}</div>
+        </div>`).join("")}
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:12px;align-items:center;flex-wrap:wrap">
+        <input id="history-q" value="${esc(state.historyQ)}" placeholder="Search team, market, league…" class="inp" style="flex:1;min-width:220px">
+        <select id="history-days" class="inp" style="min-width:130px">
+          ${[30,60,90,180,365].map(d => `<option value="${d}" ${state.historyDays==d?"selected":""}>${d} days</option>`).join("")}
+        </select>
+        <button id="history-reload" style="padding:8px 16px;border-radius:10px;border:1px solid #3f3f46;background:#18181b;font-size:13px;color:#d4d4d8;cursor:pointer;white-space:nowrap">↻ Reload</button>
+        <span style="font-size:12px;color:#52525b">${total} picks</span>
+      </div>
+      <div style="border-radius:12px;border:1px solid #27272a;overflow:hidden">
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="background:#18181b">
+              <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;white-space:nowrap">Date</th>
+              <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#52525b">Match</th>
+              <th style="padding:8px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#52525b">League</th>
+              <th style="padding:8px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#52525b">Market</th>
+              <th style="padding:8px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#52525b">Odds</th>
+              <th style="padding:8px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#52525b">Selection</th>
+              <th style="padding:8px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#52525b">Result</th>
+              <th style="padding:8px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#52525b">P&amp;L</th>
+            </tr>
+          </thead>
+          <tbody>${tableRows}${emptyHtml}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+/* ─────────────────────────────────────────────────────────────
    MAIN APP HTML
 ───────────────────────────────────────────────────────────── */
 function renderApp() {
@@ -707,7 +797,17 @@ function renderApp() {
                 <div style="font-size:12px;color:#71717a">/  Value Scanner</div>
               </div>
             </div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+              <div style="display:flex;border-radius:10px;border:1px solid #3f3f46;overflow:hidden">
+                <button class="main-tab-btn" data-maintab="picks"
+                  style="padding:8px 18px;font-size:13px;font-weight:600;border:none;cursor:pointer;background:${state.mainTab==='picks'?'#22c55e':'#09090b'};color:${state.mainTab==='picks'?'#000':'#71717a'}">
+                  📅 Picks
+                </button>
+                <button class="main-tab-btn" data-maintab="history"
+                  style="padding:8px 18px;font-size:13px;font-weight:600;border:none;cursor:pointer;background:${state.mainTab==='history'?'#22c55e':'#09090b'};color:${state.mainTab==='history'?'#000':'#71717a'}">
+                  📊 History
+                </button>
+              </div>
               <a href="/pgrdashboard" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:10px;border:1px solid rgba(34,197,94,.35);background:rgba(34,197,94,.08);font-size:13px;font-weight:600;color:#4ade80;text-decoration:none;cursor:pointer">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
                 Öppna Dashboard
@@ -717,6 +817,7 @@ function renderApp() {
           </div>
         </header>
 
+        ${state.mainTab === "history" ? renderHistoryTab() : `
         <div style="border-bottom:1px solid #27272a;background:rgba(34,197,94,.04);padding:10px 16px">
           <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
             <div style="display:flex;align-items:center;gap:10px;font-size:13px">
@@ -786,6 +887,7 @@ function renderApp() {
             </div>
           </div>
         </div>
+        `}
 
       </div>
     </div>
@@ -868,6 +970,34 @@ function bindEvents() {
   if (sheetClose) sheetClose.addEventListener("click", closeSheet);
   const overlay = document.getElementById("sheet-overlay");
   if (overlay) overlay.addEventListener("click", closeSheet);
+
+  // Main tab (Picks / History)
+  document.querySelectorAll(".main-tab-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const tab = btn.dataset.maintab;
+      if (state.mainTab === tab) return;
+      state.mainTab = tab;
+      if (tab === "history" && !state.historyFetched) {
+        fetchHistory();
+      } else {
+        render();
+      }
+    });
+  });
+
+  // History controls
+  const hq = document.getElementById("history-q");
+  if (hq) hq.addEventListener("input", e => { state.historyQ = e.target.value; render(); });
+
+  const hd = document.getElementById("history-days");
+  if (hd) hd.addEventListener("change", e => {
+    state.historyDays = Number(e.target.value);
+    state.historyFetched = false;
+    fetchHistory();
+  });
+
+  const hr = document.getElementById("history-reload");
+  if (hr) hr.addEventListener("click", () => { state.historyFetched = false; fetchHistory(); });
 }
 
 function closeSheet() {
@@ -1155,6 +1285,25 @@ async function fetchData() {
       loadDetailData(initialPick);
     }
   }
+}
+
+async function fetchHistory() {
+  state.historyLoading = true;
+  render();
+  try {
+    const res = await fetch("/api/picks/history?days=" + state.historyDays);
+    if (!res.ok) throw new Error("history failed");
+    const d = await res.json();
+    state.historyPicks = (d.picks || []).map(p => ({
+      ...p,
+      match: (p.home_team || p.match || "") + (p.home_team ? " vs " + (p.away_team || "") : ""),
+    }));
+    state.historyFetched = true;
+  } catch (e) {
+    state.historyPicks = [];
+  }
+  state.historyLoading = false;
+  render();
 }
 
 /* ─────────────────────────────────────────────────────────────
