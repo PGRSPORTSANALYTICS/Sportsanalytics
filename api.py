@@ -2158,7 +2158,6 @@ async def get_picks_history(days: int = 90):
     try:
         now_utc = datetime.utcnow()
         day_start = datetime(now_utc.year, now_utc.month, now_utc.day, 0, 0, 0)
-        today_str = day_start.strftime('%Y-%m-%d')
         window_start = (day_start - timedelta(days=min(days, 365))).strftime('%Y-%m-%d')
 
         rows = db_helper.execute("""
@@ -2173,9 +2172,10 @@ async def get_picks_history(days: int = 90):
                 OR mode = 'VALUE_OPP'
             )
               AND match_date >= %s
-              AND match_date < %s
+              AND outcome IS NOT NULL
+              AND outcome NOT IN ('', 'pending', 'unknown')
             ORDER BY match_date DESC, kickoff_time DESC NULLS LAST
-        """, (window_start, today_str), fetch='all') or []
+        """, (window_start,), fetch='all') or []
 
         picks = []
         for r in rows:
