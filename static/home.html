@@ -86,6 +86,9 @@ const state = {
   allPicks: [],
   apiStats: null,
   apiStatsPeriod: null,
+  clvStats: null,
+  clvLoading: false,
+  clvFetched: false,
   loading: true,
   isMock: false,
   fetchError: false,
@@ -671,6 +674,114 @@ function renderHistoryTab() {
 }
 
 /* ─────────────────────────────────────────────────────────────
+   CLV TAB
+───────────────────────────────────────────────────────────── */
+function renderCLVTab() {
+  if (state.clvLoading) {
+    return `<div style="text-align:center;padding:80px 0;color:#52525b;font-size:14px">Loading CLV data…</div>`;
+  }
+
+  const s = state.clvStats;
+  const fmtClv = v => v == null ? "—" : (v >= 0 ? "+" : "") + Number(v).toFixed(2) + "%";
+  const clvColor = v => v == null ? "#71717a" : v >= 0 ? "#4ade80" : "#f87171";
+
+  const coveragePct  = s ? (s.coverage_pct  || 0) : 0;
+  const sampleN      = s ? (s.sample_n      || 0) : 0;
+  const isLowSample  = sampleN < 200;
+
+  // Under-construction banner (shown until sample is large enough)
+  const warningBanner = `
+    <div style="margin:16px;border-radius:12px;border:1px solid rgba(251,191,36,.3);background:rgba(251,191,36,.06);padding:14px 18px;display:flex;align-items:flex-start;gap:12px">
+      <div style="font-size:20px;line-height:1;margin-top:1px">🔬</div>
+      <div>
+        <div style="font-size:13px;font-weight:700;color:#fbbf24;margin-bottom:4px">CLV Tracking — Data Building Up</div>
+        <div style="font-size:12px;color:#a16207;line-height:1.5">
+          Closing Line Value is now being captured automatically for all qualifying picks.
+          Coverage improves with every engine cycle. A reliable signal requires at minimum
+          200 samples — currently at <b style="color:#fbbf24">${sampleN}</b>.
+          The system captures odds from both The Odds API and API-Football within 8 hours of kickoff.
+        </div>
+      </div>
+    </div>`;
+
+  // KPI cards
+  const kpiCards = [
+    ["Avg CLV (all)", fmtClv(s ? s.avg_clv : null),     s ? clvColor(s.avg_clv)    : "#71717a"],
+    ["Avg CLV (30d)", fmtClv(s ? s.avg_clv_30d : null),  s ? clvColor(s.avg_clv_30d): "#71717a"],
+    ["Positive CLV%", s && s.positive_rate != null ? Number(s.positive_rate).toFixed(1) + "%" : "—", "#a78bfa"],
+    ["Coverage",      s ? coveragePct.toFixed(1) + "%" : "—", coveragePct >= 30 ? "#4ade80" : "#f59e0b"],
+    ["Samples",       String(sampleN), "#d4d4d8"],
+  ];
+
+  const kpiHtml = kpiCards.map(([label, val, color]) => `
+    <div style="border-radius:10px;border:1px solid #27272a;background:#09090b;padding:10px 14px">
+      <div style="font-size:9px;letter-spacing:.12em;color:#52525b;text-transform:uppercase">${label}</div>
+      <div style="font-size:20px;font-weight:700;margin-top:4px;color:${color}">${val}</div>
+    </div>`).join("");
+
+  // Recent CLV captures table
+  const recent = s ? (s.recent_20 || []) : [];
+  const recentRows = recent.map(r => {
+    const clvVal  = r.clv_pct != null ? fmtClv(r.clv_pct) : "—";
+    const clvC    = r.clv_pct != null ? clvColor(r.clv_pct) : "#71717a";
+    const minsStr = r.time_to_ko_at_close != null
+      ? (r.time_to_ko_at_close >= 0
+          ? r.time_to_ko_at_close + " min before KO"
+          : Math.abs(r.time_to_ko_at_close) + " min after KO")
+      : "—";
+    return `<tr style="border-bottom:1px solid #18181b">
+      <td style="padding:8px 10px;font-size:11px;color:#a1a1aa;white-space:nowrap">${r.home_team} vs ${r.away_team}</td>
+      <td style="padding:8px 10px;font-size:11px;color:#71717a">${r.league || "—"}</td>
+      <td style="padding:8px 10px;font-size:11px;color:#d4d4d8">${r.selection || r.market || "—"}</td>
+      <td style="padding:8px 10px;font-size:12px;color:#a1a1aa">${r.open_odds ? r.open_odds.toFixed(2) : "—"}</td>
+      <td style="padding:8px 10px;font-size:12px;color:#71717a">${r.close_odds ? r.close_odds.toFixed(2) : "—"}</td>
+      <td style="padding:8px 10px;font-size:13px;font-weight:700;color:${clvC}">${clvVal}</td>
+      <td style="padding:8px 10px;font-size:10px;color:#52525b">${r.clv_source_book || "—"}</td>
+      <td style="padding:8px 10px;font-size:10px;color:#3f3f46">${minsStr}</td>
+    </tr>`;
+  }).join("");
+
+  const emptyRows = recent.length === 0
+    ? `<tr><td colspan="8" style="text-align:center;padding:40px;color:#3f3f46;font-size:13px">No CLV captures yet — data will appear here as picks approach kickoff</td></tr>`
+    : "";
+
+  return `
+    <div>
+      ${warningBanner}
+
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;padding:0 16px 16px">
+        ${kpiHtml}
+      </div>
+
+      <div style="padding:0 16px 8px">
+        <div style="font-size:11px;letter-spacing:.1em;color:#52525b;text-transform:uppercase;margin-bottom:10px">Recent CLV Captures</div>
+        <div style="overflow-x:auto;border-radius:10px;border:1px solid #27272a">
+          <table style="width:100%;border-collapse:collapse;min-width:700px">
+            <thead>
+              <tr style="background:#0a0a0a">
+                <th style="padding:9px 10px;text-align:left;font-size:10px;color:#52525b;letter-spacing:.08em;text-transform:uppercase;font-weight:600">Match</th>
+                <th style="padding:9px 10px;text-align:left;font-size:10px;color:#52525b;letter-spacing:.08em;text-transform:uppercase;font-weight:600">League</th>
+                <th style="padding:9px 10px;text-align:left;font-size:10px;color:#52525b;letter-spacing:.08em;text-transform:uppercase;font-weight:600">Selection</th>
+                <th style="padding:9px 10px;text-align:left;font-size:10px;color:#52525b;letter-spacing:.08em;text-transform:uppercase;font-weight:600">Open</th>
+                <th style="padding:9px 10px;text-align:left;font-size:10px;color:#52525b;letter-spacing:.08em;text-transform:uppercase;font-weight:600">Close</th>
+                <th style="padding:9px 10px;text-align:left;font-size:10px;color:#52525b;letter-spacing:.08em;text-transform:uppercase;font-weight:600">CLV</th>
+                <th style="padding:9px 10px;text-align:left;font-size:10px;color:#52525b;letter-spacing:.08em;text-transform:uppercase;font-weight:600">Source</th>
+                <th style="padding:9px 10px;text-align:left;font-size:10px;color:#52525b;letter-spacing:.08em;text-transform:uppercase;font-weight:600">Timing</th>
+              </tr>
+            </thead>
+            <tbody>${recentRows}${emptyRows}</tbody>
+          </table>
+        </div>
+        <div style="margin-top:8px;font-size:10px;color:#3f3f46">
+          CLV = (open odds / close odds − 1) × 100 &nbsp;·&nbsp;
+          Positive = you got a better price than the closing line &nbsp;·&nbsp;
+          Source: The Odds API (sharp avg) + API-Football
+        </div>
+      </div>
+    </div>`;
+}
+
+/* ─────────────────────────────────────────────────────────────
    MAIN APP HTML
 ───────────────────────────────────────────────────────────── */
 function renderApp() {
@@ -832,17 +943,21 @@ function renderApp() {
                   style="padding:8px 18px;font-size:13px;font-weight:600;border:none;cursor:pointer;background:${state.mainTab==='history'?'#22c55e':'#09090b'};color:${state.mainTab==='history'?'#000':'#71717a'}">
                   📊 History
                 </button>
+                <button class="main-tab-btn" data-maintab="clv"
+                  style="padding:8px 18px;font-size:13px;font-weight:600;border:none;cursor:pointer;background:${state.mainTab==='clv'?'#a78bfa':'#09090b'};color:${state.mainTab==='clv'?'#000':'#71717a'}">
+                  📈 CLV
+                </button>
               </div>
               <a href="/pgrdashboard" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:10px;border:1px solid rgba(34,197,94,.35);background:rgba(34,197,94,.08);font-size:13px;font-weight:600;color:#4ade80;text-decoration:none;cursor:pointer">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                Öppna Dashboard
+                Open Dashboard
               </a>
               <button id="btn-refresh" style="padding:8px 16px;border-radius:10px;border:1px solid #3f3f46;background:#18181b;font-size:13px;color:#d4d4d8;cursor:pointer">Refresh</button>
             </div>
           </div>
         </header>
 
-        ${state.mainTab === "history" ? renderHistoryTab() : `
+        ${state.mainTab === "history" ? renderHistoryTab() : state.mainTab === "clv" ? renderCLVTab() : `
         <div style="border-bottom:1px solid #27272a;background:rgba(34,197,94,.04);padding:10px 16px">
           <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
             <div style="display:flex;align-items:center;gap:10px;font-size:13px">
@@ -1005,6 +1120,8 @@ function bindEvents() {
       state.mainTab = tab;
       if (tab === "history" && !state.historyFetched) {
         fetchHistory();
+      } else if (tab === "clv" && !state.clvFetched) {
+        fetchCLV();
       } else {
         render();
       }
@@ -1333,6 +1450,22 @@ async function fetchHistory() {
     state.historyPicks = [];
   }
   state.historyLoading = false;
+  render();
+}
+
+async function fetchCLV() {
+  state.clvLoading = true;
+  render();
+  try {
+    const res = await fetch("/api/clv_stats");
+    if (!res.ok) throw new Error("clv failed");
+    const d = await res.json();
+    state.clvStats   = d;
+    state.clvFetched = true;
+  } catch (e) {
+    state.clvStats = null;
+  }
+  state.clvLoading = false;
   render();
 }
 

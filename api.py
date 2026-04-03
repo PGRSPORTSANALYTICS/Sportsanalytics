@@ -1148,31 +1148,16 @@ class CLVStatsResponse(BaseModel):
     total_with_clv: int = 0
     generated_at: str
 
-@app.get("/api/clv_stats", response_model=CLVStatsResponse, tags=["Analytics"])
+@app.get("/api/clv_stats", tags=["Analytics"])
 async def get_clv_stats_endpoint():
     """
     Get Closing Line Value (CLV) statistics.
-    
-    CLV measures whether you got better odds than the closing line.
-    Positive CLV indicates long-term betting edge.
-    
-    Returns:
-    - avg_clv_all: Average CLV across all bets with closing odds
-    - avg_clv_last_100: Average CLV of last 100 bets
-    - positive_share: Percentage of bets with positive CLV
-    - total_with_clv: Total number of bets with CLV data
+    Returns all CLV fields including recent_20 captures for the dashboard.
     """
     try:
         from clv_service import get_clv_stats
         stats = get_clv_stats()
-        
-        return CLVStatsResponse(
-            avg_clv_all=stats.get('avg_clv_all'),
-            avg_clv_last_100=stats.get('avg_clv_last_100'),
-            positive_share=stats.get('positive_share'),
-            total_with_clv=stats.get('total_with_clv', 0),
-            generated_at=datetime.utcnow().isoformat() + "Z"
-        )
+        return JSONResponse(stats)
         
     except Exception as e:
         logger.error(f"Error in get_clv_stats: {e}")
