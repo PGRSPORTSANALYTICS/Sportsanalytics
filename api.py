@@ -2054,12 +2054,10 @@ async def get_today_picks():
 
         now_utc = datetime.utcnow()
         day_start = datetime(now_utc.year, now_utc.month, now_utc.day, 0, 0, 0)
-        day_end = day_start + timedelta(days=1)
-        yesterday_start = day_start - timedelta(days=1)
+        window_start = day_start - timedelta(days=30)
 
         today_str = day_start.strftime('%Y-%m-%d')
-        tomorrow_str = day_end.strftime('%Y-%m-%d')
-        yesterday_str = yesterday_start.strftime('%Y-%m-%d')
+        window_start_str = window_start.strftime('%Y-%m-%d')
 
         rows = db_helper.execute("""
             SELECT id, home_team, away_team, market, selection, odds,
@@ -2070,11 +2068,13 @@ async def get_today_picks():
             FROM football_opportunities
             WHERE mode = 'PROD'
               AND bet_placed = true
-              AND match_date >= %s AND match_date < %s
+              AND match_date >= %s
             ORDER BY
               CASE WHEN match_date >= %s THEN 0 ELSE 1 END ASC,
+              CASE WHEN match_date >= %s THEN kickoff_time END ASC NULLS LAST,
+              CASE WHEN match_date < %s THEN match_date END DESC NULLS LAST,
               kickoff_time ASC NULLS LAST
-        """, (yesterday_str, tomorrow_str, today_str), fetch='all') or []
+        """, (window_start_str, today_str, today_str, today_str), fetch='all') or []
 
         picks = []
         for r in rows:
