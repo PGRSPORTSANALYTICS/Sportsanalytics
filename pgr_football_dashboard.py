@@ -2492,24 +2492,7 @@ def render_daily_card_tab():
                 """
                 football_df = pd.read_sql(football_query, engine)
                 
-                # Get settled basketball bets (from basketball_predictions - Daily Card source)
-                basketball_query = """
-                    SELECT 
-                        DATE(commence_time::timestamp) as date,
-                        status as result,
-                        odds,
-                        market
-                    FROM basketball_predictions
-                    WHERE status IS NOT NULL 
-                    AND status NOT IN ('pending', 'voided', 'void')
-                    AND commence_time IS NOT NULL
-                    AND commence_time::timestamp >= NOW() - INTERVAL '30 days'
-                    ORDER BY commence_time DESC
-                """
-                try:
-                    basketball_df = pd.read_sql(basketball_query, engine)
-                except Exception:
-                    basketball_df = pd.DataFrame()
+                basketball_df = pd.DataFrame()
                 
                 # Calculate stats for each category
                 def calc_stats(df):
@@ -2558,46 +2541,27 @@ def render_daily_card_tab():
                 
                 # Breakdown by category
                 st.markdown("#### By Category")
-                cat_cols = st.columns(2)
-                with cat_cols[0]:
-                    fb_color = "#10B981" if football_stats['units_pl'] >= 0 else "#EF4444"
-                    st.markdown(f"""
-                    <div style="padding:12px;border-radius:10px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);margin-bottom:10px;">
-                        <div style="font-size:14px;font-weight:600;color:#10B981;margin-bottom:8px;">⚽ Football (Value Singles)</div>
-                        <div style="display:flex;gap:16px;flex-wrap:wrap;">
-                            <div><span style="font-size:11px;color:#9CA3AF;">Bets</span><br/><span style="font-size:16px;color:#E5E7EB;">{football_stats['bets']}</span></div>
-                            <div><span style="font-size:11px;color:#9CA3AF;">W-L</span><br/><span style="font-size:16px;color:#E5E7EB;">{football_stats['wins']}-{football_stats['losses']}</span></div>
-                            <div><span style="font-size:11px;color:#9CA3AF;">Units</span><br/><span style="font-size:16px;color:{fb_color};">{football_stats['units_pl']:+.2f}</span></div>
-                            <div><span style="font-size:11px;color:#9CA3AF;">Hit%</span><br/><span style="font-size:16px;color:#E5E7EB;">{football_stats['hit_rate']:.1f}%</span></div>
-                        </div>
+                fb_color = "#10B981" if football_stats['units_pl'] >= 0 else "#EF4444"
+                st.markdown(f"""
+                <div style="padding:12px;border-radius:10px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);margin-bottom:10px;">
+                    <div style="font-size:14px;font-weight:600;color:#10B981;margin-bottom:8px;">⚽ Football (Value Singles)</div>
+                    <div style="display:flex;gap:16px;flex-wrap:wrap;">
+                        <div><span style="font-size:11px;color:#9CA3AF;">Bets</span><br/><span style="font-size:16px;color:#E5E7EB;">{football_stats['bets']}</span></div>
+                        <div><span style="font-size:11px;color:#9CA3AF;">W-L</span><br/><span style="font-size:16px;color:#E5E7EB;">{football_stats['wins']}-{football_stats['losses']}</span></div>
+                        <div><span style="font-size:11px;color:#9CA3AF;">Units</span><br/><span style="font-size:16px;color:{fb_color};">{football_stats['units_pl']:+.2f}</span></div>
+                        <div><span style="font-size:11px;color:#9CA3AF;">Hit%</span><br/><span style="font-size:16px;color:#E5E7EB;">{football_stats['hit_rate']:.1f}%</span></div>
                     </div>
-                    """, unsafe_allow_html=True)
-                with cat_cols[1]:
-                    bb_color = "#10B981" if basketball_stats['units_pl'] >= 0 else "#EF4444"
-                    st.markdown(f"""
-                    <div style="padding:12px;border-radius:10px;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);margin-bottom:10px;">
-                        <div style="font-size:14px;font-weight:600;color:#F97316;margin-bottom:8px;">🏀 Basketball</div>
-                        <div style="display:flex;gap:16px;flex-wrap:wrap;">
-                            <div><span style="font-size:11px;color:#9CA3AF;">Bets</span><br/><span style="font-size:16px;color:#E5E7EB;">{basketball_stats['bets']}</span></div>
-                            <div><span style="font-size:11px;color:#9CA3AF;">W-L</span><br/><span style="font-size:16px;color:#E5E7EB;">{basketball_stats['wins']}-{basketball_stats['losses']}</span></div>
-                            <div><span style="font-size:11px;color:#9CA3AF;">Units</span><br/><span style="font-size:16px;color:{bb_color};">{basketball_stats['units_pl']:+.2f}</span></div>
-                            <div><span style="font-size:11px;color:#9CA3AF;">Hit%</span><br/><span style="font-size:16px;color:#E5E7EB;">{basketball_stats['hit_rate']:.1f}%</span></div>
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                </div>
+                """, unsafe_allow_html=True)
                 
                 # Daily profit chart
-                if not football_df.empty or not basketball_df.empty:
+                if not football_df.empty:
                     st.markdown("---")
                     st.markdown("#### Cumulative Profit (30 Days)")
                     
-                    # Combine and calculate daily P/L
+                    # Calculate daily P/L (football only)
                     all_bets = []
                     for _, row in football_df.iterrows():
-                        pl = (float(row['odds'] or 1) - 1) if 'won' in str(row['result']).lower() else (-1 if 'lost' in str(row['result']).lower() else 0)
-                        if pl != 0:
-                            all_bets.append({'date': row['date'], 'pl': pl})
-                    for _, row in basketball_df.iterrows():
                         pl = (float(row['odds'] or 1) - 1) if 'won' in str(row['result']).lower() else (-1 if 'lost' in str(row['result']).lower() else 0)
                         if pl != 0:
                             all_bets.append({'date': row['date'], 'pl': pl})
@@ -2656,13 +2620,11 @@ def render_daily_card_tab():
         
         summary = card['summary']
         st.markdown("### Card Summary")
-        cols = st.columns(3)
+        cols = st.columns(2)
         with cols[0]:
             st.metric("Total Picks", summary['total_bets'])
         with cols[1]:
             st.metric("Value Singles", summary['value_singles_count'])
-        with cols[2]:
-            st.metric("Basketball", summary.get('basketball_count', 0))
         
         st.markdown("---")
         
@@ -2682,26 +2644,6 @@ def render_daily_card_tab():
                     <div style="font-size:14px;color:#A5B4FC;margin-bottom:10px;">{bet['selection']}</div>
                     <div style="display:flex;gap:24px;">
                         <div><span style="font-size:11px;color:#9CA3AF;">ODDS</span><br/><span style="font-size:20px;font-weight:600;color:#6366F1;">{bet['odds']:.2f}x</span></div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-        
-        if card['basketball']:
-            st.markdown("### Basketball")
-            for bet in card['basketball']:
-                tier_color = "#10B981" if bet['tier'] == 'A' else "#F59E0B" if bet['tier'] == 'B' else "#6B7280"
-                ev_color = "#10B981" if bet['ev'] > 0.10 else "#F59E0B" if bet['ev'] > 0.05 else "#9CA3AF"
-                st.markdown(f"""
-                <div style="padding:16px;margin:10px 0;border-radius:14px;background:radial-gradient(circle at top left, rgba(249,115,22,0.15), rgba(15,23,42,0.96));border:1px solid rgba(249,115,22,0.4);">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                        <div style="font-size:11px;padding:3px 8px;border-radius:999px;background:{tier_color}33;color:{tier_color};">TIER {bet['tier']}</div>
-                        <div style="font-size:11px;padding:3px 8px;border-radius:999px;background:{ev_color}22;color:{ev_color};">EV +{bet['ev']*100:.1f}%</div>
-                    </div>
-                    <div style="font-size:13px;color:#9CA3AF;margin-bottom:4px;">{bet['league']} • {bet['market']}</div>
-                    <div style="font-size:16px;color:#E5E7EB;font-weight:600;margin-bottom:6px;">{bet['matchup']}</div>
-                    <div style="font-size:14px;color:#FDBA74;margin-bottom:10px;">{bet['selection']}</div>
-                    <div style="display:flex;gap:24px;">
-                        <div><span style="font-size:11px;color:#9CA3AF;">ODDS</span><br/><span style="font-size:20px;font-weight:600;color:#F97316;">{bet['odds']:.2f}x</span></div>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -2760,25 +2702,13 @@ def render_daily_card_tab():
         
         st.markdown("---")
         st.markdown("### Average Stats")
-        stats_cols = st.columns(3)
-        with stats_cols[0]:
-            pass
-        with stats_cols[1]:
-            if summary['basketball_count'] > 0:
-                st.markdown(f"""
-                <div style="padding:12px;border-radius:10px;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);">
-                    <div style="font-size:12px;color:#9CA3AF;">Basketball Average</div>
-                    <div style="font-size:16px;color:#F97316;">EV: {summary['basketball_avg_ev']:.1f}% • Odds: {summary['basketball_avg_odds']:.2f}x</div>
-                </div>
-                """, unsafe_allow_html=True)
-        with stats_cols[2]:
-            if summary['value_singles_count'] > 0:
-                st.markdown(f"""
-                <div style="padding:12px;border-radius:10px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);">
-                    <div style="font-size:12px;color:#9CA3AF;">Value Singles Average</div>
-                    <div style="font-size:16px;color:#10B981;">EV: {summary['value_singles_avg_ev']:.1f}% • Odds: {summary['value_singles_avg_odds']:.2f}x</div>
-                </div>
-                """, unsafe_allow_html=True)
+        if summary['value_singles_count'] > 0:
+            st.markdown(f"""
+            <div style="padding:12px;border-radius:10px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);">
+                <div style="font-size:12px;color:#9CA3AF;">Value Singles Average</div>
+                <div style="font-size:16px;color:#10B981;">EV: {summary['value_singles_avg_ev']:.1f}% • Odds: {summary['value_singles_avg_odds']:.2f}x</div>
+            </div>
+            """, unsafe_allow_html=True)
         
     except Exception as e:
         st.error(f"Error generating daily card: {e}")
@@ -4029,7 +3959,7 @@ def main():
     prod_bets, backtest_bets = split_bets_by_mode(all_bets)
 
     # Tabs for different products
-    smart_tab, free_tab, daily_card_tab, overview_tab, singles_tab, signal_routing_tab, odds_compare_tab, props_tab, basket_tab, kelly_tab, backtest_tab, clv_tab, system_tab = st.tabs(
+    smart_tab, free_tab, daily_card_tab, overview_tab, singles_tab, signal_routing_tab, odds_compare_tab, props_tab, kelly_tab, backtest_tab, clv_tab, system_tab = st.tabs(
         [
             "Smart Picks",
             "Free Picks",
@@ -4039,7 +3969,6 @@ def main():
             "Signal Routing",
             "Odds Compare",
             "Props & Specials",
-            "College Basketball",
             "Smart Stake",
             "Backtests",
             "CLV Analytics",
@@ -4071,9 +4000,6 @@ def main():
 
     with props_tab:
         render_props_tab()
-
-    with basket_tab:
-        render_basketball_tab(prod_bets)
 
     with kelly_tab:
         render_kelly_calculator()
