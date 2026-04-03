@@ -2770,6 +2770,7 @@ STREAMLIT_DASHBOARD_URL = os.getenv(
 )
 
 
+@app.get("/pgrdashboard", include_in_schema=False)
 @app.get("/goto-dashboard", include_in_schema=False)
 async def goto_dashboard(request: Request):
     """
