@@ -2261,53 +2261,61 @@ async def get_picks_history(days: int = 90):
 async def get_stats_summary(days: int = 90):
     """
     Unified performance stats from football_opportunities.
-    Identical filter + window to /api/picks/history so both KPI rows always match.
+    Returns both all-time and the selected rolling window.
     Filter: (mode='PROD' AND bet_placed=true) OR mode='VALUE_OPP'
-    ?days=90  (default) — same default as /api/picks/history
     """
     try:
         days = max(1, min(days, 365))
-        now_utc   = datetime.utcnow()
-        day_start = datetime(now_utc.year, now_utc.month, now_utc.day)
+        now_utc    = datetime.utcnow()
+        day_start  = datetime(now_utc.year, now_utc.month, now_utc.day)
         today_str  = day_start.strftime('%Y-%m-%d')
         window_str = (day_start - timedelta(days=days)).strftime('%Y-%m-%d')
 
-        rows = db_helper.execute("""
-            SELECT
-                COUNT(*)                                                      AS total,
-                COUNT(CASE WHEN UPPER(outcome) IN ('WON','WIN')  THEN 1 END) AS won,
-                COUNT(CASE WHEN UPPER(outcome) IN ('LOST','LOSS') THEN 1 END) AS lost,
-                COALESCE(SUM(profit_loss), 0)                                 AS total_pl
+        BASE_FILTER = "(mode = 'PROD' AND bet_placed = true) OR mode = 'VALUE_OPP'"
+
+        def _stats(rows):
+            total    = int(rows[0] or 0)
+            won      = int(rows[1] or 0)
+            lost     = int(rows[2] or 0)
+            total_pl = float(rows[3] or 0)
+            settled  = won + lost
+            return {
+                "total":    total,
+                "won":      won,
+                "lost":     lost,
+                "settled":  settled,
+                "total_pl": round(total_pl, 2),
+                "hit_rate": round(won / settled * 100, 1) if settled > 0 else 0,
+                "roi":      round(total_pl / settled * 100, 1) if settled > 0 else 0,
+            }
+
+        all_time_row = db_helper.execute(f"""
+            SELECT COUNT(*),
+                   COUNT(CASE WHEN UPPER(outcome) IN ('WON','WIN')   THEN 1 END),
+                   COUNT(CASE WHEN UPPER(outcome) IN ('LOST','LOSS') THEN 1 END),
+                   COALESCE(SUM(profit_loss), 0)
             FROM football_opportunities
-            WHERE (
-                (mode = 'PROD' AND bet_placed = true)
-                OR mode = 'VALUE_OPP'
-            )
+            WHERE {BASE_FILTER}
+        """, fetch='one')
+
+        period_row = db_helper.execute(f"""
+            SELECT COUNT(*),
+                   COUNT(CASE WHEN UPPER(outcome) IN ('WON','WIN')   THEN 1 END),
+                   COUNT(CASE WHEN UPPER(outcome) IN ('LOST','LOSS') THEN 1 END),
+                   COALESCE(SUM(profit_loss), 0)
+            FROM football_opportunities
+            WHERE ({BASE_FILTER})
               AND match_date >= %s
               AND match_date < %s
         """, (window_str, today_str), fetch='one')
 
-        if not rows:
-            return JSONResponse({"error": "no data"})
-
-        total    = int(rows[0] or 0)
-        won      = int(rows[1] or 0)
-        lost     = int(rows[2] or 0)
-        total_pl = float(rows[3] or 0)
-        settled  = won + lost
-        hit_rate = round(won / settled * 100, 1) if settled > 0 else 0
-        roi      = round(total_pl / settled * 100, 1) if settled > 0 else 0
-
         return JSONResponse({
-            "days":     days,
-            "period":   f"Last {days} days",
-            "total":    total,
-            "won":      won,
-            "lost":     lost,
-            "settled":  settled,
-            "total_pl": round(total_pl, 2),
-            "hit_rate": hit_rate,
-            "roi":      roi,
+            "all_time": _stats(all_time_row) if all_time_row else {},
+            "period":   {
+                **(_stats(period_row) if period_row else {}),
+                "days":  days,
+                "label": f"Last {days} days",
+            },
         })
     except Exception as e:
         logger.error(f"Error in get_stats_summary: {e}")

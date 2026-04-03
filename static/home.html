@@ -85,6 +85,7 @@ const state = {
   mainTab: "picks",
   allPicks: [],
   apiStats: null,
+  apiStatsPeriod: null,
   loading: true,
   isMock: false,
   fetchError: false,
@@ -689,14 +690,25 @@ function renderApp() {
   const S = state.apiStats;
   const selectedPick = getSelectedPick();
 
-  const fmtPL = v => (v >= 0 ? "+" : "") + Number(v).toFixed(1) + "u";
+  const P = state.apiStatsPeriod;
+  const fmtPL  = v => (v >= 0 ? "+" : "") + Number(v).toFixed(1) + "u";
   const fmtROI = v => (v >= 0 ? "+" : "") + Number(v).toFixed(1) + "%";
-  const kpiData = [
-    ["ROI",      S ? fmtROI(S.roi)        : "+22.7%"],
-    ["PROFIT",   S ? fmtPL(S.units)       : "+829u"],
-    ["BETS",     S ? Number(S.bets).toLocaleString() : "4,258"],
+  // All-time row
+  const kpiAllTime = [
+    ["ROI",      S ? fmtROI(S.roi)      : "+22.7%"],
+    ["PROFIT",   S ? fmtPL(S.total_pl)  : "+829u"],
+    ["BETS",     S ? Number(S.total).toLocaleString() : "4,258"],
     ["HIT RATE", S ? Number(S.hit_rate).toFixed(1) + "%" : "54.5%"],
     ["TODAY",    String(filtered.length)],
+  ];
+  // Rolling period row (matches History tab)
+  const periodLabel = P && P.label ? P.label : ("Last " + state.historyDays + " days");
+  const kpiPeriod = [
+    ["ROI",      P && P.roi      != null ? fmtROI(P.roi)      : "—"],
+    ["PROFIT",   P && P.total_pl != null ? fmtPL(P.total_pl)  : "—"],
+    ["BETS",     P && P.total    != null ? Number(P.total).toLocaleString() : "—"],
+    ["HIT RATE", P && P.hit_rate != null ? Number(P.hit_rate).toFixed(1) + "%" : "—"],
+    ["W / L",    P ? (P.won||0) + " / " + (P.lost||0) : "—"],
   ];
 
   const sportOptions = allSports.map(s =>
@@ -844,16 +856,25 @@ function renderApp() {
           </div>
         </div>
 
-        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;padding:12px 16px 6px">
-          ${kpiData.map(([l, v]) => `<div style="border-radius:12px;border:1px solid #27272a;background:#09090b;padding:10px 14px">
+        <!-- All-time KPI row -->
+        <div style="padding:10px 16px 4px">
+          <span style="font-size:9px;letter-spacing:.12em;color:#52525b;text-transform:uppercase">All time</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;padding:0 16px 10px;border-bottom:1px solid #18181b">
+          ${kpiAllTime.map(([l, v]) => `<div style="border-radius:10px;border:1px solid #27272a;background:#09090b;padding:9px 12px">
             <div style="font-size:9px;letter-spacing:.12em;color:#52525b;text-transform:uppercase">${esc(l)}</div>
-            <div ${l === "TODAY" ? 'id="kpi-today"' : ""} style="font-size:22px;font-weight:700;margin-top:4px;color:#f4f4f5">${esc(v)}</div>
+            <div ${l === "TODAY" ? 'id="kpi-today"' : ""} style="font-size:20px;font-weight:700;margin-top:3px;color:#f4f4f5">${esc(v)}</div>
           </div>`).join("")}
         </div>
-        <div style="padding:0 16px 10px;border-bottom:1px solid #18181b">
-          <span style="font-size:10px;color:#3f3f46">
-            ${S ? esc(S.period) + " · " + (S.won||0) + "W / " + (S.lost||0) + "L settled" : "Last 90 days"}
-          </span>
+        <!-- Period KPI row (matches History tab) -->
+        <div style="padding:10px 16px 4px">
+          <span style="font-size:9px;letter-spacing:.12em;color:#52525b;text-transform:uppercase">${esc(periodLabel)}</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;padding:0 16px 12px;border-bottom:1px solid #18181b">
+          ${kpiPeriod.map(([l, v]) => `<div style="border-radius:10px;border:1px solid #27272a;background:#09090b;padding:9px 12px">
+            <div style="font-size:9px;letter-spacing:.12em;color:#52525b;text-transform:uppercase">${esc(l)}</div>
+            <div style="font-size:20px;font-weight:700;margin-top:3px;color:#a78bfa">${esc(v)}</div>
+          </div>`).join("")}
         </div>
 
         <div style="border-bottom:1px solid #27272a;padding:14px 16px">
@@ -1012,20 +1033,13 @@ function bindEvents() {
     state.historyDays = Number(e.target.value);
     state.historyFetched = false;
     fetchHistory();
-    // Sync Picks tab KPI to the new period
+    // Sync Picks tab period KPI to the new window
     fetch("/api/stats/summary?days=" + state.historyDays)
       .then(r => r.ok ? r.json() : null)
       .then(sd => {
         if (!sd) return;
-        state.apiStats = {
-          roi:      sd.roi      != null ? sd.roi      : 0,
-          units:    sd.total_pl != null ? sd.total_pl : 0,
-          bets:     sd.total    != null ? sd.total    : 0,
-          hit_rate: sd.hit_rate != null ? sd.hit_rate : 0,
-          won:      sd.won      != null ? sd.won      : 0,
-          lost:     sd.lost     != null ? sd.lost     : 0,
-          period:   sd.period   || ("Last " + state.historyDays + " days"),
-        };
+        state.apiStats       = sd.all_time || {};
+        state.apiStatsPeriod = sd.period   || {};
         render();
       }).catch(() => {});
   });
@@ -1297,15 +1311,8 @@ async function fetchData() {
 
     if (sRes.ok) {
       const sd = await sRes.json();
-      state.apiStats = {
-        roi:      sd.roi      != null ? sd.roi      : 0,
-        units:    sd.total_pl != null ? sd.total_pl : 0,
-        bets:     sd.total    != null ? sd.total    : 0,
-        hit_rate: sd.hit_rate != null ? sd.hit_rate : 0,
-        won:      sd.won      != null ? sd.won      : 0,
-        lost:     sd.lost     != null ? sd.lost     : 0,
-        period:   sd.period   || ("Last " + state.historyDays + " days"),
-      };
+      state.apiStats     = sd.all_time || {};
+      state.apiStatsPeriod = sd.period  || {};
     }
   } catch (e) {
     // Hard fetch failure — show error UI (no silent fallback)
