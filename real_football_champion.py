@@ -964,6 +964,26 @@ class RealFootballChampion:
                                     enriched += 1
                             if enriched:
                                 print(f"   🔄 API-Football enriched {enriched} market odds for {home_team} vs {away_team}")
+                            # CLV capture: update pending picks with current API-Football odds
+                            try:
+                                from clv_service import capture_from_api_football
+                                ko_epoch = None
+                                if commence:
+                                    import datetime as _dt
+                                    ko_epoch = int(_dt.datetime.fromisoformat(
+                                        commence.replace('Z', '+00:00')
+                                    ).timestamp())
+                                clv_updated = capture_from_api_football(
+                                    home_team=home_team,
+                                    away_team=away_team,
+                                    market_odds=odds_map,
+                                    kickoff_epoch=ko_epoch,
+                                    match_date=match_date,
+                                )
+                                if clv_updated:
+                                    print(f"   📊 CLV(AF): {clv_updated} pick(s) updated for {home_team} vs {away_team}")
+                            except Exception:
+                                pass
                             if af_mbb:
                                 engine_mbb = match.setdefault('markets_by_bookmaker', {})
                                 for af_key, engine_key in af_to_engine.items():

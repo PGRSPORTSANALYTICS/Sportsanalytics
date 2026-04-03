@@ -33,51 +33,75 @@ SHARP_BOOKS = ['pinnacle', 'bet365', 'matchbook', 'betfair', 'betfair_ex_eu', 'n
 SHARP_PRIORITY = ['pinnacle', 'bet365', 'matchbook', 'betfair', 'betfair_ex_eu']
 
 LEAGUE_TO_SPORT_KEY: Dict[str, str] = {
+    # England
     'Premier League': 'soccer_epl',
+    'English Championship': 'soccer_efl_champ',
+    'Championship': 'soccer_efl_champ',
+    'English League One': 'soccer_england_league1',
+    'League One': 'soccer_england_league1',
+    'English League Two': 'soccer_england_league2',
+    'League Two': 'soccer_england_league2',
+    'Scottish Premiership': 'soccer_spl',
+    # Spain
     'La Liga': 'soccer_spain_la_liga',
+    'La Liga 2': 'soccer_spain_segunda_division',
+    'Segunda División': 'soccer_spain_segunda_division',
+    'Spanish Segunda Division': 'soccer_spain_segunda_division',
+    # Italy
     'Serie A': 'soccer_italy_serie_a',
+    'Serie B': 'soccer_italy_serie_b',
+    'Italian Serie B': 'soccer_italy_serie_b',
+    # Germany
     'Bundesliga': 'soccer_germany_bundesliga',
+    'Bundesliga 2': 'soccer_germany_bundesliga2',
+    '2. Bundesliga': 'soccer_germany_bundesliga2',
+    'German 2. Bundesliga': 'soccer_germany_bundesliga2',
+    # France
     'Ligue 1': 'soccer_france_ligue_one',
+    'Ligue 2': 'soccer_france_ligue_two',
+    'French Ligue 2': 'soccer_france_ligue_two',
+    # Europe
     'Champions League': 'soccer_uefa_champs_league',
     'Europa League': 'soccer_uefa_europa_league',
     'Conference League': 'soccer_uefa_europa_conference_league',
+    # Netherlands
     'Eredivisie': 'soccer_netherlands_eredivisie',
+    'Eerste Divisie': 'soccer_netherlands_eredivisie',
+    # Portugal
     'Primeira Liga': 'soccer_portugal_primeira_liga',
+    'Portuguese Primeira Liga': 'soccer_portugal_primeira_liga',
     'Portuguese Primeira': 'soccer_portugal_primeira_liga',
+    'Primeira Liga Portugal': 'soccer_portugal_primeira_liga',
+    'Segunda Liga': 'soccer_portugal_segunda_liga',
+    # Belgium
     'Belgian First Division': 'soccer_belgium_first_div',
-    'English Championship': 'soccer_efl_champ',
-    'English League One': 'soccer_england_league1',
-    'English League Two': 'soccer_england_league2',
-    'Scottish Premiership': 'soccer_spl',
+    'Belgian Pro League': 'soccer_belgium_first_div',
+    # Turkey
     'Turkish Super Lig': 'soccer_turkey_super_league',
+    'Turkish Super League': 'soccer_turkey_super_league',
+    # Scandinavia
     'Swiss Super League': 'soccer_switzerland_superleague',
     'Danish Superliga': 'soccer_denmark_superliga',
     'Superliga': 'soccer_denmark_superliga',
     'Norwegian Eliteserien': 'soccer_norway_eliteserien',
     'Swedish Allsvenskan': 'soccer_sweden_allsvenskan',
+    # Other Europe
     'Greek Super League': 'soccer_greece_super_league',
     'Austrian Bundesliga': 'soccer_austria_bundesliga',
+    'Czech Liga': 'soccer_czech_republic_first_league',
+    'Czech First League': 'soccer_czech_republic_first_league',
+    'Polish Ekstraklasa': 'soccer_poland_ekstraklasa',
+    # Americas
     'MLS': 'soccer_usa_mls',
     'Liga MX': 'soccer_mexico_ligamx',
     'Brazilian Serie A': 'soccer_brazil_serie_a',
     'Brasileirao': 'soccer_brazil_serie_a',
     'Argentine Primera': 'soccer_argentina_primera_division',
+    # Asia / Oceania
     'J1 League': 'soccer_japan_j_league',
     'K League 1': 'soccer_korea_kleague1',
     'A-League': 'soccer_australia_aleague',
     'Australian A-League': 'soccer_australia_aleague',
-    'Eerste Divisie': 'soccer_netherlands_eredivisie',
-    'Bundesliga 2': 'soccer_germany_bundesliga2',
-    '2. Bundesliga': 'soccer_germany_bundesliga2',
-    'Ligue 2': 'soccer_france_ligue_two',
-    'La Liga 2': 'soccer_spain_segunda_division',
-    'Segunda División': 'soccer_spain_segunda_division',
-    'Serie B': 'soccer_italy_serie_b',
-    'Championship': 'soccer_efl_champ',
-    'League One': 'soccer_england_league1',
-    'League Two': 'soccer_england_league2',
-    'Czech Liga': 'soccer_czech_republic_first_league',
-    'Polish Ekstraklasa': 'soccer_poland_ekstraklasa',
 }
 
 UNSUPPORTED_MARKETS = {
@@ -515,7 +539,7 @@ class CLVService:
             logger.info("📊 CLV cycle: 0 candidates in 0–8h window — nothing to do")
             return stats
 
-        CAPTURE_WINDOW_MIN  = 120   # Do not finalise close_odds more than 2h before kickoff
+        CAPTURE_WINDOW_MIN  = 480   # Capture odds up to 8h before kickoff
         CAPTURE_WINDOW_PAST = -5    # Allow up to 5 min after kickoff
 
         clv_vals: List[float] = []
@@ -528,8 +552,8 @@ class CLVService:
 
             if mins_to_ko > CAPTURE_WINDOW_MIN:
                 # Too early — will be captured in a future cycle closer to kickoff
-                logger.debug(
-                    "CLV: skipping bet %d (%s vs %s) — %d min to KO, waiting for <%d min window",
+                logger.info(
+                    "CLV: ⏳ TOO EARLY  bet=%d  %s vs %s  (%d min to KO, window <%d min)",
                     bet_id, bet['home_team'], bet['away_team'], mins_to_ko, CAPTURE_WINDOW_MIN
                 )
                 continue
@@ -717,6 +741,159 @@ def run_clv_update_cycle() -> Dict[str, Any]:
     """Convenience wrapper — called by combined_sports_runner."""
     svc = CLVService()
     return svc.run_cycle()
+
+
+def capture_from_api_football(home_team: str, away_team: str,
+                               market_odds: Dict[str, float],
+                               kickoff_epoch: Optional[int] = None,
+                               match_date: Optional[str] = None) -> int:
+    """
+    Secondary CLV source: capture closing odds from API-Football market odds.
+
+    Called from the main engine after odds are fetched for a match.
+    Updates any PENDING pick on this match (looked up by team names + date).
+
+    market_odds format: {'HOME_WIN': 2.10, 'AWAY_WIN': 3.50, 'DRAW': 3.20,
+                         'FT_OVER_2_5': 1.90, 'BTTS_YES': 1.85, ...}
+
+    Returns: number of picks updated
+    """
+    if not market_odds or not home_team or not away_team:
+        return 0
+
+    CAPTURE_MIN_BEFORE = 480    # Only capture if kickoff is within 8h
+    CAPTURE_AFTER_KO   = 10     # Allow up to 10 min after kickoff
+    now = int(time.time())
+
+    # Time-gate: only update if kickoff is approaching
+    if kickoff_epoch:
+        mins_to_ko = (kickoff_epoch - now) // 60
+        if mins_to_ko > CAPTURE_MIN_BEFORE:
+            return 0       # Too early
+        if mins_to_ko < -CAPTURE_AFTER_KO:
+            return 0       # Too late
+
+    # Fetch pending picks for this match by team name match + date
+    try:
+        if match_date:
+            rows = db_helper.execute("""
+                SELECT id, market, selection, open_odds
+                FROM football_opportunities
+                WHERE LOWER(home_team) = LOWER(%s)
+                  AND LOWER(away_team) = LOWER(%s)
+                  AND match_date       = %s
+                  AND status           = 'pending'
+                  AND close_odds       IS NULL
+                  AND open_odds        IS NOT NULL
+            """, (home_team, away_team, match_date), fetch='all') or []
+        else:
+            rows = db_helper.execute("""
+                SELECT id, market, selection, open_odds
+                FROM football_opportunities
+                WHERE LOWER(home_team) = LOWER(%s)
+                  AND LOWER(away_team) = LOWER(%s)
+                  AND status           = 'pending'
+                  AND close_odds       IS NULL
+                  AND open_odds        IS NOT NULL
+            """, (home_team, away_team), fetch='all') or []
+    except Exception as exc:
+        logger.error("CLV(AF): DB fetch error %s vs %s: %s", home_team, away_team, exc)
+        return 0
+
+    if not rows:
+        return 0
+
+    updated = 0
+    for (bet_id, market, selection, open_odds_raw) in rows:
+        open_odds = float(open_odds_raw) if open_odds_raw else 0
+        if not _is_supported(market):
+            continue
+
+        # Map selection to market_odds key
+        close_odds = _match_api_football_odds(market, selection, home_team, away_team, market_odds)
+        if close_odds is None or close_odds <= 1.0:
+            continue
+
+        # Drift guard
+        if open_odds > 1.0:
+            drift = abs(close_odds - open_odds) / open_odds
+            if drift > DRIFT_REJECT_PCT:
+                logger.debug("CLV(AF): drift reject bet=%d open=%.2f close=%.2f drift=%.0f%%",
+                             bet_id, open_odds, close_odds, drift * 100)
+                continue
+
+        try:
+            clv = _clv_pct(open_odds, close_odds)
+            status = _clv_status(clv)
+        except ValueError:
+            continue
+
+        try:
+            db_helper.execute("""
+                UPDATE football_opportunities
+                SET close_odds      = %s,
+                    close_ts        = %s,
+                    clv_pct         = %s,
+                    clv_status      = %s,
+                    clv_source_book = %s
+                WHERE id = %s AND close_odds IS NULL
+            """, (close_odds, now, clv, status, 'api_football', bet_id))
+            logger.info(
+                "CLV(AF): ✅ bet=%d  %s vs %s  %s|%s  "
+                "open=%.3f close=%.3f  CLV=%+.2f%%",
+                bet_id, home_team, away_team, market, selection,
+                open_odds, close_odds, clv
+            )
+            updated += 1
+        except Exception as exc:
+            logger.error("CLV(AF): DB update error bet=%d: %s", bet_id, exc)
+
+    return updated
+
+
+def _match_api_football_odds(market: str, selection: str,
+                              home: str, away: str,
+                              odds_map: Dict[str, float]) -> Optional[float]:
+    """Map a DB market+selection to an API-Football odds_map key."""
+    m = market.lower()
+    s = selection.lower()
+    h = home.lower()
+    a = away.lower()
+
+    # 1X2
+    if 'home win' in s or (h in s and 'win' in s):
+        return odds_map.get('HOME_WIN')
+    if 'away win' in s or (a in s and 'win' in s):
+        return odds_map.get('AWAY_WIN')
+    if s == 'draw' or 'draw' in s:
+        return odds_map.get('DRAW')
+
+    # Over/Under totals
+    ov_match = re.search(r'over\s+([\d.]+)', s)
+    un_match = re.search(r'under\s+([\d.]+)', s)
+    if ov_match:
+        line = ov_match.group(1).replace('.', '_')
+        return odds_map.get(f'FT_OVER_{line}')
+    if un_match:
+        line = un_match.group(1).replace('.', '_')
+        return odds_map.get(f'FT_UNDER_{line}')
+
+    # BTTS
+    if 'btts' in s or 'both teams' in s:
+        if 'no' in s:
+            return odds_map.get('BTTS_NO')
+        return odds_map.get('BTTS_YES')
+
+    # Double Chance
+    if 'dc' in m or 'double chance' in m or 'double chance' in s:
+        if 'home' in s and 'draw' in s:
+            return odds_map.get('DC_HOME_DRAW')
+        if 'home' in s and 'away' in s:
+            return odds_map.get('DC_HOME_AWAY')
+        if 'draw' in s and 'away' in s:
+            return odds_map.get('DC_DRAW_AWAY')
+
+    return None
 
 
 if __name__ == '__main__':
