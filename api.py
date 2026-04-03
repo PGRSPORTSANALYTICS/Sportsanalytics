@@ -2258,32 +2258,34 @@ async def get_picks_history(days: int = 90):
 
 
 @app.get("/api/stats/summary")
-async def get_stats_summary():
+async def get_stats_summary(days: int = 90):
     """
     Unified performance stats from football_opportunities.
-    Uses identical filter to /api/picks/history so both KPI rows match.
+    Identical filter + window to /api/picks/history so both KPI rows always match.
     Filter: (mode='PROD' AND bet_placed=true) OR mode='VALUE_OPP'
+    ?days=90  (default) — same default as /api/picks/history
     """
     try:
+        days = max(1, min(days, 365))
+        now_utc   = datetime.utcnow()
+        day_start = datetime(now_utc.year, now_utc.month, now_utc.day)
+        today_str  = day_start.strftime('%Y-%m-%d')
+        window_str = (day_start - timedelta(days=days)).strftime('%Y-%m-%d')
+
         rows = db_helper.execute("""
             SELECT
-                COUNT(*)                                                          AS total,
-                COUNT(CASE WHEN UPPER(outcome) IN ('WON','WIN')  THEN 1 END)     AS won,
-                COUNT(CASE WHEN UPPER(outcome) IN ('LOST','LOSS') THEN 1 END)    AS lost,
-                COALESCE(SUM(profit_loss), 0)                                    AS total_pl,
-                COUNT(CASE WHEN match_date >= TO_CHAR(CURRENT_DATE - INTERVAL '30 days','YYYY-MM-DD') THEN 1 END) AS total_30,
-                COUNT(CASE WHEN UPPER(outcome) IN ('WON','WIN')
-                           AND match_date >= TO_CHAR(CURRENT_DATE - INTERVAL '30 days','YYYY-MM-DD') THEN 1 END)  AS won_30,
-                COUNT(CASE WHEN UPPER(outcome) IN ('LOST','LOSS')
-                           AND match_date >= TO_CHAR(CURRENT_DATE - INTERVAL '30 days','YYYY-MM-DD') THEN 1 END)  AS lost_30,
-                COALESCE(SUM(CASE WHEN match_date >= TO_CHAR(CURRENT_DATE - INTERVAL '30 days','YYYY-MM-DD')
-                                  THEN profit_loss ELSE 0 END), 0)               AS pl_30
+                COUNT(*)                                                      AS total,
+                COUNT(CASE WHEN UPPER(outcome) IN ('WON','WIN')  THEN 1 END) AS won,
+                COUNT(CASE WHEN UPPER(outcome) IN ('LOST','LOSS') THEN 1 END) AS lost,
+                COALESCE(SUM(profit_loss), 0)                                 AS total_pl
             FROM football_opportunities
             WHERE (
                 (mode = 'PROD' AND bet_placed = true)
                 OR mode = 'VALUE_OPP'
             )
-        """, fetch='one')
+              AND match_date >= %s
+              AND match_date < %s
+        """, (window_str, today_str), fetch='one')
 
         if not rows:
             return JSONResponse({"error": "no data"})
@@ -2296,33 +2298,16 @@ async def get_stats_summary():
         hit_rate = round(won / settled * 100, 1) if settled > 0 else 0
         roi      = round(total_pl / settled * 100, 1) if settled > 0 else 0
 
-        total_30  = int(rows[4] or 0)
-        won_30    = int(rows[5] or 0)
-        lost_30   = int(rows[6] or 0)
-        pl_30     = float(rows[7] or 0)
-        settled_30= won_30 + lost_30
-        hit_30    = round(won_30 / settled_30 * 100, 1) if settled_30 > 0 else 0
-        roi_30    = round(pl_30 / settled_30 * 100, 1) if settled_30 > 0 else 0
-
         return JSONResponse({
-            "all_time": {
-                "total":    total,
-                "won":      won,
-                "lost":     lost,
-                "settled":  settled,
-                "total_pl": round(total_pl, 2),
-                "hit_rate": hit_rate,
-                "roi":      roi,
-            },
-            "last_30": {
-                "total":    total_30,
-                "won":      won_30,
-                "lost":     lost_30,
-                "settled":  settled_30,
-                "total_pl": round(pl_30, 2),
-                "hit_rate": hit_30,
-                "roi":      roi_30,
-            },
+            "days":     days,
+            "period":   f"Last {days} days",
+            "total":    total,
+            "won":      won,
+            "lost":     lost,
+            "settled":  settled,
+            "total_pl": round(total_pl, 2),
+            "hit_rate": hit_rate,
+            "roi":      roi,
         })
     except Exception as e:
         logger.error(f"Error in get_stats_summary: {e}")

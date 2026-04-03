@@ -844,11 +844,16 @@ function renderApp() {
           </div>
         </div>
 
-        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;border-bottom:1px solid #18181b;padding:12px 16px">
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;padding:12px 16px 6px">
           ${kpiData.map(([l, v]) => `<div style="border-radius:12px;border:1px solid #27272a;background:#09090b;padding:10px 14px">
             <div style="font-size:9px;letter-spacing:.12em;color:#52525b;text-transform:uppercase">${esc(l)}</div>
             <div ${l === "TODAY" ? 'id="kpi-today"' : ""} style="font-size:22px;font-weight:700;margin-top:4px;color:#f4f4f5">${esc(v)}</div>
           </div>`).join("")}
+        </div>
+        <div style="padding:0 16px 10px;border-bottom:1px solid #18181b">
+          <span style="font-size:10px;color:#3f3f46">
+            ${S ? esc(S.period) + " · " + (S.won||0) + "W / " + (S.lost||0) + "L settled" : "Last 90 days"}
+          </span>
         </div>
 
         <div style="border-bottom:1px solid #27272a;padding:14px 16px">
@@ -1007,6 +1012,22 @@ function bindEvents() {
     state.historyDays = Number(e.target.value);
     state.historyFetched = false;
     fetchHistory();
+    // Sync Picks tab KPI to the new period
+    fetch("/api/stats/summary?days=" + state.historyDays)
+      .then(r => r.ok ? r.json() : null)
+      .then(sd => {
+        if (!sd) return;
+        state.apiStats = {
+          roi:      sd.roi      != null ? sd.roi      : 0,
+          units:    sd.total_pl != null ? sd.total_pl : 0,
+          bets:     sd.total    != null ? sd.total    : 0,
+          hit_rate: sd.hit_rate != null ? sd.hit_rate : 0,
+          won:      sd.won      != null ? sd.won      : 0,
+          lost:     sd.lost     != null ? sd.lost     : 0,
+          period:   sd.period   || ("Last " + state.historyDays + " days"),
+        };
+        render();
+      }).catch(() => {});
   });
 
   const hr = document.getElementById("history-reload");
@@ -1228,7 +1249,7 @@ async function fetchData() {
   try {
     const [pRes, sRes] = await Promise.all([
       fetch("/api/picks/today"),
-      fetch("/api/stats/summary"),
+      fetch("/api/stats/summary?days=" + state.historyDays),
     ]);
     if (!pRes.ok) throw new Error("picks failed");
     const pd = await pRes.json();
@@ -1276,14 +1297,14 @@ async function fetchData() {
 
     if (sRes.ok) {
       const sd = await sRes.json();
-      const at = sd.all_time || {};
       state.apiStats = {
-        roi:      at.roi      != null ? at.roi      : 0,
-        units:    at.total_pl != null ? at.total_pl : 0,
-        bets:     at.total    != null ? at.total    : 0,
-        hit_rate: at.hit_rate != null ? at.hit_rate : 0,
-        won:      at.won      != null ? at.won      : 0,
-        lost:     at.lost     != null ? at.lost     : 0,
+        roi:      sd.roi      != null ? sd.roi      : 0,
+        units:    sd.total_pl != null ? sd.total_pl : 0,
+        bets:     sd.total    != null ? sd.total    : 0,
+        hit_rate: sd.hit_rate != null ? sd.hit_rate : 0,
+        won:      sd.won      != null ? sd.won      : 0,
+        lost:     sd.lost     != null ? sd.lost     : 0,
+        period:   sd.period   || ("Last " + state.historyDays + " days"),
       };
     }
   } catch (e) {
