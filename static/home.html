@@ -687,35 +687,6 @@ function renderCLVTab() {
 
   const coveragePct  = s ? (s.coverage_pct  || 0) : 0;
   const sampleN      = s ? (s.sample_n      || 0) : 0;
-  const totalPicks   = s ? (s.total_picks   || 0) : 0;
-  const lowCoverage  = coveragePct < 30;
-
-  // Info banner: always show a status line; amber warning only when coverage < 30%
-  const bannerColor  = lowCoverage
-    ? { border: 'rgba(251,191,36,.3)', bg: 'rgba(251,191,36,.06)', icon: '🔬', titleColor: '#fbbf24', bodyColor: '#a16207' }
-    : { border: 'rgba(34,197,94,.25)', bg: 'rgba(34,197,94,.04)', icon: '✅', titleColor: '#4ade80', bodyColor: '#166534' };
-
-  const warningBanner = `
-    <div style="margin:16px;border-radius:12px;border:1px solid ${bannerColor.border};background:${bannerColor.bg};padding:14px 18px;display:flex;align-items:flex-start;gap:12px">
-      <div style="font-size:20px;line-height:1;margin-top:1px">${bannerColor.icon}</div>
-      <div>
-        <div style="font-size:13px;font-weight:700;color:${bannerColor.titleColor};margin-bottom:4px">
-          ${lowCoverage ? 'CLV Tracking — Coverage Building Up' : 'CLV Tracking — Active'}
-        </div>
-        <div style="font-size:12px;color:${bannerColor.bodyColor};line-height:1.5">
-          ${lowCoverage
-            ? `CLV is being captured automatically for every new pick as it approaches kickoff.
-               Coverage improves as new picks accumulate — currently
-               <b style="color:${bannerColor.titleColor}">${sampleN} of ${totalPicks}</b> picks have closing odds (${coveragePct.toFixed(1)}%).
-               Historical picks before CLV tracking was enabled cannot be backfilled.`
-            : `Closing odds are being captured for all qualifying picks within 8 hours of kickoff.
-               <b style="color:${bannerColor.titleColor}">${sampleN} of ${totalPicks}</b> picks have CLV data (${coveragePct.toFixed(1)}% coverage).
-               A reliable long-term signal typically needs 200+ samples — threshold met.`
-          }
-          Sources: The Odds API (sharp average) + API-Football.
-        </div>
-      </div>
-    </div>`;
 
   // KPI cards
   const kpiCards = [
@@ -760,9 +731,7 @@ function renderCLVTab() {
 
   return `
     <div>
-      ${warningBanner}
-
-      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;padding:0 16px 16px">
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;padding:16px 16px 16px">
         ${kpiHtml}
       </div>
 
