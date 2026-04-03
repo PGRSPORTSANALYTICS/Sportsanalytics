@@ -2817,7 +2817,7 @@ async def stripe_webhook(request: Request):
 async def public_config():
     """Return non-sensitive public configuration used by frontend pages."""
     return JSONResponse({
-        "stripe_payment_link": os.getenv("STRIPE_PAYMENT_LINK", ""),
+        "stripe_payment_link": os.getenv("STRIPE_PAYMENT_LINK") or os.getenv("STRIPE_PAYMENT_399", ""),
         "env": os.getenv("ENV", "dev"),
     })
 
