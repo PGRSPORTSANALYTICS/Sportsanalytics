@@ -857,23 +857,10 @@ function renderApp() {
         </div>
 
         <!-- All-time KPI row -->
-        <div style="padding:10px 16px 4px">
-          <span style="font-size:9px;letter-spacing:.12em;color:#52525b;text-transform:uppercase">All time</span>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;padding:0 16px 10px;border-bottom:1px solid #18181b">
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;padding:12px 16px;border-bottom:1px solid #18181b">
           ${kpiAllTime.map(([l, v]) => `<div style="border-radius:10px;border:1px solid #27272a;background:#09090b;padding:9px 12px">
             <div style="font-size:9px;letter-spacing:.12em;color:#52525b;text-transform:uppercase">${esc(l)}</div>
             <div ${l === "TODAY" ? 'id="kpi-today"' : ""} style="font-size:20px;font-weight:700;margin-top:3px;color:#f4f4f5">${esc(v)}</div>
-          </div>`).join("")}
-        </div>
-        <!-- Period KPI row (matches History tab) -->
-        <div style="padding:10px 16px 4px">
-          <span style="font-size:9px;letter-spacing:.12em;color:#52525b;text-transform:uppercase">${esc(periodLabel)}</span>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;padding:0 16px 12px;border-bottom:1px solid #18181b">
-          ${kpiPeriod.map(([l, v]) => `<div style="border-radius:10px;border:1px solid #27272a;background:#09090b;padding:9px 12px">
-            <div style="font-size:9px;letter-spacing:.12em;color:#52525b;text-transform:uppercase">${esc(l)}</div>
-            <div style="font-size:20px;font-weight:700;margin-top:3px;color:#a78bfa">${esc(v)}</div>
           </div>`).join("")}
         </div>
 
