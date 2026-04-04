@@ -199,12 +199,12 @@ CARDS_LINES = {
 }
 
 DEFAULT_DISCIPLINE_STATS = {
-    "cards_pg": 2.1,
-    "cards_against_pg": 1.9,
+    "cards_pg": 2.3,          # Raised: real avg ~2.3/team (was 2.1 → caused Under 4.5 bias)
+    "cards_against_pg": 2.1,
     "fouls_pg": 11.5,
-    "yellow_cards_pg": 1.8,
-    "red_cards_pg": 0.05,
-    "referee_avg_cards": 4.2,
+    "yellow_cards_pg": 2.1,
+    "red_cards_pg": 0.07,
+    "referee_avg_cards": 4.4,  # Raised: real global avg is 4.4 (was 4.2)
     "tackles_pg": 16.0,
     "duels_pg": 50.0,
     "aerial_duels_pg": 15.0,
@@ -659,6 +659,11 @@ class CardsEngine:
                     market_type = (MarketType.CARDS_MATCH if product_key == "CARDS_MATCH" 
                                    else MarketType.CARDS_TEAM)
                     
+                    # Build referee display info for metadata
+                    _ref_name = fixture.get("referee_name", "TBD")
+                    _ref_style = (referee_stats or {}).get("style", "balanced") if referee_stats else "balanced"
+                    _ref_cpm = (referee_stats or {}).get("cards_per_match", 4.4) if referee_stats else 4.4
+                    
                     candidate = CardsCandidate(
                         fixture_id=fixture_id,
                         home_team=home_team,
@@ -680,6 +685,9 @@ class CardsEngine:
                             "std_value": float(np.std(sims[sim_key])),
                             "avg_total_cards": float(np.mean(sims["total_cards"])),
                             "avg_booking_pts": float(np.mean(sims["total_booking_pts"])),
+                            "referee_name": _ref_name,
+                            "referee_style": _ref_style,
+                            "referee_cards_pm": round(_ref_cpm, 1),
                         },
                         match_date=fixture.get("match_date", datetime.now().strftime('%Y-%m-%d')),
                         league=fixture.get("league", "Unknown"),
@@ -725,7 +733,13 @@ def run_cards_cycle(
         away_stats = team_stats_data.get(away_team, DEFAULT_DISCIPLINE_STATS)
         team_stats = {"home": home_stats, "away": away_stats}
         
-        referee_stats = referee_data.get(fixture.get("referee_id"), {})
+        # Prefer referee_stats embedded directly in fixture (from referee_stats_service)
+        referee_stats = (
+            fixture.get("referee_stats")
+            or referee_data.get(fixture.get("referee_id"))
+            or referee_data.get(fixture_id)
+            or {}
+        )
         h2h_stats = h2h_data.get(f"{home_team}_vs_{away_team}", {})
         
         match_context = {

@@ -22,6 +22,7 @@ from confidence_scorer import ConfidenceScorer
 from poisson_predictor import PoissonScorePredictor
 from xg_predictor import ExpectedGoalsPredictor
 from referee_analyzer import RefereeAnalyzer
+from referee_stats_service import get_referee_stats as get_real_referee_stats
 from team_name_mapper import TeamNameMapper
 from db_helper import db_helper
 from value_singles_engine import ValueSinglesEngine
@@ -4758,11 +4759,14 @@ def run_late_cards_cycle():
             
             real_cards_odds = {}
             real_corners_odds = {}
+            referee_name_for_fixture = None
             try:
                 af_fixture = af_client.get_fixture_by_teams_and_date(
                     home_team, away_team, str(match_date) if match_date else today
                 )
                 if af_fixture:
+                    # Extract referee name from fixture data (available ~48h before kickoff)
+                    referee_name_for_fixture = af_fixture.get('fixture', {}).get('referee')
                     af_id = af_fixture.get('fixture', {}).get('id')
                     if af_id:
                         af_odds = af_client.get_fixture_odds(af_id)
@@ -4788,6 +4792,11 @@ def run_late_cards_cycle():
                 cards_fixtures_found += 1
                 print(f"   🟨 CARDS ODDS FOUND: {home_team} vs {away_team} ({len(real_cards_odds)} markets, {mins_to_kickoff}min to kickoff)")
             
+            # Fetch real referee stats (DB cache → API-Football → league default)
+            ref_stats = get_real_referee_stats(referee_name_for_fixture, league or '', af_client)
+            ref_display = referee_name_for_fixture or 'TBD'
+            print(f"   🎴 Referee: {ref_display} | {ref_stats['style']} | {ref_stats['cards_per_match']:.1f} cards/match (src={ref_stats.get('source', '?')})")
+            
             fixture_entry = {
                 'fixture_id': fixture_id,
                 'home_team': home_team,
@@ -4797,6 +4806,8 @@ def run_late_cards_cycle():
                 'home_xg': 1.4 + random.uniform(-0.3, 0.5),
                 'away_xg': 1.2 + random.uniform(-0.3, 0.4),
                 'commence_time': kickoff_utc or '',
+                'referee_name': ref_display,
+                'referee_stats': ref_stats,
             }
             
             if real_cards_odds:
