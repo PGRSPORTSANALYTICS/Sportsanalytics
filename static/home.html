@@ -157,7 +157,32 @@ function normalizePick(b) {
     clv_status: b.clv_status || null,
     disagreement: b.disagreement != null ? b.disagreement : null,
     hidden_value_status: b.hidden_value_status || null,
+    created_ts: b.created_ts || null,
   };
+}
+
+function fmtAgo(epochSec) {
+  if (!epochSec) return "";
+  const diffMin = Math.floor((Date.now() / 1000 - epochSec) / 60);
+  if (diffMin < 1)  return "just now";
+  if (diffMin < 60) return diffMin + "min ago";
+  const h = Math.floor(diffMin / 60);
+  if (h < 24) return h + "h ago";
+  return Math.floor(h / 24) + "d ago";
+}
+
+function buildAgeBadgeHtml(p) {
+  if (!p.created_ts) return "";
+  const diffMin = Math.floor((Date.now() / 1000 - p.created_ts) / 60);
+  const ageStr  = fmtAgo(p.created_ts);
+  const newBadge = diffMin <= 10
+    ? `<span style="display:inline-flex;align-items:center;border-radius:99px;border:1px solid rgba(139,92,246,.5);background:rgba(99,102,241,.15);color:#a78bfa;font-size:9px;font-weight:700;padding:1px 7px;letter-spacing:.05em;animation:pulse 2s infinite">NEW</span>`
+    : "";
+  const ageSpan = ageStr
+    ? `<span style="font-size:10px;color:#52525b">· ${ageStr}</span>`
+    : "";
+  if (!newBadge && !ageSpan) return "";
+  return `<div style="display:flex;gap:5px;align-items:center;margin-top:4px">${newBadge}${ageSpan}</div>`;
 }
 
 function buildWhyHtml(p) {
@@ -918,6 +943,7 @@ function renderApp() {
           </div>
           <div style="font-size:15px;font-weight:700;line-height:1.25">${esc(row.match)}</div>
           <div style="font-size:11px;color:#71717a;margin-top:4px">${esc(row.league)} · ${esc(row.bookmaker)}</div>
+          ${buildAgeBadgeHtml(row)}
         </div>
         <div>
           <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Market</div>
@@ -1307,6 +1333,7 @@ function renderPickList() {
           </div>
           <div style="font-size:15px;font-weight:700;line-height:1.25">${esc(row.match)}</div>
           <div style="font-size:11px;color:#71717a;margin-top:4px">${esc(row.league)} · ${esc(row.bookmaker)}</div>
+          ${buildAgeBadgeHtml(row)}
         </div>
         <div>
           <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Market</div>

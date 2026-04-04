@@ -2050,7 +2050,8 @@ async def get_today_picks():
                    odds_by_bookmaker, best_odds_value, best_odds_bookmaker,
                    league, trust_level, kickoff_time, match_date,
                    open_odds, clv_pct, mode,
-                   model_prob, disagreement, clv_status, hidden_value_status
+                   model_prob, disagreement, clv_status, hidden_value_status,
+                   timestamp
             FROM football_opportunities
             WHERE (
                 (mode = 'PROD' AND bet_placed = true)
@@ -2132,6 +2133,7 @@ async def get_today_picks():
                 'disagreement': round(float(r[21]), 3) if r[21] else None,
                 'clv_status': r[22] or None,
                 'hidden_value_status': r[23] or None,
+                'created_ts': int(r[24]) if r[24] else None,
             })
 
         total = len(picks)
