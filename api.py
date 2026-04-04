@@ -2055,9 +2055,15 @@ async def get_today_picks():
                 (mode = 'PROD' AND bet_placed = true)
                 OR mode = 'VALUE_OPP'
             )
-              AND match_date >= %s
+              AND (
+                  match_date >= %s
+                  OR (
+                      match_date = %s
+                      AND (outcome IS NULL OR outcome = '' OR outcome IN ('pending', 'unknown'))
+                  )
+              )
             ORDER BY match_date ASC, kickoff_time ASC NULLS LAST
-        """, (yesterday_str,), fetch='all') or []
+        """, (today_str, yesterday_str), fetch='all') or []
 
         picks = []
         for r in rows:
