@@ -101,7 +101,7 @@ const state = {
   minOdds: "",
   maxOdds: "",
   q: "",
-  sortBy: "kickoff",
+  sortBy: "newest",
   dpTab: "intelligence",
   dpData: null,
   dpBusy: false,
@@ -310,6 +310,7 @@ function getFiltered() {
     const ql = state.q.toLowerCase();
     r = r.filter(p => (p.match + " " + p.market + " " + p.league + " " + p.bookmaker).toLowerCase().includes(ql));
   }
+  if (state.sortBy === "newest")     r.sort((a,b) => (b.id - a.id) || (b.created_ts - a.created_ts));
   if (state.sortBy === "ev")         r.sort((a,b) => b.ev - a.ev);
   if (state.sortBy === "confidence") r.sort((a,b) => b.confidence - a.confidence);
   if (state.sortBy === "odds")       r.sort((a,b) => b.odds - a.odds);
@@ -1250,6 +1251,7 @@ function renderApp() {
   ).join("");
 
   const sortOptions = [
+    ["newest", "Nyast ↓"],
     ["kickoff", "Kickoff ↑"],
     ["ev", "EV ↓"],
     ["confidence", "Edge Score ↓"],
