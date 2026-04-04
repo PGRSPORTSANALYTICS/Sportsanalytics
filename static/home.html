@@ -574,7 +574,7 @@ function detailPanelHtml(pick, data, busy, tab) {
     }
 
   } else if (tab === "h2h") {
-    if (data && data.h2h) {
+    if (data && data.h2h && data.h2h.matches > 0) {
       const h = data.h2h;
       const hw = h.matches > 0 ? ((h.home_wins / h.matches) * 100).toFixed(0) : 0;
       const dw = h.matches > 0 ? ((h.draws / h.matches) * 100).toFixed(0) : 0;
@@ -602,12 +602,12 @@ function detailPanelHtml(pick, data, busy, tab) {
       if (h.recent_matches && h.recent_matches.length) {
         body += `<div style="border-radius:14px;border:1px solid #27272a;background:rgba(0,0,0,.3);padding:14px">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-            <div style="font-size:13px;font-weight:600">Recent H2H</div>
-            ${h.source === "sofascore" ? `<span style="font-size:10px;color:#3f3f46">via SofaScore</span>` : ""}
+            <div style="font-size:13px;font-weight:600">Möten mellan lagen</div>
+            <span style="font-size:10px;color:#3f3f46">via SofaScore</span>
           </div>
           ${h.recent_matches.map((m, i) => {
             const sc = m.score.split("-");
-            const hWin = sc[0] > sc[1], aWin = sc[1] > sc[0];
+            const hWin = parseInt(sc[0]) > parseInt(sc[1]), aWin = parseInt(sc[1]) > parseInt(sc[0]);
             const hc = hWin ? "#4ade80" : aWin ? "#f87171" : "#fbbf24";
             const ac = aWin ? "#4ade80" : hWin ? "#f87171" : "#fbbf24";
             return `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:${i < h.recent_matches.length - 1 ? "1px solid rgba(39,39,42,.5)" : "none"};font-size:12px">
@@ -618,10 +618,35 @@ function detailPanelHtml(pick, data, busy, tab) {
           }).join("")}
         </div>`;
       }
-    } else {
+    }
+
+    // ── Recent form per team (5 senaste oavsett motståndare) ──────────────
+    const homeRecent = data && data.form && data.form.home && data.form.home.recent_matches;
+    const awayRecent = data && data.form && data.form.away && data.form.away.recent_matches;
+    if (homeRecent || awayRecent) {
+      [[homeRecent, pick.home_team || "Home"], [awayRecent, pick.away_team || "Away"]].forEach(([matches, label]) => {
+        if (!matches || !matches.length) return;
+        body += `<div style="border-radius:14px;border:1px solid #27272a;background:rgba(0,0,0,.3);padding:14px">
+          <div style="font-size:13px;font-weight:600;margin-bottom:10px">${esc(label)} — 5 senaste</div>
+          ${matches.slice(0,5).map((m, i) => {
+            const rc = m.result === "W" ? "#4ade80" : m.result === "D" ? "#fbbf24" : "#f87171";
+            return `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:${i < Math.min(matches.length,5)-1 ? "1px solid rgba(39,39,42,.4)" : "none"};font-size:12px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="width:22px;height:22px;border-radius:5px;background:${rc}22;color:${rc};font-weight:700;font-size:11px;display:flex;align-items:center;justify-content:center">${esc(m.result)}</span>
+                <span style="color:#71717a">${m.home_away === "H" ? "vs" : "@"} ${esc(m.opponent)}</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px">
+                <span style="color:#d4d4d8;font-weight:600">${esc(m.score)}</span>
+                <span style="color:#52525b;font-size:10px">${esc(m.date || "")}</span>
+              </div>
+            </div>`;
+          }).join("")}
+        </div>`;
+      });
+    } else if (!data || !data.h2h || !data.h2h.matches) {
       body += `<div style="text-align:center;padding:40px 16px">
-        <div style="font-size:13px;color:#52525b;margin-bottom:6px">No historical H2H data</div>
-        <div style="font-size:12px;color:#3f3f46">Head-to-head records are collected as results come in</div>
+        <div style="font-size:13px;color:#52525b;margin-bottom:6px">Samlar in data…</div>
+        <div style="font-size:12px;color:#3f3f46">Form och H2H hämtas automatiskt inför nästa engine-cykel</div>
       </div>`;
     }
 

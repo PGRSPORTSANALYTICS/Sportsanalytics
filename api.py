@@ -2183,7 +2183,7 @@ async def get_today_picks():
                            home_position, away_position, home_points, away_points,
                            home_goal_diff, away_goal_diff,
                            predicted_home_goals, predicted_away_goals, predicted_score,
-                           model_probability
+                           model_probability, odds_data
                     FROM training_data
                     WHERE (home_team, away_team, match_date) IN ({_placeholders})
                     ORDER BY created_at DESC
@@ -2202,29 +2202,44 @@ async def get_today_picks():
             _tr = _td_map.get(_key)
             _form = None; _h2h = None; _xg = None; _std = None; _pred = None
             if _tr:
+                # Parse odds_data JSON (index 37) for recent match lists
+                _odds_payload = {}
+                try:
+                    _od_raw = _tr[37]
+                    if _od_raw:
+                        _odds_payload = json.loads(_od_raw) if isinstance(_od_raw, str) else _od_raw
+                except Exception:
+                    pass
+                _home_recent = _odds_payload.get('home_recent_matches', [])
+                _away_recent = _odds_payload.get('away_recent_matches', [])
+                _h2h_recent  = _odds_payload.get('h2h_recent_matches', [])
+
                 _form_has = any(_tr[i] is not None for i in [3,4,6,7,8,9,10,11,13,14,15,16])
-                if _form_has:
+                if _form_has or _home_recent or _away_recent:
                     _form = {
                         "home": {"goals_scored": round(float(_tr[3]),2) if _tr[3] else None,
                                  "goals_conceded": round(float(_tr[4]),2) if _tr[4] else None,
                                  "clean_sheets": _tr[5],
                                  "ppg": round(float(_tr[6]),2) if _tr[6] else None,
-                                 "wins": _tr[7], "draws": _tr[8], "losses": _tr[9]},
+                                 "wins": _tr[7], "draws": _tr[8], "losses": _tr[9],
+                                 "recent_matches": _home_recent or None},
                         "away": {"goals_scored": round(float(_tr[10]),2) if _tr[10] else None,
                                  "goals_conceded": round(float(_tr[11]),2) if _tr[11] else None,
                                  "clean_sheets": _tr[12],
                                  "ppg": round(float(_tr[13]),2) if _tr[13] else None,
-                                 "wins": _tr[14], "draws": _tr[15], "losses": _tr[16]},
+                                 "wins": _tr[14], "draws": _tr[15], "losses": _tr[16],
+                                 "recent_matches": _away_recent or None},
                     }
                 _xg = {"home_xg": round(float(_tr[17]),2) if _tr[17] else None,
                        "away_xg": round(float(_tr[18]),2) if _tr[18] else None,
                        "total_xg": round(float(_tr[19]),2) if _tr[19] else None}
-                if _tr[20]:
+                if _tr[20] or _h2h_recent:
                     _h2h = {"matches": _tr[20], "home_wins": _tr[21],
                             "away_wins": _tr[22], "draws": _tr[23],
                             "avg_goals": round(float(_tr[24]),2) if _tr[24] else None,
                             "btts_rate": round(float(_tr[25])*100,1) if _tr[25] else None,
-                            "over25_rate": round(float(_tr[26])*100,1) if _tr[26] else None}
+                            "over25_rate": round(float(_tr[26])*100,1) if _tr[26] else None,
+                            "recent_matches": _h2h_recent or None}
                 _std = {"home_pos": _tr[27], "away_pos": _tr[28],
                         "home_pts": _tr[29], "away_pts": _tr[30],
                         "home_gd": _tr[31], "away_gd": _tr[32]}

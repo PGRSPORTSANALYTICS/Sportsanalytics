@@ -161,6 +161,37 @@ def run_form_cacher():
                         'over25_rate': h2h['over25_rate'],
                     }
 
+                # Build h2h recent matches for display
+                h2h_recent = []
+                for m in h2h_raw[:6]:
+                    try:
+                        h2h_recent.append({
+                            'home': m.get('home_team', ''),
+                            'away': m.get('away_team', ''),
+                            'score': f"{m.get('home_score', 0)}-{m.get('away_score', 0)}",
+                            'date': m.get('date', ''),
+                        })
+                    except Exception:
+                        pass
+
+                # Store raw recent matches in odds_data JSON so dashboard can display them
+                import json as _json
+                odds_payload = {
+                    'home_recent_matches': [
+                        {'result': m.get('result', ''), 'opponent': m.get('opponent', ''),
+                         'home_away': m.get('home_away', ''), 'score': m.get('score', ''),
+                         'date': m.get('date', '')}
+                        for m in home_raw[:5]
+                    ],
+                    'away_recent_matches': [
+                        {'result': m.get('result', ''), 'opponent': m.get('opponent', ''),
+                         'home_away': m.get('home_away', ''), 'score': m.get('score', ''),
+                         'date': m.get('date', '')}
+                        for m in away_raw[:5]
+                    ],
+                    'h2h_recent_matches': h2h_recent,
+                }
+
                 ok = collector.collect_match_analysis(
                     home_team=home_team,
                     away_team=away_team,
@@ -169,6 +200,7 @@ def run_form_cacher():
                     home_form=home_form or {},
                     away_form=away_form or {},
                     h2h_data=h2h_data_dc,
+                    odds_data=odds_payload,
                     data_source='form_cacher_sofascore',
                 )
                 if ok:
