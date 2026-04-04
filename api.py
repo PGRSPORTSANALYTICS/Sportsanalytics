@@ -1233,7 +1233,7 @@ async def get_clv_stats_endpoint():
 async def get_hockey_stats():
     """Hockey stats from learning_bets for the Railway dashboard."""
     try:
-        db = DatabaseHelper()
+        db = db_helper
         summary = db.execute("""
             SELECT sport_key,
                 COUNT(*) FILTER (WHERE outcome IN ('won','lost')) AS settled,
@@ -1306,7 +1306,7 @@ async def get_hockey_stats():
 async def get_nba_stats():
     """NBA player props stats from player_props for the Railway dashboard."""
     try:
-        db = DatabaseHelper()
+        db = db_helper
         by_market = db.execute("""
             SELECT market,
                 COUNT(*) FILTER (WHERE outcome IN ('won','lost')) AS settled,
