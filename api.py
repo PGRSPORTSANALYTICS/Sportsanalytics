@@ -1268,7 +1268,7 @@ async def get_hockey_stats():
 
         upcoming = db.execute("""
             SELECT home_team, away_team, league, market, selection, line, odds,
-                   TO_CHAR(commence_time AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Stockholm', 'YYYY-MM-DD HH24:MI') AS ko
+                   TO_CHAR(commence_time AT TIME ZONE 'Europe/Stockholm', 'YYYY-MM-DD HH24:MI') AS ko
             FROM learning_bets
             WHERE sport_category = 'HOCKEY'
               AND status = 'pending'
@@ -1348,7 +1348,7 @@ async def get_nba_stats():
 
         upcoming = db.execute("""
             SELECT home_team, away_team, league, market, selection, line, odds,
-                   TO_CHAR(commence_time AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Stockholm', 'YYYY-MM-DD HH24:MI') AS ko
+                   TO_CHAR(commence_time AT TIME ZONE 'Europe/Stockholm', 'YYYY-MM-DD HH24:MI') AS ko
             FROM learning_bets
             WHERE sport_category = 'NBA'
               AND status = 'pending'
