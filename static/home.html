@@ -1284,11 +1284,6 @@ function loadDetailData(pick) {
     state.dpData = pick._scout;
     state.dpBusy = false;
     renderDetailPanel();
-    // Still fire a background refresh to server cache but don't block on it
-    const mid = (pick.home_team && pick.away_team)
-      ? pick.home_team + "_" + pick.away_team
-      : pick.id;
-    fetch("/api/match-scout/" + encodeURIComponent(mid)).catch(() => {});
     return;
   }
 
@@ -1526,19 +1521,6 @@ async function fetchData() {
     if (initialPick && state.dpData === null && !state.dpBusy) {
       loadDetailData(initialPick);
     }
-  }
-  // Background-prefetch all remaining picks to warm server cache
-  // Staggered 400 ms apart so we don't spike the server
-  if (!state.fetchError && state.allPicks.length > 1) {
-    const others = state.allPicks.filter(p => p.id !== state.selectedId);
-    others.forEach((p, i) => {
-      setTimeout(() => {
-        const mid = (p.home_team && p.away_team)
-          ? p.home_team + "_" + p.away_team
-          : p.id;
-        fetch("/api/match-scout/" + encodeURIComponent(mid)).catch(() => {});
-      }, (i + 1) * 400);
-    });
   }
 }
 
