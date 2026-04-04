@@ -1304,57 +1304,61 @@ async def get_hockey_stats():
 
 @app.get("/api/nba/stats", tags=["Analytics"])
 async def get_nba_stats():
-    """NBA player props stats from player_props for the Railway dashboard."""
+    """NBA game-level stats (Moneyline, Totals, AH) from learning_bets for the Railway dashboard."""
     try:
         db = db_helper
+        MARKET_LABELS = {'h2h': 'Moneyline', 'totals': 'Totals (O/U)', 'spreads': 'AH / Spread'}
+
         by_market = db.execute("""
             SELECT market,
                 COUNT(*) FILTER (WHERE outcome IN ('won','lost')) AS settled,
                 COUNT(*) FILTER (WHERE outcome = 'won') AS wins,
                 COUNT(*) FILTER (WHERE outcome = 'lost') AS losses,
-                COUNT(*) FILTER (WHERE outcome = 'void') AS voids,
+                COUNT(*) FILTER (WHERE status = 'pending') AS pending,
                 COALESCE(SUM(CASE WHEN outcome IN ('won','lost') THEN profit_loss ELSE 0 END),0) AS profit,
                 ROUND(AVG(CASE WHEN outcome IN ('won','lost') THEN odds END)::numeric,2) AS avg_odds
-            FROM player_props
-            WHERE sport = 'basketball' AND league = 'basketball_nba'
+            FROM learning_bets
+            WHERE sport_category = 'NBA'
             GROUP BY market ORDER BY settled DESC
         """, fetch='all')
 
         recent = db.execute("""
-            SELECT home_team, away_team, player_name, market, selection, line, odds,
+            SELECT home_team, away_team, league, market, selection, line, odds,
                    outcome, profit_loss, settled_at
-            FROM player_props
-            WHERE sport = 'basketball' AND league = 'basketball_nba'
-              AND outcome IN ('won','lost')
+            FROM learning_bets
+            WHERE sport_category = 'NBA' AND outcome IN ('won','lost')
             ORDER BY settled_at DESC NULLS LAST LIMIT 20
         """, fetch='all')
 
-        totals = db.execute("""
+        totals_row = db.execute("""
             SELECT COUNT(*) FILTER (WHERE outcome IN ('won','lost')) AS settled,
                    COUNT(*) FILTER (WHERE outcome = 'won') AS wins,
-                   COUNT(*) FILTER (WHERE outcome = 'void') AS voids,
-                   COUNT(*) FILTER (WHERE outcome = 'pending') AS pending,
+                   COUNT(*) FILTER (WHERE status = 'pending') AS pending,
                    COALESCE(SUM(CASE WHEN outcome IN ('won','lost') THEN profit_loss ELSE 0 END),0) AS profit
-            FROM player_props WHERE sport = 'basketball' AND league = 'basketball_nba'
+            FROM learning_bets WHERE sport_category = 'NBA'
         """, fetch='one')
 
         def to_float(v):
             return float(v) if v is not None else 0.0
 
-        t = totals or (0, 0, 0, 0, 0)
-        settled, wins, voids, pending, profit = int(t[0] or 0), int(t[1] or 0), int(t[2] or 0), int(t[3] or 0), to_float(t[4])
+        t = totals_row or (0, 0, 0, 0)
+        settled, wins, pending, profit = int(t[0] or 0), int(t[1] or 0), int(t[2] or 0), to_float(t[3])
         hit_rate = round(wins / settled * 100, 1) if settled > 0 else 0
 
         return JSONResponse({
             "totals": {"settled": settled, "wins": wins, "losses": settled - wins,
-                       "voids": voids, "pending": pending, "profit": profit, "hit_rate": hit_rate},
-            "by_market": [{"market": r[0], "settled": int(r[1] or 0), "wins": int(r[2] or 0),
-                           "losses": int(r[3] or 0), "voids": int(r[4] or 0),
+                       "pending": pending, "profit": profit, "hit_rate": hit_rate},
+            "by_market": [{"market": MARKET_LABELS.get(r[0], r[0]),
+                           "market_key": r[0],
+                           "settled": int(r[1] or 0), "wins": int(r[2] or 0),
+                           "losses": int(r[3] or 0), "pending": int(r[4] or 0),
                            "profit": to_float(r[5]), "avg_odds": to_float(r[6])}
                           for r in (by_market or [])],
-            "recent": [{"home_team": r[0], "away_team": r[1], "player": r[2], "market": r[3],
-                        "selection": r[4], "line": to_float(r[5]), "odds": to_float(r[6]),
-                        "outcome": r[7], "profit_loss": to_float(r[8]),
+            "recent": [{"home_team": r[0], "away_team": r[1], "league": r[2],
+                        "market": MARKET_LABELS.get(r[3], r[3]),
+                        "selection": r[4], "line": to_float(r[5]) if r[5] else None,
+                        "odds": to_float(r[6]), "outcome": r[7],
+                        "profit_loss": to_float(r[8]),
                         "settled_at": str(r[9]) if r[9] else None}
                        for r in (recent or [])],
         })

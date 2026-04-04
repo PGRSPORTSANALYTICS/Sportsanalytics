@@ -10,7 +10,7 @@ import logging
 import os
 import time
 from datetime import datetime, timezone, timedelta
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 import requests
 from db_connection import DatabaseConnection
 
@@ -26,6 +26,16 @@ SPORT_CONFIG = {
         'markets': 'h2h,totals',
         'label': 'Hockey',
         'emoji': '🏒',
+        'max_picks': 15,
+    },
+    'NBA': {
+        'sport_keys': [
+            'basketball_nba',
+        ],
+        'markets': 'h2h,totals,spreads',
+        'label': 'NBA',
+        'emoji': '🏀',
+        'max_picks': 20,
     },
     'MMA': {
         'sport_keys': [
@@ -34,21 +44,19 @@ SPORT_CONFIG = {
         'markets': 'h2h',
         'label': 'MMA',
         'emoji': '🥊',
+        'max_picks': 10,
     },
 }
 
 ODDS_RANGE = (1.40, 3.50)
 MAX_PICKS_PER_SPORT = 15
-API_BUDGET_PER_CYCLE = 12
+API_BUDGET_PER_CYCLE = 15
 
 
 def run_multi_sport_learning() -> Dict:
-    stats = {
-        'HOCKEY': {'scanned': 0, 'saved': 0},
-        'MMA': {'scanned': 0, 'saved': 0},
-        'api_calls': 0,
-        'errors': 0,
-    }
+    stats = {cat: {'scanned': 0, 'saved': 0} for cat in SPORT_CONFIG}
+    stats['api_calls'] = 0
+    stats['errors'] = 0
 
     api_key = os.environ.get('THE_ODDS_API_KEY', '')
     if not api_key:
@@ -95,7 +103,8 @@ def run_multi_sport_learning() -> Dict:
                 league_label = sport_key.replace('_', ' ').title()
                 stats[category]['scanned'] += len(events)
 
-                saved = _process_events(events, category, sport_key, league_label, existing, config)
+                saved = _process_events(events, category, sport_key, league_label, existing, config,
+                                        max_picks=config.get('max_picks', MAX_PICKS_PER_SPORT))
                 stats[category]['saved'] += saved
 
                 time.sleep(0.3)
@@ -108,7 +117,7 @@ def run_multi_sport_learning() -> Dict:
                      f"{stats[category]['scanned']} events scanned, "
                      f"{stats[category]['saved']} picks saved")
 
-    total_saved = sum(s['saved'] for s in [stats['HOCKEY'], stats['MMA']])
+    total_saved = sum(v['saved'] for k, v in stats.items() if isinstance(v, dict))
     logger.info(f"Multi-sport learning complete: {total_saved} total picks saved, "
                 f"{stats['api_calls']} API calls used")
 
@@ -171,7 +180,8 @@ def _get_existing_events(category: str) -> set:
 
 
 def _process_events(events: List[Dict], category: str, sport_key: str,
-                    league: str, existing: set, config: Dict) -> int:
+                    league: str, existing: set, config: Dict,
+                    max_picks: int = MAX_PICKS_PER_SPORT) -> int:
     saved = 0
     picks = []
 
@@ -214,15 +224,22 @@ def _process_events(events: List[Dict], category: str, sport_key: str,
                 edge = 0.0
 
                 line = None
-                if 'Over' in selection or 'Under' in selection:
+                selection_clean = selection
+                if market_key == 'totals' and ('Over' in selection or 'Under' in selection):
                     parts = selection.split(' ')
                     try:
                         line = float(parts[-1])
                         selection_clean = parts[0]
                     except ValueError:
-                        selection_clean = selection
-                else:
-                    selection_clean = selection
+                        pass
+                elif market_key == 'spreads':
+                    parts = selection.rsplit(' ', 1)
+                    if len(parts) == 2:
+                        try:
+                            line = float(parts[-1])
+                            selection_clean = parts[0]
+                        except ValueError:
+                            pass
 
                 picks.append({
                     'event_id': event_id,
@@ -242,7 +259,7 @@ def _process_events(events: List[Dict], category: str, sport_key: str,
                 existing.add(dedup_key)
 
     picks.sort(key=lambda x: x['odds'], reverse=False)
-    picks = picks[:MAX_PICKS_PER_SPORT]
+    picks = picks[:max_picks]
 
     for pick in picks:
         try:
@@ -254,8 +271,12 @@ def _process_events(events: List[Dict], category: str, sport_key: str,
     return saved
 
 
-def _extract_best_odds(bookmakers: List[Dict]) -> Dict[str, Dict[str, float]]:
-    best = {}
+def _extract_best_odds(bookmakers: List[Dict]) -> Dict[str, Dict[str, Any]]:
+    """Extract best (highest) odds per market/selection across all bookmakers.
+    
+    Returns dict of {market_key: {selection: {'price': float, 'point': float|None}}}
+    """
+    best: Dict[str, Dict[str, Any]] = {}
 
     for bm in bookmakers:
         for market in bm.get('markets', []):
@@ -268,8 +289,11 @@ def _extract_best_odds(bookmakers: List[Dict]) -> Dict[str, Dict[str, float]]:
                 price = outcome.get('price', 0)
                 point = outcome.get('point')
 
-                if point is not None:
+                if market_key == 'totals' and point is not None:
                     sel = f"Over {point}" if name == 'Over' else f"Under {point}"
+                elif market_key == 'spreads' and point is not None:
+                    sign = f"+{point}" if point >= 0 else str(point)
+                    sel = f"{name} {sign}"
                 else:
                     sel = name
 

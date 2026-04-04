@@ -19,11 +19,13 @@ VOID_AFTER_HOURS = 72
 
 SPORT_GRACE_HOURS = {
     'HOCKEY': 3,
+    'NBA': 3,
     'MMA': 4,
 }
 
 SPORT_VOID_HOURS = {
     'HOCKEY': 48,
+    'NBA': 48,
     'MMA': 72,
     'TENNIS': 24,
 }
@@ -261,6 +263,31 @@ def _evaluate_bet(bet: Dict, home_score: float, away_score: float,
                 return 'push', f"Push: total={total:.0f} = line {line}"
             else:
                 return 'lost', f"Over {line}: total={total:.0f}"
+
+    elif market == 'spreads':
+        if line is None:
+            return None
+
+        is_home = (selection == bet_home or selection == home_team_api)
+        is_away = (selection == bet_away or selection == away_team_api)
+
+        if is_home:
+            covered = home_score + line
+            opponent = away_score
+            label = f"Home AH {line:+g}"
+        elif is_away:
+            covered = away_score + line
+            opponent = home_score
+            label = f"Away AH {line:+g}"
+        else:
+            return None
+
+        if covered > opponent:
+            return 'won', f"{label} covered {score_str}"
+        elif covered == opponent:
+            return 'push', f"{label} push {score_str}"
+        else:
+            return 'lost', f"{label} failed to cover {score_str}"
 
     return None
 
