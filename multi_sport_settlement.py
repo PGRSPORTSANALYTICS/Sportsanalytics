@@ -115,7 +115,14 @@ def run_multi_sport_settlement() -> Dict:
                 result = _evaluate_bet(bet, home_score, away_score, home_team_api, away_team_api)
                 if result:
                     outcome, note = result
-                    _settle_bet(bet['id'], outcome, note, 0.0)
+                    odds = float(bet.get('odds') or 1.0)
+                    if outcome == 'won':
+                        profit = round(odds - 1.0, 4)
+                    elif outcome == 'lost':
+                        profit = -1.0
+                    else:
+                        profit = 0.0
+                    _settle_bet(bet['id'], outcome, note, profit)
                     if outcome in stats:
                         stats[outcome] += 1
                     stats['settled'] += 1

@@ -710,14 +710,26 @@ function renderHockeyTab() {
   const s = state.hockeyStats;
   const t = s ? s.totals : null;
   const fmtProfit = v => (v >= 0 ? "+" : "") + Number(v).toFixed(1) + "u";
-  const profitColor = v => v >= 0 ? "#4ade80" : "#f87171";
+  const profitColor = v => v > 0.05 ? "#4ade80" : v < -0.05 ? "#f87171" : "#a1a1aa";
+
+  const LEAGUE_NAMES = {
+    'icehockey_nhl': 'NHL',
+    'icehockey_sweden_hockey_league': 'SHL',
+    'icehockey_sweden_allsvenskan': 'Allsvenskan',
+    'icehockey_ahl': 'AHL',
+    'icehockey_khl': 'KHL',
+  };
+  const MARKET_NAMES = {
+    'h2h': 'Moneyline', 'totals': 'Over/Under', 'h2h_lay': 'Lay ML',
+    'spreads': 'Puck Line',
+  };
 
   const kpiCards = [
-    ["Settled",   t ? String(t.settled) : "—",  "#d4d4d8"],
-    ["Hit Rate",  t ? t.hit_rate + "%" : "—",    t && t.hit_rate >= 55 ? "#4ade80" : "#f87171"],
-    ["Profit",    t ? fmtProfit(t.profit) : "—", t ? profitColor(t.profit) : "#71717a"],
-    ["Wins",      t ? String(t.wins) : "—",      "#4ade80"],
-    ["Pending",   t ? String(t.pending) : "—",   "#a78bfa"],
+    ["Settled",  t ? String(t.settled) : "—",  "#d4d4d8"],
+    ["Hit Rate", t ? t.hit_rate + "%" : "—",    t && t.hit_rate >= 55 ? "#4ade80" : "#f87171"],
+    ["Profit",   t ? fmtProfit(t.profit) : "—", t ? profitColor(t.profit) : "#71717a"],
+    ["Wins",     t ? String(t.wins) : "—",      "#4ade80"],
+    ["Pending",  t ? String(t.pending) : "—",   "#a78bfa"],
   ];
 
   const kpiHtml = kpiCards.map(([label, val, color]) => `
@@ -727,36 +739,55 @@ function renderHockeyTab() {
     </div>`).join("");
 
   const leagues = s ? (s.by_league || []) : [];
-  const leagueRows = leagues.map(r => `
+  const leagueRows = leagues.map(r => {
+    const hr = r.settled > 0 ? Math.round(r.wins / r.settled * 100) : 0;
+    const name = LEAGUE_NAMES[r.sport_key] || (r.sport_key || "—").replace(/icehockey_/i,'').replace(/_/g,' ').toUpperCase();
+    return `
     <tr style="border-bottom:1px solid #18181b">
-      <td style="padding:8px 10px;font-size:12px;color:#d4d4d8">${r.sport_key || "—"}</td>
-      <td style="padding:8px 10px;font-size:12px;color:#a1a1aa;text-align:center">${r.settled}</td>
-      <td style="padding:8px 10px;font-size:12px;color:#4ade80;text-align:center">${r.wins}</td>
-      <td style="padding:8px 10px;font-size:12px;color:#f87171;text-align:center">${r.losses}</td>
-      <td style="padding:8px 10px;font-size:12px;font-weight:700;text-align:right;color:${profitColor(r.profit)}">${fmtProfit(r.profit)}</td>
-    </tr>`).join("");
+      <td style="padding:10px 12px;font-size:13px;font-weight:600;color:#e4e4e7">${name}</td>
+      <td style="padding:10px 12px;font-size:13px;color:#a1a1aa;text-align:center">${r.settled}</td>
+      <td style="padding:10px 12px;font-size:13px;color:#4ade80;text-align:center">${r.wins}</td>
+      <td style="padding:10px 12px;font-size:13px;color:#f87171;text-align:center">${r.losses}</td>
+      <td style="padding:10px 12px;font-size:13px;color:${hr >= 55 ? '#4ade80' : '#a1a1aa'};text-align:center;font-weight:600">${hr}%</td>
+      <td style="padding:10px 12px;font-size:13px;font-weight:700;text-align:right;color:${profitColor(r.profit)}">${fmtProfit(r.profit)}</td>
+    </tr>`}).join("");
 
   const markets = s ? (s.by_market || []) : [];
-  const marketRows = markets.map(r => `
+  const marketRows = markets.map(r => {
+    const hr = r.settled > 0 ? Math.round(r.wins / r.settled * 100) : 0;
+    const mktName = MARKET_NAMES[r.market] || r.market;
+    return `
     <tr style="border-bottom:1px solid #18181b">
-      <td style="padding:8px 10px;font-size:12px;color:#d4d4d8">${r.market || "—"}</td>
-      <td style="padding:8px 10px;font-size:12px;color:#a1a1aa;text-align:center">${r.settled}</td>
-      <td style="padding:8px 10px;font-size:12px;color:#4ade80;text-align:center">${r.wins}</td>
-      <td style="padding:8px 10px;font-size:12px;color:#f87171;text-align:center">${r.losses}</td>
-      <td style="padding:8px 10px;font-size:12px;font-weight:700;text-align:right;color:${profitColor(r.profit)}">${fmtProfit(r.profit)}</td>
-    </tr>`).join("");
+      <td style="padding:10px 12px;font-size:13px;font-weight:600;color:#e4e4e7">${mktName}</td>
+      <td style="padding:10px 12px;font-size:13px;color:#a1a1aa;text-align:center">${r.settled}</td>
+      <td style="padding:10px 12px;font-size:13px;color:#4ade80;text-align:center">${r.wins}</td>
+      <td style="padding:10px 12px;font-size:13px;color:#f87171;text-align:center">${r.losses}</td>
+      <td style="padding:10px 12px;font-size:13px;color:${hr >= 55 ? '#4ade80' : '#a1a1aa'};text-align:center;font-weight:600">${hr}%</td>
+      <td style="padding:10px 12px;font-size:13px;font-weight:700;text-align:right;color:${profitColor(r.profit)}">${fmtProfit(r.profit)}</td>
+    </tr>`}).join("");
 
   const recent = s ? (s.recent || []) : [];
-  const recentRows = recent.map(r => `
+  const recentRows = recent.map(r => {
+    const league = LEAGUE_NAMES[r.league] || (r.league||'').replace(/icehockey_/i,'').replace(/_/g,' ').toUpperCase();
+    const mkt = MARKET_NAMES[r.market] || r.market;
+    const pick = r.line != null ? `${r.selection} ${r.line > 0 ? '+' : ''}${r.line}` : r.selection;
+    const won = r.outcome === 'won';
+    return `
     <tr style="border-bottom:1px solid #18181b">
-      <td style="padding:8px 10px;font-size:11px;color:#a1a1aa">${r.home_team} vs ${r.away_team}</td>
-      <td style="padding:8px 10px;font-size:11px;color:#71717a">${r.league || "—"}</td>
-      <td style="padding:8px 10px;font-size:11px;color:#d4d4d8">${r.market}</td>
-      <td style="padding:8px 10px;font-size:11px;color:#a1a1aa">${r.selection}</td>
-      <td style="padding:8px 10px;font-size:12px;color:#d4d4d8">${Number(r.odds).toFixed(2)}</td>
-      <td style="padding:8px 10px"><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:5px;background:${r.outcome==='won'?'rgba(74,222,128,.15)':'rgba(248,113,113,.15)'};color:${r.outcome==='won'?'#4ade80':'#f87171'}">${r.outcome}</span></td>
-      <td style="padding:8px 10px;font-size:12px;font-weight:700;color:${profitColor(r.profit_loss)}">${fmtProfit(r.profit_loss)}</td>
-    </tr>`).join("");
+      <td style="padding:10px 12px">
+        <div style="font-size:13px;font-weight:600;color:#e4e4e7;white-space:nowrap">${r.home_team} vs ${r.away_team}</div>
+        <div style="font-size:11px;color:#52525b;margin-top:2px">${league}</div>
+      </td>
+      <td style="padding:10px 12px;text-align:center">
+        <span style="font-size:11px;font-weight:600;padding:3px 8px;border-radius:5px;background:rgba(56,189,248,.1);color:#38bdf8;white-space:nowrap">${mkt}</span>
+      </td>
+      <td style="padding:10px 12px;font-size:13px;color:#d4d4d8;white-space:nowrap">${pick}</td>
+      <td style="padding:10px 12px;font-size:13px;color:#71717a;text-align:center">${Number(r.odds).toFixed(2)}</td>
+      <td style="padding:10px 12px;text-align:center">
+        <span style="font-size:12px;font-weight:700;padding:3px 10px;border-radius:6px;background:${won?'rgba(74,222,128,.15)':'rgba(248,113,113,.15)'};color:${won?'#4ade80':'#f87171'}">${won ? 'WON' : 'LOST'}</span>
+      </td>
+      <td style="padding:10px 12px;font-size:13px;font-weight:700;text-align:right;color:${profitColor(r.profit_loss)}">${fmtProfit(r.profit_loss)}</td>
+    </tr>`}).join("");
 
   if (!s && !state.hockeyLoading) {
     return `<div style="text-align:center;padding:80px 0;color:#52525b;font-size:14px">No hockey data yet — engine collecting results</div>`;
@@ -768,51 +799,52 @@ function renderHockeyTab() {
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px 16px">
         <div>
-          <div style="font-size:11px;letter-spacing:.1em;color:#52525b;text-transform:uppercase;margin-bottom:8px">By League</div>
+          <div style="font-size:10px;letter-spacing:.12em;color:#52525b;text-transform:uppercase;margin-bottom:8px;font-weight:600">By League</div>
           <div style="border-radius:10px;border:1px solid #27272a;overflow:hidden">
             <table style="width:100%;border-collapse:collapse">
               <thead><tr style="background:#0a0a0a">
-                <th style="padding:8px 10px;text-align:left;font-size:10px;color:#52525b;text-transform:uppercase">League</th>
-                <th style="padding:8px 10px;text-align:center;font-size:10px;color:#52525b;text-transform:uppercase">Set</th>
-                <th style="padding:8px 10px;text-align:center;font-size:10px;color:#52525b;text-transform:uppercase">W</th>
-                <th style="padding:8px 10px;text-align:center;font-size:10px;color:#52525b;text-transform:uppercase">L</th>
-                <th style="padding:8px 10px;text-align:right;font-size:10px;color:#52525b;text-transform:uppercase">P/L</th>
+                <th style="padding:8px 12px;text-align:left;font-size:10px;color:#3f3f46;text-transform:uppercase">League</th>
+                <th style="padding:8px 6px;text-align:center;font-size:10px;color:#3f3f46;text-transform:uppercase">Set</th>
+                <th style="padding:8px 6px;text-align:center;font-size:10px;color:#3f3f46;text-transform:uppercase">W</th>
+                <th style="padding:8px 6px;text-align:center;font-size:10px;color:#3f3f46;text-transform:uppercase">L</th>
+                <th style="padding:8px 6px;text-align:center;font-size:10px;color:#3f3f46;text-transform:uppercase">Hit%</th>
+                <th style="padding:8px 12px;text-align:right;font-size:10px;color:#3f3f46;text-transform:uppercase">P/L</th>
               </tr></thead>
-              <tbody>${leagueRows || '<tr><td colspan="5" style="padding:20px;text-align:center;color:#3f3f46;font-size:12px">No data</td></tr>'}</tbody>
+              <tbody>${leagueRows || '<tr><td colspan="6" style="padding:20px;text-align:center;color:#3f3f46;font-size:12px">No data</td></tr>'}</tbody>
             </table>
           </div>
         </div>
         <div>
-          <div style="font-size:11px;letter-spacing:.1em;color:#52525b;text-transform:uppercase;margin-bottom:8px">By Market</div>
+          <div style="font-size:10px;letter-spacing:.12em;color:#52525b;text-transform:uppercase;margin-bottom:8px;font-weight:600">By Market</div>
           <div style="border-radius:10px;border:1px solid #27272a;overflow:hidden">
             <table style="width:100%;border-collapse:collapse">
               <thead><tr style="background:#0a0a0a">
-                <th style="padding:8px 10px;text-align:left;font-size:10px;color:#52525b;text-transform:uppercase">Market</th>
-                <th style="padding:8px 10px;text-align:center;font-size:10px;color:#52525b;text-transform:uppercase">Set</th>
-                <th style="padding:8px 10px;text-align:center;font-size:10px;color:#52525b;text-transform:uppercase">W</th>
-                <th style="padding:8px 10px;text-align:center;font-size:10px;color:#52525b;text-transform:uppercase">L</th>
-                <th style="padding:8px 10px;text-align:right;font-size:10px;color:#52525b;text-transform:uppercase">P/L</th>
+                <th style="padding:8px 12px;text-align:left;font-size:10px;color:#3f3f46;text-transform:uppercase">Market</th>
+                <th style="padding:8px 6px;text-align:center;font-size:10px;color:#3f3f46;text-transform:uppercase">Set</th>
+                <th style="padding:8px 6px;text-align:center;font-size:10px;color:#3f3f46;text-transform:uppercase">W</th>
+                <th style="padding:8px 6px;text-align:center;font-size:10px;color:#3f3f46;text-transform:uppercase">L</th>
+                <th style="padding:8px 6px;text-align:center;font-size:10px;color:#3f3f46;text-transform:uppercase">Hit%</th>
+                <th style="padding:8px 12px;text-align:right;font-size:10px;color:#3f3f46;text-transform:uppercase">P/L</th>
               </tr></thead>
-              <tbody>${marketRows || '<tr><td colspan="5" style="padding:20px;text-align:center;color:#3f3f46;font-size:12px">No data</td></tr>'}</tbody>
+              <tbody>${marketRows || '<tr><td colspan="6" style="padding:20px;text-align:center;color:#3f3f46;font-size:12px">No data</td></tr>'}</tbody>
             </table>
           </div>
         </div>
       </div>
 
       <div style="padding:0 16px 16px">
-        <div style="font-size:11px;letter-spacing:.1em;color:#52525b;text-transform:uppercase;margin-bottom:8px">Recent Results</div>
-        <div style="overflow-x:auto;border-radius:10px;border:1px solid #27272a">
-          <table style="width:100%;border-collapse:collapse;min-width:600px">
+        <div style="font-size:10px;letter-spacing:.12em;color:#52525b;text-transform:uppercase;margin-bottom:8px;font-weight:600">Recent Results</div>
+        <div style="border-radius:10px;border:1px solid #27272a;overflow:hidden">
+          <table style="width:100%;border-collapse:collapse">
             <thead><tr style="background:#0a0a0a">
-              <th style="padding:9px 10px;text-align:left;font-size:10px;color:#52525b;text-transform:uppercase">Match</th>
-              <th style="padding:9px 10px;text-align:left;font-size:10px;color:#52525b;text-transform:uppercase">League</th>
-              <th style="padding:9px 10px;text-align:left;font-size:10px;color:#52525b;text-transform:uppercase">Market</th>
-              <th style="padding:9px 10px;text-align:left;font-size:10px;color:#52525b;text-transform:uppercase">Pick</th>
-              <th style="padding:9px 10px;text-align:left;font-size:10px;color:#52525b;text-transform:uppercase">Odds</th>
-              <th style="padding:9px 10px;text-align:left;font-size:10px;color:#52525b;text-transform:uppercase">Result</th>
-              <th style="padding:9px 10px;text-align:left;font-size:10px;color:#52525b;text-transform:uppercase">P/L</th>
+              <th style="padding:8px 12px;text-align:left;font-size:10px;color:#3f3f46;text-transform:uppercase">Match</th>
+              <th style="padding:8px 10px;text-align:center;font-size:10px;color:#3f3f46;text-transform:uppercase">Market</th>
+              <th style="padding:8px 10px;text-align:left;font-size:10px;color:#3f3f46;text-transform:uppercase">Pick</th>
+              <th style="padding:8px 10px;text-align:center;font-size:10px;color:#3f3f46;text-transform:uppercase">Odds</th>
+              <th style="padding:8px 10px;text-align:center;font-size:10px;color:#3f3f46;text-transform:uppercase">Result</th>
+              <th style="padding:8px 12px;text-align:right;font-size:10px;color:#3f3f46;text-transform:uppercase">P/L</th>
             </tr></thead>
-            <tbody>${recentRows || '<tr><td colspan="7" style="padding:30px;text-align:center;color:#3f3f46;font-size:12px">No settled hockey picks yet</td></tr>'}</tbody>
+            <tbody>${recentRows || '<tr><td colspan="6" style="padding:30px;text-align:center;color:#3f3f46;font-size:12px">No settled hockey picks yet</td></tr>'}</tbody>
           </table>
         </div>
       </div>
