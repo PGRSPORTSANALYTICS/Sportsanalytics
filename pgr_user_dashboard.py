@@ -675,7 +675,12 @@ with tab_today:
             age_str = ""
             try:
                 if created_at:
-                    ts = created_at if isinstance(created_at, datetime) else datetime.fromisoformat(str(created_at).replace("Z", "+00:00")).replace(tzinfo=None)
+                    if isinstance(created_at, (int, float)):
+                        ts = datetime.utcfromtimestamp(created_at)
+                    elif isinstance(created_at, datetime):
+                        ts = created_at.replace(tzinfo=None)
+                    else:
+                        ts = datetime.fromisoformat(str(created_at).replace("Z", "+00:00")).replace(tzinfo=None)
                     age_minutes = (now_utc - ts).total_seconds() / 60
                     age_str = _fmt_ago(ts)
                     if age_minutes <= 10:
