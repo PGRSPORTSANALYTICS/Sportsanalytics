@@ -190,6 +190,41 @@ JAPAN_J1_TEAMS = {
     'Yokohama FM': 284,
 }
 
+# Swedish Allsvenskan team IDs (The Odds API name -> API-Football ID)
+ALLSVENSKAN_TEAMS = {
+    'Hammarby IF': 363,        # API-Football: Hammarby FF
+    'Hammarby FF': 363,
+    'Djurgardens IF': 364,
+    'Djurgårdens IF': 364,
+    'IFK Goteborg': 366,
+    'IFK Göteborg': 366,
+    'BK Hacken': 367,
+    'Häcken': 367,
+    'IK Sirius': 370,          # API-Football: Sirius
+    'Sirius': 370,
+    'IF Brommapojkarna': 371,
+    'Brommapojkarna': 371,
+    'IF Elfsborg': 372,
+    'Elfsborg': 372,
+    'Kalmar FF': 374,
+    'Malmo FF': 375,
+    'Malmö FF': 375,
+    'AIK': 377,                # API-Football: AIK Stockholm
+    'AIK Stockholm': 377,
+    'Halmstads BK': 766,       # API-Football: Halmstad
+    'Halmstad': 766,
+    'Örgryte IS': 2166,        # API-Football: Orgryte IS
+    'Orgryte IS': 2166,
+    'GAIS': 2170,              # API-Football: Gais
+    'Gais': 2170,
+    'Degerfors IF': 2172,
+    'Mjällby AIF': 2240,       # API-Football: Mjallby AIF
+    'Mjallby AIF': 2240,
+    'Västerås SK': 2241,       # API-Football: Vasteras SK FK
+    'Vasteras SK FK': 2241,
+    'Vasteras SK': 2241,
+}
+
 # Combine all mappings
 ALL_TEAM_MAPPINGS = {}
 ALL_TEAM_MAPPINGS.update(PREMIER_LEAGUE_TEAMS)
@@ -200,6 +235,7 @@ ALL_TEAM_MAPPINGS.update(LIGUE_1_TEAMS)
 ALL_TEAM_MAPPINGS.update(CHAMPIONS_LEAGUE_TEAMS)
 ALL_TEAM_MAPPINGS.update(BRAZIL_SERIE_A_TEAMS)
 ALL_TEAM_MAPPINGS.update(JAPAN_J1_TEAMS)
+ALL_TEAM_MAPPINGS.update(ALLSVENSKAN_TEAMS)
 
 
 def get_team_id_from_mapping(team_name: str) -> int:

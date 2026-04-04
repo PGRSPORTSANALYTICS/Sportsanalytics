@@ -109,10 +109,21 @@ class APIFootballClient:
             date_obj = datetime.fromisoformat(match_date.replace('Z', '+00:00'))
             date_str = date_obj.strftime('%Y-%m-%d')
             
-            # Calculate correct season (Aug-Jul split): Feb 2026 → season 2025
+            # Calculate correct season. For Aug-Jul leagues (EU): Feb 2026 → season 2025.
+            # For calendar-year leagues (Nordic, MLS, Brazil, etc.) season = actual year.
             match_year = date_obj.year
             match_month = date_obj.month
             current_season = match_year if match_month >= 7 else match_year - 1
+
+            # Calendar-year leagues where season == actual year, not year-1
+            CALENDAR_YEAR_LEAGUE_TEAM_IDS = {
+                # Allsvenskan (Sweden) team IDs
+                363, 364, 366, 367, 370, 371, 372, 374, 375, 377,
+                766, 2166, 2170, 2172, 2240, 2241,
+            }
+            if home_id in CALENDAR_YEAR_LEAGUE_TEAM_IDS or away_id in CALENDAR_YEAR_LEAGUE_TEAM_IDS:
+                current_season = match_year  # e.g. 2026 for April 2026
+                logger.debug(f"📅 Calendar-year league detected — using season {current_season}")
             
             fixtures_cache_key = f"fixtures_by_date_team_{date_str}_{home_id}_s{current_season}"
             fixtures = self._fetch_with_cache('fixtures', {'date': date_str, 'team': home_id, 'season': current_season}, fixtures_cache_key, ttl_hours=6)
@@ -129,6 +140,20 @@ class APIFootballClient:
                         return fixture
                 
                 logger.warning(f"⚠️ No matching fixture found for {home_team} vs {away_team} on {date_str}")
+            else:
+                # Fallback: try next year (handles calendar-year leagues not in whitelist)
+                fallback_season = current_season + 1
+                fallback_key = f"fixtures_by_date_team_{date_str}_{home_id}_s{fallback_season}"
+                fallback_fixtures = self._fetch_with_cache('fixtures', {'date': date_str, 'team': home_id, 'season': fallback_season}, fallback_key, ttl_hours=6)
+                if fallback_fixtures:
+                    logger.info(f"🔄 Season fallback: found fixtures using season {fallback_season}")
+                    for fixture in fallback_fixtures:
+                        teams = fixture.get('teams', {})
+                        if (teams.get('home', {}).get('id') == home_id and
+                                teams.get('away', {}).get('id') == away_id):
+                            logger.info(f"✅ Found fixture (fallback season {fallback_season}): {fixture.get('fixture', {}).get('id')}")
+                            self.cache_manager.cache_response(cache_key, 'fixtures', fixture, ttl_hours=24)
+                            return fixture
             
             self.cache_manager.cache_response(cache_key, 'fixtures', None, ttl_hours=24)
             return None
