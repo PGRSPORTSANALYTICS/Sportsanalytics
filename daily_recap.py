@@ -75,8 +75,8 @@ def get_results_for_date_range(start_date: date, end_date: date):
     results = {
         'value_singles': {'won': 0, 'lost': 0, 'profit': 0},
         'corners_cards': {'won': 0, 'lost': 0, 'profit': 0},
-        'parlays': {'won': 0, 'lost': 0, 'profit': 0},
-        'basketball': {'won': 0, 'lost': 0, 'profit': 0}
+        'parlays': {'won': 0, 'lost': 0, 'profit': 0}
+        # Basketball excluded: opportunities only, no units/P&L tracking
     }
     
     with db.get_connection() as conn:
@@ -105,25 +105,7 @@ def get_results_for_date_range(start_date: date, end_date: date):
                 results[cat]['profit'] += profit_units
             
             # ml_parlay_predictions table removed — parlays disabled
-            
-            cur.execute("""
-                SELECT odds, status
-                FROM basketball_predictions
-                WHERE commence_time::date BETWEEN %s AND %s
-                AND status IN ('won', 'lost', 'WON', 'LOST')
-            """, (start_date, end_date))
-            rows = cur.fetchall()
-            
-            for row in rows:
-                odds, status = row
-                is_win = status.lower() == 'won'
-                profit_units = (float(odds) - 1) if is_win else -1
-                
-                if is_win:
-                    results['basketball']['won'] += 1
-                else:
-                    results['basketball']['lost'] += 1
-                results['basketball']['profit'] += profit_units
+            # Basketball excluded from ROI tracking (opportunities only, no units)
     
     return results
 
@@ -184,14 +166,6 @@ def send_daily_discord_recap():
         fields.append({
             "name": "🎲 Parlays",
             "value": f"{p['won']}-{p['lost']} | {p['profit']:+.2f}u",
-            "inline": True
-        })
-    
-    if results['basketball']['won'] + results['basketball']['lost'] > 0:
-        bb = results['basketball']
-        fields.append({
-            "name": "🏀 Basketball",
-            "value": f"{bb['won']}-{bb['lost']} | {bb['profit']:+.2f}u",
             "inline": True
         })
     
@@ -275,16 +249,6 @@ def send_weekly_discord_recap():
         fields.append({
             "name": "🎲 Parlays",
             "value": f"{p['won']}-{p['lost']} | {p['profit']:+.2f}u ({p_roi:+.1f}%)",
-            "inline": True
-        })
-    
-    if results['basketball']['won'] + results['basketball']['lost'] > 0:
-        bb = results['basketball']
-        bb_bets = bb['won'] + bb['lost']
-        bb_roi = (bb['profit'] / bb_bets * 100) if bb_bets > 0 else 0
-        fields.append({
-            "name": "🏀 Basketball",
-            "value": f"{bb['won']}-{bb['lost']} | {bb['profit']:+.2f}u ({bb_roi:+.1f}%)",
             "inline": True
         })
     
