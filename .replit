@@ -41,8 +41,8 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "fuser -k 6000/tcp 2>/dev/null; streamlit run pgr_user_dashboard.py --server.port 6000 --server.address 0.0.0.0"
-waitForPort = 6000
+args = "fuser -k 8080/tcp 2>/dev/null; streamlit run pgr_user_dashboard.py --server.port 8080 --server.address 0.0.0.0"
+waitForPort = 8080
 
 [[workflows.workflow]]
 name = "Combined Sports Engine"
@@ -71,13 +71,13 @@ waitForPort = 5000
 name = "Simulation Lab"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "fuser -k 8080/tcp 2>/dev/null; streamlit run sim_lab.py --server.port 8080 --server.address 0.0.0.0"
-waitForPort = 8080
-
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "fuser -k 6000/tcp 2>/dev/null; streamlit run sim_lab.py --server.port 6000 --server.address 0.0.0.0"
+waitForPort = 6000
 
 [[ports]]
 localPort = 3000

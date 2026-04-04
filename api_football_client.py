@@ -155,6 +155,26 @@ class APIFootballClient:
                             self.cache_manager.cache_response(cache_key, 'fixtures', fixture, ttl_hours=24)
                             return fixture
             
+            # ±1 day fallback: handles timezone mismatches between Odds API date and API-Football UTC date
+            for day_offset in [-1, 1]:
+                adj_date_str = (date_obj + timedelta(days=day_offset)).strftime('%Y-%m-%d')
+                for season_try in [current_season, current_season + 1]:
+                    adj_key = f"fixtures_by_date_team_{adj_date_str}_{home_id}_s{season_try}"
+                    adj_fixtures = self._fetch_with_cache(
+                        'fixtures',
+                        {'date': adj_date_str, 'team': home_id, 'season': season_try},
+                        adj_key, ttl_hours=6
+                    )
+                    if adj_fixtures:
+                        for fixture in adj_fixtures:
+                            teams = fixture.get('teams', {})
+                            if (teams.get('home', {}).get('id') == home_id and
+                                    teams.get('away', {}).get('id') == away_id):
+                                logger.info(f"✅ Found fixture ({day_offset:+d}d adj, season {season_try}): {fixture.get('fixture', {}).get('id')}")
+                                self.cache_manager.cache_response(cache_key, 'fixtures', fixture, ttl_hours=24)
+                                return fixture
+            
+            logger.warning(f"⚠️ No fixture found for {home_team} vs {away_team} on {date_str} (incl ±1 day)")
             self.cache_manager.cache_response(cache_key, 'fixtures', None, ttl_hours=24)
             return None
                 
@@ -165,7 +185,13 @@ class APIFootballClient:
     def _normalize_team_name(self, team_name: str) -> str:
         """Normalize team name to handle variations between APIs"""
         import re
+        import unicodedata
         team = team_name.lower()
+        
+        # Transliterate accented/special chars to ASCII equivalents
+        # e.g. Famalicão→famalicao, Düsseldorf→dusseldorf, Malmö→malmo
+        team = unicodedata.normalize('NFKD', team)
+        team = ''.join(c for c in team if not unicodedata.combining(c))
         
         # Remove common prefixes
         team = re.sub(r'^(fc|afc|bfc|cfc|dfc|ssc|sfc|ac|as|cd|cf|sd|us|sv|vfb|fk|hsk|nk|sk|gks|mks|ks|lks|standard|royal|racing|sporting|athletic)\s+', '', team)
@@ -186,9 +212,15 @@ class APIFootballClient:
         if team in variations:
             team = variations[team]
         
-        # Remove special characters but keep letters and numbers
+        # Remove remaining special characters but keep letters and numbers
         team = re.sub(r'[^a-z0-9\s]', '', team)
         return team.strip()
+    
+    def _ascii_team_name(self, team_name: str) -> str:
+        """Return ASCII-only version of team name for API fallback searches."""
+        import unicodedata
+        nfkd = unicodedata.normalize('NFKD', team_name)
+        return ''.join(c for c in nfkd if not unicodedata.combining(c) and ord(c) < 128)
     
     def get_team_id(self, team_name: str, league_id: int = None) -> Optional[int]:
         """Get team ID by name with PERSISTENT caching, hardcoded mappings, and API search"""
@@ -212,6 +244,13 @@ class APIFootballClient:
                 params['season'] = 2024
             
             teams = self._fetch_with_cache('teams', params, f"team_search_{cache_key_suffix}", ttl_hours=168)
+            
+            # Fallback: retry with ASCII-normalized name (handles Famalicão → Famalicao, etc.)
+            if not teams:
+                ascii_name = self._ascii_team_name(team_name)
+                if ascii_name != team_name:
+                    ascii_params = {'search': ascii_name}
+                    teams = self._fetch_with_cache('teams', ascii_params, f"team_search_ascii_{ascii_name}", ttl_hours=168)
             
             if not teams:
                 logger.warning(f"⚠️ No team ID found for: {team_name}")

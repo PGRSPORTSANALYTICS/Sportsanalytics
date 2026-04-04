@@ -54,7 +54,6 @@ LA_LIGA_TEAMS = {
     'Real Sociedad': 548,
     'Sevilla': 536,
     'Valencia': 532,
-    'Valladolid': 720,
     'Villarreal': 533,
 }
 
@@ -81,7 +80,6 @@ SERIE_A_TEAMS = {
     'AS Roma': 497,
     'Roma': 497,
     'Salernitana': 514,
-    'Sassuolo': 488,
     'Torino': 503,
     'Udinese': 494,
 }
@@ -107,27 +105,46 @@ BUNDESLIGA_TEAMS = {
     'Wolfsburg': 170,
 }
 
-# Ligue 1 team IDs
+# Ligue 1 team IDs (API-Football verified IDs)
 LIGUE_1_TEAMS = {
     'Angers': 77,
     'AJ Auxerre': 84,
-    'Brest': 81,
-    'Le Havre': 83,
-    'Lens': 80,
+    'Auxerre': 84,
+    'Brest': 89,
+    'Stade Brestois': 89,
+    'Le Havre': 1532,
+    'Le Havre AC': 1532,
+    'Lens': 116,
+    'RC Lens': 116,
     'Lille': 79,
-    'Lyon': 85,
+    'LOSC': 79,
+    'Lyon': 80,
+    'Olympique Lyonnais': 80,
     'Marseille': 81,
+    'Olympique de Marseille': 81,
     'Monaco': 91,
+    'AS Monaco': 91,
     'Montpellier': 82,
-    'Nantes': 78,
-    'Nice': 82,
+    'Nantes': 83,
+    'FC Nantes': 83,
+    'Nice': 108,
+    'OGC Nice': 108,
     'Paris Saint Germain': 85,
     'PSG': 85,
-    'Reims': 547,
-    'Rennes': 99,
+    'Paris Saint-Germain': 85,
+    'Reims': 96,
+    'Stade de Reims': 96,
+    'Rennes': 111,
+    'Stade Rennais': 111,
+    'Saint-Etienne': 1063,
     'Saint-Étienne': 1063,
+    'AS Saint-Etienne': 1063,
     'Strasbourg': 167,
+    'RC Strasbourg': 167,
     'Toulouse': 97,
+    'Toulouse FC': 97,
+    'Metz': 1527,
+    'FC Metz': 1527,
 }
 
 # Champions League frequent teams
@@ -225,6 +242,180 @@ ALLSVENSKAN_TEAMS = {
     'Vasteras SK': 2241,
 }
 
+# Portuguese Primeira Liga + Segunda Liga team IDs
+PRIMEIRA_LIGA_TEAMS = {
+    'Benfica': 211,
+    'Porto': 212,
+    'Sporting CP': 228,
+    'Sporting': 228,
+    'Braga': 217,
+    'SC Braga': 217,
+    'Vitoria de Guimaraes': 223,
+    'Vitória de Guimarães': 223,
+    'Vitoria Guimaraes': 223,
+    'Famalicão': 2666,
+    'Famalicao': 2666,
+    'FC Famalicao': 2666,
+    'FC Famalicão': 2666,
+    'Rio Ave': 772,
+    'Rio Ave FC': 772,
+    'Moreirense': 2282,
+    'Moreirense FC': 2282,
+    'Estrela Amadora': 2253,
+    'CF Estrela': 2253,
+    'CD Nacional': 1109,
+    'Nacional': 1109,
+    'Alverca': 3019,
+    'FC Alverca': 3019,
+    'Gil Vicente': 764,
+    'Casa Pia': 2797,
+    'Casa Pia AC': 2797,
+    'Chaves': 213,
+    'GD Chaves': 213,
+    'Estoril': 234,
+    'Estoril Praia': 234,
+    'Arouca': 757,
+    'FC Arouca': 757,
+    'Vizela': 2263,
+    'FC Vizela': 2263,
+    'Boavista': 219,
+    'Pacos de Ferreira': 230,
+    'Paços de Ferreira': 230,
+    'Santa Clara': 232,
+    'CD Santa Clara': 232,
+    'Portimonense': 231,
+}
+
+# English Championship team IDs
+CHAMPIONSHIP_TEAMS = {
+    'Watford': 38,
+    'Millwall': 60,
+    'Norwich City': 71,
+    'Norwich': 71,
+    'Sheffield United': 62,
+    'Sheffield Utd': 62,
+    'Luton Town': 1359,
+    'Luton': 1359,
+    'Coventry City': 1416,
+    'Coventry': 1416,
+    'Middlesbrough': 1188,
+    'Boro': 1188,
+    'Swansea City': 70,
+    'Swansea': 70,
+    'Derby County': 1374,
+    'Derby': 1374,
+    'Charlton Athletic': 715,
+    'Charlton': 715,
+    'Sunderland': 43,
+    'Hull City': 61,
+    'Hull': 61,
+    'Blackburn Rovers': 76,
+    'Blackburn': 76,
+    'Preston North End': 1114,
+    'Preston': 1114,
+    'Plymouth Argyle': 714,
+    'Plymouth': 714,
+    'Bristol City': 1269,
+    'Burnley': 44,
+    'West Bromwich Albion': 68,
+    'West Brom': 68,
+    'Ipswich Town': 57,
+    'Ipswich': 57,
+}
+
+# Dutch Eredivisie team IDs
+EREDIVISIE_TEAMS = {
+    'Ajax': 194,
+    'Feyenoord': 195,
+    'PSV': 197,
+    'AZ': 196,
+    'FC Utrecht': 176,
+    'Utrecht': 176,
+    'FC Twente': 177,
+    'Twente': 177,
+    'SC Heerenveen': 175,
+    'Heerenveen': 175,
+    'Heracles': 6395,
+    'Heracles Almelo': 6395,
+    'NAC Breda': 1386,
+    'NAC': 1386,
+    'Sparta Rotterdam': 180,
+    'Sparta': 180,
+    'PEC Zwolle': 178,
+    'Zwolle': 178,
+    'Go Ahead Eagles': 1373,
+    'FC Groningen': 182,
+    'Groningen': 182,
+    'NEC Nijmegen': 183,
+    'NEC': 183,
+    'RKC Waalwijk': 1378,
+    'RKC': 1378,
+    'Almere City': 3379,
+    'Almere': 3379,
+    'Willem II': 181,
+    'FC Emmen': 2303,
+    'Emmen': 2303,
+    'Excelsior': 2297,
+    'Vitesse': 184,
+    'Fortuna Sittard': 185,
+    'Fortuna': 185,
+    'Cambuur': 1403,
+    'SC Cambuur': 1403,
+    'Volendam': 2302,
+    'FC Volendam': 2302,
+}
+
+# Additional missing teams from various leagues
+ADDITIONAL_TEAMS = {
+    # French additional
+    'Amiens': 1074,
+    # Belgian Pro League
+    'Club Brugge': 569,
+    'Anderlecht': 566,
+    'Gent': 568,
+    'Standard Liege': 571,
+    'Standard': 571,
+    'Union Saint-Gilloise': 576,
+    'Union SG': 576,
+    # Scottish Premiership
+    'Celtic': 247,
+    'Rangers': 246,
+    'Hearts': 250,
+    'Hibernian': 251,
+    'Aberdeen': 248,
+    # Turkish Süper Lig
+    'Galatasaray': 350,
+    'Fenerbahce': 351,
+    'Besiktas': 352,
+    'Trabzonspor': 357,
+    # Greek Super League
+    'Olympiakos': 399,
+    'Panathinaikos': 400,
+    'PAOK': 394,
+    'AEK Athens': 391,
+    # Austrian Bundesliga
+    'Salzburg': 322,
+    'Red Bull Salzburg': 322,
+    'Sturm Graz': 323,
+    'Rapid Wien': 327,
+    'LASK': 1047,
+    # Swiss Super League
+    'Young Boys': 254,
+    'BSC Young Boys': 254,
+    'Basel': 253,
+    'FC Basel': 253,
+    'Zurich': 256,
+    'FC Zurich': 256,
+    'Servette': 255,
+    # Czech First League
+    'Slavia Prague': 540,
+    'Sparta Prague': 539,
+    'Viktoria Plzen': 542,
+    # Polish Ekstraklasa
+    'Legia Warsaw': 508,
+    'Lech Poznan': 507,
+}
+
 # Combine all mappings
 ALL_TEAM_MAPPINGS = {}
 ALL_TEAM_MAPPINGS.update(PREMIER_LEAGUE_TEAMS)
@@ -236,6 +427,10 @@ ALL_TEAM_MAPPINGS.update(CHAMPIONS_LEAGUE_TEAMS)
 ALL_TEAM_MAPPINGS.update(BRAZIL_SERIE_A_TEAMS)
 ALL_TEAM_MAPPINGS.update(JAPAN_J1_TEAMS)
 ALL_TEAM_MAPPINGS.update(ALLSVENSKAN_TEAMS)
+ALL_TEAM_MAPPINGS.update(PRIMEIRA_LIGA_TEAMS)
+ALL_TEAM_MAPPINGS.update(CHAMPIONSHIP_TEAMS)
+ALL_TEAM_MAPPINGS.update(EREDIVISIE_TEAMS)
+ALL_TEAM_MAPPINGS.update(ADDITIONAL_TEAMS)
 
 
 def get_team_id_from_mapping(team_name: str) -> int:
