@@ -596,12 +596,15 @@ else:
 # ─────────────────────────────────────────────────────────────────────────────
 # TABS
 # ─────────────────────────────────────────────────────────────────────────────
-tab_today, tab_scanner, tab_smart, tab_track, tab_clv = st.tabs([
+tab_today, tab_scanner, tab_smart, tab_track, tab_clv, tab_nhl, tab_nfl, tab_nba = st.tabs([
     "⚡ Today's Picks",
     "🔍 Market Scanner",
     "🧠 Smart Picks",
     "📈 Track Record",
     "🎯 Proof of Edge",
+    "🏒 Hockey",
+    "🏈 NFL",
+    "🏀 NBA",
 ])
 
 
@@ -1333,6 +1336,280 @@ with tab_clv:
             st.dataframe(mkt_grp, use_container_width=True, hide_index=True)
         else:
             st.info("Not enough picks per market yet (minimum 3 required).")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TAB 6 — HOCKEY (NHL)
+# ─────────────────────────────────────────────────────────────────────────────
+def _render_sport_coming_soon(
+    icon: str,
+    sport_name: str,
+    season_label: str,
+    accent: str,
+    markets: list,
+    desc: str,
+):
+    st.markdown(f"""
+    <div style="padding:2rem 0 1rem 0;text-align:center;">
+        <div style="font-size:4rem;line-height:1.1;">{icon}</div>
+        <div style="font-size:1.9rem;font-weight:800;color:#F2F5F8;margin:0.4rem 0 0.2rem 0;">
+            {sport_name}
+        </div>
+        <div style="font-size:0.9rem;color:#9BA0B5;">{season_label}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown(f"""
+    <div style="max-width:640px;margin:0 auto 2rem auto;
+                padding:20px 24px;border-radius:14px;
+                background:rgba(255,255,255,0.03);
+                border:1px solid rgba(255,255,255,0.06);">
+        <div style="font-size:0.92rem;color:#C4C9DC;line-height:1.7;text-align:center;">
+            {desc}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    badge_html = " ".join([
+        f'<span style="display:inline-block;padding:6px 16px;border-radius:999px;'
+        f'background:rgba({accent},0.12);border:1px solid rgba({accent},0.35);'
+        f'color:#F2F5F8;font-size:0.82rem;font-weight:600;margin:4px;">{m}</span>'
+        for m in markets
+    ])
+    st.markdown(f"""
+    <div style="text-align:center;margin-bottom:2rem;">
+        <div style="font-size:0.78rem;color:#9BA0B5;letter-spacing:0.12em;
+                    text-transform:uppercase;margin-bottom:12px;">Planned markets</div>
+        {badge_html}
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown(f"""
+    <div style="max-width:400px;margin:0 auto;padding:18px 24px;
+                border-radius:14px;text-align:center;
+                background:rgba({accent},0.07);
+                border:1px solid rgba({accent},0.25);">
+        <div style="font-size:0.82rem;font-weight:700;color:rgb({accent});
+                    letter-spacing:0.1em;text-transform:uppercase;margin-bottom:6px;">
+            Status
+        </div>
+        <div style="font-size:0.95rem;color:#F2F5F8;font-weight:600;">
+            Coming next season — data collection starting soon
+        </div>
+        <div style="font-size:0.8rem;color:#9BA0B5;margin-top:6px;">
+            Models will train on 2024/25 season data before going live
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+with tab_nhl:
+    _render_sport_coming_soon(
+        icon="🏒",
+        sport_name="NHL Hockey",
+        season_label="Season 2025/26 — Activating next season",
+        accent="0, 168, 255",
+        markets=["Over/Under Goals", "Totals", "Moneyline"],
+        desc=(
+            "The PGR model will cover NHL with the same Monte Carlo simulation and EV-filtering "
+            "used for football. Game totals are the primary market — bookmakers systematically "
+            "misprice high-scoring games in the first month of a new season."
+        ),
+    )
+
+    st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)
+    section_title("Market Structure Preview", icon="📋")
+    col_a, col_b, col_c = st.columns(3)
+    with col_a:
+        st.markdown("""
+        <div style="padding:16px 18px;border-radius:12px;
+                    background:rgba(0,168,255,0.06);
+                    border:1px solid rgba(0,168,255,0.2);
+                    text-align:center;">
+            <div style="font-size:1.4rem;margin-bottom:6px;">🥅</div>
+            <div style="font-size:0.88rem;font-weight:700;color:#F2F5F8;margin-bottom:4px;">
+                Over/Under Goals
+            </div>
+            <div style="font-size:0.78rem;color:#9BA0B5;">
+                O/U 5.5 · O/U 6.5 · O/U 7.5<br>
+                Both periods + full game
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col_b:
+        st.markdown("""
+        <div style="padding:16px 18px;border-radius:12px;
+                    background:rgba(0,168,255,0.06);
+                    border:1px solid rgba(0,168,255,0.2);
+                    text-align:center;">
+            <div style="font-size:1.4rem;margin-bottom:6px;">📊</div>
+            <div style="font-size:0.88rem;font-weight:700;color:#F2F5F8;margin-bottom:4px;">
+                Totals (Alt lines)
+            </div>
+            <div style="font-size:0.78rem;color:#9BA0B5;">
+                Alternative goal lines<br>
+                Period totals
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col_c:
+        st.markdown("""
+        <div style="padding:16px 18px;border-radius:12px;
+                    background:rgba(0,168,255,0.06);
+                    border:1px solid rgba(0,168,255,0.2);
+                    text-align:center;">
+            <div style="font-size:1.4rem;margin-bottom:6px;">💰</div>
+            <div style="font-size:0.88rem;font-weight:700;color:#F2F5F8;margin-bottom:4px;">
+                Moneyline
+            </div>
+            <div style="font-size:0.78rem;color:#9BA0B5;">
+                3-way (incl. OT/SO)<br>
+                Home / Away / Draw
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TAB 7 — NFL
+# ─────────────────────────────────────────────────────────────────────────────
+with tab_nfl:
+    _render_sport_coming_soon(
+        icon="🏈",
+        sport_name="NFL American Football",
+        season_label="Season 2025 — Activating next season",
+        accent="255, 150, 0",
+        markets=["Over/Under Totals", "Moneyline", "Asian Handicap (Spread)"],
+        desc=(
+            "NFL totals and spreads have some of the highest public betting volume in the world, "
+            "which creates systematic mispricing in certain game environments. "
+            "The model focuses on game environment factors: weather, pace of play, "
+            "and line movement signals."
+        ),
+    )
+
+    st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)
+    section_title("Market Structure Preview", icon="📋")
+    col_a, col_b, col_c = st.columns(3)
+    with col_a:
+        st.markdown("""
+        <div style="padding:16px 18px;border-radius:12px;
+                    background:rgba(255,150,0,0.06);
+                    border:1px solid rgba(255,150,0,0.22);
+                    text-align:center;">
+            <div style="font-size:1.4rem;margin-bottom:6px;">📈</div>
+            <div style="font-size:0.88rem;font-weight:700;color:#F2F5F8;margin-bottom:4px;">
+                Over/Under Totals
+            </div>
+            <div style="font-size:0.78rem;color:#9BA0B5;">
+                Game total · O/U 45–55<br>
+                1st half + full game
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col_b:
+        st.markdown("""
+        <div style="padding:16px 18px;border-radius:12px;
+                    background:rgba(255,150,0,0.06);
+                    border:1px solid rgba(255,150,0,0.22);
+                    text-align:center;">
+            <div style="font-size:1.4rem;margin-bottom:6px;">💰</div>
+            <div style="font-size:0.88rem;font-weight:700;color:#F2F5F8;margin-bottom:4px;">
+                Moneyline
+            </div>
+            <div style="font-size:0.78rem;color:#9BA0B5;">
+                Straight win (2-way)<br>
+                Underdog focus
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col_c:
+        st.markdown("""
+        <div style="padding:16px 18px;border-radius:12px;
+                    background:rgba(255,150,0,0.06);
+                    border:1px solid rgba(255,150,0,0.22);
+                    text-align:center;">
+            <div style="font-size:1.4rem;margin-bottom:6px;">↔️</div>
+            <div style="font-size:0.88rem;font-weight:700;color:#F2F5F8;margin-bottom:4px;">
+                Asian Handicap
+            </div>
+            <div style="font-size:0.78rem;color:#9BA0B5;">
+                AH Spread (–3.5 / +3.5)<br>
+                Quarter points
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TAB 8 — NBA
+# ─────────────────────────────────────────────────────────────────────────────
+with tab_nba:
+    _render_sport_coming_soon(
+        icon="🏀",
+        sport_name="NBA Basketball",
+        season_label="Season 2025/26 — Activating next season",
+        accent="200, 100, 255",
+        markets=["Over/Under Totals", "Moneyline", "Asian Handicap (Spread)"],
+        desc=(
+            "NBA totals are heavily influenced by team pace, back-to-back schedules, "
+            "and late-season load management — factors the market regularly underprices. "
+            "The model will use player availability data and team-level pace metrics "
+            "to find systematic edges."
+        ),
+    )
+
+    st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)
+    section_title("Market Structure Preview", icon="📋")
+    col_a, col_b, col_c = st.columns(3)
+    with col_a:
+        st.markdown("""
+        <div style="padding:16px 18px;border-radius:12px;
+                    background:rgba(200,100,255,0.07);
+                    border:1px solid rgba(200,100,255,0.22);
+                    text-align:center;">
+            <div style="font-size:1.4rem;margin-bottom:6px;">📈</div>
+            <div style="font-size:0.88rem;font-weight:700;color:#F2F5F8;margin-bottom:4px;">
+                Over/Under Totals
+            </div>
+            <div style="font-size:0.78rem;color:#9BA0B5;">
+                Game total · O/U 220–235<br>
+                Quarters + halves
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col_b:
+        st.markdown("""
+        <div style="padding:16px 18px;border-radius:12px;
+                    background:rgba(200,100,255,0.07);
+                    border:1px solid rgba(200,100,255,0.22);
+                    text-align:center;">
+            <div style="font-size:1.4rem;margin-bottom:6px;">💰</div>
+            <div style="font-size:0.88rem;font-weight:700;color:#F2F5F8;margin-bottom:4px;">
+                Moneyline
+            </div>
+            <div style="font-size:0.78rem;color:#9BA0B5;">
+                Straight win (2-way)<br>
+                Home / Away
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col_c:
+        st.markdown("""
+        <div style="padding:16px 18px;border-radius:12px;
+                    background:rgba(200,100,255,0.07);
+                    border:1px solid rgba(200,100,255,0.22);
+                    text-align:center;">
+            <div style="font-size:1.4rem;margin-bottom:6px;">↔️</div>
+            <div style="font-size:0.88rem;font-weight:700;color:#F2F5F8;margin-bottom:4px;">
+                Asian Handicap
+            </div>
+            <div style="font-size:0.78rem;color:#9BA0B5;">
+                AH Spread (–5.5 / +5.5)<br>
+                Half points
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # FOOTER
