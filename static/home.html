@@ -158,6 +158,8 @@ function normalizePick(b) {
     disagreement: b.disagreement != null ? b.disagreement : null,
     hidden_value_status: b.hidden_value_status || null,
     age_minutes: b.age_minutes != null ? b.age_minutes : null,
+    model_prob: b.model_prob != null ? b.model_prob : null,
+    _scout: b.scout_data || null,
   };
 }
 
@@ -1275,13 +1277,28 @@ function selectPick(id) {
 }
 
 function loadDetailData(pick) {
+  state.dpPickId = pick.id;
+
+  // If scout_data was pre-loaded in the picks response → instant, no network call
+  if (pick._scout) {
+    state.dpData = pick._scout;
+    state.dpBusy = false;
+    renderDetailPanel();
+    // Still fire a background refresh to server cache but don't block on it
+    const mid = (pick.home_team && pick.away_team)
+      ? pick.home_team + "_" + pick.away_team
+      : pick.id;
+    fetch("/api/match-scout/" + encodeURIComponent(mid)).catch(() => {});
+    return;
+  }
+
+  // Fallback: fetch from server (first-time / cache miss)
   const mid = (pick.home_team && pick.away_team)
     ? pick.home_team + "_" + pick.away_team
     : pick.id;
 
   state.dpBusy = true;
   state.dpData = null;
-  state.dpPickId = pick.id;
   renderDetailPanel();
 
   fetch("/api/match-scout/" + encodeURIComponent(mid))

@@ -2155,6 +2155,117 @@ async def get_today_picks():
                 'age_minutes': int((time.time() - int(r[24])) / 60) if r[24] else None,
             })
 
+        # ── Embed training_data for all matches in ONE batch query ──
+        # Collect unique (home, away, date) combos
+        _uniq_matches = list({
+            (p['home_team'], p['away_team'], p['match_date'])
+            for p in picks
+            if p['home_team'] and p['away_team'] and p['match_date']
+        })
+        _td_map = {}
+        if _uniq_matches:
+            try:
+                _placeholders = ",".join(
+                    ["(%s,%s,%s)"] * len(_uniq_matches)
+                )
+                _flat = [v for tup in _uniq_matches for v in tup]
+                _td_rows = db_helper.execute(f"""
+                    SELECT home_team, away_team, match_date,
+                           home_form_goals_scored, home_form_goals_conceded,
+                           home_form_clean_sheets, home_form_ppg,
+                           home_form_wins, home_form_draws, home_form_losses,
+                           away_form_goals_scored, away_form_goals_conceded,
+                           away_form_clean_sheets, away_form_ppg,
+                           away_form_wins, away_form_draws, away_form_losses,
+                           home_xg, away_xg, total_xg,
+                           h2h_matches_count, h2h_home_wins, h2h_away_wins, h2h_draws,
+                           h2h_avg_goals, h2h_btts_rate, h2h_over25_rate,
+                           home_position, away_position, home_points, away_points,
+                           home_goal_diff, away_goal_diff,
+                           predicted_home_goals, predicted_away_goals, predicted_score,
+                           model_probability
+                    FROM training_data
+                    WHERE (home_team, away_team, match_date) IN ({_placeholders})
+                    ORDER BY created_at DESC
+                """, _flat, fetch='all') or []
+                # Keep only the most recent row per match
+                for _tr in _td_rows:
+                    _key = (_tr[0], _tr[1], str(_tr[2]))
+                    if _key not in _td_map:
+                        _td_map[_key] = _tr
+            except Exception as _td_err:
+                logger.warning(f"training_data batch fetch failed: {_td_err}")
+
+        # Attach scout_data to each pick
+        for p in picks:
+            _key = (p['home_team'], p['away_team'], p['match_date'])
+            _tr = _td_map.get(_key)
+            _form = None; _h2h = None; _xg = None; _std = None; _pred = None
+            if _tr:
+                _form_has = any(_tr[i] is not None for i in [3,4,6,7,8,9,10,11,13,14,15,16])
+                if _form_has:
+                    _form = {
+                        "home": {"goals_scored": round(float(_tr[3]),2) if _tr[3] else None,
+                                 "goals_conceded": round(float(_tr[4]),2) if _tr[4] else None,
+                                 "clean_sheets": _tr[5],
+                                 "ppg": round(float(_tr[6]),2) if _tr[6] else None,
+                                 "wins": _tr[7], "draws": _tr[8], "losses": _tr[9]},
+                        "away": {"goals_scored": round(float(_tr[10]),2) if _tr[10] else None,
+                                 "goals_conceded": round(float(_tr[11]),2) if _tr[11] else None,
+                                 "clean_sheets": _tr[12],
+                                 "ppg": round(float(_tr[13]),2) if _tr[13] else None,
+                                 "wins": _tr[14], "draws": _tr[15], "losses": _tr[16]},
+                    }
+                _xg = {"home_xg": round(float(_tr[17]),2) if _tr[17] else None,
+                       "away_xg": round(float(_tr[18]),2) if _tr[18] else None,
+                       "total_xg": round(float(_tr[19]),2) if _tr[19] else None}
+                if _tr[20]:
+                    _h2h = {"matches": _tr[20], "home_wins": _tr[21],
+                            "away_wins": _tr[22], "draws": _tr[23],
+                            "avg_goals": round(float(_tr[24]),2) if _tr[24] else None,
+                            "btts_rate": round(float(_tr[25])*100,1) if _tr[25] else None,
+                            "over25_rate": round(float(_tr[26])*100,1) if _tr[26] else None}
+                _std = {"home_pos": _tr[27], "away_pos": _tr[28],
+                        "home_pts": _tr[29], "away_pts": _tr[30],
+                        "home_gd": _tr[31], "away_gd": _tr[32]}
+                _pred = {"home_goals": round(float(_tr[33]),2) if _tr[33] else None,
+                         "away_goals": round(float(_tr[34]),2) if _tr[34] else None,
+                         "score": _tr[35],
+                         "model_prob": round(float(_tr[36]),3) if _tr[36] else None}
+            # Build bookmakers dict from odds_by_bookmaker
+            _bk_raw = p.get('odds_by_bookmaker')
+            _bk = {}
+            if _bk_raw and isinstance(_bk_raw, dict):
+                _bk = {k: float(v) for k, v in _bk_raw.items() if v}
+            elif p.get('best_odds_bookmaker') and p.get('best_odds_value'):
+                _bk = {p['best_odds_bookmaker']: p['best_odds_value']}
+            p['scout_data'] = {
+                "match_id": str(p['id']),
+                "home_team": p['home_team'],
+                "away_team": p['away_team'],
+                "league": p['league'],
+                "match_date": p['match_date'],
+                "kickoff": p['kickoff_str'],
+                "picks": [{
+                    "market": p['market'],
+                    "selection": p['selection'],
+                    "odds": p['odds'],
+                    "ev_pct": p['ev'],
+                    "confidence": p['confidence'],
+                    "model_prob": p['model_prob'],
+                    "trust_level": p['trust_level'],
+                    "disagreement": p['disagreement'],
+                    "open_odds": p['open_odds'],
+                    "clv_pct": p['clv_pct'],
+                    "bookmakers": _bk,
+                }],
+                "form": _form,
+                "h2h": _h2h,
+                "xg": _xg,
+                "standings": _std,
+                "prediction": _pred,
+            }
+
         total = len(picks)
         won = sum(1 for p in picks if p['status'] == 'won')
         lost = sum(1 for p in picks if p['status'] == 'lost')
