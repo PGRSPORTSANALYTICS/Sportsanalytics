@@ -152,6 +152,15 @@ def run_discord_analysis_publisher():
         logger.error(f"❌ Discord analysis publish error: {e}")
 
 
+def run_form_cacher():
+    """Fetch and cache form + H2H for picks missing training_data."""
+    try:
+        from form_cacher import run_form_cacher as _do_cache
+        _do_cache()
+    except Exception as e:
+        logger.error(f"❌ FormCacher error: {e}")
+
+
 def run_value_singles():
     """Run Value Singles predictions (core product)"""
     _record_scan_event("value_singles_start")
@@ -171,6 +180,8 @@ def run_value_singles():
 
     # Always publish analysis — Discord publisher runs regardless of stop-loss
     run_discord_analysis_publisher()
+    # Cache form+H2H for picks missing training_data (background, non-blocking)
+    threading.Thread(target=run_form_cacher, daemon=True).start()
 
 
 def run_corners():
@@ -883,6 +894,7 @@ def main():
     schedule.every(6).hours.do(run_performance_updates)
     
     schedule.every(2).hours.do(run_learning_update)
+    schedule.every(2).hours.do(run_form_cacher)  # Cache form+H2H for upcoming picks
     
     schedule.every().day.at("22:00").do(run_daily_recap)      # 23:00 CET
     schedule.every().sunday.at("22:00").do(run_weekly_recap)  # 23:00 CET
