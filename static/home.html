@@ -968,9 +968,16 @@ function _buildHistoryContent(picks, loading, sport) {
   const lost  = rows.filter(r => r.status === "lost").length;
   const settled = won + lost;
   const hitRate = settled > 0 ? (won / settled * 100).toFixed(1) + "%" : "—";
-  const totalPl = rows.reduce((s, r) => s + (r.profit_loss || 0), 0);
-  const plStr = (totalPl >= 0 ? "+" : "") + totalPl.toFixed(2) + "u";
-  const plColor = totalPl >= 0 ? "#4ade80" : "#f87171";
+  const hitColor = hitRate !== "—" && parseFloat(hitRate) >= 55 ? "#4ade80" : "#f87171";
+
+  // P&L only shown for football (units placed). Hockey/NBA are opportunities only.
+  const totalPl = isFootball ? rows.reduce((s, r) => s + (r.profit_loss || 0), 0) : null;
+  const plStr = totalPl !== null ? ((totalPl >= 0 ? "+" : "") + totalPl.toFixed(2) + "u") : null;
+  const plColor = totalPl !== null ? (totalPl >= 0 ? "#4ade80" : "#f87171") : null;
+
+  // Football: 9 cols (Date Match Type League Market Odds Selection Result P&L)
+  // Hockey/NBA: 7 cols (Date Match League Market Odds Selection Result) — no Type, no P&L
+  const colCount = isFootball ? 9 : 7;
 
   const tableRows = rows.map(p => `
     <tr style="border-bottom:1px solid #18181b">
@@ -982,35 +989,46 @@ function _buildHistoryContent(picks, loading, sport) {
       <td style="padding:10px 8px;font-size:13px;font-weight:700;color:#4ade80">${p.odds != null ? Number(p.odds).toFixed(2) : "—"}</td>
       <td style="padding:10px 8px;font-size:12px;color:#a1a1aa">${esc(p.selection)}</td>
       <td style="padding:10px 8px">${_historyOutcomeIcon(p.status)}</td>
-      <td style="padding:10px 8px;font-size:12px;font-weight:600;text-align:right;color:${(p.profit_loss||0)>=0?'#4ade80':'#f87171'}">
+      ${isFootball ? `<td style="padding:10px 8px;font-size:12px;font-weight:600;text-align:right;color:${(p.profit_loss||0)>=0?'#4ade80':'#f87171'}">
         ${p.profit_loss != null ? ((p.profit_loss>=0?"+":"")+p.profit_loss.toFixed(2)+"u") : "—"}
-      </td>
+      </td>` : ''}
     </tr>`).join("");
 
   const emptyPick = picks.length === 0;
   const emptyHtml = rows.length === 0 ? `
-    <tr><td colspan="${isFootball ? 9 : 8}" style="text-align:center;padding:60px;color:#52525b;font-size:14px">
-      ${emptyPick ? "No historical picks yet" : "No results match your search"}
+    <tr><td colspan="${colCount}" style="text-align:center;padding:60px;color:#52525b;font-size:14px">
+      ${emptyPick ? "No opportunities recorded yet" : "No results match your search"}
     </td></tr>` : "";
 
+  // KPI cards: football shows 5 (with P&L), others show 4
+  const kpiCards = isFootball
+    ? [["TOTAL",total,"#d4d4d8"],["WON",won,"#4ade80"],["LOST",lost,"#f87171"],["HIT RATE",hitRate,hitColor],["P&L",plStr,plColor]]
+    : [["TOTAL",total,"#d4d4d8"],["HIT",won,"#4ade80"],["MISS",lost,"#f87171"],["HIT RATE",hitRate,hitColor]];
+  const kpiCols = isFootball ? 5 : 4;
+
+  const label = isFootball ? "picks" : "opportunities";
+
   return `
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px">
-      ${[["TOTAL",total,"#d4d4d8"],["WON",won,"#4ade80"],["LOST",lost,"#f87171"],["HIT RATE",hitRate,hitRate!=="—"&&parseFloat(hitRate)>=55?"#4ade80":"#f87171"],["P&L",plStr,plColor]].map(([l,v,c]) => `
+    <div style="display:grid;grid-template-columns:repeat(${kpiCols},1fr);gap:10px;margin-bottom:16px">
+      ${kpiCards.map(([l,v,c]) => `
       <div style="border-radius:12px;border:1px solid #27272a;background:#09090b;padding:10px 14px">
         <div style="font-size:9px;letter-spacing:.12em;color:#52525b;text-transform:uppercase">${l}</div>
         <div style="font-size:20px;font-weight:700;margin-top:4px;color:${c}">${v}</div>
       </div>`).join("")}
     </div>
+    ${!isFootball ? `<div style="margin-bottom:12px;padding:10px 14px;border-radius:10px;background:rgba(251,146,60,.08);border:1px solid rgba(251,146,60,.2);font-size:12px;color:#fb923c">
+      Opportunities only — no units placed on ${sport === 'hockey' ? 'Hockey' : 'NBA'}
+    </div>` : ''}
     <div style="display:flex;gap:10px;margin-bottom:12px;align-items:center;flex-wrap:wrap">
       <input id="history-q" value="${esc(state.historyQ)}" placeholder="Search team, market, league…" class="inp" style="flex:1;min-width:200px">
       <select id="history-days" class="inp" style="min-width:120px">
         ${[30,60,90,180,365].map(d => `<option value="${d}" ${state.historyDays==d?"selected":""}>${d} days</option>`).join("")}
       </select>
       <button id="history-reload" style="padding:8px 16px;border-radius:10px;border:1px solid #3f3f46;background:#18181b;font-size:13px;color:#d4d4d8;cursor:pointer;white-space:nowrap">↻ Reload</button>
-      <span style="font-size:12px;color:#52525b">${total} picks</span>
+      <span style="font-size:12px;color:#52525b">${total} ${label}</span>
     </div>
     <div style="border-radius:12px;border:1px solid #27272a;overflow-x:auto">
-      <table style="width:100%;border-collapse:collapse;min-width:${isFootball?700:600}px">
+      <table style="width:100%;border-collapse:collapse;min-width:${isFootball?700:560}px">
         <thead><tr style="background:#18181b">
           <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;white-space:nowrap">Date</th>
           <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#52525b">Match</th>
@@ -1020,7 +1038,7 @@ function _buildHistoryContent(picks, loading, sport) {
           <th style="padding:8px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#52525b">Odds</th>
           <th style="padding:8px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#52525b">Selection</th>
           <th style="padding:8px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#52525b">Result</th>
-          <th style="padding:8px 8px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#52525b">P&amp;L</th>
+          ${isFootball ? '<th style="padding:8px 8px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#52525b">P&amp;L</th>' : ''}
         </tr></thead>
         <tbody>${tableRows}${emptyHtml}</tbody>
       </table>
