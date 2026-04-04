@@ -219,7 +219,8 @@ def load_todays_picks():
         SELECT home_team, away_team, league, market, selection, odds,
                confidence, edge_percentage, status, result, kickoff_time,
                fair_odds, model_prob, best_odds_value, best_odds_bookmaker,
-               odds_by_bookmaker, timestamp
+               odds_by_bookmaker, timestamp,
+               clv_pct, clv_status, disagreement, hidden_value_status, profile_boost_score
         FROM football_opportunities
         WHERE mode = 'PROD'
           AND match_date = CURRENT_DATE::text
@@ -645,7 +646,7 @@ with tab_today:
         for i, pick in enumerate(picks):
             (home, away, league, market, selection, odds, conf, ev, status, result, ko_time,
              fair_odds, model_prob, best_odds_value, best_odds_bookmaker, odds_by_bookmaker,
-             created_at) = pick
+             created_at, clv_pct, clv_status, disagreement, hidden_value_status, profile_boost_score) = pick
             conf_label, conf_cls = _clean_confidence(conf)
             card_cls = _pick_card_class(result)
             badge = _result_badge(status, result)
@@ -705,6 +706,48 @@ with tab_today:
                 edge_html = f'<span>Edge <b style="color:{edge_color};font-weight:{edge_weight};">{edge_val:+.1f}%</b></span>'
                 fair_html += f'<span style="font-size:0.72rem;">{bk_name} <b style="color:#F2F5F8;">{bk_odds:.2f}</b></span>'
 
+            # ── Why this bet ──────────────────────────────────────────────
+            why_bullets = []
+            try:
+                mp = float(model_prob) * 100 if model_prob else None
+                mkt_prob = round(100 / float(odds), 1) if odds and float(odds) > 0 else None
+                if mp and mkt_prob:
+                    why_bullets.append(f"Model <b style='color:#00F59D'>{mp:.0f}%</b> vs Market <b style='color:#9BA0B5'>{mkt_prob:.0f}%</b>")
+            except Exception:
+                pass
+            try:
+                if disagreement is not None and float(disagreement) < 0.15:
+                    why_bullets.append("Strong model agreement")
+                elif conf and int(conf) >= 70:
+                    why_bullets.append("Strong model agreement")
+            except Exception:
+                pass
+            try:
+                if clv_status == 'pos' and clv_pct and float(clv_pct) > 0:
+                    why_bullets.append(f"Positive CLV +{float(clv_pct):.1f}%")
+            except Exception:
+                pass
+            try:
+                if hidden_value_status and hidden_value_status not in ('', 'none', None):
+                    why_bullets.append("Hidden value detected")
+                elif profile_boost_score and float(profile_boost_score) >= 1.15:
+                    why_bullets.append("Profile boost active")
+            except Exception:
+                pass
+
+            if why_bullets:
+                bullets_html = "".join(
+                    f'<div style="font-size:0.72rem;color:#C5CAE0;line-height:1.6;">· {b}</div>'
+                    for b in why_bullets
+                )
+                why_html = f'''<div style="background:rgba(96,165,250,0.07);border-left:2px solid #60A5FA;
+                    border-radius:4px;padding:6px 10px;margin:6px 0 4px 0;">
+                    <div style="font-size:0.68rem;color:#60A5FA;font-weight:600;margin-bottom:2px;">
+                        WHY THIS BET</div>
+                    {bullets_html}</div>'''
+            else:
+                why_html = ""
+
             age_html = f'<span style="font-size:0.72rem;color:#6B7280;">· {age_str}</span>' if age_str else ""
             html = f"""
             <div class="{card_cls}">
@@ -719,6 +762,7 @@ with tab_today:
                 <div class="pick-match">{home} vs {away}</div>
                 {multi_market_html}
                 <div class="pick-selection">{selection}</div>
+                {why_html}
                 <div class="pick-meta">
                     <span>Odds <b style="color:#F2F5F8;">{float(odds):.2f}</b></span>
                     {fair_html}
