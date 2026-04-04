@@ -2380,9 +2380,13 @@ async def get_today_picks():
             model_p = float(r[20]) if r[20] else None
             odds_f  = float(r[5])  if r[5]  else None
             if model_p and odds_f and odds_f > 1.0:
-                ev_val = round((model_p - 1.0 / odds_f) * 100, 1)
+                ev_raw = (model_p - 1.0 / odds_f) * 100
+                is_outlier = ev_raw > 40.0
+                ev_val = round(min(ev_raw, 40.0), 1)
             else:
-                ev_val = round(float(r[6]), 1) if r[6] else 0
+                ev_raw = float(r[6]) if r[6] else 0
+                is_outlier = ev_raw > 40.0
+                ev_val = round(min(ev_raw, 40.0), 1)
 
             book = r[12] or ''
             mode_val = r[19] or 'PROD'
@@ -2432,6 +2436,7 @@ async def get_today_picks():
                 'hidden_value_status': r[23] or None,
                 'created_ts': int(r[24]) if r[24] else None,
                 'age_minutes': int((time.time() - int(r[24])) / 60) if r[24] else None,
+                'is_outlier': is_outlier,
             })
 
         # ── Embed training_data for all matches in ONE batch query ──
@@ -2674,9 +2679,11 @@ async def get_picks_history(days: int = 90):
             model_p_h = float(r[21]) if r[21] else None
             odds_h    = float(r[5])  if r[5]  else None
             if model_p_h and odds_h and odds_h > 1.0:
-                ev_h = round((model_p_h - 1.0 / odds_h) * 100, 1)
+                ev_raw_h = (model_p_h - 1.0 / odds_h) * 100
             else:
-                ev_h = round(float(r[6]), 1) if r[6] else 0
+                ev_raw_h = float(r[6]) if r[6] else 0
+            is_outlier_h = ev_raw_h > 40.0
+            ev_h = round(min(ev_raw_h, 40.0), 1)
 
             # Full ISO kickoff string
             kickoff_iso_h = ''
@@ -2710,6 +2717,7 @@ async def get_picks_history(days: int = 90):
                 'clv_pct': round(float(r[18]), 2) if r[18] else None,
                 'layer': layer,
                 'mode': mode_val,
+                'is_outlier': is_outlier_h,
             })
 
         total = len(picks)
