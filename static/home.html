@@ -271,11 +271,11 @@ function fmtKickoff(iso) {
   const d = new Date(iso);
   if (isNaN(d)) return iso;
   const diff = d - Date.now();
-  const t = d.toLocaleTimeString("sv-SE", {hour:"2-digit", minute:"2-digit"});
-  const dateStr = d.toLocaleDateString("sv-SE", {month:"short", day:"numeric"});
+  const t = d.toLocaleTimeString("en-GB", {hour:"2-digit", minute:"2-digit"});
+  const dateStr = d.toLocaleDateString("en-GB", {month:"short", day:"numeric"});
   if (d.toDateString() === new Date().toDateString()) {
-    if (diff > 0 && diff < 3600000) return "Idag · " + Math.floor(diff / 60000) + "m";
-    return "Idag · " + t;
+    if (diff > 0 && diff < 3600000) return "Today · " + Math.floor(diff / 60000) + "m";
+    return "Today · " + t;
   }
   return dateStr + " · " + t;
 }
@@ -665,7 +665,7 @@ function detailPanelHtml(pick, data, busy, tab) {
       [[homeRecent, pick.home_team || "Home"], [awayRecent, pick.away_team || "Away"]].forEach(([matches, label]) => {
         if (!matches || !matches.length) return;
         body += `<div style="border-radius:14px;border:1px solid #27272a;background:rgba(0,0,0,.3);padding:14px">
-          <div style="font-size:13px;font-weight:600;margin-bottom:10px">${esc(label)} — 5 senaste</div>
+          <div style="font-size:13px;font-weight:600;margin-bottom:10px">${esc(label)} — last 5</div>
           ${matches.slice(0,5).map((m, i) => {
             const rc = m.result === "W" ? "#4ade80" : m.result === "D" ? "#fbbf24" : "#f87171";
             return `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:${i < Math.min(matches.length,5)-1 ? "1px solid rgba(39,39,42,.4)" : "none"};font-size:12px">
@@ -1252,7 +1252,7 @@ function renderApp() {
   ).join("");
 
   const sortOptions = [
-    ["newest", "Nyast ↓"],
+    ["newest", "Newest ↓"],
     ["kickoff", "Kickoff ↑"],
     ["ev", "EV ↓"],
     ["confidence", "Edge Score ↓"],
