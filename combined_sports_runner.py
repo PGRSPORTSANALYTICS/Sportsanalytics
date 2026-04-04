@@ -264,14 +264,15 @@ def run_player_props_settlement():
 
 
 def run_multi_sport_learning():
-    """Run multi-sport learning engine (Tennis, Hockey, MMA)"""
+    """Run multi-sport learning engine (Hockey, NBA, MMA)"""
     try:
-        from multi_sport_learning_engine import run_multi_sport_learning as scan
+        from multi_sport_learning_engine import run_multi_sport_learning as scan, SPORT_CONFIG
         logger.info("🌐 Starting Multi-Sport Learning scan...")
         stats = scan()
-        total = sum(stats[k]['saved'] for k in ['TENNIS', 'HOCKEY', 'MMA'])
-        logger.info(f"🌐 Multi-Sport Learning: {total} picks saved "
-                     f"(🎾{stats['TENNIS']['saved']} 🏒{stats['HOCKEY']['saved']} 🥊{stats['MMA']['saved']})")
+        total = sum(v['saved'] for k, v in stats.items() if isinstance(v, dict))
+        parts = [f"{cfg.get('emoji', '?')}{stats.get(cat, {}).get('saved', 0)}"
+                 for cat, cfg in SPORT_CONFIG.items()]
+        logger.info(f"🌐 Multi-Sport Learning: {total} picks saved ({' '.join(parts)})")
     except Exception as e:
         logger.error(f"❌ Multi-Sport Learning error: {e}")
         import traceback
