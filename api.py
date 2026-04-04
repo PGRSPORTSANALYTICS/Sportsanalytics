@@ -2376,10 +2376,25 @@ async def get_today_picks():
             mkt = (r[3] or '').upper()
             icon = next((v for k, v in market_icons.items() if k in mkt), '⚽')
 
-            ev_val = round(float(r[6]), 1) if r[6] else 0
+            # Real EV: (model_prob - implied_prob) × 100  — not the capped DB value
+            model_p = float(r[20]) if r[20] else None
+            odds_f  = float(r[5])  if r[5]  else None
+            if model_p and odds_f and odds_f > 1.0:
+                ev_val = round((model_p - 1.0 / odds_f) * 100, 1)
+            else:
+                ev_val = round(float(r[6]), 1) if r[6] else 0
+
             book = r[12] or ''
             mode_val = r[19] or 'PROD'
             layer = 'PRO PICK' if mode_val == 'PROD' else 'VALUE OPP'
+
+            # Build full ISO kickoff string so frontend can show date correctly
+            kickoff_iso = ''
+            if match_date and ko_str and ':' in ko_str:
+                kickoff_iso = f"{match_date}T{ko_str}:00"
+            elif match_date:
+                kickoff_iso = match_date
+
             picks.append({
                 'id': r[0],
                 'home_team': r[1] or '',
@@ -2402,8 +2417,8 @@ async def get_today_picks():
                 'league': r[13] or '',
                 'trust_level': r[14] or '',
                 'kickoff_str': ko_str,
-                'kickoff': ko_str,
-                'kickoff_time': ko_str,
+                'kickoff': kickoff_iso,
+                'kickoff_time': kickoff_iso,
                 'match_date': match_date,
                 'open_odds': float(r[17]) if r[17] else None,
                 'clv_pct': round(float(r[18]), 2) if r[18] else None,
@@ -2590,7 +2605,7 @@ async def get_picks_history(days: int = 90):
                    edge_percentage, confidence, outcome, profit_loss,
                    odds_by_bookmaker, best_odds_value, best_odds_bookmaker,
                    league, trust_level, kickoff_time, match_date,
-                   open_odds, clv_pct, mode, kickoff_epoch
+                   open_odds, clv_pct, mode, kickoff_epoch, model_prob
             FROM football_opportunities
             WHERE (
                 (mode = 'PROD' AND bet_placed = true)
@@ -2655,6 +2670,21 @@ async def get_picks_history(days: int = 90):
             if not outcome and kickoff_epoch_h and kickoff_epoch_h < cutoff_epoch_h:
                 status = 'pending_result'
 
+            # Real EV from model_prob × odds
+            model_p_h = float(r[21]) if r[21] else None
+            odds_h    = float(r[5])  if r[5]  else None
+            if model_p_h and odds_h and odds_h > 1.0:
+                ev_h = round((model_p_h - 1.0 / odds_h) * 100, 1)
+            else:
+                ev_h = round(float(r[6]), 1) if r[6] else 0
+
+            # Full ISO kickoff string
+            kickoff_iso_h = ''
+            if match_date and ko_str and ':' in ko_str:
+                kickoff_iso_h = f"{match_date}T{ko_str}:00"
+            elif match_date:
+                kickoff_iso_h = match_date
+
             picks.append({
                 'id': r[0],
                 'home_team': r[1] or '',
@@ -2663,14 +2693,19 @@ async def get_picks_history(days: int = 90):
                 'market': r[3] or '',
                 'selection': r[4] or '',
                 'odds': float(r[5]) if r[5] else 0,
-                'ev_pct': round(float(r[6]), 1) if r[6] else 0,
+                'ev_pct': ev_h,
+                'edge_pct': ev_h,
+                'ev': ev_h,
                 'confidence': round(float(r[7]), 1) if r[7] else 0,
                 'outcome': outcome,
                 'status': status,
                 'profit_loss': round(float(r[9]), 2) if r[9] else None,
                 'best_odds_bookmaker': r[12] or '',
+                'bookmaker': r[12] or '',
                 'league': r[13] or '',
                 'kickoff_str': ko_str,
+                'kickoff': kickoff_iso_h,
+                'kickoff_time': kickoff_iso_h,
                 'match_date': match_date,
                 'clv_pct': round(float(r[18]), 2) if r[18] else None,
                 'layer': layer,
