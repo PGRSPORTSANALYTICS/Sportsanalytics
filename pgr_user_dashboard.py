@@ -636,6 +636,12 @@ with tab_today:
     else:
         col_a, col_b = st.columns(2)
         now_utc = datetime.utcnow()
+
+        # Count picks per match so we can show "X markets available" / "Alt market"
+        from collections import Counter, defaultdict
+        match_counts = Counter((p[0], p[1]) for p in picks)
+        match_seen: defaultdict = defaultdict(int)
+
         for i, pick in enumerate(picks):
             (home, away, league, market, selection, odds, conf, ev, status, result, ko_time,
              fair_odds, model_prob, best_odds_value, best_odds_bookmaker, odds_by_bookmaker,
@@ -650,6 +656,19 @@ with tab_today:
                     ko_str = f"KO {str(ko_time)[:5]}"
                 except Exception:
                     pass
+
+            # Multi-market label for same match
+            match_key = (home, away)
+            total_for_match = match_counts[match_key]
+            seen_idx = match_seen[match_key]
+            match_seen[match_key] += 1
+            if total_for_match > 1:
+                if seen_idx == 0:
+                    multi_market_html = f'<div style="font-size:0.72rem;color:#60A5FA;margin-top:2px;font-weight:500;">{total_for_match} markets available</div>'
+                else:
+                    multi_market_html = '<div style="font-size:0.72rem;color:#9BA0B5;margin-top:2px;">Alt market</div>'
+            else:
+                multi_market_html = ""
 
             # NEW badge + age — NEW visible for 10 minutes, age always shown
             new_badge = ""
@@ -693,6 +712,7 @@ with tab_today:
                     </div>
                 </div>
                 <div class="pick-match">{home} vs {away}</div>
+                {multi_market_html}
                 <div class="pick-selection">{selection}</div>
                 <div class="pick-meta">
                     <span>Odds <b style="color:#F2F5F8;">{float(odds):.2f}</b></span>
