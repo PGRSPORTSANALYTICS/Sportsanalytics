@@ -2049,7 +2049,8 @@ async def get_today_picks():
                    edge_percentage, confidence, outcome, profit_loss,
                    odds_by_bookmaker, best_odds_value, best_odds_bookmaker,
                    league, trust_level, kickoff_time, match_date,
-                   open_odds, clv_pct, mode
+                   open_odds, clv_pct, mode,
+                   model_prob, disagreement, clv_status, hidden_value_status
             FROM football_opportunities
             WHERE (
                 (mode = 'PROD' AND bet_placed = true)
@@ -2127,6 +2128,10 @@ async def get_today_picks():
                 'layer': layer,
                 'badge': layer,
                 'mode': mode_val,
+                'model_prob': round(float(r[20]), 3) if r[20] else None,
+                'disagreement': round(float(r[21]), 3) if r[21] else None,
+                'clv_status': r[22] or None,
+                'hidden_value_status': r[23] or None,
             })
 
         total = len(picks)

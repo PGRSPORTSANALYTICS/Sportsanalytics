@@ -153,7 +153,43 @@ function normalizePick(b) {
     fairOdds: b.fair_odds || b.fairOdds || null,
     status: b.status || "PRE",
     featured: b.featured || false,
+    clv_pct: b.clv_pct != null ? b.clv_pct : null,
+    clv_status: b.clv_status || null,
+    disagreement: b.disagreement != null ? b.disagreement : null,
+    hidden_value_status: b.hidden_value_status || null,
   };
+}
+
+function buildWhyHtml(p) {
+  const bullets = [];
+  try {
+    const mp = p.model_probability;
+    const mktProb = p.odds > 0 ? Math.round(100 / p.odds) : null;
+    if (mp && mktProb) {
+      const mpR = Math.round(mp);
+      bullets.push(`Model <b style="color:#4ade80">${mpR}%</b> vs Market <b style="color:#71717a">${mktProb}%</b>`);
+    }
+  } catch(e){}
+  try {
+    if ((p.disagreement != null && p.disagreement < 0.15) || p.confidence >= 70) {
+      bullets.push("Strong model agreement");
+    }
+  } catch(e){}
+  try {
+    if (p.clv_status === "pos" && p.clv_pct > 0) {
+      bullets.push(`Positive CLV <b style="color:#4ade80">+${Number(p.clv_pct).toFixed(1)}%</b>`);
+    }
+  } catch(e){}
+  try {
+    if (p.hidden_value_status && p.hidden_value_status !== "none" && p.hidden_value_status !== "") {
+      bullets.push("Hidden value detected");
+    }
+  } catch(e){}
+  if (!bullets.length) return "";
+  return `<div style="grid-column:1/-1;background:rgba(99,102,241,.07);border-left:2px solid rgba(99,102,241,.5);border-radius:4px;padding:6px 10px;margin:8px 0 0 0">
+    <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#6366f1;font-weight:700;margin-bottom:3px">Why this bet</div>
+    ${bullets.map(b => `<div style="font-size:11px;color:#a1a1aa;line-height:1.7">· ${b}</div>`).join("")}
+  </div>`;
 }
 
 function evTone(ev) {
@@ -908,6 +944,7 @@ function renderApp() {
           <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Kickoff</div>
           <div style="font-size:13px;font-weight:600">${esc(fmtKickoff(row.kickoff_time))}</div>
         </div>
+        ${buildWhyHtml(row)}
       </div>`;
     }).join("") + `</div>`;
   }
@@ -1296,6 +1333,7 @@ function renderPickList() {
           <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Kickoff</div>
           <div style="font-size:13px;font-weight:600">${esc(fmtKickoff(row.kickoff_time))}</div>
         </div>
+        ${buildWhyHtml(row)}
       </div>`;
     }).join("") + `</div>`;
   }
