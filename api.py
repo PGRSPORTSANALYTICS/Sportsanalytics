@@ -2585,6 +2585,84 @@ async def get_picks_history(days: int = 90):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/learning/history", tags=["Analytics"])
+async def get_learning_history(sport: str = "HOCKEY", days: int = 90):
+    """Get hockey/NBA historical picks from learning_bets for the History sub-tab."""
+    try:
+        MARKET_LABELS = {
+            'h2h': 'Moneyline', 'totals': 'Over/Under', 'h2h_lay': 'Lay ML',
+            'spreads': 'AH / Spread',
+        }
+        LEAGUE_LABELS = {
+            # Raw API sport_key format
+            'icehockey_nhl': 'NHL', 'icehockey_sweden_hockey_league': 'SHL',
+            'icehockey_sweden_allsvenskan': 'Allsvenskan', 'icehockey_ahl': 'AHL',
+            'basketball_nba': 'NBA', 'basketball_ncaab': 'NCAAB',
+            # Title-cased format as stored in learning_bets.league
+            'Icehockey Nhl': 'NHL', 'Icehockey Sweden Hockey League': 'SHL',
+            'Icehockey Sweden Allsvenskan': 'Allsvenskan', 'Icehockey Ahl': 'AHL',
+            'Basketball Nba': 'NBA', 'Basketball Ncaab': 'NCAAB',
+        }
+        sport_upper = sport.upper()
+        safe_days = min(int(days), 730)
+
+        rows = db_helper.execute(f"""
+            SELECT id, home_team, away_team, league, market, selection, line,
+                   odds, outcome, profit_loss, status,
+                   TO_CHAR(COALESCE(settled_at, commence_time)::date, 'YYYY-MM-DD') AS match_date,
+                   COALESCE(settled_at, commence_time) AS sort_ts
+            FROM learning_bets
+            WHERE sport_category = %s
+              AND commence_time > NOW() - INTERVAL '{safe_days} days'
+            ORDER BY sort_ts DESC NULLS LAST
+            LIMIT 500
+        """, (sport_upper,), fetch='all') or []
+
+        picks = []
+        for r in rows:
+            outcome = (r[8] or '').lower()
+            status = outcome if outcome in ('won', 'lost', 'void', 'push') else 'pending'
+            pl = float(r[9]) if r[9] is not None else None
+            line_val = float(r[6]) if r[6] is not None else None
+            selection = r[5] or ''
+            if line_val is not None:
+                sign = f"+{line_val}" if line_val >= 0 else str(line_val)
+                selection_display = f"{selection} ({sign})"
+            else:
+                selection_display = selection
+            picks.append({
+                'id': r[0],
+                'match': f"{r[1]} vs {r[2]}",
+                'match_date': r[11] or '—',
+                'league': LEAGUE_LABELS.get(r[3], (r[3] or '').replace('_', ' ').title()),
+                'market': MARKET_LABELS.get(r[4], r[4] or '—'),
+                'selection': selection_display,
+                'odds': round(float(r[7]), 2) if r[7] else None,
+                'status': status,
+                'profit_loss': pl,
+            })
+
+        won = sum(1 for p in picks if p['status'] == 'won')
+        lost = sum(1 for p in picks if p['status'] == 'lost')
+        settled = won + lost
+        hit_rate = round(won / settled * 100, 1) if settled > 0 else None
+        total_pl = round(sum(p['profit_loss'] for p in picks if p['profit_loss'] is not None), 2)
+
+        return {
+            'picks': picks,
+            'total': len(picks),
+            'won': won, 'lost': lost, 'settled': settled,
+            'hit_rate': hit_rate,
+            'total_pl': total_pl,
+            'sport': sport_upper,
+            'days': safe_days,
+        }
+
+    except Exception as e:
+        logger.error(f"Error in get_learning_history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/stats/summary")
 async def get_stats_summary(days: int = 90):
     """
