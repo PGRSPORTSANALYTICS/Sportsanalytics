@@ -107,6 +107,12 @@ st.markdown("""
 .badge-high   { background:rgba(0,245,157,0.1); color:#00F59D; border:1px solid rgba(0,245,157,0.3); }
 .badge-medium { background:rgba(59,130,246,0.1); color:#60A5FA; border:1px solid rgba(59,130,246,0.3); }
 .badge-low    { background:rgba(245,158,11,0.1); color:#F59E0B; border:1px solid rgba(245,158,11,0.3); }
+.badge-new    { background:rgba(168,85,247,0.18); color:#C084FC; border:1px solid rgba(168,85,247,0.5);
+                animation: pgr-pulse 1.6s ease-in-out infinite; }
+@keyframes pgr-pulse {
+    0%,100% { box-shadow: 0 0 0 0 rgba(168,85,247,0.0); }
+    50%      { box-shadow: 0 0 6px 2px rgba(168,85,247,0.45); }
+}
 .pgr-divider {
     border: none;
     border-top: 1px solid #1C2030;
@@ -213,13 +219,11 @@ def load_todays_picks():
         SELECT home_team, away_team, league, market, selection, odds,
                confidence, edge_percentage, status, result, kickoff_time,
                fair_odds, model_prob, best_odds_value, best_odds_bookmaker,
-               odds_by_bookmaker
+               odds_by_bookmaker, timestamp
         FROM football_opportunities
         WHERE mode = 'PROD'
           AND match_date = CURRENT_DATE::text
-        ORDER BY
-            CASE WHEN UPPER(status)='PENDING' THEN 0 ELSE 1 END,
-            timestamp DESC
+        ORDER BY timestamp DESC
         LIMIT 40
     """, fetch='all')
     return rows or []
@@ -631,9 +635,11 @@ with tab_today:
         """, unsafe_allow_html=True)
     else:
         col_a, col_b = st.columns(2)
+        now_utc = datetime.utcnow()
         for i, pick in enumerate(picks):
             (home, away, league, market, selection, odds, conf, ev, status, result, ko_time,
-             fair_odds, model_prob, best_odds_value, best_odds_bookmaker, odds_by_bookmaker) = pick
+             fair_odds, model_prob, best_odds_value, best_odds_bookmaker, odds_by_bookmaker,
+             created_at) = pick
             conf_label, conf_cls = _clean_confidence(conf)
             card_cls = _pick_card_class(result)
             badge = _result_badge(status, result)
@@ -644,6 +650,17 @@ with tab_today:
                     ko_str = f"KO {str(ko_time)[:5]}"
                 except Exception:
                     pass
+
+            # NEW badge — visible for 10 minutes after pick was created
+            new_badge = ""
+            try:
+                if created_at:
+                    ts = created_at if isinstance(created_at, datetime) else datetime.fromisoformat(str(created_at).replace("Z", "+00:00")).replace(tzinfo=None)
+                    age_minutes = (now_utc - ts).total_seconds() / 60
+                    if age_minutes <= 10:
+                        new_badge = '<span class="badge badge-new">NEW</span>'
+            except Exception:
+                pass
 
             fair_html = ""
             edge_html = ""
@@ -667,6 +684,7 @@ with tab_today:
                 <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
                     <div style="font-size:0.75rem;color:#9BA0B5;">{league} {("· " + ko_str) if ko_str else ""}</div>
                     <div style="display:flex;gap:5px;align-items:center;">
+                        {new_badge}
                         <span class="badge badge-{conf_cls}">{conf_label}</span>
                         {badge}
                     </div>
