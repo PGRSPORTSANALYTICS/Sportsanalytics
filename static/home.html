@@ -1986,7 +1986,7 @@ async function fetchNba() {
 /* ─────────────────────────────────────────────────────────────
    AUTO-REFRESH & LIVE BAR
 ───────────────────────────────────────────────────────────── */
-setInterval(fetchData, 5 * 60 * 1000);
+setInterval(fetchData, 60 * 1000);
 
 setInterval(() => {
   const el = document.getElementById("updated-ago");
