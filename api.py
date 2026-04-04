@@ -2134,6 +2134,7 @@ async def get_today_picks():
                 'clv_status': r[22] or None,
                 'hidden_value_status': r[23] or None,
                 'created_ts': int(r[24]) if r[24] else None,
+                'age_minutes': int((time.time() - int(r[24])) / 60) if r[24] else None,
             })
 
         total = len(picks)

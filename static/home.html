@@ -157,13 +157,12 @@ function normalizePick(b) {
     clv_status: b.clv_status || null,
     disagreement: b.disagreement != null ? b.disagreement : null,
     hidden_value_status: b.hidden_value_status || null,
-    created_ts: b.created_ts || null,
+    age_minutes: b.age_minutes != null ? b.age_minutes : null,
   };
 }
 
-function fmtAgo(epochSec) {
-  if (!epochSec) return "";
-  const diffMin = Math.floor((Date.now() / 1000 - epochSec) / 60);
+function fmtMinutes(diffMin) {
+  if (diffMin == null || diffMin < 0) return "";
   if (diffMin < 1)  return "just now";
   if (diffMin < 60) return diffMin + "min ago";
   const h = Math.floor(diffMin / 60);
@@ -172,9 +171,9 @@ function fmtAgo(epochSec) {
 }
 
 function buildAgeBadgeHtml(p) {
-  if (!p.created_ts) return "";
-  const diffMin = Math.floor((Date.now() / 1000 - p.created_ts) / 60);
-  const ageStr  = fmtAgo(p.created_ts);
+  if (p.age_minutes == null) return "";
+  const diffMin = p.age_minutes;
+  const ageStr  = fmtMinutes(diffMin);
   const newBadge = diffMin <= 10
     ? `<span style="display:inline-flex;align-items:center;border-radius:99px;border:1px solid rgba(139,92,246,.5);background:rgba(99,102,241,.15);color:#a78bfa;font-size:9px;font-weight:700;padding:1px 7px;letter-spacing:.05em;animation:pulse 2s infinite">NEW</span>`
     : "";
