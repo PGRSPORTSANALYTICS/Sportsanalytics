@@ -42,6 +42,30 @@ A Self-Learning Engine automates performance tracking across all leagues and mar
 - **PGR API Server:** REST API accessible via port 8000. PGR Edge Finder dashboard at /pgr.
 - **College Basketball Dashboard:** Removed as separate workflow — basketball data accessed via the main Football Dashboard. The `college_basket_dashboard.py` file is preserved but not running as a workflow.
 
+## Multi-Sport Monte Carlo Engine (`/engines/`)
+
+A clean, modular simulation layer separate from the football engine:
+
+| File | Sport | Distribution | Markets |
+|---|---|---|---|
+| `football_mc.py` | Football | Poisson | Over 2.5, BTTS, 1X2 Moneyline |
+| `hockey_mc.py` | NHL Hockey | Poisson + OT coin-flip | Moneyline, Over 5.5 |
+| `nba_mc.py` | NBA | Normal + OT noise | Moneyline, Totals, Spread |
+| `nfl_mc.py` | NFL | Hybrid Poisson (TDs+FGs) + turnover noise | Moneyline, Totals, Spread |
+| `monte_carlo_router.py` | Router | — | `run_simulation(sport, inputs)` |
+
+**Standard output format** (all engines return identical structure):
+```python
+{
+  "match_id": str, "sport": str, "market": str,
+  "odds": float, "model_prob": float, "ev": float, "edge_score": float,
+  "simulation_meta": {"n_sims": int, "avg_total": float,
+                      "home_win_prob": float, "away_win_prob": float},
+  "model_version": "mc_v1_multi_sport", "created_at": int
+}
+```
+**EV filter:** EV ≥ 0.05 and odds ≥ 1.70. Output is database-insertion ready.
+
 ## External Dependencies
 
 ### Core Libraries
