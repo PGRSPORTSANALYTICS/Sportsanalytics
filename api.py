@@ -2309,34 +2309,34 @@ async def get_today_picks():
         cutoff_epoch = now_epoch - 14400  # 4 hours after kickoff → move to history
 
         rows = db_helper.execute("""
-            SELECT id, home_team, away_team, market, selection, odds,
-                   edge_percentage, confidence, outcome, profit_loss,
-                   odds_by_bookmaker, best_odds_value, best_odds_bookmaker,
-                   league, trust_level, kickoff_time, match_date,
-                   open_odds, clv_pct, mode,
-                   model_prob, disagreement, clv_status, hidden_value_status,
-                   timestamp, kickoff_epoch
-            FROM football_opportunities
-            WHERE (
-                (mode = 'PROD' AND bet_placed = true)
-                OR mode = 'VALUE_OPP'
-            )
-              AND (outcome IS NULL OR outcome = '' OR outcome IN ('pending', 'unknown'))
-              AND match_date >= %s
-              AND (
-                  -- Has epoch: kickoff must be < 4h ago
-                  (kickoff_epoch IS NOT NULL AND kickoff_epoch > %s)
-                  -- No epoch: use match_date + kickoff_time as fallback
-                  OR (kickoff_epoch IS NULL AND (
-                      kickoff_time IS NULL
-                      OR match_date IS NULL
-                      OR NOT (kickoff_time ~ '^\d{2}:\d{2}')
-                      OR (match_date::date + kickoff_time::time) > NOW() - INTERVAL '4 hours'
-                  ))
-              )
-            ORDER BY match_date ASC,
-                     COALESCE(kickoff_epoch, 9999999999) ASC,
-                     kickoff_time ASC NULLS LAST
+            SELECT * FROM (
+                SELECT DISTINCT ON (home_team, away_team, market)
+                    id, home_team, away_team, market, selection, odds,
+                    edge_percentage, confidence, outcome, profit_loss,
+                    odds_by_bookmaker, best_odds_value, best_odds_bookmaker,
+                    league, trust_level, kickoff_time, match_date,
+                    open_odds, clv_pct, mode,
+                    model_prob, disagreement, clv_status, hidden_value_status,
+                    timestamp, kickoff_epoch
+                FROM football_opportunities
+                WHERE (
+                    (mode = 'PROD' AND bet_placed = true)
+                    OR mode = 'VALUE_OPP'
+                )
+                  AND (outcome IS NULL OR outcome = '' OR outcome IN ('pending', 'unknown'))
+                  AND match_date >= %s
+                  AND (
+                      (kickoff_epoch IS NOT NULL AND kickoff_epoch > %s)
+                      OR (kickoff_epoch IS NULL AND (
+                          kickoff_time IS NULL
+                          OR match_date IS NULL
+                          OR NOT (kickoff_time ~ '^\d{2}:\d{2}')
+                          OR (match_date::date + kickoff_time::time) > NOW() - INTERVAL '4 hours'
+                      ))
+                  )
+                ORDER BY home_team, away_team, market, id DESC
+            ) sub
+            ORDER BY id DESC
         """, (today_str, cutoff_epoch), fetch='all') or []
 
         picks = []

@@ -1296,7 +1296,10 @@ function renderApp() {
             ${layerBadgeHtml(row.layer)}
           </div>
           <div style="font-size:15px;font-weight:700;line-height:1.25">${esc(row.match)}</div>
-          <div style="font-size:11px;color:#71717a;margin-top:4px">${esc(row.league)} · ${esc(row.bookmaker)}</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap">
+            <span style="font-size:12px;font-weight:700;color:#a78bfa;background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.25);border-radius:6px;padding:1px 7px">${esc(fmtKickoff(row.kickoff_time))}</span>
+            <span style="font-size:11px;color:#71717a">${esc(row.league)} · ${esc(row.bookmaker)}</span>
+          </div>
           ${buildAgeBadgeHtml(row)}
         </div>
         <div>
@@ -1321,8 +1324,8 @@ function renderApp() {
           </div>
         </div>
         <div>
-          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Kickoff</div>
-          <div style="font-size:13px;font-weight:600">${esc(fmtKickoff(row.kickoff_time))}</div>
+          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Urval</div>
+          <div style="font-size:13px;font-weight:600;color:#d4d4d8">${esc(row.selection || '—')}</div>
         </div>
         ${buildWhyHtml(row)}
       </div>`;
@@ -1746,7 +1749,10 @@ function renderPickList() {
             ${layerBadgeHtml(row.layer)}
           </div>
           <div style="font-size:15px;font-weight:700;line-height:1.25">${esc(row.match)}</div>
-          <div style="font-size:11px;color:#71717a;margin-top:4px">${esc(row.league)} · ${esc(row.bookmaker)}</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap">
+            <span style="font-size:12px;font-weight:700;color:#a78bfa;background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.25);border-radius:6px;padding:1px 7px">${esc(fmtKickoff(row.kickoff_time))}</span>
+            <span style="font-size:11px;color:#71717a">${esc(row.league)} · ${esc(row.bookmaker || '')}</span>
+          </div>
           ${buildAgeBadgeHtml(row)}
         </div>
         <div>
@@ -1771,8 +1777,8 @@ function renderPickList() {
           </div>
         </div>
         <div>
-          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Kickoff</div>
-          <div style="font-size:13px;font-weight:600">${esc(fmtKickoff(row.kickoff_time))}</div>
+          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Urval</div>
+          <div style="font-size:13px;font-weight:600;color:#d4d4d8">${esc(row.selection || '—')}</div>
         </div>
         ${buildWhyHtml(row)}
       </div>`;
