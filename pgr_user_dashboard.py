@@ -1338,277 +1338,411 @@ with tab_clv:
             st.info("Not enough picks per market yet (minimum 3 required).")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TAB 6 — HOCKEY (NHL)
+# DATA HELPERS — HOCKEY & NBA
 # ─────────────────────────────────────────────────────────────────────────────
-def _render_sport_coming_soon(
-    icon: str,
-    sport_name: str,
-    season_label: str,
-    accent: str,
-    markets: list,
-    desc: str,
-):
+@st.cache_data(ttl=180)
+def _hockey_summary():
+    try:
+        db = DatabaseHelper()
+        rows = db.execute("""
+            SELECT sport_key,
+                COUNT(*) FILTER (WHERE outcome IN ('won','lost')) AS settled,
+                COUNT(*) FILTER (WHERE outcome = 'won') AS wins,
+                COUNT(*) FILTER (WHERE outcome = 'lost') AS losses,
+                COUNT(*) FILTER (WHERE status = 'pending') AS pending,
+                COALESCE(SUM(CASE WHEN outcome IN ('won','lost') THEN profit_loss ELSE 0 END),0) AS profit,
+                ROUND(AVG(CASE WHEN outcome IN ('won','lost') THEN odds END)::numeric,2) AS avg_odds
+            FROM learning_bets
+            WHERE sport_category = 'HOCKEY'
+            GROUP BY sport_key
+            ORDER BY settled DESC
+        """, fetch='all')
+        if not rows:
+            return pd.DataFrame()
+        return pd.DataFrame(rows, columns=['sport_key','settled','wins','losses','pending','profit','avg_odds'])
+    except Exception:
+        return pd.DataFrame()
+
+@st.cache_data(ttl=180)
+def _hockey_daily():
+    try:
+        db = DatabaseHelper()
+        rows = db.execute("""
+            SELECT DATE(created_at) AS date,
+                COUNT(*) FILTER (WHERE outcome IN ('won','lost')) AS settled,
+                COUNT(*) FILTER (WHERE outcome = 'won') AS wins,
+                COALESCE(SUM(CASE WHEN outcome IN ('won','lost') THEN profit_loss ELSE 0 END),0) AS daily_profit
+            FROM learning_bets
+            WHERE sport_category = 'HOCKEY'
+            GROUP BY DATE(created_at)
+            ORDER BY date
+        """, fetch='all')
+        if not rows:
+            return pd.DataFrame()
+        return pd.DataFrame(rows, columns=['date','settled','wins','daily_profit'])
+    except Exception:
+        return pd.DataFrame()
+
+@st.cache_data(ttl=180)
+def _hockey_by_market():
+    try:
+        db = DatabaseHelper()
+        rows = db.execute("""
+            SELECT market,
+                COUNT(*) FILTER (WHERE outcome IN ('won','lost')) AS settled,
+                COUNT(*) FILTER (WHERE outcome = 'won') AS wins,
+                COUNT(*) FILTER (WHERE outcome = 'lost') AS losses,
+                COALESCE(SUM(CASE WHEN outcome IN ('won','lost') THEN profit_loss ELSE 0 END),0) AS profit
+            FROM learning_bets
+            WHERE sport_category = 'HOCKEY'
+            GROUP BY market
+            ORDER BY profit DESC
+        """, fetch='all')
+        if not rows:
+            return pd.DataFrame()
+        return pd.DataFrame(rows, columns=['market','settled','wins','losses','profit'])
+    except Exception:
+        return pd.DataFrame()
+
+@st.cache_data(ttl=180)
+def _hockey_recent():
+    try:
+        db = DatabaseHelper()
+        rows = db.execute("""
+            SELECT home_team, away_team, market, selection, odds,
+                   outcome, profit_loss, result_notes, settled_at, league
+            FROM learning_bets
+            WHERE sport_category = 'HOCKEY' AND outcome IN ('won','lost')
+            ORDER BY settled_at DESC NULLS LAST
+            LIMIT 20
+        """, fetch='all')
+        if not rows:
+            return pd.DataFrame()
+        return pd.DataFrame(rows, columns=['home_team','away_team','market','selection','odds',
+                                           'outcome','profit_loss','result_notes','settled_at','league'])
+    except Exception:
+        return pd.DataFrame()
+
+@st.cache_data(ttl=180)
+def _nba_summary():
+    try:
+        db = DatabaseHelper()
+        rows = db.execute("""
+            SELECT market,
+                COUNT(*) FILTER (WHERE outcome IN ('won','lost')) AS settled,
+                COUNT(*) FILTER (WHERE outcome = 'won') AS wins,
+                COUNT(*) FILTER (WHERE outcome = 'lost') AS losses,
+                COUNT(*) FILTER (WHERE outcome = 'void') AS voids,
+                COALESCE(SUM(CASE WHEN outcome IN ('won','lost') THEN profit_loss ELSE 0 END),0) AS profit,
+                ROUND(AVG(CASE WHEN outcome IN ('won','lost') THEN odds END)::numeric,2) AS avg_odds
+            FROM player_props
+            WHERE sport = 'basketball' AND league = 'basketball_nba'
+            GROUP BY market
+            ORDER BY settled DESC
+        """, fetch='all')
+        if not rows:
+            return pd.DataFrame()
+        return pd.DataFrame(rows, columns=['market','settled','wins','losses','voids','profit','avg_odds'])
+    except Exception:
+        return pd.DataFrame()
+
+@st.cache_data(ttl=180)
+def _nba_daily():
+    try:
+        db = DatabaseHelper()
+        rows = db.execute("""
+            SELECT DATE(created_at) AS date,
+                COUNT(*) FILTER (WHERE outcome IN ('won','lost')) AS settled,
+                COUNT(*) FILTER (WHERE outcome = 'won') AS wins,
+                COALESCE(SUM(CASE WHEN outcome IN ('won','lost') THEN profit_loss ELSE 0 END),0) AS daily_profit
+            FROM player_props
+            WHERE sport = 'basketball' AND league = 'basketball_nba'
+            GROUP BY DATE(created_at)
+            ORDER BY date
+        """, fetch='all')
+        if not rows:
+            return pd.DataFrame()
+        return pd.DataFrame(rows, columns=['date','settled','wins','daily_profit'])
+    except Exception:
+        return pd.DataFrame()
+
+@st.cache_data(ttl=180)
+def _nba_recent():
+    try:
+        db = DatabaseHelper()
+        rows = db.execute("""
+            SELECT home_team, away_team, player_name, market, selection, line, odds,
+                   outcome, profit_loss, settled_at
+            FROM player_props
+            WHERE sport = 'basketball' AND league = 'basketball_nba'
+              AND outcome IN ('won','lost')
+            ORDER BY settled_at DESC NULLS LAST
+            LIMIT 20
+        """, fetch='all')
+        if not rows:
+            return pd.DataFrame()
+        return pd.DataFrame(rows, columns=['home_team','away_team','player_name','market',
+                                           'selection','line','odds','outcome','profit_loss','settled_at'])
+    except Exception:
+        return pd.DataFrame()
+
+
+def _sport_stat_card(label: str, value: str, color: str = "#F2F5F8"):
     st.markdown(f"""
-    <div style="padding:2rem 0 1rem 0;text-align:center;">
-        <div style="font-size:4rem;line-height:1.1;">{icon}</div>
-        <div style="font-size:1.9rem;font-weight:800;color:#F2F5F8;margin:0.4rem 0 0.2rem 0;">
-            {sport_name}
-        </div>
-        <div style="font-size:0.9rem;color:#9BA0B5;">{season_label}</div>
+    <div style="padding:14px 10px;border-radius:10px;text-align:center;
+                background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);">
+        <div style="font-size:1.45rem;font-weight:800;color:{color};">{value}</div>
+        <div style="font-size:0.72rem;color:#9BA0B5;text-transform:uppercase;
+                    letter-spacing:0.08em;margin-top:3px;">{label}</div>
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown(f"""
-    <div style="max-width:640px;margin:0 auto 2rem auto;
-                padding:20px 24px;border-radius:14px;
-                background:rgba(255,255,255,0.03);
-                border:1px solid rgba(255,255,255,0.06);">
-        <div style="font-size:0.92rem;color:#C4C9DC;line-height:1.7;text-align:center;">
-            {desc}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
 
-    badge_html = " ".join([
-        f'<span style="display:inline-block;padding:6px 16px;border-radius:999px;'
-        f'background:rgba({accent},0.12);border:1px solid rgba({accent},0.35);'
-        f'color:#F2F5F8;font-size:0.82rem;font-weight:600;margin:4px;">{m}</span>'
-        for m in markets
-    ])
-    st.markdown(f"""
-    <div style="text-align:center;margin-bottom:2rem;">
-        <div style="font-size:0.78rem;color:#9BA0B5;letter-spacing:0.12em;
-                    text-transform:uppercase;margin-bottom:12px;">Planned markets</div>
-        {badge_html}
-    </div>
-    """, unsafe_allow_html=True)
+def _cumulative_chart(daily_df, color, title):
+    daily_df = daily_df.sort_values("date").copy()
+    daily_df["cum_profit"] = daily_df["daily_profit"].cumsum()
+    daily_df["cum_settled"] = daily_df["settled"].cumsum()
+    daily_df["cum_wins"] = daily_df["wins"].cumsum()
+    daily_df["hit_rate"] = (daily_df["cum_wins"] / daily_df["cum_settled"].replace(0, 1) * 100).round(1)
 
-    st.markdown(f"""
-    <div style="max-width:400px;margin:0 auto;padding:18px 24px;
-                border-radius:14px;text-align:center;
-                background:rgba({accent},0.07);
-                border:1px solid rgba({accent},0.25);">
-        <div style="font-size:0.82rem;font-weight:700;color:rgb({accent});
-                    letter-spacing:0.1em;text-transform:uppercase;margin-bottom:6px;">
-            Status
-        </div>
-        <div style="font-size:0.95rem;color:#F2F5F8;font-weight:600;">
-            Coming next season — data collection starting soon
-        </div>
-        <div style="font-size:0.8rem;color:#9BA0B5;margin-top:6px;">
-            Models will train on 2024/25 season data before going live
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-
-with tab_nhl:
-    _render_sport_coming_soon(
-        icon="🏒",
-        sport_name="NHL Hockey",
-        season_label="Season 2025/26 — Activating next season",
-        accent="0, 168, 255",
-        markets=["Over/Under Goals", "Totals", "Moneyline"],
-        desc=(
-            "The PGR model will cover NHL with the same Monte Carlo simulation and EV-filtering "
-            "used for football. Game totals are the primary market — bookmakers systematically "
-            "misprice high-scoring games in the first month of a new season."
-        ),
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=daily_df["date"], y=daily_df["cum_profit"],
+        mode="lines+markers", name="Cumulative P/L",
+        line=dict(color=color, width=2.5),
+        fill="tozeroy", fillcolor=color.replace("rgb", "rgba").replace(")", ",0.12)") if "rgb" in color else f"rgba(33,150,243,0.12)",
+        marker=dict(size=5),
+    ))
+    fig.add_hline(y=0, line_dash="dash", line_color="rgba(148,163,184,0.35)")
+    fig.update_layout(
+        title=title, template="plotly_dark", height=300,
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        margin=dict(l=40, r=20, t=40, b=30), font=dict(size=11),
+        yaxis_title="Units", showlegend=False,
     )
+    return fig
 
-    st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)
-    section_title("Market Structure Preview", icon="📋")
-    col_a, col_b, col_c = st.columns(3)
-    with col_a:
-        st.markdown("""
-        <div style="padding:16px 18px;border-radius:12px;
-                    background:rgba(0,168,255,0.06);
-                    border:1px solid rgba(0,168,255,0.2);
-                    text-align:center;">
-            <div style="font-size:1.4rem;margin-bottom:6px;">🥅</div>
-            <div style="font-size:0.88rem;font-weight:700;color:#F2F5F8;margin-bottom:4px;">
-                Over/Under Goals
-            </div>
-            <div style="font-size:0.78rem;color:#9BA0B5;">
-                O/U 5.5 · O/U 6.5 · O/U 7.5<br>
-                Both periods + full game
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    with col_b:
-        st.markdown("""
-        <div style="padding:16px 18px;border-radius:12px;
-                    background:rgba(0,168,255,0.06);
-                    border:1px solid rgba(0,168,255,0.2);
-                    text-align:center;">
-            <div style="font-size:1.4rem;margin-bottom:6px;">📊</div>
-            <div style="font-size:0.88rem;font-weight:700;color:#F2F5F8;margin-bottom:4px;">
-                Totals (Alt lines)
-            </div>
-            <div style="font-size:0.78rem;color:#9BA0B5;">
-                Alternative goal lines<br>
-                Period totals
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    with col_c:
-        st.markdown("""
-        <div style="padding:16px 18px;border-radius:12px;
-                    background:rgba(0,168,255,0.06);
-                    border:1px solid rgba(0,168,255,0.2);
-                    text-align:center;">
-            <div style="font-size:1.4rem;margin-bottom:6px;">💰</div>
-            <div style="font-size:0.88rem;font-weight:700;color:#F2F5F8;margin-bottom:4px;">
-                Moneyline
-            </div>
-            <div style="font-size:0.78rem;color:#9BA0B5;">
-                3-way (incl. OT/SO)<br>
-                Home / Away / Draw
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+
+def _hitrate_chart(daily_df, title):
+    daily_df = daily_df.sort_values("date").copy()
+    daily_df["cum_settled"] = daily_df["settled"].cumsum()
+    daily_df["cum_wins"] = daily_df["wins"].cumsum()
+    daily_df["hit_rate"] = (daily_df["cum_wins"] / daily_df["cum_settled"].replace(0, 1) * 100).round(1)
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=daily_df["date"], y=daily_df["hit_rate"],
+        mode="lines+markers", name="Hit Rate",
+        line=dict(color="#F59E0B", width=2.5), marker=dict(size=5),
+    ))
+    fig.add_hline(y=50, line_dash="dash", line_color="rgba(148,163,184,0.35)")
+    fig.update_layout(
+        title=title, template="plotly_dark", height=300,
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        margin=dict(l=40, r=20, t=40, b=30), font=dict(size=11),
+        yaxis=dict(title="%", range=[0, 100]), showlegend=False,
+    )
+    return fig
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TAB 7 — NFL
+# TAB 6 — HOCKEY
+# ─────────────────────────────────────────────────────────────────────────────
+with tab_nhl:
+    section_title("🏒 Hockey Learning Tracker", icon="")
+    st.caption("Simulated 1u flat stakes · Data collected since Feb 2026 · Settlement every 30 min")
+
+    h_summary = _hockey_summary()
+    h_daily   = _hockey_daily()
+    h_markets = _hockey_by_market()
+    h_recent  = _hockey_recent()
+
+    if not h_summary.empty:
+        totals_w = int(h_summary["wins"].sum())
+        totals_l = int(h_summary["losses"].sum())
+        totals_s = int(h_summary["settled"].sum())
+        totals_p = float(h_summary["profit"].sum())
+        totals_pend = int(h_summary["pending"].sum()) if "pending" in h_summary.columns else 0
+        hit = totals_w / totals_s * 100 if totals_s > 0 else 0
+        profit_c = "#22C55E" if totals_p >= 0 else "#EF4444"
+
+        c1, c2, c3, c4, c5 = st.columns(5)
+        with c1: _sport_stat_card("Settled", str(totals_s), "#60A5FA")
+        with c2: _sport_stat_card("Wins", str(totals_w), "#22C55E")
+        with c3: _sport_stat_card("Losses", str(totals_l), "#EF4444")
+        with c4: _sport_stat_card("Hit Rate", f"{hit:.1f}%", "#22C55E" if hit >= 50 else "#F59E0B")
+        with c5: _sport_stat_card("Net Profit", f"{totals_p:+.1f}u", profit_c)
+
+        st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)
+
+        if not h_daily.empty and h_daily["settled"].sum() > 0:
+            ch1, ch2 = st.columns(2)
+            with ch1:
+                st.plotly_chart(_cumulative_chart(h_daily, "#2196F3", "📈 Cumulative P/L"), use_container_width=True)
+            with ch2:
+                st.plotly_chart(_hitrate_chart(h_daily, "🎯 Rolling Hit Rate"), use_container_width=True)
+
+        if not h_markets.empty:
+            st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)
+            section_title("By Market", icon="📋")
+            mkt_display = h_markets[h_markets["settled"] > 0].copy()
+            mkt_display["Hit %"] = (mkt_display["wins"] / mkt_display["settled"] * 100).round(1)
+            mkt_display["Market"] = mkt_display["market"].str.replace("_", " ").str.title()
+            mkt_display = mkt_display.rename(columns={
+                "settled": "Settled", "wins": "W", "losses": "L",
+                "profit": "Profit (u)", "avg_odds": "Avg Odds",
+            })
+            st.dataframe(
+                mkt_display[["Market", "Settled", "W", "L", "Hit %", "Profit (u)", "Avg Odds"]],
+                use_container_width=True, hide_index=True,
+            )
+
+        if not h_summary.empty:
+            st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)
+            section_title("By League", icon="🌍")
+            for _, row in h_summary.iterrows():
+                s = int(row["settled"])
+                if s == 0:
+                    continue
+                w = int(row["wins"]); l = int(row["losses"])
+                p = float(row["profit"])
+                hr2 = w / s * 100 if s > 0 else 0
+                pc = "#22C55E" if p >= 0 else "#EF4444"
+                league_label = str(row["sport_key"]).replace("icehockey_", "").replace("_", " ").title()
+                st.markdown(f"""
+                <div style="padding:10px 16px;border-radius:10px;margin-bottom:6px;
+                            background:rgba(33,150,243,0.06);border-left:3px solid #2196F3;">
+                    <strong style="color:#F2F5F8;">{league_label}</strong>
+                    <span style="float:right;color:{pc};font-weight:700;">{p:+.1f}u</span><br>
+                    <span style="color:#9BA0B5;font-size:0.8rem;">{w}W / {l}L ({hr2:.0f}% hit) · {s} settled</span>
+                </div>
+                """, unsafe_allow_html=True)
+
+        if not h_recent.empty:
+            st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)
+            section_title("Recent Results", icon="🕐")
+            for _, row in h_recent.iterrows():
+                is_win = row.get("outcome") == "won"
+                bc = "rgba(34,197,94,0.5)" if is_win else "rgba(239,68,68,0.5)"
+                em = "✅" if is_win else "❌"
+                pl = float(row.get("profit_loss") or 0)
+                plc = "#22C55E" if pl >= 0 else "#EF4444"
+                mkt = str(row["market"]).replace("_", " ").title()
+                st.markdown(f"""
+                <div style="padding:10px 14px;border-radius:8px;margin-bottom:5px;
+                            background:rgba(30,41,59,0.5);border-left:3px solid {bc};font-size:0.84rem;">
+                    {em} <strong>{row['home_team']} vs {row['away_team']}</strong>
+                    <span style="float:right;color:{plc};font-weight:700;">{pl:+.1f}u</span><br>
+                    <span style="color:#CBD5E1;">{mkt}: {row['selection']} @{row['odds']:.2f}</span>
+                    <span style="color:#64748B;font-size:0.75rem;float:right;">{str(row.get('league',''))}</span>
+                </div>
+                """, unsafe_allow_html=True)
+    else:
+        st.info("No hockey data available yet.")
+
+    if st.button("🔄 Refresh", key="nhl_refresh"):
+        st.cache_data.clear()
+        st.rerun()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TAB 7 — NFL (still coming next season)
 # ─────────────────────────────────────────────────────────────────────────────
 with tab_nfl:
-    _render_sport_coming_soon(
-        icon="🏈",
-        sport_name="NFL American Football",
-        season_label="Season 2025 — Activating next season",
-        accent="255, 150, 0",
-        markets=["Over/Under Totals", "Moneyline", "Asian Handicap (Spread)"],
-        desc=(
-            "NFL totals and spreads have some of the highest public betting volume in the world, "
-            "which creates systematic mispricing in certain game environments. "
-            "The model focuses on game environment factors: weather, pace of play, "
-            "and line movement signals."
-        ),
-    )
-
-    st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)
-    section_title("Market Structure Preview", icon="📋")
-    col_a, col_b, col_c = st.columns(3)
-    with col_a:
-        st.markdown("""
-        <div style="padding:16px 18px;border-radius:12px;
-                    background:rgba(255,150,0,0.06);
-                    border:1px solid rgba(255,150,0,0.22);
-                    text-align:center;">
-            <div style="font-size:1.4rem;margin-bottom:6px;">📈</div>
-            <div style="font-size:0.88rem;font-weight:700;color:#F2F5F8;margin-bottom:4px;">
-                Over/Under Totals
-            </div>
-            <div style="font-size:0.78rem;color:#9BA0B5;">
-                Game total · O/U 45–55<br>
-                1st half + full game
+    st.markdown("""
+    <div style="padding:3rem 0;text-align:center;">
+        <div style="font-size:4rem;">🏈</div>
+        <div style="font-size:1.8rem;font-weight:800;color:#F2F5F8;margin:0.5rem 0 0.3rem 0;">NFL American Football</div>
+        <div style="font-size:0.9rem;color:#9BA0B5;margin-bottom:2rem;">Season 2025 — Data collection starting pre-season</div>
+        <div style="max-width:480px;margin:0 auto;padding:18px 24px;border-radius:14px;
+                    background:rgba(255,150,0,0.07);border:1px solid rgba(255,150,0,0.25);">
+            <div style="font-size:0.82rem;font-weight:700;color:rgb(255,150,0);
+                        letter-spacing:0.1em;text-transform:uppercase;margin-bottom:6px;">Status</div>
+            <div style="font-size:0.95rem;color:#F2F5F8;font-weight:600;">
+                Coming next season — markets: Totals · Moneyline · Asian Handicap
             </div>
         </div>
-        """, unsafe_allow_html=True)
-    with col_b:
-        st.markdown("""
-        <div style="padding:16px 18px;border-radius:12px;
-                    background:rgba(255,150,0,0.06);
-                    border:1px solid rgba(255,150,0,0.22);
-                    text-align:center;">
-            <div style="font-size:1.4rem;margin-bottom:6px;">💰</div>
-            <div style="font-size:0.88rem;font-weight:700;color:#F2F5F8;margin-bottom:4px;">
-                Moneyline
-            </div>
-            <div style="font-size:0.78rem;color:#9BA0B5;">
-                Straight win (2-way)<br>
-                Underdog focus
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    with col_c:
-        st.markdown("""
-        <div style="padding:16px 18px;border-radius:12px;
-                    background:rgba(255,150,0,0.06);
-                    border:1px solid rgba(255,150,0,0.22);
-                    text-align:center;">
-            <div style="font-size:1.4rem;margin-bottom:6px;">↔️</div>
-            <div style="font-size:0.88rem;font-weight:700;color:#F2F5F8;margin-bottom:4px;">
-                Asian Handicap
-            </div>
-            <div style="font-size:0.78rem;color:#9BA0B5;">
-                AH Spread (–3.5 / +3.5)<br>
-                Quarter points
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+    </div>
+    """, unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TAB 8 — NBA
 # ─────────────────────────────────────────────────────────────────────────────
 with tab_nba:
-    _render_sport_coming_soon(
-        icon="🏀",
-        sport_name="NBA Basketball",
-        season_label="Season 2025/26 — Activating next season",
-        accent="200, 100, 255",
-        markets=["Over/Under Totals", "Moneyline", "Asian Handicap (Spread)"],
-        desc=(
-            "NBA totals are heavily influenced by team pace, back-to-back schedules, "
-            "and late-season load management — factors the market regularly underprices. "
-            "The model will use player availability data and team-level pace metrics "
-            "to find systematic edges."
-        ),
-    )
+    section_title("🏀 NBA Player Props Tracker", icon="")
+    st.caption("Simulated 1u flat stakes · NBA player props · Feb–Mar 2026 season data")
 
-    st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)
-    section_title("Market Structure Preview", icon="📋")
-    col_a, col_b, col_c = st.columns(3)
-    with col_a:
-        st.markdown("""
-        <div style="padding:16px 18px;border-radius:12px;
-                    background:rgba(200,100,255,0.07);
-                    border:1px solid rgba(200,100,255,0.22);
-                    text-align:center;">
-            <div style="font-size:1.4rem;margin-bottom:6px;">📈</div>
-            <div style="font-size:0.88rem;font-weight:700;color:#F2F5F8;margin-bottom:4px;">
-                Over/Under Totals
-            </div>
-            <div style="font-size:0.78rem;color:#9BA0B5;">
-                Game total · O/U 220–235<br>
-                Quarters + halves
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    with col_b:
-        st.markdown("""
-        <div style="padding:16px 18px;border-radius:12px;
-                    background:rgba(200,100,255,0.07);
-                    border:1px solid rgba(200,100,255,0.22);
-                    text-align:center;">
-            <div style="font-size:1.4rem;margin-bottom:6px;">💰</div>
-            <div style="font-size:0.88rem;font-weight:700;color:#F2F5F8;margin-bottom:4px;">
-                Moneyline
-            </div>
-            <div style="font-size:0.78rem;color:#9BA0B5;">
-                Straight win (2-way)<br>
-                Home / Away
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    with col_c:
-        st.markdown("""
-        <div style="padding:16px 18px;border-radius:12px;
-                    background:rgba(200,100,255,0.07);
-                    border:1px solid rgba(200,100,255,0.22);
-                    text-align:center;">
-            <div style="font-size:1.4rem;margin-bottom:6px;">↔️</div>
-            <div style="font-size:0.88rem;font-weight:700;color:#F2F5F8;margin-bottom:4px;">
-                Asian Handicap
-            </div>
-            <div style="font-size:0.78rem;color:#9BA0B5;">
-                AH Spread (–5.5 / +5.5)<br>
-                Half points
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+    nba_summary = _nba_summary()
+    nba_daily   = _nba_daily()
+    nba_recent  = _nba_recent()
+
+    if not nba_summary.empty:
+        nba_w = int(nba_summary["wins"].sum())
+        nba_l = int(nba_summary["losses"].sum())
+        nba_s = int(nba_summary["settled"].sum())
+        nba_v = int(nba_summary["voids"].sum()) if "voids" in nba_summary.columns else 0
+        nba_prof = float(nba_summary["profit"].sum())
+        nba_hit = nba_w / nba_s * 100 if nba_s > 0 else 0
+        nba_pc = "#22C55E" if nba_prof >= 0 else "#EF4444"
+
+        c1, c2, c3, c4, c5, c6 = st.columns(6)
+        with c1: _sport_stat_card("Settled", str(nba_s), "#A855F7")
+        with c2: _sport_stat_card("Wins", str(nba_w), "#22C55E")
+        with c3: _sport_stat_card("Losses", str(nba_l), "#EF4444")
+        with c4: _sport_stat_card("Voids", str(nba_v), "#9BA0B5")
+        with c5: _sport_stat_card("Hit Rate", f"{nba_hit:.1f}%", "#22C55E" if nba_hit >= 50 else "#F59E0B")
+        with c6: _sport_stat_card("Net Profit", f"{nba_prof:+.1f}u", nba_pc)
+
+        st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)
+
+        if not nba_daily.empty and nba_daily["settled"].sum() > 0:
+            ch1, ch2 = st.columns(2)
+            with ch1:
+                st.plotly_chart(_cumulative_chart(nba_daily, "#A855F7", "📈 Cumulative P/L"), use_container_width=True)
+            with ch2:
+                st.plotly_chart(_hitrate_chart(nba_daily, "🎯 Rolling Hit Rate"), use_container_width=True)
+
+        if not nba_summary.empty:
+            st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)
+            section_title("By Market", icon="📋")
+            top_markets = nba_summary[nba_summary["settled"] > 0].copy()
+            top_markets["Hit %"] = (top_markets["wins"] / top_markets["settled"] * 100).round(1)
+            top_markets["Market"] = top_markets["market"].str.replace("_", " ").str.title()
+            top_markets = top_markets.rename(columns={
+                "settled": "Settled", "wins": "W", "losses": "L",
+                "voids": "Void", "profit": "Profit (u)", "avg_odds": "Avg Odds",
+            }).sort_values("Settled", ascending=False)
+            st.dataframe(
+                top_markets[["Market", "Settled", "W", "L", "Hit %", "Profit (u)", "Avg Odds"]],
+                use_container_width=True, hide_index=True,
+            )
+
+        if not nba_recent.empty:
+            st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)
+            section_title("Recent Results", icon="🕐")
+            for _, row in nba_recent.iterrows():
+                is_win = row.get("outcome") == "won"
+                bc = "rgba(34,197,94,0.5)" if is_win else "rgba(239,68,68,0.5)"
+                em = "✅" if is_win else "❌"
+                pl = float(row.get("profit_loss") or 0)
+                plc = "#22C55E" if pl >= 0 else "#EF4444"
+                mkt = str(row["market"]).replace("_", " ").title()
+                player = row.get("player_name", "") or ""
+                line_str = f" {row['line']}" if pd.notna(row.get("line")) and row["line"] else ""
+                st.markdown(f"""
+                <div style="padding:10px 14px;border-radius:8px;margin-bottom:5px;
+                            background:rgba(30,41,59,0.5);border-left:3px solid {bc};font-size:0.84rem;">
+                    {em} <strong>{player}</strong> — {row['home_team']} vs {row['away_team']}
+                    <span style="float:right;color:{plc};font-weight:700;">{pl:+.1f}u</span><br>
+                    <span style="color:#CBD5E1;">{mkt}{line_str}: {row['selection']} @{row['odds']:.2f}</span>
+                </div>
+                """, unsafe_allow_html=True)
+    else:
+        st.info("No NBA data available yet.")
+
+    if st.button("🔄 Refresh", key="nba_refresh"):
+        st.cache_data.clear()
+        st.rerun()
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -868,7 +868,7 @@ def main():
     # Schedule result verification - Every 5 minutes for FAST results
     schedule.every(5).minutes.do(run_results_engine)  # Unified Results Engine
     schedule.every(5).minutes.do(verify_basketball_results)  # Basketball separate
-    # schedule.every(30).minutes.do(run_player_props_settlement)  # DISABLED - paused until next season
+    schedule.every(30).minutes.do(run_player_props_settlement)  # NBA player props settlement
     schedule.every(30).minutes.do(run_multi_sport_settlement)  # Multi-sport settlement
     
     # Schedule CLV update - Every 5 minutes for closing odds capture
