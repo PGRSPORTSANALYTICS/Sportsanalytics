@@ -1229,6 +1229,140 @@ async def get_clv_stats_endpoint():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@app.get("/api/hockey/stats", tags=["Analytics"])
+async def get_hockey_stats():
+    """Hockey stats from learning_bets for the Railway dashboard."""
+    try:
+        db = DatabaseHelper()
+        summary = db.execute("""
+            SELECT sport_key,
+                COUNT(*) FILTER (WHERE outcome IN ('won','lost')) AS settled,
+                COUNT(*) FILTER (WHERE outcome = 'won') AS wins,
+                COUNT(*) FILTER (WHERE outcome = 'lost') AS losses,
+                COUNT(*) FILTER (WHERE status = 'pending') AS pending,
+                COALESCE(SUM(CASE WHEN outcome IN ('won','lost') THEN profit_loss ELSE 0 END),0) AS profit,
+                ROUND(AVG(CASE WHEN outcome IN ('won','lost') THEN odds END)::numeric,2) AS avg_odds
+            FROM learning_bets
+            WHERE sport_category = 'HOCKEY'
+            GROUP BY sport_key ORDER BY settled DESC
+        """, fetch='all')
+
+        by_market = db.execute("""
+            SELECT market,
+                COUNT(*) FILTER (WHERE outcome IN ('won','lost')) AS settled,
+                COUNT(*) FILTER (WHERE outcome = 'won') AS wins,
+                COUNT(*) FILTER (WHERE outcome = 'lost') AS losses,
+                COALESCE(SUM(CASE WHEN outcome IN ('won','lost') THEN profit_loss ELSE 0 END),0) AS profit
+            FROM learning_bets
+            WHERE sport_category = 'HOCKEY'
+            GROUP BY market ORDER BY settled DESC
+        """, fetch='all')
+
+        recent = db.execute("""
+            SELECT home_team, away_team, league, market, selection, odds,
+                   outcome, profit_loss, result_notes, settled_at
+            FROM learning_bets
+            WHERE sport_category = 'HOCKEY' AND outcome IN ('won','lost')
+            ORDER BY settled_at DESC NULLS LAST LIMIT 20
+        """, fetch='all')
+
+        totals = db.execute("""
+            SELECT COUNT(*) FILTER (WHERE outcome IN ('won','lost')) AS settled,
+                   COUNT(*) FILTER (WHERE outcome = 'won') AS wins,
+                   COUNT(*) FILTER (WHERE status = 'pending') AS pending,
+                   COALESCE(SUM(CASE WHEN outcome IN ('won','lost') THEN profit_loss ELSE 0 END),0) AS profit
+            FROM learning_bets WHERE sport_category = 'HOCKEY'
+        """, fetch='one')
+
+        def to_float(v):
+            return float(v) if v is not None else 0.0
+
+        t = totals or (0, 0, 0, 0)
+        settled, wins, pending, profit = int(t[0] or 0), int(t[1] or 0), int(t[2] or 0), to_float(t[3])
+        hit_rate = round(wins / settled * 100, 1) if settled > 0 else 0
+
+        return JSONResponse({
+            "totals": {"settled": settled, "wins": wins, "losses": settled - wins,
+                       "pending": pending, "profit": profit, "hit_rate": hit_rate},
+            "by_league": [{"sport_key": r[0], "settled": int(r[1] or 0), "wins": int(r[2] or 0),
+                           "losses": int(r[3] or 0), "pending": int(r[4] or 0),
+                           "profit": to_float(r[5]), "avg_odds": to_float(r[6])}
+                          for r in (summary or [])],
+            "by_market": [{"market": r[0], "settled": int(r[1] or 0), "wins": int(r[2] or 0),
+                           "losses": int(r[3] or 0), "profit": to_float(r[4])}
+                          for r in (by_market or [])],
+            "recent": [{"home_team": r[0], "away_team": r[1], "league": r[2], "market": r[3],
+                        "selection": r[4], "odds": to_float(r[5]), "outcome": r[6],
+                        "profit_loss": to_float(r[7]), "result_notes": r[8],
+                        "settled_at": str(r[9]) if r[9] else None}
+                       for r in (recent or [])],
+        })
+    except Exception as e:
+        logger.error(f"Error in get_hockey_stats: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/nba/stats", tags=["Analytics"])
+async def get_nba_stats():
+    """NBA player props stats from player_props for the Railway dashboard."""
+    try:
+        db = DatabaseHelper()
+        by_market = db.execute("""
+            SELECT market,
+                COUNT(*) FILTER (WHERE outcome IN ('won','lost')) AS settled,
+                COUNT(*) FILTER (WHERE outcome = 'won') AS wins,
+                COUNT(*) FILTER (WHERE outcome = 'lost') AS losses,
+                COUNT(*) FILTER (WHERE outcome = 'void') AS voids,
+                COALESCE(SUM(CASE WHEN outcome IN ('won','lost') THEN profit_loss ELSE 0 END),0) AS profit,
+                ROUND(AVG(CASE WHEN outcome IN ('won','lost') THEN odds END)::numeric,2) AS avg_odds
+            FROM player_props
+            WHERE sport = 'basketball' AND league = 'basketball_nba'
+            GROUP BY market ORDER BY settled DESC
+        """, fetch='all')
+
+        recent = db.execute("""
+            SELECT home_team, away_team, player_name, market, selection, line, odds,
+                   outcome, profit_loss, settled_at
+            FROM player_props
+            WHERE sport = 'basketball' AND league = 'basketball_nba'
+              AND outcome IN ('won','lost')
+            ORDER BY settled_at DESC NULLS LAST LIMIT 20
+        """, fetch='all')
+
+        totals = db.execute("""
+            SELECT COUNT(*) FILTER (WHERE outcome IN ('won','lost')) AS settled,
+                   COUNT(*) FILTER (WHERE outcome = 'won') AS wins,
+                   COUNT(*) FILTER (WHERE outcome = 'void') AS voids,
+                   COUNT(*) FILTER (WHERE outcome = 'pending') AS pending,
+                   COALESCE(SUM(CASE WHEN outcome IN ('won','lost') THEN profit_loss ELSE 0 END),0) AS profit
+            FROM player_props WHERE sport = 'basketball' AND league = 'basketball_nba'
+        """, fetch='one')
+
+        def to_float(v):
+            return float(v) if v is not None else 0.0
+
+        t = totals or (0, 0, 0, 0, 0)
+        settled, wins, voids, pending, profit = int(t[0] or 0), int(t[1] or 0), int(t[2] or 0), int(t[3] or 0), to_float(t[4])
+        hit_rate = round(wins / settled * 100, 1) if settled > 0 else 0
+
+        return JSONResponse({
+            "totals": {"settled": settled, "wins": wins, "losses": settled - wins,
+                       "voids": voids, "pending": pending, "profit": profit, "hit_rate": hit_rate},
+            "by_market": [{"market": r[0], "settled": int(r[1] or 0), "wins": int(r[2] or 0),
+                           "losses": int(r[3] or 0), "voids": int(r[4] or 0),
+                           "profit": to_float(r[5]), "avg_odds": to_float(r[6])}
+                          for r in (by_market or [])],
+            "recent": [{"home_team": r[0], "away_team": r[1], "player": r[2], "market": r[3],
+                        "selection": r[4], "line": to_float(r[5]), "odds": to_float(r[6]),
+                        "outcome": r[7], "profit_loss": to_float(r[8]),
+                        "settled_at": str(r[9]) if r[9] else None}
+                       for r in (recent or [])],
+        })
+    except Exception as e:
+        logger.error(f"Error in get_nba_stats: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
 @app.get("/api/units/daily", tags=["Analytics"])
 async def get_daily_units(days: int = 30):
     """
