@@ -2614,6 +2614,7 @@ async def get_learning_history(sport: str = "HOCKEY", days: int = 90):
             FROM learning_bets
             WHERE sport_category = %s
               AND commence_time > NOW() - INTERVAL '{safe_days} days'
+              AND outcome IN ('won', 'lost', 'void', 'push')
             ORDER BY sort_ts DESC NULLS LAST
             LIMIT 500
         """, (sport_upper,), fetch='all') or []
