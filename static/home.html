@@ -712,8 +712,6 @@ function renderHockeyTab() {
   }
   const s = state.hockeyStats;
   const t = s ? s.totals : null;
-  const fmtProfit = v => (v >= 0 ? "+" : "") + Number(v).toFixed(1) + "u";
-  const profitColor = v => v > 0.05 ? "#4ade80" : v < -0.05 ? "#f87171" : "#a1a1aa";
 
   const LEAGUE_NAMES = {
     'icehockey_nhl': 'NHL',
@@ -728,11 +726,11 @@ function renderHockeyTab() {
   };
 
   const kpiCards = [
-    ["Settled",  t ? String(t.settled) : "—",  "#d4d4d8"],
-    ["Hit Rate", t ? t.hit_rate + "%" : "—",    t && t.hit_rate >= 55 ? "#4ade80" : "#f87171"],
-    ["Profit",   t ? fmtProfit(t.profit) : "—", t ? profitColor(t.profit) : "#71717a"],
-    ["Wins",     t ? String(t.wins) : "—",      "#4ade80"],
-    ["Pending",  t ? String(t.pending) : "—",   "#a78bfa"],
+    ["Settled",  t ? String(t.settled) : "—", "#d4d4d8"],
+    ["Wins",     t ? String(t.wins) : "—",    "#4ade80"],
+    ["Losses",   t ? String(t.losses) : "—",  "#f87171"],
+    ["Hit Rate", t ? t.hit_rate + "%" : "—",  t && t.hit_rate >= 55 ? "#4ade80" : "#f87171"],
+    ["Pending",  t ? String(t.pending) : "—", "#a78bfa"],
   ];
 
   const kpiHtml = kpiCards.map(([label, val, color]) => `
@@ -752,7 +750,6 @@ function renderHockeyTab() {
       <td style="padding:10px 12px;font-size:13px;color:#4ade80;text-align:center">${r.wins}</td>
       <td style="padding:10px 12px;font-size:13px;color:#f87171;text-align:center">${r.losses}</td>
       <td style="padding:10px 12px;font-size:13px;color:${hr >= 55 ? '#4ade80' : '#a1a1aa'};text-align:center;font-weight:600">${hr}%</td>
-      <td style="padding:10px 12px;font-size:13px;font-weight:700;text-align:right;color:${profitColor(r.profit)}">${fmtProfit(r.profit)}</td>
     </tr>`}).join("");
 
   const markets = s ? (s.by_market || []) : [];
@@ -766,7 +763,6 @@ function renderHockeyTab() {
       <td style="padding:10px 12px;font-size:13px;color:#4ade80;text-align:center">${r.wins}</td>
       <td style="padding:10px 12px;font-size:13px;color:#f87171;text-align:center">${r.losses}</td>
       <td style="padding:10px 12px;font-size:13px;color:${hr >= 55 ? '#4ade80' : '#a1a1aa'};text-align:center;font-weight:600">${hr}%</td>
-      <td style="padding:10px 12px;font-size:13px;font-weight:700;text-align:right;color:${profitColor(r.profit)}">${fmtProfit(r.profit)}</td>
     </tr>`}).join("");
 
   const recent = s ? (s.recent || []) : [];
@@ -777,12 +773,10 @@ function renderHockeyTab() {
         const mkt = MARKET_NAMES[r.market] || r.market;
         const pick = r.line != null ? `${r.selection} ${Number(r.line) > 0 ? '+' : ''}${r.line}` : r.selection;
         const won = r.outcome === 'won';
-        const pl = Number(r.profit_loss);
         return `
         <div style="border-radius:14px;border:1px solid ${won ? 'rgba(74,222,128,.2)' : 'rgba(248,113,113,.15)'};background:#09090b;padding:14px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div style="margin-bottom:12px">
             <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;border:1px solid ${won ? 'rgba(74,222,128,.4)' : 'rgba(248,113,113,.4)'};color:${won ? '#4ade80' : '#f87171'};background:${won ? 'rgba(74,222,128,.08)' : 'rgba(248,113,113,.08)'}">${won ? 'WON' : 'LOST'}</span>
-            <span style="font-size:13px;font-weight:700;color:${profitColor(pl)}">${fmtProfit(pl)}</span>
           </div>
           <div style="font-size:16px;font-weight:700;line-height:1.25;color:#f4f4f5;margin-bottom:5px">${r.home_team} vs ${r.away_team}</div>
           <div style="font-size:12px;color:#71717a;margin-bottom:12px">${mkt} · ${pick}</div>
@@ -814,9 +808,8 @@ function renderHockeyTab() {
                 <th style="padding:8px 6px;text-align:center;font-size:10px;color:#3f3f46;text-transform:uppercase">W</th>
                 <th style="padding:8px 6px;text-align:center;font-size:10px;color:#3f3f46;text-transform:uppercase">L</th>
                 <th style="padding:8px 6px;text-align:center;font-size:10px;color:#3f3f46;text-transform:uppercase">Hit%</th>
-                <th style="padding:8px 12px;text-align:right;font-size:10px;color:#3f3f46;text-transform:uppercase">P/L</th>
               </tr></thead>
-              <tbody>${leagueRows || '<tr><td colspan="6" style="padding:20px;text-align:center;color:#3f3f46;font-size:12px">No data</td></tr>'}</tbody>
+              <tbody>${leagueRows || '<tr><td colspan="5" style="padding:20px;text-align:center;color:#3f3f46;font-size:12px">No data</td></tr>'}</tbody>
             </table>
           </div>
         </div>
@@ -830,9 +823,8 @@ function renderHockeyTab() {
                 <th style="padding:8px 6px;text-align:center;font-size:10px;color:#3f3f46;text-transform:uppercase">W</th>
                 <th style="padding:8px 6px;text-align:center;font-size:10px;color:#3f3f46;text-transform:uppercase">L</th>
                 <th style="padding:8px 6px;text-align:center;font-size:10px;color:#3f3f46;text-transform:uppercase">Hit%</th>
-                <th style="padding:8px 12px;text-align:right;font-size:10px;color:#3f3f46;text-transform:uppercase">P/L</th>
               </tr></thead>
-              <tbody>${marketRows || '<tr><td colspan="6" style="padding:20px;text-align:center;color:#3f3f46;font-size:12px">No data</td></tr>'}</tbody>
+              <tbody>${marketRows || '<tr><td colspan="5" style="padding:20px;text-align:center;color:#3f3f46;font-size:12px">No data</td></tr>'}</tbody>
             </table>
           </div>
         </div>
@@ -854,15 +846,13 @@ function renderNbaTab() {
   }
   const s = state.nbaStats;
   const t = s ? s.totals : null;
-  const fmtProfit = v => (v >= 0 ? "+" : "") + Number(v).toFixed(1) + "u";
-  const profitColor = v => v >= 0 ? "#4ade80" : "#f87171";
 
   const kpiCards = [
-    ["Settled",  t ? String(t.settled) : "—",  "#d4d4d8"],
-    ["Hit Rate", t ? t.hit_rate + "%" : "—",    t && t.hit_rate >= 55 ? "#4ade80" : "#f87171"],
-    ["Profit",   t ? fmtProfit(t.profit) : "—", t ? profitColor(t.profit) : "#71717a"],
-    ["Wins",     t ? String(t.wins) : "—",      "#4ade80"],
-    ["Voids",    t ? String(t.voids) : "—",     "#a78bfa"],
+    ["Settled",  t ? String(t.settled) : "—", "#d4d4d8"],
+    ["Wins",     t ? String(t.wins) : "—",    "#4ade80"],
+    ["Losses",   t ? String(t.losses) : "—",  "#f87171"],
+    ["Hit Rate", t ? t.hit_rate + "%" : "—",  t && t.hit_rate >= 55 ? "#4ade80" : "#f87171"],
+    ["Voids",    t ? String(t.voids) : "—",   "#a78bfa"],
   ];
 
   const kpiHtml = kpiCards.map(([label, val, color]) => `
@@ -880,8 +870,7 @@ function renderNbaTab() {
       <td style="padding:8px 10px;font-size:12px;color:#a1a1aa;text-align:center">${r.settled}</td>
       <td style="padding:8px 10px;font-size:12px;color:#4ade80;text-align:center">${r.wins}</td>
       <td style="padding:8px 10px;font-size:12px;color:#f87171;text-align:center">${r.losses}</td>
-      <td style="padding:8px 10px;font-size:12px;color:${hr >= 55 ? '#4ade80' : '#a1a1aa'};text-align:center">${hr}%</td>
-      <td style="padding:8px 10px;font-size:12px;font-weight:700;text-align:right;color:${profitColor(r.profit)}">${fmtProfit(r.profit)}</td>
+      <td style="padding:8px 10px;font-size:12px;color:${hr >= 55 ? '#4ade80' : '#a1a1aa'};text-align:center;font-weight:600">${hr}%</td>
     </tr>`;}).join("");
 
   const recent = s ? (s.recent || []) : [];
@@ -891,12 +880,10 @@ function renderNbaTab() {
         const league = (r.league||'').replace('basketball_','').replace(/_/g,' ').toUpperCase();
         const pick = r.line != null ? `${r.selection} ${Number(r.line) > 0 ? '+' : ''}${r.line}` : r.selection;
         const won = r.outcome === 'won';
-        const pl = Number(r.profit_loss);
         return `
         <div style="border-radius:14px;border:1px solid ${won ? 'rgba(74,222,128,.2)' : 'rgba(248,113,113,.15)'};background:#09090b;padding:14px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div style="margin-bottom:12px">
             <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;border:1px solid ${won ? 'rgba(74,222,128,.4)' : 'rgba(248,113,113,.4)'};color:${won ? '#4ade80' : '#f87171'};background:${won ? 'rgba(74,222,128,.08)' : 'rgba(248,113,113,.08)'}">${won ? 'WON' : 'LOST'}</span>
-            <span style="font-size:13px;font-weight:700;color:${profitColor(pl)}">${fmtProfit(pl)}</span>
           </div>
           <div style="font-size:16px;font-weight:700;line-height:1.25;color:#f4f4f5;margin-bottom:5px">${r.home_team} vs ${r.away_team}</div>
           <div style="font-size:12px;color:#71717a;margin-bottom:12px">${r.market} · ${pick}</div>
@@ -926,11 +913,9 @@ function renderNbaTab() {
               <th style="padding:8px 6px;text-align:center;font-size:10px;color:#3f3f46;text-transform:uppercase">Set</th>
               <th style="padding:8px 6px;text-align:center;font-size:10px;color:#3f3f46;text-transform:uppercase">W</th>
               <th style="padding:8px 6px;text-align:center;font-size:10px;color:#3f3f46;text-transform:uppercase">L</th>
-              <th style="padding:8px 6px;text-align:center;font-size:10px;color:#3f3f46;text-transform:uppercase">Pending</th>
               <th style="padding:8px 6px;text-align:center;font-size:10px;color:#3f3f46;text-transform:uppercase">Hit%</th>
-              <th style="padding:8px 12px;text-align:right;font-size:10px;color:#3f3f46;text-transform:uppercase">P/L</th>
             </tr></thead>
-            <tbody>${marketRows || '<tr><td colspan="7" style="padding:30px;text-align:center;color:#3f3f46;font-size:13px">🏀 NBA picks starting — engine scanning basketball_nba now</td></tr>'}</tbody>
+            <tbody>${marketRows || '<tr><td colspan="5" style="padding:30px;text-align:center;color:#3f3f46;font-size:13px">🏀 NBA picks starting — engine scanning basketball_nba now</td></tr>'}</tbody>
           </table>
         </div>
       </div>
@@ -1016,9 +1001,6 @@ function _buildHistoryContent(picks, loading, sport) {
         <div style="font-size:20px;font-weight:700;margin-top:4px;color:${c}">${v}</div>
       </div>`).join("")}
     </div>
-    ${!isFootball ? `<div style="margin-bottom:12px;padding:10px 14px;border-radius:10px;background:rgba(251,146,60,.08);border:1px solid rgba(251,146,60,.2);font-size:12px;color:#fb923c">
-      Opportunities only — no units placed on ${sport === 'hockey' ? 'Hockey' : 'NBA'}
-    </div>` : ''}
     <div style="display:flex;gap:10px;margin-bottom:12px;align-items:center;flex-wrap:wrap">
       <input id="history-q" value="${esc(state.historyQ)}" placeholder="Search team, market, league…" class="inp" style="flex:1;min-width:200px">
       <select id="history-days" class="inp" style="min-width:120px">
