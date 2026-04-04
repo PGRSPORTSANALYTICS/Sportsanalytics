@@ -74,9 +74,9 @@ except Exception as _pgr_err:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# In-memory cache for match-scout responses (TTL 10 min)
+# In-memory cache for match-scout responses (TTL 8 hours — covers a full match day)
 _match_scout_cache: Dict[str, Any] = {}
-_MATCH_SCOUT_TTL = 600  # seconds
+_MATCH_SCOUT_TTL = 28800  # seconds
 
 # =============================================================================
 # FastAPI App Initialization
@@ -993,13 +993,49 @@ async def get_match_scout(match_id: str):
                         _hf = (ss_form or {}).get("home") or {}
                         _af = (ss_form or {}).get("away") or {}
                         _h2h = ss_h2h or {}
-                        _existing = db_helper.execute("""
-                            SELECT 1 FROM training_data
+                        # Build odds_data JSON with recent match lists for pick cards
+                        _odds_data = json.dumps({
+                            "home_recent_matches": _hf.get("recent_matches") or [],
+                            "away_recent_matches": _af.get("recent_matches") or [],
+                            "h2h_recent_matches":  _h2h.get("recent_matches") or [],
+                        })
+                        _btts_val  = (_h2h.get("btts_rate") or 0) / 100 if _h2h.get("btts_rate") is not None else None
+                        _o25_val   = (_h2h.get("over25_rate") or 0) / 100 if _h2h.get("over25_rate") is not None else None
+                        # Check if a row already exists for this match
+                        _existing_row = db_helper.execute("""
+                            SELECT id, home_form_wins FROM training_data
                             WHERE home_team = %s AND away_team = %s AND match_date = %s
-                              AND home_form_wins IS NOT NULL
-                            LIMIT 1
+                            ORDER BY created_at DESC LIMIT 1
                         """, (home_team, away_team, match_date or None), fetch='one')
-                        if not _existing:
+                        if _existing_row and _existing_row[1] is None:
+                            # Row exists but has no form — UPDATE it with SofaScore data
+                            db_helper.execute("""
+                                UPDATE training_data SET
+                                    home_form_goals_scored=%s, home_form_goals_conceded=%s,
+                                    home_form_clean_sheets=%s, home_form_ppg=%s,
+                                    home_form_wins=%s, home_form_draws=%s, home_form_losses=%s,
+                                    away_form_goals_scored=%s, away_form_goals_conceded=%s,
+                                    away_form_clean_sheets=%s, away_form_ppg=%s,
+                                    away_form_wins=%s, away_form_draws=%s, away_form_losses=%s,
+                                    h2h_matches_count=%s, h2h_home_wins=%s, h2h_away_wins=%s, h2h_draws=%s,
+                                    h2h_avg_goals=%s, h2h_btts_rate=%s, h2h_over25_rate=%s,
+                                    odds_data=%s, data_source='sofascore_ondemand'
+                                WHERE id = %s
+                            """, (
+                                _hf.get("goals_scored"), _hf.get("goals_conceded"),
+                                _hf.get("clean_sheets"), _hf.get("ppg"),
+                                _hf.get("wins"), _hf.get("draws"), _hf.get("losses"),
+                                _af.get("goals_scored"), _af.get("goals_conceded"),
+                                _af.get("clean_sheets"), _af.get("ppg"),
+                                _af.get("wins"), _af.get("draws"), _af.get("losses"),
+                                _h2h.get("matches"), _h2h.get("home_wins"),
+                                _h2h.get("away_wins"), _h2h.get("draws"),
+                                _h2h.get("avg_goals"), _btts_val, _o25_val,
+                                _odds_data, _existing_row[0],
+                            ))
+                            logger.info(f"✅ Updated training_data form/H2H for {home_team} vs {away_team} (id={_existing_row[0]})")
+                        elif not _existing_row:
+                            # No row at all — INSERT a new one
                             db_helper.execute("""
                                 INSERT INTO training_data
                                     (home_team, away_team, league, match_date,
@@ -1011,12 +1047,12 @@ async def get_match_scout(match_id: str):
                                      away_form_wins, away_form_draws, away_form_losses,
                                      h2h_matches_count, h2h_home_wins, h2h_away_wins, h2h_draws,
                                      h2h_avg_goals, h2h_btts_rate, h2h_over25_rate,
-                                     data_source)
+                                     odds_data, data_source)
                                 VALUES (%s,%s,%s,%s,
                                         %s,%s,%s,%s,%s,%s,%s,
                                         %s,%s,%s,%s,%s,%s,%s,
                                         %s,%s,%s,%s,%s,%s,%s,
-                                        'sofascore_ondemand')
+                                        %s,'sofascore_ondemand')
                             """, (
                                 home_team, away_team, league, match_date or None,
                                 _hf.get("goals_scored"), _hf.get("goals_conceded"),
@@ -1027,11 +1063,12 @@ async def get_match_scout(match_id: str):
                                 _af.get("wins"), _af.get("draws"), _af.get("losses"),
                                 _h2h.get("matches"), _h2h.get("home_wins"),
                                 _h2h.get("away_wins"), _h2h.get("draws"),
-                                _h2h.get("avg_goals"),
-                                (_h2h.get("btts_rate") or 0) / 100 if _h2h.get("btts_rate") is not None else None,
-                                (_h2h.get("over25_rate") or 0) / 100 if _h2h.get("over25_rate") is not None else None,
+                                _h2h.get("avg_goals"), _btts_val, _o25_val,
+                                _odds_data,
                             ))
-                        logger.info(f"✅ Form/H2H cached to training_data for {home_team} vs {away_team}")
+                            logger.info(f"✅ Inserted training_data form/H2H for {home_team} vs {away_team}")
+                        else:
+                            logger.info(f"✅ Form/H2H already in training_data for {home_team} vs {away_team}, skipping")
                     except Exception as _save_err:
                         logger.warning(f"Could not persist SofaScore data: {_save_err}")
             except Exception as ss_err:

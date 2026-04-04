@@ -1645,8 +1645,8 @@ function selectPick(id) {
 function loadDetailData(pick) {
   state.dpPickId = pick.id;
 
-  // If scout_data was pre-loaded in the picks response → instant, no network call
-  if (pick._scout) {
+  // If scout_data was pre-loaded in the picks response AND has real content → instant, no network call
+  if (pick._scout && (pick._scout.form || pick._scout.h2h)) {
     state.dpData = pick._scout;
     state.dpBusy = false;
     renderDetailPanel();
