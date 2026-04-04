@@ -255,11 +255,12 @@ function fmtKickoff(iso) {
   if (isNaN(d)) return iso;
   const diff = d - Date.now();
   const t = d.toLocaleTimeString("sv-SE", {hour:"2-digit", minute:"2-digit"});
+  const dateStr = d.toLocaleDateString("sv-SE", {month:"short", day:"numeric"});
   if (d.toDateString() === new Date().toDateString()) {
-    if (diff > 0 && diff < 3600000) return Math.floor(diff / 60000) + "m · " + t;
-    return t;
+    if (diff > 0 && diff < 3600000) return "Idag · " + Math.floor(diff / 60000) + "m";
+    return "Idag · " + t;
   }
-  return d.toLocaleDateString("sv-SE", {month:"short", day:"numeric"}) + " " + t;
+  return dateStr + " · " + t;
 }
 
 function fmtAgo(ts) {
@@ -1832,7 +1833,9 @@ async function fetchData() {
       match: (b.home_team || "") + " vs " + (b.away_team || ""),
       ev: b.edge_pct != null ? b.edge_pct : 0,
       bookmaker: b.best_odds_bookmaker || "—",
-      kickoff_time: b.kickoff_str || b.match_date || "",
+      kickoff_time: (b.match_date && b.kickoff_str && b.kickoff_str.includes(':'))
+        ? b.match_date + 'T' + b.kickoff_str + ':00'
+        : (b.kickoff_str || b.match_date || ""),
       fair_odds: b.best_odds_value || null,
       featured: (b.edge_pct || 0) >= 20,
       status: b.status === "upcoming" ? "PRE" : (b.status || "PRE").toUpperCase(),
