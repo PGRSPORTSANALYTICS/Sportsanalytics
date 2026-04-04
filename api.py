@@ -2315,12 +2315,13 @@ async def get_today_picks():
                    league, trust_level, kickoff_time, match_date,
                    open_odds, clv_pct, mode,
                    model_prob, disagreement, clv_status, hidden_value_status,
-                   timestamp
+                   timestamp, kickoff_epoch
             FROM football_opportunities
             WHERE (
                 (mode = 'PROD' AND bet_placed = true)
                 OR mode = 'VALUE_OPP'
             )
+              AND (outcome IS NULL OR outcome = '' OR outcome IN ('pending', 'unknown'))
               AND (
                   match_date >= %s
                   OR (
@@ -2328,7 +2329,9 @@ async def get_today_picks():
                       AND (outcome IS NULL OR outcome = '' OR outcome IN ('pending', 'unknown'))
                   )
               )
-            ORDER BY match_date ASC, kickoff_time ASC NULLS LAST
+            ORDER BY match_date ASC,
+                     COALESCE(kickoff_epoch, 9999999999) ASC,
+                     kickoff_time ASC NULLS LAST
         """, (today_str, yesterday_str), fetch='all') or []
 
         picks = []
@@ -2344,10 +2347,20 @@ async def get_today_picks():
 
             ko_time = r[15]
             match_date = str(r[16]) if r[16] else ''
+            kickoff_epoch_val = r[25]
+
             ko_str = ''
             if ko_time:
-                ko_str = str(ko_time)[:5] + ' UTC' if len(str(ko_time)) >= 5 else str(ko_time)
-            elif match_date:
+                ko_str = str(ko_time)[:5] if len(str(ko_time)) >= 5 else str(ko_time)
+            elif kickoff_epoch_val:
+                try:
+                    import pytz
+                    sthlm = pytz.timezone('Europe/Stockholm')
+                    dt = datetime.utcfromtimestamp(kickoff_epoch_val).replace(tzinfo=pytz.utc)
+                    ko_str = dt.astimezone(sthlm).strftime('%H:%M')
+                except Exception:
+                    ko_str = ''
+            if not ko_str and match_date:
                 ko_str = match_date
 
             market_icons = {
