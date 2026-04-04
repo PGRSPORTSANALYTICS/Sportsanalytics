@@ -2355,16 +2355,18 @@ async def get_today_picks():
             kickoff_epoch_val = r[25]
 
             ko_str = ''
-            if ko_time:
-                ko_str = str(ko_time)[:5] if len(str(ko_time)) >= 5 else str(ko_time)
-            elif kickoff_epoch_val:
+            kickoff_epoch_iso = ''   # UTC ISO built from epoch when available
+            if kickoff_epoch_val:
                 try:
                     import pytz
                     sthlm = pytz.timezone('Europe/Stockholm')
-                    dt = datetime.utcfromtimestamp(kickoff_epoch_val).replace(tzinfo=pytz.utc)
-                    ko_str = dt.astimezone(sthlm).strftime('%H:%M')
+                    dt_utc = datetime.utcfromtimestamp(kickoff_epoch_val).replace(tzinfo=pytz.utc)
+                    ko_str = dt_utc.astimezone(sthlm).strftime('%H:%M')
+                    kickoff_epoch_iso = dt_utc.strftime('%Y-%m-%dT%H:%M:%SZ')
                 except Exception:
                     ko_str = ''
+            if not ko_str and ko_time:
+                ko_str = str(ko_time)[:5] if len(str(ko_time)) >= 5 else str(ko_time)
             if not ko_str and match_date:
                 ko_str = match_date
 
@@ -2392,12 +2394,15 @@ async def get_today_picks():
             mode_val = r[19] or 'PROD'
             layer = 'PRO PICK' if mode_val == 'PROD' else 'VALUE OPP'
 
-            # Build full ISO kickoff string so frontend can show date correctly
-            kickoff_iso = ''
-            if match_date and ko_str and ':' in ko_str:
+            # Build full ISO kickoff string — prefer UTC from epoch (avoids midnight date bug)
+            if kickoff_epoch_iso:
+                kickoff_iso = kickoff_epoch_iso
+            elif match_date and ko_str and ':' in ko_str:
                 kickoff_iso = f"{match_date}T{ko_str}:00"
             elif match_date:
                 kickoff_iso = match_date
+            else:
+                kickoff_iso = ''
 
             picks.append({
                 'id': r[0],
