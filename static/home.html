@@ -767,27 +767,30 @@ function renderHockeyTab() {
     </tr>`}).join("");
 
   const recent = s ? (s.recent || []) : [];
-  const recentRows = recent.map(r => {
-    const league = LEAGUE_NAMES[r.league] || (r.league||'').replace(/icehockey_/i,'').replace(/_/g,' ').toUpperCase();
-    const mkt = MARKET_NAMES[r.market] || r.market;
-    const pick = r.line != null ? `${r.selection} ${r.line > 0 ? '+' : ''}${r.line}` : r.selection;
-    const won = r.outcome === 'won';
-    return `
-    <tr style="border-bottom:1px solid #18181b">
-      <td style="padding:10px 12px">
-        <div style="font-size:13px;font-weight:600;color:#e4e4e7;white-space:nowrap">${r.home_team} vs ${r.away_team}</div>
-        <div style="font-size:11px;color:#52525b;margin-top:2px">${league}</div>
-      </td>
-      <td style="padding:10px 12px;text-align:center">
-        <span style="font-size:11px;font-weight:600;padding:3px 8px;border-radius:5px;background:rgba(56,189,248,.1);color:#38bdf8;white-space:nowrap">${mkt}</span>
-      </td>
-      <td style="padding:10px 12px;font-size:13px;color:#d4d4d8;white-space:nowrap">${pick}</td>
-      <td style="padding:10px 12px;font-size:13px;color:#71717a;text-align:center">${Number(r.odds).toFixed(2)}</td>
-      <td style="padding:10px 12px;text-align:center">
-        <span style="font-size:12px;font-weight:700;padding:3px 10px;border-radius:6px;background:${won?'rgba(74,222,128,.15)':'rgba(248,113,113,.15)'};color:${won?'#4ade80':'#f87171'}">${won ? 'WON' : 'LOST'}</span>
-      </td>
-      <td style="padding:10px 12px;font-size:13px;font-weight:700;text-align:right;color:${profitColor(r.profit_loss)}">${fmtProfit(r.profit_loss)}</td>
-    </tr>`}).join("");
+  const recentCards = recent.length === 0
+    ? `<div style="text-align:center;padding:40px 0;color:#3f3f46;font-size:13px">No settled hockey picks yet</div>`
+    : recent.map(r => {
+        const league = LEAGUE_NAMES[r.league] || (r.league||'').replace(/icehockey_/i,'').replace(/_/g,' ').toUpperCase();
+        const mkt = MARKET_NAMES[r.market] || r.market;
+        const pick = r.line != null ? `${r.selection} ${Number(r.line) > 0 ? '+' : ''}${r.line}` : r.selection;
+        const won = r.outcome === 'won';
+        const pl = Number(r.profit_loss);
+        return `
+        <div style="border-radius:14px;border:1px solid ${won ? 'rgba(74,222,128,.2)' : 'rgba(248,113,113,.15)'};background:#09090b;padding:14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;border:1px solid ${won ? 'rgba(74,222,128,.4)' : 'rgba(248,113,113,.4)'};color:${won ? '#4ade80' : '#f87171'};background:${won ? 'rgba(74,222,128,.08)' : 'rgba(248,113,113,.08)'}">${won ? 'WON' : 'LOST'}</span>
+            <span style="font-size:13px;font-weight:700;color:${profitColor(pl)}">${fmtProfit(pl)}</span>
+          </div>
+          <div style="font-size:16px;font-weight:700;line-height:1.25;color:#f4f4f5;margin-bottom:5px">${r.home_team} vs ${r.away_team}</div>
+          <div style="font-size:12px;color:#71717a;margin-bottom:12px">${mkt} · ${pick}</div>
+          <div style="display:flex;justify-content:space-between;align-items:flex-end">
+            <div>
+              <div style="font-size:10px;color:#52525b;margin-bottom:2px">Odds</div>
+              <div style="font-size:26px;font-weight:900;color:${won ? '#4ade80' : '#d4d4d8'}">${Number(r.odds).toFixed(2)}</div>
+            </div>
+            <div style="text-align:right;font-size:11px;color:#52525b">${league}</div>
+          </div>
+        </div>`}).join("");
 
   if (!s && !state.hockeyLoading) {
     return `<div style="text-align:center;padding:80px 0;color:#52525b;font-size:14px">No hockey data yet — engine collecting results</div>`;
@@ -833,20 +836,8 @@ function renderHockeyTab() {
       </div>
 
       <div style="padding:0 16px 16px">
-        <div style="font-size:10px;letter-spacing:.12em;color:#52525b;text-transform:uppercase;margin-bottom:8px;font-weight:600">Recent Results</div>
-        <div style="border-radius:10px;border:1px solid #27272a;overflow:hidden">
-          <table style="width:100%;border-collapse:collapse">
-            <thead><tr style="background:#0a0a0a">
-              <th style="padding:8px 12px;text-align:left;font-size:10px;color:#3f3f46;text-transform:uppercase">Match</th>
-              <th style="padding:8px 10px;text-align:center;font-size:10px;color:#3f3f46;text-transform:uppercase">Market</th>
-              <th style="padding:8px 10px;text-align:left;font-size:10px;color:#3f3f46;text-transform:uppercase">Pick</th>
-              <th style="padding:8px 10px;text-align:center;font-size:10px;color:#3f3f46;text-transform:uppercase">Odds</th>
-              <th style="padding:8px 10px;text-align:center;font-size:10px;color:#3f3f46;text-transform:uppercase">Result</th>
-              <th style="padding:8px 12px;text-align:right;font-size:10px;color:#3f3f46;text-transform:uppercase">P/L</th>
-            </tr></thead>
-            <tbody>${recentRows || '<tr><td colspan="6" style="padding:30px;text-align:center;color:#3f3f46;font-size:12px">No settled hockey picks yet</td></tr>'}</tbody>
-          </table>
-        </div>
+        <div style="font-size:10px;letter-spacing:.12em;color:#52525b;text-transform:uppercase;margin-bottom:12px;font-weight:600">Recent Results</div>
+        <div style="display:flex;flex-direction:column;gap:10px">${recentCards}</div>
       </div>
     </div>`;
 }
@@ -891,18 +882,29 @@ function renderNbaTab() {
     </tr>`;}).join("");
 
   const recent = s ? (s.recent || []) : [];
-  const recentRows = recent.map(r => {
-    const pick = r.line != null ? `${r.selection} (${r.line > 0 ? '+' : ''}${r.line})` : r.selection;
-    return `
-    <tr style="border-bottom:1px solid #18181b">
-      <td style="padding:8px 10px;font-size:11px;color:#a1a1aa;white-space:nowrap">${r.home_team} vs ${r.away_team}</td>
-      <td style="padding:8px 10px;font-size:10px;color:#71717a">${(r.league||'').replace('basketball_','').replace(/_/g,' ').toUpperCase()}</td>
-      <td style="padding:8px 10px"><span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;background:rgba(251,146,60,.12);color:#fb923c">${r.market}</span></td>
-      <td style="padding:8px 10px;font-size:11px;color:#d4d4d8">${pick}</td>
-      <td style="padding:8px 10px;font-size:12px;color:#a1a1aa">${Number(r.odds).toFixed(2)}</td>
-      <td style="padding:8px 10px"><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:5px;background:${r.outcome==='won'?'rgba(74,222,128,.15)':'rgba(248,113,113,.15)'};color:${r.outcome==='won'?'#4ade80':'#f87171'}">${r.outcome}</span></td>
-      <td style="padding:8px 10px;font-size:12px;font-weight:700;color:${profitColor(r.profit_loss)}">${fmtProfit(r.profit_loss)}</td>
-    </tr>`;}).join("");
+  const recentCards = recent.length === 0
+    ? `<div style="text-align:center;padding:40px 0;color:#3f3f46;font-size:13px">🏀 NBA picks starting — engine scanning now</div>`
+    : recent.map(r => {
+        const league = (r.league||'').replace('basketball_','').replace(/_/g,' ').toUpperCase();
+        const pick = r.line != null ? `${r.selection} ${Number(r.line) > 0 ? '+' : ''}${r.line}` : r.selection;
+        const won = r.outcome === 'won';
+        const pl = Number(r.profit_loss);
+        return `
+        <div style="border-radius:14px;border:1px solid ${won ? 'rgba(74,222,128,.2)' : 'rgba(248,113,113,.15)'};background:#09090b;padding:14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;border:1px solid ${won ? 'rgba(74,222,128,.4)' : 'rgba(248,113,113,.4)'};color:${won ? '#4ade80' : '#f87171'};background:${won ? 'rgba(74,222,128,.08)' : 'rgba(248,113,113,.08)'}">${won ? 'WON' : 'LOST'}</span>
+            <span style="font-size:13px;font-weight:700;color:${profitColor(pl)}">${fmtProfit(pl)}</span>
+          </div>
+          <div style="font-size:16px;font-weight:700;line-height:1.25;color:#f4f4f5;margin-bottom:5px">${r.home_team} vs ${r.away_team}</div>
+          <div style="font-size:12px;color:#71717a;margin-bottom:12px">${r.market} · ${pick}</div>
+          <div style="display:flex;justify-content:space-between;align-items:flex-end">
+            <div>
+              <div style="font-size:10px;color:#52525b;margin-bottom:2px">Odds</div>
+              <div style="font-size:26px;font-weight:900;color:${won ? '#4ade80' : '#d4d4d8'}">${Number(r.odds).toFixed(2)}</div>
+            </div>
+            <div style="text-align:right;font-size:11px;color:#52525b">${league}</div>
+          </div>
+        </div>`}).join("");
 
   if (!s && !state.nbaLoading) {
     return `<div style="text-align:center;padding:80px 0;color:#52525b;font-size:14px">NBA engine starting — first picks will appear within the hour</div>`;
@@ -913,17 +915,17 @@ function renderNbaTab() {
       <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;padding:16px">${kpiHtml}</div>
 
       <div style="padding:0 16px 16px">
-        <div style="font-size:11px;letter-spacing:.1em;color:#52525b;text-transform:uppercase;margin-bottom:8px">By Market</div>
-        <div style="overflow-x:auto;border-radius:10px;border:1px solid #27272a">
-          <table style="width:100%;border-collapse:collapse;min-width:500px">
+        <div style="font-size:10px;letter-spacing:.12em;color:#52525b;text-transform:uppercase;margin-bottom:8px;font-weight:600">By Market</div>
+        <div style="border-radius:10px;border:1px solid #27272a;overflow:hidden">
+          <table style="width:100%;border-collapse:collapse">
             <thead><tr style="background:#0a0a0a">
-              <th style="padding:9px 10px;text-align:left;font-size:10px;color:#52525b;text-transform:uppercase">Market</th>
-              <th style="padding:9px 10px;text-align:center;font-size:10px;color:#52525b;text-transform:uppercase">Settled</th>
-              <th style="padding:9px 10px;text-align:center;font-size:10px;color:#52525b;text-transform:uppercase">W</th>
-              <th style="padding:9px 10px;text-align:center;font-size:10px;color:#52525b;text-transform:uppercase">L</th>
-              <th style="padding:9px 10px;text-align:center;font-size:10px;color:#52525b;text-transform:uppercase">Pending</th>
-              <th style="padding:9px 10px;text-align:center;font-size:10px;color:#52525b;text-transform:uppercase">Hit%</th>
-              <th style="padding:9px 10px;text-align:right;font-size:10px;color:#52525b;text-transform:uppercase">P/L</th>
+              <th style="padding:8px 12px;text-align:left;font-size:10px;color:#3f3f46;text-transform:uppercase">Market</th>
+              <th style="padding:8px 6px;text-align:center;font-size:10px;color:#3f3f46;text-transform:uppercase">Set</th>
+              <th style="padding:8px 6px;text-align:center;font-size:10px;color:#3f3f46;text-transform:uppercase">W</th>
+              <th style="padding:8px 6px;text-align:center;font-size:10px;color:#3f3f46;text-transform:uppercase">L</th>
+              <th style="padding:8px 6px;text-align:center;font-size:10px;color:#3f3f46;text-transform:uppercase">Pending</th>
+              <th style="padding:8px 6px;text-align:center;font-size:10px;color:#3f3f46;text-transform:uppercase">Hit%</th>
+              <th style="padding:8px 12px;text-align:right;font-size:10px;color:#3f3f46;text-transform:uppercase">P/L</th>
             </tr></thead>
             <tbody>${marketRows || '<tr><td colspan="7" style="padding:30px;text-align:center;color:#3f3f46;font-size:13px">🏀 NBA picks starting — engine scanning basketball_nba now</td></tr>'}</tbody>
           </table>
@@ -931,22 +933,10 @@ function renderNbaTab() {
       </div>
 
       <div style="padding:0 16px 16px">
-        <div style="font-size:11px;letter-spacing:.1em;color:#52525b;text-transform:uppercase;margin-bottom:8px">Recent Results</div>
-        <div style="overflow-x:auto;border-radius:10px;border:1px solid #27272a">
-          <table style="width:100%;border-collapse:collapse;min-width:620px">
-            <thead><tr style="background:#0a0a0a">
-              <th style="padding:9px 10px;text-align:left;font-size:10px;color:#52525b;text-transform:uppercase">Match</th>
-              <th style="padding:9px 10px;text-align:left;font-size:10px;color:#52525b;text-transform:uppercase">League</th>
-              <th style="padding:9px 10px;text-align:left;font-size:10px;color:#52525b;text-transform:uppercase">Market</th>
-              <th style="padding:9px 10px;text-align:left;font-size:10px;color:#52525b;text-transform:uppercase">Pick</th>
-              <th style="padding:9px 10px;text-align:left;font-size:10px;color:#52525b;text-transform:uppercase">Odds</th>
-              <th style="padding:9px 10px;text-align:left;font-size:10px;color:#52525b;text-transform:uppercase">Result</th>
-              <th style="padding:9px 10px;text-align:left;font-size:10px;color:#52525b;text-transform:uppercase">P/L</th>
-            </tr></thead>
-            <tbody>${recentRows || '<tr><td colspan="7" style="padding:30px;text-align:center;color:#3f3f46;font-size:12px">No settled NBA picks yet</td></tr>'}</tbody>
-          </table>
-        </div>
+        <div style="font-size:10px;letter-spacing:.12em;color:#52525b;text-transform:uppercase;margin-bottom:12px;font-weight:600">Recent Results</div>
+        <div style="display:flex;flex-direction:column;gap:10px">${recentCards}</div>
       </div>
+
     </div>`;
 }
 
