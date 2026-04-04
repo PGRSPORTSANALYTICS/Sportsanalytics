@@ -765,6 +765,35 @@ function renderHockeyTab() {
       <td style="padding:10px 12px;font-size:13px;color:${hr >= 55 ? '#4ade80' : '#a1a1aa'};text-align:center;font-weight:600">${hr}%</td>
     </tr>`}).join("");
 
+  const upcoming = s ? (s.upcoming || []) : [];
+
+  function fmtKickoff(ko) {
+    if (!ko) return '';
+    const d = new Date(ko.replace(' ', 'T'));
+    const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const time = ko.slice(11, 16);
+    return `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]} · ${time}`;
+  }
+
+  const upcomingCards = upcoming.length === 0
+    ? `<div style="text-align:center;padding:30px 0;color:#3f3f46;font-size:13px">No upcoming hockey picks right now</div>`
+    : upcoming.map(p => `
+      <div style="border-radius:14px;border:1px solid #27272a;background:#09090b;padding:14px">
+        <div style="font-size:15px;font-weight:700;color:#f4f4f5;margin-bottom:4px">${p.home_team} vs ${p.away_team}</div>
+        <div style="font-size:12px;color:#71717a;margin-bottom:12px">${p.market} · ${p.selection}</div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-end">
+          <div>
+            <div style="font-size:10px;color:#52525b;margin-bottom:2px">Odds</div>
+            <div style="font-size:26px;font-weight:900;color:#4ade80">${Number(p.odds).toFixed(2)}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:11px;color:#71717a">${p.league}</div>
+            <div style="font-size:11px;color:#52525b;margin-top:2px">${fmtKickoff(p.kickoff)}</div>
+          </div>
+        </div>
+      </div>`).join("");
+
   if (!s && !state.hockeyLoading) {
     return `<div style="text-align:center;padding:80px 0;color:#52525b;font-size:14px">No hockey data yet — engine collecting results</div>`;
   }
@@ -772,6 +801,11 @@ function renderHockeyTab() {
   return `
     <div>
       <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;padding:16px">${kpiHtml}</div>
+
+      <div style="padding:0 16px 16px">
+        <div style="font-size:10px;letter-spacing:.12em;color:#52525b;text-transform:uppercase;margin-bottom:12px;font-weight:600">Upcoming — ${upcoming.length} picks</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px">${upcomingCards}</div>
+      </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px 16px">
         <div>
@@ -844,6 +878,34 @@ function renderNbaTab() {
       <td style="padding:8px 10px;font-size:12px;color:${hr >= 55 ? '#4ade80' : '#a1a1aa'};text-align:center;font-weight:600">${hr}%</td>
     </tr>`;}).join("");
 
+  const nbaUpcoming = s ? (s.upcoming || []) : [];
+
+  function fmtKo(ko) {
+    if (!ko) return '';
+    const d = new Date(ko.replace(' ', 'T'));
+    const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]} · ${ko.slice(11,16)}`;
+  }
+
+  const nbaUpcomingCards = nbaUpcoming.length === 0
+    ? `<div style="text-align:center;padding:30px 0;color:#3f3f46;font-size:13px">No upcoming NBA picks right now</div>`
+    : nbaUpcoming.map(p => `
+      <div style="border-radius:14px;border:1px solid #27272a;background:#09090b;padding:14px">
+        <div style="font-size:15px;font-weight:700;color:#f4f4f5;margin-bottom:4px">${p.home_team} vs ${p.away_team}</div>
+        <div style="font-size:12px;color:#71717a;margin-bottom:12px">${p.market} · ${p.selection}</div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-end">
+          <div>
+            <div style="font-size:10px;color:#52525b;margin-bottom:2px">Odds</div>
+            <div style="font-size:26px;font-weight:900;color:#4ade80">${Number(p.odds).toFixed(2)}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:11px;color:#71717a">${p.league}</div>
+            <div style="font-size:11px;color:#52525b;margin-top:2px">${fmtKo(p.kickoff)}</div>
+          </div>
+        </div>
+      </div>`).join("");
+
   if (!s && !state.nbaLoading) {
     return `<div style="text-align:center;padding:80px 0;color:#52525b;font-size:14px">NBA engine starting — first picks will appear within the hour</div>`;
   }
@@ -851,6 +913,11 @@ function renderNbaTab() {
   return `
     <div>
       <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;padding:16px">${kpiHtml}</div>
+
+      <div style="padding:0 16px 16px">
+        <div style="font-size:10px;letter-spacing:.12em;color:#52525b;text-transform:uppercase;margin-bottom:12px;font-weight:600">Upcoming — ${nbaUpcoming.length} picks</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px">${nbaUpcomingCards}</div>
+      </div>
 
       <div style="padding:0 16px 16px">
         <div style="font-size:10px;letter-spacing:.12em;color:#52525b;text-transform:uppercase;margin-bottom:8px;font-weight:600">By Market</div>
@@ -863,7 +930,7 @@ function renderNbaTab() {
               <th style="padding:8px 6px;text-align:center;font-size:10px;color:#3f3f46;text-transform:uppercase">L</th>
               <th style="padding:8px 6px;text-align:center;font-size:10px;color:#3f3f46;text-transform:uppercase">Hit%</th>
             </tr></thead>
-            <tbody>${marketRows || '<tr><td colspan="5" style="padding:30px;text-align:center;color:#3f3f46;font-size:13px">🏀 NBA picks starting — engine scanning basketball_nba now</td></tr>'}</tbody>
+            <tbody>${marketRows || '<tr><td colspan="5" style="padding:30px;text-align:center;color:#3f3f46;font-size:13px">No NBA data yet</td></tr>'}</tbody>
           </table>
         </div>
       </div>

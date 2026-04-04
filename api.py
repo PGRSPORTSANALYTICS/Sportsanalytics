@@ -1258,14 +1258,6 @@ async def get_hockey_stats():
             GROUP BY market ORDER BY settled DESC
         """, fetch='all')
 
-        recent = db.execute("""
-            SELECT home_team, away_team, league, market, selection, odds,
-                   outcome, profit_loss, result_notes, settled_at
-            FROM learning_bets
-            WHERE sport_category = 'HOCKEY' AND outcome IN ('won','lost')
-            ORDER BY settled_at DESC NULLS LAST LIMIT 20
-        """, fetch='all')
-
         totals = db.execute("""
             SELECT COUNT(*) FILTER (WHERE outcome IN ('won','lost')) AS settled,
                    COUNT(*) FILTER (WHERE outcome = 'won') AS wins,
@@ -1274,12 +1266,35 @@ async def get_hockey_stats():
             FROM learning_bets WHERE sport_category = 'HOCKEY'
         """, fetch='one')
 
+        upcoming = db.execute("""
+            SELECT home_team, away_team, league, market, selection, line, odds,
+                   TO_CHAR(commence_time AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Stockholm', 'YYYY-MM-DD HH24:MI') AS ko
+            FROM learning_bets
+            WHERE sport_category = 'HOCKEY'
+              AND status = 'pending'
+              AND commence_time > NOW()
+            ORDER BY commence_time ASC
+            LIMIT 50
+        """, fetch='all')
+
         def to_float(v):
             return float(v) if v is not None else 0.0
+
+        LEAGUE_MAP = {
+            'Icehockey Nhl': 'NHL', 'Icehockey Sweden Hockey League': 'SHL',
+            'Icehockey Sweden Allsvenskan': 'Allsvenskan', 'Icehockey Ahl': 'AHL',
+        }
+        MARKET_MAP = {'h2h': 'Moneyline', 'totals': 'Over/Under', 'h2h_lay': 'Lay ML', 'spreads': 'Puck Line'}
 
         t = totals or (0, 0, 0, 0)
         settled, wins, pending, profit = int(t[0] or 0), int(t[1] or 0), int(t[2] or 0), to_float(t[3])
         hit_rate = round(wins / settled * 100, 1) if settled > 0 else 0
+
+        def fmt_pick(sel, line):
+            if line is not None:
+                sign = f"+{float(line)}" if float(line) >= 0 else str(float(line))
+                return f"{sel} ({sign})"
+            return sel or "—"
 
         return JSONResponse({
             "totals": {"settled": settled, "wins": wins, "losses": settled - wins,
@@ -1291,11 +1306,12 @@ async def get_hockey_stats():
             "by_market": [{"market": r[0], "settled": int(r[1] or 0), "wins": int(r[2] or 0),
                            "losses": int(r[3] or 0), "profit": to_float(r[4])}
                           for r in (by_market or [])],
-            "recent": [{"home_team": r[0], "away_team": r[1], "league": r[2], "market": r[3],
-                        "selection": r[4], "odds": to_float(r[5]), "outcome": r[6],
-                        "profit_loss": to_float(r[7]), "result_notes": r[8],
-                        "settled_at": str(r[9]) if r[9] else None}
-                       for r in (recent or [])],
+            "upcoming": [{"home_team": r[0], "away_team": r[1],
+                          "league": LEAGUE_MAP.get(r[2], r[2]),
+                          "market": MARKET_MAP.get(r[3], r[3]),
+                          "selection": fmt_pick(r[4], r[5]),
+                          "odds": to_float(r[6]), "kickoff": r[7]}
+                         for r in (upcoming or [])],
         })
     except Exception as e:
         logger.error(f"Error in get_hockey_stats: {e}")
@@ -1322,14 +1338,6 @@ async def get_nba_stats():
             GROUP BY market ORDER BY settled DESC
         """, fetch='all')
 
-        recent = db.execute("""
-            SELECT home_team, away_team, league, market, selection, line, odds,
-                   outcome, profit_loss, settled_at
-            FROM learning_bets
-            WHERE sport_category = 'NBA' AND outcome IN ('won','lost')
-            ORDER BY settled_at DESC NULLS LAST LIMIT 20
-        """, fetch='all')
-
         totals_row = db.execute("""
             SELECT COUNT(*) FILTER (WHERE outcome IN ('won','lost')) AS settled,
                    COUNT(*) FILTER (WHERE outcome = 'won') AS wins,
@@ -1338,8 +1346,25 @@ async def get_nba_stats():
             FROM learning_bets WHERE sport_category = 'NBA'
         """, fetch='one')
 
+        upcoming = db.execute("""
+            SELECT home_team, away_team, league, market, selection, line, odds,
+                   TO_CHAR(commence_time AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Stockholm', 'YYYY-MM-DD HH24:MI') AS ko
+            FROM learning_bets
+            WHERE sport_category = 'NBA'
+              AND status = 'pending'
+              AND commence_time > NOW()
+            ORDER BY commence_time ASC
+            LIMIT 50
+        """, fetch='all')
+
         def to_float(v):
             return float(v) if v is not None else 0.0
+
+        def fmt_pick(sel, line):
+            if line is not None:
+                sign = f"+{float(line)}" if float(line) >= 0 else str(float(line))
+                return f"{sel} ({sign})"
+            return sel or "—"
 
         t = totals_row or (0, 0, 0, 0)
         settled, wins, pending, profit = int(t[0] or 0), int(t[1] or 0), int(t[2] or 0), to_float(t[3])
@@ -1354,13 +1379,12 @@ async def get_nba_stats():
                            "losses": int(r[3] or 0), "pending": int(r[4] or 0),
                            "profit": to_float(r[5]), "avg_odds": to_float(r[6])}
                           for r in (by_market or [])],
-            "recent": [{"home_team": r[0], "away_team": r[1], "league": r[2],
-                        "market": MARKET_LABELS.get(r[3], r[3]),
-                        "selection": r[4], "line": to_float(r[5]) if r[5] else None,
-                        "odds": to_float(r[6]), "outcome": r[7],
-                        "profit_loss": to_float(r[8]),
-                        "settled_at": str(r[9]) if r[9] else None}
-                       for r in (recent or [])],
+            "upcoming": [{"home_team": r[0], "away_team": r[1],
+                          "league": (r[2] or '').replace('Basketball Nba','NBA').replace('basketball_nba','NBA'),
+                          "market": MARKET_LABELS.get(r[3], r[3]),
+                          "selection": fmt_pick(r[4], r[5]),
+                          "odds": to_float(r[6]), "kickoff": r[7]}
+                         for r in (upcoming or [])],
         })
     except Exception as e:
         logger.error(f"Error in get_nba_stats: {e}")
