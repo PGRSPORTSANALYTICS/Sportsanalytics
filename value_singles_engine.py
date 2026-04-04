@@ -574,6 +574,8 @@ class ValueSinglesEngine:
             # 3) Real team form analysis pipeline (same as exact score system)
             lh = 1.5  # Default xG values
             la = 1.3
+            home_form = None
+            away_form = None
             
             try:
                 # Get team IDs (may be None for OddsAPI team names)
@@ -821,6 +823,8 @@ class ValueSinglesEngine:
                     "ev_sim": float(ev_sim),
                     "disagreement": float(disagreement),
                     "is_learning_only": is_learning_only,
+                    "_home_form": home_form,
+                    "_away_form": away_form,
                 })
                 print(f"   📦 CANDIDATE: {market_key} EV={ev:.1%} Conf={calibrated_prob:.0%} Odds={float(odds):.2f} PGR={pgr_score:.1f} Tier={_league_tier}")
 
@@ -1223,7 +1227,7 @@ class ValueSinglesEngine:
                     else:
                         print(f"📊 PREDICTION ONLY: {s['home_team']} vs {s['away_team']} -> {s['selection']} @ {s['odds']:.2f} (EV {s['edge_percentage']:.1f}%)")
                     
-                    # 📊 COLLECT DATA FOR AI TRAINING
+                    # 📊 COLLECT DATA FOR AI TRAINING (with full form data)
                     try:
                         collector = get_collector()
                         analysis = json.loads(s.get('analysis', '{}'))
@@ -1234,18 +1238,38 @@ class ValueSinglesEngine:
                             except:
                                 pass
                         
+                        _hf_obj = s.get('_home_form')
+                        _af_obj = s.get('_away_form')
+                        
+                        def _form_to_dict(f):
+                            if not f:
+                                return {}
+                            games = getattr(f, 'last_5_games', []) or []
+                            n = len(games)
+                            wins   = sum(1 for g in games if g.get('result') == 'W')
+                            draws  = sum(1 for g in games if g.get('result') == 'D')
+                            losses = sum(1 for g in games if g.get('result') == 'L')
+                            ppg    = round((wins * 3 + draws) / n, 2) if n else None
+                            return {
+                                'goals_scored':   round(float(getattr(f, 'goals_scored', 0) or 0), 2),
+                                'goals_conceded': round(float(getattr(f, 'goals_conceded', 0) or 0), 2),
+                                'wins': wins, 'draws': draws, 'losses': losses, 'ppg': ppg,
+                            }
+                        
                         collector.collect_value_single(
                             home_team=s['home_team'],
                             away_team=s['away_team'],
                             league=s.get('league', ''),
                             match_date=match_dt,
-                            market_type=analysis.get('market_key', ''),
+                            market_type=analysis.get('market_key', s.get('market_key', '')),
                             odds=s.get('odds', 0),
                             model_probability=analysis.get('p_model', 0),
-                            edge=analysis.get('ev', 0),
-                            home_xg=analysis.get('expected_home_goals'),
-                            away_xg=analysis.get('expected_away_goals'),
-                            odds_data={'odds': s.get('odds'), 'market': analysis.get('market_key')},
+                            edge=analysis.get('ev', s.get('ev', 0)),
+                            home_xg=analysis.get('expected_home_goals') or s.get('lh'),
+                            away_xg=analysis.get('expected_away_goals') or s.get('la'),
+                            home_form=_form_to_dict(_hf_obj),
+                            away_form=_form_to_dict(_af_obj),
+                            odds_data={'odds': s.get('odds'), 'market': analysis.get('market_key', s.get('market_key'))},
                             bet_placed=bet_placed
                         )
                     except Exception as e:

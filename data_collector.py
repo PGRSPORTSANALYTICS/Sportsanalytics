@@ -308,6 +308,8 @@ class DataCollector:
         edge: float,
         home_xg: float = None,
         away_xg: float = None,
+        home_form: Dict[str, Any] = None,
+        away_form: Dict[str, Any] = None,
         odds_data: Dict[str, Any] = None,
         bet_placed: bool = False
     ) -> bool:
@@ -333,6 +335,8 @@ class DataCollector:
             match_date=match_date,
             home_xg=home_xg,
             away_xg=away_xg,
+            home_form=home_form or {},
+            away_form=away_form or {},
             odds_data=odds_data,
             predicted_winner=predicted_winner,
             model_probability=model_probability,
