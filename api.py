@@ -2303,10 +2303,10 @@ async def get_today_picks():
 
         now_utc = datetime.utcnow()
         day_start = datetime(now_utc.year, now_utc.month, now_utc.day, 0, 0, 0)
-        yesterday_start = day_start - timedelta(days=1)
 
         today_str = day_start.strftime('%Y-%m-%d')
-        yesterday_str = yesterday_start.strftime('%Y-%m-%d')
+        now_epoch = int(now_utc.timestamp())
+        cutoff_epoch = now_epoch - 14400  # 4 hours after kickoff → move to history
 
         rows = db_helper.execute("""
             SELECT id, home_team, away_team, market, selection, odds,
@@ -2322,17 +2322,15 @@ async def get_today_picks():
                 OR mode = 'VALUE_OPP'
             )
               AND (outcome IS NULL OR outcome = '' OR outcome IN ('pending', 'unknown'))
+              AND match_date >= %s
               AND (
-                  match_date >= %s
-                  OR (
-                      match_date = %s
-                      AND (outcome IS NULL OR outcome = '' OR outcome IN ('pending', 'unknown'))
-                  )
+                  kickoff_epoch IS NULL
+                  OR kickoff_epoch > %s
               )
             ORDER BY match_date ASC,
                      COALESCE(kickoff_epoch, 9999999999) ASC,
                      kickoff_time ASC NULLS LAST
-        """, (today_str, yesterday_str), fetch='all') or []
+        """, (today_str, cutoff_epoch), fetch='all') or []
 
         picks = []
         for r in rows:
@@ -2577,22 +2575,31 @@ async def get_picks_history(days: int = 90):
         day_start = datetime(now_utc.year, now_utc.month, now_utc.day, 0, 0, 0)
         window_start = (day_start - timedelta(days=min(days, 365))).strftime('%Y-%m-%d')
 
+        now_epoch_h = int(datetime.utcnow().timestamp())
+        cutoff_epoch_h = now_epoch_h - 14400  # 4h past kickoff
+
         rows = db_helper.execute("""
             SELECT id, home_team, away_team, market, selection, odds,
                    edge_percentage, confidence, outcome, profit_loss,
                    odds_by_bookmaker, best_odds_value, best_odds_bookmaker,
                    league, trust_level, kickoff_time, match_date,
-                   open_odds, clv_pct, mode
+                   open_odds, clv_pct, mode, kickoff_epoch
             FROM football_opportunities
             WHERE (
                 (mode = 'PROD' AND bet_placed = true)
                 OR mode = 'VALUE_OPP'
             )
               AND match_date >= %s
-              AND outcome IS NOT NULL
-              AND outcome NOT IN ('', 'pending', 'unknown')
-            ORDER BY match_date DESC, kickoff_time DESC NULLS LAST
-        """, (window_start,), fetch='all') or []
+              AND (
+                  (outcome IS NOT NULL AND outcome NOT IN ('', 'pending', 'unknown'))
+                  OR (
+                      (outcome IS NULL OR outcome IN ('', 'pending', 'unknown'))
+                      AND kickoff_epoch IS NOT NULL
+                      AND kickoff_epoch < %s
+                  )
+              )
+            ORDER BY match_date DESC, COALESCE(kickoff_epoch, 0) DESC, kickoff_time DESC NULLS LAST
+        """, (window_start, cutoff_epoch_h), fetch='all') or []
 
         picks = []
         for r in rows:
@@ -2607,10 +2614,30 @@ async def get_picks_history(days: int = 90):
 
             ko_time = r[15]
             match_date = str(r[16]) if r[16] else ''
-            ko_str = str(ko_time)[:5] + ' UTC' if ko_time and len(str(ko_time)) >= 5 else str(ko_time or match_date)
+            kickoff_epoch_h = r[20]
+
+            # Build ko_str: prefer epoch→Stockholm time, else kickoff_time column
+            ko_str = ''
+            if kickoff_epoch_h:
+                try:
+                    import pytz
+                    sthlm = pytz.timezone('Europe/Stockholm')
+                    dt_ko = datetime.utcfromtimestamp(kickoff_epoch_h).replace(tzinfo=pytz.utc)
+                    ko_str = dt_ko.astimezone(sthlm).strftime('%H:%M')
+                except Exception:
+                    pass
+            if not ko_str and ko_time:
+                ko_str = str(ko_time)[:5]
+            if not ko_str:
+                ko_str = match_date
 
             mode_val = r[19] or 'PROD'
             layer = 'PRO PICK' if mode_val == 'PROD' else 'VALUE OPP'
+
+            # Unsettled but past kickoff → show as "pending_result"
+            if not outcome and kickoff_epoch_h and kickoff_epoch_h < cutoff_epoch_h:
+                status = 'pending_result'
+
             picks.append({
                 'id': r[0],
                 'home_team': r[1] or '',

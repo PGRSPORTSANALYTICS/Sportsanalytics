@@ -234,9 +234,25 @@ function evTone(ev) {
   return { badge:"bg-zinc-800/60 text-zinc-400 border-zinc-700", border:"#27272a", text:"#71717a" };
 }
 
+function fmtStatus(st) {
+  const s = (st || "").toUpperCase();
+  if (s === "WON"  || s === "WIN")   return "✓ WON";
+  if (s === "LOST" || s === "LOSS")  return "✗ LOST";
+  if (s === "VOID")                  return "VOID";
+  if (s === "PENDING_RESULT")        return "Väntar";
+  if (s === "LIVE")                  return "LIVE";
+  if (s === "EARLY")                 return "EARLY";
+  return "PRE";
+}
+
 function statusPillClass(st) {
-  if (st === "LIVE")  return "bg-red-500/15 text-red-300 border-red-400/30";
-  if (st === "EARLY") return "bg-sky-500/15 text-sky-300 border-sky-400/30";
+  const s = (st || "").toUpperCase();
+  if (s === "LIVE")            return "bg-red-500/15 text-red-300 border-red-400/30";
+  if (s === "EARLY")           return "bg-sky-500/15 text-sky-300 border-sky-400/30";
+  if (s === "WON"  || s === "WIN")  return "bg-green-500/15 text-green-400 border-green-500/30";
+  if (s === "LOST" || s === "LOSS") return "bg-red-500/15 text-red-400 border-red-500/30";
+  if (s === "VOID")            return "bg-zinc-600/20 text-zinc-400 border-zinc-600/30";
+  if (s === "PENDING_RESULT")  return "bg-amber-500/15 text-amber-400 border-amber-500/30";
   return "bg-zinc-800/60 text-zinc-400 border-zinc-700";
 }
 
@@ -1276,7 +1292,7 @@ function renderApp() {
         style="position:relative;border-left:4px solid ${blColor};display:grid;grid-template-columns:1.8fr 1.2fr 0.7fr 0.9fr 1fr 1fr;gap:12px;padding:18px 16px;cursor:pointer;border-bottom:1px solid #18181b">
         <div>
           <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
-            <span class="inline-flex rounded-full border px-2 py-0.5 text-xs ${esc(statusPillClass(row.status))}">${esc(row.status || "PRE")}</span>
+            <span class="inline-flex rounded-full border px-2 py-0.5 text-xs ${esc(statusPillClass(row.status))}">${esc(fmtStatus(row.status))}</span>
             ${layerBadgeHtml(row.layer)}
           </div>
           <div style="font-size:15px;font-weight:700;line-height:1.25">${esc(row.match)}</div>
@@ -1726,7 +1742,7 @@ function renderPickList() {
         style="position:relative;border-left:4px solid ${blColor};display:grid;grid-template-columns:1.8fr 1.2fr 0.7fr 0.9fr 1fr 1fr;gap:12px;padding:18px 16px;cursor:pointer;border-bottom:1px solid #18181b">
         <div>
           <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
-            <span class="inline-flex rounded-full border px-2 py-0.5 text-xs ${esc(statusPillClass(row.status))}">${esc(row.status || "PRE")}</span>
+            <span class="inline-flex rounded-full border px-2 py-0.5 text-xs ${esc(statusPillClass(row.status))}">${esc(fmtStatus(row.status))}</span>
             ${layerBadgeHtml(row.layer)}
           </div>
           <div style="font-size:15px;font-weight:700;line-height:1.25">${esc(row.match)}</div>
@@ -1900,10 +1916,20 @@ async function fetchHistory() {
     const res = await fetch("/api/picks/history?days=" + state.historyDays);
     if (!res.ok) throw new Error("history failed");
     const d = await res.json();
-    state.historyPicks = (d.picks || []).map(p => ({
-      ...p,
-      match: (p.home_team || p.match || "") + (p.home_team ? " vs " + (p.away_team || "") : ""),
-    }));
+    state.historyPicks = (d.picks || []).map(p => {
+      const koStr = p.kickoff_str || '';
+      const kickoffTime = (p.match_date && koStr && koStr.includes(':'))
+        ? p.match_date + 'T' + koStr + ':00'
+        : (koStr || p.match_date || '');
+      return {
+        ...p,
+        match: (p.home_team || p.match || "") + (p.home_team ? " vs " + (p.away_team || "") : ""),
+        kickoff_time: kickoffTime,
+        ev: p.ev_pct || p.ev || 0,
+        confidence: p.confidence || 0,
+        bookmaker: p.best_odds_bookmaker || '',
+      };
+    });
     state.historyFetched = true;
   } catch (e) {
     state.historyPicks = [];
@@ -1989,7 +2015,7 @@ async function fetchNba() {
 /* ─────────────────────────────────────────────────────────────
    AUTO-REFRESH & LIVE BAR
 ───────────────────────────────────────────────────────────── */
-setInterval(fetchData, 60 * 1000);
+setInterval(fetchData, 20 * 1000);
 
 setInterval(() => {
   const el = document.getElementById("updated-ago");
