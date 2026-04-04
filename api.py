@@ -74,6 +74,10 @@ except Exception as _pgr_err:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# In-memory cache for match-scout responses (TTL 10 min)
+_match_scout_cache: Dict[str, Any] = {}
+_MATCH_SCOUT_TTL = 600  # seconds
+
 # =============================================================================
 # FastAPI App Initialization
 # =============================================================================
@@ -810,6 +814,12 @@ async def get_match_scout(match_id: str):
     Full bettor intelligence for a single match:
     all markets, bookmaker odds, model probs, H2H, form, xG, standings, CLV, predicted score.
     """
+    import time as _time, asyncio as _asyncio
+    # ── Cache check ───────────────────────────────────────────────────────────
+    _cache_key = match_id
+    _cached = _match_scout_cache.get(_cache_key)
+    if _cached and (_time.time() - _cached["_ts"]) < _MATCH_SCOUT_TTL:
+        return _cached["data"]
     try:
         # ── 1. All opportunities for this match ──────────────────
         # cols: 0=match_id 1=home 2=away 3=league 4=match_date 5=kickoff_time
@@ -965,18 +975,22 @@ async def get_match_scout(match_id: str):
                 "model_prob": round(float(td[33]), 3) if td[33] else None,
             }
 
-        # ── 3. SofaScore fallback for form + H2H ─────────────────
+        # ── 3. SofaScore fallback for form + H2H (max 2 s) ──────
         if form_stats is None or h2h_stats is None:
             try:
-                ss_form, ss_h2h = await _fetch_sofascore_data(home_team, away_team, league)
+                import asyncio as _aio
+                ss_form, ss_h2h = await _aio.wait_for(
+                    _fetch_sofascore_data(home_team, away_team, league),
+                    timeout=2.0
+                )
                 if form_stats is None and ss_form:
                     form_stats = ss_form
                 if h2h_stats is None and ss_h2h:
                     h2h_stats = ss_h2h
             except Exception as ss_err:
-                logger.warning(f"SofaScore fallback failed: {ss_err}")
+                logger.warning(f"SofaScore fallback skipped: {ss_err}")
 
-        return {
+        _result = {
             "match_id":   match_id,
             "home_team":  home_team,
             "away_team":  away_team,
@@ -990,6 +1004,10 @@ async def get_match_scout(match_id: str):
             "standings":  standings,
             "prediction": prediction,
         }
+        # ── Store in cache ─────────────────────────────────────
+        import time as _t
+        _match_scout_cache[_cache_key] = {"data": _result, "_ts": _t.time()}
+        return _result
 
     except HTTPException:
         raise

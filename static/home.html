@@ -406,7 +406,27 @@ function detailPanelHtml(pick, data, busy, tab) {
 
   let body = "";
   if (busy) {
-    body = `<div style="text-align:center;padding:60px 0;color:#3f3f46;font-size:13px">Loading intelligence…</div>`;
+    // Show known pick data immediately — no blank screen while server loads
+    body = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      ${metricTileHtml("Market", pick.market)}
+      ${metricTileHtml("Selection", pick.selection || "—", "#f4f4f5")}
+      ${metricTileHtml("Odds", Number(pick.odds).toFixed(2), "#4ade80")}
+      ${metricTileHtml("EV %", "+" + Number(pick.ev).toFixed(1) + "%", "#4ade80")}
+      ${metricTileHtml("Edge Score", pick.confidence + "%", pick.confidence >= 80 ? "#4ade80" : pick.confidence >= 60 ? "#fbbf24" : "#f87171")}
+      ${metricTileHtml("Bookmaker", pick.bookmaker || "—")}
+    </div>`;
+    if (pick.model_prob != null) {
+      const mp_pct = pick.model_prob * 100;
+      body += `<div style="border-radius:14px;border:1px solid #27272a;background:rgba(0,0,0,.3);padding:14px">
+        <div style="font-size:13px;font-weight:600;color:#e4e4e7;margin-bottom:10px">Model Probabilities</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          ${progressBarHtml("Model", mp_pct, "#818cf8")}
+        </div>
+      </div>`;
+    }
+    body += `<div style="text-align:center;padding:10px 0 4px;color:#52525b;font-size:12px;letter-spacing:.03em">
+      ⟳ Loading H2H, form &amp; odds board…
+    </div>`;
   } else if (tab === "intelligence") {
     body += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
       ${metricTileHtml("Market", pick.market)}
@@ -1489,6 +1509,19 @@ async function fetchData() {
     if (initialPick && state.dpData === null && !state.dpBusy) {
       loadDetailData(initialPick);
     }
+  }
+  // Background-prefetch all remaining picks to warm server cache
+  // Staggered 400 ms apart so we don't spike the server
+  if (!state.fetchError && state.allPicks.length > 1) {
+    const others = state.allPicks.filter(p => p.id !== state.selectedId);
+    others.forEach((p, i) => {
+      setTimeout(() => {
+        const mid = (p.home_team && p.away_team)
+          ? p.home_team + "_" + p.away_team
+          : p.id;
+        fetch("/api/match-scout/" + encodeURIComponent(mid)).catch(() => {});
+      }, (i + 1) * 400);
+    });
   }
 }
 
