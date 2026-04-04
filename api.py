@@ -2324,8 +2324,15 @@ async def get_today_picks():
               AND (outcome IS NULL OR outcome = '' OR outcome IN ('pending', 'unknown'))
               AND match_date >= %s
               AND (
-                  kickoff_epoch IS NULL
-                  OR kickoff_epoch > %s
+                  -- Has epoch: kickoff must be < 4h ago
+                  (kickoff_epoch IS NOT NULL AND kickoff_epoch > %s)
+                  -- No epoch: use match_date + kickoff_time as fallback
+                  OR (kickoff_epoch IS NULL AND (
+                      kickoff_time IS NULL
+                      OR match_date IS NULL
+                      OR NOT (kickoff_time ~ '^\d{2}:\d{2}')
+                      OR (match_date::date + kickoff_time::time) > NOW() - INTERVAL '4 hours'
+                  ))
               )
             ORDER BY match_date ASC,
                      COALESCE(kickoff_epoch, 9999999999) ASC,
@@ -2591,11 +2598,21 @@ async def get_picks_history(days: int = 90):
             )
               AND match_date >= %s
               AND (
+                  -- Settled picks always show in history
                   (outcome IS NOT NULL AND outcome NOT IN ('', 'pending', 'unknown'))
+                  -- Unsettled but past kickoff by >4h (epoch-based)
                   OR (
                       (outcome IS NULL OR outcome IN ('', 'pending', 'unknown'))
                       AND kickoff_epoch IS NOT NULL
                       AND kickoff_epoch < %s
+                  )
+                  -- Unsettled, no epoch, use match_date+kickoff_time
+                  OR (
+                      (outcome IS NULL OR outcome IN ('', 'pending', 'unknown'))
+                      AND kickoff_epoch IS NULL
+                      AND kickoff_time ~ '^\d{2}:\d{2}'
+                      AND match_date IS NOT NULL
+                      AND (match_date::date + kickoff_time::time) < NOW() - INTERVAL '4 hours'
                   )
               )
             ORDER BY match_date DESC, COALESCE(kickoff_epoch, 0) DESC, kickoff_time DESC NULLS LAST
