@@ -2319,10 +2319,7 @@ async def get_today_picks():
                     model_prob, disagreement, clv_status, hidden_value_status,
                     timestamp, kickoff_epoch
                 FROM football_opportunities
-                WHERE (
-                    (mode = 'PROD' AND bet_placed = true)
-                    OR mode = 'VALUE_OPP'
-                )
+                WHERE mode = 'PROD'
                   AND (outcome IS NULL OR outcome = '' OR outcome IN ('pending', 'unknown'))
                   AND match_date >= %s
                   AND (
@@ -2596,6 +2593,83 @@ async def get_today_picks():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/analysis/today")
+async def get_analysis_today():
+    """
+    VALUE_OPP opportunities for today — pure market analysis data.
+    NOT picks, NOT bets. Displayed in the dashboard Analysis section only.
+    """
+    try:
+        now_utc   = datetime.utcnow()
+        day_start = datetime(now_utc.year, now_utc.month, now_utc.day)
+        today_str = day_start.strftime('%Y-%m-%d')
+        cutoff_ep = int((now_utc.timestamp())) - 4 * 3600
+
+        rows = db_helper.execute("""
+            SELECT id, home_team, away_team, selection, market,
+                   odds, edge_percentage, confidence, league,
+                   kickoff_time, match_date, model_prob, kickoff_epoch
+            FROM football_opportunities
+            WHERE mode = 'VALUE_OPP'
+              AND (outcome IS NULL OR outcome = '' OR outcome IN ('pending','unknown'))
+              AND match_date >= %s
+              AND (
+                  (kickoff_epoch IS NOT NULL AND kickoff_epoch > %s)
+                  OR (kickoff_epoch IS NULL AND (
+                      kickoff_time IS NULL OR match_date IS NULL
+                      OR NOT (kickoff_time ~ '^\\d{2}:\\d{2}')
+                      OR (match_date::date + kickoff_time::time) > NOW() - INTERVAL '4 hours'
+                  ))
+              )
+            ORDER BY edge_percentage DESC
+            LIMIT 50
+        """, (today_str, cutoff_ep), fetch='all') or []
+
+        items = []
+        for r in rows:
+            ko_ep  = int(r[12]) if r[12] else None
+            ko_str = ''
+            if ko_ep:
+                try:
+                    import pytz
+                    sthlm = pytz.timezone('Europe/Stockholm')
+                    dt_ko = datetime.utcfromtimestamp(ko_ep).replace(tzinfo=pytz.utc)
+                    ko_str = dt_ko.astimezone(sthlm).strftime('%H:%M')
+                    kickoff_iso = datetime.utcfromtimestamp(ko_ep).strftime('%Y-%m-%dT%H:%M:%SZ')
+                except Exception:
+                    ko_str = str(r[9] or '')[:5]
+                    kickoff_iso = f"{r[10]}T{ko_str}:00" if r[10] else ''
+            else:
+                ko_str = str(r[9] or '')[:5]
+                kickoff_iso = f"{r[10]}T{ko_str}:00" if r[10] and ko_str else str(r[10] or '')
+
+            model_p = float(r[11]) if r[11] else None
+            odds_f  = float(r[5])  if r[5]  else None
+            ev_val  = round((model_p - 1.0 / odds_f) * 100, 1) if (model_p and odds_f and odds_f > 1.0) else round(float(r[6] or 0), 1)
+
+            items.append({
+                'id':          r[0],
+                'home_team':   r[1] or '',
+                'away_team':   r[2] or '',
+                'match':       f"{r[1] or ''} vs {r[2] or ''}",
+                'selection':   r[3] or '',
+                'market':      r[4] or '',
+                'odds':        float(r[5] or 0),
+                'ev':          ev_val,
+                'confidence':  round(float(r[7] or 0) * 100, 1),
+                'league':      r[8] or '',
+                'kickoff_str': ko_str,
+                'kickoff_time': kickoff_iso,
+                'match_date':  str(r[10] or ''),
+            })
+
+        return {'analysis': items, 'count': len(items)}
+
+    except Exception as e:
+        logger.error(f"Error in get_analysis_today: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/picks/history")
 async def get_picks_history(days: int = 90):
     """
@@ -2617,10 +2691,7 @@ async def get_picks_history(days: int = 90):
                    league, trust_level, kickoff_time, match_date,
                    open_odds, clv_pct, mode, kickoff_epoch, model_prob
             FROM football_opportunities
-            WHERE (
-                (mode = 'PROD' AND bet_placed = true)
-                OR mode = 'VALUE_OPP'
-            )
+            WHERE mode = 'PROD'
               AND match_date >= %s
               AND (
                   -- Settled picks always show in history
@@ -2844,7 +2915,7 @@ async def get_stats_summary(days: int = 90):
         today_str  = day_start.strftime('%Y-%m-%d')
         window_str = (day_start - timedelta(days=days)).strftime('%Y-%m-%d')
 
-        BASE_FILTER = "(mode = 'PROD' AND bet_placed = true) OR mode = 'VALUE_OPP'"
+        BASE_FILTER = "mode = 'PROD'"
 
         def _stats(rows):
             total    = int(rows[0] or 0)

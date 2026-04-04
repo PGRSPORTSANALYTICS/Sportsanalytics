@@ -64,7 +64,7 @@ PRO_MAX_ODDS = 2.30
 # Minimum Expected Value (EV) for candidate generation scan (three-layer routing, Mar 30 2026)
 # Candidates below 7% EV are rejected before PGR scoring.
 MIN_VALUE_SINGLE_EV = 0.07  # 7% floor — candidates then scored and routed to PRO/VALUE/WATCHLIST
-MAX_VALUE_SINGLES_PER_DAY = 5  # Max 5 PRO picks/day
+MAX_VALUE_SINGLES_PER_DAY = 8  # Max 8 PRO picks/day
 
 # Layer 2: VALUE OPPORTUNITY — published in dashboard + Discord, NOT official bets
 VALUE_MIN_EV = 0.12            # 12% EV
@@ -436,7 +436,7 @@ class ValueSinglesEngine:
     def generate_value_singles(
         self,
         avoid_match_ids: Optional[Set[str]] = None,
-        max_picks: int = 6,
+        max_picks: int = 8,
         league_filter: Optional[Set[str]] = None,
         exclude_leagues: Optional[Set[str]] = None
     ) -> List[Dict[str, Any]]:

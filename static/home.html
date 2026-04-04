@@ -120,6 +120,7 @@ const state = {
   nbaStats: null,
   nbaFetched: false,
   nbaLoading: false,
+  analysisItems: [], analysisLoading: false, analysisFetched: false,
 };
 
 /* ─────────────────────────────────────────────────────────────
@@ -1385,13 +1386,17 @@ function renderApp() {
                   style="padding:8px 18px;font-size:13px;font-weight:600;border:none;cursor:pointer;background:${state.mainTab==='nba'?'#fb923c':'#09090b'};color:${state.mainTab==='nba'?'#000':'#71717a'}">
                   🏀 NBA
                 </button>
+                <button class="main-tab-btn" data-maintab="analysis"
+                  style="padding:8px 18px;font-size:13px;font-weight:600;border:none;cursor:pointer;background:${state.mainTab==='analysis'?'#a78bfa':'#09090b'};color:${state.mainTab==='analysis'?'#000':'#71717a'}">
+                  📊 Analysis
+                </button>
               </div>
               <button id="btn-refresh" style="padding:8px 16px;border-radius:10px;border:1px solid #3f3f46;background:#18181b;font-size:13px;color:#d4d4d8;cursor:pointer">Refresh</button>
             </div>
           </div>
         </header>
 
-        ${state.mainTab === "history" ? renderHistoryTab() : state.mainTab === "clv" ? renderCLVTab() : state.mainTab === "hockey" ? renderHockeyTab() : state.mainTab === "nba" ? renderNbaTab() : `
+        ${state.mainTab === "analysis" ? renderAnalysisTab() : state.mainTab === "history" ? renderHistoryTab() : state.mainTab === "clv" ? renderCLVTab() : state.mainTab === "hockey" ? renderHockeyTab() : state.mainTab === "nba" ? renderNbaTab() : `
         <div style="border-bottom:1px solid #27272a;background:rgba(34,197,94,.04);padding:10px 16px">
           <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
             <div style="display:flex;align-items:center;gap:10px;font-size:13px">
@@ -1560,6 +1565,8 @@ function bindEvents() {
         fetchHockey();
       } else if (tab === "nba" && !state.nbaFetched) {
         fetchNba();
+      } else if (tab === "analysis" && !state.analysisFetched) {
+        fetchAnalysis();
       } else {
         render();
       }
@@ -2028,6 +2035,67 @@ async function fetchNba() {
   }
   state.nbaLoading = false;
   render();
+}
+
+async function fetchAnalysis() {
+  state.analysisLoading = true;
+  render();
+  try {
+    const res = await fetch("/api/analysis/today");
+    if (!res.ok) throw new Error("analysis failed");
+    const data = await res.json();
+    state.analysisItems  = data.analysis || [];
+    state.analysisFetched = true;
+  } catch (e) {
+    state.analysisItems = [];
+  }
+  state.analysisLoading = false;
+  render();
+}
+
+function renderAnalysisTab() {
+  if (state.analysisLoading) return `<div style="padding:40px;text-align:center;color:#71717a">Loading analysis…</div>`;
+  const items = state.analysisItems;
+  if (!items.length) return `<div style="padding:40px;text-align:center;color:#71717a">No VALUE_OPP opportunities found for today.</div>`;
+  const rows = items.map(a => {
+    const ev = a.ev || 0;
+    const evColor = ev >= 20 ? '#22c55e' : ev >= 12 ? '#f59e0b' : '#71717a';
+    return `<tr style="border-bottom:1px solid #27272a">
+      <td style="padding:10px 12px;color:#e4e4e7;font-weight:600">${esc(a.home_team)} <span style="color:#71717a">vs</span> ${esc(a.away_team)}</td>
+      <td style="padding:10px 12px;color:#a1a1aa;font-size:12px">${esc(a.league)}</td>
+      <td style="padding:10px 12px;color:#d4d4d8">${esc(a.selection)}</td>
+      <td style="padding:10px 12px;color:#d4d4d8;font-weight:700">${(a.odds||0).toFixed(2)}</td>
+      <td style="padding:10px 12px"><span style="color:${evColor};font-weight:700">${ev.toFixed(1)}%</span></td>
+      <td style="padding:10px 12px;color:#a1a1aa">${(a.confidence||0).toFixed(0)}%</td>
+      <td style="padding:10px 12px;color:#71717a;font-size:12px">${esc(a.kickoff_str||a.match_date||'')}</td>
+    </tr>`;
+  }).join('');
+  return `
+    <div style="padding:16px">
+      <div style="background:#1c1c1e;border:1px solid #3f3f46;border-radius:12px;overflow:hidden">
+        <div style="padding:12px 16px;border-bottom:1px solid #27272a;display:flex;align-items:center;gap:10px">
+          <span style="font-size:13px;font-weight:700;color:#a78bfa">📊 Market Analysis</span>
+          <span style="font-size:12px;color:#71717a">VALUE_OPP — data only, not tracked as bets</span>
+          <span style="margin-left:auto;font-size:12px;background:#3f3f46;color:#d4d4d8;padding:2px 8px;border-radius:20px">${items.length} opportunities</span>
+        </div>
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead>
+              <tr style="border-bottom:1px solid #27272a">
+                <th style="padding:8px 12px;text-align:left;color:#71717a;font-weight:600">Match</th>
+                <th style="padding:8px 12px;text-align:left;color:#71717a;font-weight:600">League</th>
+                <th style="padding:8px 12px;text-align:left;color:#71717a;font-weight:600">Selection</th>
+                <th style="padding:8px 12px;text-align:left;color:#71717a;font-weight:600">Odds</th>
+                <th style="padding:8px 12px;text-align:left;color:#71717a;font-weight:600">EV%</th>
+                <th style="padding:8px 12px;text-align:left;color:#71717a;font-weight:600">Conf</th>
+                <th style="padding:8px 12px;text-align:left;color:#71717a;font-weight:600">Kickoff</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
 }
 
 /* ─────────────────────────────────────────────────────────────
