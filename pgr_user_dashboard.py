@@ -651,12 +651,14 @@ with tab_today:
                 except Exception:
                     pass
 
-            # NEW badge — visible for 10 minutes after pick was created
+            # NEW badge + age — NEW visible for 10 minutes, age always shown
             new_badge = ""
+            age_str = ""
             try:
                 if created_at:
                     ts = created_at if isinstance(created_at, datetime) else datetime.fromisoformat(str(created_at).replace("Z", "+00:00")).replace(tzinfo=None)
                     age_minutes = (now_utc - ts).total_seconds() / 60
+                    age_str = _fmt_ago(ts)
                     if age_minutes <= 10:
                         new_badge = '<span class="badge badge-new">NEW</span>'
             except Exception:
@@ -679,10 +681,11 @@ with tab_today:
                 edge_html = f'<span>Edge <b style="color:{edge_color};font-weight:{edge_weight};">{edge_val:+.1f}%</b></span>'
                 fair_html += f'<span style="font-size:0.72rem;">{bk_name} <b style="color:#F2F5F8;">{bk_odds:.2f}</b></span>'
 
+            age_html = f'<span style="font-size:0.72rem;color:#6B7280;">· {age_str}</span>' if age_str else ""
             html = f"""
             <div class="{card_cls}">
                 <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
-                    <div style="font-size:0.75rem;color:#9BA0B5;">{league} {("· " + ko_str) if ko_str else ""}</div>
+                    <div style="font-size:0.75rem;color:#9BA0B5;">{league} {("· " + ko_str) if ko_str else ""} {age_html}</div>
                     <div style="display:flex;gap:5px;align-items:center;">
                         {new_badge}
                         <span class="badge badge-{conf_cls}">{conf_label}</span>
