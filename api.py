@@ -975,18 +975,65 @@ async def get_match_scout(match_id: str):
                 "model_prob": round(float(td[33]), 3) if td[33] else None,
             }
 
-        # ── 3. SofaScore fallback for form + H2H (max 2 s) ──────
+        # ── 3. SofaScore fallback for form + H2H (up to 22 s) ──────
         if form_stats is None or h2h_stats is None:
             try:
                 import asyncio as _aio
                 ss_form, ss_h2h = await _aio.wait_for(
                     _fetch_sofascore_data(home_team, away_team, league),
-                    timeout=2.0
+                    timeout=22.0
                 )
                 if form_stats is None and ss_form:
                     form_stats = ss_form
                 if h2h_stats is None and ss_h2h:
                     h2h_stats = ss_h2h
+                # Persist fetched form/H2H to training_data so next request is instant
+                if ss_form or ss_h2h:
+                    try:
+                        _hf = (ss_form or {}).get("home") or {}
+                        _af = (ss_form or {}).get("away") or {}
+                        _h2h = ss_h2h or {}
+                        _existing = db_helper.execute("""
+                            SELECT 1 FROM training_data
+                            WHERE home_team = %s AND away_team = %s AND match_date = %s
+                              AND home_form_wins IS NOT NULL
+                            LIMIT 1
+                        """, (home_team, away_team, match_date or None), fetch='one')
+                        if not _existing:
+                            db_helper.execute("""
+                                INSERT INTO training_data
+                                    (home_team, away_team, league, match_date,
+                                     home_form_goals_scored, home_form_goals_conceded,
+                                     home_form_clean_sheets, home_form_ppg,
+                                     home_form_wins, home_form_draws, home_form_losses,
+                                     away_form_goals_scored, away_form_goals_conceded,
+                                     away_form_clean_sheets, away_form_ppg,
+                                     away_form_wins, away_form_draws, away_form_losses,
+                                     h2h_matches_count, h2h_home_wins, h2h_away_wins, h2h_draws,
+                                     h2h_avg_goals, h2h_btts_rate, h2h_over25_rate,
+                                     data_source)
+                                VALUES (%s,%s,%s,%s,
+                                        %s,%s,%s,%s,%s,%s,%s,
+                                        %s,%s,%s,%s,%s,%s,%s,
+                                        %s,%s,%s,%s,%s,%s,%s,
+                                        'sofascore_ondemand')
+                            """, (
+                                home_team, away_team, league, match_date or None,
+                                _hf.get("goals_scored"), _hf.get("goals_conceded"),
+                                _hf.get("clean_sheets"), _hf.get("ppg"),
+                                _hf.get("wins"), _hf.get("draws"), _hf.get("losses"),
+                                _af.get("goals_scored"), _af.get("goals_conceded"),
+                                _af.get("clean_sheets"), _af.get("ppg"),
+                                _af.get("wins"), _af.get("draws"), _af.get("losses"),
+                                _h2h.get("matches"), _h2h.get("home_wins"),
+                                _h2h.get("away_wins"), _h2h.get("draws"),
+                                _h2h.get("avg_goals"),
+                                (_h2h.get("btts_rate") or 0) / 100 if _h2h.get("btts_rate") is not None else None,
+                                (_h2h.get("over25_rate") or 0) / 100 if _h2h.get("over25_rate") is not None else None,
+                            ))
+                        logger.info(f"✅ Form/H2H cached to training_data for {home_team} vs {away_team}")
+                    except Exception as _save_err:
+                        logger.warning(f"Could not persist SofaScore data: {_save_err}")
             except Exception as ss_err:
                 logger.warning(f"SofaScore fallback skipped: {ss_err}")
 
