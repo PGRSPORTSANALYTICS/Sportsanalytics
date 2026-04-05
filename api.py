@@ -3712,7 +3712,7 @@ async def admin_data(x_admin_key: Optional[str] = Header(None)):
             ROUND(edge_percentage::numeric,1) AS edge,
             ROUND(confidence::numeric,2) AS conf,
             TO_CHAR(COALESCE(kickoff_utc::timestamptz, TO_TIMESTAMP("timestamp")), 'YYYY-MM-DD HH24:MI') AS ko,
-            actual_score, settled_timestamp, match_date
+            actual_score, settled_timestamp, match_date, analysis
         FROM football_opportunities
         WHERE mode='PROD' AND outcome IN ('won','lost','void')
         ORDER BY settled_timestamp DESC NULLS LAST, "timestamp" DESC
@@ -3758,7 +3758,12 @@ async def admin_data(x_admin_key: Optional[str] = Header(None)):
         "recent": [{"id": r[0], "home": r[1], "away": r[2], "league": r[3], "market": r[4],
                      "selection": r[5], "odds": f(r[6]), "outcome": r[7] or "—",
                      "pl": f(r[8]), "edge": f(r[9]), "conf": f(r[10]), "ko": r[11] or "—",
-                     "score": r[12] or "", "date": str(r[14]) if r[14] else ""} for r in (recent or [])],
+                     "score": r[12] or "", "date": str(r[14]) if r[14] else "",
+                     "pred_score": (lambda a: (
+                         f"{int(a.get('expected_home_goals', 0))}-{int(a.get('expected_away_goals', 0))}"
+                         if a and a.get('expected_home_goals') is not None else ""
+                     ))(__import__('json').loads(r[15]) if r[15] and str(r[15]).startswith('{') else {})
+                     } for r in (recent or [])],
         "pending": [{"id": r[0], "match": f"{r[1]} vs {r[2]}", "league": r[3], "market": r[4],
                       "selection": r[5], "odds": f(r[6]), "edge": f(r[7]), "ko": r[8] or "—"} for r in (pending_picks or [])],
         "last_verify": (datetime.utcfromtimestamp(float(last_verify[0])).strftime('%Y-%m-%d %H:%M UTC') if last_verify and last_verify[0] else None),

@@ -143,6 +143,11 @@
   .match-cell { display: flex; flex-direction: column; gap: 3px; min-width: 180px; }
   .match-teams { font-size: 13px; color: #cbd5e1; font-weight: 500; }
   .match-date { font-size: 11px; color: #475569; }
+  .score-cell { display: flex; flex-direction: column; gap: 6px; align-items: center; min-width: 90px; }
+  .score-row { display: flex; align-items: center; gap: 6px; }
+  .score-label { font-size: 10px; color: #475569; text-transform: uppercase; letter-spacing: 0.06em; width: 28px; text-align: right; }
+  .score-actual { font-size: 18px; font-weight: 800; }
+  .score-pred { font-size: 13px; font-weight: 600; color: #6366f1; background: #1e1e3f; padding: 2px 8px; border-radius: 5px; }
 </style>
 </head>
 <body>
@@ -246,7 +251,7 @@
               <tr>
                 <th>Date</th>
                 <th>Match</th>
-                <th>Score</th>
+                <th style="text-align:center">Pred → Actual</th>
                 <th>Market</th>
                 <th>Selection</th>
                 <th>Odds</th>
@@ -401,17 +406,42 @@ function renderDash(d) {
   renderRecent('all');
 }
 
-function scoreBadge(score, market) {
-  if (!score) return '<span class="score-badge no-score">—</span>';
-  const isFootballScore = /^\d+-\d+$/.test(score.trim());
-  if (isFootballScore) {
-    const [h, a] = score.trim().split('-').map(Number);
-    let color = '#64748b';
-    if (h > a) color = '#22c55e';
-    else if (a > h) color = '#ef4444';
-    return `<span class="score-badge result" style="border-color:${color}33;color:#fff;font-size:17px">${score}</span>`;
+function scoreColor(score) {
+  if (!score || !/^\d+-\d+$/.test(score.trim())) return '#94a3b8';
+  const [h, a] = score.trim().split('-').map(Number);
+  if (h > a) return '#22c55e';
+  if (a > h) return '#ef4444';
+  return '#f59e0b';
+}
+
+function scoreCell(pred, actual) {
+  const hasPred = pred && /^\d+-\d+$/.test(pred.trim());
+  const hasActual = actual && /^\d+-\d+$/.test(actual.trim());
+  const hasOtherActual = actual && !hasActual;
+
+  let html = '<div class="score-cell">';
+
+  if (hasPred) {
+    html += `<div class="score-row">
+      <span class="score-label">Pred</span>
+      <span class="score-pred">${pred}</span>
+    </div>`;
   }
-  return `<span class="score-badge result" style="font-size:11px;font-weight:500">${score}</span>`;
+
+  if (hasActual) {
+    const col = scoreColor(actual);
+    html += `<div class="score-row">
+      <span class="score-label" style="${hasPred ? '' : 'width:auto'}">Actual</span>
+      <span class="score-actual" style="color:${col}">${actual}</span>
+    </div>`;
+  } else if (hasOtherActual) {
+    html += `<div style="font-size:11px;color:#64748b;text-align:center;max-width:110px">${actual}</div>`;
+  } else if (!hasPred) {
+    html += '<span style="color:#334155;font-size:12px">—</span>';
+  }
+
+  html += '</div>';
+  return html;
 }
 
 function renderRecent(filter) {
@@ -425,7 +455,7 @@ function renderRecent(filter) {
         <div class="match-date">${r.league}</div>
       </div>
     </td>
-    <td style="text-align:center">${scoreBadge(r.score, r.market)}</td>
+    <td>${scoreCell(r.pred_score, r.score)}</td>
     <td style="color:#94a3b8;font-size:12px">${r.market}</td>
     <td style="font-size:13px">${r.selection}</td>
     <td style="color:#94a3b8">${r.odds.toFixed(2)}</td>
