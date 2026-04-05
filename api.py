@@ -29,7 +29,7 @@ from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, RedirectResponse
@@ -2990,9 +2990,6 @@ async def get_roi_stats_endpoint():
 # REQUIRES API KEY AUTHENTICATION - Internal operator use only
 # =============================================================================
 
-from fastapi import Header
-
-
 def verify_admin_key(x_api_key: str = Header(None, alias="X-API-Key")):
     """Verify admin API key for internal endpoints."""
     admin_key = os.environ.get("ADMIN_API_KEY")
@@ -3637,6 +3634,136 @@ async def pgr_dashboard():
 @app.get("/edge-finder", include_in_schema=False)
 async def edge_finder_alias():
     return HTMLResponse(content=(STATIC_DIR / "pgr_dashboard.html").read_text())
+
+# =============================================================================
+# SECRET ADMIN DASHBOARD
+# =============================================================================
+
+@app.get("/admin", include_in_schema=False)
+async def admin_dashboard():
+    return HTMLResponse(content=(STATIC_DIR / "admin.html").read_text())
+
+
+@app.get("/api/admin/data", include_in_schema=False)
+async def admin_data(x_admin_key: Optional[str] = Header(None)):
+    """Protected admin data endpoint. Requires ADMIN_PASSWORD header."""
+    admin_pw = os.environ.get("ADMIN_PASSWORD", "")
+    admin_key = os.environ.get("ADMIN_API_KEY", "")
+    if not x_admin_key or (x_admin_key != admin_pw and x_admin_key != admin_key):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    db = db_helper
+
+    # Overall summary
+    summary = db.execute("""
+        SELECT
+            COUNT(*) FILTER (WHERE outcome IN ('won','lost','void')) AS settled,
+            COUNT(*) FILTER (WHERE outcome = 'won') AS wins,
+            COUNT(*) FILTER (WHERE outcome = 'lost') AS losses,
+            COUNT(*) FILTER (WHERE outcome = 'void') AS voids,
+            COUNT(*) FILTER (WHERE (outcome IS NULL OR outcome = '' OR outcome = 'pending') AND status='pending') AS pending,
+            ROUND(SUM(CASE WHEN outcome='won' THEN odds-1 WHEN outcome='lost' THEN -1 ELSE 0 END)::numeric,2) AS profit,
+            ROUND(AVG(CASE WHEN outcome IN ('won','lost') THEN odds END)::numeric,2) AS avg_odds
+        FROM football_opportunities WHERE mode = 'PROD'
+    """, fetch='one')
+
+    # By market
+    by_market = db.execute("""
+        SELECT market,
+            COUNT(*) FILTER (WHERE outcome IN ('won','lost')) AS settled,
+            COUNT(*) FILTER (WHERE outcome = 'won') AS wins,
+            COUNT(*) FILTER (WHERE outcome = 'lost') AS losses,
+            ROUND(SUM(CASE WHEN outcome='won' THEN odds-1 WHEN outcome='lost' THEN -1 ELSE 0 END)::numeric,2) AS profit,
+            ROUND(AVG(CASE WHEN outcome IN ('won','lost') THEN odds END)::numeric,2) AS avg_odds
+        FROM football_opportunities WHERE mode='PROD'
+        GROUP BY market ORDER BY settled DESC LIMIT 15
+    """, fetch='all')
+
+    # By league (top 15)
+    by_league = db.execute("""
+        SELECT league,
+            COUNT(*) FILTER (WHERE outcome IN ('won','lost')) AS settled,
+            COUNT(*) FILTER (WHERE outcome = 'won') AS wins,
+            COUNT(*) FILTER (WHERE outcome = 'lost') AS losses,
+            ROUND(SUM(CASE WHEN outcome='won' THEN odds-1 WHEN outcome='lost' THEN -1 ELSE 0 END)::numeric,2) AS profit,
+            ROUND(AVG(CASE WHEN outcome IN ('won','lost') THEN odds END)::numeric,2) AS avg_odds
+        FROM football_opportunities WHERE mode='PROD'
+        GROUP BY league ORDER BY settled DESC LIMIT 15
+    """, fetch='all')
+
+    # Daily profit last 30 days
+    daily = db.execute("""
+        SELECT
+            DATE(COALESCE(kickoff_utc::timestamptz, TO_TIMESTAMP("timestamp"))) AS day,
+            COUNT(*) FILTER (WHERE outcome IN ('won','lost')) AS settled,
+            COUNT(*) FILTER (WHERE outcome = 'won') AS wins,
+            ROUND(SUM(CASE WHEN outcome='won' THEN odds-1 WHEN outcome='lost' THEN -1 ELSE 0 END)::numeric,2) AS profit
+        FROM football_opportunities
+        WHERE mode='PROD'
+          AND DATE(COALESCE(kickoff_utc::timestamptz, TO_TIMESTAMP("timestamp"))) >= CURRENT_DATE - INTERVAL '30 days'
+        GROUP BY day ORDER BY day DESC
+    """, fetch='all')
+
+    # Recent picks (last 50 settled)
+    recent = db.execute("""
+        SELECT
+            id, home_team, away_team, league, market, selection, odds,
+            outcome, profit_loss,
+            ROUND(edge_percentage::numeric,1) AS edge,
+            ROUND(confidence::numeric,2) AS conf,
+            TO_CHAR(COALESCE(kickoff_utc::timestamptz, TO_TIMESTAMP("timestamp")), 'YYYY-MM-DD HH24:MI') AS ko,
+            actual_score, settled_timestamp
+        FROM football_opportunities
+        WHERE mode='PROD' AND outcome IN ('won','lost','void')
+        ORDER BY settled_timestamp DESC NULLS LAST, "timestamp" DESC
+        LIMIT 50
+    """, fetch='all')
+
+    # Pending picks
+    pending_picks = db.execute("""
+        SELECT id, home_team, away_team, league, market, selection, odds,
+               ROUND(edge_percentage::numeric,1) AS edge,
+               TO_CHAR(COALESCE(kickoff_utc::timestamptz, TO_TIMESTAMP("timestamp")), 'YYYY-MM-DD HH24:MI') AS ko
+        FROM football_opportunities
+        WHERE mode='PROD' AND (outcome IS NULL OR outcome='' OR outcome='pending') AND status='pending'
+          AND COALESCE(kickoff_utc::timestamptz, TO_TIMESTAMP("timestamp")) > NOW() - INTERVAL '2 days'
+        ORDER BY COALESCE(kickoff_utc::timestamptz, TO_TIMESTAMP("timestamp")) ASC
+        LIMIT 20
+    """, fetch='all')
+
+    # Last verification run (latest settled_timestamp)
+    last_verify = db.execute("""
+        SELECT MAX(settled_timestamp) FROM football_opportunities WHERE mode='PROD'
+    """, fetch='one')
+
+    def f(v): return float(v) if v is not None else 0.0
+    def i(v): return int(v) if v is not None else 0
+
+    s = summary or (0,0,0,0,0,0,0)
+    settled, wins, losses, voids, pending_cnt, profit, avg_odds = i(s[0]),i(s[1]),i(s[2]),i(s[3]),i(s[4]),f(s[5]),f(s[6])
+    hit_rate = round(wins / settled * 100, 1) if settled > 0 else 0
+    roi = round(profit / settled * 100, 1) if settled > 0 else 0
+
+    return JSONResponse({
+        "summary": {
+            "settled": settled, "wins": wins, "losses": losses, "voids": voids,
+            "pending": pending_cnt, "profit": profit, "avg_odds": avg_odds,
+            "hit_rate": hit_rate, "roi": roi
+        },
+        "by_market": [{"market": r[0], "settled": i(r[1]), "wins": i(r[2]), "losses": i(r[3]),
+                        "profit": f(r[4]), "avg_odds": f(r[5])} for r in (by_market or [])],
+        "by_league": [{"league": r[0], "settled": i(r[1]), "wins": i(r[2]), "losses": i(r[3]),
+                        "profit": f(r[4]), "avg_odds": f(r[5])} for r in (by_league or [])],
+        "daily": [{"day": str(r[0]), "settled": i(r[1]), "wins": i(r[2]), "profit": f(r[3])} for r in (daily or [])],
+        "recent": [{"id": r[0], "match": f"{r[1]} vs {r[2]}", "league": r[3], "market": r[4],
+                     "selection": r[5], "odds": f(r[6]), "outcome": r[7] or "—",
+                     "pl": f(r[8]), "edge": f(r[9]), "conf": f(r[10]), "ko": r[11] or "—",
+                     "score": r[12] or "—"} for r in (recent or [])],
+        "pending": [{"id": r[0], "match": f"{r[1]} vs {r[2]}", "league": r[3], "market": r[4],
+                      "selection": r[5], "odds": f(r[6]), "edge": f(r[7]), "ko": r[8] or "—"} for r in (pending_picks or [])],
+        "last_verify": (datetime.utcfromtimestamp(float(last_verify[0])).strftime('%Y-%m-%d %H:%M UTC') if last_verify and last_verify[0] else None),
+    })
+
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
