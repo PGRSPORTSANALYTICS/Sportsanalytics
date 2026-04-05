@@ -1427,13 +1427,15 @@ class RealResultVerifier:
             
             # Update the underlying football_opportunities table (not the view)
             outcome_lower = 'won' if outcome == 'WON' else 'lost' if outcome == 'LOST' else outcome.lower()
+            score_str = f"{home_goals}-{away_goals}" if home_goals is not None and away_goals is not None else None
             cursor.execute("""
                 UPDATE football_opportunities 
                 SET outcome = %s, 
                     profit_loss = %s,
+                    actual_score = COALESCE(%s, actual_score),
                     settled_timestamp = EXTRACT(EPOCH FROM NOW())::bigint
                 WHERE id = %s
-            """, (outcome_lower, profit_loss, bet['id']))
+            """, (outcome_lower, profit_loss, score_str, bet['id']))
             
             logger.info(f"✅ Settled bet {bet['id']}: {outcome} (P/L: {profit_loss:.2f})")
             return True

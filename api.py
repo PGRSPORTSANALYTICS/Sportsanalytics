@@ -3704,7 +3704,7 @@ async def admin_data(x_admin_key: Optional[str] = Header(None)):
         GROUP BY day ORDER BY day DESC
     """, fetch='all')
 
-    # Recent picks (last 50 settled)
+    # Recent picks (last 100 settled)
     recent = db.execute("""
         SELECT
             id, home_team, away_team, league, market, selection, odds,
@@ -3712,11 +3712,11 @@ async def admin_data(x_admin_key: Optional[str] = Header(None)):
             ROUND(edge_percentage::numeric,1) AS edge,
             ROUND(confidence::numeric,2) AS conf,
             TO_CHAR(COALESCE(kickoff_utc::timestamptz, TO_TIMESTAMP("timestamp")), 'YYYY-MM-DD HH24:MI') AS ko,
-            actual_score, settled_timestamp
+            actual_score, settled_timestamp, match_date
         FROM football_opportunities
         WHERE mode='PROD' AND outcome IN ('won','lost','void')
         ORDER BY settled_timestamp DESC NULLS LAST, "timestamp" DESC
-        LIMIT 50
+        LIMIT 100
     """, fetch='all')
 
     # Pending picks
@@ -3755,10 +3755,10 @@ async def admin_data(x_admin_key: Optional[str] = Header(None)):
         "by_league": [{"league": r[0], "settled": i(r[1]), "wins": i(r[2]), "losses": i(r[3]),
                         "profit": f(r[4]), "avg_odds": f(r[5])} for r in (by_league or [])],
         "daily": [{"day": str(r[0]), "settled": i(r[1]), "wins": i(r[2]), "profit": f(r[3])} for r in (daily or [])],
-        "recent": [{"id": r[0], "match": f"{r[1]} vs {r[2]}", "league": r[3], "market": r[4],
+        "recent": [{"id": r[0], "home": r[1], "away": r[2], "league": r[3], "market": r[4],
                      "selection": r[5], "odds": f(r[6]), "outcome": r[7] or "—",
                      "pl": f(r[8]), "edge": f(r[9]), "conf": f(r[10]), "ko": r[11] or "—",
-                     "score": r[12] or "—"} for r in (recent or [])],
+                     "score": r[12] or "", "date": str(r[14]) if r[14] else ""} for r in (recent or [])],
         "pending": [{"id": r[0], "match": f"{r[1]} vs {r[2]}", "league": r[3], "market": r[4],
                       "selection": r[5], "odds": f(r[6]), "edge": f(r[7]), "ko": r[8] or "—"} for r in (pending_picks or [])],
         "last_verify": (datetime.utcfromtimestamp(float(last_verify[0])).strftime('%Y-%m-%d %H:%M UTC') if last_verify and last_verify[0] else None),

@@ -132,6 +132,17 @@
   .tab-content.active { display: block; }
 
   .loading { text-align: center; padding: 80px; color: #475569; font-size: 14px; }
+
+  /* SCORE BADGE */
+  .score-badge {
+    display: inline-block; font-size: 15px; font-weight: 800; letter-spacing: 0.02em;
+    padding: 3px 10px; border-radius: 6px; white-space: nowrap;
+  }
+  .score-badge.result { background: #1a1a2e; color: #e2e8f0; border: 1px solid #2d2d3d; }
+  .score-badge.no-score { color: #334155; font-size: 12px; font-weight: 400; }
+  .match-cell { display: flex; flex-direction: column; gap: 3px; min-width: 180px; }
+  .match-teams { font-size: 13px; color: #cbd5e1; font-weight: 500; }
+  .match-date { font-size: 11px; color: #475569; }
 </style>
 </head>
 <body>
@@ -222,7 +233,7 @@
 
       <!-- Recent results -->
       <div class="section">
-        <div class="section-title">Recent Results <span id="recentCount">50</span></div>
+        <div class="section-title">Recent Results <span id="recentCount">100</span></div>
         <div class="tabs">
           <button class="tab-btn active" onclick="filterRecent('all', this)">All</button>
           <button class="tab-btn" onclick="filterRecent('won', this)">Won</button>
@@ -233,15 +244,13 @@
           <table>
             <thead>
               <tr>
-                <th>Kickoff</th>
+                <th>Date</th>
                 <th>Match</th>
-                <th>League</th>
+                <th>Score</th>
                 <th>Market</th>
                 <th>Selection</th>
                 <th>Odds</th>
-                <th>Edge</th>
                 <th>Result</th>
-                <th>Score</th>
                 <th>P&L</th>
               </tr>
             </thead>
@@ -392,21 +401,37 @@ function renderDash(d) {
   renderRecent('all');
 }
 
+function scoreBadge(score, market) {
+  if (!score) return '<span class="score-badge no-score">—</span>';
+  const isFootballScore = /^\d+-\d+$/.test(score.trim());
+  if (isFootballScore) {
+    const [h, a] = score.trim().split('-').map(Number);
+    let color = '#64748b';
+    if (h > a) color = '#22c55e';
+    else if (a > h) color = '#ef4444';
+    return `<span class="score-badge result" style="border-color:${color}33;color:#fff;font-size:17px">${score}</span>`;
+  }
+  return `<span class="score-badge result" style="font-size:11px;font-weight:500">${score}</span>`;
+}
+
 function renderRecent(filter) {
   const rows = filter === 'all' ? allRecent : allRecent.filter(r => r.outcome === filter);
   document.getElementById('recentCount').textContent = rows.length;
   document.getElementById('recentBody').innerHTML = rows.map(r => `<tr>
-    <td style="color:#64748b;white-space:nowrap">${r.ko}</td>
-    <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.match}">${r.match}</td>
-    <td style="color:#64748b;font-size:11px">${r.league}</td>
-    <td>${r.market}</td>
-    <td>${r.selection}</td>
-    <td>${r.odds.toFixed(2)}</td>
-    <td style="color:#94a3b8">${r.edge > 0 ? r.edge.toFixed(1) + '%' : '—'}</td>
+    <td style="color:#64748b;white-space:nowrap;font-size:12px">${r.ko}</td>
+    <td>
+      <div class="match-cell">
+        <div class="match-teams">${r.home} <span style="color:#475569">vs</span> ${r.away}</div>
+        <div class="match-date">${r.league}</div>
+      </div>
+    </td>
+    <td style="text-align:center">${scoreBadge(r.score, r.market)}</td>
+    <td style="color:#94a3b8;font-size:12px">${r.market}</td>
+    <td style="font-size:13px">${r.selection}</td>
+    <td style="color:#94a3b8">${r.odds.toFixed(2)}</td>
     <td>${outcomePill(r.outcome)}</td>
-    <td style="color:#94a3b8;font-size:12px">${r.score}</td>
     <td>${pl(r.pl)}</td>
-  </tr>`).join('') || '<tr><td colspan="10" style="text-align:center;color:#475569;padding:20px">No picks</td></tr>';
+  </tr>`).join('') || '<tr><td colspan="8" style="text-align:center;color:#475569;padding:20px">No picks</td></tr>';
 }
 
 function filterRecent(filter, btn) {
