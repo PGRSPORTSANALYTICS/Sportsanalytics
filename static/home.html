@@ -339,7 +339,9 @@ function getAllSports() {
 function getSelectedPick() {
   if (!state.selectedId) return null;
   const sid = String(state.selectedId);
-  return state.allPicks.find(p => String(p.id) === sid) || null;
+  return state.allPicks.find(p => String(p.id) === sid)
+      || state.analysisItems.find(p => String(p.id) === sid)
+      || null;
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -1540,6 +1542,11 @@ function bindEvents() {
     });
   });
 
+  // Analysis rows
+  document.querySelectorAll("[data-analysisid]").forEach(el => {
+    el.addEventListener("click", () => selectPick(el.dataset.analysisid));
+  });
+
   // Detail panel tabs
   document.querySelectorAll("[data-dptab]").forEach(btn => {
     btn.addEventListener("click", () => { state.dpTab = btn.dataset.dptab; renderDetailPanel(); });
@@ -2057,45 +2064,61 @@ function renderAnalysisTab() {
   if (state.analysisLoading) return `<div style="padding:40px;text-align:center;color:#71717a">Loading analysis…</div>`;
   const items = state.analysisItems;
   if (!items.length) return `<div style="padding:40px;text-align:center;color:#71717a">No VALUE_OPP opportunities found for today.</div>`;
-  const rows = items.map(a => {
-    const ev = a.ev || 0;
-    const evColor = ev >= 20 ? '#22c55e' : ev >= 12 ? '#f59e0b' : '#71717a';
-    return `<tr style="border-bottom:1px solid #27272a">
-      <td style="padding:10px 12px;color:#e4e4e7;font-weight:600">${esc(a.home_team)} <span style="color:#71717a">vs</span> ${esc(a.away_team)}</td>
-      <td style="padding:10px 12px;color:#a1a1aa;font-size:12px">${esc(a.league)}</td>
-      <td style="padding:10px 12px;color:#d4d4d8">${esc(a.selection)}</td>
-      <td style="padding:10px 12px;color:#d4d4d8;font-weight:700">${(a.odds||0).toFixed(2)}</td>
-      <td style="padding:10px 12px"><span style="color:${evColor};font-weight:700">${ev.toFixed(1)}%</span></td>
-      <td style="padding:10px 12px;color:#a1a1aa">${(a.confidence||0).toFixed(0)}%</td>
-      <td style="padding:10px 12px;color:#71717a;font-size:12px">${esc(a.kickoff_str||a.match_date||'')}</td>
-    </tr>`;
-  }).join('');
-  return `
-    <div style="padding:16px">
-      <div style="background:#1c1c1e;border:1px solid #3f3f46;border-radius:12px;overflow:hidden">
-        <div style="padding:12px 16px;border-bottom:1px solid #27272a;display:flex;align-items:center;gap:10px">
-          <span style="font-size:13px;font-weight:700;color:#a78bfa">📊 Market Analysis</span>
-          <span style="font-size:12px;color:#71717a">VALUE_OPP — data only, not tracked as bets</span>
-          <span style="margin-left:auto;font-size:12px;background:#3f3f46;color:#d4d4d8;padding:2px 8px;border-radius:20px">${items.length} opportunities</span>
+
+  const header = `
+    <div style="padding:12px 16px 8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:13px;font-weight:700;color:#a78bfa">📊 Market Analysis</span>
+      <span style="font-size:12px;color:#71717a">VALUE_OPP — data only, not tracked as bets</span>
+      <span style="margin-left:auto;font-size:12px;background:#3f3f46;color:#d4d4d8;padding:2px 8px;border-radius:20px">${items.length} opportunities</span>
+    </div>`;
+
+  const cards = items.map(a => {
+    const isSel = state.selectedId === String(a.id);
+    const ev    = a.ev || 0;
+    const conf  = Math.min(100, a.confidence || 0);
+    const t     = evTone(ev);
+    const blColor = isSel ? "#a78bfa" : t.border;
+    return `<div class="opp-row${isSel ? " active" : ""}" data-analysisid="${esc(a.id)}"
+      style="position:relative;border-left:4px solid ${blColor};display:grid;grid-template-columns:1.8fr 1.2fr 0.7fr 0.9fr 1fr 1fr;gap:12px;padding:18px 16px;cursor:pointer;border-bottom:1px solid #18181b">
+      <div>
+        <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
+          <span class="inline-flex rounded-full border px-2 py-0.5 text-xs" style="background:rgba(167,139,250,.15);border-color:rgba(167,139,250,.4);color:#a78bfa;font-weight:600;font-size:10px">OPP</span>
         </div>
-        <div style="overflow-x:auto">
-          <table style="width:100%;border-collapse:collapse;font-size:13px">
-            <thead>
-              <tr style="border-bottom:1px solid #27272a">
-                <th style="padding:8px 12px;text-align:left;color:#71717a;font-weight:600">Match</th>
-                <th style="padding:8px 12px;text-align:left;color:#71717a;font-weight:600">League</th>
-                <th style="padding:8px 12px;text-align:left;color:#71717a;font-weight:600">Selection</th>
-                <th style="padding:8px 12px;text-align:left;color:#71717a;font-weight:600">Odds</th>
-                <th style="padding:8px 12px;text-align:left;color:#71717a;font-weight:600">EV%</th>
-                <th style="padding:8px 12px;text-align:left;color:#71717a;font-weight:600">Conf</th>
-                <th style="padding:8px 12px;text-align:left;color:#71717a;font-weight:600">Kickoff</th>
-              </tr>
-            </thead>
-            <tbody>${rows}</tbody>
-          </table>
+        <div style="font-size:15px;font-weight:700;line-height:1.25">${esc(a.match)}</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap">
+          <span style="font-size:12px;font-weight:700;color:#a78bfa;background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.25);border-radius:6px;padding:1px 7px">${esc(fmtKickoff(a.kickoff_time))}</span>
+          <span style="font-size:11px;color:#71717a">${esc(a.league)}</span>
         </div>
       </div>
+      <div>
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Market</div>
+        <div style="font-size:13px;color:#d4d4d8">${esc(a.market)}</div>
+      </div>
+      <div>
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Odds</div>
+        <div style="font-size:24px;font-weight:900;color:#4ade80">${Number(a.odds||0).toFixed(2)}</div>
+      </div>
+      <div>
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">EV</div>
+        ${evBadgeHtml(ev, true, ev > 40)}
+      </div>
+      <div>
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Edge Score</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+          <span style="font-size:13px;font-weight:600">${conf.toFixed(0)}%</span>
+          <div style="height:6px;width:60px;border-radius:99px;background:#27272a;overflow:hidden">
+            <div style="height:100%;border-radius:99px;background:#a78bfa;width:${Math.min(100,conf)}%"></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Selection</div>
+        <div style="font-size:13px;font-weight:600;color:#d4d4d8">${esc(a.selection||'—')}</div>
+      </div>
     </div>`;
+  }).join("");
+
+  return header + `<div style="border-top:1px solid #18181b">${cards}</div>`;
 }
 
 /* ─────────────────────────────────────────────────────────────

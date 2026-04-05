@@ -2656,7 +2656,7 @@ async def get_analysis_today():
                 'market':      r[4] or '',
                 'odds':        float(r[5] or 0),
                 'ev':          ev_val,
-                'confidence':  round(float(r[7] or 0) * 100, 1),
+                'confidence':  round(float(r[7] or 0), 1),
                 'league':      r[8] or '',
                 'kickoff_str': ko_str,
                 'kickoff_time': kickoff_iso,
