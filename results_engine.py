@@ -1081,6 +1081,7 @@ class ResultsEngine:
             'odds': bet_data.get('odds', 0),
             'product_type': product_type,
             'league': bet_data.get('league', ''),
+            'market': bet_data.get('market', market or ''),
         }
         
         sent = send_result_to_discord(discord_info, product_type)
@@ -1200,6 +1201,7 @@ def catchup_discord_notifications():
                 'odds': odds or 0,
                 'product_type': product_type,
                 'league': '',
+                'market': market or '',
             }
 
             try:

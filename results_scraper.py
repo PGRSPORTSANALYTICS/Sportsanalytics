@@ -112,7 +112,8 @@ class ResultsScraper:
                 'odds': odds,
                 'profit_loss': profit_loss,
                 'product_type': product_type,
-                'league': league
+                'league': league,
+                'market': bet_info.get('market', ''),
             }
             send_result_to_discord(discord_info, product_type)
         except Exception as e:

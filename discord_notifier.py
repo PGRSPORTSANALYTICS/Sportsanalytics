@@ -542,6 +542,15 @@ def create_result_embed(bet_info: dict) -> dict:
     odds = bet_info.get('odds', bet_info.get('bookmaker_odds', 0))
     league = bet_info.get('league', '')
     product_type = bet_info.get('product_type', bet_info.get('product', '')).upper()
+    market = bet_info.get('market', '')
+
+    # Prefix market if selection doesn't already mention it
+    _sel_lower = selection.lower()
+    _mkt_lower = market.lower()
+    if _mkt_lower in ('cards', 'card') and 'card' not in _sel_lower:
+        selection = f"Cards {selection}"
+    elif _mkt_lower in ('corners', 'corner') and 'corner' not in _sel_lower:
+        selection = f"Corners {selection}"
     
     if outcome in ['WIN', 'WON']:
         emoji = "✅"
