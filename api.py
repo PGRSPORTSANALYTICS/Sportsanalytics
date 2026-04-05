@@ -2937,7 +2937,10 @@ async def get_stats_summary(days: int = 90):
             SELECT COUNT(*),
                    COUNT(CASE WHEN UPPER(outcome) IN ('WON','WIN')   THEN 1 END),
                    COUNT(CASE WHEN UPPER(outcome) IN ('LOST','LOSS') THEN 1 END),
-                   COALESCE(SUM(profit_loss), 0)
+                   COALESCE(SUM(CASE
+                       WHEN UPPER(outcome) IN ('WON','WIN')   THEN odds - 1
+                       WHEN UPPER(outcome) IN ('LOST','LOSS') THEN -1
+                       ELSE 0 END), 0)
             FROM football_opportunities
             WHERE {BASE_FILTER}
         """, fetch='one')
@@ -2946,7 +2949,10 @@ async def get_stats_summary(days: int = 90):
             SELECT COUNT(*),
                    COUNT(CASE WHEN UPPER(outcome) IN ('WON','WIN')   THEN 1 END),
                    COUNT(CASE WHEN UPPER(outcome) IN ('LOST','LOSS') THEN 1 END),
-                   COALESCE(SUM(profit_loss), 0)
+                   COALESCE(SUM(CASE
+                       WHEN UPPER(outcome) IN ('WON','WIN')   THEN odds - 1
+                       WHEN UPPER(outcome) IN ('LOST','LOSS') THEN -1
+                       ELSE 0 END), 0)
             FROM football_opportunities
             WHERE ({BASE_FILTER})
               AND match_date >= %s
