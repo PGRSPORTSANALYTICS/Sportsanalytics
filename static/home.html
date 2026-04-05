@@ -2044,7 +2044,7 @@ async function fetchAnalysis() {
     const res = await fetch("/api/analysis/today");
     if (!res.ok) throw new Error("analysis failed");
     const data = await res.json();
-    state.analysisItems  = data.analysis || [];
+    state.analysisItems  = data.picks || data.analysis || [];
     state.analysisFetched = true;
   } catch (e) {
     state.analysisItems = [];
