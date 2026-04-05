@@ -3644,6 +3644,46 @@ async def admin_dashboard():
     return HTMLResponse(content=(STATIC_DIR / "admin.html").read_text())
 
 
+def _build_recent(rows, f):
+    import json as _json, math as _math
+    result = []
+    for r in (rows or []):
+        analysis_raw = r[15]
+        analysis = {}
+        try:
+            if analysis_raw and str(analysis_raw).startswith('{'):
+                analysis = _json.loads(analysis_raw)
+        except Exception:
+            pass
+
+        pred_score = ""
+        pred_winner = ""  # "H", "D", "A"
+        eh = analysis.get('expected_home_goals')
+        ea = analysis.get('expected_away_goals')
+        if eh is not None and ea is not None:
+            ph = int(_math.floor(eh))
+            pa = int(_math.floor(ea))
+            pred_score = f"{ph}-{pa}"
+            if eh > ea + 0.15:
+                pred_winner = "H"
+            elif ea > eh + 0.15:
+                pred_winner = "A"
+            else:
+                pred_winner = "D"
+
+        result.append({
+            "id": r[0], "home": r[1], "away": r[2],
+            "league": r[3], "market": r[4], "selection": r[5],
+            "odds": f(r[6]), "outcome": r[7] or "—",
+            "pl": f(r[8]), "edge": f(r[9]), "conf": f(r[10]),
+            "ko": r[11] or "—", "score": r[12] or "",
+            "date": str(r[14]) if r[14] else "",
+            "pred_score": pred_score,
+            "pred_winner": pred_winner,
+        })
+    return result
+
+
 @app.get("/api/admin/data", include_in_schema=False)
 async def admin_data(x_admin_key: Optional[str] = Header(None)):
     """Protected admin data endpoint. Requires ADMIN_PASSWORD header."""
@@ -3741,8 +3781,10 @@ async def admin_data(x_admin_key: Optional[str] = Header(None)):
 
     s = summary or (0,0,0,0,0,0,0)
     settled, wins, losses, voids, pending_cnt, profit, avg_odds = i(s[0]),i(s[1]),i(s[2]),i(s[3]),i(s[4]),f(s[5]),f(s[6])
-    hit_rate = round(wins / settled * 100, 1) if settled > 0 else 0
-    roi = round(profit / settled * 100, 1) if settled > 0 else 0
+    # ROI denominator = wins+losses only (voids return stake so excluded)
+    staked_bets = wins + losses
+    hit_rate = round(wins / staked_bets * 100, 1) if staked_bets > 0 else 0
+    roi = round(profit / staked_bets * 100, 1) if staked_bets > 0 else 0
 
     return JSONResponse({
         "summary": {
@@ -3755,15 +3797,7 @@ async def admin_data(x_admin_key: Optional[str] = Header(None)):
         "by_league": [{"league": r[0], "settled": i(r[1]), "wins": i(r[2]), "losses": i(r[3]),
                         "profit": f(r[4]), "avg_odds": f(r[5])} for r in (by_league or [])],
         "daily": [{"day": str(r[0]), "settled": i(r[1]), "wins": i(r[2]), "profit": f(r[3])} for r in (daily or [])],
-        "recent": [{"id": r[0], "home": r[1], "away": r[2], "league": r[3], "market": r[4],
-                     "selection": r[5], "odds": f(r[6]), "outcome": r[7] or "—",
-                     "pl": f(r[8]), "edge": f(r[9]), "conf": f(r[10]), "ko": r[11] or "—",
-                     "score": r[12] or "", "date": str(r[14]) if r[14] else "",
-                     "pred_score": (lambda a: (
-                         f"{int(a.get('expected_home_goals', 0))}-{int(a.get('expected_away_goals', 0))}"
-                         if a and a.get('expected_home_goals') is not None else ""
-                     ))(__import__('json').loads(r[15]) if r[15] and str(r[15]).startswith('{') else {})
-                     } for r in (recent or [])],
+        "recent": _build_recent(recent, f),
         "pending": [{"id": r[0], "match": f"{r[1]} vs {r[2]}", "league": r[3], "market": r[4],
                       "selection": r[5], "odds": f(r[6]), "edge": f(r[7]), "ko": r[8] or "—"} for r in (pending_picks or [])],
         "last_verify": (datetime.utcfromtimestamp(float(last_verify[0])).strftime('%Y-%m-%d %H:%M UTC') if last_verify and last_verify[0] else None),

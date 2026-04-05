@@ -143,11 +143,15 @@
   .match-cell { display: flex; flex-direction: column; gap: 3px; min-width: 180px; }
   .match-teams { font-size: 13px; color: #cbd5e1; font-weight: 500; }
   .match-date { font-size: 11px; color: #475569; }
-  .score-cell { display: flex; flex-direction: column; gap: 6px; align-items: center; min-width: 90px; }
+  .score-cell { display: flex; flex-direction: column; gap: 5px; align-items: center; min-width: 110px; }
   .score-row { display: flex; align-items: center; gap: 6px; }
-  .score-label { font-size: 10px; color: #475569; text-transform: uppercase; letter-spacing: 0.06em; width: 28px; text-align: right; }
+  .score-label { font-size: 10px; color: #475569; text-transform: uppercase; letter-spacing: 0.06em; width: 32px; text-align: right; flex-shrink: 0; }
   .score-actual { font-size: 18px; font-weight: 800; }
-  .score-pred { font-size: 13px; font-weight: 600; color: #6366f1; background: #1e1e3f; padding: 2px 8px; border-radius: 5px; }
+  .score-pred { font-size: 12px; font-weight: 600; color: #818cf8; background: #1e1e3f; padding: 2px 8px; border-radius: 5px; }
+  .pred-winner { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; padding: 2px 7px; border-radius: 4px; text-transform: uppercase; }
+  .pred-winner.H { background: #14532d; color: #4ade80; }
+  .pred-winner.A { background: #450a0a; color: #f87171; }
+  .pred-winner.D { background: #1c1917; color: #a8a29e; }
 </style>
 </head>
 <body>
@@ -414,12 +418,22 @@ function scoreColor(score) {
   return '#f59e0b';
 }
 
-function scoreCell(pred, actual) {
+function winnerLabel(w) {
+  if (!w) return '';
+  const map = { H: 'Home Win', D: 'Draw', A: 'Away Win' };
+  return `<span class="pred-winner ${w}">${map[w] || w}</span>`;
+}
+
+function scoreCell(pred, actual, winner) {
   const hasPred = pred && /^\d+-\d+$/.test(pred.trim());
   const hasActual = actual && /^\d+-\d+$/.test(actual.trim());
   const hasOtherActual = actual && !hasActual;
 
   let html = '<div class="score-cell">';
+
+  if (winner) {
+    html += `<div>${winnerLabel(winner)}</div>`;
+  }
 
   if (hasPred) {
     html += `<div class="score-row">
@@ -431,12 +445,12 @@ function scoreCell(pred, actual) {
   if (hasActual) {
     const col = scoreColor(actual);
     html += `<div class="score-row">
-      <span class="score-label" style="${hasPred ? '' : 'width:auto'}">Actual</span>
+      <span class="score-label">Actual</span>
       <span class="score-actual" style="color:${col}">${actual}</span>
     </div>`;
   } else if (hasOtherActual) {
     html += `<div style="font-size:11px;color:#64748b;text-align:center;max-width:110px">${actual}</div>`;
-  } else if (!hasPred) {
+  } else if (!hasPred && !winner) {
     html += '<span style="color:#334155;font-size:12px">—</span>';
   }
 
@@ -455,7 +469,7 @@ function renderRecent(filter) {
         <div class="match-date">${r.league}</div>
       </div>
     </td>
-    <td>${scoreCell(r.pred_score, r.score)}</td>
+    <td>${scoreCell(r.pred_score, r.score, r.pred_winner)}</td>
     <td style="color:#94a3b8;font-size:12px">${r.market}</td>
     <td style="font-size:13px">${r.selection}</td>
     <td style="color:#94a3b8">${r.odds.toFixed(2)}</td>
