@@ -117,9 +117,11 @@ const state = {
   hockeyStats: null,
   hockeyFetched: false,
   hockeyLoading: false,
+  hockeyPicks: [],
   nbaStats: null,
   nbaFetched: false,
   nbaLoading: false,
+  nbaPicks: [],
   analysisItems: [], analysisLoading: false, analysisFetched: false,
 };
 
@@ -341,6 +343,8 @@ function getSelectedPick() {
   const sid = String(state.selectedId);
   return state.allPicks.find(p => String(p.id) === sid)
       || state.analysisItems.find(p => String(p.id) === sid)
+      || state.hockeyPicks.find(p => String(p.id) === sid)
+      || state.nbaPicks.find(p => String(p.id) === sid)
       || null;
 }
 
@@ -807,41 +811,47 @@ function renderHockeyTab() {
     return `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]} · ${time}`;
   }
 
-  // Deduplicate: 1 pick per match (best odds)
-  const _hSeenMatches = new Set();
-  const upcomingDeduped = [...upcoming].sort((a,b) => b.odds - a.odds).filter(p => {
-    const key = (p.home_team + "|" + p.away_team).toLowerCase();
-    if (_hSeenMatches.has(key)) return false;
-    _hSeenMatches.add(key); return true;
-  });
-
-  const upcomingCards = upcomingDeduped.length === 0
+  const hPicks = state.hockeyPicks;
+  const upcomingCards = hPicks.length === 0
     ? `<div style="text-align:center;padding:30px 0;color:#3f3f46;font-size:13px">No upcoming hockey picks right now</div>`
-    : `<div style="border-top:1px solid #18181b">` + upcomingDeduped.map(p => `
-      <div style="border-left:4px solid #27272a;display:grid;grid-template-columns:1.8fr 1.2fr 0.7fr 1fr;gap:12px;padding:18px 16px;border-bottom:1px solid #18181b">
-        <div>
-          <div style="display:flex;gap:6px;margin-bottom:8px">
-            <span style="background:rgba(148,163,184,.12);border:1px solid rgba(148,163,184,.3);color:#94a3b8;font-weight:600;font-size:10px;padding:1px 7px;border-radius:99px">PRE</span>
+    : `<div style="border-top:1px solid #18181b">` + hPicks.map(row => {
+        const t = evTone(row.ev || 0);
+        const isSel = state.selectedId === String(row.id);
+        const blColor = isSel ? "#6366f1" : "#27272a";
+        return `<div class="opp-row${isSel ? " active" : ""}" data-pickid="${esc(row.id)}"
+          style="position:relative;border-left:4px solid ${blColor};display:grid;grid-template-columns:1.8fr 1.2fr 0.7fr 0.9fr 1fr 1fr;gap:12px;padding:18px 16px;cursor:pointer;border-bottom:1px solid #18181b">
+          <div>
+            <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
+              <span class="inline-flex rounded-full border px-2 py-0.5 text-xs ${esc(statusPillClass(row.status))}">${esc(fmtStatus(row.status))}</span>
+            </div>
+            <div style="font-size:15px;font-weight:700;line-height:1.25">${esc(row.match)}</div>
+            <div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap">
+              <span style="font-size:12px;font-weight:700;color:#a78bfa;background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.25);border-radius:6px;padding:1px 7px">🏒 ${esc(fmtKickoff(row.kickoff_time))}</span>
+              <span style="font-size:11px;color:#71717a">${esc(row.league)}</span>
+            </div>
           </div>
-          <div style="font-size:15px;font-weight:700;line-height:1.25">${esc(p.home_team)} vs ${esc(p.away_team)}</div>
-          <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
-            <span style="font-size:12px;font-weight:700;color:#94a3b8;background:rgba(148,163,184,.1);border:1px solid rgba(148,163,184,.2);border-radius:6px;padding:1px 7px">🏒 ${esc(fmtKickoff(p.kickoff))}</span>
-            <span style="font-size:11px;color:#71717a">${esc(p.league)}</span>
+          <div>
+            <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Market</div>
+            <div style="font-size:13px;color:#d4d4d8">${esc(row.market)}</div>
           </div>
-        </div>
-        <div>
-          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Market</div>
-          <div style="font-size:13px;color:#d4d4d8">${esc(p.market)}</div>
-        </div>
-        <div>
-          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Odds</div>
-          <div style="font-size:24px;font-weight:900;color:#4ade80">${Number(p.odds).toFixed(2)}</div>
-        </div>
-        <div>
-          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Selection</div>
-          <div style="font-size:13px;font-weight:600;color:#d4d4d8">${esc(p.selection)}</div>
-        </div>
-      </div>`).join("") + `</div>`;
+          <div>
+            <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Odds</div>
+            <div style="font-size:24px;font-weight:900;color:#4ade80">${Number(row.odds).toFixed(2)}</div>
+          </div>
+          <div>
+            <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">EV</div>
+            <div style="font-size:13px;color:#52525b">—</div>
+          </div>
+          <div>
+            <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Edge Score</div>
+            <div style="font-size:13px;color:#52525b">—</div>
+          </div>
+          <div>
+            <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Selection</div>
+            <div style="font-size:13px;font-weight:600;color:#d4d4d8">${esc(row.selection || '—')}</div>
+          </div>
+        </div>`;
+      }).join("") + `</div>`;
 
   if (!s && !state.hockeyLoading) {
     return `<div style="text-align:center;padding:80px 0;color:#52525b;font-size:14px">No hockey data yet — engine collecting results</div>`;
@@ -852,7 +862,7 @@ function renderHockeyTab() {
       <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;padding:16px">${kpiHtml}</div>
 
       <div style="padding:0 16px 16px">
-        <div style="font-size:10px;letter-spacing:.12em;color:#52525b;text-transform:uppercase;margin-bottom:12px;font-weight:600">Upcoming — ${upcomingDeduped.length} picks</div>
+        <div style="font-size:10px;letter-spacing:.12em;color:#52525b;text-transform:uppercase;margin-bottom:12px;font-weight:600">Upcoming — ${hPicks.length} picks</div>
         ${upcomingCards}
       </div>
 
@@ -937,41 +947,46 @@ function renderNbaTab() {
     return `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]} · ${ko.slice(11,16)}`;
   }
 
-  // Deduplicate: 1 pick per match (best odds)
-  const _nSeenMatches = new Set();
-  const nbaUpcomingDeduped = [...nbaUpcoming].sort((a,b) => b.odds - a.odds).filter(p => {
-    const key = (p.home_team + "|" + p.away_team).toLowerCase();
-    if (_nSeenMatches.has(key)) return false;
-    _nSeenMatches.add(key); return true;
-  });
-
-  const nbaUpcomingCards = nbaUpcomingDeduped.length === 0
+  const nbPicks = state.nbaPicks;
+  const nbaUpcomingCards = nbPicks.length === 0
     ? `<div style="text-align:center;padding:30px 0;color:#3f3f46;font-size:13px">No upcoming NBA picks right now</div>`
-    : `<div style="border-top:1px solid #18181b">` + nbaUpcomingDeduped.map(p => `
-      <div style="border-left:4px solid #27272a;display:grid;grid-template-columns:1.8fr 1.2fr 0.7fr 1fr;gap:12px;padding:18px 16px;border-bottom:1px solid #18181b">
-        <div>
-          <div style="display:flex;gap:6px;margin-bottom:8px">
-            <span style="background:rgba(251,146,60,.12);border:1px solid rgba(251,146,60,.3);color:#fb923c;font-weight:600;font-size:10px;padding:1px 7px;border-radius:99px">PRE</span>
+    : `<div style="border-top:1px solid #18181b">` + nbPicks.map(row => {
+        const isSel = state.selectedId === String(row.id);
+        const blColor = isSel ? "#6366f1" : "#27272a";
+        return `<div class="opp-row${isSel ? " active" : ""}" data-pickid="${esc(row.id)}"
+          style="position:relative;border-left:4px solid ${blColor};display:grid;grid-template-columns:1.8fr 1.2fr 0.7fr 0.9fr 1fr 1fr;gap:12px;padding:18px 16px;cursor:pointer;border-bottom:1px solid #18181b">
+          <div>
+            <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
+              <span class="inline-flex rounded-full border px-2 py-0.5 text-xs ${esc(statusPillClass(row.status))}">${esc(fmtStatus(row.status))}</span>
+            </div>
+            <div style="font-size:15px;font-weight:700;line-height:1.25">${esc(row.match)}</div>
+            <div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap">
+              <span style="font-size:12px;font-weight:700;color:#a78bfa;background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.25);border-radius:6px;padding:1px 7px">🏀 ${esc(fmtKickoff(row.kickoff_time))}</span>
+              <span style="font-size:11px;color:#71717a">${esc(row.league)}</span>
+            </div>
           </div>
-          <div style="font-size:15px;font-weight:700;line-height:1.25">${esc(p.home_team)} vs ${esc(p.away_team)}</div>
-          <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
-            <span style="font-size:12px;font-weight:700;color:#fb923c;background:rgba(251,146,60,.1);border:1px solid rgba(251,146,60,.2);border-radius:6px;padding:1px 7px">🏀 ${esc(fmtKo(p.kickoff))}</span>
-            <span style="font-size:11px;color:#71717a">${esc(p.league || 'NBA')}</span>
+          <div>
+            <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Market</div>
+            <div style="font-size:13px;color:#d4d4d8">${esc(row.market)}</div>
           </div>
-        </div>
-        <div>
-          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Market</div>
-          <div style="font-size:13px;color:#d4d4d8">${esc(p.market)}</div>
-        </div>
-        <div>
-          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Odds</div>
-          <div style="font-size:24px;font-weight:900;color:#4ade80">${Number(p.odds).toFixed(2)}</div>
-        </div>
-        <div>
-          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Selection</div>
-          <div style="font-size:13px;font-weight:600;color:#d4d4d8">${esc(p.selection)}</div>
-        </div>
-      </div>`).join("") + `</div>`;
+          <div>
+            <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Odds</div>
+            <div style="font-size:24px;font-weight:900;color:#4ade80">${Number(row.odds).toFixed(2)}</div>
+          </div>
+          <div>
+            <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">EV</div>
+            <div style="font-size:13px;color:#52525b">—</div>
+          </div>
+          <div>
+            <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Edge Score</div>
+            <div style="font-size:13px;color:#52525b">—</div>
+          </div>
+          <div>
+            <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Selection</div>
+            <div style="font-size:13px;font-weight:600;color:#d4d4d8">${esc(row.selection || '—')}</div>
+          </div>
+        </div>`;
+      }).join("") + `</div>`;
 
   if (!s && !state.nbaLoading) {
     return `<div style="text-align:center;padding:80px 0;color:#52525b;font-size:14px">NBA engine starting — first picks will appear within the hour</div>`;
@@ -982,7 +997,7 @@ function renderNbaTab() {
       <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;padding:16px">${kpiHtml}</div>
 
       <div style="padding:0 16px 16px">
-        <div style="font-size:10px;letter-spacing:.12em;color:#52525b;text-transform:uppercase;margin-bottom:12px;font-weight:600">Upcoming — ${nbaUpcomingDeduped.length} picks</div>
+        <div style="font-size:10px;letter-spacing:.12em;color:#52525b;text-transform:uppercase;margin-bottom:12px;font-weight:600">Upcoming — ${nbPicks.length} picks</div>
         ${nbaUpcomingCards}
       </div>
 
@@ -2048,16 +2063,48 @@ async function fetchCLV() {
   render();
 }
 
+function _normalizeSportPicks(upcoming, prefix) {
+  const seen = new Set();
+  return (upcoming || [])
+    .sort((a, b) => (b.odds || 0) - (a.odds || 0))
+    .filter(p => {
+      const key = ((p.home_team || "") + "|" + (p.away_team || "")).toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key); return true;
+    })
+    .map((p, i) => ({
+      id:           prefix + i,
+      match:        (p.home_team || "") + " vs " + (p.away_team || ""),
+      home_team:    p.home_team || "",
+      away_team:    p.away_team || "",
+      market:       p.market || "",
+      selection:    p.selection || "",
+      odds:         p.odds || 0,
+      ev:           null,
+      confidence:   null,
+      league:       p.league || (prefix === "hk_" ? "Hockey" : "NBA"),
+      kickoff_time: p.kickoff ? p.kickoff.replace(" ", "T") : null,
+      status:       "pre",
+      sport:        prefix === "hk_" ? "HOCKEY" : "NBA",
+      layer:        null,
+      bookmaker:    null,
+      is_outlier:   false,
+    }));
+}
+
 async function fetchHockey() {
   state.hockeyLoading = true;
   render();
   try {
     const res = await fetch("/api/hockey/stats");
     if (!res.ok) throw new Error("hockey failed");
-    state.hockeyStats  = await res.json();
+    const data = await res.json();
+    state.hockeyStats  = data;
+    state.hockeyPicks  = _normalizeSportPicks(data.upcoming, "hk_");
     state.hockeyFetched = true;
   } catch (e) {
     state.hockeyStats = null;
+    state.hockeyPicks = [];
   }
   state.hockeyLoading = false;
   render();
@@ -2069,10 +2116,13 @@ async function fetchNba() {
   try {
     const res = await fetch("/api/nba/stats");
     if (!res.ok) throw new Error("nba failed");
-    state.nbaStats  = await res.json();
+    const data = await res.json();
+    state.nbaStats  = data;
+    state.nbaPicks  = _normalizeSportPicks(data.upcoming, "nb_");
     state.nbaFetched = true;
   } catch (e) {
     state.nbaStats = null;
+    state.nbaPicks = [];
   }
   state.nbaLoading = false;
   render();
