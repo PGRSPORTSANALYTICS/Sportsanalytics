@@ -4425,7 +4425,7 @@ def run_single_cycle():
         
         vs_slots = 0 if euro_cap_reached else min(10, euro_remaining)
         try:
-            value_engine = ValueSinglesEngine(champion, ev_threshold=0.05, min_confidence=55)
+            value_engine = ValueSinglesEngine(champion, ev_threshold=0.12, min_confidence=55)
             value_singles = value_engine.generate_value_singles(
                 avoid_match_ids=pending_matches,
                 max_picks=vs_slots,
@@ -4457,7 +4457,7 @@ def run_single_cycle():
         else:
             summer_slots = min(10, summer_remaining)
             try:
-                summer_engine = ValueSinglesEngine(champion, ev_threshold=0.05, min_confidence=55)
+                summer_engine = ValueSinglesEngine(champion, ev_threshold=0.12, min_confidence=55)
                 summer_singles = summer_engine.generate_value_singles(
                     avoid_match_ids=pending_matches,
                     max_picks=summer_slots,
@@ -5090,7 +5090,7 @@ def main():
                 print("\n💰 VALUE SINGLES ENGINE - Analyzing markets...")
                 # Get existing pending matches to avoid contradictory picks
                 pending_matches = get_pending_match_ids()
-                value_engine = ValueSinglesEngine(champion, ev_threshold=0.05, min_confidence=55)
+                value_engine = ValueSinglesEngine(champion, ev_threshold=0.12, min_confidence=55)
                 value_singles = value_engine.generate_value_singles(avoid_match_ids=pending_matches, max_picks=10)
                 if value_singles:
                     saved = value_engine.save_value_singles(value_singles)

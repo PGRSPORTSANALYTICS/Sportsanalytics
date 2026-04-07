@@ -81,8 +81,9 @@ MIN_VALUE_SINGLE_ODDS = 1.60   # Broadened from 1.80
 MAX_VALUE_SINGLE_ODDS = 2.30   # PRO upper bound (legacy compat)
 MAX_LEARNING_ODDS = 4.00       # Outer scan ceiling
 
-# Legacy aliases used elsewhere in this file
-MIN_VALUE_SINGLE_EV = PRO_MIN_EV
+# Candidate scan floor — raised from 5% to 12% (Apr 2026, bleeding control)
+# PRO picks still need PRO_MIN_EV (25%) via pgr_scoring routing
+MIN_VALUE_SINGLE_EV = 0.12     # 12% floor — raised from 5%
 MIN_VALUE_SINGLE_CONFIDENCE = PRO_MIN_CONFIDENCE
 
 # Market-specific EV floors (conservative overrides for high-volume markets)
@@ -247,8 +248,8 @@ class ValueSinglesEngine:
 
     def __init__(self, champion, ev_threshold: float = None, min_confidence: int = None):
         self.champion = champion
-        # Use hard-coded constants for strict filtering (Nov 30, 2025)
-        self.ev_threshold = MIN_VALUE_SINGLE_EV  # 5% EV requirement (core product)
+        # Use caller-supplied threshold; fall back to constant (raised to 12% Apr 2026)
+        self.ev_threshold = ev_threshold if ev_threshold is not None else MIN_VALUE_SINGLE_EV
         self.min_confidence = 50  # Base confidence threshold (probability filter is separate)
     
     def _check_conflict_with_ev_comparison(self, home_team: str, away_team: str, market_key: str, 
@@ -658,8 +659,8 @@ class ValueSinglesEngine:
                 # ── Three-layer routing ──────────────────────────────────────────────
                 ev = adj_ev
 
-                # Candidate EV floor
-                if ev < MIN_VALUE_SINGLE_EV:
+                # Candidate EV floor (12% minimum, Apr 2026)
+                if ev < self.ev_threshold:
                     _reject("rejected_low_ev", home_team, away_team, market_key, float(ev), float(odds))
                     continue
 
