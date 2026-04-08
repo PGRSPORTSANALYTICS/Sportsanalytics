@@ -128,6 +128,23 @@
   }
   /* Hide chip when app is installed (body class set by JS) */
   body.pwa-app-installed #install-chip { display:none !important; }
+
+  /* ── Mobile-first / PWA additions ── */
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+
+  a, button, [role=button], .dp-tab-btn, .feat-btn, .opp-row { touch-action: manipulation; }
+  button, a, [role=button] { -webkit-tap-highlight-color: transparent; }
+  .dp-tab-btn, .feat-btn { user-select: none; -webkit-user-select: none; }
+
+  .tab-bar { min-height: 48px; }
+  .overflow-x-auto, table { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  #pwa-offline-badge {
+    display: none;
+    position: fixed; top: 10px; right: 10px; z-index: 9998;
+    background: #3f3f46; color: #a1a1aa; font-size: 11px; font-weight: 600;
+    padding: 4px 10px; border-radius: 99px; letter-spacing: .04em;
+  }
 </style>
 </head>
 <body>
@@ -2326,6 +2343,9 @@ setInterval(() => showScanPop(), 45000);
 fetchData();
 </script>
 
+<!-- PWA: Offline badge -->
+<div id="pwa-offline-badge">Offline</div>
+
 <!-- ── PWA: Service Worker + Install Prompt ─────────────────── -->
 <script>
 (function() {
@@ -2339,7 +2359,20 @@ fetchData();
     });
   }
 
-  /* ── 2. State ─────────────────────────────────────────────── */
+  /* ── 2. Offline badge via X-SW-Offline header ─────────────── */
+  function showOfflineBadge(show) {
+    const b = document.getElementById("pwa-offline-badge");
+    if (b) b.style.display = show ? "block" : "none";
+  }
+  const _origFetch = window.fetch;
+  window.fetch = function() {
+    return _origFetch.apply(this, arguments).then((r) => {
+      showOfflineBadge(r.headers.get("X-SW-Offline") === "1");
+      return r;
+    }).catch((err) => { showOfflineBadge(true); throw err; });
+  };
+
+  /* ── 3. State ─────────────────────────────────────────────── */
   const DISMISS_KEY  = "pgr_pwa_dismissed";
   const INSTALL_KEY  = "pgr_pwa_installed";
   const SHOW_DELAY_MS = 12000; // 12 seconds
@@ -2350,7 +2383,7 @@ fetchData();
   const iosHint      = document.getElementById("pwa-ios-hint");
   const dismissBtn   = document.getElementById("pwa-dismiss");
 
-  /* ── 3. Detection helpers ─────────────────────────────────── */
+  /* ── 4. Detection helpers ─────────────────────────────────── */
   const isStandalone = () =>
     window.matchMedia("(display-mode: standalone)").matches ||
     window.navigator.standalone === true;
@@ -2369,7 +2402,7 @@ fetchData();
     return Date.now() - parseInt(ts) < 7 * 24 * 60 * 60 * 1000;
   };
 
-  /* ── 4. Show banner ───────────────────────────────────────── */
+  /* ── 5. Show banner ───────────────────────────────────────── */
   function showBanner() {
     if (!banner) return;
     if (isStandalone())     return; // already installed
@@ -2397,7 +2430,7 @@ fetchData();
     setTimeout(() => { banner.style.display = "none"; }, 380);
   }
 
-  /* ── 5. Capture Android/Chrome install prompt ─────────────── */
+  /* ── 6. Capture Android/Chrome install prompt ─────────────── */
   window.addEventListener("beforeinstallprompt", (e) => {
     e.preventDefault();
     deferredPrompt = e;
@@ -2412,7 +2445,7 @@ fetchData();
     }
   });
 
-  /* ── 6. Install trigger (chip + banner button) ────────────── */
+  /* ── 7. Install trigger (chip + banner button) ────────────── */
   window.triggerInstall = function() {
     if (deferredPrompt) {
       deferredPrompt.prompt();
@@ -2435,7 +2468,7 @@ fetchData();
 
   if (installBtn) installBtn.addEventListener("click", () => triggerInstall());
 
-  /* ── 7. Dismiss ────────────────────────────────────────────── */
+  /* ── 8. Dismiss ────────────────────────────────────────────── */
   if (dismissBtn) {
     dismissBtn.addEventListener("click", () => {
       localStorage.setItem(DISMISS_KEY, String(Date.now()));
@@ -2443,12 +2476,12 @@ fetchData();
     });
   }
 
-  /* ── 8. iOS: show banner after delay (no beforeinstallprompt) */
+  /* ── 9. iOS: show banner after delay (no beforeinstallprompt) */
   if (isIosSafari() && !isStandalone()) {
     setTimeout(showBanner, SHOW_DELAY_MS);
   }
 
-  /* ── 9. Track install state via body class (survives re-renders) */
+  /* ── 10. Track install state via body class (survives re-renders) */
   function syncChipState() {
     const shouldHide = isStandalone() || !!localStorage.getItem(INSTALL_KEY);
     if (shouldHide) {
@@ -2459,7 +2492,7 @@ fetchData();
   }
   syncChipState();
 
-  /* ── 10. appinstalled event ─────────────────────────────────── */
+  /* ── 11. appinstalled event ─────────────────────────────────── */
   window.addEventListener("appinstalled", () => {
     localStorage.setItem(INSTALL_KEY, "1");
     hideBanner();

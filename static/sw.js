@@ -1,6 +1,6 @@
 /* PGR Analytics — Service Worker
    Strategy: Cache-first for static assets only.
-   API routes are NEVER cached — live data must always be fresh.
+   API routes use network-first with stale fallback for offline resilience.
 */
 const SW_VERSION = "pgr-v1";
 const STATIC_CACHE = `${SW_VERSION}-static`;
@@ -36,24 +36,26 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-// ── Fetch: network-only for API, cache-first for static ──────
+// ── Fetch: network-first for API (stale fallback), cache-first for static ──
 self.addEventListener("fetch", (event) => {
-  const url = new URL(event.request.url);
+  const { request } = event;
+  const url = new URL(request.url);
 
-  // Never cache API calls — always fetch live
+  if (request.method !== "GET") return;
+
+  // API routes: network-first with stale fallback for offline resilience
   if (url.pathname.startsWith("/api/")) {
-    event.respondWith(fetch(event.request));
+    event.respondWith(networkFirstWithFallback(request));
     return;
   }
 
-  // For navigation requests (HTML pages): network first, fall back to cache
-  if (event.request.mode === "navigate") {
+  // Navigation (HTML pages): network-first, fall back to cache
+  if (request.mode === "navigate") {
     event.respondWith(
-      fetch(event.request)
+      fetch(request)
         .then((res) => {
-          // Update the cache with the fresh response
           const clone = res.clone();
-          caches.open(STATIC_CACHE).then((c) => c.put(event.request, clone));
+          caches.open(STATIC_CACHE).then((c) => c.put(request, clone));
           return res;
         })
         .catch(() => caches.match("/"))
@@ -63,15 +65,38 @@ self.addEventListener("fetch", (event) => {
 
   // Static assets: cache-first
   event.respondWith(
-    caches.match(event.request).then((cached) => {
+    caches.match(request).then((cached) => {
       if (cached) return cached;
-      return fetch(event.request).then((res) => {
+      return fetch(request).then((res) => {
         if (res && res.status === 200) {
           const clone = res.clone();
-          caches.open(STATIC_CACHE).then((c) => c.put(event.request, clone));
+          caches.open(STATIC_CACHE).then((c) => c.put(request, clone));
         }
         return res;
       });
     })
   );
 });
+
+async function networkFirstWithFallback(request) {
+  const cache = await caches.open(STATIC_CACHE);
+  try {
+    const response = await fetch(request);
+    if (response.ok) {
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch {
+    const cached = await cache.match(request);
+    if (cached) {
+      const headers = new Headers(cached.headers);
+      headers.set("X-SW-Offline", "1");
+      const body = await cached.arrayBuffer();
+      return new Response(body, { status: cached.status, statusText: cached.statusText, headers });
+    }
+    return new Response(JSON.stringify({ error: "offline", stale: true }), {
+      status: 503,
+      headers: { "Content-Type": "application/json", "X-SW-Offline": "1" },
+    });
+  }
+}
