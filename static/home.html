@@ -2,8 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PGR Analytics</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>PGR Analytics — Live Value Scanner</title>
+<meta name="description" content="AI-powered live value opportunities across football, hockey and NBA. Real edge, real data.">
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PGR Analytics">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; }
@@ -65,9 +74,86 @@
   .inp { border-radius:12px; border:1px solid #3f3f46; background:#09090b; padding:8px 16px; font-size:13px; color:#e4e4e7; outline:none; }
   .inp::placeholder { color:#52525b; }
   .inp:focus { border-color:#52525b; }
+
+  /* ── PWA Install Banner ─────────────────────────────────── */
+  #pwa-banner {
+    position:fixed; bottom:0; left:0; right:0; z-index:9999;
+    padding: 0 0 env(safe-area-inset-bottom) 0;
+    transform: translateY(100%);
+    transition: transform .35s cubic-bezier(.16,1,.3,1);
+    display:none;
+  }
+  #pwa-banner.show { transform: translateY(0); display:block; }
+  .pwa-banner-inner {
+    margin: 0 12px 12px;
+    background: #0d1a0f;
+    border: 1px solid rgba(34,197,94,.35);
+    border-radius: 18px;
+    padding: 16px;
+    box-shadow: 0 -8px 40px rgba(0,0,0,.6), 0 0 0 1px rgba(34,197,94,.08);
+    backdrop-filter: blur(12px);
+  }
+  .pwa-banner-row { display:flex; align-items:center; gap:14px; }
+  .pwa-icon { width:46px; height:46px; border-radius:12px; background:#22c55e; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:900; color:#000; flex-shrink:0; }
+  .pwa-body { flex:1; min-width:0; }
+  .pwa-title { font-size:14px; font-weight:700; color:#e4e4e7; line-height:1.3; }
+  .pwa-sub { font-size:12px; color:#71717a; margin-top:2px; }
+  .pwa-btn-install {
+    background:#22c55e; color:#000; border:none; border-radius:10px;
+    padding:9px 16px; font-size:13px; font-weight:700; cursor:pointer;
+    white-space:nowrap; flex-shrink:0;
+  }
+  .pwa-btn-dismiss {
+    background:none; border:none; color:#52525b; cursor:pointer;
+    padding:4px; font-size:18px; line-height:1; margin-top:-2px;
+  }
+  .pwa-ios-hint { font-size:12px; color:#71717a; margin-top:10px; padding-top:10px; border-top:1px solid #18181b; text-align:center; }
+  .pwa-ios-hint strong { color:#4ade80; }
+
+  /* ── In-dashboard install chip (header, mobile only) ───── */
+  #install-chip {
+    display:none;
+    align-items:center; gap:6px;
+    background:rgba(34,197,94,.1); border:1px solid rgba(34,197,94,.2);
+    border-radius:20px; padding:5px 12px;
+    font-size:12px; font-weight:600; color:#4ade80;
+    cursor:pointer; white-space:nowrap;
+  }
+  @media(max-width:768px) { #install-chip { display:flex; } }
+
+  /* ── Mobile safe-area & body padding ───────────────────── */
+  body { padding-top: env(safe-area-inset-top); }
+  @media(max-width:768px) {
+    body { padding-bottom: calc(env(safe-area-inset-bottom) + 72px); }
+  }
+  /* Hide chip when app is installed (body class set by JS) */
+  body.pwa-app-installed #install-chip { display:none !important; }
 </style>
 </head>
 <body>
+
+<!-- ── PWA Install Banner ─────────────────────────────────── -->
+<div id="pwa-banner" role="dialog" aria-label="Install PGR Analytics app">
+  <div class="pwa-banner-inner">
+    <div class="pwa-banner-row">
+      <div class="pwa-icon">P</div>
+      <div class="pwa-body">
+        <div class="pwa-title">Install app to get live value opportunities</div>
+        <div class="pwa-sub">Instant access — no browser bar, loads in under 1 second</div>
+      </div>
+      <button class="pwa-btn-dismiss" id="pwa-dismiss" aria-label="Dismiss">×</button>
+    </div>
+    <!-- Android install button (hidden on iOS) -->
+    <button class="pwa-btn-install" id="pwa-install-btn" style="width:100%;margin-top:12px;display:none">
+      Add to Home Screen
+    </button>
+    <!-- iOS share hint (shown only on iOS Safari) -->
+    <div class="pwa-ios-hint" id="pwa-ios-hint" style="display:none">
+      Tap <strong>Share</strong> below, then <strong>"Add to Home Screen"</strong>
+    </div>
+  </div>
+</div>
+
 <div id="root">
   <div style="min-height:100vh;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;">
     <div style="width:44px;height:44px;border-radius:12px;background:#22c55e;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:900;color:#000;">P</div>
@@ -1443,6 +1529,10 @@ function renderApp() {
                 </button>
               </div>
               <button id="btn-refresh" style="padding:8px 16px;border-radius:10px;border:1px solid #3f3f46;background:#18181b;font-size:13px;color:#d4d4d8;cursor:pointer">Refresh</button>
+              <button id="install-chip" onclick="triggerInstall()" title="Install PGR app">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+                Install app
+              </button>
             </div>
           </div>
         </header>
@@ -2234,6 +2324,150 @@ setInterval(() => showScanPop(), 45000);
    BOOT
 ───────────────────────────────────────────────────────────── */
 fetchData();
+</script>
+
+<!-- ── PWA: Service Worker + Install Prompt ─────────────────── -->
+<script>
+(function() {
+  "use strict";
+
+  /* ── 1. Register Service Worker ──────────────────────────── */
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("/sw.js", { scope: "/" })
+        .catch(() => {}); // fail silently — never block UX
+    });
+  }
+
+  /* ── 2. State ─────────────────────────────────────────────── */
+  const DISMISS_KEY  = "pgr_pwa_dismissed";
+  const INSTALL_KEY  = "pgr_pwa_installed";
+  const SHOW_DELAY_MS = 12000; // 12 seconds
+
+  let deferredPrompt = null; // Chrome/Android beforeinstallprompt event
+  const banner       = document.getElementById("pwa-banner");
+  const installBtn   = document.getElementById("pwa-install-btn");
+  const iosHint      = document.getElementById("pwa-ios-hint");
+  const dismissBtn   = document.getElementById("pwa-dismiss");
+
+  /* ── 3. Detection helpers ─────────────────────────────────── */
+  const isStandalone = () =>
+    window.matchMedia("(display-mode: standalone)").matches ||
+    window.navigator.standalone === true;
+
+  const isIosSafari = () => {
+    const ua = navigator.userAgent;
+    return /iP(hone|od|ad)/.test(ua) && /WebKit/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
+  };
+
+  const isMobile = () => window.innerWidth <= 768;
+
+  const alreadyDismissed = () => {
+    const ts = localStorage.getItem(DISMISS_KEY);
+    if (!ts) return false;
+    // Re-show after 7 days if still not installed
+    return Date.now() - parseInt(ts) < 7 * 24 * 60 * 60 * 1000;
+  };
+
+  /* ── 4. Show banner ───────────────────────────────────────── */
+  function showBanner() {
+    if (!banner) return;
+    if (isStandalone())     return; // already installed
+    if (alreadyDismissed()) return;
+    if (!isMobile())        return; // desktop sees the chip only
+
+    // Show correct CTA
+    if (deferredPrompt) {
+      if (installBtn) installBtn.style.display = "block";
+    } else if (isIosSafari()) {
+      if (iosHint) iosHint.style.display = "block";
+    } else {
+      return; // no install path available
+    }
+
+    banner.style.display = "block";
+    // Force reflow so transition plays
+    void banner.offsetWidth;
+    banner.classList.add("show");
+  }
+
+  function hideBanner() {
+    if (!banner) return;
+    banner.classList.remove("show");
+    setTimeout(() => { banner.style.display = "none"; }, 380);
+  }
+
+  /* ── 5. Capture Android/Chrome install prompt ─────────────── */
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+
+    // Update chip visibility — show on all screen sizes now that prompt is ready
+    const chip = document.getElementById("install-chip");
+    if (chip) chip.style.display = "flex";
+
+    // Delay banner
+    if (!alreadyDismissed() && !isStandalone()) {
+      setTimeout(showBanner, SHOW_DELAY_MS);
+    }
+  });
+
+  /* ── 6. Install trigger (chip + banner button) ────────────── */
+  window.triggerInstall = function() {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then((choice) => {
+        if (choice.outcome === "accepted") {
+          localStorage.setItem(INSTALL_KEY, "1");
+          hideBanner();
+          const chip = document.getElementById("install-chip");
+          if (chip) chip.style.display = "none";
+        }
+        deferredPrompt = null;
+      });
+    } else if (isIosSafari()) {
+      // No prompt on iOS — just show the banner with iOS hint
+      if (iosHint) iosHint.style.display = "block";
+      if (installBtn) installBtn.style.display = "none";
+      showBanner();
+    }
+  };
+
+  if (installBtn) installBtn.addEventListener("click", () => triggerInstall());
+
+  /* ── 7. Dismiss ────────────────────────────────────────────── */
+  if (dismissBtn) {
+    dismissBtn.addEventListener("click", () => {
+      localStorage.setItem(DISMISS_KEY, String(Date.now()));
+      hideBanner();
+    });
+  }
+
+  /* ── 8. iOS: show banner after delay (no beforeinstallprompt) */
+  if (isIosSafari() && !isStandalone()) {
+    setTimeout(showBanner, SHOW_DELAY_MS);
+  }
+
+  /* ── 9. Track install state via body class (survives re-renders) */
+  function syncChipState() {
+    const shouldHide = isStandalone() || !!localStorage.getItem(INSTALL_KEY);
+    if (shouldHide) {
+      document.body.classList.add("pwa-app-installed");
+    } else {
+      document.body.classList.remove("pwa-app-installed");
+    }
+  }
+  syncChipState();
+
+  /* ── 10. appinstalled event ─────────────────────────────────── */
+  window.addEventListener("appinstalled", () => {
+    localStorage.setItem(INSTALL_KEY, "1");
+    hideBanner();
+    syncChipState();
+    deferredPrompt = null;
+  });
+
+})();
 </script>
 </body>
 </html>

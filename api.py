@@ -3810,6 +3810,34 @@ async def admin_data(x_admin_key: Optional[str] = Header(None)):
     })
 
 
+# PWA root-scope routes — sw.js MUST be served from / scope to control full app
+@app.get("/sw.js", include_in_schema=False)
+async def serve_sw():
+    from fastapi.responses import FileResponse
+    return FileResponse(str(STATIC_DIR / "sw.js"), media_type="application/javascript",
+                        headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"})
+
+@app.get("/manifest.json", include_in_schema=False)
+async def serve_manifest():
+    from fastapi.responses import FileResponse
+    return FileResponse(str(STATIC_DIR / "manifest.json"), media_type="application/manifest+json")
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def serve_favicon():
+    from fastapi.responses import FileResponse
+    ico = STATIC_DIR / "favicon.ico"
+    if ico.exists():
+        return FileResponse(str(ico), media_type="image/x-icon")
+    return Response(status_code=204)
+
+@app.get("/icons/{filename}", include_in_schema=False)
+async def serve_icon(filename: str):
+    from fastapi.responses import FileResponse
+    icon_path = STATIC_DIR / "icons" / filename
+    if icon_path.exists() and icon_path.suffix in (".png", ".ico", ".svg"):
+        return FileResponse(str(icon_path), media_type="image/png")
+    return Response(status_code=404)
+
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":
