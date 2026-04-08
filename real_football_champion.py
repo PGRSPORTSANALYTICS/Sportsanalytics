@@ -3842,8 +3842,12 @@ class RealFootballChampion:
                 odds_value = float(pick.get('odds', 0))
                 analysis_data = json.loads(pick.get('analysis', '{}'))
                 model_prob_value = analysis_data.get('p_model', 0)
-                odds_by_bookmaker = pick.get('odds_by_bookmaker')
-                odds_by_bookmaker_json = json.dumps(odds_by_bookmaker) if odds_by_bookmaker else None
+                odds_by_bookmaker = pick.get('odds_by_bookmaker') or {}
+                if not odds_by_bookmaker:
+                    odds_by_bookmaker = {"Best Line": odds_value}
+                odds_by_bookmaker_json = json.dumps(odds_by_bookmaker)
+                best_bm_val  = pick.get('best_odds_value') or odds_value
+                best_bm_name = pick.get('best_odds_bookmaker') or max(odds_by_bookmaker, key=odds_by_bookmaker.get)
 
                 db_helper.execute('''
                     INSERT INTO football_opportunities 
@@ -3887,8 +3891,8 @@ class RealFootballChampion:
                     pick.get('odds_source', 'the_odds_api'),
                     pick.get('trust_level', 'LEARNING'),
                     odds_by_bookmaker_json,
-                    pick.get('best_odds_value'),
-                    pick.get('best_odds_bookmaker'),
+                    best_bm_val,
+                    best_bm_name,
                     pick.get('avg_odds'),
                     pick.get('fair_odds'),
                     pick.get('fixture_id'),
@@ -3913,8 +3917,12 @@ class RealFootballChampion:
                 odds_value = float(pick.get('odds', 0))
                 analysis_data = json.loads(pick.get('analysis', '{}'))
                 model_prob_value = analysis_data.get('p_model', 0)
-                odds_by_bookmaker = pick.get('odds_by_bookmaker')
-                odds_by_bookmaker_json = json.dumps(odds_by_bookmaker) if odds_by_bookmaker else None
+                odds_by_bookmaker = pick.get('odds_by_bookmaker') or {}
+                if not odds_by_bookmaker:
+                    odds_by_bookmaker = {"Best Line": odds_value}
+                odds_by_bookmaker_json = json.dumps(odds_by_bookmaker)
+                best_bm_val  = pick.get('best_odds_value') or odds_value
+                best_bm_name = pick.get('best_odds_bookmaker') or max(odds_by_bookmaker, key=odds_by_bookmaker.get)
                 pick_mode = pick.get('mode', 'VALUE_OPP')
                 pgr_score_val = pick.get('pgr_score') or analysis_data.get('pgr_score')
                 league_tier_val = pick.get('league_tier') or analysis_data.get('league_tier')
@@ -3967,8 +3975,8 @@ class RealFootballChampion:
                     pick.get('odds_source', 'the_odds_api'),
                     pick.get('trust_level', pick_mode),
                     odds_by_bookmaker_json,
-                    pick.get('best_odds_value'),
-                    pick.get('best_odds_bookmaker'),
+                    best_bm_val,
+                    best_bm_name,
                     pick.get('avg_odds'),
                     pick.get('fair_odds'),
                     pick.get('fixture_id'),
@@ -4023,8 +4031,12 @@ class RealFootballChampion:
             trust_level = opp_dict.get('trust_level', 'L2_MEDIUM_TRUST')
             
             # Prepare bookmaker odds data
-            odds_by_bookmaker = opp_dict.get('odds_by_bookmaker')
-            odds_by_bookmaker_json = json.dumps(odds_by_bookmaker) if odds_by_bookmaker else None
+            odds_by_bookmaker = opp_dict.get('odds_by_bookmaker') or {}
+            if not odds_by_bookmaker:
+                odds_by_bookmaker = {"Best Line": odds_value}
+            odds_by_bookmaker_json = json.dumps(odds_by_bookmaker)
+            best_bm_val  = opp_dict.get('best_odds_value') or odds_value
+            best_bm_name = opp_dict.get('best_odds_bookmaker') or max(odds_by_bookmaker, key=odds_by_bookmaker.get)
             
             kickoff_utc = opp_dict.get('kickoff_utc')
             kickoff_epoch = opp_dict.get('kickoff_epoch')
@@ -4084,8 +4096,8 @@ class RealFootballChampion:
                 opp_dict.get('odds_source', 'the_odds_api'),
                 trust_level,
                 odds_by_bookmaker_json,
-                opp_dict.get('best_odds_value'),
-                opp_dict.get('best_odds_bookmaker'),
+                best_bm_val,
+                best_bm_name,
                 opp_dict.get('avg_odds'),
                 opp_dict.get('fair_odds'),
                 opp_dict.get('fixture_id'),
