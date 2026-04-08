@@ -173,8 +173,7 @@
 
 <div id="root">
   <div style="min-height:100vh;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;">
-    <div style="width:44px;height:44px;border-radius:12px;background:#22c55e;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:900;color:#000;">P</div>
-    <div style="color:#e4e4e7;font-size:18px;font-weight:700;">PGR Analytics</div>
+    <img src="/static/pgr-logo.png" style="width:72px;height:72px;border-radius:14px;object-fit:cover;" alt="PGR">
     <div style="color:#52525b;font-size:13px;">Loading dashboard…</div>
     <div style="width:32px;height:32px;border:3px solid #27272a;border-top-color:#22c55e;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
   </div>
@@ -1381,8 +1380,7 @@ function renderApp() {
   // Hard API error state — show error UI with Refresh button
   if (state.fetchError) {
     return `<div style="min-height:100vh;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;font-family:inherit;padding:24px;text-align:center">
-      <div style="color:#22c55e;font-size:22px;font-weight:900">P</div>
-      <div style="color:#e4e4e7;font-size:16px;font-weight:600">PGR Analytics</div>
+      <img src="/static/pgr-logo.png" style="width:64px;height:64px;border-radius:12px;object-fit:cover;" alt="PGR">
       <div style="color:#71717a;font-size:13px;margin-top:4px">Could not load picks data. Please check your connection and try again.</div>
       <button id="btn-refresh" style="margin-top:16px;padding:10px 24px;background:#22c55e;color:#000;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-size:14px">Refresh</button>
     </div>`;
@@ -1526,7 +1524,7 @@ function renderApp() {
         <header style="border-bottom:1px solid #27272a;padding:12px 16px">
           <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
             <div style="display:flex;align-items:center;gap:12px">
-              <div style="width:40px;height:40px;border-radius:12px;background:#22c55e;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;color:#000">P</div>
+              <img src="/static/pgr-logo.png" style="width:44px;height:44px;border-radius:10px;object-fit:cover;flex-shrink:0;" alt="PGR">
               <div>
                 <div style="font-size:20px;font-weight:800;letter-spacing:-.03em">PGR Analytics</div>
                 <div style="font-size:12px;color:#71717a">/  Value Scanner</div>
