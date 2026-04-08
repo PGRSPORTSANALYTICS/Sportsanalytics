@@ -180,6 +180,25 @@
     </div>
   </div>
 
+  <div style="margin-bottom:16px;text-align:left;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:16px;">
+    <div style="font-size:14px;opacity:0.9;line-height:1.7;margin-bottom:12px;">
+      Stop guessing.<br>
+      <br>
+      We scan games and find where the odds are wrong.<br>
+      <br>
+      → Model vs implied probability<br>
+      → Positive EV spots<br>
+      → Updated in real-time
+    </div>
+    <div style="font-size:12px;opacity:0.7;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06);">
+      If model &gt; odds → it's value.
+    </div>
+  </div>
+
+  <button id="login-install-btn" onclick="loginInstall()" style="display:none;width:100%;padding:12px;margin-bottom:12px;background:#22c55e;color:#000;font-size:14px;font-weight:700;border:none;border-radius:10px;cursor:pointer;">
+    Install app → Get value before odds move
+  </button>
+
   <a href="/auth/discord/login" class="discord-btn">
     <svg viewBox="0 0 71 55" fill="white" xmlns="http://www.w3.org/2000/svg">
       <path d="M60.1 4.9A58.6 58.6 0 0 0 45.5 0a40.3 40.3 0 0 0-1.8 3.7 54.2 54.2 0 0 0-16.3 0A38.8 38.8 0 0 0 25.5 0 58.5 58.5 0 0 0 10.9 4.9C1.6 18.6-.9 32 .3 45.2a59 59 0 0 0 18 9.1 44 44 0 0 0 3.8-6.2 38.4 38.4 0 0 1-6-2.9l1.5-1.1a42 42 0 0 0 35.8 0l1.5 1.1a38.4 38.4 0 0 1-6 2.9 44 44 0 0 0 3.8 6.2 58.8 58.8 0 0 0 18-9.1C72 29.8 68.2 16.5 60.1 4.9ZM23.7 37c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2 6.5 3.2 6.4 7.2c0 4-2.8 7.2-6.4 7.2Zm23.6 0c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2 6.5 3.2 6.4 7.2c0 4-2.8 7.2-6.4 7.2Z"/>
@@ -229,14 +248,27 @@
 
   window.addEventListener("beforeinstallprompt",e=>{
     e.preventDefault();deferred=e;
+    // Show inline install button immediately
+    const inlineBtn=document.getElementById("login-install-btn");
+    if(inlineBtn&&!isStandalone()&&!localStorage.getItem(INSTALL_KEY))inlineBtn.style.display="block";
     if(!dismissed()&&!isStandalone())setTimeout(show,10000);
   });
   if(installBtn)installBtn.addEventListener("click",()=>{
     if(deferred){deferred.prompt();deferred.userChoice.then(c=>{if(c.outcome==="accepted"){localStorage.setItem(INSTALL_KEY,"1");hide();}deferred=null;});}
   });
   if(dismissBtn)dismissBtn.addEventListener("click",()=>{localStorage.setItem(DISMISS_KEY,String(Date.now()));hide();});
-  if(isIosSafari()&&!isStandalone())setTimeout(show,10000);
-  window.addEventListener("appinstalled",()=>{localStorage.setItem(INSTALL_KEY,"1");hide();});
+  // iOS: show inline button + banner
+  if(isIosSafari()&&!isStandalone()&&!localStorage.getItem(INSTALL_KEY)){
+    const inlineBtn=document.getElementById("login-install-btn");
+    if(inlineBtn)inlineBtn.style.display="block";
+    setTimeout(show,10000);
+  }
+  // trigger from inline button
+  window.loginInstall=function(){
+    if(deferred){deferred.prompt();deferred.userChoice.then(c=>{if(c.outcome==="accepted"){localStorage.setItem(INSTALL_KEY,"1");const b=document.getElementById("login-install-btn");if(b)b.style.display="none";}deferred=null;});}
+    else if(isIosSafari()){show();}
+  };
+  window.addEventListener("appinstalled",()=>{localStorage.setItem(INSTALL_KEY,"1");hide();const b=document.getElementById("login-install-btn");if(b)b.style.display="none";});
 })();
 </script>
 </body>
