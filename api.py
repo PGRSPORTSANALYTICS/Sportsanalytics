@@ -3535,6 +3535,77 @@ async def public_config():
 
 
 # =============================================================================
+# Public teaser endpoint — no auth required
+# =============================================================================
+
+@app.get("/api/public/value-spots", include_in_schema=False)
+async def public_value_spots():
+    """
+    Returns 1–2 real recent value picks as a teaser on the login page.
+    No auth required. Redacted: no analysis JSON, no CLV, no bookmaker detail.
+    """
+    try:
+        # Try upcoming kickoffs first (next 24h) with solid edge
+        now_epoch = int(__import__("time").time())
+        rows = db_helper.execute("""
+            SELECT home_team, away_team, league, market, selection,
+                   odds, edge_percentage, model_prob, kickoff_epoch
+            FROM football_opportunities
+            WHERE kickoff_epoch BETWEEN %s AND %s
+              AND edge_percentage >= 15
+              AND mode != 'TEST'
+              AND bet_placed = TRUE
+            ORDER BY edge_percentage DESC NULLS LAST
+            LIMIT 2
+        """, (now_epoch, now_epoch + 86400), fetch="all") or []
+
+        # Fallback: recent picks from last 48h, lower edge bar
+        if not rows:
+            rows = db_helper.execute("""
+                SELECT home_team, away_team, league, market, selection,
+                       odds, edge_percentage, model_prob, kickoff_epoch
+                FROM football_opportunities
+                WHERE timestamp > %s
+                  AND edge_percentage >= 12
+                  AND mode != 'TEST'
+                  AND bet_placed = TRUE
+                ORDER BY edge_percentage DESC NULLS LAST
+                LIMIT 2
+            """, (now_epoch - 172800,), fetch="all") or []
+
+        if not rows:
+            return {"spots": [], "live": False}
+
+        spots = []
+        for r in rows:
+            home, away, league, market, selection = r[0], r[1], r[2], r[3], r[4]
+            odds       = float(r[5]) if r[5] else None
+            edge       = float(r[6]) if r[6] else None
+            model_prob = float(r[7]) if r[7] else None
+            ko_epoch   = int(r[8]) if r[8] else None
+            is_live    = ko_epoch and ko_epoch > now_epoch if ko_epoch else False
+
+            implied_prob = round(100 / odds) if odds else None
+            model_pct    = round(model_prob * 100) if model_prob else None
+
+            spots.append({
+                "match":        f"{home} vs {away}",
+                "league":       league or "",
+                "market":       market or "",
+                "selection":    selection or "",
+                "odds":         round(odds, 2) if odds else None,
+                "edge":         round(edge, 1) if edge else None,
+                "model_pct":    model_pct,
+                "implied_pct":  implied_prob,
+                "is_live":      is_live,
+            })
+
+        return {"spots": spots, "live": any(s["is_live"] for s in spots)}
+    except Exception as e:
+        logger.error(f"public_value_spots error: {e}")
+        return {"spots": [], "live": False}
+
+
 # Auth pages (public — no premium required)
 # =============================================================================
 
