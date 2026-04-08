@@ -247,6 +247,20 @@ const mockData = [
 /* ─────────────────────────────────────────────────────────────
    HELPERS
 ───────────────────────────────────────────────────────────── */
+const _RAW_BOOK_MAP = {
+  "the_odds_api": "Best Line", "odds_api": "Best Line",
+  "odds-api": "Best Line",     "api_football": "",
+  "football_api": "",          "api-football": "",
+};
+function cleanBookmaker(name) {
+  if (!name) return "—";
+  const lo = name.trim().toLowerCase();
+  if (lo in _RAW_BOOK_MAP) return _RAW_BOOK_MAP[lo] || "—";
+  if (lo.includes("odds_api") || lo.includes("odds-api")) return "Best Line";
+  if (lo.includes("api_football") || lo.includes("api-football") || lo.includes("football_api")) return "—";
+  return name.trim() || "—";
+}
+
 function normalizePick(b) {
   return {
     id: String(b.id || b.match_id || (b.home_team + "_" + b.away_team)),
@@ -258,7 +272,7 @@ function normalizePick(b) {
     market: b.market || "",
     selection: b.selection || "",
     odds: b.odds || 0,
-    bookmaker: b.bookmaker || b.best_book || "—",
+    bookmaker: cleanBookmaker(b.bookmaker || b.best_book || ""),
     ev: b.ev_pct != null ? b.ev_pct : (b.ev != null ? b.ev : 0),
     confidence: b.confidence || 0,
     model_probability: b.model_prob ? b.model_prob * 100 : (b.model_probability || 0),

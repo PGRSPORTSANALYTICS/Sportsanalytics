@@ -74,6 +74,27 @@ except Exception as _pgr_err:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+_RAW_SOURCE_MAP = {
+    "the_odds_api": "Best Line",
+    "odds_api":     "Best Line",
+    "api_football": "",
+    "football_api": "",
+    "api-football": "",
+    "odds-api":     "Best Line",
+}
+
+def _clean_bookmaker(name: str) -> str:
+    if not name:
+        return ""
+    lower = name.strip().lower()
+    if lower in _RAW_SOURCE_MAP:
+        return _RAW_SOURCE_MAP[lower]
+    if "odds_api" in lower or "odds-api" in lower:
+        return "Best Line"
+    if "api_football" in lower or "api-football" in lower or "football_api" in lower:
+        return ""
+    return name.strip()
+
 # In-memory cache for match-scout responses (TTL 8 hours — covers a full match day)
 _match_scout_cache: Dict[str, Any] = {}
 _MATCH_SCOUT_TTL = 28800  # seconds
@@ -681,7 +702,7 @@ async def get_bookmaker_odds(match_id: str):
                 'odds_by_bookmaker': odds_by_bookmaker,
                 'best_odds': {
                     'value': float(row[11]) if row[11] else None,
-                    'bookmaker': row[12]
+                    'bookmaker': _clean_bookmaker(row[12] or '')
                 } if row[11] else None,
                 'avg_odds': float(row[13]) if row[13] else None,
                 'fair_odds': fair_odds_val,
@@ -866,10 +887,12 @@ async def get_match_scout(match_id: str):
             src       = r[24] or ""  # odds_source
             result = {}
             if best_bm and best_val:
-                result[best_bm] = best_val
+                clean_bm = _clean_bookmaker(best_bm)
+                if clean_bm:
+                    result[clean_bm] = best_val
             # If pick odds differ from best (or no best), add pick's line
-            label = src.replace("_", " ").title() if src and src != "the_odds_api" else "Best Line"
-            if label not in result:
+            label = _clean_bookmaker(src) or "Best Line"
+            if label and label not in result:
                 result[label] = odds_val
             return result
 
@@ -2783,8 +2806,8 @@ async def get_picks_history(days: int = 90):
                 'outcome': outcome,
                 'status': status,
                 'profit_loss': round(float(r[9]), 2) if r[9] else None,
-                'best_odds_bookmaker': r[12] or '',
-                'bookmaker': r[12] or '',
+                'best_odds_bookmaker': _clean_bookmaker(r[12] or ''),
+                'bookmaker': _clean_bookmaker(r[12] or ''),
                 'league': r[13] or '',
                 'kickoff_str': ko_str,
                 'kickoff': kickoff_iso_h,
