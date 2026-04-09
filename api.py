@@ -897,6 +897,7 @@ async def get_match_scout(match_id: str):
             return result
 
         # Build picks list
+        from ev_core import confidence_tier as _conf_tier
         picks = []
         seen_sel = set()
         for r in opp_rows:
@@ -904,25 +905,30 @@ async def get_match_scout(match_id: str):
             if key in seen_sel:
                 continue
             seen_sel.add(key)
+            _ev_val   = round(float(r[9]), 1) if r[9] else None
+            _conf_raw = float(r[10]) if r[10] is not None else 0.0
             picks.append({
-                "market":          r[6],
-                "selection":       r[7],
-                "odds":            round(float(r[8]), 2) if r[8] else None,
-                "ev_pct":          round(float(r[9]), 1) if r[9] else None,
-                "confidence":      r[10],
-                "model_prob":      round(float(r[11]), 3) if r[11] else None,
-                "calibrated_prob": round(float(r[12]), 3) if r[12] else None,
-                "sim_prob":        round(float(r[13]), 3) if r[13] else None,
-                "ev_sim":          round(float(r[14]), 1) if r[14] else None,
-                "bookmakers":      _build_bookmakers(r),
-                "trust_level":     r[15],
-                "tier":            r[16],
-                "disagreement":    round(float(r[17]), 2) if r[17] else None,
-                "boost_score":     round(float(r[18]), 2) if r[18] else None,
-                "open_odds":       round(float(r[19]), 2) if r[19] else None,
-                "close_odds":      round(float(r[20]), 2) if r[20] else None,
-                "clv_pct":         round(float(r[21]), 1) if r[21] else None,
-                "analysis_raw":    r[22],
+                "market":           r[6],
+                "selection":        r[7],
+                "odds":             round(float(r[8]), 2) if r[8] else None,
+                "ev_pct":           _ev_val,
+                "confidence":       _conf_raw,
+                "confidence_tier":  _conf_tier(_conf_raw),
+                "model_prob":       round(float(r[11]), 3) if r[11] else None,
+                "model_prob_pct":   round(float(r[11]) * 100, 1) if r[11] else None,
+                "high_variance":    bool((_ev_val or 0) > 15),
+                "calibrated_prob":  round(float(r[12]), 3) if r[12] else None,
+                "sim_prob":         round(float(r[13]), 3) if r[13] else None,
+                "ev_sim":           round(float(r[14]), 1) if r[14] else None,
+                "bookmakers":       _build_bookmakers(r),
+                "trust_level":      r[15],
+                "tier":             r[16],
+                "disagreement":     round(float(r[17]), 2) if r[17] else None,
+                "boost_score":      round(float(r[18]), 2) if r[18] else None,
+                "open_odds":        round(float(r[19]), 2) if r[19] else None,
+                "close_odds":       round(float(r[20]), 2) if r[20] else None,
+                "clv_pct":          round(float(r[21]), 1) if r[21] else None,
+                "analysis_raw":     r[22],
             })
 
         # ── 2. Training data for this match ──────────────────────

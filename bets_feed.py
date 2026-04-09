@@ -42,8 +42,11 @@ class BetCard(BaseModel):
     profit_units: Optional[float] = None
     ev_pct: Optional[float] = None
     confidence: Optional[float] = None
-    trust_level: Optional[str] = None
+    confidence_tier: Optional[str] = None
     model_prob: Optional[float] = None
+    model_prob_pct: Optional[float] = None
+    high_variance: bool = False
+    trust_level: Optional[str] = None
     actual_score: Optional[str] = None
     bookmaker: Optional[str] = None
     open_odds: Optional[float] = None
@@ -306,6 +309,10 @@ def _row_to_football_card(row) -> BetCard:
     ev = ev_sim if ev_sim is not None else (edge_pct if edge_pct else None)
     pu = _compute_profit_units(norm_status, odds or 0) if norm_status in ("won", "lost", "void") else None
 
+    from ev_core import confidence_tier as _conf_tier
+    _conf_val = float(confidence) if confidence else 0.0
+    _ev_val   = round(float(ev), 2) if ev is not None else None
+    _mp       = round(float(model_prob), 4) if model_prob else None
     return BetCard(
         id=f"fb_{rid}",
         sport="football",
@@ -321,10 +328,13 @@ def _row_to_football_card(row) -> BetCard:
         status=norm_status,
         outcome=outcome,
         profit_units=pu,
-        ev_pct=round(float(ev), 2) if ev is not None else None,
-        confidence=float(confidence) if confidence else None,
+        ev_pct=_ev_val,
+        confidence=_conf_val,
+        confidence_tier=_conf_tier(_conf_val),
+        model_prob=_mp,
+        model_prob_pct=round(_mp * 100, 1) if _mp else None,
+        high_variance=bool((_ev_val or 0) > 15),
         trust_level=trust_level,
-        model_prob=round(float(model_prob), 4) if model_prob else None,
         actual_score=actual_score,
         bookmaker=bookmaker,
         open_odds=round(float(open_odds), 2) if open_odds else None,

@@ -327,9 +327,12 @@ function normalizePick(b) {
     bookmaker: cleanBookmaker(b.bookmaker || b.best_book || ""),
     ev: b.ev_pct != null ? b.ev_pct : (b.ev != null ? b.ev : 0),
     confidence: b.confidence || 0,
+    confidence_tier: b.confidence_tier || confidenceTier(b.confidence || 0),
+    high_variance: b.high_variance || (b.ev_pct||b.ev||0) > 15,
+    model_prob_pct: b.model_prob_pct || (b.model_prob ? b.model_prob * 100 : 0),
     model_probability: b.model_prob ? b.model_prob * 100 : (b.model_probability || 0),
     kickoff_time: b.kickoff_time || b.kickoff || "",
-    badge: b.badge || (b.ev_pct >= 20 ? "High EV" : b.ev_pct >= 15 ? "High EV" : b.confidence >= 85 ? "Top Conf" : "Sharp Value"),
+    badge: b.badge || ((b.ev_pct||b.ev||0) > 15 ? "High Variance" : (b.confidence_tier||confidenceTier(b.confidence||0)) === "HIGH" ? "High Signal" : "Sharp Value"),
     modelEdge: b.modelEdge || (b.model_prob ? (b.model_prob * 100 - (b.odds > 0 ? 100 / b.odds : 0)) : null),
     fairOdds: b.fair_odds || b.fairOdds || null,
     status: b.status || "PRE",
@@ -370,16 +373,16 @@ function buildAgeBadgeHtml(p) {
 function buildWhyHtml(p) {
   const bullets = [];
   try {
-    const mp = p.model_probability;
+    const mp = p.model_prob_pct || p.model_probability;
     const mktProb = p.odds > 0 ? Math.round(100 / p.odds) : null;
     if (mp && mktProb) {
       const mpR = Math.round(mp);
-      bullets.push(`Model <b style="color:#4ade80">${mpR}%</b> vs Market <b style="color:#71717a">${mktProb}%</b>`);
+      bullets.push(`Model <b style="color:#4ade80">${mpR}%</b> vs Market <b style="color:#71717a">${mktProb}%</b> implied`);
     }
   } catch(e){}
   try {
-    if ((p.disagreement != null && p.disagreement < 0.15) || p.confidence >= 70) {
-      bullets.push("Strong model agreement");
+    if ((p.disagreement != null && p.disagreement < 0.15) || (p.confidence_tier === "HIGH")) {
+      bullets.push("Strong model agreement — HIGH signal");
     }
   } catch(e){}
   try {
@@ -390,6 +393,11 @@ function buildWhyHtml(p) {
   try {
     if (p.hidden_value_status && p.hidden_value_status !== "none" && p.hidden_value_status !== "") {
       bullets.push("Hidden value detected");
+    }
+  } catch(e){}
+  try {
+    if (p.high_variance || p.ev >= 15) {
+      bullets.push(`<b style="color:#fbbf24">High variance spot</b> — EV > 15% can indicate model overconfidence or thin markets`);
     }
   } catch(e){}
   if (!bullets.length) return "";
@@ -404,6 +412,25 @@ function evTone(ev) {
   if (ev >= 10) return { badge:"bg-emerald-500/10 text-emerald-300 border-emerald-400/30", border:"#10b981", text:"#34d399" };
   if (ev >= 5)  return { badge:"bg-yellow-500/10 text-yellow-300 border-yellow-400/30", border:"#eab308", text:"#fbbf24" };
   return { badge:"bg-zinc-800/60 text-zinc-400 border-zinc-700", border:"#27272a", text:"#71717a" };
+}
+
+function confidenceTier(conf) {
+  if (!conf && conf !== 0) return "LOW";
+  const v = conf > 1 ? conf / 100 : conf;
+  if (v >= 0.75) return "HIGH";
+  if (v >= 0.60) return "MEDIUM";
+  return "LOW";
+}
+
+function tierBadgeHtml(tier, small) {
+  const map = {
+    HIGH:   { bg:"rgba(34,197,94,.1)",  border:"rgba(34,197,94,.35)",  color:"#4ade80", label:"HIGH" },
+    MEDIUM: { bg:"rgba(234,179,8,.1)",  border:"rgba(234,179,8,.3)",   color:"#fbbf24", label:"MEDIUM" },
+    LOW:    { bg:"rgba(113,113,122,.1)", border:"rgba(113,113,122,.3)", color:"#71717a", label:"LOW" },
+  };
+  const s = map[tier] || map.LOW;
+  const sz = small ? "font-size:9px;padding:1px 6px" : "font-size:10px;padding:2px 8px";
+  return `<span style="display:inline-flex;align-items:center;border-radius:99px;border:1px solid ${s.border};background:${s.bg};color:${s.color};font-weight:700;letter-spacing:.05em;${sz}">${s.label}</span>`;
 }
 
 function fmtStatus(st) {
@@ -627,15 +654,15 @@ function detailPanelHtml(pick, data, busy, tab) {
       ${metricTileHtml("Selection", pick.selection || "—", "#f4f4f5")}
       ${metricTileHtml("Odds", Number(pick.odds).toFixed(2), "#4ade80")}
       ${metricTileHtml("EV %", "+" + Number(pick.ev).toFixed(1) + "%", "#4ade80")}
-      ${metricTileHtml("Edge Score", pick.confidence + "%", pick.confidence >= 80 ? "#4ade80" : pick.confidence >= 60 ? "#fbbf24" : "#f87171")}
+      <div class="metric-tile"><div class="mt-lbl">Signal Strength</div><div style="margin-top:4px">${tierBadgeHtml(pick.confidence_tier)}</div></div>
       ${metricTileHtml("Bookmaker", pick.bookmaker || "—")}
     </div>`;
-    if (pick.model_prob != null) {
-      const mp_pct = pick.model_prob * 100;
+    if (pick.model_prob_pct || pick.model_prob != null) {
+      const mp_pct = pick.model_prob_pct || (pick.model_prob != null ? pick.model_prob * 100 : 0);
       body += `<div style="border-radius:14px;border:1px solid #27272a;background:rgba(0,0,0,.3);padding:14px">
         <div style="font-size:13px;font-weight:600;color:#e4e4e7;margin-bottom:10px">Model Probabilities</div>
         <div style="display:flex;flex-direction:column;gap:8px">
-          ${progressBarHtml("Model", mp_pct, "#818cf8")}
+          ${progressBarHtml("Model (win prob)", mp_pct, "#818cf8")}
         </div>
       </div>`;
     }
@@ -648,7 +675,7 @@ function detailPanelHtml(pick, data, busy, tab) {
       ${metricTileHtml("Selection", pick.selection || "—", "#f4f4f5")}
       ${metricTileHtml("Odds", Number(currentOdds).toFixed(2), "#4ade80")}
       ${metricTileHtml("EV %", "+" + Number(pick.ev).toFixed(1) + "%", "#4ade80")}
-      ${metricTileHtml("Edge Score", pick.confidence + "%", pick.confidence >= 80 ? "#4ade80" : pick.confidence >= 60 ? "#fbbf24" : "#f87171")}
+      <div class="metric-tile"><div class="mt-lbl">Signal Strength</div><div style="margin-top:4px">${tierBadgeHtml(pick.confidence_tier)}</div></div>
       ${metricTileHtml("Bookmaker", pick.bookmaker || "—")}
     </div>`;
 
@@ -1012,7 +1039,7 @@ function renderHockeyTab() {
             <div style="font-size:13px;color:#52525b">—</div>
           </div>
           <div>
-            <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Edge Score</div>
+            <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Signal Strength</div>
             <div style="font-size:13px;color:#52525b">—</div>
           </div>
           <div>
@@ -1147,7 +1174,7 @@ function renderNbaTab() {
             <div style="font-size:13px;color:#52525b">—</div>
           </div>
           <div>
-            <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Edge Score</div>
+            <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Signal Strength</div>
             <div style="font-size:13px;color:#52525b">—</div>
           </div>
           <div>
@@ -1474,7 +1501,7 @@ function renderApp() {
     ["newest", "Newest ↓"],
     ["kickoff", "Kickoff ↑"],
     ["ev", "EV ↓"],
-    ["confidence", "Edge Score ↓"],
+    ["confidence", "Signal ↓"],
     ["odds", "Odds ↓"],
   ].map(([v, l]) => `<option value="${v}" ${state.sortBy === v ? "selected" : ""}>${esc(l)}</option>`).join("");
 
@@ -1547,12 +1574,10 @@ function renderApp() {
           ${evBadgeHtml(row.ev, true, row.is_outlier)}
         </div>
         <div>
-          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Edge Score</div>
-          <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
-            <span style="font-size:13px;font-weight:600">${row.confidence}%</span>
-            <div style="height:6px;width:60px;border-radius:99px;background:#27272a;overflow:hidden">
-              <div style="height:100%;border-radius:99px;background:#6366f1;width:${Math.min(100, row.confidence)}%"></div>
-            </div>
+          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Signal Strength</div>
+          <div style="display:flex;flex-direction:column;gap:4px;margin-top:2px">
+            ${tierBadgeHtml(row.confidence_tier)}
+            ${row.model_prob_pct ? `<span style="font-size:10px;color:#52525b">Model ${Number(row.model_prob_pct).toFixed(1)}%</span>` : ""}
           </div>
         </div>
         <div>
@@ -2015,12 +2040,10 @@ function renderPickList() {
           ${evBadgeHtml(row.ev, true, row.is_outlier)}
         </div>
         <div>
-          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Edge Score</div>
-          <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
-            <span style="font-size:13px;font-weight:600">${row.confidence}%</span>
-            <div style="height:6px;width:60px;border-radius:99px;background:#27272a;overflow:hidden">
-              <div style="height:100%;border-radius:99px;background:#6366f1;width:${Math.min(100, row.confidence)}%"></div>
-            </div>
+          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Signal Strength</div>
+          <div style="display:flex;flex-direction:column;gap:4px;margin-top:2px">
+            ${tierBadgeHtml(row.confidence_tier)}
+            ${row.model_prob_pct ? `<span style="font-size:10px;color:#52525b">Model ${Number(row.model_prob_pct).toFixed(1)}%</span>` : ""}
           </div>
         </div>
         <div>
@@ -2359,12 +2382,10 @@ function renderAnalysisTab() {
         ${evBadgeHtml(ev, true, ev > 40)}
       </div>
       <div>
-        <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Edge Score</div>
-        <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
-          <span style="font-size:13px;font-weight:600">${conf.toFixed(0)}%</span>
-          <div style="height:6px;width:60px;border-radius:99px;background:#27272a;overflow:hidden">
-            <div style="height:100%;border-radius:99px;background:#a78bfa;width:${Math.min(100,conf)}%"></div>
-          </div>
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Signal Strength</div>
+        <div style="display:flex;flex-direction:column;gap:4px;margin-top:2px">
+          ${tierBadgeHtml(confidenceTier(conf))}
+          <span style="font-size:10px;color:#52525b">Model ${a.model_prob_pct ? Number(a.model_prob_pct).toFixed(1) : (conf > 0 ? conf.toFixed(0) : "—")}%</span>
         </div>
       </div>
       <div>

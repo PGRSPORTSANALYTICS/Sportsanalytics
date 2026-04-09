@@ -97,6 +97,30 @@ def kelly_fraction(model_prob: float, decimal_odds: float) -> float:
     return max(0.0, round(k, 6))
 
 
+def confidence_tier(raw_confidence: float) -> str:
+    """
+    Convert a raw confidence score into a human-readable tier.
+
+    Args:
+        raw_confidence: Either 0–1 decimal (0.72) or 0–100 integer (72).
+                        Both formats are handled.
+
+    Returns:
+        "HIGH", "MEDIUM", or "LOW"
+
+    Mapping:
+        >= 0.75  →  HIGH   (stable markets, top leagues, strong model agreement)
+        >= 0.60  →  MEDIUM (semi-stable)
+        < 0.60   →  LOW    (volatile: props, alt lines, small leagues)
+    """
+    v = raw_confidence / 100.0 if raw_confidence > 1.0 else raw_confidence
+    if v >= 0.75:
+        return "HIGH"
+    if v >= 0.60:
+        return "MEDIUM"
+    return "LOW"
+
+
 def clv_pct(open_odds: float, closing_odds: float) -> float:
     """
     Closing Line Value — did you beat the market?
