@@ -405,7 +405,7 @@ class DataCollector:
             away_xg=xg_data.get('lambda_away'),
             odds_data={"legs": legs, "combined_odds": combined_odds, "sgp_type": sgp_type},
             model_probability=combined_probability,
-            edge_percentage=edge * 100 if edge and edge < 1 else edge,
+            edge_percentage=round(edge * 100, 3) if edge is not None and abs(edge) < 2 else (edge or 0),
             bet_placed=bet_placed,
             data_source="sgp_engine",
             analysis_type=f"sgp_{sgp_type.lower().replace(' ', '_')}",

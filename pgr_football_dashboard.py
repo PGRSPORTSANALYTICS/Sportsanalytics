@@ -3853,8 +3853,10 @@ def render_kelly_calculator():
             cfg=cfg
         )
         
-        implied_prob = 1 / odds
-        edge_pct = (model_prob - implied_prob) * 100
+        from ev_core import ev_pct as _ev_pct, prob_gap
+        implied_prob = 1.0 / odds
+        edge_pct = _ev_pct(model_prob, odds)   # EV% = p*(odds-1)-(1-p)  ← standardised
+        prob_gap_pct = prob_gap(model_prob, odds)   # prob difference, shown separately
         ev_pct = result.get('ev', 0) * 100
         
         if result.get('ok', False):

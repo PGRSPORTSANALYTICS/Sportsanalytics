@@ -3629,6 +3629,40 @@ async def public_value_spots():
         return {"spots": [], "live": False}
 
 
+@app.get("/api/public/verify-ev", include_in_schema=False)
+async def verify_ev(model_prob: float, odds: float, fair_odds: float = 0.0):
+    """
+    Public EV audit endpoint — verify any pick's calculation.
+
+    Query params:
+      model_prob  — our model's win probability, 0–1  (e.g. 0.52)
+      odds        — decimal odds                       (e.g. 2.20)
+      fair_odds   — no-vig fair price (optional)       (e.g. 2.10)
+
+    Returns three distinct metrics:
+      ev_pct        — EV%  = (p × odds − 1) × 100   (industry standard)
+      prob_gap_pct  — probability gap vs bookmaker
+      edge_fair_pct — edge vs no-vig fair odds (if fair_odds supplied)
+    """
+    try:
+        from ev_core import verify as _verify
+        if not (0.0 < model_prob < 1.0):
+            return {"error": "model_prob must be between 0 and 1"}
+        if odds <= 1.0:
+            return {"error": "odds must be greater than 1.0"}
+        result = _verify(model_prob, odds, fair_odds if fair_odds > 1.0 else None)
+        result["formula"] = "EV% = (model_prob × odds − 1) × 100"
+        result["note"] = (
+            "EV% uses model probability. "
+            "edge_fair_pct uses devigged market probability. "
+            "prob_gap_pct is raw probability difference — not EV."
+        )
+        return result
+    except Exception as e:
+        logger.error(f"verify_ev error: {e}")
+        return {"error": str(e)}
+
+
 # Auth pages (public — no premium required)
 # =============================================================================
 
