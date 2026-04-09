@@ -326,6 +326,8 @@ function normalizePick(b) {
     odds: b.odds || 0,
     bookmaker: cleanBookmaker(b.bookmaker || b.best_book || ""),
     ev: b.ev_pct != null ? b.ev_pct : (b.ev != null ? b.ev : 0),
+    calibrated_ev: b.calibrated_ev_pct != null ? b.calibrated_ev_pct : null,
+    calibration_label: b.calibration_label || null,
     confidence: b.confidence || 0,
     confidence_tier: b.confidence_tier || confidenceTier(b.confidence || 0),
     high_variance: b.high_variance || (b.ev_pct||b.ev||0) > 15,
@@ -584,13 +586,29 @@ function getSelectedPick() {
 /* ─────────────────────────────────────────────────────────────
    HTML BUILDERS
 ───────────────────────────────────────────────────────────── */
-function evBadgeHtml(ev, large, isOutlier) {
+function resolveDisplayEv(p) {
+  if (p == null) return null;
+  if (typeof p === "number") return p;
+  if (p.calibrated_ev != null) return p.calibrated_ev;
+  if (p.ev != null) return p.ev * 0.25;
+  return null;
+}
+
+function evBadgeHtml(evOrPick, large, isOutlier) {
+  const ev = resolveDisplayEv(evOrPick);
+  if (ev == null) return `<span style="font-size:12px;color:#52525b">—</span>`;
   const t = evTone(ev);
   const sz = large ? "font-size:20px" : "font-size:12px";
   if (isOutlier) {
-    return `<span class="inline-flex rounded-xl border px-3 py-1 font-semibold" style="${sz};background:rgba(251,191,36,.12);border-color:rgba(251,191,36,.4);color:#fbbf24" title="Modellvärde över 40% — statistisk outlier">~${Number(ev).toFixed(1)}%</span>`;
+    return `<span class="inline-flex rounded-xl border px-3 py-1 font-semibold" style="${sz};background:rgba(251,191,36,.12);border-color:rgba(251,191,36,.4);color:#fbbf24" title="Model value above 40% — statistical outlier">~${Number(ev).toFixed(1)}%</span>`;
   }
   return `<span class="inline-flex rounded-xl border px-3 py-1 font-semibold ${esc(t.badge)}" style="${sz}">+${Number(ev).toFixed(1)}%</span>`;
+}
+
+function calLabelHtml(p) {
+  const lbl = (typeof p === "object" && p) ? (p.calibration_label || null) : null;
+  if (!lbl) return "";
+  return `<div style="font-size:9px;color:#52525b;margin-top:2px;font-style:italic">${esc(lbl)}</div>`;
 }
 
 function metricTileHtml(label, value, color) {
@@ -1549,7 +1567,7 @@ function renderApp() {
     const confLabel = marketConfidenceLabel(p.market, p.league);
     const confColor = confLabel === "High" ? "#4ade80" : confLabel === "Low–Medium" ? "#71717a" : "#fbbf24";
     const detectedStr = detectedAgo(p);
-    const showInefficiency = p.ev >= 10;
+    const showInefficiency = (resolveDisplayEv(p) || 0) >= 5;
     return `<button class="feat-btn" data-pickid="${esc(p.id)}"
       style="text-align:left;border-radius:16px;border:1px solid ${isSel ? "rgba(99,102,241,.5)" : "#27272a"};background:${isSel ? "rgba(99,102,241,.08)" : "#09090b"};padding:14px;cursor:pointer;color:inherit">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
@@ -1557,7 +1575,7 @@ function renderApp() {
           <span class="pulse" style="width:6px;height:6px;border-radius:50%;background:#22c55e;display:inline-block;flex-shrink:0"></span>
           <span style="font-size:9px;font-weight:700;color:#4ade80;letter-spacing:.1em">LIVE</span>
         </div>
-        ${evBadgeHtml(p.ev, false, p.is_outlier)}
+        ${evBadgeHtml(p, false, p.is_outlier)}
       </div>
       <div style="font-size:15px;font-weight:700;line-height:1.25;margin-bottom:2px">${esc(p.match)}</div>
       <div style="font-size:11px;color:#52525b;margin-bottom:10px">Market: ${esc(p.market)} · ${esc(p.league)}</div>
@@ -1572,7 +1590,8 @@ function renderApp() {
         </div>
         <div style="background:#18181b;border-radius:8px;padding:6px 8px">
           <div style="font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:2px">Value</div>
-          <div style="font-size:14px;font-weight:700;color:#4ade80">+${Number(p.ev).toFixed(1)}%</div>
+          <div style="font-size:14px;font-weight:700;color:#4ade80">+${Number(resolveDisplayEv(p) || 0).toFixed(1)}%</div>
+          ${calLabelHtml(p)}
         </div>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:${showInefficiency || detectedStr ? "8px" : "0"}">
@@ -1606,7 +1625,7 @@ function renderApp() {
       const rowConfColor = rowConfLabel === "High" ? "#4ade80" : rowConfLabel === "Low\u2013Medium" ? "#71717a" : "#fbbf24";
       const rowTier = row.confidence_tier || (row.confidence != null ? confidenceTier(row.confidence) : "LOW");
       const rowDetected = detectedAgo(row);
-      const hasInefficiency = row.ev >= 10;
+      const hasInefficiency = (resolveDisplayEv(row) || 0) >= 5;
       return `<div class="opp-row${isSel ? " active" : ""}" data-pickid="${esc(row.id)}"
         style="position:relative;border-left:4px solid ${blColor};display:grid;grid-template-columns:1.8fr 1.2fr 0.7fr 0.9fr 0.9fr 1fr;gap:12px;padding:18px 16px;cursor:pointer;border-bottom:1px solid #18181b">
         <div>
@@ -1638,7 +1657,8 @@ function renderApp() {
         </div>
         <div>
           <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Value</div>
-          ${evBadgeHtml(row.ev, true, row.is_outlier)}
+          ${evBadgeHtml(row, true, row.is_outlier)}
+          ${calLabelHtml(row)}
         </div>
         <div>
           <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Selection</div>
@@ -2120,7 +2140,8 @@ function renderPickList() {
         </div>
         <div>
           <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Value</div>
-          ${evBadgeHtml(row.ev, true, row.is_outlier)}
+          ${evBadgeHtml(row, true, row.is_outlier)}
+          ${calLabelHtml(row)}
         </div>
         <div>
           <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Signal</div>
@@ -2156,7 +2177,7 @@ function renderFeatured() {
       style="text-align:left;border-radius:16px;border:1px solid ${isSel ? "rgba(99,102,241,.5)" : "#27272a"};background:${isSel ? "rgba(99,102,241,.08)" : "#09090b"};padding:14px;cursor:pointer;color:inherit">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
         <span class="inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${esc(t.badge)}">${esc(p.badge)}</span>
-        ${evBadgeHtml(p.ev, false, p.is_outlier)}
+        ${evBadgeHtml(p, false, p.is_outlier)}
       </div>
       <div style="font-size:16px;font-weight:700;line-height:1.25;margin-bottom:6px">${esc(p.match)}</div>
       <div style="font-size:12px;color:#71717a;margin-bottom:12px">${esc(p.market)}</div>

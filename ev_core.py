@@ -162,6 +162,40 @@ def verify(model_prob: float, decimal_odds: float, fair_odds: float | None = Non
     return result
 
 
+def calibrated_ev_pct(
+    raw_ev: float,
+    market: str = "",
+    league: str = "",
+    odds: float = 0.0,
+) -> dict:
+    """
+    Wrapper around model_calibrator.calibrate_ev().
+    Returns the calibrated EV figure safe to display publicly.
+
+    Returns:
+        {
+          "calibrated_ev"  : float  (the shrunk EV%, e.g. 6.1),
+          "shrink_factor"  : float,
+          "label"          : str    (e.g. "Early calibration (N=23)"),
+          "phase"          : int,
+          "n"              : int,
+        }
+    """
+    try:
+        from model_calibrator import calibrate_ev
+        return calibrate_ev(raw_ev=raw_ev, market=market, league=league, odds=odds)
+    except ImportError:
+        # Fallback if model_calibrator not available
+        fallback = round(raw_ev * 0.25, 2)
+        return {
+            "calibrated_ev": fallback,
+            "shrink_factor": 0.25,
+            "label": "Early calibration",
+            "phase": 1,
+            "n": 0,
+        }
+
+
 if __name__ == "__main__":
     print("=== EV Core — self-test ===\n")
 

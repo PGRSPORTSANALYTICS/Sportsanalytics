@@ -56,6 +56,8 @@ class BetCard(BaseModel):
     bet_category: Optional[str] = None
     is_top_pick: bool = False
     is_premium: bool = False
+    calibrated_ev_pct: Optional[float] = None
+    calibration_label: Optional[str] = None
 
 
 class BetsFeedResponse(BaseModel):
@@ -170,7 +172,8 @@ def _build_football_query(
                match_date, kickoff_utc, kickoff_epoch, status, outcome, profit_loss,
                edge_percentage, ev_sim, confidence, trust_level, model_prob,
                actual_score, best_odds_bookmaker, open_odds, close_odds, clv_pct,
-               created_at_utc, bet_category, timestamp
+               created_at_utc, bet_category, timestamp,
+               calibrated_ev_pct, calibration_version
         FROM football_opportunities
         WHERE {where}
         ORDER BY {order}
@@ -303,16 +306,35 @@ def _row_to_football_card(row) -> BetCard:
      match_date, kickoff_utc, kickoff_epoch, status, outcome, profit_loss,
      edge_pct, ev_sim, confidence, trust_level, model_prob,
      actual_score, bookmaker, open_odds, close_odds, clv_pct,
-     created_at_utc, bet_category, ts) = row
+     created_at_utc, bet_category, ts,
+     db_calibrated_ev, _calibration_version) = row
 
     norm_status = _normalize_status(status, outcome)
     ev = ev_sim if ev_sim is not None else (edge_pct if edge_pct else None)
     pu = _compute_profit_units(norm_status, odds or 0) if norm_status in ("won", "lost", "void") else None
 
-    from ev_core import confidence_tier as _conf_tier
+    from ev_core import confidence_tier as _conf_tier, calibrated_ev_pct as _cal_ev
     _conf_val = float(confidence) if confidence else 0.0
     _ev_val   = round(float(ev), 2) if ev is not None else None
     _mp       = round(float(model_prob), 4) if model_prob else None
+
+    # Calibrated EV: use stored value, else compute on-the-fly
+    if db_calibrated_ev is not None:
+        _cal = round(float(db_calibrated_ev), 2)
+        _cal_label = None
+    elif _ev_val is not None and _ev_val > 0:
+        _cal_result = _cal_ev(
+            raw_ev=_ev_val,
+            market=market or "",
+            league=league or "",
+            odds=float(odds) if odds else 0.0,
+        )
+        _cal = _cal_result["calibrated_ev"]
+        _cal_label = _cal_result["label"]
+    else:
+        _cal = None
+        _cal_label = None
+
     return BetCard(
         id=f"fb_{rid}",
         sport="football",
@@ -342,6 +364,8 @@ def _row_to_football_card(row) -> BetCard:
         clv_pct=round(float(clv_pct), 2) if clv_pct else None,
         created_at=created_at_utc or (datetime.utcfromtimestamp(ts).isoformat() if ts else None),
         bet_category=bet_category,
+        calibrated_ev_pct=_cal,
+        calibration_label=_cal_label,
     )
 
 
