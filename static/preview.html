@@ -43,26 +43,26 @@ const { useState, useMemo, useEffect, useCallback } = React;
 const now = Date.now();
 const ko = (h, m = 0) => new Date(now + h * 3600000 + m * 60000).toISOString();
 const PICKS = [
-  { id:1,  sport:"Football",   league:"UEFA Europa League",    match:"AS Roma vs Bologna",                   market:"Over 2.5 Goals",          selection:"Over",  odds:2.27, bookmaker:"Pinnacle",   ev:25.0, confidence:100, model_prob:71, kickoff:ko(8),    status:"prematch", badge:"High EV" },
-  { id:2,  sport:"Football",   league:"UEFA Europa League",    match:"FC Midtjylland vs Nottingham Forest",  market:"Home or Draw",             selection:"X2",    odds:1.74, bookmaker:"Pinnacle",   ev:17.5, confidence:93,  model_prob:71, kickoff:ko(6),    status:"prematch", badge:"Top Confidence" },
-  { id:3,  sport:"Football",   league:"2. Bundesliga",         match:"Hannover 96 vs Eintracht Braunschweig",market:"Over 3.5 Corners",         selection:"Over",  odds:2.02, bookmaker:"Bet365",     ev:25.0, confidence:65,  model_prob:65, kickoff:ko(9.5),  status:"prematch", badge:"High EV" },
-  { id:4,  sport:"Football",   league:"Turkish Super League",  match:"Besiktas vs Kasimpasa",               market:"Over 3.5 Goals",           selection:"Over",  odds:2.25, bookmaker:"Unibet",     ev:25.0, confidence:100, model_prob:70, kickoff:ko(4),    status:"prematch", badge:"High EV" },
-  { id:5,  sport:"Football",   league:"UEFA Europa League",    match:"Aston Villa vs Lille",                market:"Corners Over 9.5",         selection:"Over",  odds:1.99, bookmaker:"Betsson",    ev:12.8, confidence:56,  model_prob:61, kickoff:ko(8),    status:"prematch", badge:"Early Line" },
-  { id:6,  sport:"Football",   league:"Ligue Nationale",       match:"Boulogne vs Nancy",                   market:"Corners Over 9.5",         selection:"Over",  odds:2.02, bookmaker:"Unibet",     ev:14.9, confidence:56,  model_prob:56, kickoff:ko(9),    status:"prematch", badge:"Value" },
-  { id:7,  sport:"Football",   league:"A-League",              match:"WS Wanderers vs Adelaide United",     market:"Corners Under 10.5",       selection:"Under", odds:1.87, bookmaker:"Kambi",      ev:4.7,  confidence:55,  model_prob:55, kickoff:ko(1),    status:"prematch", badge:"Value" },
-  { id:8,  sport:"Football",   league:"UEFA Europa League",    match:"AS Roma vs Bologna",                  market:"Corners Over 8.5",         selection:"Over",  odds:1.91, bookmaker:"API-Football",ev:25.0, confidence:69,  model_prob:68, kickoff:ko(8),    status:"prematch", badge:"High EV" },
-  { id:9,  sport:"Basketball", league:"NCAAB",                 match:"Duke vs North Carolina",              market:"Total Over 148.5",         selection:"Over",  odds:1.87, bookmaker:"DraftKings", ev:8.3,  confidence:72,  model_prob:63, kickoff:ko(10),   status:"prematch", badge:"Value" },
-  { id:10, sport:"Football",   league:"Bundesliga",            match:"Bayern Munich vs Dortmund",           market:"Home Win",                 selection:"Home",  odds:1.54, bookmaker:"Unibet",     ev:11.5, confidence:88,  model_prob:72, kickoff:ko(3),    status:"prematch", badge:"High EV" },
-  { id:11, sport:"Football",   league:"La Liga",               match:"Real Madrid vs Barcelona",            market:"BTTS Yes",                 selection:"Yes",   odds:1.68, bookmaker:"Pinnacle",   ev:6.2,  confidence:81,  model_prob:67, kickoff:ko(19),   status:"prematch", badge:"Value" },
-  { id:12, sport:"Football",   league:"Serie A",               match:"Juventus vs AC Milan",               market:"Draw No Bet — Home",       selection:"Home",  odds:1.82, bookmaker:"Bet365",     ev:9.4,  confidence:75,  model_prob:65, kickoff:ko(14),   status:"prematch", badge:"Value" },
-  { id:13, sport:"Football",   league:"Champions League",      match:"Real Madrid vs Man City",             market:"BTTS Yes",                 selection:"Yes",   odds:1.75, bookmaker:"Pinnacle",   ev:16.3, confidence:91,  model_prob:73, kickoff:ko(47),   status:"prematch", badge:"High EV" },
-  { id:14, sport:"Football",   league:"Eredivisie",            match:"Ajax vs PSV Eindhoven",               market:"Over 3.5 Goals",           selection:"Over",  odds:2.15, bookmaker:"Unibet",     ev:16.5, confidence:79,  model_prob:67, kickoff:ko(31),   status:"prematch", badge:"High EV" },
-  { id:15, sport:"Basketball", league:"NCAAB",                 match:"Kansas vs Gonzaga",                   market:"Moneyline — Kansas",       selection:"Home",  odds:2.10, bookmaker:"FanDuel",    ev:14.2, confidence:77,  model_prob:59, kickoff:ko(13),   status:"prematch", badge:"High EV" },
-  { id:16, sport:"Football",   league:"Premier League",        match:"Arsenal vs Chelsea",                  market:"Over 2.5 Goals",           selection:"Over",  odds:1.72, bookmaker:"Pinnacle",   ev:4.1,  confidence:65,  model_prob:62, kickoff:ko(27),   status:"prematch", badge:"Value" },
-  { id:17, sport:"Football",   league:"Ligue 1",               match:"PSG vs Olympique Lyon",               market:"Over 2.5 Goals",           selection:"Over",  odds:1.62, bookmaker:"Betsson",    ev:7.8,  confidence:84,  model_prob:69, kickoff:ko(23),   status:"prematch", badge:"Value" },
-  { id:18, sport:"Football",   league:"Scottish Premiership",  match:"Celtic vs Rangers",                   market:"Home Win",                 selection:"Home",  odds:1.95, bookmaker:"Pinnacle",   ev:18.2, confidence:82,  model_prob:68, kickoff:ko(36),   status:"prematch", badge:"High EV" },
-  { id:19, sport:"Football",   league:"Primeira Liga",         match:"Benfica vs Porto",                    market:"Over 2.5 Goals",           selection:"Over",  odds:1.85, bookmaker:"Bet365",     ev:10.4, confidence:78,  model_prob:66, kickoff:ko(44),   status:"prematch", badge:"High EV" },
-  { id:20, sport:"Football",   league:"MLS",                   match:"Inter Miami vs LA Galaxy",            market:"BTTS Yes",                 selection:"Yes",   odds:1.90, bookmaker:"DraftKings", ev:5.5,  confidence:70,  model_prob:64, kickoff:ko(52),   status:"prematch", badge:"Value" },
+  { id:1,  sport:"Football",   league:"UEFA Europa League",    match:"AS Roma vs Bologna",                   market:"Over 2.5 Goals",          selection:"Over",  odds:2.27, bookmaker:"Pinnacle",   ev:25.0, confidence:100, model_prob:71, kickoff:ko(8),    status:"prematch", badge:"Market discrepancy" },
+  { id:2,  sport:"Football",   league:"UEFA Europa League",    match:"FC Midtjylland vs Nottingham Forest",  market:"Home or Draw",             selection:"X2",    odds:1.74, bookmaker:"Pinnacle",   ev:17.5, confidence:93,  model_prob:71, kickoff:ko(6),    status:"prematch", badge:"Market discrepancy" },
+  { id:3,  sport:"Football",   league:"2. Bundesliga",         match:"Hannover 96 vs Eintracht Braunschweig",market:"Over 3.5 Corners",         selection:"Over",  odds:2.02, bookmaker:"Bet365",     ev:25.0, confidence:65,  model_prob:65, kickoff:ko(9.5),  status:"prematch", badge:"Market discrepancy" },
+  { id:4,  sport:"Football",   league:"Turkish Super League",  match:"Besiktas vs Kasimpasa",               market:"Over 3.5 Goals",           selection:"Over",  odds:2.25, bookmaker:"Unibet",     ev:25.0, confidence:100, model_prob:70, kickoff:ko(4),    status:"prematch", badge:"Market discrepancy" },
+  { id:5,  sport:"Football",   league:"UEFA Europa League",    match:"Aston Villa vs Lille",                market:"Corners Over 9.5",         selection:"Over",  odds:1.99, bookmaker:"Betsson",    ev:12.8, confidence:56,  model_prob:61, kickoff:ko(8),    status:"prematch", badge:"Value spot" },
+  { id:6,  sport:"Football",   league:"Ligue Nationale",       match:"Boulogne vs Nancy",                   market:"Corners Over 9.5",         selection:"Over",  odds:2.02, bookmaker:"Unibet",     ev:14.9, confidence:56,  model_prob:56, kickoff:ko(9),    status:"prematch", badge:"Value spot" },
+  { id:7,  sport:"Football",   league:"A-League",              match:"WS Wanderers vs Adelaide United",     market:"Corners Under 10.5",       selection:"Under", odds:1.87, bookmaker:"Kambi",      ev:4.7,  confidence:55,  model_prob:55, kickoff:ko(1),    status:"prematch", badge:"Value spot" },
+  { id:8,  sport:"Football",   league:"UEFA Europa League",    match:"AS Roma vs Bologna",                  market:"Corners Over 8.5",         selection:"Over",  odds:1.91, bookmaker:"API-Football",ev:25.0, confidence:69,  model_prob:68, kickoff:ko(8),    status:"prematch", badge:"Market discrepancy" },
+  { id:9,  sport:"Basketball", league:"NCAAB",                 match:"Duke vs North Carolina",              market:"Total Over 148.5",         selection:"Over",  odds:1.87, bookmaker:"DraftKings", ev:8.3,  confidence:72,  model_prob:63, kickoff:ko(10),   status:"prematch", badge:"Value spot" },
+  { id:10, sport:"Football",   league:"Bundesliga",            match:"Bayern Munich vs Dortmund",           market:"Home Win",                 selection:"Home",  odds:1.54, bookmaker:"Unibet",     ev:11.5, confidence:88,  model_prob:72, kickoff:ko(3),    status:"prematch", badge:"High signal" },
+  { id:11, sport:"Football",   league:"La Liga",               match:"Real Madrid vs Barcelona",            market:"BTTS Yes",                 selection:"Yes",   odds:1.68, bookmaker:"Pinnacle",   ev:6.2,  confidence:81,  model_prob:67, kickoff:ko(19),   status:"prematch", badge:"Value spot" },
+  { id:12, sport:"Football",   league:"Serie A",               match:"Juventus vs AC Milan",               market:"Draw No Bet — Home",       selection:"Home",  odds:1.82, bookmaker:"Bet365",     ev:9.4,  confidence:75,  model_prob:65, kickoff:ko(14),   status:"prematch", badge:"Value spot" },
+  { id:13, sport:"Football",   league:"Champions League",      match:"Real Madrid vs Man City",             market:"BTTS Yes",                 selection:"Yes",   odds:1.75, bookmaker:"Pinnacle",   ev:16.3, confidence:91,  model_prob:73, kickoff:ko(47),   status:"prematch", badge:"Market discrepancy" },
+  { id:14, sport:"Football",   league:"Eredivisie",            match:"Ajax vs PSV Eindhoven",               market:"Over 3.5 Goals",           selection:"Over",  odds:2.15, bookmaker:"Unibet",     ev:16.5, confidence:79,  model_prob:67, kickoff:ko(31),   status:"prematch", badge:"Market discrepancy" },
+  { id:15, sport:"Basketball", league:"NCAAB",                 match:"Kansas vs Gonzaga",                   market:"Moneyline — Kansas",       selection:"Home",  odds:2.10, bookmaker:"FanDuel",    ev:14.2, confidence:77,  model_prob:59, kickoff:ko(13),   status:"prematch", badge:"High signal" },
+  { id:16, sport:"Football",   league:"Premier League",        match:"Arsenal vs Chelsea",                  market:"Over 2.5 Goals",           selection:"Over",  odds:1.72, bookmaker:"Pinnacle",   ev:4.1,  confidence:65,  model_prob:62, kickoff:ko(27),   status:"prematch", badge:"Value spot" },
+  { id:17, sport:"Football",   league:"Ligue 1",               match:"PSG vs Olympique Lyon",               market:"Over 2.5 Goals",           selection:"Over",  odds:1.62, bookmaker:"Betsson",    ev:7.8,  confidence:84,  model_prob:69, kickoff:ko(23),   status:"prematch", badge:"Value spot" },
+  { id:18, sport:"Football",   league:"Scottish Premiership",  match:"Celtic vs Rangers",                   market:"Home Win",                 selection:"Home",  odds:1.95, bookmaker:"Pinnacle",   ev:18.2, confidence:82,  model_prob:68, kickoff:ko(36),   status:"prematch", badge:"Market discrepancy" },
+  { id:19, sport:"Football",   league:"Primeira Liga",         match:"Benfica vs Porto",                    market:"Over 2.5 Goals",           selection:"Over",  odds:1.85, bookmaker:"Bet365",     ev:10.4, confidence:78,  model_prob:66, kickoff:ko(44),   status:"prematch", badge:"High signal" },
+  { id:20, sport:"Football",   league:"MLS",                   match:"Inter Miami vs LA Galaxy",            market:"BTTS Yes",                 selection:"Yes",   odds:1.90, bookmaker:"DraftKings", ev:5.5,  confidence:70,  model_prob:64, kickoff:ko(52),   status:"prematch", badge:"Value spot" },
 ];
 
 /* ─── helpers ────────────────────────────────────────────────── */
@@ -228,7 +228,7 @@ function App() {
             model_prob: b.model_prob?b.model_prob*100:0,
             kickoff: b.kickoff||"",
             status:"prematch",
-            badge: (b.ev_pct??0)>=15?"High EV":(b.confidence??0)>=85?"Top Confidence":"Value",
+            badge: (b.ev_pct??0)>=15?"Market discrepancy":(b.confidence??0)>=85?"High signal":"Value spot",
           })));
         } else setIsMock(true);
       } catch { setIsMock(true); }
@@ -263,8 +263,8 @@ function App() {
         <div className="flex items-center gap-3">
           <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-black" style={{background:"linear-gradient(135deg,#6366f1,#a855f7)"}}>P</div>
           <div>
-            <span className="font-bold text-sm tracking-tight">PGR Sports Analytics</span>
-            <span className="text-xs text-slate-500 ml-2">Value Intelligence</span>
+            <span className="font-bold text-sm tracking-tight">PGR Analytics</span>
+            <span className="text-xs text-slate-600 ml-2">We scan the market for mispriced odds. Live. All day.</span>
           </div>
         </div>
         <div className="flex items-center gap-4">
@@ -283,11 +283,11 @@ function App() {
 
         {/* ── Stats row ── */}
         <div className="flex flex-wrap gap-3">
-          <StatPill label="Opportunities" value={filtered.length} color="text-indigo-400" />
-          <StatPill label="EV > 15%" value={filtered.filter(p=>p.ev>=15).length} color="text-emerald-400" />
-          <StatPill label={`Avg EV`} value={`+${(filtered.length?filtered.reduce((s,p)=>s+p.ev,0)/filtered.length:0).toFixed(1)}%`} color="text-emerald-400" />
-          <StatPill label="Avg Conf" value={`${filtered.length?Math.round(filtered.reduce((s,p)=>s+p.confidence,0)/filtered.length):0}%`} color="text-slate-300" />
-          <StatPill label="Total in DB" value={picks.length} color="text-slate-400" />
+          <StatPill label="Value Spots" value={filtered.length} color="text-emerald-400" />
+          <StatPill label="Value > 15%" value={filtered.filter(p=>p.ev>=15).length} color="text-emerald-400" />
+          <StatPill label="Avg Value" value={`+${(filtered.length?filtered.reduce((s,p)=>s+p.ev,0)/filtered.length:0).toFixed(1)}%`} color="text-emerald-400" />
+          <StatPill label="High Signal" value={filtered.filter(p=>p.confidence>=75).length} color="text-slate-300" />
+          <StatPill label="Leagues" value="40+" color="text-slate-400" />
         </div>
 
         {/* ── Filters ── */}
@@ -302,11 +302,11 @@ function App() {
           </div>
 
           {loading ? (
-            <div className="py-20 text-center text-slate-500 text-sm">Loading live data…</div>
+            <div className="py-20 text-center text-slate-500 text-sm">Scanning markets…</div>
           ) : filtered.length === 0 ? (
             <div className="py-20 text-center text-slate-600">
-              <div className="text-3xl mb-3 opacity-30">📊</div>
-              No picks match your filters
+              <div className="text-2xl mb-3 opacity-30">◈</div>
+              No value spots match your filters
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -320,8 +320,8 @@ function App() {
                       ["Market", "min-w-[160px]"],
                       ["Odds", "w-16 text-right"],
                       ["Bookmaker", "w-28"],
-                      ["EV %", "w-24"],
-                      ["Confidence", "w-32"],
+                      ["Value %", "w-24"],
+                      ["Signal", "w-32"],
                       ["Kickoff", "w-28"],
                     ].map(([label, cls]) => (
                       <th key={label} className={`px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-widest ${cls||""}`}>
@@ -382,9 +382,15 @@ function App() {
                           </span>
                         </td>
 
-                        {/* Odds */}
+                        {/* Odds — blurred for free users on high-value spots */}
                         <td className="px-3 py-2.5 text-right">
-                          <span className="font-bold text-indigo-300">{Number(p.odds).toFixed(2)}</span>
+                          {p.ev >= 15 ? (
+                            <span className="font-bold text-slate-500 select-none" style={{filter:"blur(3.5px)",userSelect:"none"}} title="Unlock to see full odds">
+                              {Number(p.odds).toFixed(2)}
+                            </span>
+                          ) : (
+                            <span className="font-bold text-indigo-300">{Number(p.odds).toFixed(2)}</span>
+                          )}
                         </td>
 
                         {/* Bookmaker */}
@@ -395,9 +401,15 @@ function App() {
                           <EvPill ev={p.ev} />
                         </td>
 
-                        {/* Confidence */}
+                        {/* Signal (confidence tier) */}
                         <td className="px-3 py-2.5">
-                          <ConfBar v={p.confidence} />
+                          {p.ev >= 15 ? (
+                            <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{background:"rgba(34,197,94,0.1)",color:"#4ade80",border:"1px solid rgba(34,197,94,0.25)"}}>HIGH</span>
+                          ) : p.confidence >= 60 ? (
+                            <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{background:"rgba(234,179,8,0.1)",color:"#fbbf24",border:"1px solid rgba(234,179,8,0.25)"}}>MEDIUM</span>
+                          ) : (
+                            <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{background:"rgba(113,113,122,0.1)",color:"#71717a",border:"1px solid rgba(113,113,122,0.25)"}}>LOW</span>
+                          )}
                         </td>
 
                         {/* Kickoff */}
@@ -416,28 +428,47 @@ function App() {
 
           {/* Table footer */}
           <div className="flex items-center justify-between px-4 py-2.5" style={{borderTop:"1px solid rgba(255,255,255,0.05)",background:"rgba(255,255,255,0.015)"}}>
-            <span className="text-xs text-slate-600">Data refreshes automatically every 5 min</span>
+            <span className="text-xs text-slate-600">Scanner refreshes automatically · Scanning 40+ leagues</span>
             <span className="text-xs" style={{
               background:"rgba(34,197,94,0.08)",color:"#4ade80",
               border:"1px solid rgba(34,197,94,0.2)",padding:"2px 10px",borderRadius:999
             }}>
-              ■ &gt;15% EV &nbsp;|&nbsp; <span style={{color:"#fbbf24"}}>■</span> 5–15% EV
+              ■ &gt;15% Value &nbsp;|&nbsp; <span style={{color:"#fbbf24"}}>■</span> 5–15% Value
             </span>
           </div>
         </div>
 
-        {/* ── Premium teaser ── */}
-        <div className="flex items-center justify-between px-5 py-4 rounded-xl flex-wrap gap-3"
-          style={{background:"linear-gradient(135deg, rgba(99,102,241,0.08), rgba(168,85,247,0.06))", border:"1px solid rgba(99,102,241,0.2)"}}>
-          <div>
-            <div className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-1">🔒 Premium Access</div>
-            <div className="text-sm font-semibold text-slate-100">+12 more picks live in Discord right now</div>
-            <div className="text-xs text-slate-400 mt-0.5">Real-time alerts · CLV tracking · 30+ league channels</div>
+        {/* ── FOMO / Lock block ── */}
+        <div className="rounded-xl overflow-hidden" style={{border:"1px solid rgba(99,102,241,0.25)"}}>
+          <div className="px-5 py-4" style={{background:"linear-gradient(135deg,rgba(99,102,241,0.08),rgba(168,85,247,0.05))"}}>
+            <div className="flex items-start justify-between flex-wrap gap-4">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="live-dot w-2 h-2 rounded-full bg-emerald-400 inline-block" />
+                  <span className="text-xs font-bold text-emerald-400 uppercase tracking-widest">Live right now</span>
+                </div>
+                <div className="text-base font-bold text-slate-100 mb-1">{picks.length + 17}+ value spots active right now</div>
+                <div className="text-sm text-slate-400">Updated in real-time · Scanning 40+ leagues 24/7</div>
+                <div className="flex flex-wrap gap-3 mt-3 text-xs text-slate-500">
+                  <span>Full MODEL % for every spot</span>
+                  <span>·</span>
+                  <span>CLV tracking as lines move</span>
+                  <span>·</span>
+                  <span>Market intelligence panel</span>
+                </div>
+              </div>
+              <div className="flex flex-col gap-2 items-end">
+                <a href="/app" className="text-sm font-bold px-6 py-2.5 rounded-xl text-black whitespace-nowrap transition-opacity hover:opacity-90 block text-center"
+                  style={{background:"linear-gradient(135deg,#22c55e,#16a34a)"}}>
+                  Unlock full value feed →
+                </a>
+                <span className="text-xs text-slate-600">Odds blurred below — unlock to see full data</span>
+              </div>
+            </div>
           </div>
-          <button className="text-sm font-bold px-5 py-2 rounded-xl text-white whitespace-nowrap transition-opacity hover:opacity-90"
-            style={{background:"linear-gradient(135deg,#6366f1,#a855f7)"}}>
-            Unlock Full Access →
-          </button>
+          <div className="px-5 py-3 flex items-center gap-2" style={{background:"rgba(0,0,0,0.3)",borderTop:"1px solid rgba(99,102,241,0.1)"}}>
+            <span className="text-xs text-slate-600">This is a data intelligence tool, not a tipster service. We surface market inefficiencies — you decide.</span>
+          </div>
         </div>
 
         <div className="text-center text-xs text-slate-700 pb-2">

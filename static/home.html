@@ -457,11 +457,26 @@ function statusPillClass(st) {
 
 function layerBadgeHtml(layer) {
   if (!layer) return "";
-  const isPro = layer === "PRO PICK";
+  const isPro = layer === "PRO PICK" || layer === "PRO VALUE";
+  const label = isPro ? "PRO VALUE" : layer;
   const bg    = isPro ? "rgba(99,102,241,.15)"  : "rgba(234,179,8,.1)";
   const color = isPro ? "#a78bfa"               : "#fbbf24";
   const border= isPro ? "rgba(139,92,246,.35)"  : "rgba(251,191,36,.3)";
-  return `<span style="display:inline-flex;align-items:center;border-radius:99px;border:1px solid ${border};background:${bg};color:${color};font-size:10px;font-weight:700;padding:2px 8px;letter-spacing:.04em;white-space:nowrap">${esc(layer)}</span>`;
+  return `<span style="display:inline-flex;align-items:center;border-radius:99px;border:1px solid ${border};background:${bg};color:${color};font-size:10px;font-weight:700;padding:2px 8px;letter-spacing:.04em;white-space:nowrap">${esc(label)}</span>`;
+}
+
+function marketConfidenceLabel(market, league) {
+  if (!market) return "Medium";
+  const m = (market || "").toLowerCase();
+  const l = (league || "").toLowerCase();
+  if (m.includes("corner") || m.includes("card") || m.includes("prop") || m.includes("player")) return "Medium";
+  if (m.includes("1x2") || m.includes("home win") || m.includes("away win") || m.includes("draw") ||
+      m.includes("moneyline") || m.includes("over") || m.includes("under") || m.includes("btts") || m.includes("total")) {
+    const smallLeague = l.includes("mls") || l.includes("a-league") || l.includes("j-league") ||
+      l.includes("k-league") || l.includes("ligue nationale") || l.includes("league two") || l.includes("league one");
+    return smallLeague ? "Low–Medium" : "High";
+  }
+  return "Medium";
 }
 
 function fmtKickoff(iso) {
@@ -591,7 +606,7 @@ function buildFormArray(wins, draws, losses) {
 ───────────────────────────────────────────────────────────── */
 function detailPanelHtml(pick, data, busy, tab) {
   if (!pick) {
-    return `<div style="border-radius:16px;border:1px solid #27272a;background:#09090b;padding:24px;color:#52525b;font-size:14px;text-align:center;">Select a play to view intelligence</div>`;
+    return `<div style="border-radius:16px;border:1px solid #27272a;background:#09090b;padding:24px;color:#52525b;font-size:14px;text-align:center;">Select a value spot to view full analysis</div>`;
   }
 
   const TABS = [
@@ -1377,15 +1392,15 @@ function renderCLVTab() {
       <div style="font-size:20px;font-weight:700;margin-top:4px;color:${color}">${val}</div>
     </div>`).join("");
 
-  // Edge-strength classification
+  // Value-strength classification
   function edgeStrength(clv) {
     if (clv == null) return { label: "—", color: "#52525b", bg: "transparent", border: "transparent" };
     const v = Math.abs(clv);
-    if (clv < 0)   return { label: "Neg",    color: "#f87171", bg: "rgba(248,113,113,.1)", border: "rgba(248,113,113,.25)" };
-    if (v < 10)    return { label: "Normal",  color: "#71717a", bg: "rgba(113,113,122,.08)", border: "rgba(113,113,122,.2)" };
-    if (v < 25)    return { label: "Strong",  color: "#4ade80", bg: "rgba(74,222,128,.08)", border: "rgba(74,222,128,.25)" };
-    if (v < 40)    return { label: "Elite",   color: "#a78bfa", bg: "rgba(167,139,250,.1)", border: "rgba(167,139,250,.3)" };
-    return           { label: "⚠️ Flag",  color: "#f59e0b", bg: "rgba(245,158,11,.1)",  border: "rgba(245,158,11,.3)"  };
+    if (clv < 0)   return { label: "Negative",  color: "#f87171", bg: "rgba(248,113,113,.1)", border: "rgba(248,113,113,.25)" };
+    if (v < 10)    return { label: "Neutral",    color: "#71717a", bg: "rgba(113,113,122,.08)", border: "rgba(113,113,122,.2)" };
+    if (v < 25)    return { label: "Positive",   color: "#4ade80", bg: "rgba(74,222,128,.08)", border: "rgba(74,222,128,.25)" };
+    if (v < 40)    return { label: "Strong",     color: "#a78bfa", bg: "rgba(167,139,250,.1)", border: "rgba(167,139,250,.3)" };
+    return           { label: "Flag",        color: "#f59e0b", bg: "rgba(245,158,11,.1)",  border: "rgba(245,158,11,.3)"  };
   }
 
   // Recent CLV captures table
@@ -1436,7 +1451,7 @@ function renderCLVTab() {
                 <th style="padding:9px 10px;text-align:left;font-size:10px;color:#52525b;letter-spacing:.08em;text-transform:uppercase;font-weight:600">Open</th>
                 <th style="padding:9px 10px;text-align:left;font-size:10px;color:#52525b;letter-spacing:.08em;text-transform:uppercase;font-weight:600">Close</th>
                 <th style="padding:9px 10px;text-align:left;font-size:10px;color:#52525b;letter-spacing:.08em;text-transform:uppercase;font-weight:600">CLV</th>
-                <th style="padding:9px 10px;text-align:left;font-size:10px;color:#52525b;letter-spacing:.08em;text-transform:uppercase;font-weight:600">Edge</th>
+                <th style="padding:9px 10px;text-align:left;font-size:10px;color:#52525b;letter-spacing:.08em;text-transform:uppercase;font-weight:600">Value</th>
                 <th style="padding:9px 10px;text-align:left;font-size:10px;color:#52525b;letter-spacing:.08em;text-transform:uppercase;font-weight:600">Source</th>
                 <th style="padding:9px 10px;text-align:left;font-size:10px;color:#52525b;letter-spacing:.08em;text-transform:uppercase;font-weight:600">Timing</th>
               </tr>
@@ -1461,7 +1476,7 @@ function renderApp() {
   if (state.fetchError) {
     return `<div style="min-height:100vh;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;font-family:inherit;padding:24px;text-align:center">
       <img src="/static/pgr-logo.png" style="width:64px;height:64px;border-radius:12px;object-fit:cover;" alt="PGR">
-      <div style="color:#71717a;font-size:13px;margin-top:4px">Could not load picks data. Please check your connection and try again.</div>
+      <div style="color:#71717a;font-size:13px;margin-top:4px">Could not load value feed data. Please check your connection and try again.</div>
       <button id="btn-refresh" style="margin-top:16px;padding:10px 24px;background:#22c55e;color:#000;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-size:14px">Refresh</button>
     </div>`;
   }
@@ -1508,23 +1523,37 @@ function renderApp() {
   const featuredHtml = featured.map(p => {
     const t = evTone(p.ev);
     const isSel = state.selectedId === p.id;
+    const modelPct = p.model_prob_pct || p.model_probability || null;
+    const confLabel = marketConfidenceLabel(p.market, p.league);
+    const confColor = confLabel === "High" ? "#4ade80" : confLabel === "Low–Medium" ? "#71717a" : "#fbbf24";
     return `<button class="feat-btn" data-pickid="${esc(p.id)}"
       style="text-align:left;border-radius:16px;border:1px solid ${isSel ? "rgba(99,102,241,.5)" : "#27272a"};background:${isSel ? "rgba(99,102,241,.08)" : "#09090b"};padding:14px;cursor:pointer;color:inherit">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-        <span class="inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${esc(t.badge)}">${esc(p.badge)}</span>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:5px">
+          <span class="pulse" style="width:6px;height:6px;border-radius:50%;background:#22c55e;display:inline-block;flex-shrink:0"></span>
+          <span style="font-size:9px;font-weight:700;color:#4ade80;letter-spacing:.1em">LIVE</span>
+        </div>
         ${evBadgeHtml(p.ev, false, p.is_outlier)}
       </div>
-      <div style="font-size:16px;font-weight:700;line-height:1.25;margin-bottom:6px">${esc(p.match)}</div>
-      <div style="font-size:12px;color:#71717a;margin-bottom:12px">${esc(p.market)}</div>
-      <div style="display:flex;justify-content:space-between;align-items:flex-end">
-        <div>
-          <div style="font-size:10px;color:#52525b;margin-bottom:2px">Odds</div>
-          <div style="font-size:26px;font-weight:900;color:#4ade80">${Number(p.odds).toFixed(2)}</div>
+      <div style="font-size:15px;font-weight:700;line-height:1.25;margin-bottom:4px">${esc(p.match)}</div>
+      <div style="font-size:11px;color:#52525b;margin-bottom:12px">${esc(p.market)} · ${esc(p.league)}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px">
+        <div style="background:#18181b;border-radius:8px;padding:6px 8px">
+          <div style="font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:2px">Model</div>
+          <div style="font-size:14px;font-weight:700;color:#d4d4d8">${modelPct != null ? Math.round(modelPct) + "%" : "—"}</div>
         </div>
-        <div style="text-align:right;font-size:11px;color:#71717a">
-          ${p.modelEdge != null ? `<div>Edge +${Number(p.modelEdge).toFixed(1)}%</div>` : ""}
-          <div>${esc(p.league)}</div>
+        <div style="background:#18181b;border-radius:8px;padding:6px 8px">
+          <div style="font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:2px">Odds</div>
+          <div style="font-size:14px;font-weight:700;color:#4ade80">${Number(p.odds).toFixed(2)}</div>
         </div>
+        <div style="background:#18181b;border-radius:8px;padding:6px 8px">
+          <div style="font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:2px">Value</div>
+          <div style="font-size:14px;font-weight:700;color:#4ade80">+${Number(p.ev).toFixed(1)}%</div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:10px;color:#52525b">Confidence: <span style="color:${confColor}">${confLabel}</span></span>
+        <span style="font-size:10px;color:#3f3f46">${esc(fmtKickoff(p.kickoff_time || p.kickoff))}</span>
       </div>
     </button>`;
   }).join("");
@@ -1534,12 +1563,11 @@ function renderApp() {
     listHtml = `<div style="text-align:center;padding:60px 0;color:#3f3f46;font-size:13px">Scanning markets…</div>`;
   } else if (filtered.length === 0) {
     listHtml = `<div style="text-align:center;padding:60px 0">
-      <div style="font-size:32px;margin-bottom:12px">🔍</div>
       <div style="color:#52525b;font-size:14px;font-weight:600;margin-bottom:6px">
-        ${state.allPicks.length === 0 ? "No picks for today yet" : "No results match your filters"}
+        ${state.allPicks.length === 0 ? "No value opportunities detected yet" : "No value spots match your filters"}
       </div>
       <div style="color:#3f3f46;font-size:12px">
-        ${state.allPicks.length === 0 ? "The engine scans every 12 min — check back shortly" : "Try adjusting your filter settings"}
+        ${state.allPicks.length === 0 ? "The scanner runs every 12 min across 40+ leagues — check back shortly" : "Try adjusting your filter settings"}
       </div>
     </div>`;
   } else {
@@ -1564,24 +1592,25 @@ function renderApp() {
         <div>
           <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Market</div>
           <div style="font-size:13px;color:#d4d4d8">${esc(row.market)}</div>
+          <div style="font-size:10px;color:#3f3f46;margin-top:3px">Conf: <span style="color:${marketConfidenceLabel(row.market,row.league)==='High'?'#4ade80':marketConfidenceLabel(row.market,row.league)==='Low\u2013Medium'?'#71717a':'#fbbf24'}">${marketConfidenceLabel(row.market,row.league)}</span></div>
         </div>
         <div>
           <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Odds</div>
           <div style="font-size:24px;font-weight:900;color:#4ade80">${Number(row.odds).toFixed(2)}</div>
         </div>
         <div>
-          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">EV</div>
+          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Value</div>
           ${evBadgeHtml(row.ev, true, row.is_outlier)}
         </div>
         <div>
-          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Signal Strength</div>
+          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Signal</div>
           <div style="display:flex;flex-direction:column;gap:4px;margin-top:2px">
-            ${tierBadgeHtml(row.confidence_tier)}
+            ${tierBadgeHtml(row.confidence_tier || (row.confidence != null ? confidenceTier(row.confidence) : "LOW"))}
             ${row.model_prob_pct ? `<span style="font-size:10px;color:#52525b">Model ${Number(row.model_prob_pct).toFixed(1)}%</span>` : ""}
           </div>
         </div>
         <div>
-          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Urval</div>
+          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Selection</div>
           <div style="font-size:13px;font-weight:600;color:#d4d4d8">${esc(row.selection || '—')}</div>
         </div>
         ${buildWhyHtml(row)}
@@ -1605,14 +1634,14 @@ function renderApp() {
               <img src="/static/pgr-logo.png" style="width:44px;height:44px;border-radius:10px;object-fit:cover;flex-shrink:0;" alt="PGR">
               <div>
                 <div style="font-size:20px;font-weight:800;letter-spacing:-.03em">PGR Analytics</div>
-                <div style="font-size:12px;color:#71717a">/  Value Scanner</div>
+                <div style="font-size:11px;color:#52525b">Most people bet teams. We scan for mispriced odds.</div>
               </div>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
               <div style="display:flex;border-radius:10px;border:1px solid #3f3f46;overflow:hidden">
                 <button class="main-tab-btn" data-maintab="picks"
                   style="padding:8px 18px;font-size:13px;font-weight:600;border:none;cursor:pointer;background:${state.mainTab==='picks'?'#22c55e':'#09090b'};color:${state.mainTab==='picks'?'#000':'#71717a'}">
-                  📅 Picks
+                  Live Feed
                 </button>
                 <button class="main-tab-btn" data-maintab="history"
                   style="padding:8px 18px;font-size:13px;font-weight:600;border:none;cursor:pointer;background:${state.mainTab==='history'?'#22c55e':'#09090b'};color:${state.mainTab==='history'?'#000':'#71717a'}">
@@ -1650,11 +1679,16 @@ function renderApp() {
             <div style="display:flex;align-items:center;gap:10px;font-size:13px">
               <span class="pulse" style="width:9px;height:9px;border-radius:50%;background:#22c55e;display:inline-block"></span>
               <span style="color:#4ade80;font-weight:700">LIVE</span>
-              <span id="live-bar-count" style="color:#a1a1aa">${filtered.length} opportunities found</span>
+              <span id="live-bar-count" style="color:#a1a1aa">${filtered.length} value ${filtered.length === 1 ? "spot" : "spots"} detected</span>
               <span style="color:#3f3f46">·</span>
               <span id="updated-ago" style="color:#52525b">Updated ${fmtAgo(state.lastFetch) || "—"}</span>
+              <span style="color:#3f3f46">·</span>
+              <span style="color:#52525b">Scanning 40+ leagues</span>
             </div>
-            <span id="scan-pop-el" style="display:none;font-size:11px;color:#4ade80;border:1px solid rgba(34,197,94,.2);border-radius:20px;padding:3px 12px;background:rgba(34,197,94,.06)"></span>
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-size:11px;color:#3f3f46">Updates every 30s</span>
+              <span id="scan-pop-el" style="display:none;font-size:11px;color:#4ade80;border:1px solid rgba(34,197,94,.2);border-radius:20px;padding:3px 12px;background:rgba(34,197,94,.06)"></span>
+            </div>
           </div>
         </div>
 
@@ -1668,8 +1702,11 @@ function renderApp() {
 
         <div style="border-bottom:1px solid #27272a;padding:14px 16px">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-            <span style="font-size:9px;letter-spacing:.25em;color:#52525b;text-transform:uppercase">TOP PICKS</span>
-            <span style="font-size:12px;color:#52525b">Featured model selections</span>
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-size:9px;letter-spacing:.25em;color:#52525b;text-transform:uppercase">TOP VALUE SPOTS</span>
+              <span style="font-size:10px;color:#52525b;background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.15);border-radius:99px;padding:1px 8px">Live market discrepancies</span>
+            </div>
+            <span style="font-size:11px;color:#3f3f46">Highest detected mispricing now</span>
           </div>
           <div data-featured-grid style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">
             ${featuredHtml}
@@ -1704,8 +1741,8 @@ function renderApp() {
         <div style="display:grid;grid-template-columns:minmax(0,1fr) 380px">
           <div style="border-right:1px solid #27272a;min-height:400px">
             <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;font-size:12px">
-              <span style="color:#71717a">Showing <b id="showing-count" style="color:#e4e4e7">${filtered.length}</b> opportunities</span>
-              <span style="color:#3f3f46;font-size:11px">Click row for full intel</span>
+              <span style="color:#71717a">Showing <b id="showing-count" style="color:#e4e4e7">${filtered.length}</b> value ${filtered.length === 1 ? "opportunity" : "opportunities"}</span>
+              <span style="color:#3f3f46;font-size:11px">Click for full market analysis</span>
             </div>
             <div id="picks-list">${listHtml}</div>
           </div>
@@ -2030,24 +2067,25 @@ function renderPickList() {
         <div>
           <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Market</div>
           <div style="font-size:13px;color:#d4d4d8">${esc(row.market)}</div>
+          <div style="font-size:10px;color:#3f3f46;margin-top:3px">Conf: <span style="color:${marketConfidenceLabel(row.market,row.league)==='High'?'#4ade80':marketConfidenceLabel(row.market,row.league)==='Low\u2013Medium'?'#71717a':'#fbbf24'}">${marketConfidenceLabel(row.market,row.league)}</span></div>
         </div>
         <div>
           <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Odds</div>
           <div style="font-size:24px;font-weight:900;color:#4ade80">${Number(row.odds).toFixed(2)}</div>
         </div>
         <div>
-          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">EV</div>
+          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Value</div>
           ${evBadgeHtml(row.ev, true, row.is_outlier)}
         </div>
         <div>
-          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Signal Strength</div>
+          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Signal</div>
           <div style="display:flex;flex-direction:column;gap:4px;margin-top:2px">
-            ${tierBadgeHtml(row.confidence_tier)}
+            ${tierBadgeHtml(row.confidence_tier || (row.confidence != null ? confidenceTier(row.confidence) : "LOW"))}
             ${row.model_prob_pct ? `<span style="font-size:10px;color:#52525b">Model ${Number(row.model_prob_pct).toFixed(1)}%</span>` : ""}
           </div>
         </div>
         <div>
-          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Urval</div>
+          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;margin-bottom:6px">Selection</div>
           <div style="font-size:13px;font-weight:600;color:#d4d4d8">${esc(row.selection || '—')}</div>
         </div>
         ${buildWhyHtml(row)}
