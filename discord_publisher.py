@@ -275,6 +275,25 @@ def _edge_color(edge: float) -> int:
     return EMBED_COLORS["standard"]
 
 
+def _display_ev(pick: dict) -> float:
+    """Return calibrated EV for display. Uses stored calibrated_ev_pct if available,
+    otherwise applies live calibration to raw edge_percentage."""
+    stored = pick.get("calibrated_ev_pct")
+    if stored is not None:
+        try:
+            return float(stored)
+        except (TypeError, ValueError):
+            pass
+    raw = float(pick.get("edge_percentage", 0) or 0)
+    if raw <= 0:
+        return 0.0
+    try:
+        from model_calibrator import calibrate_ev
+        return calibrate_ev(raw, pick.get("market", ""), pick.get("league", ""))["calibrated_ev"]
+    except Exception:
+        return round(raw * 0.42, 2)
+
+
 def _build_analysis_line(pick: dict) -> str:
     parts = []
 
@@ -349,6 +368,7 @@ def format_analysis_embed(pick: dict) -> dict:
     selection = pick.get("selection", market)
     odds = float(pick.get("odds", 0) or 0)
     edge = float(pick.get("edge_percentage", 0) or 0)
+    display_ev = _display_ev(pick)
     confidence = pick.get("confidence", "")
     mode = pick.get("mode", "")
     kickoff = _format_kickoff(pick.get("match_date"))
@@ -366,7 +386,7 @@ def format_analysis_embed(pick: dict) -> dict:
     if odds_line:
         lines.append(odds_line)
 
-    lines.append(f"Edge: +{edge:.1f}%")
+    lines.append(f"Edge: +{display_ev:.1f}%")
     if trust:
         lines.append(f"Trust: {trust}")
     lines.append(f"Kickoff: {kickoff}")
@@ -376,7 +396,7 @@ def format_analysis_embed(pick: dict) -> dict:
         lines.append("")
         lines.append(analysis_line)
 
-    color = _edge_color(edge)
+    color = _edge_color(display_ev)
 
     analysis_data = {}
     try:
@@ -457,7 +477,7 @@ def fetch_analysis_picks() -> List[dict]:
     )
     query = f"""
         SELECT id, league, home_team, away_team, market, selection, odds,
-               edge_percentage, match_date, confidence, mode, status,
+               edge_percentage, calibrated_ev_pct, match_date, confidence, mode, status,
                model_prob, calibrated_prob, analysis, discord_sent,
                odds_by_bookmaker, best_odds_value, best_odds_bookmaker,
                kickoff_epoch, open_ts,

@@ -89,8 +89,25 @@ def build_analysis_reason(bet) -> str:
 
     if edge is not None:
         try:
-            parts.append(f"+{float(edge):.1f}% edge")
-        except:
+            raw_edge = float(edge)
+            # Apply calibration — use stored calibrated_ev_pct if available
+            calibrated_ev = None
+            if isinstance(bet, dict):
+                calibrated_ev = bet.get("calibrated_ev_pct")
+            else:
+                calibrated_ev = getattr(bet, "calibrated_ev_pct", None)
+            if calibrated_ev is not None:
+                display_edge = float(calibrated_ev)
+            else:
+                try:
+                    from model_calibrator import calibrate_ev as _cal_ev
+                    market_val = bet.get("market", "") if isinstance(bet, dict) else getattr(bet, "market", "")
+                    league_val = bet.get("league", "") if isinstance(bet, dict) else getattr(bet, "league", "")
+                    display_edge = _cal_ev(raw_edge, market_val, league_val)["calibrated_ev"]
+                except Exception:
+                    display_edge = round(raw_edge * 0.42, 2)
+            parts.append(f"+{display_edge:.1f}% edge")
+        except Exception:
             pass
 
     if not parts:
