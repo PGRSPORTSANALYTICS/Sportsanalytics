@@ -434,6 +434,17 @@ def run_clv_update_cycle():
         traceback.print_exc()
 
 
+def run_calibration_backfill():
+    """Backfill calibrated_ev_pct for any new picks that don't have it yet."""
+    try:
+        from model_calibrator import backfill_calibrated_ev
+        n = backfill_calibrated_ev(batch_size=100)
+        if n > 0:
+            logger.info(f"🎯 Calibration backfill: {n} picks updated")
+    except Exception as e:
+        logger.error(f"❌ Calibration backfill error: {e}")
+
+
 def run_live_learning_enrichment():
     """Run LIVE LEARNING pick enrichment - adds syndicate engine data to pending picks"""
     if not LIVE_LEARNING_MODE:
@@ -874,6 +885,10 @@ def main():
     
     # Schedule CLV update - Every 5 minutes for closing odds capture
     schedule.every(5).minutes.do(run_clv_update_cycle)
+
+    # Calibration backfill — stamp calibrated_ev_pct on new picks every 10 min
+    schedule.every(10).minutes.do(run_calibration_backfill)
+    run_calibration_backfill()  # Run once at startup to catch any uncalibrated picks
     
     # PGR Analytics v2 — odds ingestion + bet sync every hour, aligned with Value Singles
     if ENABLE_PGR_ANALYTICS:
