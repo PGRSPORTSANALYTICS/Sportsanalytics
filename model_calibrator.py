@@ -89,9 +89,9 @@ def _load_calibration_data() -> list[dict]:
                 odds, close_odds, clv_pct, result, outcome,
                 market, market_type, league, league_tier, odds_bucket
             FROM football_opportunities
-            WHERE mode = 'PROD'
-              AND bet_placed = true
+            WHERE mode IN ('PROD', 'LEARNING')
               AND odds > 1
+              AND clv_pct IS NOT NULL
             ORDER BY timestamp DESC
             """,
             fetch="all",
@@ -371,6 +371,7 @@ def backfill_calibrated_ev(batch_size: int = 500) -> int:
             SELECT id, edge_percentage, ev_sim, market, league, odds
             FROM football_opportunities
             WHERE calibrated_ev_pct IS NULL
+              AND mode IN ('PROD', 'LEARNING')
               AND (edge_percentage IS NOT NULL OR ev_sim IS NOT NULL)
             LIMIT %s
             """,
