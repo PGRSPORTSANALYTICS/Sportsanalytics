@@ -263,6 +263,19 @@ def run_player_props_settlement():
         traceback.print_exc()
 
 
+def run_edge_management_cycle():
+    """Run Edge Management Engine — detects DEGRADED/DISABLED markets/leagues."""
+    try:
+        from edge_management_engine import run_edge_management
+        logger.info("🔬 Starting Edge Management Engine cycle...")
+        run_edge_management()
+        logger.info("✅ Edge Management Engine cycle complete")
+    except Exception as e:
+        logger.error(f"❌ Edge Management Engine error: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 def run_multi_sport_learning():
     """Run multi-sport learning engine (Hockey, NBA, MMA)"""
     try:
@@ -908,6 +921,13 @@ def main():
     schedule.every(1).hours.do(print_daily_stake_summary)
     
     schedule.every(6).hours.do(run_performance_updates)
+
+    # Edge Management Engine — protects ROI by detecting DEGRADED/DISABLED markets
+    schedule.every(6).hours.do(run_edge_management_cycle)
+    try:
+        run_edge_management_cycle()  # Run immediately at startup
+    except BaseException as e:
+        logger.error(f"❌ Edge Management startup crash: {e}")
     
     schedule.every(2).hours.do(run_learning_update)
     schedule.every(2).hours.do(run_form_cacher)  # Cache form+H2H for upcoming picks
