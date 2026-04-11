@@ -4519,23 +4519,24 @@ def run_corners_cards_cycle():
         print(f"⚠️ Stop-loss check failed: {e}")
     
     # ── Edge Management Gate ──────────────────────────────────────────────────
+    # Corners and Cards always run as VALUE_OPP (LEARNING mode / analysis only).
+    # No PROD picks — Discord Analysis Publisher handles distribution.
+    corners_value_opp = True
     try:
         from edge_management_engine import get_market_edge_status
         edge = get_market_edge_status("Corners")
         if edge["status"] == "DISABLED":
             reason = edge["reasons"][0] if edge["reasons"] else "Edge engine decision"
-            print(f"\n🚫 CORNERS BLOCKED by Edge Management Engine")
+            print(f"\n📊 CORNERS → VALUE_OPP mode (Edge: DISABLED)")
             print(f"   Reason: {reason}")
-            print(f"   All new Corners picks saved as LEARNING only — no PROD output.")
-            # Delegate to corners_engine in LEARNING-only mode by returning early
-            # (corners_engine already saves LEARNING picks via its own learning path)
-            return
         elif edge["status"] == "DEGRADED":
             reason = edge["reasons"][0] if edge["reasons"] else "Edge engine decision"
-            print(f"\n⚠️  CORNERS DEGRADED — running with raised EV threshold")
+            print(f"\n📊 CORNERS → VALUE_OPP mode (Edge: DEGRADED)")
             print(f"   Reason: {reason}")
+        else:
+            print(f"\n📊 CORNERS → VALUE_OPP mode (analysis only, no PROD picks)")
     except Exception as e:
-        print(f"⚠️ Edge gate check failed (fail-open): {e}")
+        print(f"⚠️ Edge gate check (fail-open): {e}")
 
     print("\n" + "="*60)
     print("🔢 CORNERS ENGINE (Independent Cycle)")
@@ -4675,9 +4676,10 @@ def run_corners_cards_cycle():
         all_corners = match_corners + team_corners
         if all_corners:
             all_corners = sorted(all_corners, key=_get_ev, reverse=True)[:remaining]
-            saved = _save_bet_candidates_to_db(all_corners, 'Corners')
+            saved = _save_bet_candidates_to_db(all_corners, 'Corners', force_learning=corners_value_opp)
             saved_total += saved
-            print(f"   ✅ Saved {saved} CORNERS predictions (cap: {remaining})")
+            mode_label = "VALUE_OPP/LEARNING" if corners_value_opp else "PROD"
+            print(f"   ✅ Saved {saved} CORNERS predictions [{mode_label}] (cap: {remaining})")
             print(f"   ℹ️ Corner handicaps handled separately (2-3h before kickoff)")
         else:
             print(f"   📊 No corners predictions generated")
@@ -4908,8 +4910,9 @@ def run_late_cards_cycle():
                     elif remaining <= 0:
                         prod_cards = []
                     cards_to_save = prod_cards + learning_cards
-                    saved = _save_bet_candidates_to_db(cards_to_save, 'Cards')
-                    print(f"   ✅ Saved {saved} CARDS predictions from late odds scan")
+                    # Cards run as VALUE_OPP (LEARNING mode / analysis only)
+                    saved = _save_bet_candidates_to_db(cards_to_save, 'Cards', force_learning=True)
+                    print(f"   ✅ Saved {saved} CARDS predictions [VALUE_OPP/LEARNING] from late odds scan")
                     
                     if saved > 0:
                         try:
@@ -4979,8 +4982,12 @@ def _lookup_league_for_team(team_name: str) -> Optional[str]:
         return None
 
 
-def _save_bet_candidates_to_db(candidates, market_label: str) -> int:
-    """Save BetCandidate picks to football_opportunities with proper market label"""
+def _save_bet_candidates_to_db(candidates, market_label: str, force_learning: bool = False) -> int:
+    """Save BetCandidate picks to football_opportunities with proper market label.
+    
+    force_learning=True → all picks saved as mode='LEARNING'/bet_placed=False (VALUE_OPP).
+    Used when Corners/Cards run in analysis-only mode.
+    """
     from datetime import datetime
 
     # Per-match-date cap mapping
@@ -4995,7 +5002,7 @@ def _save_bet_candidates_to_db(candidates, market_label: str) -> int:
     
     for candidate in candidates:
         try:
-            is_learning = (hasattr(candidate, 'trust_tier') and candidate.trust_tier == 'LEARNING')
+            is_learning = force_learning or (hasattr(candidate, 'trust_tier') and candidate.trust_tier == 'LEARNING')
             
             if not is_learning:
                 cap = _match_date_caps.get(market_label)
