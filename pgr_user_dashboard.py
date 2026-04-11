@@ -276,7 +276,7 @@ def load_performance(days: int = 30):
         FROM football_opportunities
         WHERE mode = 'PROD'
           AND UPPER(status) = 'SETTLED'
-          AND timestamp >= NOW() - INTERVAL '%s days'
+          AND TO_TIMESTAMP(timestamp) >= NOW() - INTERVAL '%s days'
         GROUP BY match_date
         ORDER BY match_date
     """ % days, fetch='all')

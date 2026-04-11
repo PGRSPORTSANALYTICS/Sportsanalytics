@@ -4526,9 +4526,10 @@ def run_corners_cards_cycle():
     today_count = 0
     try:
         result = db_helper.execute('''
-            SELECT COUNT(*) FROM all_bets 
-            WHERE created_at::date = CURRENT_DATE 
-              AND UPPER(product) = 'CORNERS'
+            SELECT COUNT(*) FROM football_opportunities
+            WHERE match_date::date = CURRENT_DATE
+              AND UPPER(market) = 'CORNERS'
+              AND mode = 'PROD'
         ''', fetch='one')
         today_count = result[0] if result else 0
     except:

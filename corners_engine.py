@@ -87,16 +87,17 @@ def _get_corners_db_connection():
 
 
 def get_corners_today_count() -> int:
-    """Get count of CORNERS picks already saved today (UTC)."""
+    """Get count of CORNERS picks already saved today (UTC) from football_opportunities."""
     conn = _get_corners_db_connection()
     if not conn:
         return 0
     try:
         cur = conn.cursor()
         cur.execute("""
-            SELECT COUNT(*) FROM all_bets 
-            WHERE product = 'CORNERS' 
-            AND created_at::date = CURRENT_DATE
+            SELECT COUNT(*) FROM football_opportunities
+            WHERE UPPER(market) = 'CORNERS'
+            AND mode = 'PROD'
+            AND match_date::date = CURRENT_DATE
         """)
         count = cur.fetchone()[0]
         cur.close()
@@ -111,17 +112,18 @@ def get_corners_today_count() -> int:
 
 
 def get_picks_per_match_today() -> Dict[str, int]:
-    """Get count of CORNERS picks per match today."""
+    """Get count of CORNERS picks per match today from football_opportunities."""
     conn = _get_corners_db_connection()
     if not conn:
         return {}
     try:
         cur = conn.cursor()
         cur.execute("""
-            SELECT home_team, away_team, COUNT(*) 
-            FROM all_bets 
-            WHERE product = 'CORNERS' 
-            AND created_at::date = CURRENT_DATE
+            SELECT home_team, away_team, COUNT(*)
+            FROM football_opportunities
+            WHERE UPPER(market) = 'CORNERS'
+            AND mode = 'PROD'
+            AND match_date::date = CURRENT_DATE
             GROUP BY home_team, away_team
         """)
         rows = cur.fetchall()
