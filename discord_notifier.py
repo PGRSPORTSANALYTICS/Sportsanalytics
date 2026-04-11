@@ -669,28 +669,37 @@ def send_result_to_discord(bet_info: dict, product_type: str = None):
     
     normalized_type = type_map.get(product_type, product_type.upper() if product_type else 'EXACT_SCORE')
     webhook_url = PRODUCT_WEBHOOKS.get(normalized_type)
-    
+
     if not webhook_url:
         print(f"[DISCORD] No webhook for product type: {product_type} (normalized: {normalized_type})")
         return False
-    
+
     embed = create_result_embed(bet_info)
     payload = {
         "username": "PGR Results Bot",
         "embeds": [embed]
     }
-    
-    try:
-        response = requests.post(webhook_url, json=payload, timeout=5)
-        if response.status_code in [200, 204]:
-            print(f"[DISCORD] Sent result: {bet_info.get('home_team', '?')} vs {bet_info.get('away_team', '?')} = {bet_info.get('outcome', '?')}")
-            return True
-        else:
-            print(f"[DISCORD] Failed with status {response.status_code}")
-            return False
-    except Exception as e:
-        print(f"[DISCORD] Failed to send result: {e}")
-        return False
+
+    # Webhooks to post to — always primary, plus results channel for corners/cards
+    webhooks_to_post = [webhook_url]
+    results_webhook = os.getenv("DISCORD_RESULTS_WEBHOOK")
+    if normalized_type in ("CORNERS", "CARDS") and results_webhook and results_webhook != webhook_url:
+        webhooks_to_post.append(results_webhook)
+
+    success = False
+    for url in webhooks_to_post:
+        try:
+            response = requests.post(url, json=payload, timeout=5)
+            if response.status_code in [200, 204]:
+                success = True
+            else:
+                print(f"[DISCORD] Failed with status {response.status_code} for {url}")
+        except Exception as e:
+            print(f"[DISCORD] Failed to send result: {e}")
+
+    if success:
+        print(f"[DISCORD] Sent result: {bet_info.get('home_team', '?')} vs {bet_info.get('away_team', '?')} = {bet_info.get('outcome', '?')}")
+    return success
 
 
 def send_daily_summary_to_discord(product_type: str, stats: dict):
