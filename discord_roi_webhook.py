@@ -1,12 +1,13 @@
 """
 Discord ROI/Stats Webhook - Sends performance updates to Discord
+Single canonical source: football_opportunities WHERE mode='PROD'
 """
 
 import os
 import requests
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 from sqlalchemy import create_engine, text
 
 logging.basicConfig(level=logging.INFO)
@@ -16,211 +17,188 @@ DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "")
 
 
 def get_db_url() -> str:
-    """Get database URL from environment."""
     return os.environ.get("DATABASE_URL", "")
 
 
 def get_roi_stats() -> Dict[str, Any]:
-    """Aggregate ROI and performance stats from database."""
+    """Aggregate ROI and performance stats from football_opportunities (PROD only)."""
     try:
         db_url = get_db_url()
         if not db_url:
             return {"error": "No database URL configured"}
-        
+
         engine = create_engine(db_url)
-        
+
         with engine.connect() as conn:
-            today = datetime.utcnow().date()
-            week_ago = today - timedelta(days=7)
-            month_start = today.replace(day=1)
-            
-            all_time_query = text("""
-                SELECT 
-                    COUNT(*) as total_bets,
-                    COUNT(CASE WHEN result IN ('WON', 'WIN') THEN 1 END) as wins,
-                    COUNT(CASE WHEN result IN ('LOST', 'LOSS') THEN 1 END) as losses,
-                    COALESCE(SUM(CASE 
-                        WHEN result IN ('WON', 'WIN') THEN (odds - 1) 
-                        WHEN result IN ('LOST', 'LOSS') THEN -1 
-                        ELSE 0 
-                    END), 0) as units_profit
-                FROM all_bets
-                WHERE result IN ('WON', 'WIN', 'LOST', 'LOSS')
-                AND (mode = 'PROD' OR mode IS NULL)
-                AND product != 'BASKET_SINGLE'
-            """)
-            all_time = conn.execute(all_time_query).fetchone()
-            
-            today_placed_query = text("""
-                SELECT 
-                    COUNT(*) as total_bets,
-                    COUNT(CASE WHEN result IN ('WON', 'WIN') THEN 1 END) as wins,
-                    COUNT(CASE WHEN result IN ('LOST', 'LOSS') THEN 1 END) as losses,
-                    COALESCE(SUM(CASE 
-                        WHEN result IN ('WON', 'WIN') THEN (odds - 1) 
-                        WHEN result IN ('LOST', 'LOSS') THEN -1 
-                        ELSE 0 
-                    END), 0) as units_profit,
-                    COUNT(CASE WHEN result IS NULL OR result = '' THEN 1 END) as pending
-                FROM all_bets
-                WHERE DATE(created_at) = CURRENT_DATE
-                AND (mode = 'PROD' OR mode IS NULL)
-                AND product != 'BASKET_SINGLE'
-            """)
-            today_stats = conn.execute(today_placed_query).fetchone()
-            
-            today_settled_query = text("""
-                SELECT 
-                    COUNT(*) as total_bets,
-                    COUNT(CASE WHEN result IN ('WON', 'WIN') THEN 1 END) as wins,
-                    COALESCE(SUM(CASE 
-                        WHEN result IN ('WON', 'WIN') THEN (odds - 1) 
-                        WHEN result IN ('LOST', 'LOSS') THEN -1 
-                        ELSE 0 
-                    END), 0) as units_profit
-                FROM all_bets
-                WHERE result IN ('WON', 'WIN', 'LOST', 'LOSS')
-                AND DATE(settled_at) = CURRENT_DATE
-                AND (mode = 'PROD' OR mode IS NULL)
-                AND product != 'BASKET_SINGLE'
-            """)
-            today_settled = conn.execute(today_settled_query).fetchone()
-            
-            week_query = text("""
-                SELECT 
-                    COUNT(*) as total_bets,
-                    COUNT(CASE WHEN result IN ('WON', 'WIN') THEN 1 END) as wins,
-                    COUNT(CASE WHEN result IN ('LOST', 'LOSS') THEN 1 END) as losses,
-                    COALESCE(SUM(CASE 
-                        WHEN result IN ('WON', 'WIN') THEN (odds - 1) 
-                        WHEN result IN ('LOST', 'LOSS') THEN -1 
-                        ELSE 0 
-                    END), 0) as units_profit
-                FROM all_bets
-                WHERE result IN ('WON', 'WIN', 'LOST', 'LOSS')
-                AND DATE(settled_at) >= CURRENT_DATE - INTERVAL '7 days'
-                AND (mode = 'PROD' OR mode IS NULL)
-                AND product != 'BASKET_SINGLE'
-            """)
-            week_stats = conn.execute(week_query).fetchone()
-            
-            month_query = text("""
-                SELECT 
-                    COUNT(*) as total_bets,
-                    COUNT(CASE WHEN result IN ('WON', 'WIN') THEN 1 END) as wins,
-                    COUNT(CASE WHEN result IN ('LOST', 'LOSS') THEN 1 END) as losses,
-                    COALESCE(SUM(CASE 
-                        WHEN result IN ('WON', 'WIN') THEN (odds - 1) 
-                        WHEN result IN ('LOST', 'LOSS') THEN -1 
-                        ELSE 0 
-                    END), 0) as units_profit
-                FROM all_bets
-                WHERE result IN ('WON', 'WIN', 'LOST', 'LOSS')
-                AND DATE(settled_at) >= DATE_TRUNC('month', CURRENT_DATE)
-                AND (mode = 'PROD' OR mode IS NULL)
-                AND product != 'BASKET_SINGLE'
-            """)
-            month_stats = conn.execute(month_query).fetchone()
-            
-            pending_query = text("""
-                SELECT 
-                    (SELECT COUNT(*) FROM all_bets WHERE (result IS NULL OR result = '') AND (mode = 'PROD' OR mode IS NULL)) +
-                    (SELECT COUNT(*) FROM football_opportunities WHERE UPPER(status) IN ('PENDING', 'IN_PROGRESS') AND mode = 'PROD')
-                as pending
-            """)
-            pending = conn.execute(pending_query).fetchone()
-            
-            recent_query = text("""
-                SELECT home_team, away_team, selection, odds, result, product, settled_at
-                FROM all_bets
-                WHERE result IN ('WON', 'WIN', 'LOST', 'LOSS')
-                AND (mode = 'PROD' OR mode IS NULL)
-                AND product != 'BASKET_SINGLE'
-                ORDER BY settled_at DESC NULLS LAST, id DESC
+
+            # All-time settled (WON + LOST only, normalise case)
+            all_time = conn.execute(text("""
+                SELECT
+                    COUNT(*) FILTER (WHERE UPPER(result) IN ('WON','WIN'))           AS wins,
+                    COUNT(*) FILTER (WHERE UPPER(result) IN ('LOST','LOSS'))         AS losses,
+                    COALESCE(SUM(CASE
+                        WHEN UPPER(result) IN ('WON','WIN')  THEN (odds - 1.0)
+                        WHEN UPPER(result) IN ('LOST','LOSS') THEN -1.0
+                        ELSE 0 END), 0)                                              AS units
+                FROM football_opportunities
+                WHERE mode = 'PROD'
+                  AND UPPER(result) IN ('WON','WIN','LOST','LOSS')
+            """)).fetchone()
+
+            # Picks created today (by kickoff / match_date)
+            today_placed = conn.execute(text("""
+                SELECT
+                    COUNT(*)                                                          AS total,
+                    COUNT(*) FILTER (WHERE UPPER(result) IN ('WON','WIN'))           AS wins,
+                    COUNT(*) FILTER (WHERE UPPER(result) IN ('LOST','LOSS'))         AS losses,
+                    COALESCE(SUM(CASE
+                        WHEN UPPER(result) IN ('WON','WIN')  THEN (odds - 1.0)
+                        WHEN UPPER(result) IN ('LOST','LOSS') THEN -1.0
+                        ELSE 0 END), 0)                                              AS units,
+                    COUNT(*) FILTER (WHERE UPPER(status) IN ('PENDING','IN_PROGRESS')) AS pending
+                FROM football_opportunities
+                WHERE mode = 'PROD'
+                  AND match_date = TO_CHAR(CURRENT_DATE, 'YYYY-MM-DD')
+            """)).fetchone()
+
+            # Settled today (match_date = today AND result known)
+            settled_today = conn.execute(text("""
+                SELECT
+                    COUNT(*)                                                          AS total,
+                    COUNT(*) FILTER (WHERE UPPER(result) IN ('WON','WIN'))           AS wins,
+                    COALESCE(SUM(CASE
+                        WHEN UPPER(result) IN ('WON','WIN')  THEN (odds - 1.0)
+                        WHEN UPPER(result) IN ('LOST','LOSS') THEN -1.0
+                        ELSE 0 END), 0)                                              AS units
+                FROM football_opportunities
+                WHERE mode = 'PROD'
+                  AND match_date = TO_CHAR(CURRENT_DATE, 'YYYY-MM-DD')
+                  AND UPPER(result) IN ('WON','WIN','LOST','LOSS')
+            """)).fetchone()
+
+            # Last 7 days
+            week_stats = conn.execute(text("""
+                SELECT
+                    COUNT(*)                                                          AS total,
+                    COUNT(*) FILTER (WHERE UPPER(result) IN ('WON','WIN'))           AS wins,
+                    COUNT(*) FILTER (WHERE UPPER(result) IN ('LOST','LOSS'))         AS losses,
+                    COALESCE(SUM(CASE
+                        WHEN UPPER(result) IN ('WON','WIN')  THEN (odds - 1.0)
+                        WHEN UPPER(result) IN ('LOST','LOSS') THEN -1.0
+                        ELSE 0 END), 0)                                              AS units
+                FROM football_opportunities
+                WHERE mode = 'PROD'
+                  AND UPPER(result) IN ('WON','WIN','LOST','LOSS')
+                  AND kickoff_epoch >= EXTRACT(EPOCH FROM (CURRENT_DATE - INTERVAL '7 days'))
+            """)).fetchone()
+
+            # This calendar month
+            month_stats = conn.execute(text("""
+                SELECT
+                    COUNT(*)                                                          AS total,
+                    COUNT(*) FILTER (WHERE UPPER(result) IN ('WON','WIN'))           AS wins,
+                    COUNT(*) FILTER (WHERE UPPER(result) IN ('LOST','LOSS'))         AS losses,
+                    COALESCE(SUM(CASE
+                        WHEN UPPER(result) IN ('WON','WIN')  THEN (odds - 1.0)
+                        WHEN UPPER(result) IN ('LOST','LOSS') THEN -1.0
+                        ELSE 0 END), 0)                                              AS units
+                FROM football_opportunities
+                WHERE mode = 'PROD'
+                  AND UPPER(result) IN ('WON','WIN','LOST','LOSS')
+                  AND kickoff_epoch >= EXTRACT(EPOCH FROM DATE_TRUNC('month', CURRENT_DATE))
+            """)).fetchone()
+
+            # Last 10 settled picks for emoji row
+            recent = conn.execute(text("""
+                SELECT home_team, away_team, selection, odds, result, market
+                FROM football_opportunities
+                WHERE mode = 'PROD'
+                  AND UPPER(result) IN ('WON','WIN','LOST','LOSS')
+                ORDER BY kickoff_epoch DESC, id DESC
                 LIMIT 10
-            """)
-            recent = conn.execute(recent_query).fetchall()
-        
-        def calc_roi(wins, total):
-            if total == 0:
-                return 0.0
-            return (wins / total) * 100
-        
-        def calc_units_roi(units, total):
-            if total == 0:
-                return 0.0
-            return (units / total) * 100
-        
-        all_total = all_time[0] or 0
-        all_wins = all_time[1] or 0
-        all_losses = all_time[2] or 0
-        all_units = float(all_time[3] or 0)
-        
-        today_total = today_stats[0] or 0
-        today_wins = today_stats[1] or 0
-        today_losses = today_stats[2] or 0
-        today_units = float(today_stats[3] or 0)
-        today_pending = today_stats[4] or 0 if len(today_stats) > 4 else 0
-        
-        settled_today_total = today_settled[0] or 0 if today_settled else 0
-        settled_today_wins = today_settled[1] or 0 if today_settled else 0
-        settled_today_units = float(today_settled[2] or 0) if today_settled else 0
-        
-        week_total = week_stats[0] or 0
-        week_wins = week_stats[1] or 0
-        week_units = float(week_stats[3] or 0)
-        
-        month_total = month_stats[0] or 0
-        month_wins = month_stats[1] or 0
-        month_units = float(month_stats[3] or 0)
-        
+            """)).fetchall()
+
+        def roi_pct(units, total):
+            return (units / total * 100) if total > 0 else 0.0
+
+        def hit_pct(wins, total):
+            return (wins / total * 100) if total > 0 else 0.0
+
+        all_wins   = int(all_time[0] or 0)
+        all_losses = int(all_time[1] or 0)
+        all_units  = float(all_time[2] or 0)
+        all_total  = all_wins + all_losses
+
+        tp_total   = int(today_placed[0] or 0)
+        tp_wins    = int(today_placed[1] or 0)
+        tp_losses  = int(today_placed[2] or 0)
+        tp_units   = float(today_placed[3] or 0)
+        tp_pending = int(today_placed[4] or 0)
+
+        st_total   = int(settled_today[0] or 0)
+        st_wins    = int(settled_today[1] or 0)
+        st_units   = float(settled_today[2] or 0)
+
+        wk_total   = int(week_stats[0] or 0)
+        wk_wins    = int(week_stats[1] or 0)
+        wk_losses  = int(week_stats[2] or 0)
+        wk_units   = float(week_stats[3] or 0)
+
+        mo_total   = int(month_stats[0] or 0)
+        mo_wins    = int(month_stats[1] or 0)
+        mo_losses  = int(month_stats[2] or 0)
+        mo_units   = float(month_stats[3] or 0)
+
         return {
             "all_time": {
-                "total": all_total,
-                "wins": all_wins,
-                "losses": all_losses,
-                "hit_rate": calc_roi(all_wins, all_total),
-                "units": all_units,
-                "roi": calc_units_roi(all_units, all_total)
+                "total":    all_total,
+                "wins":     all_wins,
+                "losses":   all_losses,
+                "hit_rate": hit_pct(all_wins, all_total),
+                "units":    all_units,
+                "roi":      roi_pct(all_units, all_total),
             },
             "today": {
-                "total": today_total,
-                "wins": today_wins,
-                "losses": today_losses,
-                "pending": today_pending,
-                "hit_rate": calc_roi(today_wins, today_total - today_pending) if (today_total - today_pending) > 0 else 0,
-                "units": today_units
+                "total":    tp_total,
+                "wins":     tp_wins,
+                "losses":   tp_losses,
+                "pending":  tp_pending,
+                "units":    tp_units,
+                "hit_rate": hit_pct(tp_wins, tp_total - tp_pending) if (tp_total - tp_pending) > 0 else 0,
             },
             "settled_today": {
-                "total": settled_today_total,
-                "wins": settled_today_wins,
-                "units": settled_today_units
+                "total": st_total,
+                "wins":  st_wins,
+                "units": st_units,
             },
             "week": {
-                "total": week_total,
-                "wins": week_wins,
-                "hit_rate": calc_roi(week_wins, week_total),
-                "units": week_units,
-                "roi": calc_units_roi(week_units, week_total)
+                "total":    wk_total,
+                "wins":     wk_wins,
+                "losses":   wk_losses,
+                "hit_rate": hit_pct(wk_wins, wk_total),
+                "units":    wk_units,
+                "roi":      roi_pct(wk_units, wk_total),
             },
             "month": {
-                "total": month_total,
-                "wins": month_wins,
-                "hit_rate": calc_roi(month_wins, month_total),
-                "units": month_units,
-                "roi": calc_units_roi(month_units, month_total)
+                "total":    mo_total,
+                "wins":     mo_wins,
+                "losses":   mo_losses,
+                "hit_rate": hit_pct(mo_wins, mo_total),
+                "units":    mo_units,
+                "roi":      roi_pct(mo_units, mo_total),
             },
-            "pending": pending[0] if pending else 0,
             "recent": [
                 {
-                    "match": f"{r[0]} vs {r[1]}" if r[1] and not str(r[0]).startswith('PARLAY') else str(r[0]),
-                    "pick": r[2],
-                    "odds": float(r[3]) if r[3] else 0,
-                    "result": r[4],
-                    "product": r[5] if len(r) > 5 else "BET"
-                } for r in recent
-            ]
+                    "match":   f"{r[0]} vs {r[1]}",
+                    "pick":    r[2],
+                    "odds":    float(r[3]) if r[3] else 0,
+                    "result":  r[4],
+                    "product": r[5] if r[5] else "BET",
+                }
+                for r in recent
+            ],
         }
+
     except Exception as e:
         logger.error(f"Error getting ROI stats: {e}")
         return {"error": str(e)}
@@ -234,23 +212,25 @@ def build_discord_embed(stats: Dict[str, Any]) -> Dict[str, Any]:
                 "title": "⚠️ Stats Error",
                 "description": f"Could not fetch stats: {stats['error']}",
                 "color": 0xFF5555,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.utcnow().isoformat(),
             }]
         }
 
-    all_time = stats.get("all_time", {})
+    all_time     = stats.get("all_time", {})
     settled_today = stats.get("settled_today", {})
-    week = stats.get("week", {})
-    month = stats.get("month", {})
-    recent = stats.get("recent", [])
+    week         = stats.get("week", {})
+    month        = stats.get("month", {})
+    recent       = stats.get("recent", [])
 
-    roi = all_time.get("roi", 0)
+    roi   = all_time.get("roi", 0)
     color = 0x00FFA6 if roi >= 10 else 0x22C55E if roi >= 0 else 0xFFA500 if roi >= -10 else 0xFF5555
 
-    # Recent results as emoji row
     recent_row = ""
     if recent:
-        recent_row = " ".join("✅" if r["result"] in ["WON", "WIN"] else "❌" for r in recent[:10])
+        recent_row = " ".join(
+            "✅" if r["result"] and r["result"].upper() in ("WON", "WIN") else "❌"
+            for r in recent[:10]
+        )
 
     date_str = datetime.utcnow().strftime("%d %b")
 
@@ -271,7 +251,7 @@ def build_discord_embed(stats: Dict[str, Any]) -> Dict[str, Any]:
             "description": desc,
             "color": color,
             "footer": {"text": f"PGR Sports Analytics  •  {all_time.get('total', 0)} bets tracked"},
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.utcnow().isoformat(),
         }]
     }
 
@@ -281,28 +261,28 @@ def send_discord_stats(custom_message: Optional[str] = None) -> bool:
     if not DISCORD_WEBHOOK_URL:
         logger.warning("⚠️ DISCORD_WEBHOOK_URL not set")
         return False
-    
+
     try:
-        stats = get_roi_stats()
+        stats   = get_roi_stats()
         payload = build_discord_embed(stats)
-        
+
         if custom_message:
             payload["content"] = custom_message
-        
+
         response = requests.post(
             DISCORD_WEBHOOK_URL,
             json=payload,
             headers={"Content-Type": "application/json"},
-            timeout=10
+            timeout=10,
         )
-        
+
         if response.status_code in [200, 204]:
             logger.info("✅ Discord stats sent successfully")
             return True
         else:
             logger.error(f"❌ Discord webhook failed: {response.status_code} - {response.text}")
             return False
-            
+
     except Exception as e:
         logger.error(f"❌ Discord webhook error: {e}")
         return False
@@ -312,35 +292,35 @@ def send_result_notification(match: str, pick: str, odds: float, result: str, pr
     """Send individual result notification to Discord."""
     if not DISCORD_WEBHOOK_URL:
         return False
-    
+
     try:
-        emoji = "✅" if result in ["WON", "WIN"] else "❌"
-        color = 0x00FF00 if result in ["WON", "WIN"] else 0xFF5555
+        emoji      = "✅" if result.upper() in ("WON", "WIN") else "❌"
+        color      = 0x00FF00 if result.upper() in ("WON", "WIN") else 0xFF5555
         profit_str = f"+{profit:.1f}u" if profit > 0 else f"{profit:.1f}u"
-        
+
         payload = {
             "embeds": [{
-                "title": f"{emoji} Result: {result}",
+                "title":       f"{emoji} Result: {result}",
                 "description": f"**{match}**",
-                "color": color,
+                "color":       color,
                 "fields": [
-                    {"name": "Pick", "value": pick, "inline": True},
-                    {"name": "Odds", "value": f"{odds:.2f}", "inline": True},
-                    {"name": "P/L", "value": profit_str, "inline": True}
+                    {"name": "Pick",   "value": pick,                "inline": True},
+                    {"name": "Odds",   "value": f"{odds:.2f}",       "inline": True},
+                    {"name": "P/L",    "value": profit_str,          "inline": True},
                 ],
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.utcnow().isoformat(),
             }]
         }
-        
+
         response = requests.post(
             DISCORD_WEBHOOK_URL,
             json=payload,
             headers={"Content-Type": "application/json"},
-            timeout=10
+            timeout=10,
         )
-        
+
         return response.status_code in [200, 204]
-        
+
     except Exception as e:
         logger.error(f"❌ Discord result notification error: {e}")
         return False
@@ -349,8 +329,11 @@ def send_result_notification(match: str, pick: str, odds: float, result: str, pr
 if __name__ == "__main__":
     print("🔍 Testing Discord ROI webhook...")
     stats = get_roi_stats()
-    print(f"📊 Stats: {stats}")
-    
+    print(f"📊 All-time: {stats.get('all_time', {})}")
+    print(f"📊 This month: {stats.get('month', {})}")
+    print(f"📊 Last 7d: {stats.get('week', {})}")
+    print(f"📊 Settled today: {stats.get('settled_today', {})}")
+
     if DISCORD_WEBHOOK_URL:
         success = send_discord_stats("📊 Manual stats update requested")
         print(f"{'✅' if success else '❌'} Discord send: {'success' if success else 'failed'}")
