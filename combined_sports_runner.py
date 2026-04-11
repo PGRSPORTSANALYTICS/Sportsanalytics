@@ -168,6 +168,21 @@ def run_value_singles():
         logger.warning("⏭️ Value Singles SKIPPED - Daily stop-loss active")
         _record_scan_event("value_singles_skipped")
     else:
+        # ── Edge Management Gate ──────────────────────────────────────────────
+        try:
+            from edge_management_engine import get_market_edge_status
+            edge = get_market_edge_status("Value Single")
+            if edge["status"] == "DISABLED":
+                reason = edge["reasons"][0] if edge["reasons"] else "Edge engine"
+                logger.warning(f"🚫 Value Singles BLOCKED by Edge Management: {reason}")
+                _record_scan_event("value_singles_skipped")
+                return
+            elif edge["status"] == "DEGRADED":
+                reason = edge["reasons"][0] if edge["reasons"] else "Edge engine"
+                logger.warning(f"⚠️ Value Singles DEGRADED — proceeding with caution: {reason}")
+        except Exception as e:
+            logger.warning(f"⚠️ Edge gate check failed (fail-open): {e}")
+        # ─────────────────────────────────────────────────────────────────────
         try:
             import real_football_champion
             logger.info("💰 Starting Value Singles cycle...")

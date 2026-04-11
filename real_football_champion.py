@@ -4518,6 +4518,25 @@ def run_corners_cards_cycle():
     except Exception as e:
         print(f"⚠️ Stop-loss check failed: {e}")
     
+    # ── Edge Management Gate ──────────────────────────────────────────────────
+    try:
+        from edge_management_engine import get_market_edge_status
+        edge = get_market_edge_status("Corners")
+        if edge["status"] == "DISABLED":
+            reason = edge["reasons"][0] if edge["reasons"] else "Edge engine decision"
+            print(f"\n🚫 CORNERS BLOCKED by Edge Management Engine")
+            print(f"   Reason: {reason}")
+            print(f"   All new Corners picks saved as LEARNING only — no PROD output.")
+            # Delegate to corners_engine in LEARNING-only mode by returning early
+            # (corners_engine already saves LEARNING picks via its own learning path)
+            return
+        elif edge["status"] == "DEGRADED":
+            reason = edge["reasons"][0] if edge["reasons"] else "Edge engine decision"
+            print(f"\n⚠️  CORNERS DEGRADED — running with raised EV threshold")
+            print(f"   Reason: {reason}")
+    except Exception as e:
+        print(f"⚠️ Edge gate check failed (fail-open): {e}")
+
     print("\n" + "="*60)
     print("🔢 CORNERS ENGINE (Independent Cycle)")
     print("   Cards handled separately: 2-3h before kickoff only")

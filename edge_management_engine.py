@@ -667,6 +667,37 @@ class EdgeManagementEngine:
 
 
 # ── Public entry point ────────────────────────────────────────────────────────
+def get_market_edge_status(market: str) -> dict:
+    """
+    Read the latest edge_decisions cycle from DB and return status for `market`.
+    Returns: {"status": "ACTIVE"|"DEGRADED"|"DISABLED"|"UNKNOWN",
+              "ev_adj": float, "reasons": [str]}
+    Falls back to ACTIVE/UNKNOWN on any error (fail-open).
+    """
+    default = {"status": "UNKNOWN", "ev_adj": 0.0, "reasons": []}
+    try:
+        from db_helper import db_helper as _db
+        row = _db.execute(
+            "SELECT cycle_json FROM edge_decisions ORDER BY run_at DESC LIMIT 1",
+            fetch='one'
+        )
+        if not row:
+            return default
+        raw = row[0]
+        cycle = raw if isinstance(raw, dict) else json.loads(raw)
+        for decision in cycle.get("all_market_decisions", []):
+            if decision.get("market", "").lower() == market.lower():
+                return {
+                    "status":   decision.get("status", "UNKNOWN"),
+                    "ev_adj":   decision.get("ev_threshold_adj", 0.0),
+                    "reasons":  [decision.get("reason", "")],
+                }
+        return default
+    except Exception as e:
+        logger.warning(f"get_market_edge_status({market}) error: {e}")
+        return default
+
+
 def run_edge_management() -> Optional[EdgeCycle]:
     """Called from combined_sports_runner.py on a scheduled basis."""
     try:
