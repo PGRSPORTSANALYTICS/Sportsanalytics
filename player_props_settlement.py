@@ -9,7 +9,9 @@ Sports: Basketball (NBA + NCAAB via nba_api for NBA only; NCAAB auto-voids after
 """
 
 import logging
+import os
 import time
+import requests
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Tuple
 from db_connection import DatabaseConnection
@@ -112,9 +114,17 @@ def run_player_props_settlement() -> Dict:
                     result = _evaluate_prop(prop, actual_stats)
                     if result:
                         outcome, actual_val, note = result
-                        _settle_prop(prop['id'], outcome, actual_val, note,
-                                     odds=prop.get('odds'), player_name=prop.get('player_name', ''),
-                                     market=prop.get('market', ''), line=prop.get('line'))
+                        _settle_prop(
+                            prop['id'], outcome, actual_val, note,
+                            odds=prop.get('odds'),
+                            player_name=prop.get('player_name', ''),
+                            market=prop.get('market', ''),
+                            line=prop.get('line'),
+                            selection=prop.get('selection', ''),
+                            home_team=prop.get('home_team', ''),
+                            away_team=prop.get('away_team', ''),
+                            league=prop.get('league', ''),
+                        )
                         stats[outcome] += 1
                         stats['settled'] += 1
                         settled_count += 1
@@ -281,8 +291,55 @@ def _evaluate_prop(prop: Dict, actual_stats: Dict) -> Optional[Tuple[str, float,
     return outcome, actual_val, note
 
 
+MARKET_LABELS = {
+    'player_points':                    'Points',
+    'player_rebounds':                  'Rebounds',
+    'player_assists':                   'Assists',
+    'player_points_rebounds_assists':   'PRA',
+}
+
+
+def _send_prop_result_discord(player_name: str, market: str, line: Optional[float],
+                               selection: str, odds: Optional[float],
+                               outcome: str, actual_val: Optional[float],
+                               home_team: str = '', away_team: str = '',
+                               league: str = '') -> None:
+    """Post settled prop result to Discord results channel."""
+    webhook_url = os.environ.get('DISCORD_RESULTS_WEBHOOK', '')
+    if not webhook_url:
+        return
+    try:
+        emoji     = '✅' if outcome == 'won' else '❌' if outcome == 'lost' else '⬜'
+        profit    = round(odds - 1.0, 2) if outcome == 'won' and odds else (-1.0 if outcome == 'lost' else 0.0)
+        pl_str    = f'+{profit:.2f}u' if profit > 0 else f'{profit:.2f}u'
+        label     = MARKET_LABELS.get(market, market.replace('_', ' ').title())
+        matchup   = f'{home_team} vs {away_team}' if home_team and away_team else ''
+        actual_str = f'{actual_val:.0f}' if actual_val is not None else '?'
+
+        lines = [
+            f'{emoji} **PROPS RESULT** | {player_name}',
+            f'**{label} {selection} {line:.1f}** @ {odds:.2f}' if odds and line else f'**{label} {selection}**',
+        ]
+        if matchup:
+            lines.append(f'Match: {matchup}' + (f' ({league})' if league else ''))
+        lines.append(f'Actual: **{actual_str}** vs Line: {line:.1f}' if line else f'Actual: **{actual_str}**')
+        lines.append(f'Result: **{"WON" if outcome == "won" else "LOST" if outcome == "lost" else outcome.upper()}** | P&L: **{pl_str}**')
+        lines.append('*PGR Player Props*')
+
+        requests.post(
+            webhook_url,
+            json={'content': '\n'.join(lines)},
+            headers={'Content-Type': 'application/json'},
+            timeout=8,
+        )
+    except Exception as e:
+        logger.debug(f"Discord props result notification failed: {e}")
+
+
 def _settle_prop(prop_id: int, outcome: str, actual_val: Optional[float], note: str,
-                  odds: Optional[float] = None, player_name: str = '', market: str = '', line: Optional[float] = None):
+                  odds: Optional[float] = None, player_name: str = '', market: str = '',
+                  line: Optional[float] = None, selection: str = '',
+                  home_team: str = '', away_team: str = '', league: str = ''):
     try:
         status = 'settled'
         result_str = outcome.upper()
@@ -308,6 +365,15 @@ def _settle_prop(prop_id: int, outcome: str, actual_val: Optional[float], note: 
                     settled_at = NOW()
                 WHERE id = %s AND status = 'pending'
             """, (status, outcome, result_str, profit, prop_id))
+
+        # Post result to Discord results channel (won/lost only — skip void/push)
+        if outcome in ('won', 'lost'):
+            _send_prop_result_discord(
+                player_name=player_name, market=market, line=line,
+                selection=selection, odds=odds, outcome=outcome,
+                actual_val=actual_val, home_team=home_team,
+                away_team=away_team, league=league,
+            )
 
     except Exception as e:
         logger.warning(f"Error settling prop {prop_id}: {e}")
