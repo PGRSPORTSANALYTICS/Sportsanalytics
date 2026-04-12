@@ -87,10 +87,19 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
 .scanner-row.fomo-cta-row{display:block;padding:0;border-top:none}
 
 /* Column widths: Match | Time | League | Market | Selection | Odds | Fair | Edge | Signal */
-:root{--scanner-cols:2fr 60px 120px 120px 130px 65px 65px 72px 80px}
-@media(max-width:1000px){:root{--scanner-cols:2fr 55px 100px 110px 120px 60px 60px 68px 75px}}
-@media(max-width:768px){:root{--scanner-cols:1.5fr 50px 90px 100px 100px 55px 55px 60px 65px}}
-@media(max-width:580px){:root{--scanner-cols:1.4fr 42px 0px 80px 0px 50px 0px 58px 60px}}
+/* Desktop (9 cols) */
+:root{--scanner-cols:2fr 60px 130px 120px 130px 65px 65px 72px 80px}
+@media(max-width:1000px){:root{--scanner-cols:2fr 55px 110px 110px 120px 60px 60px 68px 75px}}
+/* Tablet: hide League */
+@media(max-width:768px){
+  :root{--scanner-cols:2fr 50px 100px 100px 55px 55px 68px 72px}
+  .col-league{display:none!important}
+}
+/* Mobile: hide League + Fair + Signal — 6 cols */
+@media(max-width:580px){
+  :root{--scanner-cols:1.8fr 42px 90px 90px 52px 58px}
+  .col-league,.col-fair,.col-signal{display:none!important}
+}
 
 /* ── Cell styles ── */
 .cell-match{}
@@ -205,10 +214,12 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
 /* ── Spinner ── */
 .spinner{width:18px;height:18px;border:2px solid #27272a;border-top-color:#22c55e;border-radius:50%;display:inline-block}
 
-/* ── Premium locked row hint (mobile) ── */
 @media(max-width:580px){
-  .col-league,.col-fair{display:none}
   .col-selection .locked-blur{font-size:10px}
+  .market-tag{font-size:9px;padding:2px 6px}
+  .odds-val{font-size:12px}
+  .edge-chip{font-size:11px;padding:2px 7px}
+  .match-teams{font-size:12px}
 }
 
 /* ── new pick chip ── */
@@ -347,7 +358,7 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
         <div style="text-align:right">Odds</div>
         <div class="col-fair" style="text-align:right">Fair</div>
         <div style="text-align:right">Edge</div>
-        <div style="text-align:center">Signal</div>
+        <div class="col-signal" style="text-align:center">Signal</div>
       </div>
       <div id="scanner-body">
         <!-- Loading skeletons -->
@@ -651,7 +662,7 @@ function renderScanner(){
         ? `<div class="cell-fair col-fair locked-cell" style="justify-content:flex-end"><span class="locked-blur">${p.fairOdds?fmtOdds(p.fairOdds):"—"}</span><span class="locked-icon">🔒</span></div>`
         : `<div class="cell-fair col-fair" style="text-align:right"><span class="fair-val">${p.fairOdds?fmtOdds(p.fairOdds):"—"}</span></div>`}
       <div class="cell-edge" style="text-align:right"><span class="edge-chip ${evClass(p.ev)}">${evStr}</span></div>
-      <div class="cell-signal" style="text-align:center"><span class="sig-badge ${sigClass(p.confidence_tier)}">${sigLabel(p.confidence_tier)}</span></div>
+      <div class="cell-signal col-signal" style="text-align:center"><span class="sig-badge ${sigClass(p.confidence_tier)}">${sigLabel(p.confidence_tier)}</span></div>
     </div>`;
 
     // Expand panel (premium only)
