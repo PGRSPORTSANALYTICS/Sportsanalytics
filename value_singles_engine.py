@@ -59,7 +59,7 @@ MIN_COMBINED_CONFIDENCE = 0.01
 # Layer 1: PRO PICK — official bets, count toward public ROI/units/record
 PRO_MIN_EV = 0.25              # 25% EV
 PRO_MIN_CONFIDENCE = 0.70      # 70% model confidence
-PRO_MIN_ODDS = 1.75
+PRO_MIN_ODDS = 2.10            # Raised from 1.75 — data shows edge only at 2.10+ (Apr 2026)
 PRO_MAX_ODDS = 2.30
 # Minimum Expected Value (EV) for candidate generation scan (three-layer routing, Mar 30 2026)
 # Candidates below 7% EV are rejected before PGR scoring.
@@ -69,7 +69,7 @@ MAX_VALUE_SINGLES_PER_DAY = 8  # Max 8 PRO picks/day
 # Layer 2: VALUE OPPORTUNITY — published in dashboard + Discord, NOT official bets
 VALUE_MIN_EV = 0.12            # 12% EV
 VALUE_MIN_CONFIDENCE = 0.60    # 60% model confidence
-VALUE_MIN_ODDS = 1.60
+VALUE_MIN_ODDS = 2.10          # Raised from 1.60 — data shows edge only at 2.10+ (Apr 2026)
 VALUE_MAX_ODDS = 4.00
 
 # Layer 3: WATCHLIST — saved internally for model learning, never public
@@ -77,7 +77,7 @@ WATCHLIST_MIN_EV = 0.07        # 7% EV
 WATCHLIST_MIN_CONFIDENCE = 0.50
 
 # Broad scan floor — all candidates enter here, routing decides their layer
-MIN_VALUE_SINGLE_ODDS = 1.60   # Broadened from 1.80
+MIN_VALUE_SINGLE_ODDS = 2.10   # Raised from 1.60 — data shows edge only at 2.10+ (Apr 2026)
 MAX_VALUE_SINGLE_ODDS = 2.30   # PRO upper bound (legacy compat)
 MAX_LEARNING_ODDS = 4.00       # Outer scan ceiling
 
@@ -116,8 +116,8 @@ MARKET_SPECIFIC_MIN_ODDS = {
 }
 
 # Odds range for candidate generation (three-layer routing, Mar 30 2026)
-# Routing tiers apply tighter filters: PRO 1.75-2.30, VALUE/WATCHLIST up to 4.00
-MIN_VALUE_SINGLE_ODDS = 1.60  # Candidate floor — PRO tier enforces 1.75 internally
+# Routing tiers apply tighter filters: PRO 2.10-2.30, VALUE/WATCHLIST up to 4.00
+MIN_VALUE_SINGLE_ODDS = 2.10  # Candidate floor — raised from 1.60 (Apr 2026)
 MAX_VALUE_SINGLE_ODDS = 2.30  # PRO PICK upper limit (kept for save_value_singles legacy usage)
 MAX_LEARNING_ODDS = 4.00      # Candidate ceiling
 
@@ -134,6 +134,14 @@ TOURNAMENT_LEAGUES = {
 }
 TOURNAMENT_MIN_EV = 0.015  # 1.5% EV for tournaments (less H2H data)
 TOURNAMENT_MIN_CONFIDENCE = 0.50  # 50% confidence for tournaments
+
+# Leagues blocked for Value Singles based on historical performance data (Apr 2026)
+# La Liga: 36.5% hit, -13.6u | Championship: 41.3% hit, -17.3u | Serie A: 45.3% hit, -6.2u
+VALUE_SINGLES_BLOCKED_LEAGUES = {
+    "soccer_spain_la_liga",       # La Liga
+    "soccer_england_efl_champ",   # EFL Championship
+    "soccer_italy_serie_a",       # Serie A
+}
 
 # League filtering mode: False = allow ALL leagues
 LEAGUE_WHITELIST_ENABLED = False  # Disable whitelist - allow all leagues
@@ -555,6 +563,10 @@ class ValueSinglesEngine:
 
             if LEAGUE_WHITELIST_ENABLED and league_key and league_key not in VALUE_SINGLE_LEAGUE_WHITELIST:
                 print(f"⏭️ Skipping {home_team} vs {away_team} - league '{league_key}' not in whitelist")
+                continue
+
+            if league_key in VALUE_SINGLES_BLOCKED_LEAGUES:
+                print(f"🚫 Blocked: {home_team} vs {away_team} - '{league_key}' blocked for Value Singles (poor historical ROI)")
                 continue
             
             # Dynamic thresholds for tournament matches (less H2H data available)
