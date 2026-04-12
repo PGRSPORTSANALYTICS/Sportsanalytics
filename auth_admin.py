@@ -140,13 +140,7 @@ async def admin_login_page(request: Request, error: str = ""):
 <body>
 <div class="card">
   <div class="logo">
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <polyline points="2,15 7,9 10,12 14,6 18,9" stroke="white" stroke-opacity="0.9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-      <circle cx="7" cy="9" r="1.5" fill="white"/>
-      <circle cx="10" cy="12" r="1.5" fill="white"/>
-      <circle cx="14" cy="6" r="1.5" fill="white"/>
-      <circle cx="18" cy="9" r="2" fill="#4ade80"/>
-    </svg>
+    <span style="font-size:11px;font-weight:900;letter-spacing:-.02em;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;line-height:1">PGR</span>
   </div>
   <h1>Admin Access</h1>
   <p class="sub">Site owner login — not for regular users</p>
