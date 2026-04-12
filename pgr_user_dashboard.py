@@ -1091,7 +1091,7 @@ with tab_clv:
 # ─────────────────────────────────────────────────────────────────────────────
 with tab_bt:
     st.markdown("### 🔬 Backtest — Settled Picks Only")
-    st.caption("Pure historical analysis. 1u flat staking on every pick. Only outcome=won/lost, mode=PROD or VALUE_OPP. No live picks mixed in.")
+    st.caption("Rent historiskt backtest. 1u flat staking på varje pick. Enbart outcome=won/lost, mode=PROD eller VALUE_OPP. Inga live-picks inblandade.")
 
     @st.cache_data(ttl=300)
     def load_backtest_data():
@@ -1100,10 +1100,10 @@ with tab_bt:
             SELECT
                 market, league, odds, outcome,
                 CASE
-                    WHEN odds BETWEEN 1.50 AND 1.69 THEN '1.50–1.69'
-                    WHEN odds BETWEEN 1.70 AND 1.89 THEN '1.70–1.89'
-                    WHEN odds BETWEEN 1.90 AND 2.09 THEN '1.90–2.09'
-                    WHEN odds BETWEEN 2.10 AND 2.49 THEN '2.10–2.49'
+                    WHEN odds BETWEEN 1.50 AND 1.69 THEN '1.50\u20131.69'
+                    WHEN odds BETWEEN 1.70 AND 1.89 THEN '1.70\u20131.89'
+                    WHEN odds BETWEEN 1.90 AND 2.09 THEN '1.90\u20132.09'
+                    WHEN odds BETWEEN 2.10 AND 2.49 THEN '2.10\u20132.49'
                     WHEN odds >= 2.50              THEN '2.50+'
                     ELSE '<1.50'
                 END as odds_range,
@@ -1113,6 +1113,7 @@ with tab_bt:
               AND mode IN ('PROD','VALUE_OPP')
               AND odds > 1.0
               AND market != 'exact_score'
+            ORDER BY id ASC
         """, fetch='all') or []
         cols = ["market","league","odds","outcome","odds_range","match_date","mode"]
         df = pd.DataFrame(rows, columns=cols)
