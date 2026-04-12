@@ -45,18 +45,22 @@ def _send_smart_pick_result(pick: dict) -> bool:
     conf_lbl  = pick.get("confidence") or ""
     smart_scr = pick.get("smart_score") or 0
 
+    fields = []
+    if score_lbl and score_lbl != "—":
+        fields.append({"name": "⚽ Score", "value": f"`{score_lbl}`", "inline": True})
+    fields += [
+        {"name": "📊 Odds",       "value": f"`{float(pick.get('odds') or 0):.2f}`", "inline": True},
+        {"name": "💰 P/L",        "value": f"`{profit:+.2f}u`",                     "inline": True},
+        {"name": "🎯 SmartScore", "value": f"`{float(smart_scr):.1f}`",              "inline": True},
+        {"name": "Grade",         "value": f"`{grade}`",                             "inline": True},
+        {"name": "Confidence",    "value": f"`{conf_lbl}`",                          "inline": True},
+    ]
+
     embed = {
         "title": f"{emoji} Smart Pick {status} | {pick.get('selection','')}",
         "description": f"**{pick.get('home_team','')}** vs **{pick.get('away_team','')}**",
         "color": color,
-        "fields": [
-            {"name": "⚽ Score",       "value": f"`{score_lbl}`",                    "inline": True},
-            {"name": "📊 Odds",        "value": f"`{float(pick.get('odds') or 0):.2f}`", "inline": True},
-            {"name": "💰 P/L",         "value": f"`{profit:+.2f}u`",                 "inline": True},
-            {"name": "🎯 SmartScore",  "value": f"`{float(smart_scr):.1f}`",          "inline": True},
-            {"name": "Grade",          "value": f"`{grade}`",                         "inline": True},
-            {"name": "Confidence",     "value": f"`{conf_lbl}`",                      "inline": True},
-        ],
+        "fields": fields,
         "footer": {"text": f"{pick.get('league','')} • Smart Picks"},
         "timestamp": datetime.utcnow().isoformat(),
     }
@@ -122,8 +126,9 @@ def run_smart_picks_settlement() -> Dict:
         confidence  = row[9]
         model_grade = row[10]
 
-        # Look up settled result in football_opportunities
-        # Match on team names + date + selection (± 1 day window for timezone drift)
+        # Look up settled result in football_opportunities.
+        # STRICT: only trust PROD picks with bet_placed=true that have been properly
+        # settled by the Results Engine. Avoids false positives from LEARNING / VALUE_OPP rows.
         try:
             opp = db.execute("""
                 SELECT result, status
@@ -132,7 +137,11 @@ def run_smart_picks_settlement() -> Dict:
                   AND away_team ILIKE %s
                   AND selection ILIKE %s
                   AND match_date::date BETWEEN %s::date - INTERVAL '1 day' AND %s::date + INTERVAL '1 day'
+                  AND mode = 'PROD'
+                  AND bet_placed = true
+                  AND UPPER(status) IN ('SETTLED','WON','WIN','LOST','LOSS','VOID','PUSH')
                   AND UPPER(result) IN ('WON','WIN','LOST','LOSS','VOID','PUSH')
+                  AND match_date::date <= CURRENT_DATE
                 ORDER BY ABS(match_date::date - %s::date)
                 LIMIT 1
             """, (home_team, away_team, selection, pick_date, pick_date, pick_date), fetch='one')
