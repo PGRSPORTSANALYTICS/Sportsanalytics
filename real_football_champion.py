@@ -4317,7 +4317,36 @@ def get_pending_match_ids() -> set:
 
 
 DAILY_BET_CAP = 20           # Mar 19, 2026: scaled up for volume growth
-SUMMER_DAILY_BET_CAP = 6  # Raised from 3 — La Liga/Championship/Serie A blocked, reallocated to summer (Apr 2026)
+SUMMER_DAILY_BET_CAP = 6  # Base — overridden by get_seasonal_caps() seasonal transition logic
+DAILY_BET_CAP_BASE   = 20  # Base euro cap — overridden by get_seasonal_caps()
+
+# Seasonal transition schedule
+# As European leagues wind down (Apr→Jun), summer leagues ramp up automatically.
+# European leagues finish: Premier League ~May 19, Bundesliga ~May 23, Ligue 1 ~May 24, UCL final ~May 30
+_SEASON_PHASES = [
+    # (month, day_start, euro_cap, summer_cap, label)
+    (5,  1, 15,  8, "May early — euro winding down, summer ramping"),
+    (5, 15,  8, 12, "May late  — most leagues finishing"),
+    (6,  1,  5, 16, "June+     — full summer mode"),
+]
+
+def get_seasonal_caps() -> tuple:
+    """Return (euro_cap, summer_cap) based on current date.
+    Automatically transitions focus from European leagues to summer leagues
+    as the season progresses through May and June."""
+    from datetime import date
+    today = date.today()
+    for month, day, euro, summer, label in _SEASON_PHASES:
+        if (today.month, today.day) >= (month, day):
+            euro_cap, summer_cap = euro, summer
+            phase_label = label
+            break
+    else:
+        euro_cap, summer_cap = DAILY_BET_CAP_BASE, SUMMER_DAILY_BET_CAP
+        phase_label = "April — standard split"
+    print(f"📅 Seasonal caps: Euro={euro_cap} | Summer={summer_cap} | Phase: {phase_label}")
+    return euro_cap, summer_cap
+
 # Per-match-date caps: max PROD picks for any single match day (regardless of when created)
 MATCH_DATE_CAP_VALUE_SINGLES = 10  # Mar 22, 2026: lowered from 20 — max 10 PROD picks/day quality gate
 MATCH_DATE_CAP_CORNERS = 25   # Mar 19, 2026: scaled up, 62% hit rate proven
@@ -4411,8 +4440,9 @@ def _count_prod_picks_for_match(home_team: str, away_team: str, match_date: str)
         return 0
 
 def get_daily_remaining_slots(summer: bool = False) -> int:
-    """Get how many bet slots remain for today."""
-    cap = SUMMER_DAILY_BET_CAP if summer else DAILY_BET_CAP
+    """Get how many bet slots remain for today, using seasonal caps."""
+    euro_cap, summer_cap = get_seasonal_caps()
+    cap = summer_cap if summer else euro_cap
     used = get_todays_bet_count(summer_only=summer)
     remaining = max(0, cap - used)
     label = "Summer" if summer else "Euro"
@@ -4428,10 +4458,11 @@ def run_single_cycle():
         print("📊 Markets: 1X2, O/U, BTTS, Corners, Cards, Double Chance")
         print("=" * 60)
         
+        _euro_cap, _summer_cap = get_seasonal_caps()
         euro_remaining = get_daily_remaining_slots(summer=False)
         euro_cap_reached = euro_remaining <= 0
         if euro_cap_reached:
-            print(f"📊 EURO CAP REACHED ({DAILY_BET_CAP} bets) - Continuing scan for LEARNING picks only")
+            print(f"📊 EURO CAP REACHED ({_euro_cap} bets) - Continuing scan for LEARNING picks only")
         
         pending_matches = get_pending_match_ids()
         
@@ -4465,7 +4496,7 @@ def run_single_cycle():
         summer_remaining = get_daily_remaining_slots(summer=True)
         summer_cap_reached = summer_remaining <= 0
         if summer_cap_reached:
-            print(f"📊 SUMMER CAP REACHED ({SUMMER_DAILY_BET_CAP} bets) - Skipping summer leagues")
+            print(f"📊 SUMMER CAP REACHED ({_summer_cap} bets) - Skipping summer leagues")
         else:
             summer_slots = min(10, summer_remaining)
             try:
