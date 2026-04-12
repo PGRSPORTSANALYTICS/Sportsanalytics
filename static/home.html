@@ -299,9 +299,9 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
     <div class="stat-tile"><div class="stat-lbl">Active Edges</div><div class="stat-val" id="s-count" style="color:#4ade80">—</div><div class="stat-sub">today</div></div>
     <div class="stat-tile"><div class="stat-lbl">Avg EV</div><div class="stat-val" id="s-avgev" style="color:#4ade80">—</div><div class="stat-sub">all opportunities</div></div>
     <div class="stat-tile"><div class="stat-lbl">Best EV</div><div class="stat-val" id="s-bestev" style="color:#fbbf24">—</div><div class="stat-sub">today's best</div></div>
-    <div class="stat-tile"><div class="stat-lbl">Hit Rate</div><div class="stat-val" id="s-hitrate">—</div><div class="stat-sub">30 days</div></div>
-    <div class="stat-tile"><div class="stat-lbl">ROI</div><div class="stat-val" id="s-roi">—</div><div class="stat-sub">30 days</div></div>
-    <div class="stat-tile"><div class="stat-lbl">CLV</div><div class="stat-val" id="s-clv">—</div><div class="stat-sub">avg closing line value</div></div>
+    <div class="stat-tile"><div class="stat-lbl">Hit Rate</div><div class="stat-val" id="s-hitrate">—</div><div class="stat-sub">all time</div></div>
+    <div class="stat-tile"><div class="stat-lbl">ROI</div><div class="stat-val" id="s-roi">—</div><div class="stat-sub">all time</div></div>
+    <div class="stat-tile"><div class="stat-lbl">CLV</div><div class="stat-val" id="s-clv">—</div><div class="stat-sub">closing line value</div></div>
   </div>
 
   <!-- Nav Tabs -->
@@ -762,9 +762,10 @@ function updateStatsStrip(picks){
 ──────────────────────────────────────────────── */
 async function fetchMain(){
   try {
-    const [picksRes, statsRes] = await Promise.all([
+    const [picksRes, statsRes, clvRes] = await Promise.all([
       fetch("/api/picks/today"),
-      fetch("/api/stats/summary?days=30"),
+      fetch("/api/stats/summary?days=365"),
+      fetch("/api/clv_stats"),
     ]);
     if(picksRes.ok){
       const d = await picksRes.json();
@@ -773,13 +774,36 @@ async function fetchMain(){
     }
     if(statsRes.ok){
       const s = await statsRes.json();
-      const roi = s.roi_pct!=null?s.roi_pct:(s.roi!=null?s.roi:null);
-      const hr  = s.hit_rate_pct!=null?s.hit_rate_pct:(s.hit_rate!=null?s.hit_rate*100:null);
-      const clv = s.avg_clv!=null?s.avg_clv:(s.clv_pct!=null?s.clv_pct:null);
-      if(roi!=null) document.getElementById("s-roi").textContent=fmtPct(roi);
-      if(hr!=null)  document.getElementById("s-hitrate").textContent=fmtPct(hr,false);
-      if(clv!=null) document.getElementById("s-clv").textContent=fmtPct(clv);
-      if(roi!=null) document.getElementById("s-roi").style.color=roi>=0?"#4ade80":"#f87171";
+      // Response has {all_time: {roi, hit_rate, total, ...}, period: {...}}
+      const at = s.all_time || s;
+      const roi = at.roi!=null?at.roi:(at.roi_pct!=null?at.roi_pct:null);
+      const hr  = at.hit_rate!=null?at.hit_rate:(at.hit_rate_pct!=null?at.hit_rate_pct:null);
+      const total = at.total||at.settled||at.total_bets||null;
+      if(roi!=null){
+        document.getElementById("s-roi").textContent=fmtPct(roi);
+        document.getElementById("s-roi").style.color=roi>=0?"#4ade80":"#f87171";
+      }
+      if(hr!=null) document.getElementById("s-hitrate").textContent=fmtPct(hr,false);
+      // update subtitle with bet count for trust
+      if(total!=null){
+        const roiTile  = document.getElementById("s-roi").closest(".stat-tile");
+        const hirTile  = document.getElementById("s-hitrate").closest(".stat-tile");
+        if(roiTile)  roiTile.querySelector(".stat-sub").textContent=total.toLocaleString()+" bets";
+        if(hirTile)  hirTile.querySelector(".stat-sub").textContent=total.toLocaleString()+" bets";
+      }
+    }
+    if(clvRes.ok){
+      const c = await clvRes.json();
+      const clv = c.avg_clv!=null?c.avg_clv:(c.clv_avg!=null?c.clv_avg:null);
+      const n   = c.sample_n||c.n||c.count||null;
+      if(clv!=null){
+        document.getElementById("s-clv").textContent=fmtPct(clv);
+        document.getElementById("s-clv").style.color=clv>=0?"#4ade80":"#f87171";
+      }
+      if(n!=null){
+        const clvTile = document.getElementById("s-clv").closest(".stat-tile");
+        if(clvTile) clvTile.querySelector(".stat-sub").textContent=n.toLocaleString()+" picks measured";
+      }
     }
     state.lastFetch=Date.now();
     document.getElementById("last-updated").textContent="Updated "+fmtAgo(state.lastFetch);
