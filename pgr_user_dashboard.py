@@ -1,6 +1,7 @@
 """
-PGR Sports Analytics — User-facing dashboard
-Design: PGR demo theme  |  Data: Live from PostgreSQL
+PGR Sports Analytics — Public FOMO dashboard with premium gate.
+Free: hero stats, track record, CLV proof, teaser picks.
+Premium: full picks, selections, odds, scanner, Smart Picks details.
 """
 
 import os
@@ -11,143 +12,145 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from pgr_theme import inject_pgr_css, PGR_COLORS
-from pgr_components import metric_card, section_title, picks_table
+from pgr_components import metric_card, section_title
 from db_helper import DatabaseHelper
 
 st.set_page_config(
     page_title="PGR Sports Analytics",
-    page_icon="🧠",
+    page_icon="📡",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
 
 inject_pgr_css()
 
-# ── Extra UI polish ──────────────────────────────────────────────────────────
+PREMIUM_CODE  = os.environ.get("PREMIUM_CODE", os.environ.get("ADMIN_PASSWORD", "pgr"))
+DISCORD_LINK  = "https://discord.gg/pgrsports"
+
+# ── Extra styles ─────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-.pgr-hero {
-    padding: 2.5rem 0 1.5rem 0;
-    text-align: center;
-}
-.pgr-logo-text {
-    font-size: 0.75rem;
-    letter-spacing: 0.25em;
-    text-transform: uppercase;
-    color: #9BA0B5;
-    margin-bottom: 0.3rem;
-}
-.pgr-hero-title {
-    font-size: 2.6rem;
-    font-weight: 800;
-    color: #F2F5F8;
-    line-height: 1.1;
-}
-.pgr-hero-sub {
-    font-size: 1rem;
-    color: #9BA0B5;
-    margin-top: 0.4rem;
-}
-.pgr-hero-accent {
-    color: #00F59D;
-}
+/* pick cards */
 .pick-card {
-    padding: 18px 20px;
-    margin: 8px 0;
-    border-radius: 14px;
-    border: 1px solid rgba(28,32,48,0.9);
-    background: radial-gradient(circle at top left, #151a2c 0%, #101320 60%);
-    position: relative;
-    overflow: hidden;
+    padding:18px 20px; margin:8px 0; border-radius:14px;
+    border:1px solid rgba(28,32,48,0.9);
+    background:radial-gradient(circle at top left,#151a2c 0%,#101320 60%);
+    position:relative; overflow:hidden;
 }
-.pick-card-won {
-    border-color: rgba(0,245,157,0.35) !important;
-    background: radial-gradient(circle at top left,
-        rgba(0,245,157,0.08) 0%, #101320 60%) !important;
-}
-.pick-card-lost {
-    border-color: rgba(255,75,107,0.3) !important;
-    background: radial-gradient(circle at top left,
-        rgba(255,75,107,0.06) 0%, #101320 60%) !important;
-}
-.pick-card-pending {
-    border-color: rgba(251,191,36,0.25) !important;
-}
-.pick-match {
-    font-size: 1.05rem;
-    font-weight: 600;
-    color: #F2F5F8;
-    margin-bottom: 2px;
-}
-.pick-selection {
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: #00F59D;
-    margin-bottom: 6px;
-}
-.pick-meta {
-    font-size: 0.78rem;
-    color: #9BA0B5;
-    display: flex;
-    gap: 14px;
-    flex-wrap: wrap;
-    align-items: center;
-}
-.badge {
-    display: inline-block;
-    padding: 2px 10px;
-    border-radius: 999px;
-    font-size: 0.72rem;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-}
-.badge-won    { background:rgba(0,245,157,0.15); color:#00F59D; border:1px solid rgba(0,245,157,0.4); }
-.badge-lost   { background:rgba(255,75,107,0.12); color:#FF4B6B; border:1px solid rgba(255,75,107,0.35); }
-.badge-pending{ background:rgba(251,191,36,0.1); color:#FBBF24; border:1px solid rgba(251,191,36,0.3); }
-.badge-high   { background:rgba(0,245,157,0.1); color:#00F59D; border:1px solid rgba(0,245,157,0.3); }
-.badge-medium { background:rgba(59,130,246,0.1); color:#60A5FA; border:1px solid rgba(59,130,246,0.3); }
-.badge-low    { background:rgba(245,158,11,0.1); color:#F59E0B; border:1px solid rgba(245,158,11,0.3); }
-.badge-new    { background:rgba(168,85,247,0.18); color:#C084FC; border:1px solid rgba(168,85,247,0.5);
-                animation: pgr-pulse 1.6s ease-in-out infinite; }
+.pick-card-won   { border-color:rgba(0,245,157,0.35)!important;
+                   background:radial-gradient(circle at top left,rgba(0,245,157,0.08) 0%,#101320 60%)!important; }
+.pick-card-lost  { border-color:rgba(255,75,107,0.3)!important;
+                   background:radial-gradient(circle at top left,rgba(255,75,107,0.06) 0%,#101320 60%)!important; }
+.pick-card-pending { border-color:rgba(251,191,36,0.25)!important; }
+.pick-match      { font-size:1.05rem;font-weight:600;color:#F2F5F8;margin-bottom:2px; }
+.pick-selection  { font-size:1.1rem;font-weight:700;color:#00F59D;margin-bottom:6px; }
+.pick-meta       { font-size:0.78rem;color:#9BA0B5;display:flex;gap:14px;flex-wrap:wrap;align-items:center; }
+
+/* badges */
+.badge            { display:inline-block;padding:2px 10px;border-radius:999px;
+                    font-size:0.72rem;font-weight:600;letter-spacing:0.06em; }
+.badge-won        { background:rgba(0,245,157,0.15);color:#00F59D;border:1px solid rgba(0,245,157,0.4); }
+.badge-lost       { background:rgba(255,75,107,0.12);color:#FF4B6B;border:1px solid rgba(255,75,107,0.35); }
+.badge-pending    { background:rgba(251,191,36,0.1);color:#FBBF24;border:1px solid rgba(251,191,36,0.3); }
+.badge-high       { background:rgba(0,245,157,0.1);color:#00F59D;border:1px solid rgba(0,245,157,0.3); }
+.badge-medium     { background:rgba(59,130,246,0.1);color:#60A5FA;border:1px solid rgba(59,130,246,0.3); }
+.badge-low        { background:rgba(245,158,11,0.1);color:#F59E0B;border:1px solid rgba(245,158,11,0.3); }
+.badge-new        { background:rgba(168,85,247,0.18);color:#C084FC;border:1px solid rgba(168,85,247,0.5);
+                    animation:pgr-pulse 1.6s ease-in-out infinite; }
 @keyframes pgr-pulse {
-    0%,100% { box-shadow: 0 0 0 0 rgba(168,85,247,0.0); }
-    50%      { box-shadow: 0 0 6px 2px rgba(168,85,247,0.45); }
+    0%,100% { box-shadow:0 0 0 0 rgba(168,85,247,0.0); }
+    50%      { box-shadow:0 0 6px 2px rgba(168,85,247,0.45); }
 }
-.pgr-divider {
-    border: none;
-    border-top: 1px solid #1C2030;
-    margin: 1.2rem 0;
+.pgr-divider { border:none;border-top:1px solid #1C2030;margin:1.2rem 0; }
+.stat-pill   { display:inline-flex;align-items:center;gap:6px;padding:5px 14px;
+               border-radius:999px;background:rgba(15,23,42,0.8);border:1px solid #1C2030;
+               font-size:0.8rem;color:#9BA0B5;margin:3px; }
+.stat-pill b { color:#F2F5F8; }
+.empty-state { text-align:center;padding:60px 20px;color:#9BA0B5; }
+.empty-state .big { font-size:2.5rem; }
+.empty-state p { margin-top:8px;font-size:0.9rem; }
+
+/* FOMO lock overlay */
+.fomo-card {
+    padding:18px 20px;margin:8px 0;border-radius:14px;
+    border:1px solid rgba(28,32,48,0.9);
+    background:radial-gradient(circle at top left,#151a2c 0%,#101320 60%);
+    position:relative;overflow:hidden;
 }
-.stat-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 5px 14px;
-    border-radius: 999px;
-    background: rgba(15,23,42,0.8);
-    border: 1px solid #1C2030;
-    font-size: 0.8rem;
-    color: #9BA0B5;
-    margin: 3px;
+.fomo-blur { filter:blur(5px);user-select:none;pointer-events:none; }
+.fomo-lock-bar {
+    background:linear-gradient(90deg,transparent 0%,#06070A 55%);
+    position:absolute;inset:0;
+    display:flex;align-items:center;justify-content:flex-end;padding-right:1.2rem;
 }
-.stat-pill b { color: #F2F5F8; }
-.empty-state {
-    text-align: center;
-    padding: 60px 20px;
-    color: #9BA0B5;
+.lock-pill {
+    display:inline-flex;align-items:center;gap:6px;
+    background:rgba(0,245,157,0.1);border:1px solid rgba(0,245,157,0.4);
+    color:#00F59D;border-radius:999px;padding:4px 14px;
+    font-size:0.78rem;font-weight:700;
 }
-.empty-state .big { font-size: 2.5rem; }
-.empty-state p { margin-top: 8px; font-size: 0.9rem; }
-.track-period-btn {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 16px;
+.cta-banner {
+    background:linear-gradient(135deg,#05100f 0%,#091f1a 100%);
+    border:1px solid rgba(0,245,157,0.3);border-radius:14px;
+    padding:2rem 2rem;text-align:center;margin:1rem 0;
 }
+.cta-banner h3 { color:#F2F5F8;font-size:1.4rem;margin:0 0 0.4rem 0; }
+.cta-banner p  { color:#9BA0B5;margin:0 0 1.2rem 0;font-size:0.95rem; }
+a.pgr-cta {
+    display:inline-block;
+    background:radial-gradient(circle at top left,#22c55e 0,#00F59D 35%,#059669 90%);
+    color:#020617!important;text-decoration:none;
+    border-radius:999px;padding:0.6rem 2rem;font-weight:700;font-size:1rem;
+    box-shadow:0 12px 35px rgba(34,197,94,0.4);
+}
+
+/* pulse dot */
+.pulse-dot {
+    display:inline-block;width:9px;height:9px;border-radius:50%;
+    background:#00F59D;box-shadow:0 0 0 0 rgba(0,245,157,0.7);
+    animation:pulseGreen 1.8s infinite;margin-right:5px;vertical-align:middle;
+}
+@keyframes pulseGreen {
+    0%   { box-shadow:0 0 0 0 rgba(0,245,157,0.7); }
+    70%  { box-shadow:0 0 0 8px rgba(0,245,157,0); }
+    100% { box-shadow:0 0 0 0 rgba(0,245,157,0); }
+}
+.pgr-hero { padding:2.5rem 0 1.5rem 0;text-align:center; }
+.pgr-logo-text { font-size:0.75rem;letter-spacing:0.25em;text-transform:uppercase;color:#9BA0B5;margin-bottom:0.3rem; }
+.pgr-hero-title { font-size:2.6rem;font-weight:800;color:#F2F5F8;line-height:1.1; }
+.pgr-hero-sub   { font-size:1rem;color:#9BA0B5;margin-top:0.4rem; }
+.pgr-hero-accent { color:#00F59D; }
 </style>
 """, unsafe_allow_html=True)
 
 
-# ── DB helpers ───────────────────────────────────────────────────────────────
+# ── Premium gate (sidebar) ────────────────────────────────────────────────────
+if "is_premium" not in st.session_state:
+    st.session_state["is_premium"] = False
+
+with st.sidebar:
+    st.markdown("### 🔒 Member Access")
+    if st.session_state["is_premium"]:
+        st.success("✅ Premium unlocked")
+        if st.button("Lock session", use_container_width=True):
+            st.session_state["is_premium"] = False
+            st.rerun()
+    else:
+        code_in = st.text_input("Member code", type="password", placeholder="Enter code…")
+        if st.button("Unlock", use_container_width=True):
+            if code_in.strip() == PREMIUM_CODE.strip():
+                st.session_state["is_premium"] = True
+                st.rerun()
+            else:
+                st.error("Invalid code — join Discord to get yours.")
+        st.markdown(f'<a href="{DISCORD_LINK}" target="_blank" style="display:block;text-align:center;margin-top:8px;color:#00F59D;font-size:0.85rem;">Get access → Discord</a>', unsafe_allow_html=True)
+    st.markdown("---")
+    st.markdown('<span style="font-size:0.72rem;color:#334155;">PGR Sports Analytics · 18+ · Gamble responsibly</span>', unsafe_allow_html=True)
+
+is_premium = st.session_state["is_premium"]
+
+
+# ── DB queries ────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=120)
 def load_hero_stats():
     db = DatabaseHelper()
@@ -169,33 +172,13 @@ def load_clv_hero_stats():
     db = DatabaseHelper()
     row = db.execute("""
         SELECT
-            COUNT(*) FILTER (WHERE clv_pct IS NOT NULL)                          AS clv_total,
-            COUNT(*) FILTER (WHERE clv_pct > 0)                                  AS clv_positive,
-            COALESCE(AVG(clv_pct) FILTER (WHERE clv_pct IS NOT NULL), 0)         AS avg_clv,
-            COUNT(*) FILTER (WHERE mode = 'PROD')                                AS total_prod
-        FROM football_opportunities
-        WHERE mode = 'PROD'
+            COUNT(*) FILTER (WHERE clv_pct IS NOT NULL)          AS clv_total,
+            COUNT(*) FILTER (WHERE clv_pct > 0)                  AS clv_positive,
+            COALESCE(AVG(clv_pct) FILTER (WHERE clv_pct IS NOT NULL), 0) AS avg_clv,
+            COUNT(*) FILTER (WHERE mode = 'PROD')                AS total_prod
+        FROM football_opportunities WHERE mode = 'PROD'
     """, fetch='one')
     return row or (0, 0, 0.0, 0)
-
-
-@st.cache_data(ttl=300)
-def load_clv_proof_of_edge(days: int = 30):
-    db = DatabaseHelper()
-    rows = db.execute("""
-        SELECT
-            clv_pct,
-            match_date,
-            market,
-            league,
-            clv_status
-        FROM football_opportunities
-        WHERE mode = 'PROD'
-          AND clv_pct IS NOT NULL
-          AND timestamp >= NOW() - (%s || ' days')::INTERVAL
-        ORDER BY timestamp DESC
-    """, (str(days),), fetch='all')
-    return rows or []
 
 
 @st.cache_data(ttl=300)
@@ -203,11 +186,9 @@ def load_clv_coverage():
     db = DatabaseHelper()
     row = db.execute("""
         SELECT
-            COUNT(*) FILTER (WHERE UPPER(status) = 'SETTLED')          AS total_settled,
-            COUNT(*) FILTER (WHERE clv_pct IS NOT NULL
-                             AND UPPER(status) = 'SETTLED')             AS clv_covered
-        FROM football_opportunities
-        WHERE mode = 'PROD'
+            COUNT(*) FILTER (WHERE UPPER(status)='SETTLED')       AS total_settled,
+            COUNT(*) FILTER (WHERE clv_pct IS NOT NULL AND UPPER(status)='SETTLED') AS clv_covered
+        FROM football_opportunities WHERE mode = 'PROD'
     """, fetch='one')
     return row or (0, 0)
 
@@ -241,8 +222,7 @@ def load_market_scanner():
         FROM football_opportunities
         WHERE mode = 'PROD'
           AND match_date = CURRENT_DATE::text
-          AND fair_odds IS NOT NULL
-          AND fair_odds > 0
+          AND fair_odds IS NOT NULL AND fair_odds > 0
         ORDER BY COALESCE(edge_percentage, 0) DESC
         LIMIT 100
     """, fetch='all')
@@ -285,44 +265,36 @@ def load_performance(days: int = 30):
 
 @st.cache_data(ttl=60)
 def load_scan_status():
-    """Load the latest scan events from the DB for the status bar."""
     db = DatabaseHelper()
     try:
         rows = db.execute("""
-            SELECT scan_type, scanned_at
-            FROM scan_events
+            SELECT scan_type, scanned_at FROM scan_events
             WHERE scanned_at >= NOW() - INTERVAL '24 hours'
-            ORDER BY scanned_at DESC
-            LIMIT 200
+            ORDER BY scanned_at DESC LIMIT 200
         """, fetch='all')
     except Exception:
         return None
     if not rows:
         return None
-
     now = datetime.utcnow()
 
-    def _latest(scan_types):
-        for row in rows:
-            if row[0] in scan_types:
-                return row[1]
+    def _latest(types):
+        for r in rows:
+            if r[0] in types:
+                return r[1]
         return None
 
-    def _count_today(scan_types):
-        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        return sum(
-            1 for row in rows
-            if row[0] in scan_types and row[1] >= today_start
-        )
-
-    vs_last = _latest({"value_singles_done", "value_singles_skipped", "value_singles_error"})
-    co_last = _latest({"corners_done", "corners_skipped", "corners_error"})
-    vs_count = _count_today({"value_singles_done", "value_singles_skipped"})
-    co_count = _count_today({"corners_done", "corners_skipped"})
+    def _count(types):
+        today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        return sum(1 for r in rows if r[0] in types and r[1] >= today)
 
     return {
-        "value_singles": {"last": vs_last, "count_today": vs_count, "interval_min": 12},
-        "corners": {"last": co_last, "count_today": co_count, "interval_min": 15},
+        "value_singles": {"last": _latest({"value_singles_done","value_singles_skipped","value_singles_error"}),
+                          "count_today": _count({"value_singles_done","value_singles_skipped"}),
+                          "interval_min": 12},
+        "corners": {"last": _latest({"corners_done","corners_skipped","corners_error"}),
+                    "count_today": _count({"corners_done","corners_skipped"}),
+                    "interval_min": 15},
     }
 
 
@@ -330,14 +302,13 @@ def load_scan_status():
 def load_all_time_summary():
     db = DatabaseHelper()
     rows = db.execute("""
-        SELECT
-            market,
-            COUNT(*) FILTER (WHERE UPPER(result) IN ('WON','LOST')) AS settled,
-            COUNT(*) FILTER (WHERE UPPER(result)='WON')             AS wins,
-            COALESCE(SUM(CASE WHEN UPPER(result)='WON' THEN (odds-1.0)
-                              WHEN UPPER(result)='LOST' THEN -1.0 ELSE 0 END), 0) AS units
+        SELECT market,
+               COUNT(*) FILTER (WHERE UPPER(result) IN ('WON','LOST')) AS settled,
+               COUNT(*) FILTER (WHERE UPPER(result)='WON')             AS wins,
+               COALESCE(SUM(CASE WHEN UPPER(result)='WON' THEN (odds-1.0)
+                                 WHEN UPPER(result)='LOST' THEN -1.0 ELSE 0 END), 0) AS units
         FROM football_opportunities
-        WHERE mode = 'PROD' AND UPPER(status) = 'SETTLED'
+        WHERE mode='PROD' AND UPPER(status)='SETTLED'
         GROUP BY market
         HAVING COUNT(*) FILTER (WHERE UPPER(result) IN ('WON','LOST')) >= 5
         ORDER BY units DESC
@@ -345,28 +316,46 @@ def load_all_time_summary():
     return rows or []
 
 
+@st.cache_data(ttl=300)
+def load_clv_proof_of_edge(days: int = 30):
+    db = DatabaseHelper()
+    rows = db.execute("""
+        SELECT clv_pct, match_date, market, league, clv_status
+        FROM football_opportunities
+        WHERE mode='PROD' AND clv_pct IS NOT NULL
+          AND timestamp >= NOW() - (%s || ' days')::INTERVAL
+        ORDER BY timestamp DESC
+    """, (str(days),), fetch='all')
+    return rows or []
+
+
+@st.cache_data(ttl=120)
+def load_live_edge_summary():
+    db = DatabaseHelper()
+    row = db.execute("""
+        SELECT
+          COUNT(*) FILTER (WHERE mode IN ('PROD','VALUE_OPP') AND status='pending' AND match_date::date >= CURRENT_DATE) AS live_edges,
+          COUNT(DISTINCT league) FILTER (WHERE status='pending' AND match_date::date >= CURRENT_DATE) AS leagues,
+          (AVG(edge_percentage) FILTER (WHERE mode IN ('PROD','VALUE_OPP') AND status='pending' AND match_date::date >= CURRENT_DATE))::numeric AS avg_edge
+        FROM football_opportunities
+    """, fetch='one')
+    return row or (0, 0, 0)
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def _clean_market(m: str) -> str:
     label_map = {
-        "value single": "Value Single",
-        "corners_over": "Corners Over",
-        "corners_under": "Corners Under",
-        "corners_handicap": "Corners Handicap",
-        "cards_over": "Cards Over",
-        "cards_under": "Cards Under",
-        "btts": "Both Teams Score",
-        "double_chance": "Double Chance",
-        "asian_handicap": "Asian Handicap",
-        "over_2.5": "Over 2.5 Goals",
-        "under_2.5": "Under 2.5 Goals",
-        "over_3.5": "Over 3.5 Goals",
-        "1x2": "1X2",
+        "value single": "Value Single", "corners_over": "Corners Over",
+        "corners_under": "Corners Under", "corners_handicap": "Corners Handicap",
+        "cards_over": "Cards Over", "cards_under": "Cards Under",
+        "btts": "Both Teams Score", "double_chance": "Double Chance",
+        "asian_handicap": "Asian Handicap", "over_2.5": "Over 2.5 Goals",
+        "under_2.5": "Under 2.5 Goals", "over_3.5": "Over 3.5 Goals", "1x2": "1X2",
     }
     return label_map.get(str(m).lower().strip(), str(m).replace("_", " ").title())
 
 
 def _clean_confidence(c) -> tuple:
-    """Returns (label, css_class)."""
     if c is None:
         return "Standard", "low"
     v = str(c).lower()
@@ -386,8 +375,8 @@ def _clean_confidence(c) -> tuple:
 
 
 def _result_badge(status, result) -> str:
-    s = str(status).upper()
     r = str(result).upper() if result else ""
+    s = str(status).upper()
     if r == "WON":
         return '<span class="badge badge-won">WIN</span>'
     if r == "LOST":
@@ -406,38 +395,71 @@ def _pick_card_class(result) -> str:
     return "pick-card pick-card-pending"
 
 
-def _render_value_explanation(
-    match: str,
-    market: str,
-    book_odds: float,
-    fair_odds: float,
-    model_prob: float | None,
-    edge: float,
-    league: str,
-    bk_name: str,
-):
-    market_implied = round((1 / book_odds) * 100, 1) if book_odds else None
-    model_prob_pct = round(model_prob * 100, 1) if model_prob and model_prob <= 1 else (round(float(model_prob), 1) if model_prob else None)
+def _fmt_ago(ts) -> str:
+    if ts is None:
+        return "never"
+    try:
+        from datetime import timezone
+        diff = (datetime.now(timezone.utc) - ts) if (hasattr(ts, 'tzinfo') and ts.tzinfo) else (datetime.utcnow() - ts)
+    except Exception:
+        return "—"
+    secs = int(diff.total_seconds())
+    if secs < 60:
+        return f"{secs}s ago"
+    if secs < 3600:
+        return f"{secs // 60}min ago"
+    return f"{secs // 3600}h ago"
 
+
+def _next_scan_str(last_ts, interval_min: int) -> str:
+    if last_ts is None:
+        return "soon"
+    try:
+        from datetime import timezone
+        diff = (datetime.now(timezone.utc) - last_ts) if (hasattr(last_ts, 'tzinfo') and last_ts.tzinfo) else (datetime.utcnow() - last_ts)
+    except Exception:
+        return "—"
+    remaining_sec = max(0, int((interval_min * 60) - diff.total_seconds()))
+    if remaining_sec < 60:
+        return f"~{remaining_sec}s" if remaining_sec > 0 else "now"
+    return f"~{remaining_sec // 60}min"
+
+
+def _cta_banner():
     st.markdown(f"""
-**🧠 EDGE**
+    <div class="cta-banner">
+        <h3>🔓 Unlock Full Access</h3>
+        <p>See exact selections, odds, stakes &amp; real-time edge across 30+ leagues.<br>
+           Join the PGR premium community.</p>
+        <a class="pgr-cta" href="{DISCORD_LINK}" target="_blank">Join PGR Premium →</a>
+    </div>
+    """, unsafe_allow_html=True)
 
-Market: **{market_implied}%** &nbsp;→&nbsp; Model: **{model_prob_pct}%**
 
-👉 **+{edge:.1f}% edge**
-
----
-
-**💰 PRICE**
-
-`{book_odds:.2f}` book &nbsp;vs&nbsp; `{fair_odds:.2f}` fair
-
-👉 This price is too high.
-
----
-
-⚠️ Wins don't matter short term. Beating the price does.
-""")
+def _fomo_pick_card(home, away, league, market, result=None, status=None, i=0):
+    """Show match/league but blur selection+odds."""
+    badge = _result_badge(status, result)
+    card_cls = _pick_card_class(result)
+    market_clean = _clean_market(market)
+    st.markdown(f"""
+    <div class="{card_cls}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+            <span class="badge badge-new" style="font-size:0.68rem;">#{i+1}</span>
+            {badge}
+        </div>
+        <div class="pick-match">{home} vs {away}</div>
+        <div class="pick-meta" style="margin-top:4px;">
+            <span>{league}</span>
+            <span>{market_clean}</span>
+        </div>
+        <div style="margin-top:10px;display:flex;align-items:center;gap:10px;">
+            <span class="fomo-blur" style="font-size:1.1rem;font-weight:700;color:#00F59D;">
+                ██████████ @ x.xx
+            </span>
+            <span class="lock-pill">🔒 Premium</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -445,57 +467,61 @@ Market: **{market_implied}%** &nbsp;→&nbsp; Model: **{model_prob_pct}%**
 # ─────────────────────────────────────────────────────────────────────────────
 wins, settled, profit_units, pending = load_hero_stats()
 hit_rate = (wins / settled * 100) if settled > 0 else 0.0
-roi = (profit_units / settled * 100) if settled > 0 else 0.0
+roi      = (profit_units / settled * 100) if settled > 0 else 0.0
 
 clv_total, clv_positive, avg_clv, _ = load_clv_hero_stats()
 clv_hit_rate = (clv_positive / clv_total * 100) if clv_total > 0 else 0.0
 total_settled_hero, clv_covered_hero = load_clv_coverage()
+live_edges_row = load_live_edge_summary()
+live_edges = live_edges_row[0] or 0
+live_leagues = live_edges_row[1] or 0
+avg_edge   = float(live_edges_row[2] or 0)
 
-st.markdown("""
+st.markdown(f"""
 <div class="pgr-hero">
     <div class="pgr-logo-text">PGR Sports Analytics</div>
     <div class="pgr-hero-title">
-        AI-Powered <span class="pgr-hero-accent">Edge Detection</span>
+        AI-Powered <span class="pgr-hero-accent">Value Detection</span>
     </div>
     <div class="pgr-hero-sub">
-        Real-time value scanning across 30+ football leagues. No guesswork — pure data.
+        Real-time edge scanner across 30+ football leagues — no guesswork, pure data.
+    </div>
+    <div style="margin-top:1rem;font-size:0.9rem;color:#9BA0B5;">
+        <span class="pulse-dot"></span>
+        <span style="color:#00F59D;font-weight:700;">{live_edges} live value edges</span>
+        &nbsp;·&nbsp; {live_leagues} leagues &nbsp;·&nbsp; avg edge {avg_edge:.1f}%
     </div>
 </div>
 """, unsafe_allow_html=True)
 
+# KPI row — always visible, builds trust
 c1, c2, c3, c4, c5, c6 = st.columns(6)
 with c1:
     metric_card("All-Time ROI", f"{roi:+.1f}%", kicker=f"{settled} settled picks",
                 variant="good" if roi >= 0 else "bad")
 with c2:
-    metric_card("Hit Rate", f"{hit_rate:.1f}%", kicker="Wins / total picks",
+    metric_card("Hit Rate", f"{hit_rate:.1f}%", kicker="Wins / settled",
                 variant="good" if hit_rate >= 45 else "bad")
 with c3:
-    metric_card("Profit", f"{profit_units:+.1f} units",
-                kicker="Flat 1-unit staking",
+    metric_card("Profit", f"{profit_units:+.1f}u", kicker="Flat 1-unit staking",
                 variant="good" if profit_units >= 0 else "bad")
 with c4:
-    metric_card("Live Picks", str(pending), kicker="Pending today",
-                variant="default")
+    metric_card("Live Picks", str(pending), kicker="Active today", variant="default")
 with c5:
-    metric_card(
-        "CLV Hit Rate",
-        f"{clv_hit_rate:.1f}%" if clv_total > 0 else "—",
-        kicker=f"{clv_positive} of {clv_total} picks beat closing line",
-        variant="good" if clv_hit_rate >= 50 else ("bad" if clv_total > 0 else "default"),
-    )
+    metric_card("CLV Hit Rate",
+                f"{clv_hit_rate:.1f}%" if clv_total > 0 else "—",
+                kicker=f"{clv_positive} of {clv_total} beat closing line",
+                variant="good" if clv_hit_rate >= 50 else ("bad" if clv_total > 0 else "default"))
 with c6:
-    metric_card(
-        "Avg CLV%",
-        f"{avg_clv:+.2f}%" if clv_total > 0 else "—",
-        kicker="vs closing market price",
-        variant="good" if avg_clv >= 0 else ("bad" if clv_total > 0 else "default"),
-    )
+    metric_card("Avg CLV%",
+                f"{avg_clv:+.2f}%" if clv_total > 0 else "—",
+                kicker="vs closing market price",
+                variant="good" if avg_clv >= 0 else ("bad" if clv_total > 0 else "default"))
 
 if clv_total > 0:
-    hero_cov_pct = (clv_covered_hero / total_settled_hero * 100) if total_settled_hero > 0 else 0
+    hero_cov_pct   = (clv_covered_hero / total_settled_hero * 100) if total_settled_hero > 0 else 0
     hero_cov_color = "#00F59D" if hero_cov_pct >= 50 else "#FBBF24"
-    hero_cov_label = "" if hero_cov_pct >= 50 else f' · <span style="color:#FBBF24;font-size:0.78rem;">⚠ Preliminary — CLV coverage below 50%</span>'
+    note = "" if hero_cov_pct >= 50 else ' · <span style="color:#FBBF24;font-size:0.78rem;">⚠ Preliminary — CLV coverage below 50%</span>'
     st.markdown(f"""
     <div style="margin:12px 0 4px 0;padding:10px 18px;border-radius:10px;
                 background:rgba(0,245,157,0.06);border:1px solid rgba(0,245,157,0.18);
@@ -506,105 +532,50 @@ if clv_total > 0:
         <span style="color:{hero_cov_color};font-size:0.78rem;margin-left:8px;">
             CLV coverage: {hero_cov_pct:.0f}%
         </span>
-        {hero_cov_label}
+        {note}
     </div>
     """, unsafe_allow_html=True)
 
 st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# SCAN STATUS BAR
-# ─────────────────────────────────────────────────────────────────────────────
+# ── Scan status bar ───────────────────────────────────────────────────────────
 scan_status = load_scan_status()
-
-def _fmt_ago(ts) -> str:
-    """Return a human-friendly 'X min ago' string for a timestamp."""
-    if ts is None:
-        return "never"
-    if hasattr(ts, 'tzinfo') and ts.tzinfo is not None:
-        from datetime import timezone
-        now_aware = datetime.now(timezone.utc)
-        diff = now_aware - ts
-    else:
-        diff = datetime.utcnow() - ts
-    secs = int(diff.total_seconds())
-    if secs < 60:
-        return f"{secs}s ago"
-    if secs < 3600:
-        return f"{secs // 60}min ago"
-    return f"{secs // 3600}h ago"
-
-
-def _next_scan_str(last_ts, interval_min: int) -> str:
-    """Return how long until the next scheduled scan."""
-    if last_ts is None:
-        return "soon"
-    if hasattr(last_ts, 'tzinfo') and last_ts.tzinfo is not None:
-        from datetime import timezone
-        now_aware = datetime.now(timezone.utc)
-        diff = now_aware - last_ts
-    else:
-        diff = datetime.utcnow() - last_ts
-    elapsed_min = diff.total_seconds() / 60
-    remaining_min = interval_min - elapsed_min
-    if remaining_min <= 0:
-        return "now"
-    remaining_sec = int(remaining_min * 60)
-    if remaining_sec < 60:
-        return f"~{remaining_sec}s"
-    return f"~{int(remaining_min)}min"
-
-
 if scan_status:
     vs = scan_status["value_singles"]
     co = scan_status["corners"]
-    vs_ago = _fmt_ago(vs["last"])
-    co_ago = _fmt_ago(co["last"])
-    vs_next = _next_scan_str(vs["last"], vs["interval_min"])
-    co_next = _next_scan_str(co["last"], co["interval_min"])
     st.markdown(f"""
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin:0 0 18px 0;align-items:center;">
-        <span style="font-size:0.72rem;letter-spacing:0.08em;text-transform:uppercase;
-                     color:#9BA0B5;margin-right:4px;">Scan status</span>
+        <span style="font-size:0.72rem;letter-spacing:0.08em;text-transform:uppercase;color:#9BA0B5;margin-right:4px;">Scan status</span>
         <span class="stat-pill">
-            💰 Value Singles &nbsp;·&nbsp;
-            <b>Last:</b>&nbsp;<b style="color:#F2F5F8;">{vs_ago}</b>
-            &nbsp;·&nbsp;
-            <b>Next:</b>&nbsp;<b style="color:#00F59D;">{vs_next}</b>
-            &nbsp;·&nbsp;
-            <b>Today:</b>&nbsp;<b style="color:#F2F5F8;">{vs["count_today"]}</b>
+            💰 Value Singles &nbsp;·&nbsp; <b>Last:</b>&nbsp;<b style="color:#F2F5F8;">{_fmt_ago(vs["last"])}</b>
+            &nbsp;·&nbsp; <b>Next:</b>&nbsp;<b style="color:#00F59D;">{_next_scan_str(vs["last"],vs["interval_min"])}</b>
+            &nbsp;·&nbsp; <b>Today:</b>&nbsp;<b style="color:#F2F5F8;">{vs["count_today"]}</b>
         </span>
         <span class="stat-pill">
-            🔢 Corners &nbsp;·&nbsp;
-            <b>Last:</b>&nbsp;<b style="color:#F2F5F8;">{co_ago}</b>
-            &nbsp;·&nbsp;
-            <b>Next:</b>&nbsp;<b style="color:#00F59D;">{co_next}</b>
-            &nbsp;·&nbsp;
-            <b>Today:</b>&nbsp;<b style="color:#F2F5F8;">{co["count_today"]}</b>
+            🔢 Corners &nbsp;·&nbsp; <b>Last:</b>&nbsp;<b style="color:#F2F5F8;">{_fmt_ago(co["last"])}</b>
+            &nbsp;·&nbsp; <b>Next:</b>&nbsp;<b style="color:#00F59D;">{_next_scan_str(co["last"],co["interval_min"])}</b>
+            &nbsp;·&nbsp; <b>Today:</b>&nbsp;<b style="color:#F2F5F8;">{co["count_today"]}</b>
         </span>
     </div>
     """, unsafe_allow_html=True)
 else:
     st.markdown("""
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin:0 0 18px 0;align-items:center;">
-        <span style="font-size:0.72rem;letter-spacing:0.08em;text-transform:uppercase;
-                     color:#9BA0B5;margin-right:4px;">Scan status</span>
-        <span class="stat-pill" style="color:#9BA0B5;">Engine starting up — first scan pending</span>
+        <span style="font-size:0.72rem;letter-spacing:0.08em;text-transform:uppercase;color:#9BA0B5;margin-right:4px;">Scan status</span>
+        <span class="stat-pill" style="color:#9BA0B5;">Engine starting — first scan pending</span>
     </div>
     """, unsafe_allow_html=True)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TABS
 # ─────────────────────────────────────────────────────────────────────────────
-tab_today, tab_scanner, tab_smart, tab_track, tab_clv, tab_nhl, tab_nfl, tab_nba = st.tabs([
+tab_today, tab_smart, tab_scanner, tab_track, tab_clv = st.tabs([
     "⚡ Today's Picks",
-    "🔍 Market Scanner",
     "🧠 Smart Picks",
+    "🔍 Market Scanner",
     "📈 Track Record",
     "🎯 Proof of Edge",
-    "🏒 Hockey",
-    "🏈 NFL",
-    "🏀 NBA",
 ])
 
 
@@ -614,19 +585,18 @@ tab_today, tab_scanner, tab_smart, tab_track, tab_clv, tab_nhl, tab_nfl, tab_nba
 with tab_today:
     picks = load_todays_picks()
 
-    today_wins   = sum(1 for p in picks if str(p[9] or "").upper() == "WON")
-    today_losses = sum(1 for p in picks if str(p[9] or "").upper() == "LOST")
-    today_pend   = sum(1 for p in picks if str(p[8] or "").upper() == "PENDING")
-    today_settled_n = today_wins + today_losses
-    today_hr = (today_wins / today_settled_n * 100) if today_settled_n > 0 else 0.0
+    today_wins     = sum(1 for p in picks if str(p[9] or "").upper() == "WON")
+    today_losses   = sum(1 for p in picks if str(p[9] or "").upper() == "LOST")
+    today_pend     = sum(1 for p in picks if str(p[8] or "").upper() == "PENDING")
+    today_settled  = today_wins + today_losses
+    today_hr       = (today_wins / today_settled * 100) if today_settled > 0 else 0.0
 
     st.markdown(f"""
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 20px 0;">
-        <span class="stat-pill"><b>{len(picks)}</b> av max 10 möjligheter identifierade idag</span>
-        <span class="stat-pill">Wins <b style="color:#00F59D;">{today_wins}</b></span>
-        <span class="stat-pill">Losses <b style="color:#FF4B6B;">{today_losses}</b></span>
-        <span class="stat-pill">Pending <b style="color:#FBBF24;">{today_pend}</b></span>
-        {"<span class='stat-pill'>Hit Rate <b>" + f"{today_hr:.0f}%" + "</b></span>" if today_settled_n > 0 else ""}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px;">
+        <span class="stat-pill"><b style="color:#00F59D;">{today_wins}</b>&nbsp;won today</span>
+        <span class="stat-pill"><b style="color:#FF4B6B;">{today_losses}</b>&nbsp;lost</span>
+        <span class="stat-pill"><b style="color:#FBBF24;">{today_pend}</b>&nbsp;pending</span>
+        {'<span class="stat-pill"><b>Hit rate: ' + f'{today_hr:.0f}%</b></span>' if today_settled > 0 else ''}
     </div>
     """, unsafe_allow_html=True)
 
@@ -634,335 +604,93 @@ with tab_today:
         st.markdown("""
         <div class="empty-state">
             <div class="big">⚡</div>
-            <p>No picks for today yet.<br>The engine runs multiple times daily — check back soon.</p>
+            <p>No picks generated yet today.<br>Engine scans every 12 minutes — check back soon.</p>
         </div>
         """, unsafe_allow_html=True)
     else:
-        col_a, col_b = st.columns(2)
-        now_utc = datetime.utcnow()
-
-        # Count picks per match so we can show "X markets available" / "Alt market"
-        from collections import Counter, defaultdict
-        match_counts = Counter((p[0], p[1]) for p in picks)
-        match_seen: defaultdict = defaultdict(int)
-
-        for i, pick in enumerate(picks):
-            (home, away, league, market, selection, odds, conf, ev, status, result, ko_time,
-             fair_odds, model_prob, best_odds_value, best_odds_bookmaker, odds_by_bookmaker,
-             created_at, clv_pct, clv_status, disagreement, hidden_value_status, profile_boost_score) = pick
-            conf_label, conf_cls = _clean_confidence(conf)
-            card_cls = _pick_card_class(result)
-            badge = _result_badge(status, result)
-            market_clean = _clean_market(market)
-            ko_str = ""
-            if ko_time:
-                try:
-                    ko_str = f"KO {str(ko_time)[:5]}"
-                except Exception:
-                    pass
-
-            # Multi-market label for same match
-            match_key = (home, away)
-            total_for_match = match_counts[match_key]
-            seen_idx = match_seen[match_key]
-            match_seen[match_key] += 1
-            if total_for_match > 1:
-                if seen_idx == 0:
-                    multi_market_html = f'<div style="font-size:0.72rem;color:#60A5FA;margin-top:2px;font-weight:500;">{total_for_match} markets available</div>'
-                else:
-                    multi_market_html = '<div style="font-size:0.72rem;color:#9BA0B5;margin-top:2px;">Alt market</div>'
-            else:
-                multi_market_html = ""
-
-            # NEW badge + age — NEW visible for 10 minutes, age always shown
-            new_badge = ""
-            age_str = ""
-            try:
-                if created_at:
-                    if isinstance(created_at, (int, float)):
-                        ts = datetime.utcfromtimestamp(created_at)
-                    elif isinstance(created_at, datetime):
-                        ts = created_at.replace(tzinfo=None)
-                    else:
-                        ts = datetime.fromisoformat(str(created_at).replace("Z", "+00:00")).replace(tzinfo=None)
-                    age_minutes = (now_utc - ts).total_seconds() / 60
-                    age_str = _fmt_ago(ts)
-                    if age_minutes <= 10:
-                        new_badge = '<span class="badge badge-new">NEW</span>'
-            except Exception:
-                pass
-
-            fair_html = ""
-            edge_html = ""
-            edge_val = None
-            fo = None
-            bk_odds = None
-            bk_name = "Best"
-            if fair_odds and float(fair_odds) > 0:
-                fo = float(fair_odds)
-                bk_odds = float(best_odds_value) if best_odds_value else float(odds)
-                edge_val = (bk_odds / fo - 1) * 100
-                edge_color = "#00F59D" if edge_val >= 10 else ("#FBBF24" if edge_val >= 5 else "#9BA0B5")
-                edge_weight = "700" if edge_val >= 5 else "400"
-                bk_name = str(best_odds_bookmaker) if best_odds_bookmaker else "Best"
-                fair_html = f'<span>Fair <b style="color:#60A5FA;">{fo:.2f}</b></span>'
-                edge_html = f'<span>Edge <b style="color:{edge_color};font-weight:{edge_weight};">{edge_val:+.1f}%</b></span>'
-                fair_html += f'<span style="font-size:0.72rem;">{bk_name} <b style="color:#F2F5F8;">{bk_odds:.2f}</b></span>'
-
-            # ── Why this bet ──────────────────────────────────────────────
-            why_bullets = []
-            try:
-                mp = float(model_prob) * 100 if model_prob else None
-                mkt_prob = round(100 / float(odds), 1) if odds and float(odds) > 0 else None
-                if mp and mkt_prob:
-                    why_bullets.append(f"Model <b style='color:#00F59D'>{mp:.0f}%</b> vs Market <b style='color:#9BA0B5'>{mkt_prob:.0f}%</b>")
-            except Exception:
-                pass
-            try:
-                if disagreement is not None and float(disagreement) < 0.15:
-                    why_bullets.append("Strong model agreement")
-                elif conf and int(conf) >= 70:
-                    why_bullets.append("Strong model agreement")
-            except Exception:
-                pass
-            try:
-                if clv_status == 'pos' and clv_pct and float(clv_pct) > 0:
-                    why_bullets.append(f"Positive CLV +{float(clv_pct):.1f}%")
-            except Exception:
-                pass
-            try:
-                if hidden_value_status and hidden_value_status not in ('', 'none', None):
-                    why_bullets.append("Hidden value detected")
-                elif profile_boost_score and float(profile_boost_score) >= 1.15:
-                    why_bullets.append("Profile boost active")
-            except Exception:
-                pass
-
-            if why_bullets:
-                bullets_html = "".join(
-                    f'<div style="font-size:0.72rem;color:#C5CAE0;line-height:1.6;">· {b}</div>'
-                    for b in why_bullets
-                )
-                why_html = f'''<div style="background:rgba(96,165,250,0.07);border-left:2px solid #60A5FA;
-                    border-radius:4px;padding:6px 10px;margin:6px 0 4px 0;">
-                    <div style="font-size:0.68rem;color:#60A5FA;font-weight:600;margin-bottom:2px;">
-                        WHY THIS BET</div>
-                    {bullets_html}</div>'''
-            else:
-                why_html = ""
-
-            age_html = f'<span style="font-size:0.72rem;color:#6B7280;">· {age_str}</span>' if age_str else ""
-            html = f"""
-            <div class="{card_cls}">
-                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
-                    <div style="font-size:0.75rem;color:#9BA0B5;">{league} {("· " + ko_str) if ko_str else ""} {age_html}</div>
-                    <div style="display:flex;gap:5px;align-items:center;">
-                        {new_badge}
-                        <span class="badge badge-{conf_cls}">{conf_label}</span>
+        if is_premium:
+            # ── PREMIUM: full picks ──────────────────────────────────────────
+            col_a, col_b = st.columns(2)
+            for i, p in enumerate(picks):
+                home, away, league, market, selection, odds = p[0],p[1],p[2],p[3],p[4],p[5]
+                conf, edge, status, result, ko = p[6],p[7],p[8],p[9],p[10]
+                fair_odds, model_prob = p[11],p[12]
+                conf_lbl, conf_cls = _clean_confidence(conf)
+                badge = _result_badge(status, result)
+                card_cls = _pick_card_class(result)
+                market_clean = _clean_market(market)
+                edge_str = f"+{edge:.1f}%" if edge else "—"
+                ko_str = str(ko)[:5] if ko else "—"
+                fair_str = f"{float(fair_odds):.2f}" if fair_odds else "—"
+                model_str = f"{float(model_prob)*100:.0f}%" if model_prob and float(model_prob) <= 1 else (f"{float(model_prob):.0f}%" if model_prob else "—")
+                html = f"""
+                <div class="{card_cls}">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+                        <span style="font-size:0.78rem;color:#9BA0B5;">{league}</span>
                         {badge}
                     </div>
-                </div>
-                <div class="pick-match">{home} vs {away}</div>
-                {multi_market_html}
-                <div class="pick-selection">{selection}</div>
-                {why_html}
-                <div class="pick-meta">
-                    <span>Odds <b style="color:#F2F5F8;">{float(odds):.2f}</b></span>
-                    {fair_html}
-                    {edge_html}
-                    <span>{market_clean}</span>
-                </div>
-            </div>
-            """
-
-            col = col_a if i % 2 == 0 else col_b
-            with col:
-                st.markdown(html, unsafe_allow_html=True)
-                if fo is not None and edge_val is not None:
-                    with st.expander("🧠 Why is this value?"):
-                        _render_value_explanation(
-                            match=f"{home} vs {away}",
-                            market=market_clean,
-                            book_odds=bk_odds,
-                            fair_odds=fo,
-                            model_prob=float(model_prob) if model_prob else None,
-                            edge=edge_val,
-                            league=league,
-                            bk_name=bk_name,
-                        )
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB 2 — MARKET SCANNER
-# ─────────────────────────────────────────────────────────────────────────────
-with tab_scanner:
-    scanner_rows = load_market_scanner()
-
-    st.markdown("""
-    <div style="padding:10px 16px;border-radius:10px;
-                background:rgba(59,130,246,0.06);
-                border:1px solid rgba(59,130,246,0.2);
-                margin-bottom:20px;">
-        <span style="color:#60A5FA;font-size:0.82rem;font-weight:600;">🔍 Market Scanner</span>
-        <span style="color:#9BA0B5;font-size:0.82rem;">
-            &nbsp;— All scanned markets today, sorted by edge. Green = edge &gt;10%, grey = &lt;5%.
-            Edge = (Best odds / Fair odds − 1) × 100.
-        </span>
-    </div>
-    """, unsafe_allow_html=True)
-
-    if not scanner_rows:
-        st.markdown("""
-        <div class="empty-state">
-            <div class="big">🔍</div>
-            <p>No market data with fair odds available yet.<br>
-            Markets are scanned as the engine runs throughout the day.</p>
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        import json as _json
-
-        rows_with_edge = []
-        for r in scanner_rows:
-            (s_home, s_away, s_league, s_market, s_selection, s_odds,
-             s_fair, s_model_prob, s_edge, s_best_val, s_best_bk,
-             s_odds_by_bk, s_conf, s_status, s_match_date, s_ko_time) = r
-            try:
-                fo = float(s_fair) if s_fair else None
-                bk = float(s_best_val) if s_best_val else float(s_odds)
-                edge_val = (bk / fo - 1) * 100 if fo and fo > 0 else (float(s_edge) if s_edge else None)
-            except Exception:
-                edge_val = float(s_edge) if s_edge else None
-            rows_with_edge.append((r, edge_val))
-
-        rows_with_edge.sort(key=lambda x: x[1] if x[1] is not None else -999, reverse=True)
-
-        has_edge = [x for x in rows_with_edge if x[1] is not None and x[1] >= 5]
-        no_edge = [x for x in rows_with_edge if x[1] is None or x[1] < 5]
-
-        total_scanned = len(rows_with_edge)
-        edge_5 = sum(1 for x in rows_with_edge if x[1] is not None and x[1] >= 5)
-        edge_10 = sum(1 for x in rows_with_edge if x[1] is not None and x[1] >= 10)
-
-        st.markdown(f"""
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 20px 0;">
-            <span class="stat-pill">Scanned <b>{total_scanned}</b></span>
-            <span class="stat-pill">Edge ≥5% <b style="color:#FBBF24;">{edge_5}</b></span>
-            <span class="stat-pill">Edge ≥10% <b style="color:#00F59D;">{edge_10}</b></span>
-        </div>
-        """, unsafe_allow_html=True)
-
-        def _scanner_row_html(r, edge_val):
-            (s_home, s_away, s_league, s_market, s_selection, s_odds,
-             s_fair, s_model_prob, s_edge, s_best_val, s_best_bk,
-             s_odds_by_bk, s_conf, s_status, s_match_date, s_ko_time) = r
-
-            fo = float(s_fair) if s_fair else None
-            bk_odds = float(s_best_val) if s_best_val else float(s_odds)
-            mkt_clean = _clean_market(s_market)
-
-            if edge_val is None or edge_val < 5:
-                card_bg = "rgba(15,20,36,0.6)"
-                border_color = "rgba(28,32,48,0.7)"
-                edge_color = "#9BA0B5"
-                edge_weight = "400"
-                row_opacity = "opacity:0.65;"
-            elif edge_val >= 10:
-                card_bg = "rgba(0,245,157,0.05)"
-                border_color = "rgba(0,245,157,0.35)"
-                edge_color = "#00F59D"
-                edge_weight = "700"
-                row_opacity = ""
-            else:
-                card_bg = "rgba(251,191,36,0.04)"
-                border_color = "rgba(251,191,36,0.25)"
-                edge_color = "#FBBF24"
-                edge_weight = "600"
-                row_opacity = ""
-
-            fair_str = f"{fo:.2f}" if fo else "—"
-            bk_name = str(s_best_bk) if s_best_bk else "Best"
-            edge_str = f"{edge_val:+.1f}%" if edge_val is not None else "—"
-            prob_str = f"{float(s_model_prob)*100:.1f}%" if s_model_prob else "—"
-
-            bk_breakdown = ""
-            spread_html = ""
-            if s_odds_by_bk and fo and fo > 0:
-                try:
-                    bk_data = _json.loads(s_odds_by_bk) if isinstance(s_odds_by_bk, str) else s_odds_by_bk
-                    if isinstance(bk_data, dict) and bk_data:
-                        items = sorted(bk_data.items(), key=lambda x: float(x[1]) if x[1] else 0, reverse=True)[:5]
-                        parts = []
-                        edge_vals_bk = []
-                        for k, v in items:
-                            try:
-                                bk_o = float(v)
-                                bk_edge = (bk_o / fo - 1) * 100
-                                edge_vals_bk.append(bk_edge)
-                                ec = "#00F59D" if bk_edge >= 10 else ("#FBBF24" if bk_edge >= 5 else "#9BA0B5")
-                                parts.append(
-                                    f'<span style="font-size:0.7rem;color:#9BA0B5;">'
-                                    f'{k}: <b style="color:#F2F5F8;">{bk_o:.2f}</b>'
-                                    f' <b style="color:{ec};">({bk_edge:+.0f}%)</b></span>'
-                                )
-                            except Exception:
-                                pass
-                        bk_breakdown = ' &nbsp;'.join(parts)
-                        if len(edge_vals_bk) >= 2:
-                            spread = max(edge_vals_bk) - min(edge_vals_bk)
-                            spread_html = f'<span style="font-size:0.72rem;color:#9BA0B5;">Spread <b style="color:#F2F5F8;">{spread:.1f}pp</b></span>'
-                except Exception:
-                    pass
-
-            return f"""
-            <div style="padding:12px 16px;margin:6px 0;border-radius:12px;
-                        background:{card_bg};border:1px solid {border_color};{row_opacity}">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-                    <div style="font-size:0.75rem;color:#9BA0B5;">{s_league} · {mkt_clean}</div>
-                    <div style="display:flex;gap:8px;align-items:center;">
-                        {spread_html}
-                        <b style="color:{edge_color};font-weight:{edge_weight};font-size:0.95rem;">{edge_str}</b>
+                    <div class="pick-match">{home} vs {away}</div>
+                    <div class="pick-selection">{selection}</div>
+                    <div class="pick-meta">
+                        <span>Odds <b style="color:#F2F5F8;">{float(odds):.2f}</b></span>
+                        <span>{market_clean}</span>
+                        <span>KO {ko_str}</span>
+                        <span class="badge badge-{'high' if conf_cls=='high' else ('medium' if conf_cls=='medium' else 'low')}">{conf_lbl}</span>
                     </div>
-                </div>
-                <div style="font-size:0.95rem;font-weight:600;color:#F2F5F8;">{s_home} vs {s_away}</div>
-                <div style="font-size:0.88rem;color:#00F59D;margin:2px 0 6px 0;">{s_selection}</div>
-                <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:0.78rem;color:#9BA0B5;align-items:center;">
-                    <span>Model odds <b style="color:#F2F5F8;">{float(s_odds):.2f}</b></span>
-                    <span>Fair <b style="color:#60A5FA;">{fair_str}</b></span>
-                    <span>{bk_name} <b style="color:#F2F5F8;">{bk_odds:.2f}</b></span>
-                    <span>Model prob <b style="color:#9BA0B5;">{prob_str}</b></span>
-                </div>
-                {f'<div style="margin-top:5px;display:flex;gap:8px;flex-wrap:wrap;">{bk_breakdown}</div>' if bk_breakdown else ""}
-            </div>
-            """
+                    <div class="pick-meta" style="margin-top:6px;">
+                        <span>Edge <b style="color:#00F59D;">{edge_str}</b></span>
+                        <span>Fair <b style="color:#F2F5F8;">{fair_str}</b></span>
+                        <span>Model <b style="color:#F2F5F8;">{model_str}</b></span>
+                    </div>
+                </div>"""
+                if i % 2 == 0:
+                    col_a.markdown(html, unsafe_allow_html=True)
+                else:
+                    col_b.markdown(html, unsafe_allow_html=True)
+        else:
+            # ── FREE: FOMO picks ─────────────────────────────────────────────
+            PREVIEW_FREE = 2
+            col_a, col_b = st.columns(2)
+            for i, p in enumerate(picks):
+                home, away, league, market, status, result = p[0],p[1],p[2],p[3],p[8],p[9]
+                if i % 2 == 0:
+                    with col_a:
+                        _fomo_pick_card(home, away, league, market, result, status, i)
+                else:
+                    with col_b:
+                        _fomo_pick_card(home, away, league, market, result, status, i)
+                if i >= PREVIEW_FREE - 1:
+                    break
 
-        if has_edge:
-            st.markdown("#### Value Markets")
-            for row, ev in has_edge:
-                st.markdown(_scanner_row_html(row, ev), unsafe_allow_html=True)
+            remaining = len(picks) - PREVIEW_FREE
+            if remaining > 0:
+                st.markdown(f"""
+                <div style="margin:8px 0;padding:14px 20px;border-radius:10px;
+                            border:1px solid #1C2030;background:#101320;
+                            text-align:center;color:#9BA0B5;font-size:0.88rem;">
+                    🔒 &nbsp; <b style="color:#F2F5F8;">{remaining} more picks</b> available today — selection &amp; odds visible for members only
+                </div>
+                """, unsafe_allow_html=True)
 
-        if no_edge:
-            with st.expander(f"No significant edge ({len(no_edge)} markets)", expanded=False):
-                for row, ev in no_edge:
-                    st.markdown(_scanner_row_html(row, ev), unsafe_allow_html=True)
+            _cta_banner()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TAB 3 — SMART PICKS
+# TAB 2 — SMART PICKS
 # ─────────────────────────────────────────────────────────────────────────────
 with tab_smart:
     smart = load_smart_picks()
 
     st.markdown("""
-    <div style="padding:10px 16px;border-radius:10px;
-                background:rgba(0,245,157,0.06);
-                border:1px solid rgba(0,245,157,0.2);
-                margin-bottom:20px;">
-        <span style="color:#00F59D;font-size:0.82rem;font-weight:600;">🧠 Smart Picks</span>
-        <span style="color:#9BA0B5;font-size:0.82rem;">
-            &nbsp;— AI-curated selections. One best pick per match, SmartScore ranked.
-            Refreshes daily at 09:00 CET.
-        </span>
+    <div style="padding:14px 20px;border-radius:12px;background:rgba(0,245,157,0.05);
+                border:1px solid rgba(0,245,157,0.2);margin-bottom:20px;">
+        <div style="font-size:1rem;font-weight:700;color:#00F59D;margin-bottom:6px;">
+            🧠 Smart Picks — AI Curated
+        </div>
+        <div style="font-size:0.85rem;color:#C4C9DC;line-height:1.6;">
+            One best pick per match, ranked by SmartScore (model confidence × CLV × form).
+            These are the highest-conviction opportunities from today's scan.
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -970,74 +698,155 @@ with tab_smart:
         st.markdown("""
         <div class="empty-state">
             <div class="big">🧠</div>
-            <p>Smart Picks for today aren't ready yet.<br>
-            Check back after 09:00 CET.</p>
+            <p>Smart Picks for today not yet generated.<br>They're published once daily around 09:00 UTC.</p>
         </div>
         """, unsafe_allow_html=True)
     else:
-        grade_colors = {"A": ("#00F59D", "rgba(0,245,157,0.1)", "rgba(0,245,157,0.3)"),
-                        "B": ("#60A5FA", "rgba(59,130,246,0.1)", "rgba(59,130,246,0.3)"),
-                        "C": ("#F59E0B", "rgba(245,158,11,0.1)", "rgba(245,158,11,0.3)")}
-
         col_a, col_b = st.columns(2)
-        for i, pick in enumerate(smart):
-            home, away, league, market, selection, odds, score, conf, grade = pick
-            gc, gb, gbd = grade_colors.get(str(grade), grade_colors["C"])
-            conf_label, conf_cls = _clean_confidence(conf)
-            market_clean = _clean_market(market)
+        for i, row in enumerate(smart):
+            home, away, league, market, selection, odds = row[0],row[1],row[2],row[3],row[4],row[5]
+            smart_score, confidence, grade = float(row[6] or 0), row[7], row[8]
+            conf_icon = "🟢" if confidence == "Strong" else ("🟡" if confidence == "Medium" else "🔴")
+            score_color = "#00F59D" if smart_score >= 80 else ("#FBBF24" if smart_score >= 65 else "#9BA0B5")
 
-            html = f"""
-            <div style="padding:18px 20px;margin:8px 0;border-radius:14px;
-                        background:radial-gradient(circle at top left,{gb} 0%,#101320 60%);
-                        border:1px solid {gbd};">
-                <div style="display:flex;justify-content:space-between;
-                            align-items:flex-start;margin-bottom:6px;">
-                    <span style="font-size:0.75rem;color:#9BA0B5;">{league}</span>
-                    <div style="display:flex;gap:5px;">
-                        <span class="badge badge-{conf_cls}">{conf_label}</span>
-                        <span style="padding:2px 10px;border-radius:999px;
-                                     background:{gb};color:{gc};
-                                     border:1px solid {gbd};font-size:0.72rem;font-weight:600;">
-                            Grade {grade}
+            if is_premium:
+                html = f"""
+                <div class="pick-card pick-card-pending">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+                        <span style="font-size:0.78rem;color:#9BA0B5;">{league}</span>
+                        <span style="font-size:0.82rem;font-weight:700;color:{score_color};">
+                            SmartScore {smart_score:.1f} · {grade}
                         </span>
                     </div>
-                </div>
-                <div class="pick-match">{home} vs {away}</div>
-                <div class="pick-selection">{selection}</div>
-                <div class="pick-meta">
-                    <span>Odds <b style="color:#F2F5F8;">{float(odds):.2f}</b></span>
-                    <span>{market_clean}</span>
-                </div>
-            </div>
-            """
+                    <div class="pick-match">{home} vs {away}</div>
+                    <div class="pick-selection">{selection}</div>
+                    <div class="pick-meta">
+                        <span>Odds <b style="color:#F2F5F8;">{float(odds):.2f}</b></span>
+                        <span>{_clean_market(market)}</span>
+                        <span>{conf_icon} {confidence}</span>
+                    </div>
+                </div>"""
+            else:
+                blur_part = '<span class="fomo-blur" style="font-size:1.05rem;font-weight:700;color:#00F59D;">██████ @ x.xx</span>'
+                show_full = i < 2
+                if show_full:
+                    html = f"""
+                    <div class="pick-card pick-card-pending">
+                        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+                            <span style="font-size:0.78rem;color:#9BA0B5;">{league}</span>
+                            <span style="font-size:0.82rem;font-weight:700;color:{score_color};">
+                                SmartScore {smart_score:.1f}
+                            </span>
+                        </div>
+                        <div class="pick-match">{home} vs {away}</div>
+                        <div class="pick-meta" style="margin-top:4px;">
+                            <span>{_clean_market(market)}</span>
+                            <span>{conf_icon} {confidence}</span>
+                        </div>
+                        <div style="margin-top:10px;display:flex;align-items:center;gap:10px;">
+                            {blur_part}
+                            <span class="lock-pill">🔒 Premium</span>
+                        </div>
+                    </div>"""
+                else:
+                    html = f"""
+                    <div class="fomo-card">
+                        <span style="font-size:0.78rem;color:#9BA0B5;">{league} · SmartScore {smart_score:.1f}</span>
+                        <div style="margin-top:6px;display:flex;align-items:center;gap:10px;">
+                            {blur_part}
+                            <span class="lock-pill">🔒 Premium</span>
+                        </div>
+                    </div>"""
+
             if i % 2 == 0:
                 col_a.markdown(html, unsafe_allow_html=True)
             else:
                 col_b.markdown(html, unsafe_allow_html=True)
 
+        if not is_premium:
+            _cta_banner()
+
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TAB 3 — TRACK RECORD
+# TAB 3 — MARKET SCANNER
+# ─────────────────────────────────────────────────────────────────────────────
+with tab_scanner:
+    scanner_rows = load_market_scanner()
+
+    if not is_premium:
+        # FOMO: show summary + teaser table with blurred details
+        league_counts = {}
+        for r in scanner_rows:
+            lg = r[2]
+            league_counts[lg] = league_counts.get(lg, 0) + 1
+
+        st.markdown(f"""
+        <div style="padding:20px;border-radius:12px;border:1px solid rgba(0,245,157,0.2);
+                    background:rgba(0,245,157,0.04);margin-bottom:20px;text-align:center;">
+            <div style="font-size:2rem;font-weight:800;color:#00F59D;">{len(scanner_rows)}</div>
+            <div style="font-size:0.9rem;color:#9BA0B5;margin-top:4px;">
+                value edges detected today across <b style="color:#F2F5F8;">{len(league_counts)} leagues</b>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Teaser: league list with edge, but details blurred
+        section_title("Top Leagues by Edge Count", "🔍")
+        for lg, cnt in sorted(league_counts.items(), key=lambda x: -x[1])[:8]:
+            st.markdown(f"""
+            <div class="fomo-card" style="margin-bottom:6px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div>
+                        <span style="color:#F2F5F8;font-weight:600;">{lg}</span>
+                        <span style="color:#9BA0B5;font-size:0.82rem;margin-left:8px;">{cnt} edge{'s' if cnt > 1 else ''}</span>
+                    </div>
+                    <span class="lock-pill">🔒 Selection &amp; odds: Premium</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        _cta_banner()
+    else:
+        # ── PREMIUM: full scanner table ──────────────────────────────────────
+        if not scanner_rows:
+            st.markdown("""
+            <div class="empty-state">
+                <div class="big">🔍</div>
+                <p>No scanner results yet today. Engine runs every 12 minutes.</p>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            df = pd.DataFrame(scanner_rows, columns=[
+                "Home", "Away", "League", "Market", "Selection", "Odds",
+                "Fair Odds", "Model Prob", "Edge %",
+                "Best Odds", "Best Book", "Odds by Book",
+                "Confidence", "Status", "Date", "KO"
+            ])
+            df["Market"] = df["Market"].apply(_clean_market)
+            df["Edge %"] = df["Edge %"].apply(lambda x: f"+{x:.1f}%" if x else "—")
+            df["Odds"] = df["Odds"].apply(lambda x: f"{float(x):.2f}" if x else "—")
+            df["Fair Odds"] = df["Fair Odds"].apply(lambda x: f"{float(x):.2f}" if x else "—")
+            df["Model Prob"] = df["Model Prob"].apply(
+                lambda x: f"{float(x)*100:.0f}%" if x and float(x) <= 1 else (f"{float(x):.0f}%" if x else "—"))
+            display_cols = ["League", "Home", "Away", "Market", "Selection", "Odds", "Fair Odds", "Edge %", "Model Prob", "KO"]
+            section_title(f"Market Scanner — {len(df)} edges today", "🔍")
+            st.dataframe(df[display_cols], use_container_width=True, hide_index=True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TAB 4 — TRACK RECORD  (always visible — best conversion tool)
 # ─────────────────────────────────────────────────────────────────────────────
 with tab_track:
-    period = st.radio(
-        "Period",
-        ["7 days", "30 days", "90 days"],
-        index=1,
-        horizontal=True,
-        label_visibility="collapsed",
-    )
-    day_map = {"7 days": 7, "30 days": 30, "90 days": 90}
-    days = day_map[period]
-
+    period = st.radio("Period", ["7 days", "30 days", "90 days"],
+                      index=1, horizontal=True, label_visibility="collapsed")
+    days = {"7 days": 7, "30 days": 30, "90 days": 90}[period]
     perf = load_performance(days)
 
     if not perf:
         st.markdown("""
         <div class="empty-state">
             <div class="big">📈</div>
-            <p>Not enough settled picks yet to show performance.<br>
-            Check back as results come in.</p>
+            <p>Not enough settled picks yet to show performance.<br>Check back as results come in.</p>
         </div>
         """, unsafe_allow_html=True)
     else:
@@ -1045,9 +854,7 @@ with tab_track:
         df["date"] = pd.to_datetime(df["date"])
         df = df.sort_values("date")
         df["cumulative_units"] = df["day_units"].cumsum()
-        df["hit_rate"] = df.apply(
-            lambda r: (r["wins"] / r["settled"] * 100) if r["settled"] > 0 else None, axis=1
-        )
+        df["hit_rate"] = df.apply(lambda r: (r["wins"] / r["settled"] * 100) if r["settled"] > 0 else None, axis=1)
 
         total_settled = int(df["settled"].sum())
         total_wins    = int(df["wins"].sum())
@@ -1066,112 +873,95 @@ with tab_track:
             metric_card("Hit Rate", f"{total_hr:.1f}%", kicker=f"{total_wins}W / {total_settled - total_wins}L",
                         variant="good" if total_hr >= 45 else "bad")
         with c4:
-            metric_card("Picks", str(total_settled), kicker="Settled this period",
-                        variant="default")
+            metric_card("Picks", str(total_settled), kicker="Settled this period", variant="default")
 
         st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
 
-        # Equity curve
         fig = go.Figure()
         fig.add_trace(go.Scatter(
-            x=df["date"],
-            y=df["cumulative_units"],
-            mode="lines",
-            fill="tozeroy",
+            x=df["date"], y=df["cumulative_units"],
+            mode="lines", fill="tozeroy",
             line=dict(color="#00F59D", width=2.5),
             fillcolor="rgba(0,245,157,0.08)",
-            name="Cumulative units",
             hovertemplate="%{x|%b %d}<br>%{y:+.2f} units<extra></extra>",
         ))
         fig.add_hline(y=0, line_dash="dot", line_color="#1C2030", line_width=1)
         fig.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
             font=dict(color="#9BA0B5", size=12),
-            margin=dict(l=10, r=10, t=10, b=10),
-            height=280,
+            margin=dict(l=10, r=10, t=10, b=10), height=280,
             showlegend=False,
             xaxis=dict(gridcolor="#1C2030", showgrid=True, zeroline=False),
-            yaxis=dict(gridcolor="#1C2030", showgrid=True, zeroline=False,
-                       ticksuffix="u"),
+            yaxis=dict(gridcolor="#1C2030", showgrid=True, zeroline=False, ticksuffix="u"),
         )
-        section_title("Equity Curve", icon="📈")
+        section_title("Equity Curve", "📈")
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
-        # Daily bar chart
         bar_colors = ["#00F59D" if v >= 0 else "#FF4B6B" for v in df["day_units"]]
         fig2 = go.Figure()
         fig2.add_trace(go.Bar(
-            x=df["date"],
-            y=df["day_units"],
+            x=df["date"], y=df["day_units"],
             marker_color=bar_colors,
             hovertemplate="%{x|%b %d}<br>%{y:+.2f}u<extra></extra>",
         ))
         fig2.add_hline(y=0, line_color="#1C2030", line_width=1)
         fig2.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
             font=dict(color="#9BA0B5", size=12),
-            margin=dict(l=10, r=10, t=10, b=10),
-            height=200,
+            margin=dict(l=10, r=10, t=10, b=10), height=200,
             showlegend=False,
             xaxis=dict(gridcolor="#1C2030", showgrid=False, zeroline=False),
-            yaxis=dict(gridcolor="#1C2030", showgrid=True, zeroline=False,
-                       ticksuffix="u"),
+            yaxis=dict(gridcolor="#1C2030", showgrid=True, zeroline=False, ticksuffix="u"),
         )
-        section_title("Daily Units", icon="📊")
+        section_title("Daily Units", "📊")
         st.plotly_chart(fig2, use_container_width=True, config={"displayModeBar": False})
 
-        # Market breakdown
         market_data = load_all_time_summary()
         if market_data:
             st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)
-            section_title("Performance by Market", icon="🎯")
+            section_title("Performance by Market", "🎯")
             mdf = pd.DataFrame(market_data, columns=["Market", "Picks", "Wins", "Units"])
             mdf["Market"] = mdf["Market"].apply(_clean_market)
-            mdf["Hit Rate"] = mdf.apply(
-                lambda r: f"{r['Wins']/r['Picks']*100:.0f}%" if r["Picks"] > 0 else "-", axis=1
-            )
+            mdf["Hit Rate"] = mdf.apply(lambda r: f"{r['Wins']/r['Picks']*100:.0f}%" if r["Picks"] > 0 else "-", axis=1)
             mdf["Units"] = mdf["Units"].apply(lambda x: f"{x:+.1f}u")
-            mdf = mdf.drop(columns=["Wins"])
-            st.dataframe(mdf, use_container_width=True, hide_index=True)
+            st.dataframe(mdf.drop(columns=["Wins"]), use_container_width=True, hide_index=True)
+
+        if not is_premium:
+            st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)
+            _cta_banner()
+
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TAB 4 — PROOF OF EDGE (CLV)
+# TAB 5 — PROOF OF EDGE / CLV  (always visible — transparency = trust)
 # ─────────────────────────────────────────────────────────────────────────────
 with tab_clv:
-    # ── CLV explanation ──────────────────────────────────────────────────────
     st.markdown("""
-    <div style="padding:16px 20px;border-radius:12px;
-                background:rgba(0,245,157,0.05);
-                border:1px solid rgba(0,245,157,0.2);
-                margin-bottom:24px;">
+    <div style="padding:16px 20px;border-radius:12px;background:rgba(0,245,157,0.05);
+                border:1px solid rgba(0,245,157,0.2);margin-bottom:24px;">
         <div style="font-size:1.05rem;font-weight:700;color:#00F59D;margin-bottom:8px;">
             What is Closing Line Value (CLV)?
         </div>
         <div style="font-size:0.88rem;color:#C4C9DC;line-height:1.65;">
-            When you place a bet, the odds you get are compared to the odds right before the match
-            starts — the <b style="color:#F2F5F8;">closing line</b>. Sharp bookmakers set extremely
-            accurate prices as kick-off approaches, because they've absorbed all public and sharp money.
+            When you place a bet, the odds you get are compared to the odds right before the match starts —
+            the <b style="color:#F2F5F8;">closing line</b>. Sharp bookmakers set extremely accurate prices
+            as kick-off approaches, absorbing all sharp money.
             <br><br>
-            If you consistently get <b style="color:#00F59D;">better odds than the closing price</b>,
-            it means the market agreed with you — and priced the bet even lower later.
-            That's positive CLV: the clearest, most objective proof that a system finds mispriced markets.
+            If you consistently get <b style="color:#00F59D;">better odds than the closing price</b>, the market
+            agreed with you. That's positive CLV — the clearest, most objective proof a system finds mispriced markets.
             <br><br>
             <span style="color:#9BA0B5;">
-                A sustained CLV of +3–5%+ across a large sample is statistically significant
-                evidence of genuine edge — independent of short-term win/loss results.
+                A sustained CLV of +3–5%+ across a large sample is statistically significant evidence of
+                genuine edge — independent of short-term win/loss results.
             </span>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # ── CLV coverage banner ──────────────────────────────────────────────────
     total_settled_cov, clv_covered = load_clv_coverage()
     if total_settled_cov > 0:
         coverage_pct = clv_covered / total_settled_cov * 100
         cov_color = "#00F59D" if coverage_pct >= 50 else "#FBBF24"
-        cov_label = "Solid CLV sample" if coverage_pct >= 50 else "Preliminary data — CLV coverage below 50%"
+        cov_label = "Solid CLV sample" if coverage_pct >= 50 else "Preliminary — coverage below 50%"
         st.markdown(f"""
         <div style="padding:8px 16px;border-radius:8px;margin-bottom:20px;
                     background:rgba(0,0,0,0.2);border:1px solid #1C2030;
@@ -1182,143 +972,101 @@ with tab_clv:
         </div>
         """, unsafe_allow_html=True)
 
-    # ── Period selector ──────────────────────────────────────────────────────
-    clv_period = st.radio(
-        "CLV period",
-        ["30 days", "90 days"],
-        index=0,
-        horizontal=True,
-        label_visibility="collapsed",
-    )
+    clv_period = st.radio("CLV period", ["30 days", "90 days"],
+                          index=0, horizontal=True, label_visibility="collapsed")
     clv_days = 30 if clv_period == "30 days" else 90
-
     clv_rows = load_clv_proof_of_edge(clv_days)
 
     if not clv_rows:
         st.markdown("""
         <div class="empty-state">
             <div class="big">🎯</div>
-            <p>No CLV data yet for this period.<br>
-            CLV is captured automatically as matches approach kick-off.</p>
+            <p>No CLV data yet for this period.<br>CLV is captured automatically as matches approach kick-off.</p>
         </div>
         """, unsafe_allow_html=True)
     else:
-        clv_df = pd.DataFrame(clv_rows, columns=["clv_pct", "match_date", "market", "league", "clv_status"])
+        clv_df = pd.DataFrame(clv_rows, columns=["clv_pct","match_date","market","league","clv_status"])
         clv_df["clv_pct"] = clv_df["clv_pct"].astype(float)
         clv_df["match_date"] = pd.to_datetime(clv_df["match_date"], errors="coerce")
 
-        total_clv = len(clv_df)
-        pos_clv = int((clv_df["clv_pct"] > 0).sum())
-        avg_clv_period = float(clv_df["clv_pct"].mean())
-        clv_hr_period = pos_clv / total_clv * 100 if total_clv > 0 else 0.0
+        total_clv    = len(clv_df)
+        pos_clv      = int((clv_df["clv_pct"] > 0).sum())
+        avg_clv_p    = float(clv_df["clv_pct"].mean())
+        clv_hr_p     = pos_clv / total_clv * 100 if total_clv > 0 else 0.0
 
-        # Summary KPIs
         k1, k2, k3, k4 = st.columns(4)
         with k1:
-            metric_card("CLV Hit Rate", f"{clv_hr_period:.1f}%",
-                        kicker=f"{pos_clv} of {total_clv} beat closing",
-                        variant="good" if clv_hr_period >= 50 else "bad")
+            metric_card("CLV Hit Rate", f"{clv_hr_p:.1f}%", kicker=f"{pos_clv} of {total_clv} beat closing",
+                        variant="good" if clv_hr_p >= 50 else "bad")
         with k2:
-            metric_card("Avg CLV%", f"{avg_clv_period:+.2f}%",
-                        kicker="Mean vs closing line",
-                        variant="good" if avg_clv_period >= 0 else "bad")
+            metric_card("Avg CLV%", f"{avg_clv_p:+.2f}%", kicker="Mean vs closing line",
+                        variant="good" if avg_clv_p >= 0 else "bad")
         with k3:
             best_clv = float(clv_df["clv_pct"].max())
-            metric_card("Best CLV", f"{best_clv:+.2f}%",
-                        kicker="Top single pick",
-                        variant="good")
+            metric_card("Best CLV", f"{best_clv:+.2f}%", kicker="Top single pick", variant="good")
         with k4:
-            metric_card("Picks", str(total_clv),
-                        kicker=f"Last {clv_days} days with CLV",
-                        variant="default")
+            metric_card("Picks", str(total_clv), kicker=f"Last {clv_days} days with CLV", variant="default")
 
         st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
 
-        # ── CLV distribution histogram ────────────────────────────────────────
-        section_title("CLV Distribution", icon="📊")
         clv_vals = clv_df["clv_pct"].tolist()
         fig_hist = go.Figure()
         fig_hist.add_trace(go.Histogram(
-            x=clv_vals,
-            nbinsx=30,
-            marker_color=[
-                "#00F59D" if v > 0 else "#FF4B6B"
-                for v in clv_vals
-            ],
+            x=clv_vals, nbinsx=30,
+            marker_color=["#00F59D" if v > 0 else "#FF4B6B" for v in clv_vals],
             opacity=0.8,
             hovertemplate="CLV: %{x:.1f}%<br>Count: %{y}<extra></extra>",
         ))
         fig_hist.add_vline(x=0, line_dash="dot", line_color="#9BA0B5", line_width=1.5)
-        fig_hist.add_vline(x=avg_clv_period, line_dash="dash",
-                           line_color="#00F59D", line_width=1.5,
-                           annotation_text=f"Avg {avg_clv_period:+.1f}%",
-                           annotation_font_color="#00F59D",
-                           annotation_position="top right")
+        fig_hist.add_vline(x=avg_clv_p, line_dash="dash", line_color="#00F59D", line_width=1.5,
+                           annotation_text=f"Avg {avg_clv_p:+.1f}%",
+                           annotation_font_color="#00F59D", annotation_position="top right")
         fig_hist.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
             font=dict(color="#9BA0B5", size=12),
-            margin=dict(l=10, r=10, t=20, b=10),
-            height=250,
-            showlegend=False,
-            xaxis=dict(gridcolor="#1C2030", showgrid=True, zeroline=False,
-                       ticksuffix="%", title="CLV%"),
-            yaxis=dict(gridcolor="#1C2030", showgrid=True, zeroline=False,
-                       title="Picks"),
+            margin=dict(l=10, r=10, t=20, b=10), height=250, showlegend=False,
+            xaxis=dict(gridcolor="#1C2030", showgrid=True, zeroline=False, ticksuffix="%", title="CLV%"),
+            yaxis=dict(gridcolor="#1C2030", showgrid=True, zeroline=False, title="Picks"),
             bargap=0.05,
         )
+        section_title("CLV Distribution", "📊")
         st.plotly_chart(fig_hist, use_container_width=True, config={"displayModeBar": False})
 
-        # ── CLV trend over time ───────────────────────────────────────────────
         clv_time = clv_df.dropna(subset=["match_date"]).copy()
         if not clv_time.empty:
             st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)
-            section_title(f"CLV Trend — Last {clv_days} Days", icon="📈")
+            section_title(f"CLV Trend — Last {clv_days} Days", "📈")
             clv_daily = (
                 clv_time.groupby("match_date")["clv_pct"]
-                .mean()
-                .reset_index()
-                .rename(columns={"clv_pct": "avg_clv"})
+                .mean().reset_index().rename(columns={"clv_pct":"avg_clv"})
                 .sort_values("match_date")
             )
             clv_daily["rolling_avg"] = clv_daily["avg_clv"].rolling(window=7, min_periods=1).mean()
-
             fig_trend = go.Figure()
             bar_clr = ["#00F59D" if v >= 0 else "#FF4B6B" for v in clv_daily["avg_clv"]]
             fig_trend.add_trace(go.Bar(
-                x=clv_daily["match_date"],
-                y=clv_daily["avg_clv"],
-                marker_color=bar_clr,
-                opacity=0.5,
-                name="Daily avg CLV",
+                x=clv_daily["match_date"], y=clv_daily["avg_clv"],
+                marker_color=bar_clr, opacity=0.5, name="Daily avg CLV",
                 hovertemplate="%{x|%b %d}<br>%{y:+.2f}%<extra></extra>",
             ))
             fig_trend.add_trace(go.Scatter(
-                x=clv_daily["match_date"],
-                y=clv_daily["rolling_avg"],
-                mode="lines",
-                line=dict(color="#00F59D", width=2.5),
-                name="7-day rolling avg",
+                x=clv_daily["match_date"], y=clv_daily["rolling_avg"],
+                mode="lines", line=dict(color="#00F59D", width=2.5), name="7-day rolling avg",
                 hovertemplate="%{x|%b %d}<br>Rolling: %{y:+.2f}%<extra></extra>",
             ))
             fig_trend.add_hline(y=0, line_dash="dot", line_color="#1C2030", line_width=1)
             fig_trend.update_layout(
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                 font=dict(color="#9BA0B5", size=12),
-                margin=dict(l=10, r=10, t=10, b=10),
-                height=240,
-                legend=dict(orientation="h", yanchor="bottom", y=1.02,
-                            xanchor="right", x=1, font=dict(size=11)),
+                margin=dict(l=10, r=10, t=10, b=10), height=240,
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(size=11)),
                 xaxis=dict(gridcolor="#1C2030", showgrid=False, zeroline=False),
-                yaxis=dict(gridcolor="#1C2030", showgrid=True, zeroline=False,
-                           ticksuffix="%"),
+                yaxis=dict(gridcolor="#1C2030", showgrid=True, zeroline=False, ticksuffix="%"),
             )
             st.plotly_chart(fig_trend, use_container_width=True, config={"displayModeBar": False})
 
-        # ── CLV by market ─────────────────────────────────────────────────────
         st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)
-        section_title("CLV by Market", icon="🎯")
+        section_title("CLV by Market", "🎯")
         mkt_grp = (
             clv_df.groupby("market")["clv_pct"]
             .agg(["mean", "count", lambda x: (x > 0).sum()])
@@ -1326,431 +1074,21 @@ with tab_clv:
         )
         mkt_grp.columns = ["Market", "Avg CLV%", "Picks", "Positive"]
         mkt_grp = mkt_grp[mkt_grp["Picks"] >= 3].sort_values("Avg CLV%", ascending=False)
-        mkt_grp["Market"] = mkt_grp["Market"].apply(_clean_market)
-        mkt_grp["Hit Rate"] = mkt_grp.apply(
-            lambda r: f"{r['Positive']/r['Picks']*100:.0f}%" if r["Picks"] > 0 else "-", axis=1
-        )
+        mkt_grp["Market"]   = mkt_grp["Market"].apply(_clean_market)
+        mkt_grp["Hit Rate"] = mkt_grp.apply(lambda r: f"{r['Positive']/r['Picks']*100:.0f}%" if r["Picks"] > 0 else "-", axis=1)
         mkt_grp["Avg CLV%"] = mkt_grp["Avg CLV%"].apply(lambda x: f"{x:+.2f}%")
-        mkt_grp = mkt_grp.drop(columns=["Positive"])
         if not mkt_grp.empty:
-            st.dataframe(mkt_grp, use_container_width=True, hide_index=True)
-        else:
-            st.info("Not enough picks per market yet (minimum 3 required).")
+            st.dataframe(mkt_grp.drop(columns=["Positive"]), use_container_width=True, hide_index=True)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# DATA HELPERS — HOCKEY & NBA
-# ─────────────────────────────────────────────────────────────────────────────
-@st.cache_data(ttl=180)
-def _hockey_summary():
-    try:
-        db = DatabaseHelper()
-        rows = db.execute("""
-            SELECT sport_key,
-                COUNT(*) FILTER (WHERE outcome IN ('won','lost')) AS settled,
-                COUNT(*) FILTER (WHERE outcome = 'won') AS wins,
-                COUNT(*) FILTER (WHERE outcome = 'lost') AS losses,
-                COUNT(*) FILTER (WHERE status = 'pending') AS pending,
-                COALESCE(SUM(CASE WHEN outcome IN ('won','lost') THEN profit_loss ELSE 0 END),0) AS profit,
-                ROUND(AVG(CASE WHEN outcome IN ('won','lost') THEN odds END)::numeric,2) AS avg_odds
-            FROM learning_bets
-            WHERE sport_category = 'HOCKEY'
-            GROUP BY sport_key
-            ORDER BY settled DESC
-        """, fetch='all')
-        if not rows:
-            return pd.DataFrame()
-        return pd.DataFrame(rows, columns=['sport_key','settled','wins','losses','pending','profit','avg_odds'])
-    except Exception:
-        return pd.DataFrame()
-
-@st.cache_data(ttl=180)
-def _hockey_daily():
-    try:
-        db = DatabaseHelper()
-        rows = db.execute("""
-            SELECT DATE(created_at) AS date,
-                COUNT(*) FILTER (WHERE outcome IN ('won','lost')) AS settled,
-                COUNT(*) FILTER (WHERE outcome = 'won') AS wins,
-                COALESCE(SUM(CASE WHEN outcome IN ('won','lost') THEN profit_loss ELSE 0 END),0) AS daily_profit
-            FROM learning_bets
-            WHERE sport_category = 'HOCKEY'
-            GROUP BY DATE(created_at)
-            ORDER BY date
-        """, fetch='all')
-        if not rows:
-            return pd.DataFrame()
-        return pd.DataFrame(rows, columns=['date','settled','wins','daily_profit'])
-    except Exception:
-        return pd.DataFrame()
-
-@st.cache_data(ttl=180)
-def _hockey_by_market():
-    try:
-        db = DatabaseHelper()
-        rows = db.execute("""
-            SELECT market,
-                COUNT(*) FILTER (WHERE outcome IN ('won','lost')) AS settled,
-                COUNT(*) FILTER (WHERE outcome = 'won') AS wins,
-                COUNT(*) FILTER (WHERE outcome = 'lost') AS losses,
-                COALESCE(SUM(CASE WHEN outcome IN ('won','lost') THEN profit_loss ELSE 0 END),0) AS profit
-            FROM learning_bets
-            WHERE sport_category = 'HOCKEY'
-            GROUP BY market
-            ORDER BY profit DESC
-        """, fetch='all')
-        if not rows:
-            return pd.DataFrame()
-        return pd.DataFrame(rows, columns=['market','settled','wins','losses','profit'])
-    except Exception:
-        return pd.DataFrame()
-
-@st.cache_data(ttl=180)
-def _hockey_recent():
-    try:
-        db = DatabaseHelper()
-        rows = db.execute("""
-            SELECT home_team, away_team, market, selection, odds,
-                   outcome, profit_loss, result_notes, settled_at, league
-            FROM learning_bets
-            WHERE sport_category = 'HOCKEY' AND outcome IN ('won','lost')
-            ORDER BY settled_at DESC NULLS LAST
-            LIMIT 20
-        """, fetch='all')
-        if not rows:
-            return pd.DataFrame()
-        return pd.DataFrame(rows, columns=['home_team','away_team','market','selection','odds',
-                                           'outcome','profit_loss','result_notes','settled_at','league'])
-    except Exception:
-        return pd.DataFrame()
-
-@st.cache_data(ttl=180)
-def _nba_summary():
-    try:
-        db = DatabaseHelper()
-        rows = db.execute("""
-            SELECT market,
-                COUNT(*) FILTER (WHERE outcome IN ('won','lost')) AS settled,
-                COUNT(*) FILTER (WHERE outcome = 'won') AS wins,
-                COUNT(*) FILTER (WHERE outcome = 'lost') AS losses,
-                COUNT(*) FILTER (WHERE outcome = 'void') AS voids,
-                COALESCE(SUM(CASE WHEN outcome IN ('won','lost') THEN profit_loss ELSE 0 END),0) AS profit,
-                ROUND(AVG(CASE WHEN outcome IN ('won','lost') THEN odds END)::numeric,2) AS avg_odds
-            FROM player_props
-            WHERE sport = 'basketball' AND league = 'basketball_nba'
-            GROUP BY market
-            ORDER BY settled DESC
-        """, fetch='all')
-        if not rows:
-            return pd.DataFrame()
-        return pd.DataFrame(rows, columns=['market','settled','wins','losses','voids','profit','avg_odds'])
-    except Exception:
-        return pd.DataFrame()
-
-@st.cache_data(ttl=180)
-def _nba_daily():
-    try:
-        db = DatabaseHelper()
-        rows = db.execute("""
-            SELECT DATE(created_at) AS date,
-                COUNT(*) FILTER (WHERE outcome IN ('won','lost')) AS settled,
-                COUNT(*) FILTER (WHERE outcome = 'won') AS wins,
-                COALESCE(SUM(CASE WHEN outcome IN ('won','lost') THEN profit_loss ELSE 0 END),0) AS daily_profit
-            FROM player_props
-            WHERE sport = 'basketball' AND league = 'basketball_nba'
-            GROUP BY DATE(created_at)
-            ORDER BY date
-        """, fetch='all')
-        if not rows:
-            return pd.DataFrame()
-        return pd.DataFrame(rows, columns=['date','settled','wins','daily_profit'])
-    except Exception:
-        return pd.DataFrame()
-
-@st.cache_data(ttl=180)
-def _nba_recent():
-    try:
-        db = DatabaseHelper()
-        rows = db.execute("""
-            SELECT home_team, away_team, player_name, market, selection, line, odds,
-                   outcome, profit_loss, settled_at
-            FROM player_props
-            WHERE sport = 'basketball' AND league = 'basketball_nba'
-              AND outcome IN ('won','lost')
-            ORDER BY settled_at DESC NULLS LAST
-            LIMIT 20
-        """, fetch='all')
-        if not rows:
-            return pd.DataFrame()
-        return pd.DataFrame(rows, columns=['home_team','away_team','player_name','market',
-                                           'selection','line','odds','outcome','profit_loss','settled_at'])
-    except Exception:
-        return pd.DataFrame()
-
-
-def _sport_stat_card(label: str, value: str, color: str = "#F2F5F8"):
-    st.markdown(f"""
-    <div style="padding:14px 10px;border-radius:10px;text-align:center;
-                background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);">
-        <div style="font-size:1.45rem;font-weight:800;color:{color};">{value}</div>
-        <div style="font-size:0.72rem;color:#9BA0B5;text-transform:uppercase;
-                    letter-spacing:0.08em;margin-top:3px;">{label}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-
-def _cumulative_chart(daily_df, color, title):
-    daily_df = daily_df.sort_values("date").copy()
-    daily_df["cum_profit"] = daily_df["daily_profit"].cumsum()
-    daily_df["cum_settled"] = daily_df["settled"].cumsum()
-    daily_df["cum_wins"] = daily_df["wins"].cumsum()
-    daily_df["hit_rate"] = (daily_df["cum_wins"] / daily_df["cum_settled"].replace(0, 1) * 100).round(1)
-
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=daily_df["date"], y=daily_df["cum_profit"],
-        mode="lines+markers", name="Cumulative P/L",
-        line=dict(color=color, width=2.5),
-        fill="tozeroy", fillcolor=color.replace("rgb", "rgba").replace(")", ",0.12)") if "rgb" in color else f"rgba(33,150,243,0.12)",
-        marker=dict(size=5),
-    ))
-    fig.add_hline(y=0, line_dash="dash", line_color="rgba(148,163,184,0.35)")
-    fig.update_layout(
-        title=title, template="plotly_dark", height=300,
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        margin=dict(l=40, r=20, t=40, b=30), font=dict(size=11),
-        yaxis_title="Units", showlegend=False,
-    )
-    return fig
-
-
-def _hitrate_chart(daily_df, title):
-    daily_df = daily_df.sort_values("date").copy()
-    daily_df["cum_settled"] = daily_df["settled"].cumsum()
-    daily_df["cum_wins"] = daily_df["wins"].cumsum()
-    daily_df["hit_rate"] = (daily_df["cum_wins"] / daily_df["cum_settled"].replace(0, 1) * 100).round(1)
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=daily_df["date"], y=daily_df["hit_rate"],
-        mode="lines+markers", name="Hit Rate",
-        line=dict(color="#F59E0B", width=2.5), marker=dict(size=5),
-    ))
-    fig.add_hline(y=50, line_dash="dash", line_color="rgba(148,163,184,0.35)")
-    fig.update_layout(
-        title=title, template="plotly_dark", height=300,
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        margin=dict(l=40, r=20, t=40, b=30), font=dict(size=11),
-        yaxis=dict(title="%", range=[0, 100]), showlegend=False,
-    )
-    return fig
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB 6 — HOCKEY
-# ─────────────────────────────────────────────────────────────────────────────
-with tab_nhl:
-    section_title("🏒 Hockey Learning Tracker", icon="")
-    st.caption("Simulated 1u flat stakes · Data collected since Feb 2026 · Settlement every 30 min")
-
-    h_summary = _hockey_summary()
-    h_daily   = _hockey_daily()
-    h_markets = _hockey_by_market()
-    h_recent  = _hockey_recent()
-
-    if not h_summary.empty:
-        totals_w = int(h_summary["wins"].sum())
-        totals_l = int(h_summary["losses"].sum())
-        totals_s = int(h_summary["settled"].sum())
-        totals_p = float(h_summary["profit"].sum())
-        totals_pend = int(h_summary["pending"].sum()) if "pending" in h_summary.columns else 0
-        hit = totals_w / totals_s * 100 if totals_s > 0 else 0
-        profit_c = "#22C55E" if totals_p >= 0 else "#EF4444"
-
-        c1, c2, c3, c4, c5 = st.columns(5)
-        with c1: _sport_stat_card("Settled", str(totals_s), "#60A5FA")
-        with c2: _sport_stat_card("Wins", str(totals_w), "#22C55E")
-        with c3: _sport_stat_card("Losses", str(totals_l), "#EF4444")
-        with c4: _sport_stat_card("Hit Rate", f"{hit:.1f}%", "#22C55E" if hit >= 50 else "#F59E0B")
-        with c5: _sport_stat_card("Net Profit", f"{totals_p:+.1f}u", profit_c)
-
-        st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)
-
-        if not h_daily.empty and h_daily["settled"].sum() > 0:
-            ch1, ch2 = st.columns(2)
-            with ch1:
-                st.plotly_chart(_cumulative_chart(h_daily, "#2196F3", "📈 Cumulative P/L"), use_container_width=True)
-            with ch2:
-                st.plotly_chart(_hitrate_chart(h_daily, "🎯 Rolling Hit Rate"), use_container_width=True)
-
-        if not h_markets.empty:
+        if not is_premium:
             st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)
-            section_title("By Market", icon="📋")
-            mkt_display = h_markets[h_markets["settled"] > 0].copy()
-            mkt_display["Hit %"] = (mkt_display["wins"] / mkt_display["settled"] * 100).round(1)
-            mkt_display["Market"] = mkt_display["market"].str.replace("_", " ").str.title()
-            mkt_display = mkt_display.rename(columns={
-                "settled": "Settled", "wins": "W", "losses": "L",
-                "profit": "Profit (u)", "avg_odds": "Avg Odds",
-            })
-            st.dataframe(
-                mkt_display[["Market", "Settled", "W", "L", "Hit %", "Profit (u)", "Avg Odds"]],
-                use_container_width=True, hide_index=True,
-            )
-
-        if not h_summary.empty:
-            st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)
-            section_title("By League", icon="🌍")
-            for _, row in h_summary.iterrows():
-                s = int(row["settled"])
-                if s == 0:
-                    continue
-                w = int(row["wins"]); l = int(row["losses"])
-                p = float(row["profit"])
-                hr2 = w / s * 100 if s > 0 else 0
-                pc = "#22C55E" if p >= 0 else "#EF4444"
-                league_label = str(row["sport_key"]).replace("icehockey_", "").replace("_", " ").title()
-                st.markdown(f"""
-                <div style="padding:10px 16px;border-radius:10px;margin-bottom:6px;
-                            background:rgba(33,150,243,0.06);border-left:3px solid #2196F3;">
-                    <strong style="color:#F2F5F8;">{league_label}</strong>
-                    <span style="float:right;color:{pc};font-weight:700;">{p:+.1f}u</span><br>
-                    <span style="color:#9BA0B5;font-size:0.8rem;">{w}W / {l}L ({hr2:.0f}% hit) · {s} settled</span>
-                </div>
-                """, unsafe_allow_html=True)
-
-        if not h_recent.empty:
-            st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)
-            section_title("Recent Results", icon="🕐")
-            for _, row in h_recent.iterrows():
-                is_win = row.get("outcome") == "won"
-                bc = "rgba(34,197,94,0.5)" if is_win else "rgba(239,68,68,0.5)"
-                em = "✅" if is_win else "❌"
-                pl = float(row.get("profit_loss") or 0)
-                plc = "#22C55E" if pl >= 0 else "#EF4444"
-                mkt = str(row["market"]).replace("_", " ").title()
-                st.markdown(f"""
-                <div style="padding:10px 14px;border-radius:8px;margin-bottom:5px;
-                            background:rgba(30,41,59,0.5);border-left:3px solid {bc};font-size:0.84rem;">
-                    {em} <strong>{row['home_team']} vs {row['away_team']}</strong>
-                    <span style="float:right;color:{plc};font-weight:700;">{pl:+.1f}u</span><br>
-                    <span style="color:#CBD5E1;">{mkt}: {row['selection']} @{row['odds']:.2f}</span>
-                    <span style="color:#64748B;font-size:0.75rem;float:right;">{str(row.get('league',''))}</span>
-                </div>
-                """, unsafe_allow_html=True)
-    else:
-        st.info("No hockey data available yet.")
-
-    if st.button("🔄 Refresh", key="nhl_refresh"):
-        st.cache_data.clear()
-        st.rerun()
+            _cta_banner()
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB 7 — NFL (still coming next season)
-# ─────────────────────────────────────────────────────────────────────────────
-with tab_nfl:
-    st.markdown("""
-    <div style="padding:3rem 0;text-align:center;">
-        <div style="font-size:4rem;">🏈</div>
-        <div style="font-size:1.8rem;font-weight:800;color:#F2F5F8;margin:0.5rem 0 0.3rem 0;">NFL American Football</div>
-        <div style="font-size:0.9rem;color:#9BA0B5;margin-bottom:2rem;">Season 2025 — Data collection starting pre-season</div>
-        <div style="max-width:480px;margin:0 auto;padding:18px 24px;border-radius:14px;
-                    background:rgba(255,150,0,0.07);border:1px solid rgba(255,150,0,0.25);">
-            <div style="font-size:0.82rem;font-weight:700;color:rgb(255,150,0);
-                        letter-spacing:0.1em;text-transform:uppercase;margin-bottom:6px;">Status</div>
-            <div style="font-size:0.95rem;color:#F2F5F8;font-weight:600;">
-                Coming next season — markets: Totals · Moneyline · Asian Handicap
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB 8 — NBA
-# ─────────────────────────────────────────────────────────────────────────────
-with tab_nba:
-    section_title("🏀 NBA Player Props Tracker", icon="")
-    st.caption("Simulated 1u flat stakes · NBA player props · Feb–Mar 2026 season data")
-
-    nba_summary = _nba_summary()
-    nba_daily   = _nba_daily()
-    nba_recent  = _nba_recent()
-
-    if not nba_summary.empty:
-        nba_w = int(nba_summary["wins"].sum())
-        nba_l = int(nba_summary["losses"].sum())
-        nba_s = int(nba_summary["settled"].sum())
-        nba_v = int(nba_summary["voids"].sum()) if "voids" in nba_summary.columns else 0
-        nba_prof = float(nba_summary["profit"].sum())
-        nba_hit = nba_w / nba_s * 100 if nba_s > 0 else 0
-        nba_pc = "#22C55E" if nba_prof >= 0 else "#EF4444"
-
-        c1, c2, c3, c4, c5, c6 = st.columns(6)
-        with c1: _sport_stat_card("Settled", str(nba_s), "#A855F7")
-        with c2: _sport_stat_card("Wins", str(nba_w), "#22C55E")
-        with c3: _sport_stat_card("Losses", str(nba_l), "#EF4444")
-        with c4: _sport_stat_card("Voids", str(nba_v), "#9BA0B5")
-        with c5: _sport_stat_card("Hit Rate", f"{nba_hit:.1f}%", "#22C55E" if nba_hit >= 50 else "#F59E0B")
-        with c6: _sport_stat_card("Net Profit", f"{nba_prof:+.1f}u", nba_pc)
-
-        st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)
-
-        if not nba_daily.empty and nba_daily["settled"].sum() > 0:
-            ch1, ch2 = st.columns(2)
-            with ch1:
-                st.plotly_chart(_cumulative_chart(nba_daily, "#A855F7", "📈 Cumulative P/L"), use_container_width=True)
-            with ch2:
-                st.plotly_chart(_hitrate_chart(nba_daily, "🎯 Rolling Hit Rate"), use_container_width=True)
-
-        if not nba_summary.empty:
-            st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)
-            section_title("By Market", icon="📋")
-            top_markets = nba_summary[nba_summary["settled"] > 0].copy()
-            top_markets["Hit %"] = (top_markets["wins"] / top_markets["settled"] * 100).round(1)
-            top_markets["Market"] = top_markets["market"].str.replace("_", " ").str.title()
-            top_markets = top_markets.rename(columns={
-                "settled": "Settled", "wins": "W", "losses": "L",
-                "voids": "Void", "profit": "Profit (u)", "avg_odds": "Avg Odds",
-            }).sort_values("Settled", ascending=False)
-            st.dataframe(
-                top_markets[["Market", "Settled", "W", "L", "Hit %", "Profit (u)", "Avg Odds"]],
-                use_container_width=True, hide_index=True,
-            )
-
-        if not nba_recent.empty:
-            st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)
-            section_title("Recent Results", icon="🕐")
-            for _, row in nba_recent.iterrows():
-                is_win = row.get("outcome") == "won"
-                bc = "rgba(34,197,94,0.5)" if is_win else "rgba(239,68,68,0.5)"
-                em = "✅" if is_win else "❌"
-                pl = float(row.get("profit_loss") or 0)
-                plc = "#22C55E" if pl >= 0 else "#EF4444"
-                mkt = str(row["market"]).replace("_", " ").title()
-                player = row.get("player_name", "") or ""
-                line_str = f" {row['line']}" if pd.notna(row.get("line")) and row["line"] else ""
-                st.markdown(f"""
-                <div style="padding:10px 14px;border-radius:8px;margin-bottom:5px;
-                            background:rgba(30,41,59,0.5);border-left:3px solid {bc};font-size:0.84rem;">
-                    {em} <strong>{player}</strong> — {row['home_team']} vs {row['away_team']}
-                    <span style="float:right;color:{plc};font-weight:700;">{pl:+.1f}u</span><br>
-                    <span style="color:#CBD5E1;">{mkt}{line_str}: {row['selection']} @{row['odds']:.2f}</span>
-                </div>
-                """, unsafe_allow_html=True)
-    else:
-        st.info("No NBA data available yet.")
-
-    if st.button("🔄 Refresh", key="nba_refresh"):
-        st.cache_data.clear()
-        st.rerun()
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# FOOTER
-# ─────────────────────────────────────────────────────────────────────────────
-st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)
-st.markdown("""
-<div style="text-align:center;color:#3D4259;font-size:0.75rem;padding:8px 0 24px 0;">
-    PGR Sports Analytics · AI-powered picks for recreational players · No staking advice
+# ── footer ────────────────────────────────────────────────────────────────────
+st.markdown(f"""
+<div style="text-align:center;color:#334155;font-size:0.72rem;margin-top:2rem;padding-bottom:1rem;">
+    PGR Sports Analytics · Data for informational purposes only · Always gamble responsibly · 18+<br>
+    Model scans every ~12 min · Edges vs sharp books (Pinnacle / Betfair) · Last refresh: {datetime.utcnow().strftime("%H:%M UTC")}
 </div>
 """, unsafe_allow_html=True)
