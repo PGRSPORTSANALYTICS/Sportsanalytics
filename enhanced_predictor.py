@@ -59,7 +59,7 @@ class EnhancedExactScorePredictor:
         
         # Initialize persistent cache for API-Football
         try:
-            self.cache_manager = APICacheManager('api_football', quota_limit=7000)
+            self.cache_manager = APICacheManager('api_football', quota_limit=75000)
         except Exception as e:
             logger.warning(f"⚠️ Could not initialize cache manager: {e}")
             self.cache_manager = None

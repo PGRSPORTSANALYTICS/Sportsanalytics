@@ -2,7 +2,7 @@
 🎯 UNIFIED ODDS SERVICE
 Combines odds from multiple sources:
 1. The Odds API (primary - 500 free requests/month)
-2. API-Football (secondary - 7000 requests/day)
+2. API-Football (secondary - 75000 requests/day, Ultra plan)
 
 Provides best available odds across all markets:
 - 1X2 (Match Winner)

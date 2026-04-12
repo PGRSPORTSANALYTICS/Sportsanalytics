@@ -31,7 +31,7 @@ class APIFootballClient:
         }
         self.last_request_time = 0
         
-        self.cache_manager = APICacheManager('api_football', quota_limit=7000)
+        self.cache_manager = APICacheManager('api_football', quota_limit=75000)
         
         logger.info("✅ API-Football client initialized with PERSISTENT caching (shared across all workflows)")
     
