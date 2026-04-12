@@ -1,6 +1,6 @@
 """
 🎯 LIVE ODDS API INTEGRATION
-Real betting odds from The Odds API (500 free requests/month)
+Real betting odds from The Odds API (6,000,000 requests/month)
 Covers major soccer leagues including virtual/e-soccer when available
 """
 import requests
@@ -34,7 +34,7 @@ class TheOddsAPI:
         
         self.base_url = "https://api.the-odds-api.com/v4"
         self.requests_used = 0
-        self.max_requests = 500  # Free tier limit
+        self.max_requests = 6000000  # Paid plan limit
         
     def get_available_sports(self) -> List[Dict]:
         """Get list of available sports (doesn't count against quota)"""

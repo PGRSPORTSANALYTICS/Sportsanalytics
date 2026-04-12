@@ -27,7 +27,7 @@ class RealOddsAPI:
         self.session = requests.Session()
         self.session.params['apiKey'] = self.api_key
         
-        self.cache_manager = APICacheManager('odds_api', quota_limit=450)
+        self.cache_manager = APICacheManager('odds_api', quota_limit=6000000)
         
         logger.info("🚀 REAL ODDS API INITIALIZED with PERSISTENT caching (shared across all workflows)")
         logger.info(f"✅ API Key loaded: {self.api_key[:8]}...")
