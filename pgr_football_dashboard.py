@@ -1209,7 +1209,7 @@ def render_overview(df: pd.DataFrame):
         unsafe_allow_html=True,
     )
     st.markdown(
-        '<div class="pgr-subtitle">ROI + Units Performance Mode | Flat 1u stake per bet for analytics</div>',
+        '<div class="pgr-subtitle">ROI tracking via Smart Picks · Value Opportunities = model edge feed · Corners & Cards always on</div>',
         unsafe_allow_html=True,
     )
 
@@ -2267,8 +2267,9 @@ def render_signal_routing_tab():
     """Render the Signal Routing tab showing PRO PICK / VALUE OPP / WATCHLIST signals."""
     st.markdown("## Signal Routing Intelligence")
     st.caption(
-        "Three-tier signal classification: PRO PICK (official ROI), "
-        "VALUE OPPORTUNITY (data feed — results tracked internally), WATCHLIST (internal DB only)."
+        "Three-tier signal classification: PRO PICK (high-confidence edges), "
+        "VALUE OPPORTUNITY (full model edge data feed — all Value Opportunities), WATCHLIST (near-miss, internal). "
+        "ROI tracking → Smart Picks tab."
     )
 
     today_str = datetime.now().strftime("%Y-%m-%d")
@@ -2334,7 +2335,7 @@ def render_signal_routing_tab():
 
     pro_picks = signal_df[signal_df["mode"] == "PROD"].copy()
     st.markdown("### PRO PICK")
-    st.caption("EV≥25%, Confidence≥70%, Odds 1.75–2.30, Tier A/B — counts toward official ROI")
+    st.caption("EV≥25%, Confidence≥70%, Odds 1.75–2.30, Tier A/B — high-confidence model edges")
     if pro_picks.empty:
         st.info("No PRO PICK signals found.")
     else:
@@ -2344,7 +2345,7 @@ def render_signal_routing_tab():
 
     value_opp = signal_df[signal_df["mode"] == "VALUE_OPP"].copy()
     st.markdown("### VALUE OPPORTUNITY")
-    st.caption("EV≥12%, Confidence≥60%, Odds 1.60–4.00 — data feed to Discord. Results tracked internally in Admin tab.")
+    st.caption("EV≥12%, Confidence≥60%, Odds 1.60–4.00 — Value Opportunities data feed (all model edges, sent to Discord)")
     if value_opp.empty:
         st.info("No VALUE OPPORTUNITY signals found.")
     else:
@@ -2538,7 +2539,7 @@ def render_daily_card_tab():
                 fb_color = "#10B981" if football_stats['units_pl'] >= 0 else "#EF4444"
                 st.markdown(f"""
                 <div style="padding:12px;border-radius:10px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);margin-bottom:10px;">
-                    <div style="font-size:14px;font-weight:600;color:#10B981;margin-bottom:8px;">⚽ Football (Value Singles)</div>
+                    <div style="font-size:14px;font-weight:600;color:#10B981;margin-bottom:8px;">⚽ Football (Value Opportunities)</div>
                     <div style="display:flex;gap:16px;flex-wrap:wrap;">
                         <div><span style="font-size:11px;color:#9CA3AF;">Bets</span><br/><span style="font-size:16px;color:#E5E7EB;">{football_stats['bets']}</span></div>
                         <div><span style="font-size:11px;color:#9CA3AF;">W-L</span><br/><span style="font-size:16px;color:#E5E7EB;">{football_stats['wins']}-{football_stats['losses']}</span></div>
@@ -2618,7 +2619,7 @@ def render_daily_card_tab():
         with cols[0]:
             st.metric("Total Picks", summary['total_bets'])
         with cols[1]:
-            st.metric("Value Singles", summary['value_singles_count'])
+            st.metric("Value Opportunities", summary['value_singles_count'])
         
         st.markdown("---")
         
@@ -2643,7 +2644,7 @@ def render_daily_card_tab():
                 """, unsafe_allow_html=True)
         
         if card['value_singles']:
-            st.markdown("### Value Singles")
+            st.markdown("### Value Opportunities")
             MAJOR_BOOKMAKERS = ['Pinnacle', 'Bet365', 'Betfair', 'Unibet', 'Betway', 'William Hill', 'Ladbrokes', 'Paddy Power', 'Coral', 'Sky Bet', 'BetMGM', 'DraftKings', 'FanDuel', 'Betsson', '1xBet', 'Bovada', 'BetOnline.ag', 'Marathon Bet']
             
             for bet in card['value_singles']:
@@ -2699,7 +2700,7 @@ def render_daily_card_tab():
         if summary['value_singles_count'] > 0:
             st.markdown(f"""
             <div style="padding:12px;border-radius:10px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);">
-                <div style="font-size:12px;color:#9CA3AF;">Value Singles Average</div>
+                <div style="font-size:12px;color:#9CA3AF;">Value Opportunities Average</div>
                 <div style="font-size:16px;color:#10B981;">EV: {summary['value_singles_avg_ev']:.1f}% • Odds: {summary['value_singles_avg_odds']:.2f}x</div>
             </div>
             """, unsafe_allow_html=True)
@@ -3961,7 +3962,7 @@ def main():
             "Free Picks",
             "Daily Card",
             "Overview",
-            "Value Singles",
+            "Value Opportunities",
             "Signal Routing",
             "Odds Compare",
             "Props & Specials",
@@ -4037,12 +4038,12 @@ def _load_pipeline_stats():
 
 
 def render_three_layer_tab():
-    """Three-layer signal view: PRO PICK / VALUE OPPORTUNITY / WATCHLIST."""
-    st.markdown("## Signal Routing — Three-Layer View")
+    """Value Opportunities — all model edges as a live data feed."""
+    st.markdown("## Value Opportunities — Model Edge Feed")
     st.caption(
-        "PRO PICK = official bets (count toward public ROI) · "
-        "VALUE OPPORTUNITY = data feed to Discord (results tracked in Admin) · "
-        "WATCHLIST = internal learning only"
+        "All edges identified by the model across all markets. "
+        "This is a data feed — not investment advice. "
+        "ROI tracking is done via Smart Picks. Corners and Cards run separately."
     )
 
     try:
@@ -4089,24 +4090,19 @@ def render_three_layer_tab():
             display["Pgr Score"] = display["Pgr Score"].map(lambda x: f"{x:.3f}" if x else "")
         st.dataframe(display, use_container_width=True)
 
-    if not pro.empty:
-        won = pro[pro["status"] == "won"]
-        lost = pro[pro["status"] == "lost"]
-        total_settled = len(won) + len(lost)
-        hit_rate = len(won) / total_settled * 100 if total_settled > 0 else 0
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("PRO Picks (today+)", len(pro))
-        c2.metric("Official Hit Rate", f"{hit_rate:.0f}%" if total_settled > 0 else "—")
-        c3.metric("Won / Lost", f"{len(won)} / {len(lost)}")
-        c4.metric("Pending", len(pro[pro["status"] == "pending"]))
-        st.caption("Official record: only mode=PROD rows with bet_placed=True")
+    # Quick count KPIs — no ROI (ROI tracked in Smart Picks)
+    c1, c2, c3 = st.columns(3)
+    c1.metric("High Confidence Edges", len(pro))
+    c2.metric("Value Opportunities", len(val))
+    c3.metric("Watchlist Signals", len(watch))
+    st.caption("ROI tracking → Smart Picks tab. This feed is for data analysis only.")
 
     st.divider()
-    _render_layer(pro, "🎯 PRO PICK — Official Bets", "#00C853")
+    _render_layer(pro, "🎯 High Confidence — Top Edges", "#00C853")
     st.divider()
-    _render_layer(val, "📊 VALUE OPPORTUNITY — Data Feed (Discord)", "#2196F3")
+    _render_layer(val, "📊 Value Opportunities — All Model Edges", "#2196F3")
     st.divider()
-    _render_layer(watch, "🔍 WATCHLIST — Internal Learning", "#9E9E9E")
+    _render_layer(watch, "🔍 Watchlist — Near-Miss Signals", "#9E9E9E")
 
 
 def render_admin_tab():
