@@ -77,12 +77,12 @@ async def admin_login_page(request: Request, error: str = ""):
     width: 340px;
   }}
   .logo {{
-    width: 36px; height: 36px;
-    background: #22c55e;
-    border-radius: 8px;
+    width: 38px; height: 38px;
+    background: linear-gradient(145deg, #16a34a, #15803d);
+    border-radius: 10px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 16px; font-weight: 900; color: #000;
     margin-bottom: 18px;
+    box-shadow: 0 0 0 1px rgba(34,197,94,.2), 0 2px 8px rgba(22,163,74,.3);
   }}
   h1 {{
     font-size: 18px;
@@ -139,7 +139,15 @@ async def admin_login_page(request: Request, error: str = ""):
 </head>
 <body>
 <div class="card">
-  <div class="logo">P</div>
+  <div class="logo">
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <polyline points="2,15 7,9 10,12 14,6 18,9" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      <circle cx="7" cy="9" r="1.5" fill="white"/>
+      <circle cx="10" cy="12" r="1.5" fill="white"/>
+      <circle cx="14" cy="6" r="1.5" fill="white"/>
+      <circle cx="18" cy="9" r="2" fill="#4ade80"/>
+    </svg>
+  </div>
   <h1>Admin Access</h1>
   <p class="sub">Site owner login — not for regular users</p>
   <form method="POST" action="/admin-login">

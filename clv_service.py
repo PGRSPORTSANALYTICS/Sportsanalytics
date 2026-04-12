@@ -155,6 +155,34 @@ def _is_supported(market: str) -> bool:
     return not any(u in m for u in UNSUPPORTED_MARKETS)
 
 
+DC_PATTERNS = [
+    'home or draw', 'draw or home',
+    'draw or away', 'away or draw',
+    'home or away', 'away or home',
+    'double chance',
+]
+
+
+def _is_double_chance(market: str, selection: str) -> bool:
+    combined = (market + ' ' + selection).lower()
+    return any(p in combined for p in DC_PATTERNS)
+
+
+def _dc_type(selection: str) -> str:
+    """Return '1X', 'X2', or '12' for a double-chance selection."""
+    s = selection.lower()
+    has_home = 'home' in s
+    has_draw = 'draw' in s
+    has_away = 'away' in s
+    if has_home and has_draw:
+        return '1X'
+    if has_draw and has_away:
+        return 'X2'
+    if has_home and has_away:
+        return '12'
+    return 'UNKNOWN'
+
+
 def _market_type(market: str, selection: str = '') -> Optional[str]:
     """Determine Odds API market type from market name AND selection text.
 
@@ -163,19 +191,23 @@ def _market_type(market: str, selection: str = '') -> Optional[str]:
     """
     if not _is_supported(market):
         return None
-    # Combine both fields for matching — selection text is more specific
     combined = (market + ' ' + selection).lower()
+
+    # Double Chance — must be checked BEFORE generic 'draw'/'home'/'away' checks
+    if _is_double_chance(market, selection):
+        return 'h2h'   # We fetch h2h and compute DC odds from legs (see _compute_dc_odds)
+
     if 'over' in combined or 'under' in combined:
         return 'totals'
+
+    # BTTS — The Odds API does not reliably expose this market; skip CLV tracking
     if 'btts' in combined or 'both teams' in combined:
-        return 'h2h'   # Pinnacle/sharp books include BTTS inside h2h response
+        return None
+
     if ('ah' in combined or 'asian' in combined or 'handicap' in combined
             or re.search(r'[+-]\d+(\.\d+)?\s*(ah|\(ah\))', combined)):
         return 'spreads'
-    if 'home win' in combined or 'away win' in combined or 'draw' in combined:
-        return 'h2h'
-    if 'double chance' in combined:
-        return 'h2h'
+
     return 'h2h'
 
 
@@ -282,6 +314,14 @@ class CLVService:
 
         mtype = _market_type(market, selection)
         if not mtype:
+            combined = (market + ' ' + selection).lower()
+            if 'btts' in combined or 'both teams' in combined:
+                logger.debug(
+                    "CLV: BTTS market skipped (Odds API has no BTTS endpoint) — bet=%d %s vs %s",
+                    bet.get('id', '?'), bet['home_team'], bet['away_team']
+                )
+            else:
+                logger.debug("CLV: unsupported market type '%s' sel='%s'", market, selection)
             return None
 
         try:
@@ -343,6 +383,83 @@ class CLVService:
             and bool(a_words & set(ea.split()))
         )
 
+    def _compute_dc_odds(
+        self, bookmakers: List, selection: str, home: str, away: str
+    ) -> Optional[tuple]:
+        """
+        Compute Double Chance closing odds from h2h legs using no-vig probability.
+
+        For 'Home or Draw' (1X): P(DC) = P(home) + P(draw)
+        For 'Draw or Away' (X2): P(DC) = P(draw) + P(away)
+        For 'Home or Away' (12): P(DC) = P(home) + P(away)
+
+        Returns (dc_odds, source_label, matched_outcome_name) or None.
+        """
+        dc = _dc_type(selection)
+        if dc == 'UNKNOWN':
+            return None
+
+        h_lower = home.lower()
+        a_lower = away.lower()
+
+        sharp_hits: List[tuple] = []
+        fallback_hit: Optional[tuple] = None
+
+        for bk in bookmakers:
+            bk_key   = bk.get('key', '').lower()
+            bk_title = bk.get('title', bk.get('key', 'unknown'))
+            is_sharp = bk_key in SHARP_PRIORITY
+
+            home_price = draw_price = away_price = None
+
+            for mkt_obj in bk.get('markets', []):
+                if mkt_obj.get('key') != 'h2h':
+                    continue
+                for outcome in mkt_obj.get('outcomes', []):
+                    name  = outcome.get('name', '').lower()
+                    price = outcome.get('price')
+                    if not price:
+                        continue
+                    if 'draw' in name:
+                        draw_price = float(price)
+                    elif name == h_lower or h_lower in name:
+                        home_price = float(price)
+                    elif name == a_lower or a_lower in name:
+                        away_price = float(price)
+
+            if home_price and draw_price and away_price:
+                raw   = [1.0 / home_price, 1.0 / draw_price, 1.0 / away_price]
+                total = sum(raw)
+                p_h, p_d, p_a = [p / total for p in raw]
+
+                if dc == '1X':
+                    p_dc = p_h + p_d
+                elif dc == 'X2':
+                    p_dc = p_d + p_a
+                else:  # 12
+                    p_dc = p_h + p_a
+
+                if p_dc > 0:
+                    dc_odds = round(1.0 / p_dc, 4)
+                    entry   = (dc_odds, bk_title, f"DC_{dc}(computed)")
+                    if is_sharp:
+                        sharp_hits.append(entry)
+                    elif fallback_hit is None:
+                        fallback_hit = entry
+
+        if sharp_hits:
+            avg = sum(h[0] for h in sharp_hits) / len(sharp_hits)
+            names = sorted(
+                {h[1] for h in sharp_hits},
+                key=lambda b: SHARP_PRIORITY.index(b.lower()) if b.lower() in SHARP_PRIORITY else 99
+            )
+            return (round(avg, 4), f"dc_computed({','.join(names)};n={len(sharp_hits)})", f"DC_{dc}")
+
+        if fallback_hit:
+            return fallback_hit
+
+        return None
+
     def _best_odds_for_selection(
         self, event: Dict, market: str, selection: str, home: str, away: str
     ) -> Optional[tuple]:
@@ -351,38 +468,68 @@ class CLVService:
         (Pinnacle, Bet365, Matchbook, Betfair) and return their average.
         Falls back to any available book if no sharp books match.
 
+        Special handling:
+        - Double Chance selections → computed from h2h legs via _compute_dc_odds
+        - Totals → uses outcome 'point' field for line matching (not name regex)
+
         Returns (avg_odds, source_label, matched_outcome_name)
         """
         bookmakers = event.get('bookmakers', [])
+
+        # ── Double Chance: compute from h2h legs, don't do direct outcome match ──
+        if _is_double_chance(market, selection):
+            return self._compute_dc_odds(bookmakers, selection, home, away)
+
         sel_lower = selection.lower()
         mkt_lower = market.lower()
+        is_totals = 'over' in sel_lower or 'under' in sel_lower
+        target_line = _extract_line(sel_lower) if is_totals else None
 
         sharp_hits: List[tuple] = []
         fallback_hit: Optional[tuple] = None
 
         for bk in bookmakers:
-            bk_key = bk.get('key', '').lower()
+            bk_key   = bk.get('key', '').lower()
             bk_title = bk.get('title', bk.get('key', 'unknown'))
             is_sharp = bk_key in SHARP_PRIORITY
 
             for mkt_obj in bk.get('markets', []):
                 for outcome in mkt_obj.get('outcomes', []):
-                    name = outcome.get('name', '').lower()
+                    name  = outcome.get('name', '').lower()
                     price = outcome.get('price')
                     if not price:
                         continue
-                    if self._sel_matches(sel_lower, name, home, away, mkt_lower):
-                        entry = (float(price), bk_title, outcome.get('name', name))
-                        if is_sharp:
-                            sharp_hits.append(entry)
-                        elif fallback_hit is None:
-                            fallback_hit = entry
+
+                    # For totals: match using the 'point' field, not the name
+                    if is_totals:
+                        point = outcome.get('point')
+                        if point is None:
+                            continue
+                        side_match = ('over' in sel_lower and 'over' in name) or \
+                                     ('under' in sel_lower and 'under' in name)
+                        if not side_match:
+                            continue
+                        if target_line is not None and abs(float(point) - target_line) > 0.01:
+                            continue
+                        # Totals match confirmed
+                    else:
+                        if not self._sel_matches(sel_lower, name, home, away, mkt_lower):
+                            continue
+
+                    entry = (float(price), bk_title, outcome.get('name', name))
+                    if is_sharp:
+                        sharp_hits.append(entry)
+                    elif fallback_hit is None:
+                        fallback_hit = entry
 
         if sharp_hits:
-            avg_odds = sum(h[0] for h in sharp_hits) / len(sharp_hits)
-            book_names = sorted({h[1] for h in sharp_hits}, key=lambda b: SHARP_PRIORITY.index(b.lower()) if b.lower() in SHARP_PRIORITY else 99)
+            avg_odds  = sum(h[0] for h in sharp_hits) / len(sharp_hits)
+            book_names = sorted(
+                {h[1] for h in sharp_hits},
+                key=lambda b: SHARP_PRIORITY.index(b.lower()) if b.lower() in SHARP_PRIORITY else 99
+            )
             source_label = f"sharp_avg({','.join(book_names)};n={len(sharp_hits)})"
-            matched_out = sharp_hits[0][2]
+            matched_out  = sharp_hits[0][2]
             return (round(avg_odds, 4), source_label, matched_out)
 
         if fallback_hit:
@@ -391,26 +538,36 @@ class CLVService:
         return None
 
     def _sel_matches(self, sel: str, outcome: str, home: str, away: str, market: str) -> bool:
+        """
+        Strict outcome matching for h2h (1X2) markets only.
+        Totals and Double Chance are handled separately — do NOT call this for them.
+        """
         h, a = home.lower(), away.lower()
+
+        # Exact match
         if sel == outcome:
             return True
-        if ('home' in sel or h in sel) and (h in outcome or outcome == h):
+
+        # Home win: sel must reference home side and outcome must be home team name
+        if ('home win' in sel or sel == h) and (outcome == h or h in outcome):
             return True
-        if ('away' in sel or a in sel) and (a in outcome or outcome == a):
+
+        # Away win: sel must reference away side and outcome must be away team name
+        if ('away win' in sel or sel == a) and (outcome == a or a in outcome):
             return True
-        if 'draw' in sel and 'draw' in outcome:
+
+        # Draw: only pure draw selections (not double chance)
+        if sel == 'draw' and outcome == 'draw':
             return True
-        for side in ('over', 'under'):
-            if side in sel and side in outcome:
-                sl = _extract_line(sel)
-                ol = _extract_line(outcome)
-                if sl is not None and ol is not None and abs(sl - ol) < 0.01:
-                    return True
-        if ('btts' in sel or 'both teams' in sel):
-            if 'yes' in sel and 'yes' in outcome:
-                return True
-            if 'no' in sel and 'no' in outcome:
-                return True
+
+        # Home team name directly in selection (e.g. sel = "manchester city")
+        if sel == h and (outcome == h or h in outcome):
+            return True
+
+        # Away team name directly in selection
+        if sel == a and (outcome == a or a in outcome):
+            return True
+
         return False
 
     # ── DB update ────────────────────────────────────────────────────────────
