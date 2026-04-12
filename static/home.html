@@ -271,11 +271,11 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
     <a class="logo-wrap" href="/">
       <div class="logo-badge">
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <polyline points="2,15 7,9 10,12 14,6 18,9" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-          <circle cx="7" cy="9" r="1.5" fill="white"/>
-          <circle cx="10" cy="12" r="1.5" fill="white"/>
-          <circle cx="14" cy="6" r="1.5" fill="white"/>
-          <circle cx="18" cy="9" r="2" fill="#4ade80"/>
+          <polyline points="2,15 7,9 10,12 14,6 18,9" stroke="white" stroke-opacity="0.9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <circle cx="7" cy="9" r="1.6" fill="white"/>
+          <circle cx="10" cy="12" r="1.6" fill="white"/>
+          <circle cx="14" cy="6" r="1.6" fill="white"/>
+          <circle cx="18" cy="9" r="2.2" fill="#4ade80"/>
         </svg>
       </div>
       <div>
@@ -290,6 +290,9 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
         <span id="hdr-count">—</span>
         <span style="color:#71717a;font-weight:500">edges live</span>
       </div>
+      <button id="bell-btn" onclick="togglePush()" title="Enable notifications" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:background .15s">
+        <svg id="bell-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-opacity="0.7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      </button>
       <div id="premium-status" class="btn-premium" onclick="openPremiumModal()">🔒 Unlock Premium</div>
       <button class="btn-install" id="install-chip" onclick="triggerInstall()" style="display:none">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
@@ -1117,6 +1120,90 @@ setInterval(()=>{
 checkPremiumCache();
 setupFilters();
 fetchMain();
+initPush();
+
+/* ──────────────────────────────────────────────
+   PUSH NOTIFICATIONS
+──────────────────────────────────────────────── */
+const VAPID_PUBLIC_KEY = "BEI3HKCgDsONES3BsYSjpTbnZmZe_EF_icvKLy1o_9SaS4QAdxJC34R97WCokxru-zmNkDy-QMeA2XDvJ_TPNDc";
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  return new Uint8Array([...rawData].map(c => c.charCodeAt(0)));
+}
+
+async function initPush() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  const reg = await navigator.serviceWorker.ready;
+  const sub = await reg.pushManager.getSubscription();
+  if (sub) updateBellActive(true);
+}
+
+async function togglePush() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    alert("Push notifications are not supported in this browser.");
+    return;
+  }
+  const reg = await navigator.serviceWorker.ready;
+  const existing = await reg.pushManager.getSubscription();
+  if (existing) {
+    await existing.unsubscribe();
+    await fetch('/api/push/unsubscribe?endpoint=' + encodeURIComponent(existing.endpoint), { method: 'DELETE' });
+    updateBellActive(false);
+    return;
+  }
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') { alert("Notifications blocked. Enable them in browser settings."); return; }
+  try {
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    });
+    const k = sub.getKey('p256dh');
+    const a = sub.getKey('auth');
+    await fetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        endpoint:  sub.endpoint,
+        p256dh:    k ? btoa(String.fromCharCode(...new Uint8Array(k))) : '',
+        auth:      a ? btoa(String.fromCharCode(...new Uint8Array(a))) : '',
+        userAgent: navigator.userAgent
+      })
+    });
+    updateBellActive(true);
+  } catch(e) { console.error('Push subscribe failed:', e); }
+}
+
+function updateBellActive(on) {
+  const btn  = document.getElementById('bell-btn');
+  const icon = document.getElementById('bell-icon');
+  if (!btn || !icon) return;
+  if (on) {
+    btn.style.background  = 'rgba(34,197,94,0.15)';
+    btn.style.borderColor = 'rgba(34,197,94,0.4)';
+    icon.style.stroke     = '#4ade80';
+    icon.style.strokeOpacity = '1';
+    btn.title = 'Notifications ON — tap to disable';
+  } else {
+    btn.style.background  = 'rgba(255,255,255,0.06)';
+    btn.style.borderColor = 'rgba(255,255,255,0.1)';
+    icon.style.stroke     = 'white';
+    icon.style.strokeOpacity = '0.7';
+    btn.title = 'Enable notifications';
+  }
+}
 </script>
+
+<!-- ── Footer ─────────────────────────────────────────────── -->
+<div style="text-align:center;padding:24px 16px 32px;margin-top:auto">
+  <p style="font-size:10px;color:#27272a;letter-spacing:.04em">
+    PGR Analytics · AI-powered edge detection ·
+    <a href="/admin-login" style="color:#27272a;text-decoration:none">⚙</a>
+  </p>
+</div>
+
 </body>
 </html>

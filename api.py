@@ -3982,6 +3982,69 @@ async def serve_icon(filename: str):
         return FileResponse(str(icon_path), media_type="image/png")
     return Response(status_code=404)
 
+# =============================================================================
+# WEB PUSH NOTIFICATION ENDPOINTS
+# =============================================================================
+
+@app.get("/api/push/vapid-key", include_in_schema=False)
+async def push_vapid_key():
+    """Return the VAPID public key for client-side subscription."""
+    key = os.environ.get("VAPID_PUBLIC_KEY", "")
+    return {"publicKey": key}
+
+
+class PushSubscribeBody(BaseModel):
+    endpoint: str
+    p256dh: str
+    auth: str
+    userAgent: Optional[str] = ""
+
+
+@app.post("/api/push/subscribe", include_in_schema=False)
+async def push_subscribe(body: PushSubscribeBody):
+    """Save a push subscription from the browser."""
+    try:
+        from push_service import PushService
+        svc = PushService()
+        ok = svc.save_subscription(body.endpoint, body.p256dh, body.auth, body.userAgent or "")
+        return {"ok": ok, "subscribers": svc.count()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/push/unsubscribe", include_in_schema=False)
+async def push_unsubscribe(endpoint: str):
+    """Remove a push subscription."""
+    try:
+        from push_service import PushService
+        PushService().delete_subscription(endpoint)
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class PushSendBody(BaseModel):
+    title: str
+    body: str
+    url: Optional[str] = "/"
+
+
+@app.post("/api/push/send", include_in_schema=False)
+async def push_send(payload: PushSendBody,
+                    x_admin_key: Optional[str] = Header(None)):
+    """Admin-only: broadcast a push notification to all subscribers."""
+    admin_pw  = os.environ.get("ADMIN_PASSWORD", "")
+    admin_key = os.environ.get("ADMIN_API_KEY", "")
+    if not x_admin_key or (x_admin_key != admin_pw and x_admin_key != admin_key):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    try:
+        from push_service import PushService
+        result = PushService().send_to_all(payload.title, payload.body, payload.url)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":

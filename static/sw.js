@@ -78,6 +78,41 @@ self.addEventListener("fetch", (event) => {
   );
 });
 
+/* ── Push Notifications ─────────────────────────────────────── */
+self.addEventListener("push", (event) => {
+  let data = { title: "PGR Analytics", body: "New edge detected!", url: "/" };
+  try { data = event.data.json(); } catch (_) {}
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body:     data.body,
+      icon:     "/static/icons/icon-192.png",
+      badge:    "/static/icons/icon-192.png",
+      data:     { url: data.url },
+      vibrate:  [100, 50, 100],
+      tag:      "pgr-pick",
+      renotify: true,
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = event.notification.data?.url || "/";
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((ws) => {
+      for (const w of ws) {
+        if (w.url.includes(self.location.origin)) {
+          w.focus();
+          w.navigate(target);
+          return;
+        }
+      }
+      return clients.openWindow(target);
+    })
+  );
+});
+
 async function networkFirstWithFallback(request) {
   const cache = await caches.open(STATIC_CACHE);
   try {
