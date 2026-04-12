@@ -2323,17 +2323,19 @@ async def send_discord_stats_endpoint():
 @app.get("/api/picks/today")
 async def get_today_picks():
     """
-    Get today's PROD picks (all markets) for the user-facing dashboard.
-    Returns upcoming, live, and settled picks for today's matches.
+    Get picks (PROD + VALUE_OPP) for the next 48h — today + tomorrow.
+    Returns upcoming, live, and settled picks. PROD is preferred over VALUE_OPP
+    when both exist for the same match/market (DISTINCT ON ordering).
     """
     try:
-        from datetime import date, timezone
+        from datetime import date, timezone, timedelta
         import time
 
         now_utc = datetime.utcnow()
         day_start = datetime(now_utc.year, now_utc.month, now_utc.day, 0, 0, 0)
 
         today_str = day_start.strftime('%Y-%m-%d')
+        tomorrow_str = (day_start + timedelta(days=2)).strftime('%Y-%m-%d')  # 48h window
         now_epoch = int(now_utc.timestamp())
         cutoff_epoch = now_epoch - 14400  # 4 hours after kickoff → move to history
 
@@ -2348,9 +2350,10 @@ async def get_today_picks():
                     model_prob, disagreement, clv_status, hidden_value_status,
                     timestamp, kickoff_epoch
                 FROM football_opportunities
-                WHERE mode = 'PROD'
+                WHERE mode IN ('PROD', 'VALUE_OPP')
                   AND (outcome IS NULL OR outcome = '' OR outcome IN ('pending', 'unknown'))
                   AND match_date >= %s
+                  AND match_date < %s
                   AND (
                       (kickoff_epoch IS NOT NULL AND kickoff_epoch > %s)
                       OR (kickoff_epoch IS NULL AND (
@@ -2360,10 +2363,12 @@ async def get_today_picks():
                           OR (match_date::date + kickoff_time::time) > NOW() - INTERVAL '4 hours'
                       ))
                   )
-                ORDER BY home_team, away_team, market, id DESC
+                ORDER BY home_team, away_team, market,
+                         (CASE WHEN mode='PROD' THEN 0 ELSE 1 END),
+                         id DESC
             ) sub
-            ORDER BY id DESC
-        """, (today_str, cutoff_epoch), fetch='all') or []
+            ORDER BY kickoff_epoch ASC NULLS LAST, id DESC
+        """, (today_str, tomorrow_str, cutoff_epoch), fetch='all') or []
 
         picks = []
         for r in rows:

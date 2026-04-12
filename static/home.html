@@ -108,7 +108,9 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
 .cell-match{}
 .match-teams{font-size:13px;font-weight:600;color:#f4f4f5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .match-meta{font-size:10px;color:#52525b;margin-top:2px}
-.cell-time{font-size:11px;font-weight:600;color:#a1a1aa;text-align:center}
+.cell-time{font-size:11px;font-weight:600;color:#a1a1aa;text-align:center;line-height:1.3}
+.tmrw-badge{display:block;font-size:9px;font-weight:700;color:#f59e0b;letter-spacing:.05em;margin-top:1px}
+.date-divider{grid-column:1/-1;padding:6px 14px 4px;font-size:10px;font-weight:700;color:#52525b;text-transform:uppercase;letter-spacing:.08em;border-top:1px solid #27272a;background:#0a0a0b}
 .cell-league{font-size:11px;color:#71717a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cell-market .market-tag{display:inline-flex;padding:2px 8px;border-radius:99px;background:#18181b;border:1px solid #27272a;font-size:10px;font-weight:600;color:#a1a1aa;white-space:nowrap}
 .cell-selection .sel-text{font-size:12px;font-weight:600;color:#e4e4e7}
@@ -516,6 +518,7 @@ function normPick(b){
     clv_pct: b.clv_pct!=null?b.clv_pct:null,
     status: b.status||"PRE",
     age_minutes: b.age_minutes!=null?b.age_minutes:null,
+    match_date: b.match_date||"",
   };
 }
 function evClass(ev){
@@ -632,9 +635,30 @@ function renderScanner(){
     return;
   }
 
+  // Determine today/tomorrow date strings for divider logic
+  const _now = new Date();
+  const _todayStr = _now.toISOString().slice(0,10);
+  const _tmrwDate = new Date(_now); _tmrwDate.setDate(_tmrwDate.getDate()+1);
+  const _tmrwStr = _tmrwDate.toISOString().slice(0,10);
+
   let html = "";
+  let _shownToday = false, _shownTmrw = false;
 
   picks.forEach((p,i)=>{
+    // Determine which day this pick belongs to
+    const _pDate = (p.match_date||"").slice(0,10);
+    const _isTmrw = _pDate >= _tmrwStr;
+
+    // Insert date dividers
+    if(!_isTmrw && !_shownToday){
+      _shownToday = true;
+      html+=`<div class="scanner-row" style="display:block"><div class="date-divider">📅 Today</div></div>`;
+    }
+    if(_isTmrw && !_shownTmrw){
+      _shownTmrw = true;
+      html+=`<div class="scanner-row" style="display:block"><div class="date-divider">📅 Tomorrow — ${_tmrwDate.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})}</div></div>`;
+    }
+
     // Free users: ALWAYS locked — they see match + market + edge, never selection/odds
     const isLocked = !state.isPremium;
     const isExpanded = state.expandedId === p.id;
@@ -649,7 +673,7 @@ function renderScanner(){
         <div class="match-teams">${esc(p.match)}${isNew?'<span class="new-chip">NEW</span>':''}</div>
         <div class="match-meta">${esc(p.league.replace(/^soccer_/,"").replace(/_/g," "))}</div>
       </div>
-      <div class="cell-time">${fmtKo(p.kickoff_time)}</div>
+      <div class="cell-time">${fmtKo(p.kickoff_time)}${_isTmrw?'<span class="tmrw-badge">TMRW</span>':''}</div>
       <div class="cell-league col-league" style="font-size:11px;color:#71717a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(leagueShort)}</div>
       <div class="cell-market"><span class="market-tag">${esc(marketLabel)}</span></div>
       ${isLocked
