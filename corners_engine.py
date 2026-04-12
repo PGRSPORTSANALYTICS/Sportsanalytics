@@ -55,7 +55,7 @@ from bet_filter import BetCandidate
 from multimarket_config import PRODUCT_CONFIGS, get_market_label, MarketType
 
 CORNERS_GLOBAL_DAILY_CAP = 10
-CORNERS_MAX_PICKS_PER_MATCH = 3
+CORNERS_MAX_PICKS_PER_MATCH = 1  # Max 1 corners pick per match — correlated lines skew results
 
 try:
     from live_learning_config import apply_ev_controls, is_stability_mode_active

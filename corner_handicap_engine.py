@@ -221,25 +221,41 @@ def run_corner_handicap_cycle(fixtures: List[Dict], odds_data: Dict) -> List[Cor
     """Run corner handicap engine cycle for all fixtures."""
     engine = CornerHandicapEngine()
     all_candidates = []
-    
+
     for fixture in fixtures:
         fixture_id = fixture.get("fixture_id")
         odds_snapshot = odds_data.get(fixture_id, {})
-        
+
         if not odds_snapshot:
             continue
-        
+
         candidates = engine.generate_market_predictions(fixture, odds_snapshot)
         all_candidates.extend(candidates)
-    
+
     config = PRODUCT_CONFIGS.get("CORNERS_HANDICAP")
     max_per_day = getattr(config, 'max_per_day', 6)
-    
+
+    # Sort by EV descending so best pick per match wins
     all_candidates.sort(key=lambda x: x.ev, reverse=True)
-    selected = all_candidates[:max_per_day]
-    
-    logger.info(f"🔷 CORNER HANDICAP ENGINE: {len(selected)}/{len(all_candidates)} candidates selected")
-    
+
+    # Per-match cap: max 1 corner handicap pick per match (correlated lines)
+    seen_matches: set = set()
+    deduped: List[CornerHCCandidate] = []
+    for c in all_candidates:
+        match_key = f"{c.home_team}|{c.away_team}"
+        if match_key in seen_matches:
+            logger.debug(f"⏭️ HC dedup skip: {match_key} already has a pick ({c.selection})")
+            continue
+        seen_matches.add(match_key)
+        deduped.append(c)
+
+    selected = deduped[:max_per_day]
+
+    logger.info(
+        f"🔷 CORNER HANDICAP ENGINE: {len(selected)}/{len(all_candidates)} candidates selected "
+        f"(1/match cap applied, {len(all_candidates)-len(deduped)} correlated lines dropped)"
+    )
+
     return selected
 
 
