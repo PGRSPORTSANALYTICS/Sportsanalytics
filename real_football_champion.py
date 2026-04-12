@@ -4317,7 +4317,7 @@ def get_pending_match_ids() -> set:
 
 
 DAILY_BET_CAP = 20           # Mar 19, 2026: scaled up for volume growth
-SUMMER_DAILY_BET_CAP = 3
+SUMMER_DAILY_BET_CAP = 6  # Raised from 3 — La Liga/Championship/Serie A blocked, reallocated to summer (Apr 2026)
 # Per-match-date caps: max PROD picks for any single match day (regardless of when created)
 MATCH_DATE_CAP_VALUE_SINGLES = 10  # Mar 22, 2026: lowered from 20 — max 10 PROD picks/day quality gate
 MATCH_DATE_CAP_CORNERS = 25   # Mar 19, 2026: scaled up, 62% hit rate proven
