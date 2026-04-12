@@ -570,12 +570,13 @@ else:
 # ─────────────────────────────────────────────────────────────────────────────
 # TABS
 # ─────────────────────────────────────────────────────────────────────────────
-tab_today, tab_smart, tab_scanner, tab_track, tab_clv = st.tabs([
+tab_today, tab_smart, tab_scanner, tab_track, tab_clv, tab_bt = st.tabs([
     "⚡ Today's Picks",
     "🧠 Smart Picks",
     "🔍 Market Scanner",
     "📈 Track Record",
     "🎯 Proof of Edge",
+    "🔬 Backtest",
 ])
 
 
@@ -1083,6 +1084,295 @@ with tab_clv:
         if not is_premium:
             st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)
             _cta_banner()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TAB 6 — BACKTEST
+# ─────────────────────────────────────────────────────────────────────────────
+with tab_bt:
+    st.markdown("### 🔬 Backtest — Settled Picks Only")
+    st.caption("Pure historical analysis. 1u flat staking on every pick. Only outcome=won/lost, mode=PROD or VALUE_OPP. No live picks mixed in.")
+
+    @st.cache_data(ttl=300)
+    def load_backtest_data():
+        db = DatabaseHelper()
+        rows = db.execute("""
+            SELECT
+                market, league, odds, outcome,
+                CASE
+                    WHEN odds BETWEEN 1.50 AND 1.69 THEN '1.50–1.69'
+                    WHEN odds BETWEEN 1.70 AND 1.89 THEN '1.70–1.89'
+                    WHEN odds BETWEEN 1.90 AND 2.09 THEN '1.90–2.09'
+                    WHEN odds BETWEEN 2.10 AND 2.49 THEN '2.10–2.49'
+                    WHEN odds >= 2.50              THEN '2.50+'
+                    ELSE '<1.50'
+                END as odds_range,
+                match_date, mode
+            FROM football_opportunities
+            WHERE outcome IN ('won','lost')
+              AND mode IN ('PROD','VALUE_OPP')
+              AND odds > 1.0
+              AND market != 'exact_score'
+        """, fetch='all') or []
+        cols = ["market","league","odds","outcome","odds_range","match_date","mode"]
+        df = pd.DataFrame(rows, columns=cols)
+        df["odds"] = pd.to_numeric(df["odds"], errors="coerce")
+        df["profit"] = df.apply(lambda r: (r["odds"] - 1) if r["outcome"] == "won" else -1.0, axis=1)
+        df["win"] = (df["outcome"] == "won").astype(int)
+        return df
+
+    bt = load_backtest_data()
+
+    if bt.empty:
+        st.info("No settled picks found yet.")
+    else:
+        # ── Metric helpers ─────────────────────────────────────────────────────
+        def bt_stats(df):
+            n = len(df)
+            if n == 0:
+                return {"N": 0, "W": 0, "L": 0, "HR%": 0.0, "Profit": 0.0, "ROI%": 0.0, "AvgOdds": 0.0}
+            w = df["win"].sum()
+            profit = df["profit"].sum()
+            return {
+                "N": n,
+                "W": int(w),
+                "L": int(n - w),
+                "HR%": round(100 * w / n, 1),
+                "Profit": round(profit, 2),
+                "ROI%": round(100 * profit / n, 2),
+                "AvgOdds": round(df["odds"].mean(), 2),
+            }
+
+        # ── 1. BASELINE ────────────────────────────────────────────────────────
+        st.markdown("---")
+        st.markdown("#### 1️⃣ Baseline — All Picks, 1u Flat")
+        b = bt_stats(bt)
+        c1, c2, c3, c4, c5, c6 = st.columns(6)
+        c1.metric("Total Picks", f"{b['N']:,}")
+        c2.metric("Wins", f"{b['W']:,}")
+        c3.metric("Losses", f"{b['L']:,}")
+        c4.metric("Hit Rate", f"{b['HR%']}%")
+        c5.metric("Profit (units)", f"{b['Profit']:+.1f}u",
+                  delta=f"ROI {b['ROI%']:+.1f}%")
+        c6.metric("Avg Odds", f"{b['AvgOdds']:.2f}")
+
+        # ── 2. BY MARKET ───────────────────────────────────────────────────────
+        st.markdown("---")
+        st.markdown("#### 2️⃣ Segmenterat per Marknad")
+        mkt_rows = []
+        for mkt, grp in bt.groupby("market"):
+            s = bt_stats(grp)
+            mkt_rows.append({"Market": mkt, **s})
+        mdf = pd.DataFrame(mkt_rows).sort_values("Profit", ascending=False)
+
+        col_l, col_r = st.columns([1.2, 1.8])
+        with col_l:
+            def _color_profit(v):
+                color = "#00F59D" if v > 0 else "#FF4B6B" if v < 0 else "#9BA0B5"
+                return f"color:{color};font-weight:700"
+            def _color_roi(v):
+                c = "#00F59D" if v > 0 else "#FF4B6B" if v < 0 else "#9BA0B5"
+                return f"color:{c}"
+            styled = mdf[["Market","N","W","L","HR%","Profit","ROI%","AvgOdds"]].style\
+                .applymap(_color_profit, subset=["Profit"])\
+                .applymap(_color_roi, subset=["ROI%"])\
+                .format({"HR%":"{:.1f}%","Profit":"{:+.1f}u","ROI%":"{:+.1f}%","AvgOdds":"{:.2f}"})
+            st.dataframe(styled, use_container_width=True, hide_index=True)
+        with col_r:
+            fig_mkt = go.Figure()
+            colors_mkt = ["#00F59D" if v > 0 else "#FF4B6B" for v in mdf["Profit"]]
+            fig_mkt.add_trace(go.Bar(
+                x=mdf["Market"], y=mdf["Profit"],
+                marker_color=colors_mkt,
+                text=[f"{v:+.1f}u" for v in mdf["Profit"]],
+                textposition="outside",
+            ))
+            fig_mkt.update_layout(
+                plot_bgcolor="#0D1117", paper_bgcolor="#0D1117",
+                font=dict(color="#9BA0B5", size=12),
+                yaxis=dict(gridcolor="#1C2030", zeroline=True, zerolinecolor="#334155"),
+                xaxis=dict(gridcolor="#1C2030"),
+                margin=dict(t=20, b=10, l=10, r=10),
+                height=300,
+            )
+            st.plotly_chart(fig_mkt, use_container_width=True)
+
+        # ── 3. BY ODDS RANGE ───────────────────────────────────────────────────
+        st.markdown("---")
+        st.markdown("#### 3️⃣ Segmenterat per Oddsintervall")
+        ODDS_ORDER = ["<1.50","1.50–1.69","1.70–1.89","1.90–2.09","2.10–2.49","2.50+"]
+        odds_rows = []
+        for rng in ODDS_ORDER:
+            grp = bt[bt["odds_range"] == rng]
+            if grp.empty:
+                continue
+            s = bt_stats(grp)
+            odds_rows.append({"Odds Range": rng, **s})
+        odf = pd.DataFrame(odds_rows)
+
+        col_l2, col_r2 = st.columns([1.2, 1.8])
+        with col_l2:
+            styled_o = odf[["Odds Range","N","W","L","HR%","Profit","ROI%","AvgOdds"]].style\
+                .applymap(_color_profit, subset=["Profit"])\
+                .applymap(_color_roi, subset=["ROI%"])\
+                .format({"HR%":"{:.1f}%","Profit":"{:+.1f}u","ROI%":"{:+.1f}%","AvgOdds":"{:.2f}"})
+            st.dataframe(styled_o, use_container_width=True, hide_index=True)
+        with col_r2:
+            bar_colors_o = ["#00F59D" if v > 0 else "#FF4B6B" for v in odf["Profit"]]
+            fig_odds = go.Figure()
+            fig_odds.add_trace(go.Bar(
+                x=odf["Odds Range"], y=odf["Profit"],
+                marker_color=bar_colors_o,
+                text=[f"{v:+.1f}u" for v in odf["Profit"]],
+                textposition="outside",
+            ))
+            fig_odds.add_trace(go.Scatter(
+                x=odf["Odds Range"], y=odf["HR%"],
+                mode="lines+markers+text",
+                name="Hit Rate %",
+                yaxis="y2",
+                line=dict(color="#FBBF24", width=2),
+                marker=dict(size=6),
+                text=[f"{v:.0f}%" for v in odf["HR%"]],
+                textposition="top center",
+                textfont=dict(color="#FBBF24", size=10),
+            ))
+            fig_odds.update_layout(
+                plot_bgcolor="#0D1117", paper_bgcolor="#0D1117",
+                font=dict(color="#9BA0B5", size=12),
+                yaxis=dict(gridcolor="#1C2030", zeroline=True, zerolinecolor="#334155", title="Profit (units)"),
+                yaxis2=dict(overlaying="y", side="right", title="Hit Rate %",
+                            showgrid=False, range=[0, 100]),
+                xaxis=dict(gridcolor="#1C2030"),
+                margin=dict(t=20, b=10, l=10, r=40),
+                height=310,
+                legend=dict(x=0.01, y=0.99, bgcolor="rgba(0,0,0,0)"),
+            )
+            st.plotly_chart(fig_odds, use_container_width=True)
+
+        # ── 4. BY LEAGUE ───────────────────────────────────────────────────────
+        st.markdown("---")
+        st.markdown("#### 4️⃣ Segmenterat per Liga (min 10 picks)")
+        lgt_rows = []
+        for lge, grp in bt.groupby("league"):
+            s = bt_stats(grp)
+            if s["N"] < 10:
+                continue
+            lgt_rows.append({"League": lge, **s})
+        ldf = pd.DataFrame(lgt_rows).sort_values("Profit", ascending=False)
+
+        top_n = st.slider("Visa antal ligor", min_value=10, max_value=len(ldf), value=min(25, len(ldf)))
+        ldf_show = ldf.head(top_n)
+
+        styled_l = ldf_show[["League","N","W","L","HR%","Profit","ROI%","AvgOdds"]].style\
+            .applymap(_color_profit, subset=["Profit"])\
+            .applymap(_color_roi, subset=["ROI%"])\
+            .format({"HR%":"{:.1f}%","Profit":"{:+.1f}u","ROI%":"{:+.1f}%","AvgOdds":"{:.2f}"})
+        st.dataframe(styled_l, use_container_width=True, hide_index=True)
+
+        col_bt1, col_bt2 = st.columns(2)
+        with col_bt1:
+            top5 = ldf.head(5)
+            fig_top = go.Figure(go.Bar(
+                x=top5["Profit"], y=top5["League"],
+                orientation="h",
+                marker_color="#00F59D",
+                text=[f"{v:+.1f}u" for v in top5["Profit"]],
+                textposition="outside",
+            ))
+            fig_top.update_layout(
+                title="Top 5 ligor (profit)", title_font=dict(color="#9BA0B5", size=13),
+                plot_bgcolor="#0D1117", paper_bgcolor="#0D1117",
+                font=dict(color="#9BA0B5", size=11),
+                yaxis=dict(autorange="reversed"),
+                xaxis=dict(gridcolor="#1C2030"),
+                margin=dict(t=40, b=10, l=10, r=60), height=230,
+            )
+            st.plotly_chart(fig_top, use_container_width=True)
+        with col_bt2:
+            bot5 = ldf.tail(5).sort_values("Profit")
+            fig_bot = go.Figure(go.Bar(
+                x=bot5["Profit"], y=bot5["League"],
+                orientation="h",
+                marker_color="#FF4B6B",
+                text=[f"{v:+.1f}u" for v in bot5["Profit"]],
+                textposition="outside",
+            ))
+            fig_bot.update_layout(
+                title="Botten 5 ligor (förlust)", title_font=dict(color="#9BA0B5", size=13),
+                plot_bgcolor="#0D1117", paper_bgcolor="#0D1117",
+                font=dict(color="#9BA0B5", size=11),
+                yaxis=dict(autorange="reversed"),
+                xaxis=dict(gridcolor="#1C2030"),
+                margin=dict(t=40, b=10, l=10, r=60), height=230,
+            )
+            st.plotly_chart(fig_bot, use_container_width=True)
+
+        # ── 5. INSIGHTS ────────────────────────────────────────────────────────
+        st.markdown("---")
+        st.markdown("#### 5️⃣ Insikter & Förbättringsförslag")
+
+        # Best/worst odds range
+        best_range = odf.loc[odf["Profit"].idxmax(), "Odds Range"] if not odf.empty else "—"
+        worst_range = odf.loc[odf["Profit"].idxmin(), "Odds Range"] if not odf.empty else "—"
+        best_range_roi = odf.loc[odf["Profit"].idxmax(), "ROI%"] if not odf.empty else 0
+        worst_range_roi = odf.loc[odf["Profit"].idxmin(), "ROI%"] if not odf.empty else 0
+
+        # Best/worst markets
+        best_mkt = mdf.iloc[0]["Market"] if not mdf.empty else "—"
+        worst_mkt = mdf.iloc[-1]["Market"] if not mdf.empty else "—"
+
+        # Positive leagues count
+        pos_leagues = (ldf["Profit"] > 0).sum()
+        neg_leagues = (ldf["Profit"] <= 0).sum()
+
+        # Value Single odds breakdown
+        vs = bt[bt["market"] == "Value Single"]
+        vs_by_range = []
+        for rng in ODDS_ORDER:
+            g = vs[vs["odds_range"] == rng]
+            if len(g) >= 5:
+                s = bt_stats(g)
+                vs_by_range.append(f"**{rng}**: {s['N']} picks, {s['HR%']}% HR, {s['Profit']:+.1f}u ({s['ROI%']:+.1f}% ROI)")
+
+        st.markdown(f"""
+<div style="background:#0D1117;border:1px solid #1C2030;border-radius:12px;padding:20px 24px;line-height:2">
+
+**🎯 Sweetspot oddszon: {best_range}** (ROI {best_range_roi:+.1f}%) — fokusera mer volym här.
+
+**⚠️ Giftzon: {worst_range}** (ROI {worst_range_roi:+.1f}%) — undvik eller minska volymen drastiskt i detta intervall.
+
+**✅ Bästa marknaden: {best_mkt}** — klart mest lönsam. Öka caps om möjligt.
+
+**❌ Sämsta marknaden: {worst_mkt}** — negativ EV historiskt. Utvärdera om den ska köras i LEARNING.
+
+**🌍 Ligor:** {pos_leagues} av {pos_leagues + neg_leagues} ligor är lönsamma historiskt. Ligorna i botten bör antingen rensas ur systemet eller flaggas för manuell granskning.
+
+{"**📊 Value Singles per oddszon:**<br>" + "<br>".join(vs_by_range) if vs_by_range else ""}
+
+</div>
+""", unsafe_allow_html=True)
+
+        st.markdown("<br>**Rekommenderade åtgärder:**", unsafe_allow_html=True)
+        actions = []
+        # Poison zone action
+        pz = odf[odf["Odds Range"] == worst_range]
+        if not pz.empty and pz.iloc[0]["ROI%"] < -2:
+            actions.append(f"🚫 **Blockera oddszon {worst_range}** i value_singles_engine — negativt historisk ROI ({pz.iloc[0]['ROI%']:+.1f}%)")
+        # Negative leagues
+        neg_lge_list = ldf[ldf["Profit"] < -5]["League"].tolist()
+        if neg_lge_list:
+            actions.append(f"📉 **Nedgradera dessa ligor till LEARNING:** {', '.join(neg_lge_list[:5])}")
+        # Markets
+        neg_mkt_list = mdf[mdf["Profit"] < -10]["Market"].tolist()
+        if neg_mkt_list:
+            actions.append(f"🔄 **Flytta till LEARNING:** {', '.join(neg_mkt_list)}")
+        # Best leagues
+        top_lge_list = ldf.head(5)["League"].tolist()
+        actions.append(f"📈 **Öka caps för toppligorna:** {', '.join(top_lge_list[:3])}")
+
+        for a in actions:
+            st.markdown(f"- {a}")
 
 
 # ── footer ────────────────────────────────────────────────────────────────────
