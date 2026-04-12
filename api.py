@@ -3669,6 +3669,20 @@ async def verify_ev(model_prob: float, odds: float, fair_odds: float = 0.0):
         return {"error": str(e)}
 
 
+@app.post("/api/verify-code", include_in_schema=False)
+async def verify_member_code(request: Request):
+    import os
+    try:
+        body = await request.json()
+        code = str(body.get("code", "")).strip()
+    except Exception:
+        return JSONResponse({"valid": False, "error": "bad_request"}, status_code=400)
+    valid_code = (os.getenv("PREMIUM_CODE") or os.getenv("ADMIN_PASSWORD") or "").strip()
+    if not valid_code:
+        return JSONResponse({"valid": False, "error": "not_configured"})
+    return JSONResponse({"valid": code == valid_code})
+
+
 # Auth pages (public — no premium required)
 # =============================================================================
 
@@ -3688,18 +3702,13 @@ async def upgrade_page():
 @app.get("/", include_in_schema=False)
 async def root_redirect(request: Request):
     """
-    Redirect based on authentication state:
-    - Admin session      → /home
-    - Premium Discord    → /home
-    - Logged in, no sub  → /upgrade
-    - Not logged in      → /login
+    Serve the public value scanner (home.html) for everyone.
+    Premium gate is handled client-side via /api/verify-code.
+    Admin sessions are redirected to the internal dashboard.
     """
     if is_admin_session(request):
         return RedirectResponse("/home", status_code=302)
-    discord_id = get_discord_id(request)
-    if discord_id:
-        return RedirectResponse("/home" if is_premium(discord_id) else "/upgrade", status_code=302)
-    return RedirectResponse("/login", status_code=302)
+    return HTMLResponse(content=(STATIC_DIR / "home.html").read_text())
 
 
 # =============================================================================
