@@ -2264,11 +2264,11 @@ def render_product_tab(
 
 
 def render_signal_routing_tab():
-    """Render the Signal Routing tab showing PRO PICK / VALUE OPP / WATCHLIST signals."""
+    """Render the Signal Routing tab — shows PRO PICK only. VALUE_OPP/WATCHLIST are admin-only."""
     st.markdown("## Signal Routing Intelligence")
     st.caption(
-        "Three-tier signal classification: PRO PICK (official ROI), "
-        "VALUE OPPORTUNITY (analysis signals), WATCHLIST (internal DB only)."
+        "PRO PICK signals — official bets that count toward public ROI. "
+        "VALUE_OPP and WATCHLIST are logged internally (admin access only)."
     )
 
     today_str = datetime.now().strftime("%Y-%m-%d")
@@ -2287,6 +2287,7 @@ def render_signal_routing_tab():
                            pgr_score, league_tier, routing_reason
                     FROM football_opportunities
                     WHERE match_date::date >= CURRENT_DATE - INTERVAL '3 days'
+                      AND mode = 'PROD'
                     ORDER BY match_date DESC, COALESCE(pgr_score, edge_percentage) DESC
                 """))
             except Exception:
@@ -2297,6 +2298,7 @@ def render_signal_routing_tab():
                            NULL::float AS pgr_score, NULL::text AS league_tier, NULL::text AS routing_reason
                     FROM football_opportunities
                     WHERE match_date::date >= CURRENT_DATE - INTERVAL '3 days'
+                      AND mode = 'PROD'
                     ORDER BY match_date DESC, edge_percentage DESC
                 """))
             rows = result.fetchall()
@@ -2308,63 +2310,26 @@ def render_signal_routing_tab():
         signal_df = pd.DataFrame()
 
     if signal_df.empty:
-        st.info("No signal routing data found for the last 3 days.")
+        st.info("No PRO PICK signals found for the last 3 days.")
         return
 
-    # Official P&L stats — only PROD + bet_placed = true
-    prod_placed = signal_df[(signal_df["mode"] == "PROD") & (signal_df["bet_placed"] == True)]
-
-    # Filter to today only for the KPI counts — normalize match_date to date string
-    # to handle both "YYYY-MM-DD" and timestamp variants from the DB.
     if "match_date" in signal_df.columns:
         _md_norm = pd.to_datetime(signal_df["match_date"], errors="coerce").dt.strftime("%Y-%m-%d")
         today_df = signal_df[_md_norm == today_str]
     else:
         today_df = signal_df
-    prod_placed_today = today_df[(today_df["mode"] == "PROD") & (today_df["bet_placed"] == True)]
+    prod_placed_today = today_df[today_df["bet_placed"] == True]
 
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2 = st.columns(2)
     with col1:
-        st.metric("PRO PICK Today", int((today_df["mode"] == "PROD").sum()))
+        st.metric("PRO PICK Today", len(today_df))
     with col2:
-        st.metric("VALUE OPP Today", int((today_df["mode"] == "VALUE_OPP").sum()))
-    with col3:
-        st.metric("WATCHLIST Today", int((today_df["mode"] == "WATCHLIST").sum()))
-    with col4:
         st.metric("Official Bets Placed Today", len(prod_placed_today))
 
     st.markdown("---")
-
-    # ── PRO PICK section ─────────────────────────────────────────────────────
-    pro_picks = signal_df[signal_df["mode"] == "PROD"].copy()
     st.markdown("### PRO PICK")
     st.caption("EV≥25%, Confidence≥70%, Odds 1.75–2.30, Tier A/B — counts toward official ROI")
-    if pro_picks.empty:
-        st.info("No PRO PICK signals found.")
-    else:
-        _display_routing_table(pro_picks, tier="PRO_PICK")
-
-    st.markdown("---")
-
-    # ── VALUE OPPORTUNITY section ─────────────────────────────────────────────
-    value_opp = signal_df[signal_df["mode"] == "VALUE_OPP"].copy()
-    st.markdown("### VALUE OPPORTUNITY")
-    st.caption("EV≥12%, Confidence≥60%, Odds 1.60–4.00 — shown in dashboard & Discord as analysis signals")
-    if value_opp.empty:
-        st.info("No VALUE OPPORTUNITY signals found.")
-    else:
-        _display_routing_table(value_opp, tier="VALUE_OPP")
-
-    st.markdown("---")
-
-    # ── WATCHLIST section ─────────────────────────────────────────────────────
-    watchlist = signal_df[signal_df["mode"] == "WATCHLIST"].copy()
-    st.markdown("### WATCHLIST (Internal Only)")
-    st.caption("EV 7–12%, Confidence≥50% — DB-only, never published publicly")
-    if watchlist.empty:
-        st.info("No WATCHLIST signals found.")
-    else:
-        _display_routing_table(watchlist, tier="WATCHLIST")
+    _display_routing_table(signal_df, tier="PRO_PICK")
 
 
 def _display_routing_table(df: pd.DataFrame, tier: str):
@@ -3961,7 +3926,7 @@ def main():
     prod_bets, backtest_bets = split_bets_by_mode(all_bets)
 
     # Tabs for different products
-    smart_tab, free_tab, daily_card_tab, overview_tab, singles_tab, signal_routing_tab, odds_compare_tab, props_tab, kelly_tab, backtest_tab, clv_tab, system_tab = st.tabs(
+    smart_tab, free_tab, daily_card_tab, overview_tab, singles_tab, signal_routing_tab, odds_compare_tab, props_tab, kelly_tab, backtest_tab, clv_tab, system_tab, admin_tab = st.tabs(
         [
             "Smart Picks",
             "Free Picks",
@@ -3975,6 +3940,7 @@ def main():
             "Backtests",
             "CLV Analytics",
             "System Status",
+            "Admin",
         ]
     )
 
@@ -4015,6 +3981,9 @@ def main():
     with system_tab:
         render_system_status_tab()
 
+    with admin_tab:
+        render_admin_tab()
+
 
 @st.cache_data(ttl=180, show_spinner=False)
 def _load_pipeline_stats():
@@ -4039,12 +4008,11 @@ def _load_pipeline_stats():
 
 
 def render_three_layer_tab():
-    """Three-layer signal view: PRO PICK / VALUE OPPORTUNITY / WATCHLIST."""
-    st.markdown("## Signal Routing — Three-Layer View")
+    """Three-layer signal view: PRO PICK only (VALUE_OPP/WATCHLIST are admin-only)."""
+    st.markdown("## Signal Routing — PRO PICK View")
     st.caption(
-        "PRO PICK = official bets (count toward public ROI) · "
-        "VALUE OPPORTUNITY = analysis signals (not official bets) · "
-        "WATCHLIST = internal learning only"
+        "PRO PICK = official bets (count toward public ROI). "
+        "VALUE_OPP and WATCHLIST are logged internally — visible in Admin section only."
     )
 
     try:
@@ -4056,7 +4024,7 @@ def render_three_layer_tab():
                        model_prob, calibrated_prob, status, bet_placed
                 FROM football_opportunities
                 WHERE match_date::date >= CURRENT_DATE - 1
-                  AND mode IN ('PROD', 'VALUE_OPP', 'WATCHLIST')
+                  AND mode = 'PROD'
                 ORDER BY match_date ASC, pgr_score DESC NULLS LAST
             """), conn)
     except Exception as e:
@@ -4064,14 +4032,12 @@ def render_three_layer_tab():
         return
 
     if df.empty:
-        st.info("No signals in the last 48 hours.")
+        st.info("No PRO PICK signals in the last 48 hours.")
         return
 
     pro = df[df["mode"] == "PROD"]
-    val = df[df["mode"] == "VALUE_OPP"]
-    watch = df[df["mode"] == "WATCHLIST"]
 
-    def _render_layer(layer_df, label, color):
+    def _render_layer(layer_df, label):
         st.markdown(f"### {label}  `{len(layer_df)}`")
         if layer_df.empty:
             st.caption("No signals in this layer right now.")
@@ -4091,7 +4057,6 @@ def render_three_layer_tab():
             display["Pgr Score"] = display["Pgr Score"].map(lambda x: f"{x:.3f}" if x else "")
         st.dataframe(display, use_container_width=True)
 
-    # Official ROI stats (only PROD + bet_placed=True)
     if not pro.empty:
         won = pro[pro["status"] == "won"]
         lost = pro[pro["status"] == "lost"]
@@ -4105,11 +4070,93 @@ def render_three_layer_tab():
         st.caption("Official record: only mode=PROD rows with bet_placed=True")
 
     st.divider()
-    _render_layer(pro, "🎯 PRO PICK — Official Bets", "#00C853")
+    _render_layer(pro, "🎯 PRO PICK — Official Bets")
+
+
+def render_admin_tab():
+    """Admin-only section: VALUE_OPP, WATCHLIST, and full internal signal log."""
+    st.markdown("## Admin — Internal Signal Log")
+
+    import os
+    admin_pw = os.environ.get("ADMIN_PASSWORD", "")
+    entered = st.text_input("Admin Password", type="password", key="admin_pw_input")
+
+    if not entered:
+        st.info("Enter admin password to access internal signal data.")
+        return
+    if entered != admin_pw:
+        st.error("Incorrect password.")
+        return
+
+    st.success("Access granted.")
+    st.caption(
+        "All signals logged internally — VALUE_OPP, WATCHLIST, LEARNING, PROD. "
+        "Not published publicly. Use for model development and quality review."
+    )
+
+    if st.button("Refresh", key="admin_refresh"):
+        st.rerun()
+
+    days_back = st.slider("Days back", 1, 30, 3, key="admin_days_back")
+
+    try:
+        engine = get_dashboard_engine()
+        with engine.connect() as conn:
+            df = pd.read_sql(text(f"""
+                SELECT id, home_team, away_team, league, selection, odds,
+                       edge_percentage, calibrated_ev_pct, confidence, mode, status,
+                       bet_placed, match_date, routing_reason, pgr_score, league_tier,
+                       model_prob, calibrated_prob, result, stake
+                FROM football_opportunities
+                WHERE match_date::date >= CURRENT_DATE - INTERVAL '{days_back} days'
+                ORDER BY match_date DESC, mode, COALESCE(pgr_score, edge_percentage) DESC
+            """), conn)
+    except Exception as e:
+        st.error(f"DB error: {e}")
+        return
+
+    if df.empty:
+        st.info("No signals found.")
+        return
+
+    # Summary counts per mode
+    mode_counts = df.groupby("mode").size().reset_index(name="count")
+    st.markdown("### Signal counts by mode")
+    st.dataframe(mode_counts, use_container_width=True, hide_index=True)
     st.divider()
-    _render_layer(val, "📊 VALUE OPPORTUNITY — Analysis Signals", "#2196F3")
-    st.divider()
-    _render_layer(watch, "🔍 WATCHLIST — Internal Learning", "#9E9E9E")
+
+    for tier_mode, label, color in [
+        ("VALUE_OPP",  "VALUE OPPORTUNITY",     "#2196F3"),
+        ("WATCHLIST",  "WATCHLIST",              "#9E9E9E"),
+        ("LEARNING",   "LEARNING (cards/corners)", "#FF9800"),
+        ("PROD",       "PRO PICK",               "#00C853"),
+    ]:
+        tier_df = df[df["mode"] == tier_mode].copy()
+        st.markdown(f"### {label}  `{len(tier_df)}`")
+        if tier_df.empty:
+            st.caption("No signals in this tier for the selected period.")
+            st.divider()
+            continue
+        cols = ["league", "home_team", "away_team", "selection", "odds",
+                "edge_percentage", "calibrated_ev_pct", "confidence",
+                "pgr_score", "routing_reason", "league_tier",
+                "model_prob", "status", "result", "match_date"]
+        cols = [c for c in cols if c in tier_df.columns]
+        display = tier_df[cols].copy()
+        display.columns = [c.replace("_", " ").title() for c in display.columns]
+        for pct_col in ["Edge Percentage", "Calibrated Ev Pct", "Confidence", "Model Prob"]:
+            if pct_col in display.columns:
+                display[pct_col] = display[pct_col].map(
+                    lambda x: f"{x:.1f}%" if x is not None and str(x) != "nan" else ""
+                )
+        if "Pgr Score" in display.columns:
+            display["Pgr Score"] = display["Pgr Score"].map(
+                lambda x: f"{x:.2f}" if x is not None and str(x) != "nan" else ""
+            )
+        if "Odds" in display.columns:
+            display["Odds"] = display["Odds"].map(lambda x: f"{x:.2f}" if x else "")
+        st.dataframe(display, use_container_width=True, hide_index=True)
+        st.divider()
 
 
 def render_clv_analytics_tab():
