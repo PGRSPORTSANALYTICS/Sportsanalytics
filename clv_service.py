@@ -23,7 +23,7 @@ from real_odds_api import RealOddsAPI
 logger = logging.getLogger(__name__)
 
 # ── Window settings ──────────────────────────────────────────────
-CANDIDATE_WINDOW_HOURS = 8          # Look for picks kicking off within next 8 h
+CANDIDATE_WINDOW_HOURS = 12         # Look for picks kicking off within next 12 h
 CLOSE_AFTER_KICKOFF_MIN = 5         # Allow capture up to 5 min AFTER kickoff
 TARGET_MINUTES_BEFORE = 60          # Ideal capture point (60 min before KO)
 DRIFT_REJECT_PCT = 0.50             # Reject if odds moved >50% (data error)

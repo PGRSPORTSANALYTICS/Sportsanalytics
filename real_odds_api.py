@@ -98,7 +98,7 @@ class RealOddsAPI:
         """Get live odds for a specific sport (PERSISTENT cache, 5min TTL for live odds)"""
         
         if regions is None:
-            regions = ['eu', 'uk']
+            regions = ['eu', 'uk', 'us', 'au']
         if markets is None:
             markets = ['h2h', 'totals']
         
@@ -148,7 +148,7 @@ class RealOddsAPI:
         BTTS is an 'additional market' that requires event-specific endpoint
         """
         if regions is None:
-            regions = ['eu', 'uk']
+            regions = ['eu', 'uk', 'us', 'au']
         
         cache_key = f"btts_odds_{sport_key}_{event_id}_{','.join(regions)}"
         

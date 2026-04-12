@@ -343,7 +343,12 @@ class CentralRouter:
         logger.info(f"📊 Total candidates for routing: {len(all_candidates)}")
         
         if use_router and all_candidates:
-            routed = route_picks(all_candidates)
+            try:
+                from edge_management_engine import get_dynamic_caps
+                dynamic_caps = get_dynamic_caps()
+            except Exception:
+                dynamic_caps = None
+            routed = route_picks(all_candidates, market_caps=dynamic_caps)
             routing_stats = get_routing_stats(routed)
             
             card.routing_stats = routing_stats

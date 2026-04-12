@@ -369,7 +369,7 @@ class EdgeManagementEngine:
 
         # ── EV threshold & volume adjustments ───────────────────────────────
         if status == "ACTIVE":
-            if clv_avg is not None and clv_avg > 2.0:
+            if clv_avg is not None and clv_avg > 1.0 and clv_n >= 30:
                 ev_adj = EV_ADJ_ACTIVE_CLV
                 vol_adj = "INCREASE"
             else:
@@ -696,6 +696,77 @@ def get_market_edge_status(market: str) -> dict:
     except Exception as e:
         logger.warning(f"get_market_edge_status({market}) error: {e}")
         return default
+
+
+def get_dynamic_caps(base_caps: Optional[Dict] = None) -> Dict:
+    """
+    Read the latest edge_decisions from DB and return CLV-adjusted MARKET_CAPS.
+
+    Scaling rules (applied to product-level max_picks):
+      INCREASE  (CLV > +1%, 30+ samples)  → +25%  (capped at 2× base)
+      DECREASE  (DEGRADED market)          → -30%  (floor = 2)
+      MAINTAIN                             → no change
+
+    Falls back to base_caps (or MARKET_CAPS) on any error.
+    """
+    import copy
+    from market_router_config import MARKET_CAPS as _DEFAULT_CAPS
+    caps = copy.deepcopy(base_caps if base_caps is not None else _DEFAULT_CAPS)
+
+    MARKET_TO_ROUTER = {
+        "Value Single": ["TOTALS", "BTTS", "ML_AH"],
+        "Corners":      ["CORNERS_MATCH", "CORNERS_TEAM", "CORNERS_HANDICAP"],
+        "Cards":        ["CARDS_MATCH", "CARDS_TEAM"],
+    }
+
+    try:
+        from db_helper import db_helper as _db
+        row = _db.execute(
+            "SELECT cycle_json FROM edge_decisions ORDER BY run_at DESC LIMIT 1",
+            fetch='one'
+        )
+        if not row:
+            return caps
+
+        raw = row[0]
+        cycle = raw if isinstance(raw, dict) else json.loads(raw)
+
+        for decision in cycle.get("all_market_decisions", []):
+            market   = decision.get("market", "")
+            vol_adj  = decision.get("volume_adj", "MAINTAIN")
+            clv_avg  = decision.get("clv_avg")
+            clv_n    = decision.get("clv_n", 0)
+
+            if vol_adj == "INCREASE" and not (
+                clv_avg is not None and clv_avg > 1.0 and clv_n >= 30
+            ):
+                vol_adj = "MAINTAIN"
+
+            router_keys = MARKET_TO_ROUTER.get(market, [])
+            for rk in router_keys:
+                if rk not in caps:
+                    continue
+                base_max = caps[rk].get("max_picks", 10)
+                if vol_adj == "INCREASE":
+                    new_max = min(int(base_max * 1.25), base_max * 2)
+                elif vol_adj == "DECREASE":
+                    new_max = max(int(base_max * 0.70), 2)
+                else:
+                    new_max = base_max
+                if new_max != base_max:
+                    logger.info(
+                        f"🎚️ CLV-cap adj [{market}→{rk}]: {base_max} → {new_max} "
+                        f"({vol_adj}, CLV={clv_avg:+.2f}% n={clv_n})"
+                        if clv_avg is not None else
+                        f"🎚️ CLV-cap adj [{market}→{rk}]: {base_max} → {new_max} ({vol_adj})"
+                    )
+                    caps[rk]["max_picks"] = new_max
+
+        return caps
+
+    except Exception as e:
+        logger.warning(f"get_dynamic_caps error (falling back to base): {e}")
+        return caps
 
 
 def run_edge_management() -> Optional[EdgeCycle]:
