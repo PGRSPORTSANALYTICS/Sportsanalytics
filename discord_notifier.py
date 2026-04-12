@@ -305,6 +305,9 @@ PRODUCT_WEBHOOKS = {
     "CORNERS": os.getenv("DISCORD_PROPS_WEBHOOK_URL"),
     "CARDS":   os.getenv("DISCORD_PROPS_WEBHOOK_URL"),
     "SHOTS":   os.getenv("DISCORD_PROPS_WEBHOOK_URL"),
+    # Smart Picks — curated AI selections channel
+    "SMART_PICKS":  os.getenv("DISCORD_WH_SMART_PICKS"),
+    "SMART_PICK":   os.getenv("DISCORD_WH_SMART_PICKS"),
 }
 
 
@@ -665,6 +668,10 @@ def send_result_to_discord(bet_info: dict, product_type: str = None):
         'CORNERS': 'CORNERS',
         'cards': 'CARDS',
         'CARDS': 'CARDS',
+        'smart_pick': 'SMART_PICKS',
+        'SMART_PICK': 'SMART_PICKS',
+        'smart_picks': 'SMART_PICKS',
+        'SMART_PICKS': 'SMART_PICKS',
     }
     
     normalized_type = type_map.get(product_type, product_type.upper() if product_type else 'EXACT_SCORE')

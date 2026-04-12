@@ -307,6 +307,20 @@ def run_multi_sport_learning():
         traceback.print_exc()
 
 
+def run_smart_picks_settlement():
+    """Settle Smart Picks by joining to football_opportunities results and post to Discord."""
+    try:
+        from smart_picks_result_scanner import run_smart_picks_settlement as settle
+        logger.info("🎯 Running Smart Picks settlement...")
+        stats = settle()
+        if stats['settled'] > 0:
+            logger.info(f"🎯 Smart Picks settled: {stats['settled']} | Discord: {stats['discord_posted']} | Errors: {stats['errors']}")
+        else:
+            logger.info("🎯 Smart Picks: nothing new to settle")
+    except Exception as e:
+        logger.error(f"❌ Smart Picks settlement error: {e}")
+
+
 def run_multi_sport_settlement():
     """Settle multi-sport learning bets (Tennis, Hockey, MMA)"""
     try:
@@ -909,7 +923,9 @@ def main():
     schedule.every(5).minutes.do(run_results_engine)  # Unified Results Engine
     schedule.every(5).minutes.do(verify_basketball_results)  # Basketball separate
     schedule.every(30).minutes.do(run_player_props_settlement)  # NBA player props settlement
-    schedule.every(30).minutes.do(run_multi_sport_settlement)  # Multi-sport settlement
+    schedule.every(30).minutes.do(run_multi_sport_settlement)   # Multi-sport settlement
+    schedule.every(30).minutes.do(run_smart_picks_settlement)   # Smart Picks result scanner + Discord
+    run_smart_picks_settlement()  # Run once at startup to catch any overnight results
     
     # Schedule CLV update - Every 5 minutes for closing odds capture
     schedule.every(5).minutes.do(run_clv_update_cycle)
