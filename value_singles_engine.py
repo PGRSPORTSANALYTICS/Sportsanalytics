@@ -105,6 +105,13 @@ LEARNING_ONLY_MARKETS = {
     "AH_AWAY_-0.5", "AH_AWAY_-1.0", "AH_AWAY_-1.5",
     "AH_HOME_+0.5", "AH_HOME_+1.0", "AH_HOME_+1.5",
     "AH_AWAY_+0.5", "AH_AWAY_+1.0", "AH_AWAY_+1.5",
+    # ── Data collection from Apr 12, 2026 — review May 12, 2026 ──────────────
+    # DNB: high Pinnacle liquidity, model has edge signal but insufficient samples
+    "DNB_HOME",      # Draw No Bet Home — LEARNING from Apr 12, 2026
+    "DNB_AWAY",      # Draw No Bet Away — LEARNING from Apr 12, 2026
+    # 1H: first-half market, model uses Poisson split, odds from totals_h1 API
+    "1H_OVER_0_5",   # 1st Half Over 0.5 Goals — LEARNING from Apr 12, 2026
+    "1H_OVER_1_5",   # 1st Half Over 1.5 Goals — LEARNING from Apr 12, 2026
 }
 
 # ============================================================

@@ -100,7 +100,7 @@ class RealOddsAPI:
         if regions is None:
             regions = ['eu', 'uk', 'us', 'au']
         if markets is None:
-            markets = ['h2h', 'totals']
+            markets = ['h2h', 'totals', 'totals_h1']
         
         cache_key = f"live_odds_{sport_key}_{','.join(regions)}_{','.join(markets)}"
         
