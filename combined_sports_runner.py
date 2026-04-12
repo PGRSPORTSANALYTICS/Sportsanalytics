@@ -33,10 +33,10 @@ ENABLE_COLLEGE_BASKETBALL = True     # ACTIVE - 63.3% hit rate, +$3,446 profit
 ENABLE_PLAYER_PROPS = False          # DISABLED - paused until next season evaluation
 
 # ============================================================
-# DAILY STOP-LOSS (Jan 28, 2026)
+# DAILY STOP-LOSS — DISABLED
+# Daily caps (8 Value Singles, 10 Corners, 5 Cards) already act as risk control.
 # ============================================================
-ENABLE_DAILY_STOPLOSS = True         # Soft stop-loss at -5u per day
-# Threshold configured in daily_stoploss.py (DAILY_STOPLOSS_UNITS = -5.0)
+ENABLE_DAILY_STOPLOSS = False        # Disabled — daily pick caps handle exposure
 
 # ============================================================
 # LIVE LEARNING MODE - Full Data Capture Enabled
