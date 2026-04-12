@@ -35,10 +35,13 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
 .main-content{max-width:1400px;margin:0 auto;width:100%;padding:16px;flex:1}
 
 /* ── Logo ── */
-.logo-wrap{display:flex;align-items:center;gap:10px;text-decoration:none}
-.logo-badge{width:36px;height:36px;border-radius:10px;background:linear-gradient(145deg,#16a34a,#15803d);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 0 1px rgba(34,197,94,.2),0 2px 8px rgba(22,163,74,.3)}
-.logo-title{font-size:16px;font-weight:800;letter-spacing:-.03em;color:#f4f4f5}
-.logo-sub{font-size:10px;color:#52525b;letter-spacing:.06em;font-weight:600;text-transform:uppercase}
+.logo-wrap{display:flex;align-items:center;gap:11px;text-decoration:none}
+.logo-badge{width:38px;height:38px;border-radius:11px;background:linear-gradient(150deg,#1a9e52,#0f6331);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 0 1px rgba(34,197,94,.25),0 3px 10px rgba(15,99,49,.5)}
+.logo-title{font-size:16px;font-weight:900;letter-spacing:-.04em;line-height:1.15}
+.logo-title .t-pgr{color:#f4f4f5}
+.logo-title .t-dot{color:#22c55e;margin:0 1px}
+.logo-title .t-an{color:#4ade80;font-weight:600;font-size:13px;letter-spacing:-.02em}
+.logo-sub{font-size:10px;color:#3f3f46;letter-spacing:.07em;font-weight:600;text-transform:uppercase;margin-top:1px}
 
 /* ── Live badge ── */
 .live-badge{display:inline-flex;align-items:center;gap:5px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.25);border-radius:99px;padding:3px 10px;font-size:11px;font-weight:700;color:#4ade80}
@@ -270,10 +273,14 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
   <div class="top-bar-inner">
     <a class="logo-wrap" href="/">
       <div class="logo-badge">
-        <span style="font-size:11px;font-weight:900;letter-spacing:-.02em;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;line-height:1">PGR</span>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M5 3 L5 21" stroke="white" stroke-width="3" stroke-linecap="round"/>
+          <path d="M5 3 C5 3 17 3 17 9 C17 15 5 15 5 15" stroke="white" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="19.5" cy="19.5" r="3" fill="#4ade80"/>
+        </svg>
       </div>
       <div>
-        <div class="logo-title">PGR Analytics</div>
+        <div class="logo-title"><span class="t-pgr">PGR</span><span class="t-dot">·</span><span class="t-an">Analytics</span></div>
         <div class="logo-sub">Value Scanner</div>
       </div>
     </a>
