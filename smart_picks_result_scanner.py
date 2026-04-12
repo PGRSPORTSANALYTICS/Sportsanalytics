@@ -131,9 +131,9 @@ def run_smart_picks_settlement() -> Dict:
                 WHERE home_team ILIKE %s
                   AND away_team ILIKE %s
                   AND selection ILIKE %s
-                  AND match_date::date BETWEEN %s::date - 1 AND %s::date + 1
+                  AND match_date::date BETWEEN %s::date - INTERVAL '1 day' AND %s::date + INTERVAL '1 day'
                   AND UPPER(result) IN ('WON','WIN','LOST','LOSS','VOID','PUSH')
-                ORDER BY ABS(EXTRACT(EPOCH FROM (match_date::date - %s::date)))
+                ORDER BY ABS(match_date::date - %s::date)
                 LIMIT 1
             """, (home_team, away_team, selection, pick_date, pick_date, pick_date), fetch='one')
         except Exception as e:
@@ -171,16 +171,19 @@ def run_smart_picks_settlement() -> Dict:
             stats["errors"] += 1
             continue
 
-        # Try to fetch actual score for the embed
+        # Try to fetch actual score from analysis field
         try:
             score_row = db.execute("""
-                SELECT home_goals, away_goals
-                FROM football_opportunities
+                SELECT analysis FROM football_opportunities
                 WHERE home_team ILIKE %s AND away_team ILIKE %s
-                  AND match_date::date BETWEEN %s::date - 1 AND %s::date + 1
+                  AND match_date::date BETWEEN %s::date - INTERVAL '1 day' AND %s::date + INTERVAL '1 day'
+                  AND analysis IS NOT NULL
                 LIMIT 1
             """, (home_team, away_team, pick_date, pick_date), fetch='one')
-            actual_score = f"{score_row[0]}-{score_row[1]}" if score_row and score_row[0] is not None else "—"
+            import re as _re
+            raw_analysis = score_row[0] if score_row else ""
+            m = _re.search(r'(\d+)[:\-](\d+)', str(raw_analysis))
+            actual_score = f"{m.group(1)}-{m.group(2)}" if m else "—"
         except Exception:
             actual_score = "—"
 
