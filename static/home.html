@@ -460,7 +460,8 @@ const state = {
 };
 
 const DISCORD = "https://discord.gg/pgrsports";
-const FREE_VISIBLE = 5; // rows fully visible to free users before lock
+const FREE_VISIBLE = 0; // free users see match+market+edge but NEVER selection/odds
+const GHOST_ROWS = 6;   // extra locked ghost rows to show volume
 
 /* ──────────────────────────────────────────────
    HELPERS
@@ -620,25 +621,12 @@ function renderScanner(){
   }
 
   let html = "";
-  let fomoInserted = false;
-  const lockedCount = state.isPremium ? 0 : Math.max(0, picks.length - FREE_VISIBLE);
 
   picks.forEach((p,i)=>{
-    const isLocked = !state.isPremium && i >= FREE_VISIBLE;
+    // Free users: ALWAYS locked — they see match + market + edge, never selection/odds
+    const isLocked = !state.isPremium;
     const isExpanded = state.expandedId === p.id;
     const isNew = p.age_minutes!=null && p.age_minutes<=15;
-
-    // Insert FOMO row after FREE_VISIBLE rows for non-premium
-    if(!state.isPremium && i===FREE_VISIBLE && !fomoInserted){
-      fomoInserted=true;
-      html+=`<div class="fomo-cta-row scanner-row">
-        <div class="fomo-row">
-          <div class="fomo-row-text">🔒 <b>${lockedCount} more ${lockedCount===1?"edge":"edges"}</b> locked — selection, odds and fair value hidden</div>
-          <button class="fomo-row-btn" onclick="openPremiumModal()">Unlock All →</button>
-        </div>
-      </div>`;
-    }
-
     const leagueShort = (p.league||"").replace(/^soccer_/,"").replace(/_/," ").replace(/\b\w/g,c=>c.toUpperCase()).substring(0,18);
     const marketLabel = p.market;
     const selectionText = p.selection || "—";
@@ -647,7 +635,7 @@ function renderScanner(){
     html+=`<div class="scanner-row${isExpanded?" expanded":""} row-new" data-id="${esc(p.id)}">
       <div class="cell-match">
         <div class="match-teams">${esc(p.match)}${isNew?'<span class="new-chip">NEW</span>':''}</div>
-        <div class="match-meta">${isLocked?"":esc(p.league.replace(/^soccer_/,"").replace(/_/g," "))}</div>
+        <div class="match-meta">${esc(p.league.replace(/^soccer_/,"").replace(/_/g," "))}</div>
       </div>
       <div class="cell-time">${fmtKo(p.kickoff_time)}</div>
       <div class="cell-league col-league" style="font-size:11px;color:#71717a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(leagueShort)}</div>
@@ -671,10 +659,45 @@ function renderScanner(){
     }
   });
 
+  // Ghost rows — always add for non-premium to show volume
+  if(!state.isPremium){
+    const ghostMarkets = ["Over 2.5 Goals","BTTS Yes","1X2 Home","Double Chance","Over 3.5","Under 2.5","BTTS No","1X2 Away","Corners Over","Cards Over"];
+    const ghostLeagues = ["Premier League","La Liga","Bundesliga","Serie A","Ligue 1","Champions League","Europa League","Championship","Eredivisie","Primeira Liga"];
+    const ghostEvs = ["+8.2%","+11.4%","+6.7%","+9.1%","+14.3%","+7.8%","+12.5%","+5.9%","+10.2%","+8.8%"];
+    for(let g=0;g<GHOST_ROWS;g++){
+      const mkt = ghostMarkets[g % ghostMarkets.length];
+      const lge = ghostLeagues[g % ghostLeagues.length];
+      const ev  = ghostEvs[g % ghostEvs.length];
+      const evNum = parseFloat(ev);
+      html+=`<div class="scanner-row" style="opacity:${0.55-g*0.05}" onclick="openPremiumModal()">
+        <div class="cell-match">
+          <div class="match-teams" style="filter:blur(6px);user-select:none">Hidden Match ${g+picks.length+1}</div>
+          <div class="match-meta" style="filter:blur(4px);user-select:none">${esc(lge)}</div>
+        </div>
+        <div class="cell-time" style="filter:blur(4px);user-select:none">18:30</div>
+        <div class="cell-league col-league" style="filter:blur(4px);user-select:none;font-size:11px;color:#71717a">${esc(lge)}</div>
+        <div class="cell-market"><span class="market-tag" style="filter:blur(3px);user-select:none">${esc(mkt)}</span></div>
+        <div class="cell-selection locked-cell"><span class="locked-blur">Premium Pick</span><span class="locked-icon">🔒</span></div>
+        <div class="cell-odds locked-cell" style="justify-content:flex-end"><span class="locked-blur">2.05</span><span class="locked-icon">🔒</span></div>
+        <div class="cell-fair col-fair locked-cell" style="justify-content:flex-end"><span class="locked-blur">1.92</span><span class="locked-icon">🔒</span></div>
+        <div class="cell-edge" style="text-align:right"><span class="edge-chip ${evClass(evNum)}">${ev}</span></div>
+        <div class="cell-signal col-signal" style="text-align:center"><span class="sig-badge sig-med">◆ MED</span></div>
+      </div>`;
+    }
+    // FOMO unlock banner after all rows
+    const totalLocked = picks.length + GHOST_ROWS;
+    html+=`<div class="fomo-cta-row scanner-row">
+      <div class="fomo-row">
+        <div class="fomo-row-text">🔒 All <b>${totalLocked} edges locked</b> — match visible, selection + odds hidden</div>
+        <button class="fomo-row-btn" onclick="openPremiumModal()">Unlock All →</button>
+      </div>
+    </div>`;
+  }
+
   body.innerHTML=html;
-  if(!state.isPremium && picks.length>=FREE_VISIBLE){
+  if(!state.isPremium){
     document.getElementById("fomo-section").style.display="block";
-  } else if(state.isPremium){
+  } else {
     document.getElementById("fomo-section").style.display="none";
   }
 
