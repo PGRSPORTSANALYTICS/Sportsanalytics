@@ -531,11 +531,44 @@ def send_bet_to_discord(bet, product_type=None):
 
     try:
         response = requests.post(webhook_url, json=payload, timeout=5)
-        return response.status_code in [200, 204]
+        ok = response.status_code in [200, 204]
+        if ok:
+            _fire_push_for_bet(bet, product_type)
+        return ok
     except Exception as e:
         bet_id = bet.get('id', '?') if isinstance(bet, dict) else getattr(bet, 'id', '?')
         print(f"[DISCORD] Failed to post bet {bet_id}: {e}")
         return False
+
+
+def _fire_push_for_bet(bet, product_type: str):
+    """Send a Web Push notification for a confirmed pick. Runs in background thread."""
+    import threading
+
+    def _send():
+        try:
+            home  = bet.get('home_team', '') if isinstance(bet, dict) else getattr(bet, 'home_team', '')
+            away  = bet.get('away_team', '') if isinstance(bet, dict) else getattr(bet, 'away_team', '')
+            sel   = bet.get('selection', '') if isinstance(bet, dict) else getattr(bet, 'selection', '')
+            odds  = bet.get('odds', bet.get('bookmaker_odds', 0)) if isinstance(bet, dict) else getattr(bet, 'odds', 0)
+            league = bet.get('league', '') if isinstance(bet, dict) else getattr(bet, 'league', '')
+
+            match_str = f"{home} vs {away}" if home and away else league or "New match"
+            prod_label = {
+                'CORNERS': '📐 Corners', 'CARDS': '🟨 Cards',
+                'VALUE_SINGLES': '⚡ Value Single', 'SMART_PICKS': '🧠 Smart Pick',
+                'PARLAY': '🎯 Parlay', 'COLLEGE_BASKETBALL': '🏀 Basketball',
+            }.get((product_type or '').upper(), '⚡ Pick')
+
+            title = f"{prod_label} — {match_str}"
+            body  = f"{sel}  @{float(odds):.2f}" if sel and odds else sel or "New pick available"
+
+            from push_service import PushService
+            PushService().send_to_all(title, body, "/")
+        except Exception as ex:
+            print(f"[PUSH] fire_push_for_bet failed: {ex}")
+
+    threading.Thread(target=_send, daemon=True, name="push-notify").start()
 
 
 def send_custom_message(product_type: str, message: str):
