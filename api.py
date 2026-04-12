@@ -3789,7 +3789,10 @@ async def edge_finder_alias():
 # =============================================================================
 
 @app.get("/admin", include_in_schema=False)
-async def admin_dashboard():
+async def admin_dashboard(request: Request):
+    from auth_premium import is_admin_session
+    if not is_admin_session(request):
+        return RedirectResponse("/admin-login", status_code=302)
     return HTMLResponse(content=(STATIC_DIR / "admin.html").read_text())
 
 
@@ -3834,11 +3837,13 @@ def _build_recent(rows, f):
 
 
 @app.get("/api/admin/data", include_in_schema=False)
-async def admin_data(x_admin_key: Optional[str] = Header(None)):
-    """Protected admin data endpoint. Requires ADMIN_PASSWORD header."""
-    admin_pw = os.environ.get("ADMIN_PASSWORD", "")
+async def admin_data(request: Request, x_admin_key: Optional[str] = Header(None)):
+    """Protected admin data endpoint. Accepts cookie session OR x-admin-key header."""
+    from auth_premium import is_admin_session
+    admin_pw  = os.environ.get("ADMIN_PASSWORD", "")
     admin_key = os.environ.get("ADMIN_API_KEY", "")
-    if not x_admin_key or (x_admin_key != admin_pw and x_admin_key != admin_key):
+    key_ok    = x_admin_key and (x_admin_key == admin_pw or x_admin_key == admin_key)
+    if not is_admin_session(request) and not key_ok:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     db = db_helper
@@ -3935,11 +3940,18 @@ async def admin_data(x_admin_key: Optional[str] = Header(None)):
     hit_rate = round(wins / staked_bets * 100, 1) if staked_bets > 0 else 0
     roi = round(profit / staked_bets * 100, 1) if staked_bets > 0 else 0
 
+    push_subs = 0
+    try:
+        from push_service import PushService
+        push_subs = PushService().count()
+    except Exception:
+        pass
+
     return JSONResponse({
         "summary": {
             "settled": settled, "wins": wins, "losses": losses, "voids": voids,
             "pending": pending_cnt, "profit": profit, "avg_odds": avg_odds,
-            "hit_rate": hit_rate, "roi": roi
+            "hit_rate": hit_rate, "roi": roi, "push_subs": push_subs
         },
         "by_market": [{"market": r[0], "settled": i(r[1]), "wins": i(r[2]), "losses": i(r[3]),
                         "profit": f(r[4]), "avg_odds": f(r[5])} for r in (by_market or [])],
@@ -4030,12 +4042,15 @@ class PushSendBody(BaseModel):
 
 
 @app.post("/api/push/send", include_in_schema=False)
-async def push_send(payload: PushSendBody,
+async def push_send(request: Request, payload: PushSendBody,
                     x_admin_key: Optional[str] = Header(None)):
-    """Admin-only: broadcast a push notification to all subscribers."""
+    """Admin-only: broadcast a push notification to all subscribers.
+    Accepts either the pgr_admin_session cookie OR x-admin-key header."""
+    from auth_premium import is_admin_session
     admin_pw  = os.environ.get("ADMIN_PASSWORD", "")
     admin_key = os.environ.get("ADMIN_API_KEY", "")
-    if not x_admin_key or (x_admin_key != admin_pw and x_admin_key != admin_key):
+    key_ok    = x_admin_key and (x_admin_key == admin_pw or x_admin_key == admin_key)
+    if not is_admin_session(request) and not key_ok:
         raise HTTPException(status_code=401, detail="Unauthorized")
     try:
         from push_service import PushService

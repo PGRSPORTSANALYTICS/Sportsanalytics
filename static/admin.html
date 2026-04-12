@@ -5,93 +5,55 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PGR Admin</title>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: #0a0a0f; color: #e2e8f0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; }
 
-  /* LOCK SCREEN */
-  #lockScreen {
-    display: flex; align-items: center; justify-content: center;
-    min-height: 100vh; background: #0a0a0f;
-  }
-  .lock-card {
-    background: #13131a; border: 1px solid #2d2d3d; border-radius: 16px;
-    padding: 48px 40px; width: 360px; text-align: center;
-  }
-  .lock-icon { font-size: 48px; margin-bottom: 16px; }
-  .lock-title { font-size: 22px; font-weight: 700; color: #fff; margin-bottom: 6px; }
-  .lock-sub { font-size: 14px; color: #64748b; margin-bottom: 32px; }
-  .lock-input {
-    width: 100%; padding: 12px 16px; background: #1e1e2e; border: 1px solid #2d2d3d;
-    border-radius: 8px; color: #e2e8f0; font-size: 16px; margin-bottom: 16px;
-    outline: none; transition: border-color 0.2s;
-  }
-  .lock-input:focus { border-color: #6366f1; }
-  .lock-btn {
-    width: 100%; padding: 12px; background: #6366f1; border: none; border-radius: 8px;
-    color: #fff; font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.2s;
-  }
-  .lock-btn:hover { background: #4f46e5; }
-  .lock-error { color: #ef4444; font-size: 13px; margin-top: 12px; display: none; }
-
-  /* ADMIN DASHBOARD */
-  #adminDash { display: none; }
   .topbar {
-    background: #13131a; border-bottom: 1px solid #1e1e2e;
+    background: #0d1117; border-bottom: 1px solid rgba(255,255,255,0.06);
     padding: 14px 24px; display: flex; align-items: center; justify-content: space-between;
     position: sticky; top: 0; z-index: 100;
   }
-  .topbar-title { font-size: 18px; font-weight: 700; color: #fff; }
-  .topbar-sub { font-size: 12px; color: #64748b; margin-top: 2px; }
-  .topbar-right { display: flex; align-items: center; gap: 16px; }
-  .verify-badge {
-    font-size: 11px; padding: 4px 10px; border-radius: 20px;
-    background: #14532d; color: #86efac; border: 1px solid #22c55e33;
-  }
-  .logout-btn {
-    font-size: 12px; padding: 6px 14px; background: #1e1e2e; border: 1px solid #2d2d3d;
-    border-radius: 8px; color: #94a3b8; cursor: pointer;
-  }
+  .topbar-left { display: flex; align-items: center; gap: 12px; }
+  .topbar-logo { width: 32px; height: 32px; border-radius: 8px; background: linear-gradient(145deg,#16a34a,#15803d); display:flex;align-items:center;justify-content:center; }
+  .topbar-title { font-size: 16px; font-weight: 700; color: #f1f5f9; }
+  .topbar-sub { font-size: 11px; color: #52525b; margin-top: 1px; }
+  .topbar-right { display: flex; align-items: center; gap: 10px; }
+
+  .badge-green { font-size: 11px; padding: 3px 10px; border-radius: 20px; background: #14532d; color: #86efac; border: 1px solid #22c55e33; }
+  .btn-sm { font-size: 12px; padding: 6px 14px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: #94a3b8; cursor: pointer; text-decoration: none; transition: background .12s; }
+  .btn-sm:hover { background: rgba(255,255,255,0.1); }
+  .btn-primary { background: #22c55e; color: #000; font-weight: 700; border-color: transparent; }
+  .btn-primary:hover { background: #16a34a; }
+  .btn-danger { background: rgba(239,68,68,0.15); color: #f87171; border-color: rgba(239,68,68,0.3); }
+  .btn-danger:hover { background: rgba(239,68,68,0.25); }
 
   .main-content { padding: 24px; max-width: 1400px; margin: 0 auto; }
 
-  /* KPI CARDS */
-  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 28px; }
-  .kpi-card {
-    background: #13131a; border: 1px solid #1e1e2e; border-radius: 12px;
-    padding: 20px; text-align: center;
-  }
-  .kpi-label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
-  .kpi-value { font-size: 28px; font-weight: 700; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .kpi-card { background: #0d1117; border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 16px; }
+  .kpi-label { font-size: 10px; color: #52525b; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 6px; }
+  .kpi-value { font-size: 26px; font-weight: 700; }
   .kpi-value.green { color: #22c55e; }
   .kpi-value.red { color: #ef4444; }
-  .kpi-value.blue { color: #6366f1; }
+  .kpi-value.blue { color: #818cf8; }
   .kpi-value.yellow { color: #f59e0b; }
-  .kpi-value.white { color: #fff; }
+  .kpi-value.white { color: #f1f5f9; }
+  .kpi-value.teal { color: #2dd4bf; }
 
-  /* SECTION */
-  .section { margin-bottom: 28px; }
-  .section-title {
-    font-size: 14px; font-weight: 600; color: #94a3b8; text-transform: uppercase;
-    letter-spacing: 0.08em; margin-bottom: 14px; display: flex; align-items: center; gap: 8px;
-  }
-  .section-title span { background: #1e1e2e; padding: 2px 10px; border-radius: 20px; font-size: 11px; }
+  .section { margin-bottom: 24px; }
+  .section-hd { font-size: 12px; font-weight: 600; color: #71717a; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .section-hd span { background: rgba(255,255,255,0.06); padding: 2px 9px; border-radius: 20px; font-size: 10px; }
 
-  /* TABLES */
-  .table-wrap { background: #13131a; border: 1px solid #1e1e2e; border-radius: 12px; overflow: hidden; }
+  .card { background: #0d1117; border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; overflow: hidden; }
+
   table { width: 100%; border-collapse: collapse; }
-  th {
-    font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase;
-    letter-spacing: 0.05em; padding: 12px 16px; text-align: left;
-    background: #0f0f1a; border-bottom: 1px solid #1e1e2e;
-  }
-  td { font-size: 13px; padding: 11px 16px; border-bottom: 1px solid #1a1a2e; color: #cbd5e1; }
+  th { font-size: 10px; font-weight: 600; color: #52525b; text-transform: uppercase; letter-spacing: 0.05em; padding: 10px 14px; text-align: left; background: rgba(255,255,255,0.02); border-bottom: 1px solid rgba(255,255,255,0.05); }
+  td { font-size: 12px; padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,0.04); color: #94a3b8; }
   tr:last-child td { border-bottom: none; }
-  tr:hover td { background: #1a1a2e; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
 
-  .pill {
-    display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 600;
-  }
-  .pill-won { background: #14532d; color: #86efac; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 600; }
+  .pill-won  { background: #14532d; color: #86efac; }
   .pill-lost { background: #7f1d1d; color: #fca5a5; }
   .pill-void { background: #1e293b; color: #94a3b8; }
   .pill-pending { background: #1e3a5f; color: #93c5fd; }
@@ -99,400 +61,318 @@
   .profit-pos { color: #22c55e; font-weight: 600; }
   .profit-neg { color: #ef4444; font-weight: 600; }
 
-  /* TWO COLUMNS */
   .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
   @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
 
-  /* DAILY CHART */
-  .daily-bar-wrap { background: #13131a; border: 1px solid #1e1e2e; border-radius: 12px; padding: 20px; }
-  .daily-bars { display: flex; align-items: flex-end; gap: 4px; height: 80px; margin-top: 12px; }
-  .daily-bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
-  .daily-bar {
-    width: 100%; border-radius: 3px 3px 0 0; min-height: 2px;
-    transition: opacity 0.2s; cursor: default; position: relative;
-  }
-  .daily-bar:hover::after {
-    content: attr(data-tip);
-    position: absolute; bottom: 110%; left: 50%; transform: translateX(-50%);
-    background: #1e1e2e; border: 1px solid #2d2d3d; border-radius: 6px;
-    padding: 4px 10px; font-size: 11px; color: #e2e8f0; white-space: nowrap; z-index: 10;
-  }
-  .daily-label { font-size: 9px; color: #475569; }
+  .daily-bars { display: flex; align-items: flex-end; gap: 3px; height: 80px; padding: 16px 16px 8px; }
+  .daily-bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .daily-bar { width: 100%; border-radius: 2px 2px 0 0; min-height: 2px; transition: opacity .2s; cursor: default; position: relative; }
+  .daily-bar:hover::after { content: attr(data-tip); position: absolute; bottom: 110%; left: 50%; transform: translateX(-50%); background: #1e1e2e; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 4px 10px; font-size: 11px; color: #e2e8f0; white-space: nowrap; z-index: 10; }
+  .daily-label { font-size: 8px; color: #3f3f46; }
 
-  /* TABS */
-  .tabs { display: flex; gap: 4px; margin-bottom: 16px; }
-  .tab-btn {
-    padding: 7px 18px; border-radius: 8px; font-size: 13px; font-weight: 500;
-    border: 1px solid #1e1e2e; background: transparent; color: #64748b; cursor: pointer;
-    transition: all 0.15s;
-  }
-  .tab-btn.active { background: #6366f1; border-color: #6366f1; color: #fff; }
+  .tabs { display: flex; gap: 4px; margin-bottom: 12px; }
+  .tab-btn { padding: 6px 16px; border-radius: 7px; font-size: 12px; font-weight: 500; border: 1px solid rgba(255,255,255,0.08); background: transparent; color: #52525b; cursor: pointer; transition: all .12s; }
+  .tab-btn.active { background: #22c55e; border-color: #22c55e; color: #000; font-weight: 700; }
 
-  .tab-content { display: none; }
-  .tab-content.active { display: block; }
+  .loading { text-align: center; padding: 80px; color: #52525b; font-size: 13px; }
 
-  .loading { text-align: center; padding: 80px; color: #475569; font-size: 14px; }
+  .match-cell { display: flex; flex-direction: column; gap: 2px; min-width: 160px; }
+  .match-teams { font-size: 12px; color: #cbd5e1; font-weight: 500; }
+  .match-date { font-size: 10px; color: #52525b; }
+  .score-badge { display:inline-block; font-size:14px; font-weight:800; padding:2px 8px; border-radius:5px; }
+  .score-badge.result { background:#1a1a2e; color:#e2e8f0; border:1px solid rgba(255,255,255,0.08); }
+  .pred-score { font-size:10px; color:#818cf8; background:#1e1e3f; padding:1px 6px; border-radius:4px; }
+  .pred-winner { font-size:9px; font-weight:700; letter-spacing:.08em; padding:2px 6px; border-radius:4px; text-transform:uppercase; }
+  .pred-winner.H { background:#14532d; color:#4ade80; }
+  .pred-winner.A { background:#450a0a; color:#f87171; }
+  .pred-winner.D { background:#1c1917; color:#a8a29e; }
 
-  /* SCORE BADGE */
-  .score-badge {
-    display: inline-block; font-size: 15px; font-weight: 800; letter-spacing: 0.02em;
-    padding: 3px 10px; border-radius: 6px; white-space: nowrap;
-  }
-  .score-badge.result { background: #1a1a2e; color: #e2e8f0; border: 1px solid #2d2d3d; }
-  .score-badge.no-score { color: #334155; font-size: 12px; font-weight: 400; }
-  .match-cell { display: flex; flex-direction: column; gap: 3px; min-width: 180px; }
-  .match-teams { font-size: 13px; color: #cbd5e1; font-weight: 500; }
-  .match-date { font-size: 11px; color: #475569; }
-  .score-cell { display: flex; flex-direction: column; gap: 5px; align-items: center; min-width: 110px; }
-  .score-row { display: flex; align-items: center; gap: 6px; }
-  .score-label { font-size: 10px; color: #475569; text-transform: uppercase; letter-spacing: 0.06em; width: 32px; text-align: right; flex-shrink: 0; }
-  .score-actual { font-size: 18px; font-weight: 800; }
-  .score-pred { font-size: 12px; font-weight: 600; color: #818cf8; background: #1e1e3f; padding: 2px 8px; border-radius: 5px; }
-  .pred-winner { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; padding: 2px 7px; border-radius: 4px; text-transform: uppercase; }
-  .pred-winner.H { background: #14532d; color: #4ade80; }
-  .pred-winner.A { background: #450a0a; color: #f87171; }
-  .pred-winner.D { background: #1c1917; color: #a8a29e; }
+  /* Push panel */
+  .push-panel { background: #0d1117; border: 1px solid rgba(34,197,94,0.2); border-radius: 10px; padding: 20px; }
+  .push-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+  .push-input { flex: 1; min-width: 200px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 9px 12px; color: #f1f5f9; font-size: 13px; outline: none; }
+  .push-input:focus { border-color: rgba(34,197,94,0.5); }
+  .push-result { margin-top: 10px; font-size: 12px; color: #52525b; min-height: 18px; }
+  .push-result.ok { color: #22c55e; }
+  .push-result.err { color: #f87171; }
 </style>
 </head>
 <body>
 
-<!-- LOCK SCREEN -->
-<div id="lockScreen">
-  <div class="lock-card">
-    <div class="lock-icon">🔒</div>
-    <div class="lock-title">PGR Admin</div>
-    <div class="lock-sub">Private results dashboard</div>
-    <input type="password" id="pwInput" class="lock-input" placeholder="Password" autocomplete="off">
-    <button class="lock-btn" onclick="unlock()">Access Dashboard</button>
-    <div class="lock-error" id="lockError">Incorrect password</div>
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="topbar-logo">
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+        <polyline points="2,15 7,9 10,12 14,6 18,9" stroke="white" stroke-opacity="0.9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        <circle cx="18" cy="9" r="2.2" fill="#4ade80"/>
+      </svg>
+    </div>
+    <div>
+      <div class="topbar-title">PGR Admin</div>
+      <div class="topbar-sub" id="verifyStatus">Loading...</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <span class="badge-green" id="verifyBadge">Auto-verify active</span>
+    <a href="/" class="btn-sm">← App</a>
+    <a href="/admin-logout" class="btn-sm btn-danger">Log out</a>
   </div>
 </div>
 
-<!-- ADMIN DASHBOARD -->
-<div id="adminDash">
-  <div class="topbar">
-    <div>
-      <div class="topbar-title">PGR Admin — Results</div>
-      <div class="topbar-sub" id="verifyStatus">Loading...</div>
-    </div>
-    <div class="topbar-right">
-      <div class="verify-badge" id="verifyBadge">Auto-verify active</div>
-      <button class="logout-btn" onclick="logout()">Lock</button>
-    </div>
-  </div>
+<!-- MAIN CONTENT -->
+<div class="main-content">
+  <div id="loadingMsg" class="loading">Loading dashboard…</div>
+  <div id="dashContent" style="display:none">
 
-  <div class="main-content">
-    <div id="loadingMsg" class="loading">Loading data...</div>
-    <div id="dashContent" style="display:none">
+    <!-- KPIs -->
+    <div class="kpi-grid" id="kpiGrid"></div>
 
-      <!-- KPIs -->
-      <div class="kpi-grid" id="kpiGrid"></div>
-
-      <!-- Daily chart + pending -->
-      <div class="two-col">
-        <div class="section">
-          <div class="section-title">Daily P&L — last 30 days</div>
-          <div class="daily-bar-wrap">
-            <div id="dailyBars" class="daily-bars"></div>
-          </div>
+    <!-- Push notification sender -->
+    <div class="section">
+      <div class="section-hd">📲 Push Notifications</div>
+      <div class="push-panel">
+        <div style="font-size:12px;color:#71717a;margin-bottom:2px">Broadcast to all subscribers</div>
+        <div class="push-row">
+          <input class="push-input" id="pushTitle" placeholder="Title — e.g. ⚡ New Value Single" />
+          <input class="push-input" id="pushBody" placeholder="Body — e.g. BTTS YES @ 2.10  |  Bundesliga" />
+          <input class="push-input" style="flex:0 0 120px" id="pushUrl" placeholder="URL (opt)" value="/" />
+          <button class="btn-sm btn-primary" onclick="sendPush()">Send push</button>
         </div>
-        <div class="section">
-          <div class="section-title">Pending picks <span id="pendingCount">0</span></div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Match</th>
-                  <th>Market</th>
-                  <th>Odds</th>
-                  <th>Kickoff</th>
-                </tr>
-              </thead>
-              <tbody id="pendingBody"></tbody>
-            </table>
-          </div>
-        </div>
+        <div class="push-result" id="pushResult"></div>
       </div>
+    </div>
 
-      <!-- Market + League breakdown -->
-      <div class="two-col section">
-        <div>
-          <div class="section-title">By Market</div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr><th>Market</th><th>W</th><th>L</th><th>Hit%</th><th>P&L</th><th>Avg Odds</th></tr>
-              </thead>
-              <tbody id="marketBody"></tbody>
-            </table>
-          </div>
-        </div>
-        <div>
-          <div class="section-title">By League</div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr><th>League</th><th>W</th><th>L</th><th>Hit%</th><th>P&L</th></tr>
-              </thead>
-              <tbody id="leagueBody"></tbody>
-            </table>
-          </div>
-        </div>
+    <!-- Daily chart + pending -->
+    <div class="two-col section">
+      <div>
+        <div class="section-hd">Daily P&L — last 30 days</div>
+        <div class="card"><div id="dailyBars" class="daily-bars"></div></div>
       </div>
-
-      <!-- Recent results -->
-      <div class="section">
-        <div class="section-title">Recent Results <span id="recentCount">100</span></div>
-        <div class="tabs">
-          <button class="tab-btn active" onclick="filterRecent('all', this)">All</button>
-          <button class="tab-btn" onclick="filterRecent('won', this)">Won</button>
-          <button class="tab-btn" onclick="filterRecent('lost', this)">Lost</button>
-          <button class="tab-btn" onclick="filterRecent('void', this)">Void</button>
-        </div>
-        <div class="table-wrap">
+      <div>
+        <div class="section-hd">Pending picks <span id="pendingCount">0</span></div>
+        <div class="card">
           <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Match</th>
-                <th style="text-align:center">Pred → Actual</th>
-                <th>Market</th>
-                <th>Selection</th>
-                <th>Odds</th>
-                <th>Result</th>
-                <th>P&L</th>
-              </tr>
-            </thead>
-            <tbody id="recentBody"></tbody>
+            <thead><tr><th>Match</th><th>Market</th><th>Odds</th><th>Kickoff</th></tr></thead>
+            <tbody id="pendingBody"></tbody>
           </table>
         </div>
       </div>
-
     </div>
-  </div>
+
+    <!-- Market + League breakdown -->
+    <div class="two-col section">
+      <div>
+        <div class="section-hd">By Market</div>
+        <div class="card">
+          <table>
+            <thead><tr><th>Market</th><th>W</th><th>L</th><th>Hit%</th><th>P&L</th><th>Avg Odds</th></tr></thead>
+            <tbody id="marketBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div>
+        <div class="section-hd">By League</div>
+        <div class="card">
+          <table>
+            <thead><tr><th>League</th><th>W</th><th>L</th><th>Hit%</th><th>P&L</th></tr></thead>
+            <tbody id="leagueBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent picks -->
+    <div class="section">
+      <div class="section-hd">Recent picks <span id="recentCount">0</span></div>
+      <div class="tabs">
+        <button class="tab-btn active" onclick="filterRecent('all',this)">All</button>
+        <button class="tab-btn" onclick="filterRecent('won',this)">Won</button>
+        <button class="tab-btn" onclick="filterRecent('lost',this)">Lost</button>
+        <button class="tab-btn" onclick="filterRecent('pending',this)">Pending</button>
+      </div>
+      <div class="card">
+        <table>
+          <thead>
+            <tr>
+              <th>Kickoff</th><th>Match</th><th>Score</th><th>Market</th>
+              <th>Selection</th><th>Odds</th><th>Result</th><th>P&L</th>
+            </tr>
+          </thead>
+          <tbody id="recentBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /dashContent -->
 </div>
 
 <script>
-let adminKey = '';
-let allData = null;
 let allRecent = [];
 
-function unlock() {
-  const pw = document.getElementById('pwInput').value.trim();
-  if (!pw) return;
-  adminKey = pw;
-  fetchData();
-}
-
-document.getElementById('pwInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter') unlock();
-});
-
-function logout() {
-  adminKey = '';
-  allData = null;
-  document.getElementById('lockScreen').style.display = 'flex';
-  document.getElementById('adminDash').style.display = 'none';
-  document.getElementById('pwInput').value = '';
-}
-
-async function fetchData() {
-  try {
-    const res = await fetch('/api/admin/data', {
-      headers: { 'x-admin-key': adminKey }
-    });
-    if (res.status === 401) {
-      document.getElementById('lockError').style.display = 'block';
-      adminKey = '';
-      return;
-    }
-    document.getElementById('lockError').style.display = 'none';
-    document.getElementById('lockScreen').style.display = 'none';
-    document.getElementById('adminDash').style.display = 'block';
-
-    allData = await res.json();
-    renderDash(allData);
-  } catch (e) {
-    document.getElementById('lockError').textContent = 'Connection error';
-    document.getElementById('lockError').style.display = 'block';
-  }
-}
-
-function pl(v) {
+/* ── helpers ── */
+const pl = v => {
   const n = parseFloat(v) || 0;
-  const s = (n >= 0 ? '+' : '') + n.toFixed(2) + 'u';
-  return `<span class="${n >= 0 ? 'profit-pos' : 'profit-neg'}">${s}</span>`;
-}
-
-function hitRate(w, total) {
-  return total > 0 ? (w / total * 100).toFixed(1) + '%' : '—';
-}
-
-function outcomePill(o) {
-  if (o === 'won') return `<span class="pill pill-won">WON</span>`;
+  return `<span class="${n >= 0 ? 'profit-pos' : 'profit-neg'}">${n >= 0 ? '+' : ''}${n.toFixed(2)}u</span>`;
+};
+const hitRate = (w, t) => t > 0 ? (w / t * 100).toFixed(1) + '%' : '—';
+const outcomePill = o => {
+  if (o === 'won')  return `<span class="pill pill-won">WON</span>`;
   if (o === 'lost') return `<span class="pill pill-lost">LOST</span>`;
   if (o === 'void') return `<span class="pill pill-void">VOID</span>`;
   return `<span class="pill pill-pending">${o || 'PENDING'}</span>`;
-}
+};
 
-function renderDash(d) {
-  const s = d.summary;
-
-  // KPIs
-  document.getElementById('kpiGrid').innerHTML = `
-    <div class="kpi-card"><div class="kpi-label">Settled</div><div class="kpi-value white">${s.settled}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Win Rate</div><div class="kpi-value ${s.hit_rate >= 50 ? 'green' : 'yellow'}">${s.hit_rate}%</div></div>
-    <div class="kpi-card"><div class="kpi-label">Total P&L</div><div class="kpi-value ${s.profit >= 0 ? 'green' : 'red'}">${s.profit >= 0 ? '+' : ''}${s.profit.toFixed(2)}u</div></div>
-    <div class="kpi-card"><div class="kpi-label">ROI</div><div class="kpi-value ${s.roi >= 0 ? 'green' : 'red'}">${s.roi >= 0 ? '+' : ''}${s.roi}%</div></div>
-    <div class="kpi-card"><div class="kpi-label">Avg Odds</div><div class="kpi-value blue">${s.avg_odds.toFixed(2)}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Won</div><div class="kpi-value green">${s.wins}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Lost</div><div class="kpi-value red">${s.losses}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Pending</div><div class="kpi-value yellow">${s.pending}</div></div>
-  `;
-
-  // Verify status
-  const lv = d.last_verify ? new Date(d.last_verify).toLocaleString('en-GB') : 'Never';
-  document.getElementById('verifyStatus').textContent = `Last auto-verify: ${lv}`;
-
-  // Daily chart
-  const daily = d.daily.slice(0, 30).reverse();
-  const maxAbs = Math.max(...daily.map(r => Math.abs(r.profit)), 1);
-  const barsEl = document.getElementById('dailyBars');
-  barsEl.innerHTML = daily.map(r => {
-    const pct = Math.round(Math.abs(r.profit) / maxAbs * 75);
-    const color = r.profit >= 0 ? '#22c55e' : '#ef4444';
-    const label = r.day ? r.day.slice(5) : '';
-    const tip = `${r.day} | ${r.settled} settled | ${r.profit >= 0 ? '+' : ''}${r.profit.toFixed(2)}u`;
-    return `<div class="daily-bar-col">
-      <div class="daily-bar" style="height:${Math.max(pct,2)}px;background:${color}" data-tip="${tip}"></div>
-      <div class="daily-label">${label}</div>
-    </div>`;
-  }).join('');
-
-  // Pending
-  document.getElementById('pendingCount').textContent = d.pending.length;
-  document.getElementById('pendingBody').innerHTML = d.pending.length
-    ? d.pending.map(p => `<tr>
-        <td>${p.match}</td>
-        <td>${p.market}</td>
-        <td>${p.odds.toFixed(2)}</td>
-        <td>${p.ko}</td>
-      </tr>`).join('')
-    : '<tr><td colspan="4" style="text-align:center;color:#475569;padding:20px">No pending picks</td></tr>';
-
-  // By market
-  document.getElementById('marketBody').innerHTML = d.by_market.map(m => {
-    const hr = hitRate(m.wins, m.settled);
-    return `<tr>
-      <td>${m.market}</td>
-      <td style="color:#22c55e">${m.wins}</td>
-      <td style="color:#ef4444">${m.losses}</td>
-      <td>${hr}</td>
-      <td>${pl(m.profit)}</td>
-      <td style="color:#94a3b8">${m.avg_odds.toFixed(2)}</td>
-    </tr>`;
-  }).join('');
-
-  // By league
-  document.getElementById('leagueBody').innerHTML = d.by_league.map(l => {
-    const hr = hitRate(l.wins, l.settled);
-    return `<tr>
-      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${l.league}">${l.league}</td>
-      <td style="color:#22c55e">${l.wins}</td>
-      <td style="color:#ef4444">${l.losses}</td>
-      <td>${hr}</td>
-      <td>${pl(l.profit)}</td>
-    </tr>`;
-  }).join('');
-
-  // Recent
-  allRecent = d.recent;
-  renderRecent('all');
-}
-
-function scoreColor(score) {
-  if (!score || !/^\d+-\d+$/.test(score.trim())) return '#94a3b8';
-  const [h, a] = score.trim().split('-').map(Number);
-  if (h > a) return '#22c55e';
-  if (a > h) return '#ef4444';
-  return '#f59e0b';
-}
-
-function winnerLabel(w) {
-  if (!w) return '';
-  const map = { H: 'Home Win', D: 'Draw', A: 'Away Win' };
-  return `<span class="pred-winner ${w}">${map[w] || w}</span>`;
+function scoreColor(s) {
+  if (!s || !/^\d+-\d+$/.test(s.trim())) return '#94a3b8';
+  const [h,a] = s.trim().split('-').map(Number);
+  return h > a ? '#22c55e' : a > h ? '#ef4444' : '#f59e0b';
 }
 
 function scoreCell(pred, actual, winner) {
-  const hasPred = pred && /^\d+-\d+$/.test(pred.trim());
-  const hasActual = actual && /^\d+-\d+$/.test(actual.trim());
-  const hasOtherActual = actual && !hasActual;
-
-  let html = '<div class="score-cell">';
-
+  let html = '<div style="display:flex;flex-direction:column;gap:3px;align-items:center">';
   if (winner) {
-    html += `<div>${winnerLabel(winner)}</div>`;
+    const map = {H:'Home Win',D:'Draw',A:'Away Win'};
+    html += `<span class="pred-winner ${winner}">${map[winner]||winner}</span>`;
   }
-
-  if (hasPred) {
-    html += `<div class="score-row">
-      <span class="score-label">Pred</span>
-      <span class="score-pred">${pred}</span>
-    </div>`;
-  }
-
-  if (hasActual) {
-    const col = scoreColor(actual);
-    html += `<div class="score-row">
-      <span class="score-label">Actual</span>
-      <span class="score-actual" style="color:${col}">${actual}</span>
-    </div>`;
-  } else if (hasOtherActual) {
-    html += `<div style="font-size:11px;color:#64748b;text-align:center;max-width:110px">${actual}</div>`;
-  } else if (!hasPred && !winner) {
-    html += '<span style="color:#334155;font-size:12px">—</span>';
-  }
-
+  if (pred && /^\d+-\d+$/.test(pred.trim()))
+    html += `<span class="pred-score">${pred}</span>`;
+  if (actual && /^\d+-\d+$/.test(actual.trim()))
+    html += `<span class="score-badge result" style="color:${scoreColor(actual)}">${actual}</span>`;
   html += '</div>';
   return html;
-}
-
-function renderRecent(filter) {
-  const rows = filter === 'all' ? allRecent : allRecent.filter(r => r.outcome === filter);
-  document.getElementById('recentCount').textContent = rows.length;
-  document.getElementById('recentBody').innerHTML = rows.map(r => `<tr>
-    <td style="color:#64748b;white-space:nowrap;font-size:12px">${r.ko}</td>
-    <td>
-      <div class="match-cell">
-        <div class="match-teams">${r.home} <span style="color:#475569">vs</span> ${r.away}</div>
-        <div class="match-date">${r.league}</div>
-      </div>
-    </td>
-    <td>${scoreCell(r.pred_score, r.score, r.pred_winner)}</td>
-    <td style="color:#94a3b8;font-size:12px">${r.market}</td>
-    <td style="font-size:13px">${r.selection}</td>
-    <td style="color:#94a3b8">${r.odds.toFixed(2)}</td>
-    <td>${outcomePill(r.outcome)}</td>
-    <td>${pl(r.pl)}</td>
-  </tr>`).join('') || '<tr><td colspan="8" style="text-align:center;color:#475569;padding:20px">No picks</td></tr>';
 }
 
 function filterRecent(filter, btn) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   renderRecent(filter);
+}
+
+function renderRecent(filter) {
+  const rows = filter === 'all' ? allRecent : allRecent.filter(r => r.outcome === filter);
+  document.getElementById('recentCount').textContent = rows.length;
+  document.getElementById('recentBody').innerHTML = rows.map(r => `<tr>
+    <td style="color:#52525b;white-space:nowrap;font-size:11px">${r.ko}</td>
+    <td><div class="match-cell">
+      <div class="match-teams">${r.home} <span style="color:#3f3f46">vs</span> ${r.away}</div>
+      <div class="match-date">${r.league}</div>
+    </div></td>
+    <td>${scoreCell(r.pred_score, r.score, r.pred_winner)}</td>
+    <td style="color:#52525b;font-size:11px">${r.market}</td>
+    <td style="font-size:12px">${r.selection}</td>
+    <td style="color:#94a3b8">${parseFloat(r.odds||0).toFixed(2)}</td>
+    <td>${outcomePill(r.outcome)}</td>
+    <td>${pl(r.pl)}</td>
+  </tr>`).join('') || '<tr><td colspan="8" style="text-align:center;color:#52525b;padding:24px">No picks found</td></tr>';
+}
+
+function renderDash(d) {
+  const s = d.summary;
+
+  document.getElementById('kpiGrid').innerHTML = `
+    <div class="kpi-card"><div class="kpi-label">Settled</div><div class="kpi-value white">${s.settled}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Win Rate</div><div class="kpi-value ${s.hit_rate >= 50 ? 'green' : 'yellow'}">${s.hit_rate}%</div></div>
+    <div class="kpi-card"><div class="kpi-label">Total P&L</div><div class="kpi-value ${s.profit >= 0 ? 'green' : 'red'}">${s.profit >= 0 ? '+' : ''}${parseFloat(s.profit||0).toFixed(2)}u</div></div>
+    <div class="kpi-card"><div class="kpi-label">ROI</div><div class="kpi-value ${s.roi >= 0 ? 'green' : 'red'}">${s.roi >= 0 ? '+' : ''}${s.roi}%</div></div>
+    <div class="kpi-card"><div class="kpi-label">Avg Odds</div><div class="kpi-value blue">${parseFloat(s.avg_odds||0).toFixed(2)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Won</div><div class="kpi-value green">${s.wins}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Lost</div><div class="kpi-value red">${s.losses}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Pending</div><div class="kpi-value yellow">${s.pending}</div></div>
+    <div class="kpi-card"><div class="kpi-label">📲 Subscribers</div><div class="kpi-value teal">${s.push_subs ?? 0}</div></div>
+  `;
+
+  document.getElementById('verifyStatus').textContent = d.last_verify
+    ? `Last auto-verify: ${d.last_verify}` : 'Last verify: —';
+
+  const daily = (d.daily || []).slice(0, 30).reverse();
+  const maxAbs = Math.max(...daily.map(r => Math.abs(r.profit)), 1);
+  document.getElementById('dailyBars').innerHTML = daily.map(r => {
+    const pct = Math.round(Math.abs(r.profit) / maxAbs * 72);
+    const col = r.profit >= 0 ? '#22c55e' : '#ef4444';
+    const label = (r.day || '').slice(5);
+    const tip = `${r.day} · ${r.settled} settled · ${r.profit >= 0 ? '+' : ''}${parseFloat(r.profit||0).toFixed(2)}u`;
+    return `<div class="daily-bar-col">
+      <div class="daily-bar" style="height:${Math.max(pct,2)}px;background:${col}" data-tip="${tip}"></div>
+      <div class="daily-label">${label}</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('pendingCount').textContent = d.pending.length;
+  document.getElementById('pendingBody').innerHTML = d.pending.length
+    ? d.pending.map(p => `<tr>
+        <td>${p.match}</td><td style="color:#52525b">${p.market}</td>
+        <td>${parseFloat(p.odds||0).toFixed(2)}</td>
+        <td style="color:#52525b">${p.ko}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="4" style="text-align:center;color:#52525b;padding:20px">No pending picks</td></tr>';
+
+  document.getElementById('marketBody').innerHTML = (d.by_market || []).map(m => `<tr>
+    <td>${m.market}</td>
+    <td style="color:#22c55e">${m.wins}</td>
+    <td style="color:#ef4444">${m.losses}</td>
+    <td>${hitRate(m.wins, m.settled)}</td>
+    <td>${pl(m.profit)}</td>
+    <td style="color:#71717a">${parseFloat(m.avg_odds||0).toFixed(2)}</td>
+  </tr>`).join('');
+
+  document.getElementById('leagueBody').innerHTML = (d.by_league || []).map(l => `<tr>
+    <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${l.league}">${l.league}</td>
+    <td style="color:#22c55e">${l.wins}</td>
+    <td style="color:#ef4444">${l.losses}</td>
+    <td>${hitRate(l.wins, l.settled)}</td>
+    <td>${pl(l.profit)}</td>
+  </tr>`).join('');
+
+  allRecent = d.recent || [];
+  renderRecent('all');
+
   document.getElementById('loadingMsg').style.display = 'none';
   document.getElementById('dashContent').style.display = 'block';
 }
 
-// After data loaded, show content
-const _origRender = renderDash;
-window.renderDash = function(d) {
-  _origRender(d);
-  document.getElementById('loadingMsg').style.display = 'none';
-  document.getElementById('dashContent').style.display = 'block';
-};
+/* ── Push sender ── */
+async function sendPush() {
+  const title = document.getElementById('pushTitle').value.trim();
+  const body  = document.getElementById('pushBody').value.trim();
+  const url   = document.getElementById('pushUrl').value.trim() || '/';
+  const res   = document.getElementById('pushResult');
+
+  if (!title || !body) { res.textContent = 'Title and body are required.'; res.className = 'push-result err'; return; }
+  res.textContent = 'Sending…'; res.className = 'push-result';
+
+  try {
+    const r = await fetch('/api/push/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, body, url })
+    });
+    if (r.status === 401) { res.textContent = 'Session expired — please log in again.'; res.className = 'push-result err'; return; }
+    const data = await r.json();
+    res.textContent = `✅ Sent to ${data.sent} subscribers (${data.failed} failed, ${data.cleaned||0} cleaned)`;
+    res.className = 'push-result ok';
+  } catch (e) {
+    res.textContent = 'Request failed: ' + e.message;
+    res.className = 'push-result err';
+  }
+}
+
+/* ── Load data on page open ── */
+async function loadDash() {
+  try {
+    const r = await fetch('/api/admin/data');
+    if (r.status === 401) {
+      window.location.href = '/admin-login';
+      return;
+    }
+    const data = await r.json();
+    renderDash(data);
+  } catch (e) {
+    document.getElementById('loadingMsg').textContent = 'Failed to load: ' + e.message;
+  }
+}
+
+loadDash();
 </script>
 </body>
 </html>

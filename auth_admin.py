@@ -181,7 +181,7 @@ async def admin_login(password: str = Form(...)):
 
     token = make_admin_token()
 
-    response = RedirectResponse("/home", status_code=302)
+    response = RedirectResponse("/admin", status_code=302)
     response.set_cookie(
         key=ADMIN_COOKIE_NAME,
         value=token,
