@@ -312,9 +312,9 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
   <div class="stats-strip" id="stats-strip">
     <div class="stat-tile"><div class="stat-lbl">Active Edges</div><div class="stat-val" id="s-count" style="color:#4ade80">—</div><div class="stat-sub">today</div></div>
     <div class="stat-tile"><div class="stat-lbl">Avg Edge (PROD)</div><div class="stat-val" id="s-avgev" style="color:#4ade80">—</div><div class="stat-sub">all opportunities</div></div>
-    <div class="stat-tile"><div class="stat-lbl">Best EV</div><div class="stat-val" id="s-bestev" style="color:#fbbf24">—</div><div class="stat-sub">today's best</div></div>
+    <div class="stat-tile"><div class="stat-lbl">Top Edge</div><div class="stat-val" id="s-bestev" style="color:#fbbf24">—</div><div class="stat-sub">highest identified</div></div>
     <div class="stat-tile"><div class="stat-lbl">Avg Odds</div><div class="stat-val" id="s-avgodds">—</div><div class="stat-sub">identified edges</div></div>
-    <div class="stat-tile"><div class="stat-lbl">Signal Accuracy</div><div class="stat-val" id="s-hitrate">—</div><div class="stat-sub">settled signals</div></div>
+    <div class="stat-tile"><div class="stat-lbl">Model Calibration</div><div class="stat-val" id="s-hitrate">—</div><div class="stat-sub">settled signals</div></div>
     <div class="stat-tile"><div class="stat-lbl">CLV</div><div class="stat-val" id="s-clv">—</div><div class="stat-sub">closing line value</div></div>
   </div>
 
@@ -665,7 +665,26 @@ function renderScanner(){
     const isExpanded = state.expandedId === p.id;
     const isNew = p.age_minutes!=null && p.age_minutes<=15;
     const leagueShort = (p.league||"").replace(/^soccer_/,"").replace(/_/," ").replace(/\b\w/g,c=>c.toUpperCase()).substring(0,18);
-    const marketLabel = p.market;
+    const MARKET_LABELS = {
+      "Value Single":"Model Signal","Value Singles":"Model Signal","value_single":"Model Signal",
+      "PRO PICK":"Model Signal","VALUE OPP":"Model Signal","VALUE_OPP":"Model Signal",
+      "BTTS_YES":"BTTS Yes","BTTS_NO":"BTTS No","BTTS":"BTTS",
+      "HOME_WIN":"Home Win","AWAY_WIN":"Away Win","DRAW":"Draw",
+      "FT_OVER_0_5":"Over 0.5","FT_OVER_1_5":"Over 1.5","FT_OVER_2_5":"Over 2.5",
+      "FT_OVER_3_5":"Over 3.5","FT_OVER_4_5":"Over 4.5",
+      "FT_UNDER_2_5":"Under 2.5","FT_UNDER_3_5":"Under 3.5",
+      "CORNERS_OVER_7_5":"Corners O7.5","CORNERS_OVER_8_5":"Corners O8.5",
+      "CORNERS_OVER_9_5":"Corners O9.5","CORNERS_OVER_10_5":"Corners O10.5",
+      "CORNERS_OVER_11_5":"Corners O11.5","CORNERS_OVER_12_5":"Corners O12.5",
+      "CARDS_OVER_2_5":"Cards O2.5","CARDS_OVER_3_5":"Cards O3.5",
+      "CARDS_OVER_4_5":"Cards O4.5","CARDS_OVER_5_5":"Cards O5.5",
+      "DC_HOME_DRAW":"DC Home/Draw","DC_HOME_AWAY":"DC Home/Away","DC_DRAW_AWAY":"DC Draw/Away",
+      "AH_HOME_-0.5":"AH Home -0.5","AH_HOME_+0.5":"AH Home +0.5",
+      "AH_AWAY_-0.5":"AH Away -0.5","AH_AWAY_+0.5":"AH Away +0.5",
+      "Corners":"Corners","Cards":"Cards",
+    };
+    const rawMkt = p.market || "";
+    const marketLabel = MARKET_LABELS[rawMkt] || rawMkt.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
     const selectionText = p.selection || "—";
     const evStr = fmtPct(p.ev);
 
@@ -901,7 +920,7 @@ function renderHistory(){
 
   document.getElementById("history-stats").innerHTML=`
     <div class="stat-tile"><div class="stat-lbl">Signals</div><div class="stat-val">${stats.total}</div><div class="stat-sub">settled</div></div>
-    <div class="stat-tile"><div class="stat-lbl">Signal Accuracy</div><div class="stat-val" style="color:#e4e4e7">${fmtPct(stats.hitRate,false)}</div><div class="stat-sub">correct signals</div></div>
+    <div class="stat-tile"><div class="stat-lbl">Model Calibration</div><div class="stat-val" style="color:#e4e4e7">${fmtPct(stats.hitRate,false)}</div><div class="stat-sub">correct signals</div></div>
     <div class="stat-tile"><div class="stat-lbl">Avg Odds</div><div class="stat-val">${fmt2(stats.avgOdds)}</div><div class="stat-sub">identified edges</div></div>`;
 
   const start = state.historyPage * state.historyPerPage;
@@ -1009,7 +1028,7 @@ function renderSport(data, statsEl, tableEl, sportLabel){
 
   document.getElementById(statsEl).innerHTML=`
     <div class="stat-tile"><div class="stat-lbl">Signals</div><div class="stat-val">${picks.length}</div><div class="stat-sub">tracked</div></div>
-    <div class="stat-tile"><div class="stat-lbl">Signal Accuracy</div><div class="stat-val" style="color:#e4e4e7">${hr!=null?fmtPct(hr,false):"—"}</div><div class="stat-sub">correct signals</div></div>
+    <div class="stat-tile"><div class="stat-lbl">Model Calibration</div><div class="stat-val" style="color:#e4e4e7">${hr!=null?fmtPct(hr,false):"—"}</div><div class="stat-sub">correct signals</div></div>
     <div class="stat-tile"><div class="stat-lbl">Mode</div><div class="stat-val" style="font-size:12px;color:#a78bfa">Learning</div><div class="stat-sub">no units tracked</div></div>`;
 
   if(!picks.length){ document.getElementById(tableEl).innerHTML=`<div class="empty-state"><div class="empty-sub">No ${sportLabel} picks today</div></div>`; return; }
