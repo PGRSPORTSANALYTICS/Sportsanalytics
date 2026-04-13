@@ -694,7 +694,8 @@ function renderScanner(){
     const marketLabel = MARKET_LABELS[rawMkt] || rawMkt.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
     const selectionText = p.selection || "—";
     const evStr = fmtPct(p.ev);
-    const modelPct  = p.model_prob ? Math.round(p.model_prob * 100) : null;
+    const _mp = p.model_prob;
+    const modelPct  = _mp ? Math.round(_mp > 1 ? _mp : _mp * 100) : null;
     const marketPct = p.odds && p.odds > 1 ? Math.round(100 / p.odds) : null;
     const edgeSign  = (p.ev||0) >= 0 ? '+' : '';
     const mmeLine   = (modelPct && marketPct)
