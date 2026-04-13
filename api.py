@@ -2341,7 +2341,7 @@ async def get_today_picks():
 
         rows = db_helper.execute("""
             SELECT * FROM (
-                SELECT DISTINCT ON (home_team, away_team, market)
+                SELECT DISTINCT ON (home_team, away_team, market, selection)
                     id, home_team, away_team, market, selection, odds,
                     edge_percentage, confidence, outcome, profit_loss,
                     odds_by_bookmaker, best_odds_value, best_odds_bookmaker,
@@ -2350,7 +2350,10 @@ async def get_today_picks():
                     model_prob, disagreement, clv_status, hidden_value_status,
                     timestamp, kickoff_epoch
                 FROM football_opportunities
-                WHERE mode IN ('PROD', 'VALUE_OPP')
+                WHERE (
+                    mode IN ('PROD', 'VALUE_OPP')
+                    OR market IN ('Corners', 'Cards')
+                )
                   AND (outcome IS NULL OR outcome = '' OR outcome IN ('pending', 'unknown'))
                   AND match_date >= %s
                   AND match_date < %s
@@ -2363,7 +2366,7 @@ async def get_today_picks():
                           OR (match_date::date + kickoff_time::time) > NOW() - INTERVAL '4 hours'
                       ))
                   )
-                ORDER BY home_team, away_team, market,
+                ORDER BY home_team, away_team, market, selection,
                          (CASE WHEN mode='PROD' THEN 0 ELSE 1 END),
                          id DESC
             ) sub

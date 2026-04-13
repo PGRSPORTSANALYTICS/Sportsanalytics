@@ -114,10 +114,12 @@ LEAGUE_TO_SPORT_KEY: Dict[str, str] = {
 }
 
 UNSUPPORTED_MARKETS = {
-    'corners', 'cards', 'shots', 'fouls', 'offsides',
+    'shots', 'fouls', 'offsides',
     'throw-ins', 'player props', 'player_props', 'props',
     'exact score', 'exact_score',
 }
+# Corners and Cards: no Odds API support — handled via API-Football fallback (_try_af_clv)
+AF_ONLY_MARKETS = {'corners', 'cards'}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -199,6 +201,9 @@ def _market_type(market: str, selection: str = '') -> Optional[str]:
     must inspect the selection text to find the correct market endpoint.
     """
     if not _is_supported(market):
+        return None
+    # Corners/Cards: Odds API has no endpoint — route to API-Football fallback
+    if any(af in market.lower() for af in AF_ONLY_MARKETS):
         return None
     combined = (market + ' ' + selection).lower()
 
@@ -1220,15 +1225,59 @@ def _match_api_football_odds(market: str, selection: str,
     h = home.lower()
     a = away.lower()
 
-    # 1X2
-    if 'home win' in s or (h in s and 'win' in s):
+    # ── Corners ──────────────────────────────────────────────────────────────
+    if 'corner' in m or 'corner' in s:
+        num_match = re.search(r'([\d.]+)', s)
+        if not num_match:
+            return None
+        line = num_match.group(1).replace('.', '_')
+
+        # Team corners: home or away team name in selection
+        if h and any(word in s for word in h.split() if len(word) > 3):
+            side = 'over' if 'over' in s else 'under'
+            key = f"HOME_CORNERS_{side.upper()}_{line}"
+            return odds_map.get(key)
+        if a and any(word in s for word in a.split() if len(word) > 3):
+            side = 'over' if 'over' in s else 'under'
+            key = f"AWAY_CORNERS_{side.upper()}_{line}"
+            return odds_map.get(key)
+
+        # Match corners over/under
+        if 'over' in s:
+            return odds_map.get(f'CORNERS_OVER_{line}')
+        if 'under' in s:
+            return odds_map.get(f'CORNERS_UNDER_{line}')
+        return None
+
+    # ── Cards ─────────────────────────────────────────────────────────────────
+    if 'card' in m or 'card' in s:
+        num_match = re.search(r'([\d.]+)', s)
+        if not num_match:
+            return None
+        line = num_match.group(1).replace('.', '_')
+
+        if 'home' in s:
+            side = 'over' if 'over' in s else 'under'
+            return odds_map.get(f"HOME_CARDS_{side.upper()}_{line}")
+        if 'away' in s:
+            side = 'over' if 'over' in s else 'under'
+            return odds_map.get(f"AWAY_CARDS_{side.upper()}_{line}")
+
+        if 'over' in s:
+            return odds_map.get(f'CARDS_OVER_{line}')
+        if 'under' in s:
+            return odds_map.get(f'CARDS_UNDER_{line}')
+        return None
+
+    # ── 1X2 ───────────────────────────────────────────────────────────────────
+    if 'home win' in s or (h and h in s and 'win' in s):
         return odds_map.get('HOME_WIN')
-    if 'away win' in s or (a in s and 'win' in s):
+    if 'away win' in s or (a and a in s and 'win' in s):
         return odds_map.get('AWAY_WIN')
-    if s == 'draw' or 'draw' in s:
+    if s == 'draw' or ('draw' in s and 'double' not in s and 'no' not in s):
         return odds_map.get('DRAW')
 
-    # Over/Under totals
+    # ── Over/Under totals (goals) ─────────────────────────────────────────────
     ov_match = re.search(r'over\s+([\d.]+)', s)
     un_match = re.search(r'under\s+([\d.]+)', s)
     if ov_match:
@@ -1238,13 +1287,13 @@ def _match_api_football_odds(market: str, selection: str,
         line = un_match.group(1).replace('.', '_')
         return odds_map.get(f'FT_UNDER_{line}')
 
-    # BTTS
+    # ── BTTS ─────────────────────────────────────────────────────────────────
     if 'btts' in s or 'both teams' in s:
         if 'no' in s:
             return odds_map.get('BTTS_NO')
         return odds_map.get('BTTS_YES')
 
-    # Double Chance
+    # ── Double Chance ─────────────────────────────────────────────────────────
     if 'dc' in m or 'double chance' in m or 'double chance' in s:
         if 'home' in s and 'draw' in s:
             return odds_map.get('DC_HOME_DRAW')
@@ -1252,6 +1301,13 @@ def _match_api_football_odds(market: str, selection: str,
             return odds_map.get('DC_HOME_AWAY')
         if 'draw' in s and 'away' in s:
             return odds_map.get('DC_DRAW_AWAY')
+    # home or draw / draw or away patterns
+    if ('home' in s and 'draw' in s) or s in ('home or draw', 'draw or home'):
+        return odds_map.get('DOUBLE_CHANCE_1X') or odds_map.get('DC_HOME_DRAW')
+    if ('draw' in s and 'away' in s) or s in ('draw or away', 'away or draw'):
+        return odds_map.get('DOUBLE_CHANCE_X2') or odds_map.get('DC_DRAW_AWAY')
+    if ('home' in s and 'away' in s) or s in ('home or away', 'away or home'):
+        return odds_map.get('DOUBLE_CHANCE_12') or odds_map.get('DC_HOME_AWAY')
 
     return None
 
