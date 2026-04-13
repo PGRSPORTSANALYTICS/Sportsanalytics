@@ -70,6 +70,18 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
 .nav-tab{padding:10px 16px;font-size:13px;font-weight:600;color:#71717a;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .15s;background:none;border-top:none;border-left:none;border-right:none}
 .nav-tab:hover{color:#d4d4d8}
 .nav-tab.active{color:#e4e4e7;border-bottom-color:#22c55e}
+.nav-tab.sv-tab.active{color:#fbbf24;border-bottom-color:#f59e0b}
+
+/* ── Smart Value row marker ── */
+.sv-row{border-left:2px solid rgba(245,158,11,.55)!important;background:rgba(245,158,11,.025)!important}
+.sv-row:hover{background:rgba(245,158,11,.045)!important}
+.sv-chip{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:5px;font-size:9px;font-weight:800;letter-spacing:.06em;background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.35);color:#fbbf24;vertical-align:middle;margin-left:5px}
+
+/* ── Smart Value banner ── */
+.sv-banner{background:linear-gradient(135deg,rgba(245,158,11,.08),rgba(245,158,11,.03));border:1px solid rgba(245,158,11,.2);border-radius:12px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:10px}
+.sv-banner-icon{font-size:22px;flex-shrink:0}
+.sv-banner-text{font-size:11px;color:#a1a1aa;line-height:1.5}
+.sv-banner-text b{color:#fbbf24}
 
 /* ── Filter bar ── */
 .filter-bar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px;padding:10px 12px;background:#0f0f11;border:1px solid #18181b;border-radius:12px}
@@ -322,6 +334,7 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
 
   <!-- Nav Tabs -->
   <div class="nav-tabs">
+    <button class="nav-tab sv-tab" data-tab="smartvalue">⭐ Smart Value</button>
     <button class="nav-tab active" data-tab="scanner">⚡ Live Scanner</button>
     <button class="nav-tab" data-tab="history">📊 Track Record</button>
     <button class="nav-tab" data-tab="clv">📈 CLV</button>
@@ -336,6 +349,14 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
       <span style="font-size:11px;color:#52525b;line-height:1.4;max-width:75%">This tool identifies pricing inefficiencies — not every signal is meant to be played.</span>
       <span style="font-size:10px;font-weight:700;color:#4ade80;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.25);border-radius:20px;padding:3px 9px;white-space:nowrap">● Live market scan</span>
+    </div>
+
+    <!-- Smart Value banner (shown only on SV tab) -->
+    <div class="sv-banner" id="sv-banner" style="display:none">
+      <div class="sv-banner-icon">⭐</div>
+      <div class="sv-banner-text">
+        <b>Smart Value picks</b> — our highest-conviction signals. One best pick per match, model-approved and EV-positive. Sorted by kickoff time.
+      </div>
     </div>
 
     <!-- Filter bar -->
@@ -528,6 +549,7 @@ function normPick(b){
     status: b.status||"PRE",
     age_minutes: b.age_minutes!=null?b.age_minutes:null,
     match_date: b.match_date||"",
+    mode: b.mode||"",
   };
 }
 function evClass(ev){
@@ -618,6 +640,19 @@ async function verifyCode(){
 ──────────────────────────────────────────────── */
 function filteredPicks(){
   let picks = [...state.picks];
+
+  // Smart Value tab: only PROD picks
+  if(state.activeTab === "smartvalue"){
+    picks = picks.filter(p => p.mode === "PROD");
+    // Smart Value always sorted by time (easiest to action)
+    picks.sort((a,b)=>{
+      const ta=new Date(isNaN(a.kickoff_time)?a.kickoff_time:Number(a.kickoff_time)*1000).getTime()||0;
+      const tb=new Date(isNaN(b.kickoff_time)?b.kickoff_time:Number(b.kickoff_time)*1000).getTime()||0;
+      return ta-tb;
+    });
+    return picks;
+  }
+
   if(state.filters.sport!=="all"){
     picks = picks.filter(p=>(p.sport||"").toLowerCase().includes(state.filters.sport)||
       (state.filters.sport==="football"&&(p.sport||"").toLowerCase().includes("soccer")));
@@ -641,13 +676,23 @@ function filteredPicks(){
 function renderScanner(){
   const body = document.getElementById("scanner-body");
   const picks = filteredPicks();
+  const isSV = state.activeTab === "smartvalue";
 
   document.getElementById("hdr-count").textContent = picks.length;
   updateStatsStrip(picks);
 
+  // Show/hide filter bar and SV banner
+  const filterBar = document.querySelector(".filter-bar");
+  const svBanner  = document.getElementById("sv-banner");
+  if(filterBar) filterBar.style.display = isSV ? "none" : "";
+  if(svBanner)  svBanner.style.display  = isSV ? "flex" : "none";
+
   if(!picks.length){
-    body.innerHTML=`<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">No edges found</div><div class="empty-sub">Try lowering the min EV filter or check back soon</div></div>`;
-    if(!state.isPremium) document.getElementById("fomo-section").style.display="block";
+    const emptyMsg = isSV
+      ? `<div class="empty-state"><div class="empty-icon">⭐</div><div class="empty-title">No Smart Value picks today</div><div class="empty-sub">Check back closer to kickoff — picks publish 2–4 hours before matches</div></div>`
+      : `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">No edges found</div><div class="empty-sub">Try lowering the min EV filter or check back soon</div></div>`;
+    body.innerHTML=emptyMsg;
+    if(!state.isPremium && !isSV) document.getElementById("fomo-section").style.display="block";
     return;
   }
 
@@ -715,9 +760,13 @@ function renderScanner(){
       ? `<div class="mme-line">Model: <b>${modelPct}%</b> · Market: <b>${marketPct}%</b> · Edge: <b>${edgeSign}${(p.ev||0).toFixed(1)}%</b>${mmeBook}</div>${unlockHint}`
       : unlockHint;
 
-    html+=`<div class="scanner-row${isExpanded?" expanded":""} row-new" data-id="${esc(p.id)}">
+    const isProd = p.mode === "PROD";
+    const svMark = (!isSV && isProd) ? '<span class="sv-chip">⭐ SV</span>' : '';
+    const svRowCls = isProd ? " sv-row" : "";
+
+    html+=`<div class="scanner-row${isExpanded?" expanded":""}${svRowCls} row-new" data-id="${esc(p.id)}">
       <div class="cell-match">
-        <div class="match-teams">${esc(p.match)}${isNew?'<span class="new-chip">NEW</span>':''}</div>
+        <div class="match-teams">${esc(p.match)}${isNew?'<span class="new-chip">NEW</span>':''}${svMark}</div>
         <div class="match-meta">${esc(p.league.replace(/^soccer_/,"").replace(/_/g," "))}</div>
         ${mmeLine}
       </div>
@@ -743,8 +792,8 @@ function renderScanner(){
     }
   });
 
-  // Ghost rows — always add for non-premium to show volume
-  if(!state.isPremium){
+  // Ghost rows — show in scanner tab only, not in Smart Value tab
+  if(!state.isPremium && !isSV){
     const ghostMarkets = ["Over 2.5 Goals","BTTS Yes","1X2 Home","Double Chance","Over 3.5","Under 2.5","BTTS No","1X2 Away","Corners Over","Cards Over"];
     const ghostLeagues = ["Premier League","La Liga","Bundesliga","Serie A","Ligue 1","Champions League","Europa League","Championship","Eredivisie","Primeira Liga"];
     const ghostEvs = ["+8.2%","+11.4%","+6.7%","+9.1%","+14.3%","+7.8%","+12.5%","+5.9%","+10.2%","+8.8%"];
@@ -1100,11 +1149,16 @@ const TABS = ["scanner","history","clv","hockey","nba"];
 function switchTab(id){
   state.activeTab=id;
   document.querySelectorAll(".nav-tab").forEach(b=>b.classList.toggle("active",b.dataset.tab===id));
+  // "smartvalue" shares tab-scanner div — show it for both scanner + smartvalue
+  const showScanner = id==="scanner" || id==="smartvalue";
   TABS.forEach(t=>{ const el=document.getElementById("tab-"+t); if(el) el.style.display=t===id?"block":"none"; });
+  const scannerEl = document.getElementById("tab-scanner");
+  if(scannerEl) scannerEl.style.display = showScanner ? "block" : "none";
   if(id==="history"  && !state.historyPicks.length) fetchHistory();
   if(id==="clv"      && !state.clvData)             fetchCLV();
   if(id==="hockey"   && !state.hockeyData)           fetchHockey();
   if(id==="nba"      && !state.nbaData)              fetchNba();
+  if(showScanner) renderScanner();
 }
 
 /* ──────────────────────────────────────────────
@@ -1191,7 +1245,7 @@ if("serviceWorker" in navigator){
    AUTO-REFRESH
 ──────────────────────────────────────────────── */
 setInterval(()=>{
-  if(state.activeTab==="scanner") fetchMain();
+  if(state.activeTab==="scanner" || state.activeTab==="smartvalue") fetchMain();
 }, 30 * 1000);
 
 setInterval(()=>{
