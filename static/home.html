@@ -675,14 +675,14 @@ function renderScanner(){
       html+=`<div class="scanner-row" style="display:block"><div class="date-divider">📅 Tomorrow — ${_tmrwDate.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})}</div></div>`;
     }
 
-    // Free users: ALWAYS locked — they see match + market + edge, never selection/odds
-    const isLocked = !state.isPremium;
+    // Free users: first row is a teaser (fully visible), rest are locked
+    const isLocked = !state.isPremium && i > 0;
     const isExpanded = state.expandedId === p.id;
     const isNew = p.age_minutes!=null && p.age_minutes<=15;
     const leagueShort = (p.league||"").replace(/^soccer_/,"").replace(/_/," ").replace(/\b\w/g,c=>c.toUpperCase()).substring(0,18);
     const MARKET_LABELS = {
-      "Value Single":"Model Signal","Value Singles":"Model Signal","value_single":"Model Signal",
-      "PRO PICK":"Model Signal","VALUE OPP":"Model Signal","VALUE_OPP":"Model Signal",
+      "Value Single":"Edge Detected","Value Singles":"Edge Detected","value_single":"Edge Detected",
+      "PRO PICK":"Edge Detected","VALUE OPP":"Edge Detected","VALUE_OPP":"Edge Detected",
       "BTTS_YES":"BTTS Yes","BTTS_NO":"BTTS No","BTTS":"BTTS",
       "HOME_WIN":"Home Win","AWAY_WIN":"Away Win","DRAW":"Draw",
       "FT_OVER_0_5":"Over 0.5","FT_OVER_1_5":"Over 1.5","FT_OVER_2_5":"Over 2.5",
@@ -708,9 +708,12 @@ function renderScanner(){
     const edgeSign  = (p.ev||0) >= 0 ? '+' : '';
     const bookShort = (p.bookmaker||"").replace(/Exchange.*/i,"").trim();
     const mmeBook   = (!isLocked && bookShort) ? ` · <span style="color:#52525b">Best odds at: ${esc(bookShort)}</span>` : '';
-    const mmeLine   = (modelPct && marketPct)
-      ? `<div class="mme-line">Model: <b>${modelPct}%</b> · Market: <b>${marketPct}%</b> · Edge: <b>${edgeSign}${(p.ev||0).toFixed(1)}%</b>${mmeBook}</div>`
+    const unlockHint = isLocked
+      ? `<div style="font-size:10px;color:#a16207;margin-top:2px;cursor:pointer" onclick="openPremiumModal()">🔒 Unlock odds &amp; full analysis →</div>`
       : '';
+    const mmeLine   = (modelPct && marketPct)
+      ? `<div class="mme-line">Model: <b>${modelPct}%</b> · Market: <b>${marketPct}%</b> · Edge: <b>${edgeSign}${(p.ev||0).toFixed(1)}%</b>${mmeBook}</div>${unlockHint}`
+      : unlockHint;
 
     html+=`<div class="scanner-row${isExpanded?" expanded":""} row-new" data-id="${esc(p.id)}">
       <div class="cell-match">
