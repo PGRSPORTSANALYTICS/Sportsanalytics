@@ -721,7 +721,7 @@ function renderScanner(){
     }
 
     // Free users: first row is a teaser (fully visible), rest are locked
-    const isLocked = !state.isPremium && i > 0;
+    const isLocked = !state.isPremium && (isSV || i > 0);
     const isExpanded = state.expandedId === p.id;
     const isNew = p.age_minutes!=null && p.age_minutes<=15;
     const leagueShort = (p.league||"").replace(/^soccer_/,"").replace(/_/," ").replace(/\b\w/g,c=>c.toUpperCase()).substring(0,18);
