@@ -95,10 +95,14 @@ def post_clv_proof(bet: dict, close_odds: float, clv: float, close_book: str,
 
     close_label = close_book.replace("Exchange", "").strip() if close_book else "sharp book"
 
+    # Use selection as primary descriptor, fall back to market label
+    # e.g. "Go Ahead Eagles -1.0 (AH)" is more useful than "Asian Handicap"
+    market_display = selection if selection else market_lbl
+
     # Build description lines
     lines = [
         f"**{match_str}**",
-        f"{league}  ·  {market_lbl}" + (f"  ·  *{selection}*" if selection else ""),
+        f"{league}  ·  *{market_display}*",
         "",
     ]
 
