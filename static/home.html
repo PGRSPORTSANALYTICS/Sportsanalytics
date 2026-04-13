@@ -313,8 +313,8 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
     <div class="stat-tile"><div class="stat-lbl">Active Edges</div><div class="stat-val" id="s-count" style="color:#4ade80">—</div><div class="stat-sub">today</div></div>
     <div class="stat-tile"><div class="stat-lbl">Avg EV</div><div class="stat-val" id="s-avgev" style="color:#4ade80">—</div><div class="stat-sub">all opportunities</div></div>
     <div class="stat-tile"><div class="stat-lbl">Best EV</div><div class="stat-val" id="s-bestev" style="color:#fbbf24">—</div><div class="stat-sub">today's best</div></div>
-    <div class="stat-tile"><div class="stat-lbl">Hit Rate</div><div class="stat-val" id="s-hitrate">—</div><div class="stat-sub">all time</div></div>
-    <div class="stat-tile"><div class="stat-lbl">ROI</div><div class="stat-val" id="s-roi">—</div><div class="stat-sub">all time</div></div>
+    <div class="stat-tile"><div class="stat-lbl">Avg Odds</div><div class="stat-val" id="s-avgodds">—</div><div class="stat-sub">identified edges</div></div>
+    <div class="stat-tile"><div class="stat-lbl">Signal Accuracy</div><div class="stat-val" id="s-hitrate">—</div><div class="stat-sub">settled signals</div></div>
     <div class="stat-tile"><div class="stat-lbl">CLV</div><div class="stat-val" id="s-clv">—</div><div class="stat-sub">closing line value</div></div>
   </div>
 
@@ -785,12 +785,15 @@ function renderExpandPanel(p){
 
 function updateStatsStrip(picks){
   if(!picks.length) return;
-  const evs = picks.map(p=>p.ev).filter(v=>!isNaN(v));
-  const avgEv = evs.length ? evs.reduce((a,b)=>a+b,0)/evs.length : 0;
-  const bestEv = evs.length ? Math.max(...evs) : 0;
-  document.getElementById("s-count").textContent = picks.length;
-  document.getElementById("s-avgev").textContent  = fmtPct(avgEv);
-  document.getElementById("s-bestev").textContent = fmtPct(bestEv);
+  const evs  = picks.map(p=>p.ev).filter(v=>!isNaN(v));
+  const odds = picks.map(p=>parseFloat(p.odds||p.best_odds||0)).filter(v=>v>1);
+  const avgEv   = evs.length  ? evs.reduce((a,b)=>a+b,0)/evs.length  : 0;
+  const bestEv  = evs.length  ? Math.max(...evs) : 0;
+  const avgOdds = odds.length ? odds.reduce((a,b)=>a+b,0)/odds.length : null;
+  document.getElementById("s-count").textContent   = picks.length;
+  document.getElementById("s-avgev").textContent   = fmtPct(avgEv);
+  document.getElementById("s-bestev").textContent  = fmtPct(bestEv);
+  if(avgOdds!=null) document.getElementById("s-avgodds").textContent = avgOdds.toFixed(2);
 }
 
 /* ──────────────────────────────────────────────
@@ -810,22 +813,17 @@ async function fetchMain(){
     }
     if(statsRes.ok){
       const s = await statsRes.json();
-      // Response has {all_time: {roi, hit_rate, total, ...}, period: {...}}
       const at = s.all_time || s;
-      const roi = at.roi!=null?at.roi:(at.roi_pct!=null?at.roi_pct:null);
-      const hr  = at.hit_rate!=null?at.hit_rate:(at.hit_rate_pct!=null?at.hit_rate_pct:null);
+      const hr    = at.hit_rate!=null?at.hit_rate:(at.hit_rate_pct!=null?at.hit_rate_pct:null);
       const total = at.total||at.settled||at.total_bets||null;
-      if(roi!=null){
-        document.getElementById("s-roi").textContent=fmtPct(roi);
-        document.getElementById("s-roi").style.color=roi>=0?"#4ade80":"#f87171";
+      if(hr!=null){
+        // Neutral color — signal accuracy is informational, not a win/loss indicator
+        document.getElementById("s-hitrate").textContent = fmtPct(hr,false);
+        document.getElementById("s-hitrate").style.color = "#e4e4e7";
       }
-      if(hr!=null) document.getElementById("s-hitrate").textContent=fmtPct(hr,false);
-      // update subtitle with bet count for trust
       if(total!=null){
-        const roiTile  = document.getElementById("s-roi").closest(".stat-tile");
-        const hirTile  = document.getElementById("s-hitrate").closest(".stat-tile");
-        if(roiTile)  roiTile.querySelector(".stat-sub").textContent=total.toLocaleString()+" bets";
-        if(hirTile)  hirTile.querySelector(".stat-sub").textContent=total.toLocaleString()+" bets";
+        const hirTile = document.getElementById("s-hitrate").closest(".stat-tile");
+        if(hirTile) hirTile.querySelector(".stat-sub").textContent = total.toLocaleString()+" settled";
       }
     }
     if(clvRes.ok){
@@ -901,10 +899,9 @@ function renderHistory(){
   const stats = calcHistoryStats(picks);
 
   document.getElementById("history-stats").innerHTML=`
-    <div class="stat-tile"><div class="stat-lbl">Total Bets</div><div class="stat-val">${stats.total}</div></div>
-    <div class="stat-tile"><div class="stat-lbl">Hit Rate</div><div class="stat-val" style="color:${stats.hitRate>=50?"#4ade80":"#f87171"}">${fmtPct(stats.hitRate,false)}</div></div>
-    <div class="stat-tile"><div class="stat-lbl">ROI</div><div class="stat-val" style="color:${stats.roi>=0?"#4ade80":"#f87171"}">${fmtPct(stats.roi)}</div></div>
-    <div class="stat-tile"><div class="stat-lbl">Avg Odds</div><div class="stat-val">${fmt2(stats.avgOdds)}</div></div>`;
+    <div class="stat-tile"><div class="stat-lbl">Signals</div><div class="stat-val">${stats.total}</div><div class="stat-sub">settled</div></div>
+    <div class="stat-tile"><div class="stat-lbl">Signal Accuracy</div><div class="stat-val" style="color:#e4e4e7">${fmtPct(stats.hitRate,false)}</div><div class="stat-sub">correct signals</div></div>
+    <div class="stat-tile"><div class="stat-lbl">Avg Odds</div><div class="stat-val">${fmt2(stats.avgOdds)}</div><div class="stat-sub">identified edges</div></div>`;
 
   const start = state.historyPage * state.historyPerPage;
   const page  = picks.slice(start, start+state.historyPerPage);
@@ -1010,9 +1007,8 @@ function renderSport(data, statsEl, tableEl, sportLabel){
   const hr  = s.hit_rate_pct!=null?s.hit_rate_pct:(s.hit_rate!=null?s.hit_rate*100:null);
 
   document.getElementById(statsEl).innerHTML=`
-    <div class="stat-tile"><div class="stat-lbl">Picks</div><div class="stat-val">${picks.length}</div><div class="stat-sub">tracked</div></div>
-    <div class="stat-tile"><div class="stat-lbl">Hit Rate</div><div class="stat-val" style="color:#4ade80">${hr!=null?fmtPct(hr,false):"—"}</div></div>
-    <div class="stat-tile"><div class="stat-lbl">ROI</div><div class="stat-val" style="color:${roi!=null&&roi>=0?"#4ade80":"#f87171"}">${roi!=null?fmtPct(roi):"—"}</div></div>
+    <div class="stat-tile"><div class="stat-lbl">Signals</div><div class="stat-val">${picks.length}</div><div class="stat-sub">tracked</div></div>
+    <div class="stat-tile"><div class="stat-lbl">Signal Accuracy</div><div class="stat-val" style="color:#e4e4e7">${hr!=null?fmtPct(hr,false):"—"}</div><div class="stat-sub">correct signals</div></div>
     <div class="stat-tile"><div class="stat-lbl">Mode</div><div class="stat-val" style="font-size:12px;color:#a78bfa">Learning</div><div class="stat-sub">no units tracked</div></div>`;
 
   if(!picks.length){ document.getElementById(tableEl).innerHTML=`<div class="empty-state"><div class="empty-sub">No ${sportLabel} picks today</div></div>`; return; }
