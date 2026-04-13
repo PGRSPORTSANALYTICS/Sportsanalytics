@@ -23,6 +23,14 @@ from proof_poster import post_clv_proof
 
 logger = logging.getLogger(__name__)
 
+def _get_af_client():
+    """Lazy-import API-Football client to avoid circular imports."""
+    try:
+        from api_football_client import APIFootballClient
+        return APIFootballClient()
+    except Exception:
+        return None
+
 # ── Window settings ──────────────────────────────────────────────
 CANDIDATE_WINDOW_HOURS = 12         # Look for picks kicking off within next 12 h
 CLOSE_AFTER_KICKOFF_MIN = 30        # Allow capture up to 30 min AFTER kickoff
@@ -704,6 +712,84 @@ class CLVService:
         except Exception:
             pass
 
+    # ── API-Football fallback (BTTS + unsupported-sport leagues) ─────────────
+
+    def _try_af_clv(self, bet: Dict, stats: Dict) -> bool:
+        """
+        API-Football fallback for BTTS and leagues not in Odds API.
+        Covers BTTS Yes/No, Over/Under totals, 1X2 for any league.
+        Returns True if CLV was captured and saved.
+        """
+        db_market = bet.get('market', '')
+        db_sel    = bet.get('selection', '')
+        home      = bet['home_team']
+        away      = bet['away_team']
+        open_odds = bet['open_odds']
+
+        af = _get_af_client()
+        if not af:
+            return False
+
+        # Derive match_date string from kickoff_utc or kickoff_epoch
+        match_date = bet.get('kickoff_utc') or ''
+        if not match_date:
+            ko = bet.get('kickoff_epoch')
+            if ko:
+                match_date = datetime.fromtimestamp(ko, tz=timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+        if not match_date:
+            return False
+
+        try:
+            fixture = af.get_fixture_by_teams_and_date(home, away, match_date)
+            if not fixture:
+                return False
+
+            fixture_id = fixture.get('fixture', {}).get('id')
+            if not fixture_id:
+                return False
+
+            odds_data = af.get_fixture_odds(fixture_id)
+            if not odds_data:
+                return False
+
+            market_odds = odds_data.get('markets', {})
+            if not market_odds:
+                return False
+
+            close_odds = _match_api_football_odds(db_market, db_sel, home, away, market_odds)
+            if not close_odds or close_odds <= 1.0:
+                return False
+
+            # Drift guard
+            if open_odds > 1.0:
+                drift = abs(close_odds - open_odds) / open_odds
+                if drift > DRIFT_REJECT_PCT:
+                    logger.debug(
+                        "CLV(AF-fb): drift reject bet=%d open=%.2f close=%.2f drift=%.0f%%",
+                        bet['id'], open_odds, close_odds, drift * 100
+                    )
+                    return False
+
+            close_result = {
+                'odds':            close_odds,
+                'bookmaker':       'api_football',
+                'ts':              _now(),
+                'api_market_type': 'af_fallback',
+                'matched_outcome': db_sel,
+            }
+            ok = self.save_clv(bet, close_result)
+            if ok:
+                stats['updated'] += 1
+                logger.info(
+                    "CLV(AF-fb): ✅ bet=%d  %s vs %s  %s  open=%.2f close=%.2f",
+                    bet['id'], home, away, db_sel, open_odds, close_odds
+                )
+            return ok
+
+        except Exception as exc:
+            logger.debug("CLV(AF-fb): error bet=%d: %s", bet.get('id', '?'), exc)
+            return False
+
     # ── Main cycle ───────────────────────────────────────────────────────────
 
     def run_cycle(self) -> Dict[str, Any]:
@@ -762,12 +848,15 @@ class CLVService:
             mtype = _market_type(db_market, db_sel)
             sport = _sport_key(bet.get('league', ''))
             if not mtype or not sport:
-                logger.info(
-                    "CLV: ⏭️ SKIP  bet=%d  %s vs %s | market='%s' → api_type='%s' | league='%s' sport='%s'",
-                    bet_id, bet['home_team'], bet['away_team'],
-                    db_market, mtype or 'none', bet.get('league', '?'), sport or 'not_mapped'
-                )
-                stats['skipped'] += 1
+                # Fallback: try API-Football for BTTS + unsupported-sport leagues
+                af_ok = self._try_af_clv(bet, stats)
+                if not af_ok:
+                    logger.info(
+                        "CLV: ⏭️ SKIP  bet=%d  %s vs %s | market='%s' → api_type='%s' | league='%s' sport='%s'",
+                        bet_id, bet['home_team'], bet['away_team'],
+                        db_market, mtype or 'none', bet.get('league', '?'), sport or 'not_mapped'
+                    )
+                    stats['skipped'] += 1
                 continue
 
             close_result = self.fetch_closing_odds(bet)
@@ -948,6 +1037,72 @@ def run_clv_update_cycle() -> Dict[str, Any]:
     return svc.run_cycle()
 
 
+def sweep_missed_clv(lookback_hours: int = 48) -> int:
+    """
+    Retroactive sweep: finds picks from last `lookback_hours` that still
+    have close_odds IS NULL and kickoff has already passed by >90 min.
+    Tries API-Football for each one.
+
+    Called hourly from combined_sports_runner.
+    Returns number of picks updated.
+    """
+    now = _now()
+    cutoff_open   = now - (lookback_hours * 3600)
+    cutoff_kickoff = now - (90 * 60)   # must have kicked off >90 min ago
+
+    try:
+        rows = db_helper.execute("""
+            SELECT id, match_id, home_team, away_team, league,
+                   market, selection, open_odds, kickoff_epoch, kickoff_utc,
+                   best_odds_bookmaker
+            FROM football_opportunities
+            WHERE status          = 'pending'
+              AND close_odds      IS NULL
+              AND clv_status      IS NULL
+              AND open_odds       IS NOT NULL
+              AND kickoff_epoch   IS NOT NULL
+              AND open_ts         >= %s
+              AND kickoff_epoch   <= %s
+            ORDER BY kickoff_epoch DESC
+        """, (cutoff_open, cutoff_kickoff), fetch='all') or []
+    except Exception as exc:
+        logger.error("sweep_missed_clv: DB fetch error: %s", exc)
+        return 0
+
+    if not rows:
+        logger.info("sweep_missed_clv: no missed picks found (window %dh)", lookback_hours)
+        return 0
+
+    logger.info("sweep_missed_clv: %d pick(s) to retry via API-Football", len(rows))
+    svc = CLVService()
+    updated = 0
+    dummy_stats: Dict[str, Any] = {'updated': 0}
+
+    for row in rows:
+        bet = {
+            'id':               row[0],
+            'match_id':         row[1],
+            'home_team':        row[2],
+            'away_team':        row[3],
+            'league':           row[4],
+            'market':           row[5],
+            'selection':        row[6],
+            'open_odds':        float(row[7]),
+            'kickoff_epoch':    int(row[8]),
+            'kickoff_utc':      row[9],
+            'seconds_to_ko':    int(row[8]) - now,
+            'open_source_book': row[10] or 'unknown',
+        }
+        if not _is_supported(bet['market']):
+            continue
+        ok = svc._try_af_clv(bet, dummy_stats)
+        if ok:
+            updated += 1
+
+    logger.info("sweep_missed_clv: updated %d/%d pick(s)", updated, len(rows))
+    return updated
+
+
 def capture_from_api_football(home_team: str, away_team: str,
                                market_odds: Dict[str, float],
                                kickoff_epoch: Optional[int] = None,
@@ -966,8 +1121,8 @@ def capture_from_api_football(home_team: str, away_team: str,
     if not market_odds or not home_team or not away_team:
         return 0
 
-    CAPTURE_MIN_BEFORE = 480    # Only capture if kickoff is within 8h
-    CAPTURE_AFTER_KO   = 10     # Allow up to 10 min after kickoff
+    CAPTURE_MIN_BEFORE = 720    # Only capture if kickoff is within 12h
+    CAPTURE_AFTER_KO   = 120    # Allow up to 120 min after kickoff (was 10)
     now = int(time.time())
 
     # Time-gate: only update if kickoff is approaching

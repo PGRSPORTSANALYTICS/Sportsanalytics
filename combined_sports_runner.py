@@ -472,6 +472,17 @@ def run_clv_update_cycle():
             logger.info(f"📊 CLV cycle: No bets updated ({stats.get('candidates', 0)} candidates checked)")
     except Exception as e:
         logger.error(f"❌ CLV update cycle error: {e}")
+
+
+def run_clv_sweep():
+    """Hourly retroactive sweep: recover CLV for picks missed during real-time capture."""
+    try:
+        from clv_service import sweep_missed_clv
+        updated = sweep_missed_clv(lookback_hours=48)
+        if updated:
+            logger.info(f"📊 CLV sweep: recovered {updated} missed CLV capture(s)")
+    except Exception as e:
+        logger.error(f"❌ CLV sweep error: {e}")
         import traceback
         traceback.print_exc()
 
@@ -929,6 +940,10 @@ def main():
     
     # Schedule CLV update - Every 5 minutes for closing odds capture
     schedule.every(5).minutes.do(run_clv_update_cycle)
+
+    # CLV retroactive sweep — hourly, catches BTTS + missed real-time captures
+    schedule.every(1).hours.do(run_clv_sweep)
+    run_clv_sweep()   # Run once at startup to recover recent missed picks
 
     # Calibration backfill — stamp calibrated_ev_pct on new picks every 10 min
     schedule.every(10).minutes.do(run_calibration_backfill)
