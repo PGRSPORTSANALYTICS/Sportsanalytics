@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional
 
 from db_helper import db_helper
 from real_odds_api import RealOddsAPI
+from proof_poster import post_clv_proof
 
 logger = logging.getLogger(__name__)
 
@@ -653,6 +654,14 @@ class CLVService:
                     clv_source_book = %s
                 WHERE id = %s
             """, (close_odds, close_ts, clv, status, close_book, bet_id))
+
+            # Post proof-of-work to Discord (fire-and-forget, never blocks)
+            try:
+                post_clv_proof(bet, close_odds, clv, close_book,
+                               mins_to_close=mins_to_ko_at_close)
+            except Exception as _pe:
+                logger.debug("proof_poster non-fatal: %s", _pe)
+
             return True
 
         except Exception as exc:
