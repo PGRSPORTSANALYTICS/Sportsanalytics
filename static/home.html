@@ -292,7 +292,7 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
       <div class="live-badge">
         <span class="live-dot pulse"></span>
         <span id="hdr-count">—</span>
-        <span style="color:#71717a;font-weight:500">edges live</span>
+        <span style="color:#71717a;font-weight:500">live edges</span>
       </div>
       <button id="bell-btn" onclick="togglePush()" title="Enable notifications" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:background .15s">
         <svg id="bell-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-opacity="0.7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
@@ -311,8 +311,8 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
 
   <!-- Stats strip -->
   <div class="stats-strip" id="stats-strip">
-    <div class="stat-tile"><div class="stat-lbl">Active Edges</div><div class="stat-val" id="s-count" style="color:#4ade80">—</div><div class="stat-sub">identified</div></div>
-    <div class="stat-tile"><div class="stat-lbl">Avg Edge (unfiltered)</div><div class="stat-val" id="s-avgev" style="color:#4ade80">—</div><div class="stat-sub">raw signal scan</div></div>
+    <div class="stat-tile"><div class="stat-lbl">Live Edges</div><div class="stat-val" id="s-count" style="color:#4ade80">—</div><div class="stat-sub">identified</div></div>
+    <div class="stat-tile"><div class="stat-lbl">Avg Edge (unfiltered)</div><div class="stat-val" id="s-avgev" style="color:#4ade80">—</div><div class="stat-sub">includes all signals (unfiltered scan)</div></div>
     <div class="stat-tile"><div class="stat-lbl">Top Edge</div><div class="stat-val" id="s-bestev" style="color:#fbbf24">—</div><div class="stat-sub">highest identified</div></div>
     <div class="stat-tile"><div class="stat-lbl">Avg Odds</div><div class="stat-val" id="s-avgodds">—</div><div class="stat-sub">identified edges</div></div>
     <div class="stat-tile"><div class="stat-lbl">Model Calibration</div><div class="stat-val" id="s-hitrate">—</div><div class="stat-sub">settled signals</div></div>
@@ -698,8 +698,10 @@ function renderScanner(){
     const modelPct  = _mp ? Math.round(_mp > 1 ? _mp : _mp * 100) : null;
     const marketPct = p.odds && p.odds > 1 ? Math.round(100 / p.odds) : null;
     const edgeSign  = (p.ev||0) >= 0 ? '+' : '';
+    const bookShort = (p.bookmaker||"").replace(/Exchange.*/i,"").trim();
+    const mmeBook   = bookShort ? ` · <span style="color:#52525b">Best odds at: ${esc(bookShort)}</span>` : '';
     const mmeLine   = (modelPct && marketPct)
-      ? `<div class="mme-line">Model: <b>${modelPct}%</b> · Market: <b>${marketPct}%</b> · Edge: <b>${edgeSign}${(p.ev||0).toFixed(1)}%</b></div>`
+      ? `<div class="mme-line">Model: <b>${modelPct}%</b> · Market: <b>${marketPct}%</b> · Edge: <b>${edgeSign}${(p.ev||0).toFixed(1)}%</b>${mmeBook}</div>`
       : '';
 
     html+=`<div class="scanner-row${isExpanded?" expanded":""} row-new" data-id="${esc(p.id)}">
@@ -756,11 +758,14 @@ function renderScanner(){
       </div>`;
     }
     // FOMO unlock banner after all rows
-    const totalLocked = picks.length + GHOST_ROWS;
+    const totalVisible = picks.length + GHOST_ROWS;
     html+=`<div class="fomo-cta-row scanner-row">
       <div class="fomo-row">
-        <div class="fomo-row-text">More value spots hidden — selection + odds visible to members</div>
-        <button class="fomo-row-btn" onclick="openPremiumModal()">Unlock Today's Edges →</button>
+        <div>
+          <div style="font-size:10px;color:#52525b;margin-bottom:3px">Showing ${picks.length} of ${totalVisible}+ signals</div>
+          <div class="fomo-row-text">+ more signals hidden — unlock full scanner →</div>
+        </div>
+        <button class="fomo-row-btn" onclick="openPremiumModal()">Unlock full market scan →</button>
       </div>
     </div>`;
   }
