@@ -83,6 +83,13 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
 .sv-banner-text{font-size:11px;color:#a1a1aa;line-height:1.5}
 .sv-banner-text b{color:#fbbf24}
 
+/* ── CLV proof strip (inside SV tab) ── */
+.clv-proof-strip{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px}
+.clv-proof-tile{background:rgba(245,158,11,.04);border:1px solid rgba(245,158,11,.15);border-radius:10px;padding:10px 12px;text-align:center}
+.clv-proof-val{font-size:20px;font-weight:800;color:#fbbf24;line-height:1.1}
+.clv-proof-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:#71717a;font-weight:600;margin-top:4px}
+.clv-proof-note{font-size:10px;color:#52525b;margin-top:2px}
+
 /* ── Filter bar ── */
 .filter-bar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px;padding:10px 12px;background:#0f0f11;border:1px solid #18181b;border-radius:12px}
 .filter-label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#52525b;font-weight:600;white-space:nowrap}
@@ -357,6 +364,25 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
       <div class="sv-banner-text">
         <b>Smart Value</b> — identifies pricing inefficiencies across markets. Not every signal is meant to be played.<br>
         <span style="color:#fbbf24;font-style:italic">"We don't track wins. We track whether the market moves."</span>
+      </div>
+    </div>
+
+    <!-- CLV proof strip (shown only on SV tab) -->
+    <div class="clv-proof-strip" id="clv-proof-strip" style="display:none">
+      <div class="clv-proof-tile">
+        <div class="clv-proof-val" id="sv-clv-avg">—</div>
+        <div class="clv-proof-lbl">Avg CLV (30d)</div>
+        <div class="clv-proof-note">vs closing line</div>
+      </div>
+      <div class="clv-proof-tile">
+        <div class="clv-proof-val" id="sv-clv-rate">—</div>
+        <div class="clv-proof-lbl">Beat the line</div>
+        <div class="clv-proof-note">of measured signals</div>
+      </div>
+      <div class="clv-proof-tile" style="cursor:pointer" onclick="switchTab('clv')">
+        <div class="clv-proof-val" id="sv-clv-n">—</div>
+        <div class="clv-proof-lbl">Signals tracked</div>
+        <div class="clv-proof-note" style="color:#fbbf24">View full CLV →</div>
       </div>
     </div>
 
@@ -694,11 +720,35 @@ function renderScanner(){
     }
   }
 
-  // Show/hide filter bar and SV banner
-  const filterBar = document.querySelector(".filter-bar");
-  const svBanner  = document.getElementById("sv-banner");
+  // Show/hide filter bar, SV banner, and CLV proof strip
+  const filterBar    = document.querySelector(".filter-bar");
+  const svBanner     = document.getElementById("sv-banner");
+  const clvProof     = document.getElementById("clv-proof-strip");
   if(filterBar) filterBar.style.display = isSV ? "none" : "";
   if(svBanner)  svBanner.style.display  = isSV ? "flex" : "none";
+  if(clvProof)  clvProof.style.display  = isSV ? "grid" : "none";
+
+  // Populate CLV proof strip from cached data (or fetch if needed)
+  if(isSV){
+    const clv = state.clvData;
+    if(clv){
+      const avg30 = clv.avg_clv_30d != null ? clv.avg_clv_30d : clv.avg_clv;
+      const rate  = clv.positive_rate;
+      const n     = clv.sample_n || clv.n;
+      const el_avg  = document.getElementById("sv-clv-avg");
+      const el_rate = document.getElementById("sv-clv-rate");
+      const el_n    = document.getElementById("sv-clv-n");
+      if(el_avg && avg30 != null){
+        el_avg.textContent = (avg30 >= 0 ? "+" : "") + Number(avg30).toFixed(2) + "%";
+        el_avg.style.color = avg30 >= 0 ? "#4ade80" : "#f87171";
+      }
+      if(el_rate && rate != null) el_rate.textContent = Number(rate).toFixed(1) + "%";
+      if(el_n && n != null)       el_n.textContent    = Number(n).toLocaleString();
+    } else {
+      // Fetch CLV data if not yet loaded
+      fetchCLV();
+    }
+  }
 
   if(!picks.length){
     const emptyMsg = isSV
@@ -987,6 +1037,8 @@ async function fetchCLV(){
     if(!res.ok) return;
     state.clvData = await res.json();
     renderCLV();
+    // Repopulate SV tab CLV strip if it's visible
+    if(state.activeTab === "smartvalue") renderScanner();
   } catch(e){}
 }
 
