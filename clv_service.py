@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 # ── Window settings ──────────────────────────────────────────────
 CANDIDATE_WINDOW_HOURS = 12         # Look for picks kicking off within next 12 h
-CLOSE_AFTER_KICKOFF_MIN = 5         # Allow capture up to 5 min AFTER kickoff
+CLOSE_AFTER_KICKOFF_MIN = 30        # Allow capture up to 30 min AFTER kickoff
 TARGET_MINUTES_BEFORE = 60          # Ideal capture point (60 min before KO)
 DRIFT_REJECT_PCT = 0.50             # Reject if odds moved >50% (data error)
 
@@ -372,17 +372,41 @@ class CLVService:
         return None
 
     def _teams_match(self, event: Dict, home: str, away: str) -> bool:
-        eh = event.get('home_team', '').lower()
-        ea = event.get('away_team', '').lower()
-        h, a = home.lower(), away.lower()
-        if eh == h and ea == a:
+        from difflib import SequenceMatcher
+
+        def _norm(s: str) -> str:
+            return (s.lower()
+                    .replace('fc ', '').replace(' fc', '')
+                    .replace('afc ', '').replace(' afc', '')
+                    .replace('sc ', '').replace(' sc', '')
+                    .replace('ö', 'o').replace('ü', 'u').replace('ä', 'a')
+                    .replace('ø', 'o').replace('å', 'a').replace('é', 'e')
+                    .replace('-', ' ').strip())
+
+        def _sim(a: str, b: str) -> float:
+            return SequenceMatcher(None, _norm(a), _norm(b)).ratio()
+
+        def _word_overlap(a: str, b: str) -> bool:
+            wa = set(_norm(a).split())
+            wb = set(_norm(b).split())
+            common = wa & wb
+            # At least 1 meaningful word (len>2) must overlap
+            return any(len(w) > 2 for w in common)
+
+        eh = event.get('home_team', '')
+        ea = event.get('away_team', '')
+        # Exact match
+        if eh.lower() == home.lower() and ea.lower() == away.lower():
             return True
-        h_words = set(h.split())
-        a_words = set(a.split())
-        return (
-            bool(h_words & set(eh.split()))
-            and bool(a_words & set(ea.split()))
-        )
+        # Fuzzy: both teams must score >= 0.75 similarity
+        h_score = _sim(home, eh)
+        a_score = _sim(away, ea)
+        if h_score >= 0.75 and a_score >= 0.75:
+            return True
+        # Word-overlap fallback (catches "Man Utd" vs "Manchester United")
+        if _word_overlap(home, eh) and _word_overlap(away, ea):
+            return True
+        return False
 
     def _compute_dc_odds(
         self, bookmakers: List, selection: str, home: str, away: str
@@ -693,6 +717,7 @@ class CLVService:
             'candidates': 0,
             'updated':    0,
             'failed':     0,
+            'skipped':    0,    # unsupported market/league — not an error
             'na':         0,
             'avg_clv':    None,
             'timestamp':  datetime.now(timezone.utc).isoformat(),
@@ -702,11 +727,11 @@ class CLVService:
         stats['candidates'] = len(candidates)
 
         if not candidates:
-            logger.info("📊 CLV cycle: 0 candidates in 0–8h window — nothing to do")
+            logger.info("📊 CLV cycle: 0 candidates in 0–12h window — nothing to do")
             return stats
 
-        CAPTURE_WINDOW_MIN  = 480   # Capture odds up to 8h before kickoff
-        CAPTURE_WINDOW_PAST = -5    # Allow up to 5 min after kickoff
+        CAPTURE_WINDOW_MIN  = CANDIDATE_WINDOW_HOURS * 60   # mirror candidate window
+        CAPTURE_WINDOW_PAST = -CLOSE_AFTER_KICKOFF_MIN      # mirror post-kickoff window
 
         clv_vals: List[float] = []
         now = _now()
@@ -717,11 +742,32 @@ class CLVService:
             mins_to_ko = bet['seconds_to_ko'] // 60
 
             if mins_to_ko > CAPTURE_WINDOW_MIN:
-                # Too early — will be captured in a future cycle closer to kickoff
                 logger.info(
                     "CLV: ⏳ TOO EARLY  bet=%d  %s vs %s  (%d min to KO, window <%d min)",
                     bet_id, bet['home_team'], bet['away_team'], mins_to_ko, CAPTURE_WINDOW_MIN
                 )
+                continue
+
+            # Pre-check: skip unsupported markets immediately (not a failure)
+            db_market = bet.get('market', '?')
+            db_sel    = bet.get('selection', '')
+            if not _is_supported(db_market):
+                logger.debug(
+                    "CLV: ⏭️ SKIP  bet=%d  %s vs %s | market='%s' unsupported",
+                    bet_id, bet['home_team'], bet['away_team'], db_market
+                )
+                stats['skipped'] += 1
+                continue
+
+            mtype = _market_type(db_market, db_sel)
+            sport = _sport_key(bet.get('league', ''))
+            if not mtype or not sport:
+                logger.info(
+                    "CLV: ⏭️ SKIP  bet=%d  %s vs %s | market='%s' → api_type='%s' | league='%s' sport='%s'",
+                    bet_id, bet['home_team'], bet['away_team'],
+                    db_market, mtype or 'none', bet.get('league', '?'), sport or 'not_mapped'
+                )
+                stats['skipped'] += 1
                 continue
 
             close_result = self.fetch_closing_odds(bet)
@@ -737,22 +783,14 @@ class CLVService:
                 else:
                     stats['failed'] += 1
             else:
-                # Log what we attempted so it's traceable
-                db_market = bet.get('market', '?')
-                db_sel = bet.get('selection', '')
-                mtype = _market_type(db_market, db_sel) or 'unsupported'
-                sport = _sport_key(bet.get('league', '')) or 'no_sport_key'
                 logger.info(
-                    "CLV: ⚪ NO ODDS  bet=%d  %s vs %s | "
-                    "market='%s' → api_type='%s' | sport='%s' | "
-                    "open_book=[%s] | %+d min to KO",
+                    "CLV: ⚪ NO MATCH  bet=%d  %s vs %s | "
+                    "market='%s' → api_type='%s' | sport='%s' | %+d min to KO",
                     bet_id, bet['home_team'], bet['away_team'],
-                    db_market, mtype, sport,
-                    bet.get('open_source_book', 'unknown'),
-                    mins_to_ko
+                    db_market, mtype, sport, mins_to_ko
                 )
                 if mins_to_ko < CAPTURE_WINDOW_PAST:
-                    self.mark_clv_na(bet_id, "no odds data found after kickoff")
+                    self.mark_clv_na(bet_id, "no match found in API after kickoff")
                     stats['na'] += 1
                 else:
                     stats['failed'] += 1
@@ -761,8 +799,9 @@ class CLVService:
             stats['avg_clv'] = round(sum(clv_vals) / len(clv_vals), 2)
 
         logger.info(
-            "📊 CLV cycle done — candidates=%d updated=%d failed=%d na=%d avg_clv=%s",
-            stats['candidates'], stats['updated'], stats['failed'], stats['na'],
+            "📊 CLV cycle done — candidates=%d updated=%d skipped=%d failed=%d na=%d avg_clv=%s",
+            stats['candidates'], stats['updated'], stats['skipped'],
+            stats['failed'], stats['na'],
             f"{stats['avg_clv']:+.2f}%" if stats['avg_clv'] is not None else "—"
         )
         return stats
