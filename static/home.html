@@ -255,7 +255,7 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
   <div class="modal-box">
     <button class="modal-close" id="modal-close">×</button>
     <div style="font-size:28px;margin-bottom:8px">🔓</div>
-    <div class="modal-title">Unlock Premium Access</div>
+    <div class="modal-title">Unlock Today's Edges</div>
     <div class="modal-sub">Enter your member code to reveal all selections, odds, fair odds and get full value scanner access.</div>
     <input class="modal-input" id="modal-code-input" type="password" placeholder="Member code" autocomplete="off">
     <div class="modal-err" id="modal-err" style="display:none">Invalid code — try again</div>
@@ -296,7 +296,7 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
       <button id="bell-btn" onclick="togglePush()" title="Enable notifications" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:background .15s">
         <svg id="bell-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-opacity="0.7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
       </button>
-      <div id="premium-status" class="btn-premium" onclick="openPremiumModal()">🔒 Unlock Premium</div>
+      <div id="premium-status" class="btn-premium" onclick="openPremiumModal()">Unlock Today's Edges</div>
       <button class="btn-install" id="install-chip" onclick="triggerInstall()" style="display:none">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
         Install app
@@ -311,7 +311,7 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
   <!-- Stats strip -->
   <div class="stats-strip" id="stats-strip">
     <div class="stat-tile"><div class="stat-lbl">Active Edges</div><div class="stat-val" id="s-count" style="color:#4ade80">—</div><div class="stat-sub">today</div></div>
-    <div class="stat-tile"><div class="stat-lbl">Avg EV</div><div class="stat-val" id="s-avgev" style="color:#4ade80">—</div><div class="stat-sub">all opportunities</div></div>
+    <div class="stat-tile"><div class="stat-lbl">Avg Edge (PROD)</div><div class="stat-val" id="s-avgev" style="color:#4ade80">—</div><div class="stat-sub">all opportunities</div></div>
     <div class="stat-tile"><div class="stat-lbl">Best EV</div><div class="stat-val" id="s-bestev" style="color:#fbbf24">—</div><div class="stat-sub">today's best</div></div>
     <div class="stat-tile"><div class="stat-lbl">Avg Odds</div><div class="stat-val" id="s-avgodds">—</div><div class="stat-sub">identified edges</div></div>
     <div class="stat-tile"><div class="stat-lbl">Signal Accuracy</div><div class="stat-val" id="s-hitrate">—</div><div class="stat-sub">settled signals</div></div>
@@ -385,16 +385,17 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
 
     <!-- Big FOMO CTA (shown only when not premium) -->
     <div class="fomo-section" id="fomo-section" style="display:none">
-      <h3>🔒 Unlock Full Scanner Access</h3>
-      <p>You can see that the edges exist. Premium members see exactly what to bet, at which bookmaker, and at what odds — before the line moves.</p>
+      <h3>Unlock Today's Edges</h3>
+      <p>The scanner identifies where the market is wrong. Premium members see the full output — selection, odds, fair value, and CLV tracking on every signal.</p>
       <div class="fomo-bullets">
-        <div class="fomo-bullet">Exact selection (team, market, line)</div>
-        <div class="fomo-bullet">Live odds + fair value comparison</div>
-        <div class="fomo-bullet">Best bookmaker for each edge</div>
-        <div class="fomo-bullet">CLV tracking — did you beat the close?</div>
-        <div class="fomo-bullet">Smart Picks daily recap on Discord</div>
+        <div class="fomo-bullet">Exact selection + model vs market comparison</div>
+        <div class="fomo-bullet">Live odds + fair value (no-vig price)</div>
+        <div class="fomo-bullet">Best bookmaker per edge</div>
+        <div class="fomo-bullet">CLV tracked — did you beat the close?</div>
+        <div class="fomo-bullet">Model signals recap on Discord</div>
       </div>
-      <button class="fomo-unlock-btn" onclick="openPremiumModal()">🔓 Unlock All Access</button>
+      <div style="font-size:11px;color:#52525b;margin-bottom:12px;">This is a value scanner — not every signal is meant to be played.</div>
+      <button class="fomo-unlock-btn" onclick="openPremiumModal()">Unlock Today's Edges</button>
       <div class="fomo-discord-link">No code yet? <a href="https://discord.gg/pgrsports" target="_blank">Join Discord to get access →</a></div>
     </div>
   </div>
@@ -407,8 +408,8 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
         <div>Match</div>
         <div>Market</div>
         <div style="text-align:right">Odds</div>
-        <div style="text-align:right">EV%</div>
-        <div class="col-hide-sm" style="text-align:right">P&L</div>
+        <div style="text-align:right">Edge%</div>
+        <div class="col-hide-sm" style="text-align:right">P&amp;L</div>
         <div style="text-align:center">Result</div>
       </div>
       <div id="history-body"><div style="padding:20px;text-align:center;color:#52525b;font-size:12px"><div class="spinner spin" style="margin:0 auto 8px"></div>Loading history…</div></div>
@@ -561,7 +562,7 @@ function updatePremiumUI(){
     el.onclick=null;
     document.getElementById("fomo-section").style.display="none";
   } else {
-    el.textContent="🔒 Unlock Premium";
+    el.textContent="Unlock Today's Edges";
     el.className="btn-premium";
     el.onclick=openPremiumModal;
   }
@@ -724,8 +725,8 @@ function renderScanner(){
     const totalLocked = picks.length + GHOST_ROWS;
     html+=`<div class="fomo-cta-row scanner-row">
       <div class="fomo-row">
-        <div class="fomo-row-text">🔒 All <b>${totalLocked} edges locked</b> — match visible, selection + odds hidden</div>
-        <button class="fomo-row-btn" onclick="openPremiumModal()">Unlock All →</button>
+        <div class="fomo-row-text">More value spots hidden — selection + odds visible to members</div>
+        <button class="fomo-row-btn" onclick="openPremiumModal()">Unlock Today's Edges →</button>
       </div>
     </div>`;
   }
@@ -1012,7 +1013,7 @@ function renderSport(data, statsEl, tableEl, sportLabel){
     <div class="stat-tile"><div class="stat-lbl">Mode</div><div class="stat-val" style="font-size:12px;color:#a78bfa">Learning</div><div class="stat-sub">no units tracked</div></div>`;
 
   if(!picks.length){ document.getElementById(tableEl).innerHTML=`<div class="empty-state"><div class="empty-sub">No ${sportLabel} picks today</div></div>`; return; }
-  let html=`<div style="display:grid;grid-template-columns:2fr 80px 110px 65px 65px 60px;padding:8px 14px;background:#0f0f11;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;font-weight:700;gap:8px"><div>Match</div><div style="text-align:center">Time</div><div>Market</div><div style="text-align:right">Odds</div><div style="text-align:right">EV%</div><div style="text-align:center">Signal</div></div>`;
+  let html=`<div style="display:grid;grid-template-columns:2fr 80px 110px 65px 65px 60px;padding:8px 14px;background:#0f0f11;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;font-weight:700;gap:8px"><div>Match</div><div style="text-align:center">Time</div><div>Market</div><div style="text-align:right">Odds</div><div style="text-align:right">Edge%</div><div style="text-align:center">Signal</div></div>`;
   picks.forEach(p=>{
     const match = p.match||((p.home_team||"")+" vs "+(p.away_team||""));
     const ev = p.ev_pct!=null?p.ev_pct:(p.ev!=null?p.ev:0);

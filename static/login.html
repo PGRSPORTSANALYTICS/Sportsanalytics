@@ -244,40 +244,46 @@
     const cards = spots.map(s => {
       const badge = s.is_live
         ? `<span style="background:rgba(239,68,68,.15);color:#f87171;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:.06em;">● LIVE</span>`
-        : `<span style="background:rgba(34,197,94,.12);color:#4ade80;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:.06em;">🔥 VALUE</span>`;
+        : `<span style="background:rgba(99,102,241,.15);color:#818cf8;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:.06em;">⬡ VALUE EDGE</span>`;
 
       const mktLine = marketLabel(s.market, s.selection);
-      const selLine = s.selection || "";
-      const edgeStr = s.edge ? `+${s.edge}%` : "";
+      const edgeStr = s.edge ? `Model edge: +${s.edge}% vs implied` : "—";
+      const modelStr  = s.model_pct  != null ? `${s.model_pct}%`  : "—";
+      const impliedStr = s.implied_pct != null ? `${s.implied_pct}%` : "—";
 
       return `
-      <div style="background:rgba(34,197,94,.05);border:1px solid rgba(34,197,94,.18);border-radius:12px;padding:14px 14px 12px;margin-bottom:8px;">
+      <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px 14px 12px;margin-bottom:8px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
           ${badge}
           <span style="font-size:10px;color:#52525b;">${s.league || ""}</span>
         </div>
         <div style="font-size:14px;font-weight:700;color:#e4e4e7;margin-bottom:4px;">${s.match}</div>
-        <div style="font-size:13px;color:#a1a1aa;margin-bottom:10px;">${mktLine} ${selLine}</div>
-        <div style="display:flex;gap:10px;font-size:12px;">
+        <div style="font-size:12px;color:#a1a1aa;margin-bottom:10px;">${mktLine}</div>
+        <div style="display:flex;gap:8px;font-size:12px;margin-bottom:8px;">
           <div style="flex:1;background:rgba(0,0,0,.3);border-radius:8px;padding:7px 10px;">
-            <div style="color:#52525b;font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;">Odds</div>
-            <div style="color:#71717a;font-weight:700;">🔒 Locked</div>
+            <div style="color:#52525b;font-size:9px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;">Odds</div>
+            <div style="color:#71717a;font-weight:600;font-size:11px;">Hidden</div>
           </div>
           <div style="flex:1;background:rgba(0,0,0,.3);border-radius:8px;padding:7px 10px;">
-            <div style="color:#52525b;font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;">Market</div>
-            <div style="color:#a1a1aa;font-weight:700;">${mktLine}</div>
+            <div style="color:#52525b;font-size:9px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;">Market</div>
+            <div style="color:#a1a1aa;font-weight:600;font-size:11px;">${mktLine}</div>
           </div>
-          <div style="flex:1;background:rgba(0,0,0,.3);border-radius:8px;padding:7px 10px;">
-            <div style="color:#52525b;font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;">Edge</div>
-            <div style="color:#22c55e;font-weight:700;">${edgeStr}</div>
+          <div style="flex:1.4;background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.15);border-radius:8px;padding:7px 10px;">
+            <div style="color:#6366f1;font-size:9px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;">Model Edge</div>
+            <div style="color:#818cf8;font-weight:700;font-size:11px;">+${s.edge || "—"}% vs implied</div>
           </div>
+        </div>
+        <div style="display:flex;gap:8px;font-size:11px;color:#52525b;">
+          <span>Model: <span style="color:#a1a1aa">${modelStr}</span></span>
+          <span style="color:#3f3f46">·</span>
+          <span>Implied: <span style="color:#a1a1aa">${impliedStr}</span></span>
         </div>
       </div>`;
     }).join("");
 
     container.innerHTML = cards +
       `<div style="text-align:center;font-size:12px;color:#52525b;padding:6px 0 2px;">
-         + more picks hidden — <a href="/auth/discord/login" style="color:#4ade80;text-decoration:none;font-weight:700;">unlock all value spots →</a>
+         More value spots hidden — <a href="/auth/discord/login" style="color:#818cf8;text-decoration:none;font-weight:700;">unlock today's edges →</a>
        </div>`;
   }
 

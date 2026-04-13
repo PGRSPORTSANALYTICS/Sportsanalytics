@@ -196,7 +196,7 @@ def _build_daily_message(s: dict, date_str: str) -> str:
         f"📡 Scanner Recap — {date_str}",
         "",
         f"Edges found: {s['edges_total']} ({s['edges_prod']} PROD)",
-        f"Avg EV (PROD): {avg_ev_str}",
+        f"Avg Edge (PROD): {avg_ev_str}",
         "",
         DIVIDER,
     ]
@@ -264,7 +264,7 @@ def _build_weekly_message(s: dict, week_str: str) -> str:
         f"📡 Weekly Scanner Report — {week_str}",
         "",
         f"Edges found: {s['edges_total']} ({s['edges_prod']} PROD)",
-        f"Avg EV (PROD): {avg_ev_str}",
+        f"Avg Edge (PROD): {avg_ev_str}",
         "",
         DIVIDER,
     ]
