@@ -16,7 +16,7 @@ from db_connection import DatabaseConnection
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-DISCORD_WEBHOOK_URL = os.getenv('DISCORD_WEBHOOK_URL')
+DISCORD_WEBHOOK_URL = os.getenv('DISCORD_RESULTS_WEBHOOK')
 
 NEUTRAL_COLOR  = 0x5865F2   # Discord blurple — no win/loss connotation
 SECTION_COLOR  = 0x2C2F33   # Dark — weekly report header
