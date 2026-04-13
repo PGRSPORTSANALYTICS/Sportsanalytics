@@ -785,31 +785,42 @@ function renderScanner(){
 
 function renderExpandPanel(p){
   const mktProb = p.odds>0 ? (100/p.odds).toFixed(1) : null;
-  const modelProbStr = p.model_prob!=null ? Number(p.model_prob).toFixed(1)+"%" : "—";
+  const _mpRaw  = p.model_prob!=null ? Number(p.model_prob) : null;
+  const modelProbStr = _mpRaw!=null ? (_mpRaw>1?_mpRaw.toFixed(1):(_mpRaw*100).toFixed(1))+"%" : "—";
   const mktProbStr   = mktProb ? mktProb+"%" : "—";
   const bookStr      = p.bookmaker||"—";
+  const selText      = p.selection||"—";
+  const rawMkt2      = p.market||"";
+  const MLBL2 = {
+    "BTTS_YES":"BTTS Yes","BTTS_NO":"BTTS No","HOME_WIN":"Home Win","AWAY_WIN":"Away Win","DRAW":"Draw",
+    "FT_OVER_1_5":"Over 1.5 Goals","FT_OVER_2_5":"Over 2.5 Goals","FT_OVER_3_5":"Over 3.5 Goals",
+    "FT_UNDER_2_5":"Under 2.5 Goals","CORNERS_OVER_9_5":"Corners Over 9.5","CARDS_OVER_3_5":"Cards Over 3.5",
+    "Value Single":"1X2 / Totals","Value Singles":"1X2 / Totals"
+  };
+  const mktDisplay = MLBL2[rawMkt2] || rawMkt2.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
   return `<div class="expand-panel">
+    <!-- Prominent selection header -->
+    <div style="grid-column:1/-1;background:#131920;border:1px solid rgba(74,222,128,0.2);border-radius:10px;padding:12px 16px;margin-bottom:4px">
+      <div style="font-size:10px;font-weight:700;color:#4ade80;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Signal</div>
+      <div style="font-size:17px;font-weight:700;color:#f4f4f5">${esc(selText)}</div>
+      <div style="font-size:11px;color:#71717a;margin-top:2px">${esc(mktDisplay)} · ${p.odds>0?'@ '+fmtOdds(p.odds):'odds unavailable'} · ${esc(bookStr)}</div>
+    </div>
     <div class="detail-tile">
       <div class="detail-lbl">Model Probability</div>
       <div class="detail-val" style="color:#4ade80">${modelProbStr}</div>
       <div class="detail-sub">vs market implied ${mktProbStr}</div>
     </div>
     <div class="detail-tile">
+      <div class="detail-lbl">Edge (EV)</div>
+      <div class="detail-val" style="color:#fbbf24">${fmtPct(p.ev)}</div>
+      <div class="detail-sub">model vs market</div>
+    </div>
+    <div class="detail-tile">
       <div class="detail-lbl">Fair Odds</div>
       <div class="detail-val" style="color:#a78bfa">${p.fairOdds?fmtOdds(p.fairOdds):"—"}</div>
       <div class="detail-sub">no-vig price</div>
     </div>
-    <div class="detail-tile">
-      <div class="detail-lbl">Bookmaker</div>
-      <div class="detail-val" style="font-size:13px">${esc(bookStr)}</div>
-      <div class="detail-sub">best available line</div>
-    </div>
-    ${p.clv_pct!=null?`<div class="detail-tile"><div class="detail-lbl">CLV</div><div class="detail-val" style="color:${p.clv_pct>0?"#4ade80":"#f87171"}">${fmtPct(p.clv_pct)}</div><div class="detail-sub">closing line value</div></div>`:""}
-    <div class="detail-tile">
-      <div class="detail-lbl">EV %</div>
-      <div class="detail-val" style="color:#fbbf24">${fmtPct(p.ev)}</div>
-      <div class="detail-sub">expected value</div>
-    </div>
+    ${p.clv_pct!=null?`<div class="detail-tile"><div class="detail-lbl">Closing Line Value</div><div class="detail-val" style="color:${p.clv_pct>0?"#4ade80":"#f87171"}">${fmtPct(p.clv_pct)}</div><div class="detail-sub">did model beat market?</div></div>`:""}
     <div class="detail-tile">
       <div class="detail-lbl">Kickoff</div>
       <div class="detail-val" style="font-size:13px">${fmtKo(p.kickoff_time)}</div>
