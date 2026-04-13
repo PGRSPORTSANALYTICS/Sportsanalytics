@@ -298,6 +298,7 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
         <svg id="bell-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-opacity="0.7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
       </button>
       <div id="premium-status" class="btn-premium" onclick="openPremiumModal()">Unlock Today's Edges</div>
+      <button id="logout-btn" onclick="logout()" title="Log out" style="display:none;background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:6px 10px;color:#52525b;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;transition:all .15s" onmouseover="this.style.color='#f87171';this.style.borderColor='rgba(248,113,113,0.3)'" onmouseout="this.style.color='#52525b';this.style.borderColor='rgba(255,255,255,0.1)'">Log out</button>
       <button class="btn-install" id="install-chip" onclick="triggerInstall()" style="display:none">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
         Install app
@@ -562,17 +563,24 @@ function setPremium(val){
 }
 function updatePremiumUI(){
   const el = document.getElementById("premium-status");
+  const logoutBtn = document.getElementById("logout-btn");
   if(!el) return;
   if(state.isPremium){
     el.textContent="✓ Premium Active";
     el.className="btn-premium active";
     el.onclick=null;
     document.getElementById("fomo-section").style.display="none";
+    if(logoutBtn) logoutBtn.style.display="inline-flex";
   } else {
     el.textContent="Unlock Today's Edges";
     el.className="btn-premium";
     el.onclick=openPremiumModal;
+    if(logoutBtn) logoutBtn.style.display="none";
   }
+}
+function logout(){
+  if(!confirm("Log out from premium access?")) return;
+  setPremium(false);
 }
 function openPremiumModal(){
   document.getElementById("premium-modal").style.display="flex";
