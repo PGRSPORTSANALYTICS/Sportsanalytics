@@ -105,7 +105,7 @@ def _fetch_scanner_stats(start_date: date, end_date: date) -> dict:
                     stats["settled"]["won" if is_win else "lost"] += 1
                     stats["settled"]["profit"] += profit
 
-                # 4. Smart Picks tracker
+                # 4. Smart Value tracker
                 cur.execute("""
                     SELECT outcome, odds
                     FROM football_opportunities
@@ -236,7 +236,7 @@ def _build_daily_message(s: dict, date_str: str) -> str:
         lines.append(" · ".join(lg for lg, _, _ in s["top_leagues"]))
         lines += ["", DIVIDER]
 
-    # Model signals (Smart Picks — low emphasis)
+    # Model signals (Smart Value — low emphasis)
     sp = s["smart_picks"]
     sp_total = sp["won"] + sp["lost"]
     clv_str = f"+{s['clv_avg']:.1f}%" if s["clv_avg"] is not None else "n/a"

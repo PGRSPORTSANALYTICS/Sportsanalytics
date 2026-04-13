@@ -308,17 +308,17 @@ def run_multi_sport_learning():
 
 
 def run_smart_picks_settlement():
-    """Settle Smart Picks by joining to football_opportunities results and post to Discord."""
+    """Settle Smart Value by joining to football_opportunities results and post to Discord."""
     try:
         from smart_picks_result_scanner import run_smart_picks_settlement as settle
-        logger.info("🎯 Running Smart Picks settlement...")
+        logger.info("🎯 Running Smart Value settlement...")
         stats = settle()
         if stats['settled'] > 0:
-            logger.info(f"🎯 Smart Picks settled: {stats['settled']} | Discord: {stats['discord_posted']} | Errors: {stats['errors']}")
+            logger.info(f"🎯 Smart Value settled: {stats['settled']} | Discord: {stats['discord_posted']} | Errors: {stats['errors']}")
         else:
-            logger.info("🎯 Smart Picks: nothing new to settle")
+            logger.info("🎯 Smart Value: nothing new to settle")
     except Exception as e:
-        logger.error(f"❌ Smart Picks settlement error: {e}")
+        logger.error(f"❌ Smart Value settlement error: {e}")
 
 
 def run_multi_sport_settlement():
@@ -686,15 +686,15 @@ def run_daily_free_pick():
 
 
 def run_smart_picks():
-    """Generate and post Smart Picks — Daily Top 10 at 10:00"""
+    """Generate and post Smart Value — Daily Top 10 at 10:00"""
     import traceback
     try:
         from smart_picks_engine import run_smart_picks as smart_picks_cycle
-        logger.info("🧠 Running Smart Picks Engine...")
+        logger.info("🧠 Running Smart Value Engine...")
         picks = smart_picks_cycle()
-        logger.info(f"🧠 Smart Picks complete: {len(picks) if picks else 0} picks")
+        logger.info(f"🧠 Smart Value complete: {len(picks) if picks else 0} picks")
     except Exception as e:
-        logger.error(f"❌ Smart Picks error: {e}\n{traceback.format_exc()}")
+        logger.error(f"❌ Smart Value error: {e}\n{traceback.format_exc()}")
 
 
 def run_weekly_recap():
@@ -797,17 +797,17 @@ def main():
     except Exception as _e:
         logger.warning(f"⚠️ pgr_scoring migration check failed (non-fatal): {_e}")
 
-    # Smart Picks catchup — if it's past 08:00 UTC and engine just started, run it now
+    # Smart Value catchup — if it's past 08:00 UTC and engine just started, run it now
     import datetime as _dt
     _now_utc = _dt.datetime.utcnow()
     if _now_utc.hour >= 8:
         def _smart_picks_catchup():
             time.sleep(120)  # wait for Value Singles engine to populate DB first
             try:
-                logger.info("🧠 Smart Picks catchup: running missed 08:00 cycle...")
+                logger.info("🧠 Smart Value catchup: running missed 08:00 cycle...")
                 run_smart_picks()
             except Exception as e:
-                logger.error(f"❌ Smart Picks catchup error: {e}")
+                logger.error(f"❌ Smart Value catchup error: {e}")
         import threading as _sp_thread
         _sp_thread.Thread(target=_smart_picks_catchup, daemon=True, name="smart-picks-catchup").start()
 
@@ -935,7 +935,7 @@ def main():
     schedule.every(5).minutes.do(verify_basketball_results)  # Basketball separate
     schedule.every(30).minutes.do(run_player_props_settlement)  # NBA player props settlement
     schedule.every(30).minutes.do(run_multi_sport_settlement)   # Multi-sport settlement
-    schedule.every(30).minutes.do(run_smart_picks_settlement)   # Smart Picks result scanner + Discord
+    schedule.every(30).minutes.do(run_smart_picks_settlement)   # Smart Value result scanner + Discord
     run_smart_picks_settlement()  # Run once at startup to catch any overnight results
     
     # Schedule CLV update - Every 5 minutes for closing odds capture
@@ -985,7 +985,7 @@ def main():
     schedule.every().day.at("22:45").do(run_end_of_day_results)  # Results summary after all games
     schedule.every().day.at("08:00").do(run_daily_games_reminder)
     schedule.every().day.at("09:00").do(run_daily_analysis)
-    schedule.every().day.at("08:00").do(run_smart_picks)  # Smart Picks — Daily Top 10 (08:00 UTC = 09:00 CET)
+    schedule.every().day.at("08:00").do(run_smart_picks)  # Smart Value — Daily Top 10 (08:00 UTC = 09:00 CET)
     schedule.every().day.at("08:00").do(run_daily_free_pick)  # 1 free pick to Discord
     
     logger.info("✅ All schedules configured. Starting main loop...")

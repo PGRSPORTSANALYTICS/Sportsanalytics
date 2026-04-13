@@ -1,7 +1,7 @@
 """
-Smart Picks Engine — Daily Top 10
+Smart Value Engine — Daily Top 10
 
-Generates exactly 10 curated Smart Picks per day based on SmartScore.
+Generates exactly 10 curated Smart Value per day based on SmartScore.
 Posts to Discord smart-picks channel at 10:00 server time.
 
 STRICT RULES:
@@ -297,12 +297,12 @@ def generate_smart_picks() -> List[Dict]:
     _ensure_table()
 
     if _picks_exist_today():
-        logger.info("Smart Picks already generated today — skipping to avoid duplicates")
+        logger.info("Smart Value already generated today — skipping to avoid duplicates")
         return []
 
     candidates = _fetch_candidates()
     if not candidates:
-        logger.info("No candidates found for Smart Picks today")
+        logger.info("No candidates found for Smart Value today")
         return []
 
     for c in candidates:
@@ -313,7 +313,7 @@ def generate_smart_picks() -> List[Dict]:
     picks = _select_top_picks(candidates, target=10)
 
     if not picks:
-        logger.info("No qualifying Smart Picks after filtering")
+        logger.info("No qualifying Smart Value after filtering")
         return []
 
     today = _get_server_date()
@@ -336,7 +336,7 @@ def generate_smart_picks() -> List[Dict]:
             p["model_grade"],
         ))
 
-    logger.info(f"Generated {len(picks)} Smart Picks for {today}")
+    logger.info(f"Generated {len(picks)} Smart Value for {today}")
     return picks
 
 
@@ -388,7 +388,7 @@ def _format_discord_chunks(picks: List[Dict]) -> List[str]:
 
 def post_to_discord(picks: List[Dict]) -> bool:
     if not SMART_PICKS_WEBHOOK:
-        logger.warning("DISCORD_WH_SMART_PICKS not set — cannot post Smart Picks")
+        logger.warning("DISCORD_WH_SMART_PICKS not set — cannot post Smart Value")
         return False
 
     if not picks:
@@ -406,7 +406,7 @@ def post_to_discord(picks: List[Dict]) -> bool:
                 timeout=15,
             )
             if resp.status_code in (200, 204):
-                logger.info(f"Smart Picks chunk {idx}/{len(chunks)} posted ({len(chunk)} chars)")
+                logger.info(f"Smart Value chunk {idx}/{len(chunks)} posted ({len(chunk)} chars)")
                 if resp.status_code == 429:
                     import time as _time
                     retry_after = resp.json().get("retry_after", 5)
@@ -419,14 +419,14 @@ def post_to_discord(picks: List[Dict]) -> bool:
             success = False
 
     if success:
-        logger.info(f"Smart Picks posted to Discord ({len(picks)} picks, {len(chunks)} messages)")
+        logger.info(f"Smart Value posted to Discord ({len(picks)} picks, {len(chunks)} messages)")
         _mark_discord_posted_today()
     return success
 
 
 def run_smart_picks():
-    # DISABLED — Smart Picks Discord posting turned off
-    logger.info("Smart Picks Discord posting DISABLED — skipping")
+    # DISABLED — Smart Value Discord posting turned off
+    logger.info("Smart Value Discord posting DISABLED — skipping")
     return
     logger.info("========================================")
     logger.info("SMART PICKS ENGINE — Starting daily run")
@@ -436,19 +436,19 @@ def run_smart_picks():
 
     if picks:
         posted = post_to_discord(picks)
-        logger.info(f"Smart Picks complete: {len(picks)} picks, posted={posted}")
+        logger.info(f"Smart Value complete: {len(picks)} picks, posted={posted}")
     elif not _already_posted_today():
         # Picks may be in DB but Discord post wasn't confirmed — retry
         db_picks = _get_todays_picks_from_db()
         if db_picks:
-            logger.info(f"Smart Picks: {len(db_picks)} picks in DB but not confirmed posted — retrying Discord post")
+            logger.info(f"Smart Value: {len(db_picks)} picks in DB but not confirmed posted — retrying Discord post")
             posted = post_to_discord(db_picks)
-            logger.info(f"Smart Picks re-post complete: posted={posted}")
+            logger.info(f"Smart Value re-post complete: posted={posted}")
             picks = db_picks
         else:
-            logger.info("Smart Picks complete: 0 picks generated")
+            logger.info("Smart Value complete: 0 picks generated")
     else:
-        logger.info("Smart Picks already confirmed posted today — skipping")
+        logger.info("Smart Value already confirmed posted today — skipping")
 
     return picks
 

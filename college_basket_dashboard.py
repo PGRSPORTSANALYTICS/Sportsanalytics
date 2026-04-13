@@ -286,10 +286,10 @@ if stats is not None:
 
 st.markdown("---")
 
-tab_smart, tab1, tab2, tab3, tab4 = st.tabs(["🎯 Smart Picks", "📈 Today's Picks", "🏆 Recent Results", "📊 Performance Chart", "📋 All Data"])
+tab_smart, tab1, tab2, tab3, tab4 = st.tabs(["🎯 Smart Value", "📈 Today's Picks", "🏆 Recent Results", "📊 Performance Chart", "📋 All Data"])
 
 with tab_smart:
-    st.markdown("### Smart Picks — Moneyline Winners")
+    st.markdown("### Smart Value — Moneyline Winners")
     st.caption("Who wins? Odds 1.70–2.00 | High probability, clean value. Historical: 64% hit rate.")
 
     st.markdown("""
@@ -307,7 +307,7 @@ with tab_smart:
         smart_picks = _load_smart_picks()
     except Exception as e:
         smart_picks = []
-        st.error(f"Could not load smart picks: {e}")
+        st.error(f"Could not load smart value: {e}")
 
     if not smart_picks:
         st.info("No moneyline picks in the 1.70–2.00 range right now. Check back closer to game time.")

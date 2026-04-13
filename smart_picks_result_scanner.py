@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Smart Picks Result Scanner
+Smart Value Result Scanner
 ==========================
-Settles Smart Picks by joining to football_opportunities results.
+Settles Smart Value by joining to football_opportunities results.
 Sends settled results to the DISCORD_WH_SMART_PICKS channel.
 
 Runs every 30 minutes via combined_sports_runner.py.
@@ -61,7 +61,7 @@ def _send_smart_pick_result(pick: dict) -> bool:
         "description": f"**{pick.get('home_team','')}** vs **{pick.get('away_team','')}**",
         "color": color,
         "fields": fields,
-        "footer": {"text": f"{pick.get('league','')} • Smart Picks"},
+        "footer": {"text": f"{pick.get('league','')} • Smart Value"},
         "timestamp": datetime.utcnow().isoformat(),
     }
 
@@ -73,7 +73,7 @@ def _send_smart_pick_result(pick: dict) -> bool:
     success = False
     for url in webhooks:
         try:
-            resp = requests.post(url, json={"username": "PGR Smart Picks", "embeds": [embed]}, timeout=8)
+            resp = requests.post(url, json={"username": "PGR Smart Value", "embeds": [embed]}, timeout=8)
             if resp.status_code in (200, 204):
                 success = True
             else:
@@ -109,7 +109,7 @@ def run_smart_picks_settlement() -> Dict:
         return stats
 
     if not rows:
-        logger.info("Smart Picks settlement: nothing pending")
+        logger.info("Smart Value settlement: nothing pending")
         return stats
 
     for row in rows:
@@ -222,7 +222,7 @@ def run_smart_picks_settlement() -> Dict:
                 pass
 
     logger.info(
-        f"Smart Picks settlement: scanned={stats['scanned']} "
+        f"Smart Value settlement: scanned={stats['scanned']} "
         f"settled={stats['settled']} discord={stats['discord_posted']} errors={stats['errors']}"
     )
     return stats

@@ -1209,7 +1209,7 @@ def render_overview(df: pd.DataFrame):
         unsafe_allow_html=True,
     )
     st.markdown(
-        '<div class="pgr-subtitle">ROI tracking via Smart Picks · Value Opportunities = model edge feed · Corners & Cards always on</div>',
+        '<div class="pgr-subtitle">ROI tracking via Smart Value · Value Opportunities = model edge feed · Corners & Cards always on</div>',
         unsafe_allow_html=True,
     )
 
@@ -2269,7 +2269,7 @@ def render_signal_routing_tab():
     st.caption(
         "Three-tier signal classification: PRO PICK (high-confidence edges), "
         "VALUE OPPORTUNITY (full model edge data feed — all Value Opportunities), WATCHLIST (near-miss, internal). "
-        "ROI tracking → Smart Picks tab."
+        "ROI tracking → Smart Value tab."
     )
 
     today_str = datetime.now().strftime("%Y-%m-%d")
@@ -3958,7 +3958,7 @@ def main():
     # Tabs for different products
     smart_tab, free_tab, daily_card_tab, overview_tab, singles_tab, signal_routing_tab, odds_compare_tab, props_tab, kelly_tab, backtest_tab, clv_tab, system_tab, admin_tab = st.tabs(
         [
-            "Smart Picks",
+            "Smart Value",
             "Free Picks",
             "Daily Card",
             "Overview",
@@ -4043,7 +4043,7 @@ def render_three_layer_tab():
     st.caption(
         "All edges identified by the model across all markets. "
         "This is a data feed — not investment advice. "
-        "ROI tracking is done via Smart Picks. Corners and Cards run separately."
+        "ROI tracking is done via Smart Value. Corners and Cards run separately."
     )
 
     try:
@@ -4090,12 +4090,12 @@ def render_three_layer_tab():
             display["Pgr Score"] = display["Pgr Score"].map(lambda x: f"{x:.3f}" if x else "")
         st.dataframe(display, use_container_width=True)
 
-    # Quick count KPIs — no ROI (ROI tracked in Smart Picks)
+    # Quick count KPIs — no ROI (ROI tracked in Smart Value)
     c1, c2, c3 = st.columns(3)
     c1.metric("High Confidence Edges", len(pro))
     c2.metric("Value Opportunities", len(val))
     c3.metric("Watchlist Signals", len(watch))
-    st.caption("ROI tracking → Smart Picks tab. This feed is for data analysis only.")
+    st.caption("ROI tracking → Smart Value tab. This feed is for data analysis only.")
 
     st.divider()
     _render_layer(pro, "🎯 High Confidence — Top Edges", "#00C853")

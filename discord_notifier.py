@@ -305,7 +305,7 @@ PRODUCT_WEBHOOKS = {
     "CORNERS": os.getenv("DISCORD_PROPS_WEBHOOK_URL"),
     "CARDS":   os.getenv("DISCORD_PROPS_WEBHOOK_URL"),
     "SHOTS":   os.getenv("DISCORD_PROPS_WEBHOOK_URL"),
-    # Smart Picks — curated AI selections channel
+    # Smart Value — curated AI selections channel
     "SMART_PICKS":  os.getenv("DISCORD_WH_SMART_PICKS"),
     "SMART_PICK":   os.getenv("DISCORD_WH_SMART_PICKS"),
 }

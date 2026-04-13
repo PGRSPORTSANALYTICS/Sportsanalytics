@@ -51,7 +51,7 @@ def render_smart_picks_tab():
 
     st.markdown("""
     <div class="sp-header">
-        <div class="sp-title">Smart Picks</div>
+        <div class="sp-title">Smart Value</div>
         <div class="sp-subtitle">Curated AI selections. One best pick per match. SmartScore ranked.</div>
     </div>
     """, unsafe_allow_html=True)
@@ -104,7 +104,7 @@ def render_smart_picks_tab():
     today_pending_cnt = int(today_pending[0]) if today_pending else 0
 
     if not picks:
-        st.info("No Smart Picks available for today. The engine runs daily at 08:00 UTC (09:00 CET) — check back then.")
+        st.info("No Smart Value available for today. The engine runs daily at 08:00 UTC (09:00 CET) — check back then.")
 
     st.markdown(f"""
     <div style="font-size:0.85rem;color:#9CA3AF;margin-bottom:6px;">Today's Results</div>
@@ -135,7 +135,7 @@ def render_smart_picks_tab():
     <div class="sp-stats-row">
         <div class="sp-stat" style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);">
             <div class="sp-stat-value" style="color:#10B981;">{len(picks)}</div>
-            <div class="sp-stat-label">Smart Picks</div>
+            <div class="sp-stat-label">Smart Value</div>
         </div>
         <div class="sp-stat" style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);">
             <div class="sp-stat-value" style="color:#3B82F6;">{sum(1 for p in picks if p[7] == 'Strong')}</div>
@@ -190,7 +190,7 @@ def render_smart_picks_tab():
 
 
 def _render_picks_table(picks: list):
-    st.markdown("### All Smart Picks — Table View")
+    st.markdown("### All Smart Value — Table View")
     rows = []
     for p in picks:
         home_team, away_team, league, market, selection, odds, smart_score, confidence, model_grade = p

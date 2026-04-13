@@ -1,7 +1,7 @@
 """
 PGR Sports Analytics — Public FOMO dashboard with premium gate.
 Free: hero stats, track record, CLV proof, teaser picks.
-Premium: full picks, selections, odds, scanner, Smart Picks details.
+Premium: full picks, selections, odds, scanner, Smart Value details.
 """
 
 import os
@@ -572,7 +572,7 @@ else:
 # ─────────────────────────────────────────────────────────────────────────────
 tab_today, tab_smart, tab_scanner, tab_track, tab_clv, tab_bt = st.tabs([
     "⚡ Today's Picks",
-    "🧠 Smart Picks",
+    "🧠 Smart Value",
     "🔍 Market Scanner",
     "📈 Track Record",
     "🎯 Proof of Edge",
@@ -686,7 +686,7 @@ with tab_smart:
     <div style="padding:14px 20px;border-radius:12px;background:rgba(0,245,157,0.05);
                 border:1px solid rgba(0,245,157,0.2);margin-bottom:20px;">
         <div style="font-size:1rem;font-weight:700;color:#00F59D;margin-bottom:6px;">
-            🧠 Smart Picks — AI Curated
+            🧠 Smart Value — AI Curated
         </div>
         <div style="font-size:0.85rem;color:#C4C9DC;line-height:1.6;">
             One best pick per match, ranked by SmartScore (model confidence × CLV × form).
@@ -699,7 +699,7 @@ with tab_smart:
         st.markdown("""
         <div class="empty-state">
             <div class="big">🧠</div>
-            <p>Smart Picks for today not yet generated.<br>They're published once daily around 09:00 UTC.</p>
+            <p>Smart Value for today not yet generated.<br>They're published once daily around 09:00 UTC.</p>
         </div>
         """, unsafe_allow_html=True)
     else:
