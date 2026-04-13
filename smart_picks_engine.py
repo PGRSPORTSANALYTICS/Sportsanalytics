@@ -425,6 +425,9 @@ def post_to_discord(picks: List[Dict]) -> bool:
 
 
 def run_smart_picks():
+    # DISABLED — Smart Picks Discord posting turned off
+    logger.info("Smart Picks Discord posting DISABLED — skipping")
+    return
     logger.info("========================================")
     logger.info("SMART PICKS ENGINE — Starting daily run")
     logger.info("========================================")

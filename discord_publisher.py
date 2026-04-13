@@ -679,14 +679,9 @@ def run_publish_cycle():
 
 
 def publish_after_cycle():
-    try:
-        count = run_publish_cycle()
-        if count > 0:
-            logger.info(f"Published {count} analysis entries to Discord")
-        return count
-    except Exception as e:
-        logger.error(f"Analysis publish error: {e}", exc_info=True)
-        return 0
+    # DISABLED — league-specific Discord publishing turned off
+    logger.info("Discord league publishing DISABLED — skipping")
+    return 0
 
 
 def discover_webhook_status():

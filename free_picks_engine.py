@@ -214,6 +214,9 @@ def mark_pick_as_free_sent(pick_id: int) -> bool:
 
 def run_free_picks(picks_to_send: int = 1):
     """Run free picks distribution."""
+    # DISABLED — Free Picks Discord posting turned off
+    print("Free Picks Discord posting DISABLED — skipping")
+    return {"sent": 0, "disabled": True}
     print(f"\n{'='*50}")
     print(f"FREE PICKS ENGINE - {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC")
     print(f"{'='*50}\n")

@@ -132,6 +132,9 @@ def send_props_picks_to_discord(picks: List[Dict], market_type: str = "PROPS") -
 
 def send_new_props_picks() -> Dict[str, int]:
     """Query new unsent Corners/Cards/Shots picks and send to Discord."""
+    # DISABLED — Props Discord posting turned off
+    logger.info("Props Discord posting DISABLED — skipping")
+    return {"sent": 0, "disabled": True}
     try:
         db_url = get_db_url()
         if not db_url:
