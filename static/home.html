@@ -324,7 +324,7 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
 
   <!-- Stats strip -->
   <div class="stats-strip" id="stats-strip">
-    <div class="stat-tile"><div class="stat-lbl">Live Edges</div><div class="stat-val" id="s-count" style="color:#4ade80">—</div><div class="stat-sub">identified</div></div>
+    <div class="stat-tile" style="cursor:pointer" onclick="document.querySelector('[data-tab=scanner]').click()"><div class="stat-lbl">Live Edges Right Now</div><div class="stat-val" id="s-count" style="color:#4ade80">—</div><div class="stat-sub" id="s-count-sub">you might be missing something</div></div>
     <div class="stat-tile"><div class="stat-lbl">Avg Edge (unfiltered)</div><div class="stat-val" id="s-avgev" style="color:#4ade80">—</div><div class="stat-sub">includes all signals (unfiltered scan)</div></div>
     <div class="stat-tile"><div class="stat-lbl">Top Edge</div><div class="stat-val" id="s-bestev" style="color:#fbbf24">—</div><div class="stat-sub">highest identified</div></div>
     <div class="stat-tile"><div class="stat-lbl">Avg Odds</div><div class="stat-val" id="s-avgodds">—</div><div class="stat-sub">identified edges</div></div>
@@ -347,15 +347,15 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
 
     <!-- Scanner header -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-      <span style="font-size:11px;color:#52525b;line-height:1.4;max-width:75%">This tool identifies pricing inefficiencies — not every signal is meant to be played.</span>
-      <span style="font-size:10px;font-weight:700;color:#4ade80;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.25);border-radius:20px;padding:3px 9px;white-space:nowrap">● Live market scan</span>
+      <span style="font-size:11px;color:#52525b;line-height:1.4;max-width:75%">Identifies pricing inefficiencies across markets. Not every signal is meant to be played.</span>
+      <span id="live-edge-counter" style="font-size:10px;font-weight:700;color:#4ade80;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.25);border-radius:20px;padding:3px 9px;white-space:nowrap">● Live market scan</span>
     </div>
 
     <!-- Smart Value banner (shown only on SV tab) -->
     <div class="sv-banner" id="sv-banner" style="display:none">
       <div class="sv-banner-icon">⭐</div>
       <div class="sv-banner-text">
-        <b>Smart Value picks</b> — our highest-conviction signals. One best pick per match, model-approved and EV-positive. Sorted by kickoff time.
+        <b>Smart Value</b> — identifies pricing inefficiencies across markets.<br>Not every signal is meant to be played.
       </div>
     </div>
 
@@ -681,6 +681,18 @@ function renderScanner(){
   document.getElementById("hdr-count").textContent = picks.length;
   updateStatsStrip(picks);
 
+  // Live edge counter badge — shows real count as FOMO
+  const allPicks = state.picks.length;
+  const counter = document.getElementById("live-edge-counter");
+  if(counter){
+    if(allPicks > 0){
+      counter.textContent = `⚡ ${allPicks} live edges right now`;
+      counter.style.color = "#4ade80";
+    } else {
+      counter.textContent = "● Live market scan";
+    }
+  }
+
   // Show/hide filter bar and SV banner
   const filterBar = document.querySelector(".filter-bar");
   const svBanner  = document.getElementById("sv-banner");
@@ -819,14 +831,14 @@ function renderScanner(){
     }
     // FOMO unlock banner after all rows
     const totalVisible = picks.length + GHOST_ROWS;
-    const hiddenCount  = GHOST_ROWS;
     html+=`<div class="fomo-cta-row scanner-row">
       <div class="fomo-row">
         <div>
-          <div style="font-size:10px;color:#52525b;margin-bottom:3px">Showing ${picks.length} of ${totalVisible}+ live edges</div>
-          <div class="fomo-row-text">${hiddenCount}+ more signals hidden for premium users</div>
+          <div style="font-size:11px;color:#a1a1aa;margin-bottom:4px;font-style:italic">"This tool finds pricing inefficiencies. Not every signal is meant to be played."</div>
+          <div style="font-size:10px;color:#52525b;margin-bottom:3px">${totalVisible}+ live edges identified right now — you're seeing ${picks.length}</div>
+          <div class="fomo-row-text">Unlock full scanner access →</div>
         </div>
-        <button class="fomo-row-btn" onclick="openPremiumModal()">See All Live Edges →</button>
+        <button class="fomo-row-btn" onclick="openPremiumModal()">See All Live Edges</button>
       </div>
     </div>`;
   }
