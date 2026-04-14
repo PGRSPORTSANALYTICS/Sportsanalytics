@@ -316,6 +316,7 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
       <button id="bell-btn" onclick="togglePush()" title="Enable notifications" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:background .15s">
         <svg id="bell-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-opacity="0.7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
       </button>
+      <button id="push-test-btn" onclick="sendTestPush()" title="Send test notification" style="display:none;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:0 10px;height:34px;color:#4ade80;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .15s">TEST</button>
       <div id="premium-status" class="btn-premium" onclick="openPremiumModal()">Unlock Today's Edges</div>
       <button id="logout-btn" onclick="logout()" title="Log out" style="display:none;background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:6px 10px;color:#52525b;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;transition:all .15s" onmouseover="this.style.color='#f87171';this.style.borderColor='rgba(248,113,113,0.3)'" onmouseout="this.style.color='#52525b';this.style.borderColor='rgba(255,255,255,0.1)'">Log out</button>
       <button class="btn-install" id="install-chip" onclick="triggerInstall()" style="display:none">
@@ -1476,8 +1477,9 @@ async function togglePush() {
 }
 
 function updateBellActive(on) {
-  const btn  = document.getElementById('bell-btn');
-  const icon = document.getElementById('bell-icon');
+  const btn      = document.getElementById('bell-btn');
+  const icon     = document.getElementById('bell-icon');
+  const testBtn  = document.getElementById('push-test-btn');
   if (!btn || !icon) return;
   if (on) {
     btn.style.background  = 'rgba(34,197,94,0.15)';
@@ -1485,13 +1487,37 @@ function updateBellActive(on) {
     icon.style.stroke     = '#4ade80';
     icon.style.strokeOpacity = '1';
     btn.title = 'Notifications ON — tap to disable';
+    if (testBtn) testBtn.style.display = 'flex';
   } else {
     btn.style.background  = 'rgba(255,255,255,0.06)';
     btn.style.borderColor = 'rgba(255,255,255,0.1)';
     icon.style.stroke     = 'white';
     icon.style.strokeOpacity = '0.7';
     btn.title = 'Enable notifications';
+    if (testBtn) testBtn.style.display = 'none';
   }
+}
+
+async function sendTestPush() {
+  const btn = document.getElementById('push-test-btn');
+  if (btn) { btn.textContent = '...'; btn.disabled = true; }
+  try {
+    const res  = await fetch('/api/push/self-test', { method: 'POST' });
+    const data = await res.json();
+    if (data.ok && data.sent > 0) {
+      if (btn) { btn.textContent = '✓ SENT'; btn.style.color = '#4ade80'; }
+    } else if (data.detail === 'No subscribers registered yet') {
+      if (btn) { btn.textContent = 'NO SUBS'; btn.style.color = '#f87171'; }
+      alert('No subscribers found. Try clicking the bell icon again to re-subscribe.');
+    } else {
+      if (btn) { btn.textContent = 'ERR'; btn.style.color = '#f87171'; }
+    }
+  } catch(e) {
+    if (btn) { btn.textContent = 'ERR'; btn.style.color = '#f87171'; }
+  }
+  setTimeout(() => {
+    if (btn) { btn.textContent = 'TEST'; btn.style.color = '#4ade80'; btn.disabled = false; }
+  }, 3000);
 }
 </script>
 

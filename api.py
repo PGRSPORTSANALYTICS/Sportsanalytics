@@ -4261,6 +4261,33 @@ async def push_send(request: Request, payload: PushSendBody,
         raise HTTPException(status_code=500, detail=str(e))
 
 
+_push_test_last: dict = {}
+
+@app.post("/api/push/self-test", include_in_schema=False)
+async def push_self_test(request: Request):
+    """Fire a test push to all subscribers — no auth, rate-limited to 1/min."""
+    import time
+    now = time.time()
+    ip  = request.client.host if request.client else "unknown"
+    if now - _push_test_last.get(ip, 0) < 60:
+        raise HTTPException(status_code=429, detail="Rate limit: 1 test per minute")
+    _push_test_last[ip] = now
+    try:
+        from push_service import PushService
+        svc    = PushService()
+        count  = svc.count()
+        if count == 0:
+            return {"ok": False, "detail": "No subscribers registered yet"}
+        result = svc.send_to_all(
+            "🔒 Sharp Entry Found",
+            "CLV Score: 5/6\nBTTS Yes @2.25\nEntry window open",
+            url="/"
+        )
+        return {"ok": True, "subscribers": count, **result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":
