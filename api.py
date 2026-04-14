@@ -4263,6 +4263,32 @@ async def push_send(request: Request, payload: PushSendBody,
 
 _push_test_last: dict = {}
 
+@app.get("/api/push/debug", include_in_schema=False)
+async def push_debug():
+    """Debug endpoint — returns key metadata without exposing key values."""
+    import os, base64
+    pub  = os.getenv("VAPID_PUBLIC_KEY", "")
+    priv = os.getenv("VAPID_PRIVATE_KEY", "")
+    decoded_ok = False
+    decoded_len = 0
+    pem_header = ""
+    try:
+        padding = "=" * ((4 - len(priv) % 4) % 4)
+        decoded = base64.urlsafe_b64decode(priv + padding)
+        decoded_ok = True
+        decoded_len = len(decoded)
+        pem_header = decoded.decode("utf-8").split("\n")[0]
+    except Exception as e:
+        pem_header = f"decode_error: {e}"
+    return {
+        "pub_len":      len(pub),
+        "pub_start":    pub[:12] + "...",
+        "priv_len":     len(priv),
+        "decoded_ok":   decoded_ok,
+        "decoded_len":  decoded_len,
+        "pem_header":   pem_header,
+    }
+
 @app.post("/api/push/self-test", include_in_schema=False)
 async def push_self_test(request: Request):
     """Fire a test push to all subscribers — no auth, rate-limited to 1/min."""
