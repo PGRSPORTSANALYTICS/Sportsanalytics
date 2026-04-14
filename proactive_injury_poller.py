@@ -243,15 +243,23 @@ class ProactiveInjuryPoller:
     # DB upsert
     # ------------------------------------------------------------------
 
+    # Reasons that mean "not in squad for tactical/admin reasons" — not a real absence signal
+    _SKIP_REASONS = {"inactive", "not in squad", "suspended (admin)"}
+
     def _upsert_injuries(self, fixture: Dict, players: List[Dict], polled_at: int) -> int:
         """
         Upsert player injury records into proactive_injuries.
+        Skips 'Inactive' entries — those are squad-list omissions, not injuries or suspensions.
         ON CONFLICT (fixture_id, player_name) → update injury_type, reason, polled_at.
 
         Returns number of rows inserted/updated.
         """
         count = 0
         for player in players:
+            reason_raw = player.get("reason", "")
+            # Fix 1: Skip "Inactive" — tactical omission, not an absence signal
+            if reason_raw.strip().lower() in self._SKIP_REASONS:
+                continue
             try:
                 self.db.execute("""
                     INSERT INTO proactive_injuries
@@ -275,7 +283,7 @@ class ProactiveInjuryPoller:
                     player.get("team_name", ""),
                     player.get("player_name", "Unknown"),
                     player.get("type", player.get("injury_type", "")),
-                    player.get("reason", ""),
+                    reason_raw,
                     polled_at,
                 ))
                 count += 1
@@ -293,9 +301,10 @@ class ProactiveInjuryPoller:
     ) -> Dict:
         """
         Returns injury report for a specific match.
-        Looks up by team name in proactive_injuries (recent records only).
 
-        Returns dict with home_injuries, away_injuries lists and totals.
+        Fix 1: Excludes 'Inactive' (tactical omissions, not real absences).
+        Fix 2: Separates confirmed_out (Missing Fixture) from doubts (Questionable).
+        Fix 3: Exposes last_polled_utc and data_age_minutes for freshness check.
         """
         cutoff = int(time.time()) - (max_age_hours * 3600)
         try:
@@ -307,37 +316,71 @@ class ProactiveInjuryPoller:
                     OR home_team ILIKE %s OR away_team ILIKE %s
                 )
                 AND polled_at >= %s
-                ORDER BY polled_at DESC
+                AND LOWER(reason) NOT IN ('inactive', 'not in squad')
+                ORDER BY injury_type ASC, polled_at DESC
             """, (
                 f"%{home_team}%", f"%{home_team}%",
                 f"%{away_team}%", f"%{away_team}%",
                 cutoff,
             ), fetch="all") or []
 
-            home_injuries, away_injuries = [], []
+            home_confirmed, home_doubts = [], []
+            away_confirmed, away_doubts = [], []
+            latest_polled = 0
+
             for row in rows:
                 team, player, inj_type, reason, polled = row
+                if polled and polled > latest_polled:
+                    latest_polled = polled
+
+                # Fix 2: classify by injury_type
+                confidence = "confirmed" if (inj_type or "").lower() == "missing fixture" else "doubt"
                 entry = {
                     "player_name": player,
-                    "injury_type": inj_type or "",
                     "reason": reason or "",
-                    "polled_at": polled,
+                    "confidence": confidence,
                 }
-                # Classify to home or away by fuzzy team name match
+
                 if _name_match(team, home_team):
-                    home_injuries.append(entry)
+                    (home_confirmed if confidence == "confirmed" else home_doubts).append(entry)
                 elif _name_match(team, away_team):
-                    away_injuries.append(entry)
+                    (away_confirmed if confidence == "confirmed" else away_doubts).append(entry)
+
+            # Fix 3: freshness metadata
+            now = int(time.time())
+            data_age_min = round((now - latest_polled) / 60) if latest_polled else None
+            last_polled_utc = (
+                datetime.fromtimestamp(latest_polled, tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+                if latest_polled else None
+            )
+
+            home_all = home_confirmed + home_doubts
+            away_all = away_confirmed + away_doubts
 
             return {
                 "home_team": home_team,
                 "away_team": away_team,
-                "home_injuries": home_injuries,
-                "home_injury_count": len(home_injuries),
-                "away_injuries": away_injuries,
-                "away_injury_count": len(away_injuries),
-                "total_injuries": len(home_injuries) + len(away_injuries),
-                "has_key_injuries": (len(home_injuries) + len(away_injuries)) >= 2,
+                # Detailed split
+                "home_confirmed_out": home_confirmed,
+                "home_doubts": home_doubts,
+                "away_confirmed_out": away_confirmed,
+                "away_doubts": away_doubts,
+                # Flat lists kept for backwards compat
+                "home_injuries": home_all,
+                "away_injuries": away_all,
+                # Counts
+                "home_confirmed_count": len(home_confirmed),
+                "home_doubt_count": len(home_doubts),
+                "away_confirmed_count": len(away_confirmed),
+                "away_doubt_count": len(away_doubts),
+                "home_injury_count": len(home_all),
+                "away_injury_count": len(away_all),
+                "total_injuries": len(home_all) + len(away_all),
+                # Flag only if confirmed absences (not just doubts)
+                "has_key_injuries": (len(home_confirmed) + len(away_confirmed)) >= 2,
+                # Fix 3: freshness
+                "last_polled_utc": last_polled_utc,
+                "data_age_minutes": data_age_min,
             }
         except Exception as e:
             logger.error(f"❌ get_injuries_for_match error: {e}")
@@ -355,29 +398,50 @@ class ProactiveInjuryPoller:
                 SELECT
                     fixture_id, home_team, away_team, league_name,
                     kickoff_epoch,
-                    COUNT(*) as injury_count,
-                    COUNT(DISTINCT team_name) as teams_affected,
-                    MAX(polled_at) as last_polled
+                    -- Fix 2: split confirmed vs doubt
+                    COUNT(*) FILTER (WHERE injury_type = 'Missing Fixture') AS confirmed_out,
+                    COUNT(*) FILTER (WHERE injury_type = 'Questionable')    AS doubts,
+                    COUNT(*) AS total_absences,
+                    COUNT(DISTINCT team_name)                                AS teams_affected,
+                    MAX(polled_at)                                           AS last_polled
                 FROM proactive_injuries
                 WHERE kickoff_epoch BETWEEN %s AND %s
+                -- Fix 1: exclude Inactive entries
+                AND LOWER(reason) NOT IN ('inactive', 'not in squad')
                 GROUP BY fixture_id, home_team, away_team, league_name, kickoff_epoch
                 ORDER BY kickoff_epoch ASC
             """, (cutoff_ko, max_ko), fetch="all") or []
 
+            now = int(time.time())
             results = []
             for row in rows:
+                fixture_id, home, away, league, ko_epoch, confirmed, doubts, total, teams, last_polled = row
+                ko_utc = (
+                    datetime.fromtimestamp(ko_epoch, tz=timezone.utc).strftime("%Y-%m-%d %H:%M")
+                    if ko_epoch else "?"
+                )
+                # Fix 3: format last_polled as UTC string + age in minutes
+                last_polled_utc = (
+                    datetime.fromtimestamp(last_polled, tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+                    if last_polled else None
+                )
+                data_age_min = round((now - last_polled) / 60) if last_polled else None
+
                 results.append({
-                    "fixture_id": row[0],
-                    "home_team": row[1],
-                    "away_team": row[2],
-                    "league_name": row[3],
-                    "kickoff_epoch": row[4],
-                    "kickoff_utc": datetime.fromtimestamp(row[4], tz=timezone.utc).strftime(
-                        "%Y-%m-%d %H:%M"
-                    ) if row[4] else "?",
-                    "injury_count": row[5],
-                    "teams_affected": row[6],
-                    "last_polled": row[7],
+                    "fixture_id": fixture_id,
+                    "home_team": home,
+                    "away_team": away,
+                    "league_name": league,
+                    "kickoff_epoch": ko_epoch,
+                    "kickoff_utc": ko_utc,
+                    # Fix 2: confirmed vs doubt breakdown
+                    "confirmed_out": confirmed or 0,
+                    "doubts": doubts or 0,
+                    "total_absences": total or 0,
+                    "teams_affected": teams or 0,
+                    # Fix 3: freshness
+                    "last_polled_utc": last_polled_utc,
+                    "data_age_minutes": data_age_min,
                 })
             return results
         except Exception as e:
