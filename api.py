@@ -2500,7 +2500,8 @@ async def get_today_picks():
                     league, trust_level, kickoff_time, match_date,
                     open_odds, clv_pct, mode,
                     model_prob, disagreement, clv_status, hidden_value_status,
-                    timestamp, kickoff_epoch, clv_score, clv_tier
+                    timestamp, kickoff_epoch, clv_score, clv_tier,
+                    fair_odds
                 FROM football_opportunities
                 WHERE (
                     mode IN ('PROD', 'VALUE_OPP')
@@ -2566,7 +2567,14 @@ async def get_today_picks():
             icon = next((v for k, v in market_icons.items() if k in mkt), '⚽')
 
             # Real EV: (model_prob - implied_prob) × 100  — not the capped DB value
+            # r[28] = fair_odds (added to SELECT); derive from model_prob if NULL and vice versa
+            _fair_odds_raw = float(r[28]) if r[28] else None
             model_p = float(r[20]) if r[20] else None
+            if not _fair_odds_raw and model_p and model_p > 0:
+                _fair_odds_raw = round(1.0 / model_p, 3)
+            # Backcompat: corners/cards saved before model_prob was added → derive from fair_odds
+            if not model_p and _fair_odds_raw and _fair_odds_raw > 1:
+                model_p = round(1.0 / _fair_odds_raw, 3)
             odds_f  = float(r[5])  if r[5]  else None
             if model_p and odds_f and odds_f > 1.0:
                 ev_raw = (model_p - 1.0 / odds_f) * 100
@@ -2622,13 +2630,14 @@ async def get_today_picks():
                 'layer': layer,
                 'badge': layer,
                 'mode': mode_val,
-                'model_prob': round(float(r[20]), 3) if r[20] else None,
+                'model_prob': round(model_p, 3) if model_p else None,
                 'disagreement': round(float(r[21]), 3) if r[21] else None,
                 'clv_status': r[22] or None,
                 'hidden_value_status': r[23] or None,
                 'created_ts': int(r[24]) if r[24] else None,
                 'age_minutes': int((time.time() - int(r[24])) / 60) if r[24] else None,
                 'is_outlier': is_outlier,
+                'fair_odds': round(_fair_odds_raw, 3) if _fair_odds_raw else None,
             })
 
         # ── Embed training_data for all matches in ONE batch query ──

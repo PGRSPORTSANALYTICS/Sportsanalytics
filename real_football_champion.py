@@ -5098,8 +5098,9 @@ def _save_bet_candidates_to_db(candidates, market_label: str, force_learning: bo
                  quality_score, recommended_date, recommended_tier, daily_rank, mode, bet_placed,
                  trust_level, sim_probability, ev_sim,
                  odds_by_bookmaker, best_odds_value, best_odds_bookmaker, avg_odds, fair_odds,
+                 model_prob, calibrated_prob,
                  open_ts)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (home_team, away_team, selection, market, match_date, mode) DO NOTHING
                 RETURNING id
             ''', (
@@ -5134,6 +5135,8 @@ def _save_bet_candidates_to_db(candidates, market_label: str, force_learning: bo
                 best_odds_bookmaker,
                 float(avg_odds),
                 float(fair_odds),
+                float(candidate.confidence),   # model_prob (0-1 range)
+                float(candidate.confidence),   # calibrated_prob (same as model_prob for corners)
                 int(time.time()),  # open_ts = epoch when pick was created
             ), fetch='one')
             
