@@ -33,6 +33,8 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
 .top-bar{position:sticky;top:0;z-index:50;background:rgba(9,9,11,.95);backdrop-filter:blur(12px);border-bottom:1px solid #18181b;padding:0 16px}
 .top-bar-inner{max-width:1400px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;height:52px;gap:12px}
 .main-content{max-width:1400px;margin:0 auto;width:100%;padding:16px;flex:1}
+/* logout span defaults */
+.logout-short{display:none}
 @media(max-width:500px){
   .top-bar{padding:0 12px}
   .top-bar-inner{height:48px;gap:8px}
@@ -43,6 +45,10 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
   .btn-premium{padding:6px 10px;font-size:11px}
   #push-test-btn{display:none!important}
   .main-content{padding:12px}
+  #hdr-right{flex-wrap:nowrap!important;gap:6px!important}
+  .logout-full{display:none}
+  .logout-short{display:inline}
+  #logout-btn{padding:0;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-size:14px}
 }
 
 /* ── Logo ── */
@@ -341,7 +347,7 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
       </div>
     </a>
 
-    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+    <div id="hdr-right" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end">
       <div class="live-badge">
         <span class="live-dot pulse"></span>
         <span id="hdr-count">—</span>
@@ -352,7 +358,7 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
       </button>
       <button id="push-test-btn" onclick="sendTestPush()" title="Send test notification" style="display:none;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:0 10px;height:34px;color:#4ade80;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .15s">TEST</button>
       <div id="premium-status" class="btn-premium" onclick="openPremiumModal()">Unlock Today's Edges</div>
-      <button id="logout-btn" onclick="logout()" title="Log out" style="display:none;background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:6px 10px;color:#52525b;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;transition:all .15s" onmouseover="this.style.color='#f87171';this.style.borderColor='rgba(248,113,113,0.3)'" onmouseout="this.style.color='#52525b';this.style.borderColor='rgba(255,255,255,0.1)'">Log out</button>
+      <button id="logout-btn" onclick="logout()" title="Log out" style="display:none;background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:6px 10px;color:#52525b;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;transition:all .15s" onmouseover="this.style.color='#f87171';this.style.borderColor='rgba(248,113,113,0.3)'" onmouseout="this.style.color='#52525b';this.style.borderColor='rgba(255,255,255,0.1)'"><span class="logout-full">Log out</span><span class="logout-short">✕</span></button>
       <button class="btn-install" id="install-chip" onclick="triggerInstall()" style="display:none">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
         Install app
