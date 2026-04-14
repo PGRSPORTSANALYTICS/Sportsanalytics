@@ -1073,7 +1073,13 @@ function renderExpandPanel(p){
       <div class="detail-val" style="color:#a78bfa">${p.fairOdds?fmtOdds(p.fairOdds):"—"}</div>
       <div class="detail-sub">no-vig price</div>
     </div>
-    ${p.clv_pct!=null?`<div class="detail-tile"><div class="detail-lbl">Closing Line Value</div><div class="detail-val" style="color:${p.clv_pct>0?"#4ade80":"#f87171"}">${fmtPct(p.clv_pct)}</div><div class="detail-sub">did model beat market?</div></div>`:""}
+    <div class="detail-tile">
+      <div class="detail-lbl">Closing Line Value</div>
+      ${p.clv_pct!=null
+        ? `<div class="detail-val" style="color:${p.clv_pct>0?"#4ade80":"#f87171"}">${fmtPct(p.clv_pct)}</div><div class="detail-sub">vs closing line</div>`
+        : `<div class="detail-val" style="font-size:13px;color:#52525b">Monitoring…</div><div class="detail-sub" style="color:#3f3f46">captured near kickoff</div>`
+      }
+    </div>
     <div class="detail-tile">
       <div class="detail-lbl">Kickoff</div>
       <div class="detail-val" style="font-size:13px">${fmtKo(p.kickoff_time)}</div>
