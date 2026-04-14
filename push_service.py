@@ -140,7 +140,7 @@ class PushService:
                     pass
                 last_error = f"HTTP {status}: {body}"
                 logger.warning(f"Push failed ({status}): {e} | body: {body}")
-                if status in (404, 410):
+                if status in (401, 404, 410):
                     dead_endpoints.append(sub["endpoint"])
                 failed += 1
             except Exception as e:

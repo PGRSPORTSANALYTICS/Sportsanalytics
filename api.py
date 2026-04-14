@@ -4314,6 +4314,26 @@ async def push_self_test(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/push/clear-all", include_in_schema=False)
+async def push_clear_all(request: Request, x_admin_key: Optional[str] = Header(None)):
+    """Clear ALL push subscriptions from DB — use after VAPID key rotation."""
+    from auth_premium import is_admin_session
+    admin_pw  = os.environ.get("ADMIN_PASSWORD", "")
+    admin_key = os.environ.get("ADMIN_API_KEY", "")
+    key_ok    = x_admin_key and (x_admin_key == admin_pw or x_admin_key == admin_key)
+    if not is_admin_session(request) and not key_ok:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    try:
+        from db_connection import DatabaseConnection
+        with DatabaseConnection.get_cursor() as cur:
+            cur.execute("DELETE FROM push_subscriptions")
+            deleted = cur.rowcount
+        logger.info(f"push/clear-all: deleted {deleted} subscriptions")
+        return {"ok": True, "deleted": deleted, "message": "All subscriptions cleared. Users must re-subscribe."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":
