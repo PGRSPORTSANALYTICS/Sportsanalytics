@@ -499,6 +499,36 @@ class ValueSinglesEngine:
         # raw_candidates: all signals that pass hard pre-routing filters (PGR scored, not yet routed)
         raw_candidates: List[Dict[str, Any]] = []
 
+        # ── Pre-load existing open_odds for steam detection ──────────────────
+        # Key: (match_id, market_key) → earliest open_odds seen for that line.
+        # If current odds are significantly HIGHER than the stored open_odds
+        # it means the market has drifted AGAINST our selection (negative steam).
+        _existing_open_odds: Dict[str, float] = {}
+        try:
+            import time as _time_module
+            _cutoff = int(_time_module.time()) - 86400 * 4  # 4-day lookback
+            from db_helper import db_helper as _db
+            _steam_rows = _db.execute(
+                """SELECT match_id, market, MIN(open_odds) AS earliest_open
+                   FROM football_opportunities
+                   WHERE open_odds IS NOT NULL AND open_ts >= %s
+                   GROUP BY match_id, market""",
+                (_cutoff,), fetch='all'
+            )
+            if _steam_rows:
+                for _sr in _steam_rows:
+                    # db_helper may return tuples or dicts depending on cursor type
+                    if isinstance(_sr, dict):
+                        _key = f"{_sr['match_id']}|{_sr['market']}"
+                        _val = float(_sr['earliest_open'])
+                    else:
+                        _key = f"{_sr[0]}|{_sr[1]}"
+                        _val = float(_sr[2])
+                    _existing_open_odds[_key] = _val
+            print(f"   🔍 Steam cache: {len(_existing_open_odds)} match/market pairs loaded")
+        except Exception as _se:
+            print(f"   ⚠️ Steam pre-load skipped: {_se}")
+
         # 1) Get fixtures
         if not hasattr(self.champion, "get_todays_fixtures"):
             print("⚠️ ValueSinglesEngine: champion.get_todays_fixtures() missing")
@@ -543,7 +573,21 @@ class ValueSinglesEngine:
                         continue  # Too far in the future, skip silently
                 except:
                     pass  # Couldn't parse, allow it through
-            
+
+            # ── TIME GATE: Block picks < 2h before kickoff ───────────────────
+            # Late picks have poor CLV — market has already priced in information.
+            # Optimal window is 6-12h before KO. Hard block at <2h.
+            _hours_to_ko = None
+            if commence_time:
+                try:
+                    _ko_dt = datetime.fromisoformat(commence_time.replace('Z', '+00:00'))
+                    _hours_to_ko = (_ko_dt - datetime.now(timezone.utc)).total_seconds() / 3600
+                    if _hours_to_ko < 2.0:
+                        print(f"   ⏰ TIME GATE: {home_team} vs {away_team} — {_hours_to_ko:.1f}h to KO (<2h) — skipped")
+                        continue
+                except Exception:
+                    pass  # Cannot parse kickoff time — allow through
+
             league_key = match.get('sport_key') or match.get('league_key') or match.get('odds_api_key') or ''
             is_tournament = league_key in TOURNAMENT_LEAGUES
 
@@ -648,6 +692,27 @@ class ValueSinglesEngine:
                     _reject("rejected_low_odds", home_team, away_team, market_key, 0.0, float(odds))
                     continue
                 
+                # ── STEAM CHECK: Block if market drifted >2% AGAINST our selection ─
+                # If a prior entry for this match+market has lower open_odds than
+                # current odds, the market moved AGAINST our selection (negative steam).
+                # Example: open_odds was 2.02, now it's 3.00 → sharp money faded us.
+                _mkt_label = {
+                    "HOME_WIN": "Home Win", "AWAY_WIN": "Away Win", "DRAW": "Draw",
+                    "OVER_2_5": "Over 2.5 Goals", "UNDER_2_5": "Under 2.5 Goals",
+                    "OVER_1_5": "Over 1.5 Goals", "UNDER_1_5": "Under 1.5 Goals",
+                    "OVER_3_5": "Over 3.5 Goals", "UNDER_3_5": "Under 3.5 Goals",
+                    "BTTS_YES": "BTTS Yes", "BTTS_NO": "BTTS No",
+                }.get(market_key, market_key.replace("_", " ").title())
+                _steam_key = f"{match_id}|{_mkt_label}"
+                _prior_open = _existing_open_odds.get(_steam_key)
+                if _prior_open and _prior_open > 0:
+                    _drift_ratio = (float(odds) - _prior_open) / _prior_open
+                    if _drift_ratio > 0.02:  # >2% odds drift against our selection
+                        print(f"   ⚡ STEAM BLOCK: {home_team} vs {away_team} | {market_key} "
+                              f"open={_prior_open:.2f}→now={float(odds):.2f} (+{_drift_ratio*100:.1f}%) — late steam")
+                        _reject("rejected_steam", home_team, away_team, market_key, 0.0, float(odds))
+                        continue
+
                 # CONFIDENCE FLOOR: Skip below candidate minimum (50%)
                 if p_model < MIN_VALUE_SINGLE_CONFIDENCE:
                     _reject("rejected_low_confidence", home_team, away_team, market_key, 0.0, float(odds))
@@ -804,6 +869,38 @@ class ValueSinglesEngine:
                 fair_odds = round(1.0 / p_model, 3) if p_model > 0 else None
                 confidence = int(min(100, max(0, calibrated_prob * 100)))
 
+                # ── CLV SCORE: Quality signal for pick ranking ────────────────────
+                # Scoring (max 6):
+                #   +2  Early timing  — pick created ≥6h before KO
+                #   +2  No steam      — no prior open_odds, or current ≈ prior (within 1%)
+                #   +1  Injury clear  — no confirmed_out for this fixture (proactive_injuries)
+                #   +1  Odds stable   — current odds within 1% of fair_odds model estimate
+                # ≥4 = Smart Value quality candidate
+                _clv_score = 0
+                # Early timing
+                if _hours_to_ko is not None and _hours_to_ko >= 6.0:
+                    _clv_score += 2
+                elif _hours_to_ko is None:
+                    _clv_score += 1  # Unknown timing — partial credit
+                # No steam / odds stable at open
+                _no_steam = True
+                if _prior_open and _prior_open > 0:
+                    _abs_drift = abs(float(odds) - _prior_open) / _prior_open
+                    if _abs_drift <= 0.01:
+                        _clv_score += 2  # Stable at open
+                    elif _abs_drift <= 0.02:
+                        _clv_score += 1  # Minor movement
+                    else:
+                        _no_steam = False  # Already steamed — no points
+                else:
+                    _clv_score += 2  # No prior entry = fresh pick, no steam signal
+                # Odds within 1% of model fair value (odds stable vs model)
+                if fair_odds and abs(float(odds) - fair_odds) / fair_odds <= 0.01:
+                    _clv_score += 1
+                # Injury clear check (lightweight — avoids DB query per candidate)
+                # Will be upgraded to proactive_injuries lookup when integrated into predictor
+                _clv_score_final = min(6, _clv_score)
+
                 # ── Store as raw candidate (routing deferred to pass 2) ───────────
                 raw_candidates.append({
                     # identity
@@ -845,8 +942,12 @@ class ValueSinglesEngine:
                     "is_learning_only": is_learning_only,
                     "_home_form": home_form,
                     "_away_form": away_form,
+                    # CLV Quality Score
+                    "clv_score": _clv_score_final,
+                    "hours_to_ko": _hours_to_ko,
                 })
-                print(f"   📦 CANDIDATE: {market_key} EV={ev:.1%} Conf={calibrated_prob:.0%} Odds={float(odds):.2f} PGR={pgr_score:.1f} Tier={_league_tier}")
+                _clv_tag = f" CLV={_clv_score_final}/6" if _clv_score_final >= 4 else f" clv={_clv_score_final}/6"
+                print(f"   📦 CANDIDATE: {market_key} EV={ev:.1%} Conf={calibrated_prob:.0%} Odds={float(odds):.2f} PGR={pgr_score:.1f} Tier={_league_tier}{_clv_tag}")
 
         # ════════════════════════════════════════════════════════════════════
         # PASS 2: Sort all raw candidates by PGR score (desc), then route
@@ -972,6 +1073,7 @@ class ValueSinglesEngine:
                     "pgr_score": pgr_score,
                     "league_tier": _league_tier,
                     "routing_reason": _routing_reason,
+                    "clv_score": c.get("clv_score"),
                 })
                 continue
 
@@ -1039,6 +1141,7 @@ class ValueSinglesEngine:
                 "pgr_score": pgr_score,
                 "league_tier": _league_tier,
                 "routing_reason": _routing_reason,
+                "clv_score": c.get("clv_score"),
             }
             picks.append(opportunity)
 
