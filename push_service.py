@@ -82,8 +82,8 @@ class PushService:
     def send_to_all(self, title: str, body: str, url: str = "/",
                     icon: str = "/static/icon-192.png") -> dict:
         if not VAPID_PUBLIC_KEY or not VAPID_PRIVATE_KEY:
-            logger.warning("VAPID keys not configured — push skipped")
-            return {"sent": 0, "failed": 0}
+            logger.error("VAPID keys not configured — set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY env vars")
+            return {"sent": 0, "failed": 0, "vapid_missing": True}
 
         try:
             from pywebpush import webpush, WebPushException
