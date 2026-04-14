@@ -260,19 +260,26 @@ class CLVService:
         window_end = now + (CANDIDATE_WINDOW_HOURS * 3600)
 
         try:
+            # Also include picks where close_odds was captured early (>30 min before KO)
+            # so we can refresh with the true closing line in the final 30-minute window.
+            refresh_cutoff = now - (30 * 60)   # 30 min ago
             rows = db_helper.execute("""
                 SELECT id, match_id, home_team, away_team, league,
                        market, selection, open_odds, kickoff_epoch, kickoff_utc,
                        best_odds_bookmaker, fixture_id
                 FROM football_opportunities
                 WHERE status       = 'pending'
-                  AND close_odds   IS NULL
                   AND open_odds    IS NOT NULL
                   AND kickoff_epoch IS NOT NULL
                   AND kickoff_epoch >= %s
                   AND kickoff_epoch <= %s
+                  AND (
+                    close_odds IS NULL
+                    OR (close_ts IS NOT NULL AND close_ts < kickoff_epoch - 1800
+                        AND kickoff_epoch > %s)
+                  )
                 ORDER BY kickoff_epoch ASC
-            """, (window_start, window_end), fetch='all') or []
+            """, (window_start, window_end, refresh_cutoff), fetch='all') or []
 
             candidates = []
             for row in rows:
@@ -812,7 +819,7 @@ class CLVService:
                 if not fixture_id:
                     return False
 
-            odds_data = af.get_fixture_odds(fixture_id)
+            odds_data = af.get_fixture_odds(fixture_id, bypass_cache=True)
             if not odds_data:
                 return False
 

@@ -973,7 +973,7 @@ class APIFootballClient:
         logger.info(f"✅ Retrieved {len(leagues)} leagues from API-Football (cached)")
         return leagues
 
-    def get_fixture_odds(self, fixture_id: int, bookmaker_id: int = None) -> Dict:
+    def get_fixture_odds(self, fixture_id: int, bookmaker_id: int = None, bypass_cache: bool = False) -> Dict:
         """
         Get betting odds for a specific fixture from API-Football
         
@@ -1003,13 +1003,37 @@ class APIFootballClient:
         # Odds TTL is set to 20 min, matching the tighter scan cycles.
         # If odds were fetched <20 min ago, serve from cache directly without
         # touching the quota counter so consecutive 12/15-min scans stay cheap.
+        # bypass_cache=True skips this gate — used by CLV service to get live closing odds.
         ODDS_TTL_HOURS = 20 / 60  # 20 minutes expressed in hours for cache_response
-        if self.cache_manager.is_cache_fresh(cache_key, fresh_window_minutes=20):
+        if not bypass_cache and self.cache_manager.is_cache_fresh(cache_key, fresh_window_minutes=20):
             cached = self.cache_manager.get_cached_response(cache_key, 'odds')
             if cached is not None:
                 logger.debug(f"🕐 Odds cache fresh for fixture {fixture_id} — skipping live fetch")
                 return self._parse_odds_response(cached)
         
+        # bypass_cache=True: make a direct live API call (CLV closing-line capture)
+        if bypass_cache:
+            self._rate_limit()
+            try:
+                url = f"{self.base_url}/odds"
+                response = requests.get(url, headers=self.headers, params=params, timeout=15)
+                if response.status_code == 200:
+                    live_data = response.json().get('response', [])
+                    if live_data:
+                        # Overwrite the cache with fresh data for subsequent normal calls
+                        self.cache_manager.cache_response(cache_key, 'odds', live_data, ttl_hours=ODDS_TTL_HOURS)
+                        logger.debug(f"📡 CLV live fetch: fixture {fixture_id} — cache refreshed")
+                        return self._parse_odds_response(live_data)
+                    else:
+                        logger.warning(f"⚠️ CLV live fetch: empty odds for fixture {fixture_id}")
+                        return {}
+                else:
+                    logger.warning(f"⚠️ CLV live fetch: API status {response.status_code} for fixture {fixture_id}")
+                    return {}
+            except Exception as e:
+                logger.error(f"❌ CLV live fetch error fixture {fixture_id}: {e}")
+                return {}
+
         # _fetch_with_cache handles caching internally — always parse the raw response
         # (the old early-return bypass caused 'list has no .get()' on cache hits)
         # TTL = 20 min so stale odds are refetched on the next scan cycle (not after 2h)
