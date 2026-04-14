@@ -1403,6 +1403,50 @@ async def get_clv_breakdown():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/injuries/upcoming", tags=["Analytics"])
+async def get_upcoming_injuries(hours: int = 48):
+    """
+    Returns upcoming matches with known injury absences from the proactive injury cache.
+    Polled every 6h from API-Football for Big 5 + European cups (next 48h).
+    """
+    try:
+        from proactive_injury_poller import ProactiveInjuryPoller
+        from api_football_client import APIFootballClient
+        af_client = APIFootballClient()
+        poller = ProactiveInjuryPoller(af_client, db_helper)
+        summary = poller.get_upcoming_injury_summary(hours_ahead=hours)
+        stats = poller.get_stats()
+        return JSONResponse({
+            "matches": summary,
+            "meta": {
+                "hours_ahead": hours,
+                "total_matches": len(summary),
+                **stats,
+            }
+        })
+    except Exception as e:
+        logger.error(f"Error in get_upcoming_injuries: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/injuries/match", tags=["Analytics"])
+async def get_match_injuries(home: str, away: str):
+    """
+    Returns injury report for a specific match (by team name, fuzzy match).
+    Used by the dashboard and predictor to pre-check absences.
+    """
+    try:
+        from proactive_injury_poller import ProactiveInjuryPoller
+        from api_football_client import APIFootballClient
+        af_client = APIFootballClient()
+        poller = ProactiveInjuryPoller(af_client, db_helper)
+        report = poller.get_injuries_for_match(home, away)
+        return JSONResponse(report)
+    except Exception as e:
+        logger.error(f"Error in get_match_injuries: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/hockey/stats", tags=["Analytics"])
 async def get_hockey_stats():
     """Hockey stats from learning_bets for the Railway dashboard."""

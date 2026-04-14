@@ -291,6 +291,27 @@ def run_edge_management_cycle():
         traceback.print_exc()
 
 
+def run_proactive_injury_poll():
+    """Poll API-Football injuries 48h+ in advance for upcoming fixtures (Big 5 + Euro cups)."""
+    try:
+        from proactive_injury_poller import ProactiveInjuryPoller
+        from api_football_client import APIFootballClient
+        from db_helper import db_helper
+        logger.info("🏥 Starting Proactive Injury Poll...")
+        af_client = APIFootballClient()
+        poller = ProactiveInjuryPoller(af_client, db_helper)
+        summary = poller.poll(days_ahead=3)
+        logger.info(
+            f"🏥 Injury Poll done — {summary.get('fixtures_checked', 0)} fixtures, "
+            f"{summary.get('fixtures_with_injuries', 0)} with injuries, "
+            f"{summary.get('injuries_stored', 0)} records"
+        )
+    except Exception as e:
+        logger.error(f"❌ Proactive Injury Poll error: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 def run_multi_sport_learning():
     """Run multi-sport learning engine (Hockey, NBA, MMA)"""
     try:
@@ -974,6 +995,13 @@ def main():
         run_edge_management_cycle()  # Run immediately at startup
     except BaseException as e:
         logger.error(f"❌ Edge Management startup crash: {e}")
+
+    # Proactive Injury Poller — pre-fetch injuries 48h before kickoff (every 6h)
+    schedule.every(6).hours.do(run_proactive_injury_poll)
+    try:
+        run_proactive_injury_poll()  # Run immediately at startup to seed the table
+    except BaseException as e:
+        logger.error(f"❌ Proactive Injury Poll startup crash: {e}")
     
     schedule.every(2).hours.do(run_learning_update)
     schedule.every(2).hours.do(run_form_cacher)  # Cache form+H2H for upcoming picks
