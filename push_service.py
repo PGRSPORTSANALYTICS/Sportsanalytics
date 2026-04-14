@@ -88,8 +88,8 @@ class PushService:
         try:
             from pywebpush import webpush, WebPushException
         except ImportError:
-            logger.error("pywebpush not installed")
-            return {"sent": 0, "failed": 0}
+            logger.error("pywebpush not installed — add pywebpush to requirements.txt")
+            return {"sent": 0, "failed": 0, "pywebpush_missing": True}
 
         payload = json.dumps({
             "title": title,

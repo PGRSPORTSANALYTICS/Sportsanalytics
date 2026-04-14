@@ -1574,6 +1574,9 @@ async function sendTestPush() {
     } else if (data.vapid_missing) {
       if (btn) { btn.textContent = 'NO KEY'; btn.style.color = '#f87171'; }
       alert('VAPID keys missing on server.\n\nSet VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY in Railway environment variables.');
+    } else if (data.pywebpush_missing) {
+      if (btn) { btn.textContent = 'NO LIB'; btn.style.color = '#f87171'; }
+      alert('Push library (pywebpush) not installed on server. Railway needs to redeploy to pick up the new package.');
     } else if (data.ok && data.sent === 0 && (data.failed > 0 || data.cleaned > 0)) {
       if (btn) { btn.textContent = 'RE-SUB'; btn.style.color = '#f59e0b'; }
       const errDetail = data.error ? '\n\nError: ' + data.error : '';
