@@ -98,15 +98,45 @@ class PushService:
             "icon":  icon,
         })
 
-        # Decode base64url-encoded PEM → actual PEM string
+        # Resolve private key to a format pywebpush accepts.
+        # Supports three input formats stored in VAPID_PRIVATE_KEY:
+        #   1. Raw 32-byte scalar, base64url-encoded (43 chars) — preferred
+        #   2. Base64url-encoded PEM string (320+ chars)
+        #   3. Plain PEM string starting with "-----"
         priv_key = VAPID_PRIVATE_KEY
         if priv_key and not priv_key.startswith("-----"):
             try:
                 padding = "=" * ((4 - len(priv_key) % 4) % 4)
                 decoded = base64.urlsafe_b64decode(priv_key + padding)
-                priv_key = decoded.decode("utf-8").strip() + "\n"
-            except Exception:
-                pass  # Use as-is if decode fails
+                if len(decoded) == 32:
+                    # Raw 32-byte EC private scalar → reconstruct proper PKCS8 PEM
+                    from cryptography.hazmat.primitives.asymmetric import ec
+                    from cryptography.hazmat.primitives.serialization import (
+                        Encoding, PrivateFormat, NoEncryption
+                    )
+                    from cryptography.hazmat.primitives.asymmetric.ec import (
+                        EllipticCurvePrivateNumbers, SECP256R1
+                    )
+                    from cryptography.hazmat.primitives.asymmetric.ec import (
+                        generate_private_key
+                    )
+                    # Build private key from raw scalar
+                    scalar = int.from_bytes(decoded, "big")
+                    pub    = generate_private_key(SECP256R1()).public_key()
+                    # Derive matching public numbers from scalar
+                    from cryptography.hazmat.backends import default_backend
+                    from cryptography.hazmat.primitives.asymmetric.ec import (
+                        EllipticCurvePublicNumbers
+                    )
+                    priv_obj = ec.derive_private_key(scalar, SECP256R1(), default_backend())
+                    pem_bytes = priv_obj.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption())
+                    priv_key = pem_bytes.decode("utf-8")
+                else:
+                    # Assume base64url-encoded PEM
+                    priv_key = decoded.decode("utf-8").strip() + "\n"
+            except Exception as e:
+                logger.warning(f"VAPID key decode: {e} — using key as-is")
+                pass  # Use as-is if all else fails
 
         subs = self.get_subscriptions()
         sent = failed = 0
