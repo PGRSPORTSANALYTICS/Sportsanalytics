@@ -1332,9 +1332,11 @@ def _match_api_football_odds(market: str, selection: str,
             return odds_map.get(f"AWAY_CARDS_{side.upper()}_{line}")
 
         if 'over' in s:
-            return odds_map.get(f'CARDS_OVER_{line}')
+            return (odds_map.get(f'MATCH_CARDS_OVER_{line}')
+                    or odds_map.get(f'CARDS_OVER_{line}'))
         if 'under' in s:
-            return odds_map.get(f'CARDS_UNDER_{line}')
+            return (odds_map.get(f'MATCH_CARDS_UNDER_{line}')
+                    or odds_map.get(f'CARDS_UNDER_{line}'))
         return None
 
     # ── 1X2 ───────────────────────────────────────────────────────────────────
