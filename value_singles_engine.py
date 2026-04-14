@@ -1067,6 +1067,21 @@ class ValueSinglesEngine:
             is_learning_only = c["is_learning_only"]
             is_league_learning = c.get("is_league_learning", False)
             selection_text = c["selection"]
+            _clv_score_p2 = c.get("clv_score") or 0
+
+            # ── CLV liquidity gate ────────────────────────────────────────────
+            # Low-liquidity leagues (Tier C) need sharper odds signal to qualify.
+            # Standard/Premium leagues (Tier A/B) require volume-grade CLV quality.
+            # League-learning picks bypass this gate — we want all data collected.
+            _min_clv = 5 if _league_tier == "C" else 4
+            if _clv_score_p2 < _min_clv and not is_league_learning:
+                _reject(
+                    "rejected_clv_score",
+                    home_team, away_team, market_key, float(ev), float(odds)
+                )
+                print(f"   ❌ CLV gate: {home_team} vs {away_team} [{market_key}] "
+                      f"CLV={_clv_score_p2}/6 < {_min_clv} (Tier {_league_tier})")
+                continue
 
             # ── Determine routing tier ────────────────────────────────────────
             # IMPORTANT: Pass pro_picks_today=0 here so routing is purely quality-based.
