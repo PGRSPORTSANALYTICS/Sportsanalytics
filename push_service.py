@@ -98,12 +98,13 @@ class PushService:
             "icon":  icon,
         })
 
+        # Decode base64url-encoded PEM → actual PEM string
         priv_key = VAPID_PRIVATE_KEY
         if priv_key and not priv_key.startswith("-----"):
             try:
                 padding = "=" * ((4 - len(priv_key) % 4) % 4)
                 decoded = base64.urlsafe_b64decode(priv_key + padding)
-                priv_key = decoded.decode("utf-8")
+                priv_key = decoded.decode("utf-8").strip() + "\n"
             except Exception:
                 pass  # Use as-is if decode fails
 
