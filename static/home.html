@@ -33,6 +33,17 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
 .top-bar{position:sticky;top:0;z-index:50;background:rgba(9,9,11,.95);backdrop-filter:blur(12px);border-bottom:1px solid #18181b;padding:0 16px}
 .top-bar-inner{max-width:1400px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;height:52px;gap:12px}
 .main-content{max-width:1400px;margin:0 auto;width:100%;padding:16px;flex:1}
+@media(max-width:500px){
+  .top-bar{padding:0 12px}
+  .top-bar-inner{height:48px;gap:8px}
+  .live-badge{display:none}
+  .logo-sub{display:none}
+  .logo-badge{width:32px;height:32px;border-radius:9px}
+  .logo-title{font-size:14px}
+  .btn-premium{padding:6px 10px;font-size:11px}
+  #push-test-btn{display:none!important}
+  .main-content{padding:12px}
+}
 
 /* ── Logo ── */
 .logo-wrap{display:flex;align-items:center;gap:11px;text-decoration:none}
@@ -57,20 +68,27 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
 /* ── Stats strip ── */
 .stats-strip{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:16px}
 @media(max-width:900px){.stats-strip{grid-template-columns:repeat(3,1fr)}}
-@media(max-width:500px){.stats-strip{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:500px){.stats-strip{grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px}}
 .stat-tile{background:rgba(0,0,0,.4);border:1px solid #18181b;border-radius:12px;padding:12px;transition:border-color .15s}
 .stat-tile:hover{border-color:#27272a}
 .stat-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;font-weight:600;margin-bottom:5px}
 .stat-val{font-size:20px;font-weight:700;line-height:1}
 .stat-sub{font-size:10px;color:#52525b;margin-top:3px}
+@media(max-width:500px){
+  .stat-tile{padding:9px 10px;border-radius:10px}
+  .stat-val{font-size:17px}
+  .stat-lbl{font-size:8px;margin-bottom:3px}
+  .stat-sub{font-size:9px}
+}
 
 /* ── Nav tabs ── */
-.nav-tabs{display:flex;gap:2px;border-bottom:1px solid #18181b;margin-bottom:16px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.nav-tabs{display:flex;gap:2px;border-bottom:1px solid #18181b;margin-bottom:16px;overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;padding-right:16px}
 .nav-tabs::-webkit-scrollbar{height:0}
-.nav-tab{padding:10px 16px;font-size:13px;font-weight:600;color:#71717a;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .15s;background:none;border-top:none;border-left:none;border-right:none}
+.nav-tab{padding:10px 14px;font-size:13px;font-weight:600;color:#71717a;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .15s;background:none;border-top:none;border-left:none;border-right:none;scroll-snap-align:start;-webkit-tap-highlight-color:transparent}
 .nav-tab:hover{color:#d4d4d8}
 .nav-tab.active{color:#e4e4e7;border-bottom-color:#22c55e}
 .nav-tab.sv-tab.active{color:#fbbf24;border-bottom-color:#f59e0b}
+@media(max-width:500px){.nav-tab{padding:10px 11px;font-size:12px}}
 
 /* ── Smart Value row marker ── */
 .sv-row{border-left:2px solid rgba(245,158,11,.55)!important;background:rgba(245,158,11,.025)!important}
@@ -94,11 +112,18 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
 .filter-bar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px;padding:10px 12px;background:#0f0f11;border:1px solid #18181b;border-radius:12px}
 .filter-label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#52525b;font-weight:600;white-space:nowrap}
 .filter-pills{display:flex;gap:4px;flex-wrap:wrap}
-.pill{padding:4px 11px;border-radius:99px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #27272a;background:#18181b;color:#71717a;transition:all .12s;white-space:nowrap}
+.pill{padding:4px 11px;border-radius:99px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #27272a;background:#18181b;color:#71717a;transition:all .12s;white-space:nowrap;-webkit-tap-highlight-color:transparent}
 .pill:hover{background:#27272a;color:#d4d4d8}
 .pill.on{background:#22c55e;border-color:#22c55e;color:#000}
 .pill.sport.on{background:#3b82f6;border-color:#3b82f6;color:#fff}
 .divider{width:1px;height:20px;background:#27272a;flex-shrink:0}
+@media(max-width:500px){
+  .filter-bar{padding:8px 10px;gap:6px;border-radius:10px}
+  .filter-pills{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+  .filter-pills::-webkit-scrollbar{height:0}
+  .pill{padding:6px 12px;font-size:11px;min-height:34px;display:inline-flex;align-items:center}
+  .divider{display:none}
+}
 
 /* ── Scanner table ── */
 .scanner-wrap{border:1px solid #18181b;border-radius:14px;overflow:hidden;margin-bottom:20px}
@@ -121,6 +146,15 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
 @media(max-width:580px){
   :root{--scanner-cols:1.8fr 42px 90px 90px 52px 58px}
   .col-league,.col-fair,.col-signal{display:none!important}
+}
+/* Small phone: hide Market too — show Match, Selection, Odds, Edge */
+@media(max-width:420px){
+  :root{--scanner-cols:1.6fr 85px 52px 56px}
+  .col-league,.col-fair,.col-signal,.col-time,.col-market{display:none!important}
+  .scanner-hdr,.scanner-row{padding:10px 12px}
+  .match-teams{font-size:12px}
+  .match-meta{font-size:9px}
+  .cell-odds .odds-val{font-size:13px}
 }
 
 /* ── Cell styles ── */
