@@ -33,7 +33,7 @@ def _get_af_client():
 
 # ── Window settings ──────────────────────────────────────────────
 CANDIDATE_WINDOW_HOURS = 12         # Look for picks kicking off within next 12 h
-CLOSE_AFTER_KICKOFF_MIN = 30        # Allow capture up to 30 min AFTER kickoff
+CLOSE_AFTER_KICKOFF_MIN = 90        # Allow capture up to 90 min AFTER kickoff
 TARGET_MINUTES_BEFORE = 60          # Ideal capture point (60 min before KO)
 DRIFT_REJECT_PCT = 0.50             # Reject if odds moved >50% (data error)
 
@@ -268,7 +268,7 @@ class CLVService:
                        market, selection, open_odds, kickoff_epoch, kickoff_utc,
                        best_odds_bookmaker, fixture_id
                 FROM football_opportunities
-                WHERE status       = 'pending'
+                WHERE status IN ('pending', 'won', 'lost', 'settled')
                   AND open_odds    IS NOT NULL
                   AND kickoff_epoch IS NOT NULL
                   AND kickoff_epoch >= %s
