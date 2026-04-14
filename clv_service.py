@@ -710,26 +710,46 @@ class CLVService:
             except Exception as _pe:
                 logger.debug("proof_poster non-fatal: %s", _pe)
 
-            # 🔔 Push notification for significant CLV moves (fire-and-forget)
+            # 🔔 Push notification for significant CLV moves — first alert only
             if steam_flag in ('early', 'late'):
                 try:
-                    import threading
-                    from push_service import PushService
-                    match_str = f"{bet.get('home_team', '?')} vs {bet.get('away_team', '?')}"
-                    sel = bet.get('selection', bet.get('market', '?'))
-                    clv_sign = f"+{clv:.1f}" if clv >= 0 else f"{clv:.1f}"
-                    if steam_flag == 'early':
-                        title = "⚡ CLV Beat"
-                        body  = f"{match_str} | {sel} — {clv_sign}% vs close (market moved our way)"
-                    else:
-                        title = "⚠️ Early Drop Alert"
-                        body  = f"{match_str} | {sel} — {clv_sign}% CLV (odds drifted against us)"
-                    def _fire_clv(t=title, b=body):
-                        try:
-                            PushService().send_to_all(t, b, url="/")
-                        except Exception as _e:
-                            logger.debug("CLV push non-fatal: %s", _e)
-                    threading.Thread(target=_fire_clv, daemon=True).start()
+                    # Only fire if not already pushed for this pick
+                    _push_row = db_helper.execute(
+                        "SELECT push_sent FROM football_opportunities WHERE id=%s",
+                        (bet_id,)
+                    )
+                    _already_pushed = _push_row and _push_row[0][0]
+                    if not _already_pushed:
+                        import threading
+                        from push_service import PushService
+                        match_str = f"{bet.get('home_team', '?')} vs {bet.get('away_team', '?')}"
+                        sel = bet.get('selection', bet.get('market', '?'))
+                        clv_sign = f"+{clv:.1f}" if clv >= 0 else f"{clv:.1f}"
+                        if steam_flag == 'early':
+                            title = "⚡ CLV Confirmed"
+                            body  = (
+                                f"{match_str}\n"
+                                f"{sel} — {clv_sign}% vs close\n"
+                                f"Market moved our way"
+                            )
+                        else:
+                            title = "⚠️ Early Drop Alert"
+                            body  = (
+                                f"{match_str}\n"
+                                f"{sel} — {clv_sign}% CLV\n"
+                                f"Odds drifted against entry"
+                            )
+                        def _fire_clv(t=title, b=body, bid=bet_id):
+                            try:
+                                result = PushService().send_to_all(t, b, url="/")
+                                if result.get('sent', 0) > 0:
+                                    db_helper.execute(
+                                        "UPDATE football_opportunities SET push_sent=TRUE WHERE id=%s",
+                                        (bid,)
+                                    )
+                            except Exception as _e:
+                                logger.debug("CLV push non-fatal: %s", _e)
+                        threading.Thread(target=_fire_clv, daemon=True).start()
                 except Exception as _pe:
                     logger.debug("CLV push setup non-fatal: %s", _pe)
 

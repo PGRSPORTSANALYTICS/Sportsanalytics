@@ -1412,21 +1412,36 @@ class ValueSinglesEngine:
                     else:
                         print(f"📊 PREDICTION ONLY: {s['home_team']} vs {s['away_team']} -> {s['selection']} @ {s['odds']:.2f} (EV {s['edge_percentage']:.1f}%)")
 
-                    # 🔔 Push notification for SHARP picks (fire-and-forget)
+                    # 🔔 Push notification — SHARP picks only, first alert only
                     if s.get('clv_tier') == 'SHARP':
                         try:
                             import threading
                             from push_service import PushService
-                            tier_tag = "🔥 SHARP"
-                            match = f"{s['home_team']} vs {s['away_team']}"
-                            sel = s.get('selection', '')
+                            from db_helper import db_helper as _db
+                            home = s['home_team']
+                            away = s['away_team']
+                            sel  = s.get('selection', '')
                             odds = s.get('odds', 0)
-                            ev = s.get('edge_percentage', 0)
                             clv_s = s.get('clv_score', '?')
-                            body = f"{match} | {sel} @ {odds:.2f} — EV {ev:.1f}% CLV {clv_s}/6"
-                            def _fire(t=tier_tag, b=body):
+                            mkt  = s.get('market', s.get('market_key', ''))
+                            title = "🔒 Sharp Entry Found"
+                            body  = (
+                                f"CLV Score: {clv_s}/6\n"
+                                f"{sel} @{odds:.2f}\n"
+                                f"Entry window open"
+                            )
+                            def _fire(t=title, b=body,
+                                      ht=home, at=away, mk=mkt):
                                 try:
-                                    PushService().send_to_all(t, b, url="/")
+                                    result = PushService().send_to_all(t, b, url="/")
+                                    if result.get('sent', 0) > 0:
+                                        _db.execute("""
+                                            UPDATE football_opportunities
+                                            SET push_sent = TRUE
+                                            WHERE home_team=%s AND away_team=%s
+                                              AND market=%s AND push_sent=FALSE
+                                            ORDER BY id DESC LIMIT 1
+                                        """, (ht, at, mk))
                                 except Exception as _pe:
                                     print(f"⚠️ Push failed: {_pe}")
                             threading.Thread(target=_fire, daemon=True).start()
