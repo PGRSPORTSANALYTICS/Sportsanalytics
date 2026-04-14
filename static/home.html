@@ -16,7 +16,7 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif;color:#e4e4e7;font-size:14px}
+html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif;color:#e4e4e7;font-size:14px;overflow-x:hidden}
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:#27272a;border-radius:3px}
@@ -42,10 +42,11 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
   .logo-sub{display:none}
   .logo-badge{width:32px;height:32px;border-radius:9px}
   .logo-title{font-size:14px}
-  .btn-premium{padding:6px 10px;font-size:11px}
-  #push-test-btn{padding:0 8px;font-size:10px}
-  .main-content{padding:12px}
+  .btn-premium{padding:5px 9px;font-size:11px;max-width:130px;overflow:hidden;text-overflow:ellipsis}
+  #push-test-btn{display:none!important}
+  .main-content{padding:10px}
   #hdr-right{flex-wrap:nowrap!important;gap:6px!important}
+  #bell-btn{width:30px;height:30px;flex-shrink:0}
   .logout-full{display:none}
   .logout-short{display:inline}
   #logout-btn{padding:0;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-size:14px}
@@ -132,7 +133,7 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
 }
 
 /* ── Scanner table ── */
-.scanner-wrap{border:1px solid #18181b;border-radius:14px;overflow:hidden;margin-bottom:20px}
+.scanner-wrap{border:1px solid #18181b;border-radius:14px;overflow:hidden;overflow-x:hidden;margin-bottom:20px}
 .scanner-hdr{display:grid;grid-template-columns:var(--scanner-cols);padding:8px 14px;background:#0f0f11;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;font-weight:700;gap:8px}
 .scanner-row{display:grid;grid-template-columns:var(--scanner-cols);padding:11px 14px;gap:8px;border-top:1px solid #18181b;align-items:center;cursor:pointer;transition:background .1s}
 .scanner-row:hover{background:rgba(255,255,255,.025)}
@@ -148,19 +149,77 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
   :root{--scanner-cols:2fr 50px 100px 100px 55px 55px 68px 72px}
   .col-league{display:none!important}
 }
-/* Mobile: hide League + Fair + Signal — 6 cols */
+/* Small screen: hide League + Fair + Signal — 6 cols */
 @media(max-width:580px){
   :root{--scanner-cols:1.8fr 42px 90px 90px 52px 58px}
   .col-league,.col-fair,.col-signal{display:none!important}
 }
-/* Small phone: hide Market too — show Match, Selection, Odds, Edge */
-@media(max-width:420px){
-  :root{--scanner-cols:1.6fr 85px 52px 56px}
-  .col-league,.col-fair,.col-signal,.col-time,.col-market{display:none!important}
-  .scanner-hdr,.scanner-row{padding:10px 12px}
-  .match-teams{font-size:12px}
-  .match-meta{font-size:9px}
-  .cell-odds .odds-val{font-size:13px}
+/* ── Phone card layout (≤500px) ─────────────────────────────────────────
+   Replace cramped multi-col grid with a 2-col card:
+   LEFT col  → match info (team names + league + mme-line), takes all space
+   RIGHT col → time / odds / edge stacked vertically, right-aligned
+─────────────────────────────────────────────────────────────────────── */
+@media(max-width:500px){
+  .scanner-hdr{display:none!important}
+  /* 2-col card grid */
+  .scanner-row:not(.fomo-cta-row){
+    display:grid!important;
+    grid-template-columns:1fr auto;
+    grid-template-rows:auto auto auto;
+    column-gap:10px;
+    row-gap:2px;
+    padding:12px;
+    overflow:hidden;
+  }
+  /* Match: spans all 3 rows on the left */
+  .cell-match{
+    grid-column:1;
+    grid-row:1/span 3;
+    min-width:0;
+    align-self:center;
+  }
+  .match-teams{
+    white-space:normal;
+    font-size:13px;
+    line-height:1.35;
+    overflow:hidden;
+  }
+  .match-meta{font-size:10px;margin-top:2px}
+  .mme-line{
+    white-space:normal;
+    font-size:9.5px;
+    line-height:1.4;
+    margin-top:3px;
+  }
+  /* Right col row 1: kickoff time */
+  .cell-time{
+    grid-column:2;
+    grid-row:1;
+    text-align:right;
+    font-size:11px;
+    font-weight:700;
+    color:#a1a1aa;
+    align-self:start;
+  }
+  /* Right col row 2: odds */
+  .cell-odds{
+    grid-column:2;
+    grid-row:2;
+    text-align:right;
+    align-self:center;
+  }
+  .cell-odds .odds-val{font-size:15px;font-weight:800}
+  /* Right col row 3: edge badge */
+  .cell-edge{
+    grid-column:2;
+    grid-row:3;
+    text-align:right;
+    align-self:end;
+  }
+  .edge-chip{font-size:11px;padding:2px 7px}
+  /* Hide columns not needed in card layout */
+  .col-league,.col-fair,.col-signal,
+  .cell-market,.cell-selection{display:none!important}
 }
 
 /* ── Cell styles ── */
