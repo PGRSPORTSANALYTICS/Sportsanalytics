@@ -186,7 +186,6 @@ LEAGUE_REGISTRY: List[LeagueConfig] = [
         api_football_id=89,
         country="Netherlands",
         tier=3,
-        active=False,  # Key not available on Odds API (404)
         timezone="Europe/Amsterdam"
     ),
     LeagueConfig(
@@ -195,7 +194,6 @@ LEAGUE_REGISTRY: List[LeagueConfig] = [
         api_football_id=95,
         country="Portugal",
         tier=3,
-        active=False,  # Key not available on Odds API (404)
         timezone="Europe/Lisbon"
     ),
     
@@ -262,7 +260,6 @@ LEAGUE_REGISTRY: List[LeagueConfig] = [
         api_football_id=345,
         country="Czech Republic",
         tier=3,
-        active=False,  # Key not available on Odds API (404)
         timezone="Europe/Prague"
     ),
     LeagueConfig(
