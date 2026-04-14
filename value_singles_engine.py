@@ -150,6 +150,14 @@ VALUE_SINGLES_BLOCKED_LEAGUES = {
     "soccer_italy_serie_a",       # Serie A
 }
 
+# Leagues in learning mode — picks saved with mode='LEARNING', bet_placed=False.
+# Data collected for model training but never count toward daily caps or real P&L.
+# Added Apr 2026: new leagues with insufficient historical calibration data.
+LEARNING_ONLY_LEAGUES = {
+    "soccer_saudi_arabia_pro_league",  # Saudi Pro League — new, limited H2H data
+    "soccer_chile_campeonato",         # Chilean Primera — new, harder to calibrate
+}
+
 # League filtering mode: False = allow ALL leagues
 LEAGUE_WHITELIST_ENABLED = False  # Disable whitelist - allow all leagues
 
@@ -842,6 +850,10 @@ class ValueSinglesEngine:
                     _reject("rejected_market_type", home_team, away_team, market_key, float(ev), float(odds))
                     continue
 
+                # League-level learning mode: candidate is allowed through but will be saved
+                # with mode='LEARNING', bet_placed=False (never counts toward caps or P&L).
+                _is_league_learning = _lk in LEARNING_ONLY_LEAGUES
+
                 if LEARNING_ENGINE_AVAILABLE:
                     combined_conf = compute_bet_confidence(ev, _lk, market_key, 'football')
                     if combined_conf < MIN_COMBINED_CONFIDENCE:
@@ -990,6 +1002,7 @@ class ValueSinglesEngine:
                     "ev_sim": float(ev_sim),
                     "disagreement": float(disagreement),
                     "is_learning_only": is_learning_only,
+                    "is_league_learning": _is_league_learning,
                     "_home_form": home_form,
                     "_away_form": away_form,
                     # CLV Quality Score
@@ -1052,6 +1065,7 @@ class ValueSinglesEngine:
             fair_odds = c["fair_odds"]
             confidence = c["confidence"]
             is_learning_only = c["is_learning_only"]
+            is_league_learning = c.get("is_league_learning", False)
             selection_text = c["selection"]
 
             # ── Determine routing tier ────────────────────────────────────────
@@ -1087,6 +1101,58 @@ class ValueSinglesEngine:
 
             # ── Build analysis blob shared by both tier paths ─────────────────
             _created = to_iso_utc(now_utc())
+
+            # ── LEARNING_ONLY_LEAGUES: save with mode='LEARNING', never count as real pick ──
+            if is_league_learning:
+                data_picks.append({
+                    "timestamp": int(time.time()),
+                    "match_id": match_id,
+                    "home_team": home_team,
+                    "away_team": away_team,
+                    "league": c["league"],
+                    "market": "Value Single",
+                    "selection": selection_text,
+                    "odds": odds,
+                    "edge_percentage": float(ev * 100),
+                    "confidence": confidence,
+                    "analysis": json.dumps({
+                        "market_key": market_key,
+                        "p_model": raw_prob,
+                        "calibrated_prob": calibrated_prob,
+                        "ev": ev,
+                        "pgr_score": pgr_score,
+                        "league_tier": _league_tier,
+                        "routing": _routing,
+                        "league_learning": True,
+                    }),
+                    "match_date": match_date,
+                    "kickoff_utc": _ko_utc,
+                    "kickoff_epoch": _ko_epoch,
+                    "created_at_utc": _created,
+                    "mode": "LEARNING",
+                    "stake": 0,
+                    "bet_placed": False,
+                    "odds_by_bookmaker": bookmaker_data.get('odds_by_bookmaker'),
+                    "best_odds_value": bookmaker_data.get('best_odds_value'),
+                    "best_odds_bookmaker": bookmaker_data.get('best_odds_bookmaker'),
+                    "avg_odds": bookmaker_data.get('avg_odds'),
+                    "fair_odds": fair_odds,
+                    "fixture_id": c.get("fixture_id"),
+                    "trust_level": _routing,
+                    "sim_probability": sim_prob,
+                    "ev_sim": ev_sim,
+                    "model_prob": raw_prob,
+                    "calibrated_prob": calibrated_prob,
+                    "disagreement": disagreement,
+                    "pgr_score": pgr_score,
+                    "league_tier": _league_tier,
+                    "routing_reason": "league_learning_mode",
+                    "market_key_raw": market_key,
+                    "clv_score": c.get("clv_score"),
+                    "clv_tier": c.get("clv_tier"),
+                })
+                print(f"   📚 [LEAGUE LEARNING] {c['league']} → mode=LEARNING, bet_placed=False")
+                continue
 
             # ── VALUE_OPP and WATCHLIST → data_picks (never official P&L) ──────
             if _routing in ("VALUE_OPP", "WATCHLIST"):
