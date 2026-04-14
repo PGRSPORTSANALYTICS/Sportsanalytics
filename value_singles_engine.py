@@ -1411,6 +1411,27 @@ class ValueSinglesEngine:
                         print(f"✅ BET PLACED: {s['home_team']} vs {s['away_team']} -> {s['selection']} @ {s['odds']:.2f} (EV {s['edge_percentage']:.1f}%)")
                     else:
                         print(f"📊 PREDICTION ONLY: {s['home_team']} vs {s['away_team']} -> {s['selection']} @ {s['odds']:.2f} (EV {s['edge_percentage']:.1f}%)")
+
+                    # 🔔 Push notification for SHARP picks (fire-and-forget)
+                    if s.get('clv_tier') == 'SHARP':
+                        try:
+                            import threading
+                            from push_service import PushService
+                            tier_tag = "🔥 SHARP"
+                            match = f"{s['home_team']} vs {s['away_team']}"
+                            sel = s.get('selection', '')
+                            odds = s.get('odds', 0)
+                            ev = s.get('edge_percentage', 0)
+                            clv_s = s.get('clv_score', '?')
+                            body = f"{match} | {sel} @ {odds:.2f} — EV {ev:.1f}% CLV {clv_s}/6"
+                            def _fire(t=tier_tag, b=body):
+                                try:
+                                    PushService().send_to_all(t, b, url="/")
+                                except Exception as _pe:
+                                    print(f"⚠️ Push failed: {_pe}")
+                            threading.Thread(target=_fire, daemon=True).start()
+                        except Exception as _pe:
+                            pass  # Never block pick saving
                     
                     # 📊 COLLECT DATA FOR AI TRAINING (with full form data)
                     try:

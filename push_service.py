@@ -99,7 +99,14 @@ class PushService:
             "icon":  icon,
         })
 
-        priv_pem = base64.urlsafe_b64decode(VAPID_PRIVATE_KEY + "==").decode()
+        priv_key = VAPID_PRIVATE_KEY
+        if priv_key and not priv_key.startswith("-----"):
+            try:
+                padding = "=" * ((4 - len(priv_key) % 4) % 4)
+                decoded = base64.urlsafe_b64decode(priv_key + padding)
+                priv_key = decoded.decode("utf-8")
+            except Exception:
+                pass  # Use as-is if decode fails
 
         subs = self.get_subscriptions()
         sent = failed = 0
@@ -116,7 +123,7 @@ class PushService:
                         },
                     },
                     data=payload,
-                    vapid_private_key=priv_pem,
+                    vapid_private_key=priv_key,
                     vapid_claims={
                         "sub": VAPID_CONTACT,
                     },

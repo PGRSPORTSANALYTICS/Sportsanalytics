@@ -710,6 +710,29 @@ class CLVService:
             except Exception as _pe:
                 logger.debug("proof_poster non-fatal: %s", _pe)
 
+            # 🔔 Push notification for significant CLV moves (fire-and-forget)
+            if steam_flag in ('early', 'late'):
+                try:
+                    import threading
+                    from push_service import PushService
+                    match_str = f"{bet.get('home_team', '?')} vs {bet.get('away_team', '?')}"
+                    sel = bet.get('selection', bet.get('market', '?'))
+                    clv_sign = f"+{clv:.1f}" if clv >= 0 else f"{clv:.1f}"
+                    if steam_flag == 'early':
+                        title = "⚡ CLV Beat"
+                        body  = f"{match_str} | {sel} — {clv_sign}% vs close (market moved our way)"
+                    else:
+                        title = "⚠️ Early Drop Alert"
+                        body  = f"{match_str} | {sel} — {clv_sign}% CLV (odds drifted against us)"
+                    def _fire_clv(t=title, b=body):
+                        try:
+                            PushService().send_to_all(t, b, url="/")
+                        except Exception as _e:
+                            logger.debug("CLV push non-fatal: %s", _e)
+                    threading.Thread(target=_fire_clv, daemon=True).start()
+                except Exception as _pe:
+                    logger.debug("CLV push setup non-fatal: %s", _pe)
+
             return True
 
         except Exception as exc:
