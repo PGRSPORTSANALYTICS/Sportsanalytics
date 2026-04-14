@@ -529,6 +529,36 @@ class ValueSinglesEngine:
         except Exception as _se:
             print(f"   ⚠️ Steam pre-load skipped: {_se}")
 
+        # ── Pre-load proactive injuries for CLV injury-clear signal ──────────
+        # Bulk query: group by fixture_id, flag fixtures that have ≥1 confirmed-out player.
+        # Key: fixture_id (int) → True = confirmed_out exists, False = all clear (polled but no absences)
+        # Fixtures NOT in this dict = no injury data polled yet → unknown (0 pts)
+        _injury_cache: Dict[int, bool] = {}          # True = has confirmed-out
+        _injury_fixtures_polled: set = set()          # all fixture_ids with ANY data
+        try:
+            _now_ep = int(_time_module.time())
+            _inj_rows = _db.execute(
+                """SELECT fixture_id,
+                          MAX(CASE WHEN injury_type = 'Missing Fixture' THEN 1 ELSE 0 END) AS has_confirmed_out
+                   FROM proactive_injuries
+                   WHERE kickoff_epoch BETWEEN %s AND %s
+                     AND LOWER(COALESCE(reason,'')) NOT IN ('inactive', 'not in squad')
+                   GROUP BY fixture_id""",
+                (_now_ep - 3600, _now_ep + 259200),  # -1h to +72h window
+                fetch='all'
+            )
+            if _inj_rows:
+                for _ir in _inj_rows:
+                    _fid = int(_ir[0]) if not isinstance(_ir, dict) else int(_ir['fixture_id'])
+                    _has_out = bool((_ir[1] if not isinstance(_ir, dict) else _ir['has_confirmed_out']))
+                    _injury_fixtures_polled.add(_fid)
+                    _injury_cache[_fid] = _has_out
+            _inj_clear = sum(1 for v in _injury_cache.values() if not v)
+            _inj_warn  = sum(1 for v in _injury_cache.values() if v)
+            print(f"   🏥 Injury cache: {len(_injury_cache)} fixtures — {_inj_clear} clear, {_inj_warn} with confirmed-out")
+        except Exception as _ie:
+            print(f"   ⚠️ Injury pre-load skipped: {_ie}")
+
         # 1) Get fixtures
         if not hasattr(self.champion, "get_todays_fixtures"):
             print("⚠️ ValueSinglesEngine: champion.get_todays_fixtures() missing")
@@ -897,8 +927,18 @@ class ValueSinglesEngine:
                 # Odds within 1% of model fair value (odds stable vs model)
                 if fair_odds and abs(float(odds) - fair_odds) / fair_odds <= 0.01:
                     _clv_score += 1
-                # Injury clear check (lightweight — avoids DB query per candidate)
-                # Will be upgraded to proactive_injuries lookup when integrated into predictor
+                # Injury clear: +1 if fixture has been polled AND no confirmed-out players
+                _fixture_id_int = match.get("fixture_id")
+                if _fixture_id_int is not None:
+                    try:
+                        _fixture_id_int = int(_fixture_id_int)
+                        if _fixture_id_int in _injury_cache:
+                            if not _injury_cache[_fixture_id_int]:
+                                _clv_score += 1  # Polled + no confirmed-out = Injury Clear
+                            # else: has confirmed-out → 0 pts
+                        # else: not polled yet → unknown → 0 pts
+                    except (ValueError, TypeError):
+                        pass  # Can't cast → skip
                 _clv_score_final = min(6, _clv_score)
 
                 # ── CLV Tier classification ───────────────────────────────────────
@@ -958,7 +998,15 @@ class ValueSinglesEngine:
                     "hours_to_ko": _hours_to_ko,
                 })
                 _tier_emoji = "🔥" if _clv_tier == "SHARP" else "📊"
-                _clv_tag = f" CLV={_clv_score_final}/6 [{_clv_tier}]"
+                try:
+                    _fid_chk = int(match.get("fixture_id")) if match.get("fixture_id") else None
+                except (ValueError, TypeError):
+                    _fid_chk = None
+                if _fid_chk is not None and _fid_chk in _injury_cache:
+                    _inj_tag = " 🏥✅" if not _injury_cache[_fid_chk] else " 🏥⚠️"
+                else:
+                    _inj_tag = ""
+                _clv_tag = f" CLV={_clv_score_final}/6 [{_clv_tier}]{_inj_tag}"
                 print(f"   {_tier_emoji} CANDIDATE: {market_key} EV={ev:.1%} Conf={calibrated_prob:.0%} Odds={float(odds):.2f} PGR={pgr_score:.1f} Tier={_league_tier}{_clv_tag}")
 
         # ════════════════════════════════════════════════════════════════════
