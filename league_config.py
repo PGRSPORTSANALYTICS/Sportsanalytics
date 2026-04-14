@@ -186,6 +186,7 @@ LEAGUE_REGISTRY: List[LeagueConfig] = [
         api_football_id=89,
         country="Netherlands",
         tier=3,
+        active=False,  # Key not available on Odds API (404)
         timezone="Europe/Amsterdam"
     ),
     LeagueConfig(
@@ -194,6 +195,7 @@ LEAGUE_REGISTRY: List[LeagueConfig] = [
         api_football_id=95,
         country="Portugal",
         tier=3,
+        active=False,  # Key not available on Odds API (404)
         timezone="Europe/Lisbon"
     ),
     
@@ -260,6 +262,7 @@ LEAGUE_REGISTRY: List[LeagueConfig] = [
         api_football_id=345,
         country="Czech Republic",
         tier=3,
+        active=False,  # Key not available on Odds API (404)
         timezone="Europe/Prague"
     ),
     LeagueConfig(
@@ -332,6 +335,72 @@ LEAGUE_REGISTRY: List[LeagueConfig] = [
         country="Australia",
         tier=3,
         timezone="Australia/Sydney"
+    ),
+
+    # === NEW LEAGUES — ADDED APR 2026 ===
+    LeagueConfig(
+        name="Copa Libertadores",
+        odds_api_key="soccer_conmebol_copa_libertadores",
+        api_football_id=13,
+        country="South America",
+        tier=2,
+        timezone="America/Sao_Paulo"
+    ),
+    LeagueConfig(
+        name="Copa Sudamericana",
+        odds_api_key="soccer_conmebol_copa_sudamericana",
+        api_football_id=11,
+        country="South America",
+        tier=2,
+        timezone="America/Sao_Paulo"
+    ),
+    LeagueConfig(
+        name="Brazilian Serie B",
+        odds_api_key="soccer_brazil_serie_b",
+        api_football_id=72,
+        country="Brazil",
+        tier=3,
+        timezone="America/Sao_Paulo"
+    ),
+    LeagueConfig(
+        name="Saudi Pro League",
+        odds_api_key="soccer_saudi_arabia_pro_league",
+        api_football_id=307,
+        country="Saudi Arabia",
+        tier=2,
+        timezone="Asia/Riyadh"
+    ),
+    LeagueConfig(
+        name="Swedish Superettan",
+        odds_api_key="soccer_sweden_superettan",
+        api_football_id=114,
+        country="Sweden",
+        tier=3,
+        timezone="Europe/Stockholm"
+    ),
+    LeagueConfig(
+        name="German 3. Liga",
+        odds_api_key="soccer_germany_liga3",
+        api_football_id=80,
+        country="Germany",
+        tier=3,
+        timezone="Europe/Berlin"
+    ),
+    LeagueConfig(
+        name="Finnish Veikkausliiga",
+        odds_api_key="soccer_finland_veikkausliiga",
+        api_football_id=244,
+        country="Finland",
+        tier=3,
+        timezone="Europe/Helsinki"
+    ),
+    LeagueConfig(
+        name="Chilean Primera Division",
+        odds_api_key="soccer_chile_campeonato",
+        api_football_id=265,
+        country="Chile",
+        tier=3,
+        timezone="America/Santiago"
     ),
 ]
 
