@@ -67,15 +67,17 @@ class PushService:
 
     def get_subscriptions(self):
         rows = self.db.execute(
-            "SELECT endpoint, p256dh, auth FROM push_subscriptions", ()
+            "SELECT endpoint, p256dh, auth FROM push_subscriptions", (),
+            fetch='all'
         ) or []
         return [{"endpoint": r[0], "p256dh": r[1], "auth": r[2]} for r in rows]
 
     def count(self) -> int:
         row = self.db.execute(
-            "SELECT COUNT(*) FROM push_subscriptions", ()
+            "SELECT COUNT(*) FROM push_subscriptions", (),
+            fetch='one'
         )
-        return row[0][0] if row else 0
+        return row[0] if row else 0
 
     def send_to_all(self, title: str, body: str, url: str = "/",
                     icon: str = "/static/icon-192.png") -> dict:
