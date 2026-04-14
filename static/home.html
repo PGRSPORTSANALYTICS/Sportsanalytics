@@ -476,6 +476,29 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
   <!-- ╔══ CLV TAB ═══════════════════════════════════════╗ -->
   <div id="tab-clv" style="display:none">
     <div class="clv-grid" id="clv-stats"></div>
+
+    <!-- CLV Breakdown: Market + Timing -->
+    <div id="clv-breakdown-wrap" style="display:none;margin-bottom:14px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <!-- Market breakdown -->
+        <div class="scanner-wrap" style="padding:0">
+          <div style="padding:10px 14px;border-bottom:1px solid #18181b">
+            <div style="font-size:11px;font-weight:700;color:#e4e4e7">CLV by Market</div>
+            <div style="font-size:10px;color:#52525b">Avg CLV % per market type</div>
+          </div>
+          <div id="clv-mkt-body"></div>
+        </div>
+        <!-- Timing breakdown -->
+        <div class="scanner-wrap" style="padding:0">
+          <div style="padding:10px 14px;border-bottom:1px solid #18181b">
+            <div style="font-size:11px;font-weight:700;color:#e4e4e7">CLV by Timing (Value Singles)</div>
+            <div style="font-size:10px;color:#52525b">When pick is posted relative to kickoff</div>
+          </div>
+          <div id="clv-timing-body"></div>
+        </div>
+      </div>
+    </div>
+
     <div class="scanner-wrap">
       <div style="display:grid;grid-template-columns:2fr 80px 80px 80px 90px;padding:8px 14px;background:#0f0f11;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;font-weight:700;gap:8px">
         <div>Match</div><div style="text-align:right">Open</div><div style="text-align:right">Close</div><div style="text-align:right">CLV%</div><div style="text-align:center">Time to KO</div>
@@ -521,6 +544,7 @@ const state = {
   historyPage: 0,
   historyPerPage: 25,
   clvData: null,
+  clvBreakdown: null,
   hockeyData: null,
   nbaData: null,
   activeTab: "scanner",
@@ -1042,6 +1066,59 @@ async function fetchCLV(){
   } catch(e){}
 }
 
+async function fetchCLVBreakdown(){
+  try {
+    const res = await fetch("/api/clv_breakdown");
+    if(!res.ok) return;
+    state.clvBreakdown = await res.json();
+    renderCLVBreakdown();
+  } catch(e){}
+}
+
+function renderCLVBreakdown(){
+  const d = state.clvBreakdown;
+  if(!d) return;
+  const wrap = document.getElementById("clv-breakdown-wrap");
+  if(wrap) wrap.style.display = "";
+
+  // Market table
+  const mktEl = document.getElementById("clv-mkt-body");
+  if(mktEl && d.markets){
+    let h = "";
+    d.markets.filter(m=>m.with_clv>0).forEach(m=>{
+      const clvColor = (m.avg_clv||0) >= 0 ? "#4ade80" : "#f87171";
+      const bar = m.avg_clv != null ? `<div style="height:3px;background:${clvColor};width:${Math.min(Math.abs(m.avg_clv)*8,100)}%;border-radius:2px;margin-top:4px"></div>` : "";
+      h+=`<div style="display:grid;grid-template-columns:1fr 60px 60px 50px;padding:8px 14px;gap:8px;border-top:1px solid #18181b;align-items:center;font-size:11px">
+        <div>
+          <div style="font-weight:600;color:#e4e4e7">${esc(m.market)}</div>
+          ${bar}
+        </div>
+        <div style="text-align:right;font-weight:700;color:${clvColor}">${m.avg_clv!=null?(m.avg_clv>=0?"+":"")+m.avg_clv.toFixed(2)+"%":"—"}</div>
+        <div style="text-align:right;color:#a1a1aa">${m.pos_rate!=null?m.pos_rate.toFixed(0)+"%":"—"}</div>
+        <div style="text-align:right;color:#52525b;font-size:10px">n=${m.with_clv}</div>
+      </div>`;
+    });
+    mktEl.innerHTML = h || `<div style="padding:12px 14px;color:#52525b;font-size:11px">No CLV data</div>`;
+  }
+
+  // Timing table
+  const timEl = document.getElementById("clv-timing-body");
+  if(timEl && d.timing){
+    let h="<div style='display:grid;grid-template-columns:1fr 55px 55px 50px;padding:6px 14px;background:#0f0f11;font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:#52525b;font-weight:700;gap:8px'><div>Timing</div><div style='text-align:right'>Avg CLV</div><div style='text-align:right'>Hit%</div><div style='text-align:right'>n</div></div>";
+    d.timing.forEach(t=>{
+      const clvColor = (t.avg_clv||0) >= 0 ? "#4ade80" : "#f87171";
+      const isBest = d.timing.reduce((best,x)=>(!best||((x.avg_clv||0)>(best.avg_clv||0))?x:best), null) === t;
+      h+=`<div style="display:grid;grid-template-columns:1fr 55px 55px 50px;padding:9px 14px;gap:8px;border-top:1px solid #18181b;align-items:center;font-size:11px">
+        <div style="font-weight:600;color:#e4e4e7">${esc(t.bucket)}${isBest?" <span style='font-size:9px;color:#fbbf24;margin-left:4px'>★ best</span>":""}</div>
+        <div style="text-align:right;font-weight:700;color:${clvColor}">${t.avg_clv!=null?(t.avg_clv>=0?"+":"")+t.avg_clv.toFixed(2)+"%":"—"}</div>
+        <div style="text-align:right;color:#a1a1aa">${t.pos_rate!=null?t.pos_rate.toFixed(0)+"%":"—"}</div>
+        <div style="text-align:right;color:#52525b;font-size:10px">${t.with_clv||0}</div>
+      </div>`;
+    });
+    timEl.innerHTML = h;
+  }
+}
+
 async function fetchHockey(){
   try {
     const res = await fetch("/api/hockey/stats");
@@ -1221,6 +1298,7 @@ function switchTab(id){
   if(scannerEl) scannerEl.style.display = showScanner ? "block" : "none";
   if(id==="history"  && !state.historyPicks.length) fetchHistory();
   if(id==="clv"      && !state.clvData)             fetchCLV();
+  if(id==="clv"      && !state.clvBreakdown)        fetchCLVBreakdown();
   if(id==="hockey"   && !state.hockeyData)           fetchHockey();
   if(id==="nba"      && !state.nbaData)              fetchNba();
   if(showScanner) renderScanner();

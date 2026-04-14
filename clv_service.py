@@ -263,7 +263,7 @@ class CLVService:
             rows = db_helper.execute("""
                 SELECT id, match_id, home_team, away_team, league,
                        market, selection, open_odds, kickoff_epoch, kickoff_utc,
-                       best_odds_bookmaker
+                       best_odds_bookmaker, fixture_id
                 FROM football_opportunities
                 WHERE status       = 'pending'
                   AND close_odds   IS NULL
@@ -289,6 +289,7 @@ class CLVService:
                     'kickoff_utc':         row[9],
                     'seconds_to_ko':       int(row[8]) - now,
                     'open_source_book':    row[10] or 'unknown',
+                    'fixture_id':          row[11],
                 }
                 candidates.append(rec)
 
@@ -634,6 +635,15 @@ class CLVService:
             logger.warning("CLV calc error for bet %d: %s", bet_id, exc)
             return False
 
+        # Steam flag: positive CLV > 3% = "early" (we were ahead of market move)
+        #             negative CLV < -3% = "late" (missed the move, market already moved)
+        if clv > 3.0:
+            steam_flag = 'early'
+        elif clv < -3.0:
+            steam_flag = 'late'
+        else:
+            steam_flag = 'neutral'
+
         mins_to_ko_at_close = round((ko_epoch - close_ts) / 60) if ko_epoch else None
 
         # ── Full debug block (always emitted at INFO level) ──────────────────
@@ -688,9 +698,10 @@ class CLVService:
                     close_ts        = %s,
                     clv_pct         = %s,
                     clv_status      = %s,
-                    clv_source_book = %s
+                    clv_source_book = %s,
+                    steam_flag      = %s
                 WHERE id = %s
-            """, (close_odds, close_ts, clv, status, close_book, bet_id))
+            """, (close_odds, close_ts, clv, status, close_book, steam_flag, bet_id))
 
             # Post proof-of-work to Discord (fire-and-forget, never blocks)
             try:
@@ -721,8 +732,8 @@ class CLVService:
 
     def _try_af_clv(self, bet: Dict, stats: Dict) -> bool:
         """
-        API-Football fallback for BTTS and leagues not in Odds API.
-        Covers BTTS Yes/No, Over/Under totals, 1X2 for any league.
+        API-Football fallback for BTTS, Corners, Cards, and leagues not in Odds API.
+        Uses fixture_id directly if available (avoids extra team-name search API call).
         Returns True if CLV was captured and saved.
         """
         db_market = bet.get('market', '')
@@ -745,13 +756,18 @@ class CLVService:
             return False
 
         try:
-            fixture = af.get_fixture_by_teams_and_date(home, away, match_date)
-            if not fixture:
-                return False
-
-            fixture_id = fixture.get('fixture', {}).get('id')
-            if not fixture_id:
-                return False
+            # Use stored fixture_id directly if available (faster, no extra API call)
+            stored_fid = bet.get('fixture_id')
+            if stored_fid:
+                fixture_id = int(stored_fid)
+                logger.debug("CLV(AF-fb): using stored fixture_id=%d for bet=%d", fixture_id, bet['id'])
+            else:
+                fixture = af.get_fixture_by_teams_and_date(home, away, match_date)
+                if not fixture:
+                    return False
+                fixture_id = fixture.get('fixture', {}).get('id')
+                if not fixture_id:
+                    return False
 
             odds_data = af.get_fixture_odds(fixture_id)
             if not odds_data:
@@ -1059,7 +1075,7 @@ def sweep_missed_clv(lookback_hours: int = 48) -> int:
         rows = db_helper.execute("""
             SELECT id, match_id, home_team, away_team, league,
                    market, selection, open_odds, kickoff_epoch, kickoff_utc,
-                   best_odds_bookmaker
+                   best_odds_bookmaker, fixture_id
             FROM football_opportunities
             WHERE status          = 'pending'
               AND close_odds      IS NULL
@@ -1097,6 +1113,7 @@ def sweep_missed_clv(lookback_hours: int = 48) -> int:
             'kickoff_utc':      row[9],
             'seconds_to_ko':    int(row[8]) - now,
             'open_source_book': row[10] or 'unknown',
+            'fixture_id':       row[11],
         }
         if not _is_supported(bet['market']):
             continue
@@ -1193,6 +1210,13 @@ def capture_from_api_football(home_team: str, away_team: str,
         except ValueError:
             continue
 
+        if clv > 3.0:
+            steam_flag = 'early'
+        elif clv < -3.0:
+            steam_flag = 'late'
+        else:
+            steam_flag = 'neutral'
+
         try:
             db_helper.execute("""
                 UPDATE football_opportunities
@@ -1200,9 +1224,10 @@ def capture_from_api_football(home_team: str, away_team: str,
                     close_ts        = %s,
                     clv_pct         = %s,
                     clv_status      = %s,
-                    clv_source_book = %s
+                    clv_source_book = %s,
+                    steam_flag      = %s
                 WHERE id = %s AND close_odds IS NULL
-            """, (close_odds, now, clv, status, 'api_football', bet_id))
+            """, (close_odds, now, clv, status, 'api_football', steam_flag, bet_id))
             logger.info(
                 "CLV(AF): ✅ bet=%d  %s vs %s  %s|%s  "
                 "open=%.3f close=%.3f  CLV=%+.2f%%",

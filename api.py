@@ -1295,6 +1295,114 @@ async def get_clv_stats_endpoint():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@app.get("/api/clv_breakdown", tags=["Analytics"])
+async def get_clv_breakdown():
+    """
+    CLV breakdown by market + timing bucket.
+    Used to identify which markets and timing patterns drive best CLV.
+    """
+    try:
+        # Market breakdown
+        market_rows = db_helper.execute("""
+            SELECT
+                market,
+                COUNT(*)                                                                        AS total,
+                COUNT(clv_pct)                                                                  AS with_clv,
+                ROUND(100.0 * COUNT(clv_pct) / NULLIF(COUNT(*), 0), 1)                        AS coverage,
+                ROUND(AVG(clv_pct)::numeric, 2)                                                AS avg_clv,
+                ROUND(100.0 * SUM(CASE WHEN clv_pct > 0 THEN 1 ELSE 0 END)::numeric
+                      / NULLIF(COUNT(clv_pct), 0), 1)                                         AS pos_rate,
+                ROUND(100.0 * SUM(CASE WHEN steam_flag = 'early' THEN 1 ELSE 0 END)::numeric
+                      / NULLIF(COUNT(clv_pct), 0), 1)                                         AS steam_early_rate
+            FROM football_opportunities
+            WHERE open_odds IS NOT NULL
+            GROUP BY market
+            ORDER BY with_clv DESC
+        """, fetch='all') or []
+
+        # Timing breakdown (hours before KO when pick was created)
+        timing_rows = db_helper.execute("""
+            SELECT
+                CASE
+                    WHEN (open_ts - kickoff_epoch) / 3600.0 < -12 THEN '>12h before KO'
+                    WHEN (open_ts - kickoff_epoch) / 3600.0 < -6  THEN '6-12h before KO'
+                    WHEN (open_ts - kickoff_epoch) / 3600.0 < -2  THEN '2-6h before KO'
+                    ELSE '<2h before KO'
+                END                                                                             AS timing_bucket,
+                CASE
+                    WHEN (open_ts - kickoff_epoch) / 3600.0 < -12 THEN 4
+                    WHEN (open_ts - kickoff_epoch) / 3600.0 < -6  THEN 3
+                    WHEN (open_ts - kickoff_epoch) / 3600.0 < -2  THEN 2
+                    ELSE 1
+                END                                                                             AS sort_key,
+                COUNT(*)                                                                        AS total,
+                COUNT(clv_pct)                                                                  AS with_clv,
+                ROUND(100.0 * COUNT(clv_pct) / NULLIF(COUNT(*), 0), 1)                        AS coverage,
+                ROUND(AVG(clv_pct)::numeric, 2)                                                AS avg_clv,
+                ROUND(100.0 * SUM(CASE WHEN clv_pct > 0 THEN 1 ELSE 0 END)::numeric
+                      / NULLIF(COUNT(clv_pct), 0), 1)                                         AS pos_rate
+            FROM football_opportunities
+            WHERE open_odds IS NOT NULL
+              AND open_ts IS NOT NULL
+              AND kickoff_epoch IS NOT NULL
+              AND market = 'Value Single'
+            GROUP BY 1, 2
+            ORDER BY sort_key DESC
+        """, fetch='all') or []
+
+        # Steam stats
+        steam_rows = db_helper.execute("""
+            SELECT
+                steam_flag,
+                COUNT(*)                                AS n,
+                ROUND(AVG(clv_pct)::numeric, 2)        AS avg_clv,
+                ROUND(100.0 * SUM(CASE WHEN clv_pct > 0 THEN 1 ELSE 0 END)::numeric
+                      / NULLIF(COUNT(*), 0), 1)         AS pos_rate
+            FROM football_opportunities
+            WHERE clv_pct IS NOT NULL AND steam_flag IS NOT NULL
+            GROUP BY steam_flag
+            ORDER BY n DESC
+        """, fetch='all') or []
+
+        return JSONResponse({
+            "markets": [
+                {
+                    "market":           r[0],
+                    "total":            r[1],
+                    "with_clv":         r[2],
+                    "coverage":         float(r[3]) if r[3] else 0,
+                    "avg_clv":          float(r[4]) if r[4] else None,
+                    "pos_rate":         float(r[5]) if r[5] else None,
+                    "steam_early_rate": float(r[6]) if r[6] else None,
+                }
+                for r in market_rows
+            ],
+            "timing": [
+                {
+                    "bucket":   r[0],
+                    "total":    r[2],
+                    "with_clv": r[3],
+                    "coverage": float(r[4]) if r[4] else 0,
+                    "avg_clv":  float(r[5]) if r[5] else None,
+                    "pos_rate": float(r[6]) if r[6] else None,
+                }
+                for r in timing_rows
+            ],
+            "steam": [
+                {
+                    "flag":     r[0],
+                    "n":        r[1],
+                    "avg_clv":  float(r[2]) if r[2] else None,
+                    "pos_rate": float(r[3]) if r[3] else None,
+                }
+                for r in steam_rows
+            ],
+        })
+    except Exception as e:
+        logger.error(f"Error in get_clv_breakdown: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/hockey/stats", tags=["Analytics"])
 async def get_hockey_stats():
     """Hockey stats from learning_bets for the Railway dashboard."""
