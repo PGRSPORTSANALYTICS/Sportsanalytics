@@ -2500,7 +2500,7 @@ async def get_today_picks():
                     league, trust_level, kickoff_time, match_date,
                     open_odds, clv_pct, mode,
                     model_prob, disagreement, clv_status, hidden_value_status,
-                    timestamp, kickoff_epoch
+                    timestamp, kickoff_epoch, clv_score, clv_tier
                 FROM football_opportunities
                 WHERE (
                     mode IN ('PROD', 'VALUE_OPP')
@@ -2764,6 +2764,7 @@ async def get_today_picks():
         hit_rate = round(won / settled * 100, 1) if settled > 0 else None
 
         today_picks = [p for p in picks if p['match_date'] == today_str]
+        sharp_count = sum(1 for p in picks if p.get('clv_tier') == 'SHARP')
         return {
             'picks': picks,
             'total': total,
@@ -2776,11 +2777,50 @@ async def get_today_picks():
             'is_demo': False,
             'has_today_picks': len(today_picks) > 0,
             'today_count': len(today_picks),
+            'sharp_count': sharp_count,
         }
 
     except Exception as e:
         logger.error(f"Error in get_today_picks: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/scanner/daily-stats")
+async def get_scanner_daily_stats():
+    """
+    Returns today's scanner volume stats for the UI header:
+    - edges_found: all opportunities identified today (PROD + VALUE_OPP + WATCHLIST, pending)
+    - high_confidence: CLV tier SHARP (score 5-6) — the actual edge picks
+    """
+    try:
+        now_utc = datetime.utcnow()
+        today_str = now_utc.strftime('%Y-%m-%d')
+        cutoff_epoch = int(now_utc.timestamp()) - 14400  # 4h grace
+
+        rows = db_helper.execute("""
+            SELECT COUNT(*) AS total,
+                   SUM(CASE WHEN clv_tier = 'SHARP' THEN 1 ELSE 0 END) AS sharp_count,
+                   SUM(CASE WHEN clv_tier = 'VOLUME' THEN 1 ELSE 0 END) AS volume_count
+            FROM football_opportunities
+            WHERE match_date = %s
+              AND mode IN ('PROD', 'VALUE_OPP', 'WATCHLIST')
+              AND (outcome IS NULL OR outcome = '' OR outcome IN ('pending', 'unknown'))
+              AND (kickoff_epoch IS NULL OR kickoff_epoch > %s)
+        """, (today_str, cutoff_epoch), fetch='one')
+
+        total = int(rows[0]) if rows and rows[0] else 0
+        sharp = int(rows[1]) if rows and rows[1] else 0
+        volume = int(rows[2]) if rows and rows[2] else 0
+
+        return {
+            'edges_found': total,
+            'high_confidence': sharp,
+            'volume_plays': volume,
+            'date': today_str,
+        }
+    except Exception as e:
+        logger.error(f"Error in get_scanner_daily_stats: {e}")
+        return {'edges_found': 0, 'high_confidence': 0, 'volume_plays': 0, 'date': ''}
 
 
 @app.get("/api/analysis/today")

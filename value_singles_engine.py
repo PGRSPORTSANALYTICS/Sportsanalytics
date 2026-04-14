@@ -901,6 +901,16 @@ class ValueSinglesEngine:
                 # Will be upgraded to proactive_injuries lookup when integrated into predictor
                 _clv_score_final = min(6, _clv_score)
 
+                # ── CLV Tier classification ───────────────────────────────────────
+                if _clv_score_final >= 5:
+                    _clv_tier = "SHARP"
+                elif _clv_score_final == 4:
+                    _clv_tier = "VOLUME"
+                else:
+                    # Tier 3 = TRASH — hard block, no DB insert
+                    _reject("rejected_clv_trash", home_team, away_team, market_key, float(ev), float(odds))
+                    continue
+
                 # ── Store as raw candidate (routing deferred to pass 2) ───────────
                 raw_candidates.append({
                     # identity
@@ -944,10 +954,12 @@ class ValueSinglesEngine:
                     "_away_form": away_form,
                     # CLV Quality Score
                     "clv_score": _clv_score_final,
+                    "clv_tier": _clv_tier,
                     "hours_to_ko": _hours_to_ko,
                 })
-                _clv_tag = f" CLV={_clv_score_final}/6" if _clv_score_final >= 4 else f" clv={_clv_score_final}/6"
-                print(f"   📦 CANDIDATE: {market_key} EV={ev:.1%} Conf={calibrated_prob:.0%} Odds={float(odds):.2f} PGR={pgr_score:.1f} Tier={_league_tier}{_clv_tag}")
+                _tier_emoji = "🔥" if _clv_tier == "SHARP" else "📊"
+                _clv_tag = f" CLV={_clv_score_final}/6 [{_clv_tier}]"
+                print(f"   {_tier_emoji} CANDIDATE: {market_key} EV={ev:.1%} Conf={calibrated_prob:.0%} Odds={float(odds):.2f} PGR={pgr_score:.1f} Tier={_league_tier}{_clv_tag}")
 
         # ════════════════════════════════════════════════════════════════════
         # PASS 2: Sort all raw candidates by PGR score (desc), then route
@@ -1074,6 +1086,7 @@ class ValueSinglesEngine:
                     "league_tier": _league_tier,
                     "routing_reason": _routing_reason,
                     "clv_score": c.get("clv_score"),
+                    "clv_tier": c.get("clv_tier"),
                 })
                 continue
 
@@ -1142,6 +1155,7 @@ class ValueSinglesEngine:
                 "league_tier": _league_tier,
                 "routing_reason": _routing_reason,
                 "clv_score": c.get("clv_score"),
+                "clv_tier": c.get("clv_tier"),
             }
             picks.append(opportunity)
 

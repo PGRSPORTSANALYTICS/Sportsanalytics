@@ -331,7 +331,7 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
 
   <!-- Stats strip -->
   <div class="stats-strip" id="stats-strip">
-    <div class="stat-tile" style="cursor:pointer" onclick="document.querySelector('[data-tab=scanner]').click()"><div class="stat-lbl">Live Edges Right Now</div><div class="stat-val" id="s-count" style="color:#4ade80">—</div><div class="stat-sub" id="s-count-sub">you might be missing something</div></div>
+    <div class="stat-tile" style="cursor:pointer" onclick="document.querySelector('[data-tab=scanner]').click()"><div class="stat-lbl">Edges Found Today</div><div class="stat-val" id="s-count" style="color:#4ade80">—</div><div class="stat-sub" id="s-count-sub">— high confidence (CLV 5-6)</div></div>
     <div class="stat-tile"><div class="stat-lbl">Avg Edge (unfiltered)</div><div class="stat-val" id="s-avgev" style="color:#4ade80">—</div><div class="stat-sub">includes all signals (unfiltered scan)</div></div>
     <div class="stat-tile"><div class="stat-lbl">Top Edge</div><div class="stat-val" id="s-bestev" style="color:#fbbf24">—</div><div class="stat-sub">highest identified</div></div>
     <div class="stat-tile"><div class="stat-lbl">Avg Odds</div><div class="stat-val" id="s-avgodds">—</div><div class="stat-sub">identified edges</div></div>
@@ -989,10 +989,22 @@ function updateStatsStrip(picks){
   const avgEv   = evs.length  ? evs.reduce((a,b)=>a+b,0)/evs.length  : 0;
   const bestEv  = evs.length  ? Math.max(...evs) : 0;
   const avgOdds = odds.length ? odds.reduce((a,b)=>a+b,0)/odds.length : null;
-  document.getElementById("s-count").textContent   = picks.length;
   document.getElementById("s-avgev").textContent   = fmtPct(avgEv);
   document.getElementById("s-bestev").textContent  = fmtPct(bestEv);
   if(avgOdds!=null) document.getElementById("s-avgodds").textContent = avgOdds.toFixed(2);
+}
+
+function updateEdgesFoundTile(total, sharp){
+  const el = document.getElementById("s-count");
+  const sub = document.getElementById("s-count-sub");
+  if(el) el.textContent = total > 0 ? total : "—";
+  if(sub){
+    if(sharp > 0){
+      sub.innerHTML = `<span style="color:#f59e0b;font-weight:700">${sharp} high confidence</span> <span style="color:#52525b">(CLV 5-6 ⚡)</span>`;
+    } else {
+      sub.textContent = total > 0 ? "scanning for sharp signals..." : "—";
+    }
+  }
 }
 
 /* ──────────────────────────────────────────────
@@ -1000,15 +1012,20 @@ function updateStatsStrip(picks){
 ──────────────────────────────────────────────── */
 async function fetchMain(){
   try {
-    const [picksRes, statsRes, clvRes] = await Promise.all([
+    const [picksRes, statsRes, clvRes, dailyStatsRes] = await Promise.all([
       fetch("/api/picks/today"),
       fetch("/api/stats/summary?days=365"),
       fetch("/api/clv_stats"),
+      fetch("/api/scanner/daily-stats"),
     ]);
     if(picksRes.ok){
       const d = await picksRes.json();
       const raw = Array.isArray(d) ? d : (d.picks||d.data||[]);
       state.picks = raw.map(normPick);
+    }
+    if(dailyStatsRes.ok){
+      const ds = await dailyStatsRes.json();
+      updateEdgesFoundTile(ds.edges_found||0, ds.high_confidence||0);
     }
     if(statsRes.ok){
       const s = await statsRes.json();
