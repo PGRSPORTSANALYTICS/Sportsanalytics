@@ -1462,18 +1462,31 @@ async function togglePush() {
     });
     const k = sub.getKey('p256dh');
     const a = sub.getKey('auth');
-    await fetch('/api/push/subscribe', {
+    const p256dh = k ? btoa(String.fromCharCode.apply(null, new Uint8Array(k))) : '';
+    const auth   = a ? btoa(String.fromCharCode.apply(null, new Uint8Array(a))) : '';
+    const resp = await fetch('/api/push/subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         endpoint:  sub.endpoint,
-        p256dh:    k ? btoa(String.fromCharCode(...new Uint8Array(k))) : '',
-        auth:      a ? btoa(String.fromCharCode(...new Uint8Array(a))) : '',
+        p256dh,
+        auth,
         userAgent: navigator.userAgent
       })
     });
+    if (!resp.ok) {
+      const errText = await resp.text();
+      console.error('Push subscribe API error:', resp.status, errText);
+      alert('Push subscribe failed (' + resp.status + '): ' + errText);
+      return;
+    }
+    const data = await resp.json();
+    console.log('Push subscribed:', data);
     updateBellActive(true);
-  } catch(e) { console.error('Push subscribe failed:', e); }
+  } catch(e) {
+    console.error('Push subscribe failed:', e);
+    alert('Push subscribe error: ' + e.message);
+  }
 }
 
 function updateBellActive(on) {
