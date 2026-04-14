@@ -418,7 +418,7 @@ def format_analysis_embed(pick: dict) -> dict:
     elif mode == "VALUE_OPP":
         title = f"\U0001f4ca VALUE OPPORTUNITY{pgr_str}{tier_str} — {league}"
         color = 0xFFAA00
-    elif mode == "WATCHLIST":
+    elif mode in ("WATCHLIST", "LEARNING"):
         return None
     else:
         title = f"\U0001f4ca VALUE OPPORTUNITY — {league}"
