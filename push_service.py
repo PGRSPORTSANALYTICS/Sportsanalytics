@@ -46,19 +46,16 @@ class PushService:
 
     def save_subscription(self, endpoint: str, p256dh: str, auth: str,
                           user_agent: str = "") -> bool:
-        try:
-            self.db.execute("""
-                INSERT INTO push_subscriptions (endpoint, p256dh, auth, user_agent)
-                VALUES (%s, %s, %s, %s)
-                ON CONFLICT (endpoint) DO UPDATE
-                  SET p256dh = EXCLUDED.p256dh,
-                      auth   = EXCLUDED.auth,
-                      user_agent = EXCLUDED.user_agent
-            """, (endpoint, p256dh, auth, user_agent))
-            return True
-        except Exception as e:
-            logger.error(f"save_subscription failed: {e}")
-            return False
+        self.db.execute("""
+            INSERT INTO push_subscriptions (endpoint, p256dh, auth, user_agent)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (endpoint) DO UPDATE
+              SET p256dh = EXCLUDED.p256dh,
+                  auth   = EXCLUDED.auth,
+                  user_agent = EXCLUDED.user_agent
+        """, (endpoint, p256dh, auth, user_agent))
+        logger.info(f"push_subscription saved: {endpoint[:40]}...")
+        return True
 
     def delete_subscription(self, endpoint: str):
         try:

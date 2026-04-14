@@ -1482,6 +1482,10 @@ async function togglePush() {
     }
     const data = await resp.json();
     console.log('Push subscribed:', data);
+    if (!data.ok) {
+      alert('Subscribe saved ok=false. Subscribers: ' + data.subscribers + '. Check console.');
+      return;
+    }
     updateBellActive(true);
   } catch(e) {
     console.error('Push subscribe failed:', e);
