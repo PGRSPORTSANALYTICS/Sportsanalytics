@@ -291,6 +291,22 @@ def run_edge_management_cycle():
         traceback.print_exc()
 
 
+def run_daily_clv_digest():
+    """Post daily CLV proof digest to WEBHOOK_PROOF (22:55 CET)."""
+    try:
+        from proof_poster import post_daily_clv_digest
+        logger.info("📊 Posting daily CLV proof digest...")
+        ok = post_daily_clv_digest()
+        if ok:
+            logger.info("✅ Daily CLV digest posted to Discord")
+        else:
+            logger.info("📊 Daily CLV digest: nothing to post or webhook not set")
+    except Exception as e:
+        logger.error(f"❌ Daily CLV digest error: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 def run_proactive_injury_poll():
     """Poll API-Football injuries 48h+ in advance for upcoming fixtures (Big 5 + Euro cups)."""
     try:
@@ -1006,6 +1022,7 @@ def main():
     schedule.every(2).hours.do(run_learning_update)
     schedule.every(2).hours.do(run_form_cacher)  # Cache form+H2H for upcoming picks
     
+    schedule.every().day.at("21:55").do(run_daily_clv_digest)  # 22:55 CET — before recap
     schedule.every().day.at("22:00").do(run_daily_recap)      # 23:00 CET
     schedule.every().sunday.at("22:00").do(run_weekly_recap)  # 23:00 CET
     schedule.every().sunday.at("23:00").do(run_weekly_learning_report)
