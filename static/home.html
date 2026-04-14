@@ -1560,14 +1560,24 @@ async function sendTestPush() {
   if (btn) { btn.textContent = '...'; btn.disabled = true; }
   try {
     const res  = await fetch('/api/push/self-test', { method: 'POST' });
+    if (res.status === 429) {
+      if (btn) { btn.textContent = 'WAIT'; btn.style.color = '#f59e0b'; }
+      setTimeout(() => { if(btn){btn.textContent='TEST';btn.style.color='#4ade80';btn.disabled=false;} }, 60000);
+      return;
+    }
     const data = await res.json();
     if (data.ok && data.sent > 0) {
       if (btn) { btn.textContent = '✓ SENT'; btn.style.color = '#4ade80'; }
     } else if (data.detail === 'No subscribers registered yet') {
       if (btn) { btn.textContent = 'NO SUBS'; btn.style.color = '#f87171'; }
-      alert('No subscribers found. Try clicking the bell icon again to re-subscribe.');
+      alert('No subscribers found. Click the bell icon to subscribe first.');
+    } else if (data.ok && data.sent === 0 && (data.failed > 0 || data.cleaned > 0)) {
+      if (btn) { btn.textContent = 'RE-SUB'; btn.style.color = '#f59e0b'; }
+      const errDetail = data.error ? '\n\nError: ' + data.error : '';
+      alert('Subscription expired or invalid. Click the 🔔 bell to unsubscribe, then click it again to re-subscribe.' + errDetail);
     } else {
       if (btn) { btn.textContent = 'ERR'; btn.style.color = '#f87171'; }
+      alert('Push error. Detail: ' + (data.detail || JSON.stringify(data)));
     }
   } catch(e) {
     if (btn) { btn.textContent = 'ERR'; btn.style.color = '#f87171'; }

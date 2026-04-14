@@ -111,6 +111,7 @@ class PushService:
         sent = failed = 0
         dead_endpoints = []
 
+        last_error = None
         for sub in subs:
             try:
                 webpush(
@@ -131,12 +132,18 @@ class PushService:
                 sent += 1
             except WebPushException as e:
                 status = getattr(e.response, "status_code", 0)
+                body = ""
+                try:
+                    body = e.response.text[:200] if e.response else ""
+                except Exception:
+                    pass
+                last_error = f"HTTP {status}: {body}"
+                logger.warning(f"Push failed ({status}): {e} | body: {body}")
                 if status in (404, 410):
                     dead_endpoints.append(sub["endpoint"])
-                else:
-                    logger.warning(f"Push failed ({status}): {e}")
                 failed += 1
             except Exception as e:
+                last_error = str(e)
                 logger.warning(f"Push error: {e}")
                 failed += 1
 
@@ -144,4 +151,7 @@ class PushService:
             self.delete_subscription(ep)
 
         logger.info(f"Push: {sent} sent, {failed} failed, {len(dead_endpoints)} cleaned")
-        return {"sent": sent, "failed": failed, "cleaned": len(dead_endpoints)}
+        result = {"sent": sent, "failed": failed, "cleaned": len(dead_endpoints)}
+        if last_error:
+            result["error"] = last_error
+        return result
