@@ -1126,7 +1126,7 @@ def main():
     schedule.every().day.at("22:45").do(run_end_of_day_results)  # Results summary after all games
     schedule.every().day.at("22:50").do(run_daily_clv_summary)    # Daily CLV pulse: bets, beat-rate, avg CLV
     schedule.every().day.at("23:30").do(run_evaluation_milestone)  # Auto-post evaluation at 200/400/600 milestones
-    schedule.every().day.at("08:01").do(run_engine_heartbeat)       # Daily alive-check to Discord
+    schedule.every(2).hours.do(run_engine_heartbeat)                 # Heartbeat var 2:e timme till Discord
     schedule.every().day.at("08:00").do(run_daily_games_reminder)
     schedule.every().day.at("09:00").do(run_daily_analysis)
     schedule.every().day.at("08:00").do(run_smart_picks)  # Smart Value — Daily Top 10 (08:00 UTC = 09:00 CET)
