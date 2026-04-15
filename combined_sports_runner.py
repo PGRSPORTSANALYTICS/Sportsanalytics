@@ -480,6 +480,15 @@ def run_end_of_day_results():
         logger.error(f"❌ End-of-day results error: {e}")
 
 
+def run_evaluation_milestone():
+    """Check if settled PROD picks crossed a 200-pick milestone — post evaluation if so."""
+    try:
+        from evaluation_engine import check_milestone_and_post
+        check_milestone_and_post()
+    except Exception as e:
+        logger.error(f"❌ Evaluation milestone check error: {e}")
+
+
 def verify_football_results():
     """Verify Football Exact Score and Value Singles results"""
     try:
@@ -1045,6 +1054,7 @@ def main():
     schedule.every().sunday.at("23:00").do(run_weekly_learning_report)
     schedule.every().day.at("23:00").do(run_daily_categorizer)
     schedule.every().day.at("22:45").do(run_end_of_day_results)  # Results summary after all games
+    schedule.every().day.at("23:30").do(run_evaluation_milestone)  # Auto-post evaluation at 200/400/600 milestones
     schedule.every().day.at("08:00").do(run_daily_games_reminder)
     schedule.every().day.at("09:00").do(run_daily_analysis)
     schedule.every().day.at("08:00").do(run_smart_picks)  # Smart Value — Daily Top 10 (08:00 UTC = 09:00 CET)
