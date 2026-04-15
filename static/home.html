@@ -714,9 +714,9 @@ function sigClass(tier){
   return "sig-low";
 }
 function sigLabel(tier){
-  if(tier==="HIGH") return "★ HIGH";
-  if(tier==="MED")  return "◆ MED";
-  return "· LOW";
+  if(tier==="HIGH") return "🟢 Elite Value";
+  if(tier==="MED")  return "🟡 Strong Value";
+  return "🔵 Standard Value";
 }
 
 /* ──────────────────────────────────────────────
@@ -1018,7 +1018,7 @@ function renderScanner(){
         <div class="cell-odds locked-cell" style="justify-content:flex-end"><span class="locked-blur">2.05</span><span class="locked-icon">🔒</span></div>
         <div class="cell-fair col-fair locked-cell" style="justify-content:flex-end"><span class="locked-blur">1.92</span><span class="locked-icon">🔒</span></div>
         <div class="cell-edge" style="text-align:right"><span class="edge-chip ${evClass(evNum)}">${ev}</span></div>
-        <div class="cell-signal col-signal" style="text-align:center"><span class="sig-badge sig-med">◆ MED</span></div>
+        <div class="cell-signal col-signal" style="text-align:center"><span class="sig-badge sig-med">🟡 Strong Value</span></div>
       </div>`;
     }
     // FOMO unlock banner after all rows
