@@ -2501,7 +2501,7 @@ async def get_today_picks():
                     open_odds, clv_pct, mode,
                     model_prob, disagreement, clv_status, hidden_value_status,
                     timestamp, kickoff_epoch, clv_score, clv_tier,
-                    fair_odds
+                    fair_odds, pgr_score
                 FROM football_opportunities
                 WHERE (
                     mode IN ('PROD', 'VALUE_OPP')
@@ -2638,6 +2638,7 @@ async def get_today_picks():
                 'age_minutes': int((time.time() - int(r[24])) / 60) if r[24] else None,
                 'is_outlier': is_outlier,
                 'fair_odds': round(_fair_odds_raw, 3) if _fair_odds_raw else None,
+                'pgr_score': round(float(r[29]), 1) if r[29] else None,
             })
 
         # ── Embed training_data for all matches in ONE batch query ──

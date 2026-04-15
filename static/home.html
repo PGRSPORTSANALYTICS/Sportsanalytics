@@ -960,8 +960,12 @@ function renderScanner(){
     const unlockHint = isLocked
       ? `<div style="font-size:10px;color:#a16207;margin-top:2px;cursor:pointer" onclick="openPremiumModal()">🔒 Unlock odds &amp; full analysis →</div>`
       : '';
+    const pgrScore  = p.pgr_score != null ? p.pgr_score : null;
+    const scoreChip = pgrScore != null
+      ? `<span style="display:inline-block;margin-left:8px;background:rgba(168,139,250,.12);border:1px solid rgba(168,139,250,.3);color:#a78bfa;border-radius:99px;padding:1px 7px;font-size:10px;font-weight:700">⭐ ${pgrScore.toFixed(1)}</span>`
+      : '';
     const mmeLine   = (modelPct && marketPct)
-      ? `<div class="mme-line">Model: <b>${modelPct}%</b> · Market: <b>${marketPct}%</b> · Edge: <b>${edgeSign}${(p.ev||0).toFixed(1)}%</b>${mmeBook}</div>${unlockHint}`
+      ? `<div class="mme-line">Model: <b>${modelPct}%</b> · Market: <b>${marketPct}%</b> · Edge: <b>${edgeSign}${(p.ev||0).toFixed(1)}%</b>${mmeBook}${scoreChip}</div>${unlockHint}`
       : unlockHint;
 
     const isProd = p.mode === "PROD";
