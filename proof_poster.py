@@ -398,7 +398,79 @@ def post_clv_buckets() -> bool:
 
 
 # ─────────────────────────────────────────────────────────────────
-# 4. DAILY CLV SUMMARY — posts to DISCORD_RESULTS_WEBHOOK
+# 4. PER-PICK CLV CAPTURE — posts to DISCORD_RESULTS_WEBHOOK
+# ─────────────────────────────────────────────────────────────────
+
+def post_clv_capture(bet: dict, close_odds: float, clv: float,
+                     close_book: str, mins_to_close: int | None = None) -> bool:
+    """
+    Post a one-line CLV result to DISCORD_RESULTS_WEBHOOK for EVERY pick
+    when closing odds are captured — regardless of positive or negative CLV.
+
+    Lets the user see pick-by-pick: open odds → close odds → CLV result.
+    No threshold — all picks reported.
+    """
+    if not WEBHOOK_RESULTS:
+        return False
+
+    try:
+        open_odds = float(bet.get('open_odds') or 0)
+        market    = _label(bet.get('market', ''))
+        selection = bet.get('selection') or market
+        home      = bet.get('home_team', '?')
+        away      = bet.get('away_team', '?')
+        league    = (bet.get('league') or '').replace('soccer_', '').replace('_', ' ').title()
+        book_lbl  = (close_book or 'sharp').replace('Exchange', '').strip()
+
+        beat    = clv >= 0
+        icon    = '✅' if beat else '❌'
+        clv_str = f'+{clv:.2f}%' if beat else f'{clv:.2f}%'
+
+        open_str  = f'{open_odds:.2f}' if open_odds else '—'
+        close_str = f'{close_odds:.2f}'
+
+        timing = ''
+        if mins_to_close is not None:
+            timing = f'  ·  {mins_to_close}min before KO'
+
+        desc = (
+            f"{icon} **{home} vs {away}**\n"
+            f"{league}  ·  *{selection}*\n\n"
+            f"```\n"
+            f"{'Du tog':<20} {open_str}\n"
+            f"{'Stänging ({})'.format(book_lbl):<20} {close_str}\n"
+            f"{'CLV':<20} {clv_str}\n"
+            f"```"
+            f"{timing}"
+        )
+
+        color = 0x22c55e if beat else 0xef4444
+
+        embed = {
+            "description": desc,
+            "color": color,
+            "footer": {"text": "PGR Analytics · CLV capture"},
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }
+
+        resp = requests.post(
+            WEBHOOK_RESULTS,
+            json={"embeds": [embed]},
+            timeout=8,
+        )
+        if resp.status_code in (200, 204):
+            logger.debug("proof_poster: CLV capture posted for bet %s (CLV %s%%)",
+                         bet.get('id'), clv_str)
+            return True
+        else:
+            logger.warning("proof_poster clv_capture: webhook %d", resp.status_code)
+    except Exception as exc:
+        logger.error("proof_poster clv_capture: %s", exc)
+    return False
+
+
+# ─────────────────────────────────────────────────────────────────
+# 5. DAILY CLV SUMMARY — posts to DISCORD_RESULTS_WEBHOOK
 # ─────────────────────────────────────────────────────────────────
 
 def _clv_stats_query(since_epoch=None):

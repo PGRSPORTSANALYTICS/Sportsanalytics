@@ -717,6 +717,14 @@ class CLVService:
             except Exception as _pe:
                 logger.debug("proof_poster non-fatal: %s", _pe)
 
+            # Per-pick CLV capture — posts ALL picks to DISCORD_RESULTS_WEBHOOK (no threshold)
+            try:
+                from proof_poster import post_clv_capture
+                post_clv_capture(bet, close_odds, clv, close_book,
+                                 mins_to_close=mins_to_ko_at_close)
+            except Exception as _ce:
+                logger.debug("clv_capture non-fatal: %s", _ce)
+
             # 🔔 Push notification for significant CLV moves — first alert only
             if steam_flag in ('early', 'late'):
                 try:
