@@ -811,13 +811,30 @@ function filteredPicks(){
   if(state.filters.ev>0){
     picks = picks.filter(p=>p.ev>=state.filters.ev);
   }
-  if(state.filters.sort==="ev")    picks.sort((a,b)=>b.ev-a.ev);
-  else if(state.filters.sort==="conf") picks.sort((a,b)=>b.confidence-a.confidence);
-  else if(state.filters.sort==="time") picks.sort((a,b)=>{
-    const ta=new Date(isNaN(a.kickoff_time)?a.kickoff_time:Number(a.kickoff_time)*1000).getTime()||0;
-    const tb=new Date(isNaN(b.kickoff_time)?b.kickoff_time:Number(b.kickoff_time)*1000).getTime()||0;
-    return ta-tb;
-  });
+  // Helper: epoch ms for a pick (0 if unknown)
+  const koMs = p => {
+    const v = p.kickoff_time;
+    if(!v) return 0;
+    return isNaN(v) ? (new Date(v).getTime()||0) : Number(v)*1000;
+  };
+
+  // Primary sort: today always before tomorrow
+  // Secondary sort: by user-chosen filter
+  const _todayMid = new Date(); _todayMid.setUTCHours(0,0,0,0);
+  const _tmrwMid  = new Date(_todayMid); _tmrwMid.setUTCDate(_todayMid.getUTCDate()+1);
+  const dayBucket = p => {
+    const t = koMs(p);
+    if(!t) return 1;
+    return t < _tmrwMid.getTime() ? 0 : 1;   // 0=today, 1=tomorrow+
+  };
+
+  if(state.filters.sort==="ev"){
+    picks.sort((a,b)=> dayBucket(a)-dayBucket(b) || b.ev-a.ev);
+  } else if(state.filters.sort==="conf"){
+    picks.sort((a,b)=> dayBucket(a)-dayBucket(b) || b.confidence-a.confidence);
+  } else {
+    picks.sort((a,b)=> dayBucket(a)-dayBucket(b) || koMs(a)-koMs(b));
+  }
   return picks;
 }
 
