@@ -20,7 +20,8 @@ import db_helper as _db_module
 
 logger = logging.getLogger(__name__)
 
-WEBHOOK_PROOF = os.getenv("WEBHOOK_PROOF", "")
+WEBHOOK_PROOF          = os.getenv("WEBHOOK_PROOF", "")
+WEBHOOK_RESULTS        = os.getenv("DISCORD_RESULTS_WEBHOOK", "")
 
 # Real-time post threshold — lower than before (was 2.5%)
 REALTIME_CLV_THRESHOLD = 2.0
@@ -293,3 +294,104 @@ def post_daily_clv_digest() -> bool:
 
     ok = _send_embed(embed, label=f"daily CLV digest ({pos_count}/{total} positive)")
     return ok
+
+
+# ─────────────────────────────────────────────────────────
+# 3. CLV BUCKET ANALYSIS — posts to DISCORD_RESULTS_WEBHOOK
+# ─────────────────────────────────────────────────────────
+
+def post_clv_buckets() -> bool:
+    """
+    Post CLV bucket win-rate analysis to the results Discord channel.
+
+    Buckets: +5%+, +3-5%, +1-3%, +0-1%, Negative CLV
+    Shows: n picks, win rate, avg CLV per bucket.
+    Hypothesis: higher CLV = higher win rate.
+    """
+    if not WEBHOOK_RESULTS:
+        logger.warning("proof_poster: DISCORD_RESULTS_WEBHOOK not set — skip CLV buckets")
+        return False
+
+    try:
+        rows = _db_module.db_helper.execute("""
+            SELECT
+                CASE
+                    WHEN clv_pct >= 5   THEN 4
+                    WHEN clv_pct >= 3   THEN 3
+                    WHEN clv_pct >= 1   THEN 2
+                    WHEN clv_pct >= 0   THEN 1
+                    ELSE                     0
+                END                                              AS bucket_ord,
+                COUNT(*)                                         AS total,
+                SUM(CASE WHEN outcome = %(w)s THEN 1 ELSE 0 END) AS wins,
+                SUM(CASE WHEN outcome = %(l)s THEN 1 ELSE 0 END) AS losses,
+                ROUND(AVG(clv_pct)::numeric, 2)                 AS avg_clv
+            FROM football_opportunities
+            WHERE clv_pct IS NOT NULL
+              AND outcome IN (%(w)s, %(l)s)
+              AND match_id NOT LIKE 'seed_%%'
+            GROUP BY bucket_ord
+            ORDER BY bucket_ord DESC
+        """, {'w': 'won', 'l': 'lost'}, fetch='all') or []
+
+    except Exception as exc:
+        logger.error("proof_poster clv_buckets: DB fetch failed: %s", exc)
+        return False
+
+    if not rows:
+        logger.info("proof_poster clv_buckets: no settled picks with CLV — skip")
+        return False
+
+    BUCKET_LABELS = {4: "+5%+", 3: "+3–5%", 2: "+1–3%", 1: "+0–1%", 0: "Negative"}
+    BUCKET_ICONS  = {4: "🟢", 3: "🟡", 2: "🔵", 1: "⚪", 0: "🔴"}
+
+    lines = []
+    total_all = sum(r[1] for r in rows)
+    wins_all  = sum(r[2] for r in rows)
+    wr_all    = round(100 * wins_all / total_all, 1) if total_all else 0
+
+    for r in rows:
+        b_ord, total, wins, losses, avg_clv = r[0], r[1], r[2], r[3], r[4]
+        wr = round(100 * wins / total, 1) if total > 0 else 0
+        label = BUCKET_LABELS.get(b_ord, "?")
+        icon  = BUCKET_ICONS.get(b_ord, "•")
+        bar_n = round(wr / 10)   # 0–10 blocks
+        bar   = "█" * bar_n + "░" * (10 - bar_n)
+        lines.append(
+            f"{icon}  {label:<10}  {bar}  {wr}%  ({wins}/{total}  avg CLV {avg_clv:+.1f}%)"
+        )
+
+    block = "\n".join(["```", *lines, "", f"Overall win rate  :  {wins_all}/{total_all}  ({wr_all}%)", "```"])
+
+    # Color: green if top bucket beats overall, amber otherwise
+    top_bucket = rows[0]
+    top_wr = round(100 * top_bucket[2] / top_bucket[1], 1) if top_bucket[1] else 0
+    color = 0x22c55e if top_wr > wr_all else 0xf59e0b
+
+    embed = {
+        "title": "📊 CLV Bucket Analysis — Win Rate by Closing Line Value",
+        "description": (
+            "Does beating the closing line predict wins?\n"
+            f"Based on **{total_all} settled picks** with CLV tracking.\n\n"
+            + block
+            + "\n\n*Higher CLV = you got a better price than where the market settled.*"
+        ),
+        "color": color,
+        "footer": {"text": "PGR Analytics · CLV Bucket Report · Not financial advice"},
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+
+    try:
+        resp = requests.post(
+            WEBHOOK_RESULTS,
+            json={"embeds": [embed]},
+            timeout=8,
+        )
+        if resp.status_code in (200, 204):
+            logger.info("✅ proof_poster: CLV bucket report posted")
+            return True
+        else:
+            logger.warning("proof_poster clv_buckets: webhook %d — %s", resp.status_code, resp.text[:120])
+    except Exception as exc:
+        logger.error("proof_poster clv_buckets: request failed: %s", exc)
+    return False

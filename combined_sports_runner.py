@@ -307,6 +307,22 @@ def run_daily_clv_digest():
         traceback.print_exc()
 
 
+def run_clv_buckets():
+    """Post CLV bucket win-rate analysis to results Discord channel (Mon 09:00 UTC)."""
+    try:
+        from proof_poster import post_clv_buckets
+        logger.info("📊 Posting CLV bucket analysis...")
+        ok = post_clv_buckets()
+        if ok:
+            logger.info("✅ CLV bucket report posted to Discord")
+        else:
+            logger.warning("📊 CLV bucket report: nothing to post or webhook not set")
+    except Exception as e:
+        logger.error(f"❌ CLV bucket report error: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 def run_proactive_injury_poll():
     """Poll API-Football injuries 48h+ in advance for upcoming fixtures (Big 5 + Euro cups)."""
     try:
@@ -1022,6 +1038,7 @@ def main():
     schedule.every(2).hours.do(run_learning_update)
     schedule.every(2).hours.do(run_form_cacher)  # Cache form+H2H for upcoming picks
     
+    schedule.every().monday.at("09:00").do(run_clv_buckets)    # Weekly CLV bucket report
     schedule.every().day.at("21:55").do(run_daily_clv_digest)  # 22:55 CET — before recap
     schedule.every().day.at("22:00").do(run_daily_recap)      # 23:00 CET
     schedule.every().sunday.at("22:00").do(run_weekly_recap)  # 23:00 CET
