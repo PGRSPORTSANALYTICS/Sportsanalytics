@@ -545,6 +545,24 @@ async def health_check():
     )
 
 
+@app.get("/api/debug", include_in_schema=False)
+async def debug_env():
+    """Shows which critical env vars are SET (true/false) — no values exposed."""
+    import os, time
+    keys = [
+        "DATABASE_URL", "THE_ODDS_API_KEY", "API_FOOTBALL_KEY",
+        "DISCORD_RESULTS_WEBHOOK", "DISCORD_WEBHOOK_URL",
+        "DISCORD_FREE_PICKS_WEBHOOK_URL", "WEBHOOK_PROOF",
+        "RAILWAY_SERVICE_NAME", "RAILWAY_ENVIRONMENT", "RAILWAY_PROJECT_ID",
+        "ADMIN_API_KEY",
+    ]
+    return {
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "service": os.getenv("RAILWAY_SERVICE_NAME", "unknown"),
+        "env_vars": {k: bool(os.getenv(k)) for k in keys},
+    }
+
+
 @app.get("/api/matches/today", response_model=MatchesResponse, tags=["Matches"])
 async def get_today_matches():
     """
