@@ -359,11 +359,11 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
 <div id="pwa-banner">
   <div class="pwa-banner-row">
     <div class="pwa-icon">P</div>
-    <div class="pwa-body">
+    <div class="pwa-body" onclick="triggerInstall()" style="cursor:pointer;flex:1">
       <div class="pwa-title">Install PGR Analytics</div>
-      <div class="pwa-sub">Get live value alerts before odds move</div>
+      <div class="pwa-sub">Tap to add to home screen</div>
     </div>
-    <button class="pwa-btn" id="pwa-install-btn" style="display:none">Add to Home Screen</button>
+    <button class="pwa-btn" id="pwa-install-btn" onclick="triggerInstall()" style="display:none">Install</button>
     <div id="pwa-ios-hint" style="display:none;font-size:11px;color:#71717a">Tap Share → Add to Home Screen</div>
     <button class="pwa-dismiss" id="pwa-dismiss">×</button>
   </div>
@@ -1493,6 +1493,7 @@ let _deferredPrompt=null;
 window.addEventListener("beforeinstallprompt",e=>{
   e.preventDefault(); _deferredPrompt=e;
   document.getElementById("install-chip").style.display="inline-flex";
+  document.getElementById("pwa-install-btn").style.display="inline-flex";
   if(!sessionStorage.getItem("pwa_dismissed") && !window.matchMedia("(display-mode: standalone)").matches){
     setTimeout(()=>{ document.getElementById("pwa-banner").style.display="block"; },3000);
   }
