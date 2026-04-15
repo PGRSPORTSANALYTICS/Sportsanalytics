@@ -401,84 +401,119 @@ def post_clv_buckets() -> bool:
 # 4. DAILY CLV SUMMARY — posts to DISCORD_RESULTS_WEBHOOK
 # ─────────────────────────────────────────────────────────────────
 
+def _clv_stats_query(since_epoch=None):
+    """Fetch CLV stats from a given epoch. If None, fetches all-time."""
+    where_extra = f"AND timestamp >= {since_epoch}" if since_epoch else ""
+    return _db_module.db_helper.execute(f"""
+        SELECT
+            COUNT(*)                                                             AS total,
+            COUNT(*) FILTER (WHERE clv_pct IS NOT NULL)                          AS clv_tracked,
+            COUNT(*) FILTER (WHERE clv_pct > 0)                                  AS clv_pos,
+            ROUND(AVG(clv_pct) FILTER (WHERE clv_pct IS NOT NULL)::numeric, 2)  AS avg_clv,
+            ROUND(AVG(clv_pct) FILTER (WHERE clv_pct > 0)::numeric, 2)          AS avg_clv_pos,
+            SUM(CASE WHEN outcome='won' THEN 1 ELSE 0 END)                       AS wins,
+            ROUND(SUM(
+                CASE WHEN outcome='won' THEN (odds - 1) ELSE -1.0 END
+            )::numeric / NULLIF(COUNT(*), 0) * 100, 1)                           AS roi
+        FROM football_opportunities
+        WHERE outcome IN ('won', 'lost')
+          AND mode IN ('PROD', 'VALUE_OPP')
+          AND match_id NOT LIKE 'seed_%%'
+          {where_extra}
+    """, fetch='one')
+
+
 def post_daily_clv_summary() -> bool:
     """
-    Daily pulse check posted to DISCORD_RESULTS_WEBHOOK showing:
-      - Total settled PROD picks (all-time + last 30 days)
-      - How many beat the closing line (clv_pct > 0)
-      - Average CLV (all tracked picks)
+    Daily pulse check posted to DISCORD_RESULTS_WEBHOOK.
+    Shows two panels: since CLV era start (today onward) + all-time reference.
+    Tracks: bets, CLV beat rate, avg CLV, ROI.
     """
     if not WEBHOOK_RESULTS:
         logger.warning("proof_poster: DISCORD_RESULTS_WEBHOOK not set — skip daily CLV summary")
         return False
 
+    # Fetch era start from system_kv
+    era_epoch = None
+    era_date  = "okänt datum"
     try:
-        row = _db_module.db_helper.execute("""
-            SELECT
-                COUNT(*)                                                        AS total_settled,
-                COUNT(*) FILTER (WHERE clv_pct IS NOT NULL)                     AS clv_tracked,
-                COUNT(*) FILTER (WHERE clv_pct > 0)                            AS clv_positive,
-                ROUND(AVG(clv_pct) FILTER (WHERE clv_pct IS NOT NULL)::numeric, 2) AS avg_clv,
-                ROUND(AVG(clv_pct) FILTER (WHERE clv_pct > 0)::numeric, 2)    AS avg_clv_pos,
-                COUNT(*) FILTER (WHERE outcome = 'won' AND clv_pct IS NOT NULL) AS clv_wins,
-                COUNT(*) FILTER (
-                    WHERE outcome IN ('won','lost')
-                      AND timestamp >= EXTRACT(EPOCH FROM NOW() - INTERVAL '30 days')::BIGINT
-                )                                                               AS last_30_n,
-                COUNT(*) FILTER (WHERE clv_pct > 0 AND
-                    timestamp >= EXTRACT(EPOCH FROM NOW() - INTERVAL '30 days')::BIGINT)
-                                                                                AS last_30_clv_pos
-            FROM football_opportunities
-            WHERE outcome IN ('won', 'lost')
-              AND mode IN ('PROD', 'VALUE_OPP')
-              AND match_id NOT LIKE 'seed_%%'
-        """, fetch='one')
+        kv = _db_module.db_helper.execute(
+            "SELECT value FROM system_kv WHERE key = 'clv_era_start'",
+            fetch='one'
+        )
+        if kv and kv[0]:
+            era_epoch = int(kv[0])
+            era_date  = time.strftime("%d %b %Y", time.gmtime(era_epoch))
+    except Exception as exc:
+        logger.warning("proof_poster: could not read clv_era_start: %s", exc)
+
+    try:
+        era_row = _clv_stats_query(since_epoch=era_epoch)
+        all_row = _clv_stats_query(since_epoch=None)
     except Exception as exc:
         logger.error("proof_poster daily_clv_summary: DB fetch failed: %s", exc)
         return False
 
-    if not row or not row[0]:
+    if not era_row or not all_row:
         return False
 
-    total, clv_tracked, clv_pos, avg_clv, avg_clv_pos, clv_wins, last30_n, last30_clv_pos = row
+    def _fmt(row):
+        total, clv_tracked, clv_pos, avg_clv, avg_clv_pos, wins, roi = row
+        total       = total or 0
+        clv_tracked = clv_tracked or 0
+        clv_pos     = clv_pos or 0
+        wins        = wins or 0
+        beat_rate   = round(100 * clv_pos / clv_tracked, 1) if clv_tracked else 0
+        wr          = round(100 * wins / total, 1) if total else 0
+        avg_clv_s   = f"{avg_clv:+.2f}%" if avg_clv is not None else "n/a"
+        roi_s       = f"{roi:+.1f}%" if roi is not None else "n/a"
+        return total, clv_tracked, clv_pos, beat_rate, wr, avg_clv_s, roi_s
 
-    beat_rate     = round(100 * clv_pos / clv_tracked, 1) if clv_tracked else 0
-    beat_rate_30  = round(100 * last30_clv_pos / last30_n, 1) if last30_n else 0
-    clv_wr        = round(100 * clv_wins / clv_tracked, 1) if clv_tracked else 0
+    e_total, e_clv, e_pos, e_beat, e_wr, e_avg, e_roi = _fmt(era_row)
+    a_total, a_clv, a_pos, a_beat, a_wr, a_avg, a_roi = _fmt(all_row)
 
-    avg_clv_str     = f"{avg_clv:+.2f}%" if avg_clv is not None else "n/a"
-    avg_clv_pos_str = f"{avg_clv_pos:+.2f}%" if avg_clv_pos is not None else "n/a"
-
-    if beat_rate >= 55:
-        color = 0x22c55e
-        trend = "🟢"
-    elif beat_rate >= 45:
-        color = 0xf59e0b
-        trend = "🟡"
+    # Color based on era beat rate
+    if e_beat >= 55:
+        color, trend = 0x22c55e, "🟢"
+    elif e_beat >= 45:
+        color, trend = 0xf59e0b, "🟡"
     else:
-        color = 0xef4444
-        trend = "🔴"
+        color, trend = 0xef4444, "🔴"
+
+    era_block = (
+        f"```\n"
+        f"{'Picks avgjorda':<24} {e_total:>5}\n"
+        f"{'CLV-spårade':<24} {e_clv:>5}  ({round(100*e_clv/e_total,0) if e_total else 0:.0f}%)\n"
+        f"{'Slog CLV (>0)':<24} {e_pos:>5}  ({e_beat}%)\n"
+        f"{'Snitt CLV':<24} {e_avg:>8}\n"
+        f"{'Win rate':<24} {e_wr:>6}%\n"
+        f"{'ROI':<24} {e_roi:>8}\n"
+        f"```"
+    )
+
+    all_block = (
+        f"```\n"
+        f"{'Picks avgjorda':<24} {a_total:>5}\n"
+        f"{'Slog CLV (>0)':<24} {a_pos:>5}  ({a_beat}%)\n"
+        f"{'Snitt CLV':<24} {a_avg:>8}\n"
+        f"{'ROI':<24} {a_roi:>8}\n"
+        f"```"
+    )
 
     desc = (
-        f"**Totalt avgjorda picks (PROD/VALUE_OPP):** {total}\n"
-        f"**CLV-spårade:** {clv_tracked} av {total} "
-        f"({round(100*clv_tracked/total,1) if total else 0}%)\n\n"
-        f"```\n"
-        f"{'Slog CLV (> 0)':<26} {clv_pos:>5} picks   ({beat_rate}%)\n"
-        f"{'Snitt CLV (alla spårade)':<26} {avg_clv_str:>8}\n"
-        f"{'Snitt CLV (positiva)':<26} {avg_clv_pos_str:>8}\n"
-        f"{'Win rate bland CLV-picks':<26} {clv_wr:>6}%\n"
-        f"```\n"
-        f"**Senaste 30 dagarna:** {last30_n} picks · {last30_clv_pos} slog CLV ({beat_rate_30}%)\n\n"
-        f"{trend} **CLV beat rate (all-time): {beat_rate}%** "
-        f"_(mål: >50%)_"
+        f"{trend} **Era-start: {era_date}** — clean baseline, nollställt idag\n\n"
+        f"**📊 Sedan era-start**\n"
+        + era_block
+        + f"\n**📁 All-time (referens)**\n"
+        + all_block
+        + f"\n_{trend} CLV beat rate (era): **{e_beat}%** · mål >50%_"
     )
 
     embed = {
         "title": "📈 Daglig CLV-puls — Closing Line Value",
         "description": desc,
         "color": color,
-        "footer": {"text": "PGR Analytics · Daglig CLV-sammanfattning · Uppdateras 22:00 UTC"},
+        "footer": {"text": f"PGR Analytics · Era start {era_date} · Uppdateras 22:50 UTC"},
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
 
@@ -489,7 +524,7 @@ def post_daily_clv_summary() -> bool:
             timeout=8,
         )
         if resp.status_code in (200, 204):
-            logger.info("✅ proof_poster: daily CLV summary posted (%d picks, beat_rate=%.1f%%)", total, beat_rate)
+            logger.info("✅ proof_poster: daily CLV summary posted (%d picks era, beat_rate=%.1f%%)", e_total, e_beat)
             return True
         else:
             logger.warning("proof_poster daily_clv_summary: webhook %d — %s", resp.status_code, resp.text[:120])
