@@ -1,22 +1,20 @@
 """
 Smart Value Engine — Daily Top 10
 
-Generates exactly 10 curated Smart Value per day based on SmartScore.
-Posts to Discord smart-picks channel at 10:00 server time.
+Generates exactly 10 curated Smart Value picks per day based on SmartScore.
+Picks are stored in the DB and displayed in the dashboard — no Discord posting.
 
 STRICT RULES:
 - Odds range: 1.75 – 2.10
-- No EV, no implied probability, no unit sizing, no odds shopping
 - One pick per match, max 2 per league
 - SmartScore-based ranking (NOT EV-based)
-- Posted once per day, locked after posting
+- Generated once per day, locked after generation
 """
 
 import os
 import json
 import time
 import logging
-import requests
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional
 
@@ -28,8 +26,6 @@ except ImportError:
     logger.error("Could not import db_helper")
     raise
 
-
-SMART_PICKS_WEBHOOK = os.getenv("DISCORD_WH_SMART_PICKS", "")
 
 SMART_SCORE_WEIGHTS = {
     "model_prob": 0.40,
@@ -55,15 +51,6 @@ def _get_server_date() -> str:
     return datetime.now().strftime("%Y-%m-%d")
 
 
-def _already_posted_today() -> bool:
-    """Returns True if picks were already successfully posted to Discord today."""
-    today = _get_server_date()
-    row = db_helper.execute("""
-        SELECT COUNT(*) FROM smart_picks WHERE pick_date = %s AND discord_posted = TRUE
-    """, (today,), fetch='one')
-    return row is not None and row[0] > 0
-
-
 def _picks_exist_today() -> bool:
     """Returns True if any picks (posted or not) were already generated today."""
     today = _get_server_date()
@@ -71,33 +58,6 @@ def _picks_exist_today() -> bool:
         SELECT COUNT(*) FROM smart_picks WHERE pick_date = %s
     """, (today,), fetch='one')
     return row is not None and row[0] > 0
-
-
-def _get_todays_picks_from_db() -> List[Dict]:
-    """Fetch today's picks from DB (for re-posting if Discord post failed)."""
-    today = _get_server_date()
-    rows = db_helper.execute("""
-        SELECT home_team, away_team, league, market, selection, odds, smart_score, confidence, model_grade
-        FROM smart_picks WHERE pick_date = %s ORDER BY smart_score DESC
-    """, (today,), fetch='all')
-    if not rows:
-        return []
-    return [
-        {
-            "home_team": r[0], "away_team": r[1], "league": r[2],
-            "market": r[3], "selection": r[4], "odds": r[5],
-            "smart_score": r[6], "confidence": r[7], "model_grade": r[8]
-        }
-        for r in rows
-    ]
-
-
-def _mark_discord_posted_today():
-    """Mark all today's picks as discord_posted = TRUE."""
-    today = _get_server_date()
-    db_helper.execute("""
-        UPDATE smart_picks SET discord_posted = TRUE WHERE pick_date = %s
-    """, (today,))
 
 
 def _ensure_table():
@@ -114,12 +74,8 @@ def _ensure_table():
             smart_score REAL,
             confidence TEXT,
             model_grade TEXT,
-            discord_posted BOOLEAN DEFAULT FALSE,
             created_at TIMESTAMP DEFAULT NOW()
         )
-    """)
-    db_helper.execute("""
-        ALTER TABLE smart_picks ADD COLUMN IF NOT EXISTS discord_posted BOOLEAN DEFAULT FALSE
     """)
 
 
@@ -340,116 +296,18 @@ def generate_smart_picks() -> List[Dict]:
     return picks
 
 
-_DISCORD_MAX_CHARS = 1900  # Safe limit below Discord's 2000-char hard cap
+def run_smart_picks() -> List[Dict]:
+    """Generate and store today's Smart Value picks. Dashboard reads them from DB."""
+    if _picks_exist_today():
+        logger.info("Smart Value: picks already generated today — skipping")
+        return []
 
-
-def _format_pick_block(i: int, p: Dict) -> str:
-    """Format a single pick as a compact block (under 200 chars)."""
-    match = f"{p.get('home_team', '')} vs {p.get('away_team', '')}"
-    selection = p.get('selection', 'N/A')
-    odds = float(p.get('odds', 0))
-    conf = p.get('confidence', 'Low')
-    grade = p.get('model_grade', 'C')
-    league = p.get('league') or 'Football'
-    lines = [
-        f"**#{i}** {league}",
-        f"{match}",
-        f"**{selection}** @ {odds:.2f} | {conf} | {grade}",
-        "─────────────────────────",
-    ]
-    return "\n".join(lines)
-
-
-def _format_discord_chunks(picks: List[Dict]) -> List[str]:
-    """Split picks into Discord messages that each stay under _DISCORD_MAX_CHARS."""
-    today = _get_server_date()
-    header = f"**PGR SMART PICKS — {today}**\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-    footer = "\n*AI picks for recreational players. No staking advice.*"
-
-    chunks: List[str] = []
-    current = header
-    first_chunk = True
-
-    for i, p in enumerate(picks, 1):
-        block = "\n" + _format_pick_block(i, p) + "\n"
-        candidate = current + block
-
-        if len(candidate) + len(footer) > _DISCORD_MAX_CHARS and not first_chunk:
-            # Close current chunk and start a new one
-            chunks.append(current + footer)
-            current = f"**PGR SMART PICKS (cont.) — {today}**\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" + block
-        else:
-            current = candidate
-            first_chunk = False
-
-    chunks.append(current + footer)
-    return chunks
-
-
-def post_to_discord(picks: List[Dict]) -> bool:
-    if not SMART_PICKS_WEBHOOK:
-        logger.warning("DISCORD_WH_SMART_PICKS not set — cannot post Smart Value")
-        return False
-
-    if not picks:
-        logger.info("No picks to post")
-        return False
-
-    chunks = _format_discord_chunks(picks)
-    success = True
-
-    for idx, chunk in enumerate(chunks, 1):
-        try:
-            resp = requests.post(
-                SMART_PICKS_WEBHOOK,
-                json={"content": chunk},
-                timeout=15,
-            )
-            if resp.status_code in (200, 204):
-                logger.info(f"Smart Value chunk {idx}/{len(chunks)} posted ({len(chunk)} chars)")
-                if resp.status_code == 429:
-                    import time as _time
-                    retry_after = resp.json().get("retry_after", 5)
-                    _time.sleep(retry_after)
-            else:
-                logger.error(f"Discord post failed chunk {idx}: {resp.status_code} — {resp.text[:200]}")
-                success = False
-        except Exception as e:
-            logger.error(f"Discord post error chunk {idx}: {e}")
-            success = False
-
-    if success:
-        logger.info(f"Smart Value posted to Discord ({len(picks)} picks, {len(chunks)} messages)")
-        _mark_discord_posted_today()
-    return success
-
-
-def run_smart_picks():
-    # DISABLED — Smart Value Discord posting turned off
-    logger.info("Smart Value Discord posting DISABLED — skipping")
-    return
     logger.info("========================================")
     logger.info("SMART PICKS ENGINE — Starting daily run")
     logger.info("========================================")
 
     picks = generate_smart_picks()
-
-    if picks:
-        posted = post_to_discord(picks)
-        logger.info(f"Smart Value complete: {len(picks)} picks, posted={posted}")
-    elif not _already_posted_today():
-        # Picks may be in DB but Discord post wasn't confirmed — retry
-        db_picks = _get_todays_picks_from_db()
-        if db_picks:
-            logger.info(f"Smart Value: {len(db_picks)} picks in DB but not confirmed posted — retrying Discord post")
-            posted = post_to_discord(db_picks)
-            logger.info(f"Smart Value re-post complete: posted={posted}")
-            picks = db_picks
-        else:
-            logger.info("Smart Value complete: 0 picks generated")
-    else:
-        logger.info("Smart Value already confirmed posted today — skipping")
-
+    logger.info(f"Smart Value complete: {len(picks)} picks stored in DB")
     return picks
 
 
