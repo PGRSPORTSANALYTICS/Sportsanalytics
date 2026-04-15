@@ -1133,7 +1133,13 @@ def main():
     schedule.every().day.at("08:00").do(run_daily_free_pick)  # 1 free pick to Discord
     
     logger.info("✅ All schedules configured. Starting main loop...")
-    
+
+    # Fire heartbeat immediately at startup so Discord confirms engine is alive
+    try:
+        run_engine_heartbeat()
+    except Exception as e:
+        logger.error(f"❌ Startup heartbeat error: {e}")
+
     # Catch-up: send recap if engine restarted after 22:30 and recap wasn't sent yet
     try:
         _catchup_daily_recap()
