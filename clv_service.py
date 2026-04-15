@@ -835,6 +835,13 @@ class CLVService:
         )
 
         try:
+            # Only post to Discord on FIRST capture — check if close_odds already set
+            already_captured = db_helper.execute(
+                "SELECT close_ts FROM football_opportunities WHERE id = %s",
+                (bet_id,), fetch='one'
+            )
+            first_capture = not (already_captured and already_captured[0])
+
             db_helper.execute("""
                 UPDATE football_opportunities
                 SET close_odds      = %s,
@@ -846,20 +853,25 @@ class CLVService:
                 WHERE id = %s
             """, (close_odds, close_ts, clv, status, close_book, steam_flag, bet_id))
 
-            # Post proof-of-work to Discord (fire-and-forget, never blocks)
-            try:
-                post_clv_proof(bet, close_odds, clv, close_book,
-                               mins_to_close=mins_to_ko_at_close)
-            except Exception as _pe:
-                logger.debug("proof_poster non-fatal: %s", _pe)
+            if not first_capture:
+                logger.debug(
+                    "CLV: bet=%d already captured — skip Discord post", bet_id
+                )
+            else:
+                # Post proof-of-work to Discord (fire-and-forget, never blocks)
+                try:
+                    post_clv_proof(bet, close_odds, clv, close_book,
+                                   mins_to_close=mins_to_ko_at_close)
+                except Exception as _pe:
+                    logger.debug("proof_poster non-fatal: %s", _pe)
 
-            # Per-pick CLV capture — posts ALL picks to DISCORD_RESULTS_WEBHOOK (no threshold)
-            try:
-                from proof_poster import post_clv_capture
-                post_clv_capture(bet, close_odds, clv, close_book,
-                                 mins_to_close=mins_to_ko_at_close)
-            except Exception as _ce:
-                logger.debug("clv_capture non-fatal: %s", _ce)
+                # Per-pick CLV capture — posts ALL picks to DISCORD_RESULTS_WEBHOOK (no threshold)
+                try:
+                    from proof_poster import post_clv_capture
+                    post_clv_capture(bet, close_odds, clv, close_book,
+                                     mins_to_close=mins_to_ko_at_close)
+                except Exception as _ce:
+                    logger.debug("clv_capture non-fatal: %s", _ce)
 
             # 🔔 Push notification for significant CLV moves — first alert only
             if steam_flag in ('early', 'late'):
