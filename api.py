@@ -556,10 +556,16 @@ async def debug_env():
         "RAILWAY_SERVICE_NAME", "RAILWAY_ENVIRONMENT", "RAILWAY_PROJECT_ID",
         "ADMIN_API_KEY",
     ]
+    def var_info(k):
+        v = os.getenv(k, "")
+        if not v:
+            return {"set": False, "len": 0}
+        return {"set": True, "len": len(v), "prefix": v[:4]}
+
     return {
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "service": os.getenv("RAILWAY_SERVICE_NAME", "unknown"),
-        "env_vars": {k: bool(os.getenv(k)) for k in keys},
+        "env_vars": {k: var_info(k) for k in keys},
     }
 
 
