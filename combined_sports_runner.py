@@ -637,9 +637,9 @@ def run_daily_categorizer():
 
 def run_engine_heartbeat():
     """
-    Daily heartbeat to DISCORD_RESULTS_WEBHOOK at 08:01 UTC.
-    Lets the user verify the engine is alive without opening Replit.
-    If this message doesn't appear in Discord — the engine is down.
+    Hourly heartbeat to DISCORD_RESULTS_WEBHOOK.
+    Lets the user verify the engine is alive 24/7.
+    If this message stops appearing — the engine is down.
     """
     import os, time, requests
     webhook = os.getenv("DISCORD_RESULTS_WEBHOOK", "")
@@ -655,32 +655,56 @@ def run_engine_heartbeat():
         else:
             platform = "Unknown"
 
-        # Count today's picks so far
         from db_helper import db_helper
-        today_start = int(time.time()) - (int(time.time()) % 86400)
+        now = int(time.time())
+        today_start = now - (now % 86400)
+
+        # Picks today
         row = db_helper.execute(
             "SELECT COUNT(*) FROM football_opportunities WHERE timestamp >= %s AND mode IN ('PROD','VALUE_OPP')",
             (today_start,), fetch='one'
         )
         picks_today = row[0] if row else 0
 
+        # CLV captures today
+        clv_row = db_helper.execute(
+            "SELECT COUNT(*) FROM football_opportunities WHERE timestamp >= %s AND clv_pct IS NOT NULL",
+            (today_start,), fetch='one'
+        )
+        clv_today = clv_row[0] if clv_row else 0
+
+        # Next upcoming match with a pick
+        next_row = db_helper.execute(
+            "SELECT home, away, kickoff_epoch FROM football_opportunities WHERE kickoff_epoch > %s ORDER BY kickoff_epoch ASC LIMIT 1",
+            (now,), fetch='one'
+        )
+        if next_row:
+            h, a, ko = next_row
+            mins = int((ko - now) / 60)
+            hrs, m = divmod(mins, 60)
+            next_match = f"{h} vs {a} (om {hrs}h {m}m)"
+        else:
+            next_match = "Inga kommande"
+
         uptime_str = time.strftime("%d %b %Y · %H:%M UTC", time.gmtime())
 
         embed = {
-            "title": "💚 Engine Heartbeat — Systemet är igång",
+            "title": "💚 Systemet är igång · Timvis bekräftelse",
             "description": (
                 f"**Platform:** {platform}\n"
                 f"**Tid:** {uptime_str}\n\n"
                 f"```\n"
-                f"{'Picks skapade idag':<24} {picks_today}\n"
-                f"{'Prediktion-engine':<24} AKTIV\n"
-                f"{'CLV-tracking':<24} AKTIV\n"
-                f"{'Resultat-verifiering':<24} AKTIV\n"
+                f"{'Picks idag':<26} {picks_today}\n"
+                f"{'CLV-fångster idag':<26} {clv_today}\n"
+                f"{'Nästa match':<26} {next_match}\n"
+                f"{'Prediktion-engine':<26} AKTIV\n"
+                f"{'CLV-tracking':<26} AKTIV\n"
+                f"{'Resultat-verifiering':<26} AKTIV\n"
                 f"```\n"
-                f"_Om detta meddelande inte syns → motorn är nere_"
+                f"_Nästa bekräftelse om 1 timme — om den uteblir är motorn nere_"
             ),
             "color": 0x22c55e,
-            "footer": {"text": "PGR Analytics · Daglig heartbeat · 08:01 UTC"},
+            "footer": {"text": "PGR Analytics · Timvis heartbeat · Railway 24/7"},
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         }
 
@@ -1126,7 +1150,7 @@ def main():
     schedule.every().day.at("22:45").do(run_end_of_day_results)  # Results summary after all games
     schedule.every().day.at("22:50").do(run_daily_clv_summary)    # Daily CLV pulse: bets, beat-rate, avg CLV
     schedule.every().day.at("23:30").do(run_evaluation_milestone)  # Auto-post evaluation at 200/400/600 milestones
-    schedule.every(2).hours.do(run_engine_heartbeat)                 # Heartbeat var 2:e timme till Discord
+    schedule.every(1).hours.do(run_engine_heartbeat)                 # Heartbeat varje timme till Discord
     schedule.every().day.at("08:00").do(run_daily_games_reminder)
     schedule.every().day.at("09:00").do(run_daily_analysis)
     schedule.every().day.at("08:00").do(run_smart_picks)  # Smart Value — Daily Top 10 (08:00 UTC = 09:00 CET)
