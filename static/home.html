@@ -973,7 +973,7 @@ function renderScanner(){
     }
     const scoreChip = pgrChip(pgrScore);
     const mmeLine   = (modelPct && marketPct)
-      ? `<div class="mme-line">Model: <b>${modelPct}%</b> · Market: <b>${marketPct}%</b> · Edge: <b>${edgeSign}${(p.ev||0).toFixed(1)}%</b>${mmeBook}${scoreChip}</div>${unlockHint}`
+      ? `<div class="mme-line">Model: <b>${modelPct}%</b> · Market: <b>${marketPct}%</b> · Edge: <b>${edgeSign}${(p.ev||0).toFixed(1)}%</b>${mmeBook}</div>${scoreChip?`<div style="margin-top:4px">${scoreChip}</div>`:''}${unlockHint}`
       : unlockHint;
 
     const isProd = p.mode === "PROD";
