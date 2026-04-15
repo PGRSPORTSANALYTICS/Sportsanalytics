@@ -323,16 +323,16 @@ def post_clv_buckets() -> bool:
                     ELSE                     0
                 END                                              AS bucket_ord,
                 COUNT(*)                                         AS total,
-                SUM(CASE WHEN outcome = %(w)s THEN 1 ELSE 0 END) AS wins,
-                SUM(CASE WHEN outcome = %(l)s THEN 1 ELSE 0 END) AS losses,
+                SUM(CASE WHEN outcome = 'won'  THEN 1 ELSE 0 END) AS wins,
+                SUM(CASE WHEN outcome = 'lost' THEN 1 ELSE 0 END) AS losses,
                 ROUND(AVG(clv_pct)::numeric, 2)                 AS avg_clv
             FROM football_opportunities
             WHERE clv_pct IS NOT NULL
-              AND outcome IN (%(w)s, %(l)s)
+              AND outcome IN ('won', 'lost')
               AND match_id NOT LIKE 'seed_%%'
             GROUP BY bucket_ord
             ORDER BY bucket_ord DESC
-        """, {'w': 'won', 'l': 'lost'}, fetch='all') or []
+        """, fetch='all') or []
 
     except Exception as exc:
         logger.error("proof_poster clv_buckets: DB fetch failed: %s", exc)
@@ -394,4 +394,105 @@ def post_clv_buckets() -> bool:
             logger.warning("proof_poster clv_buckets: webhook %d — %s", resp.status_code, resp.text[:120])
     except Exception as exc:
         logger.error("proof_poster clv_buckets: request failed: %s", exc)
+    return False
+
+
+# ─────────────────────────────────────────────────────────────────
+# 4. DAILY CLV SUMMARY — posts to DISCORD_RESULTS_WEBHOOK
+# ─────────────────────────────────────────────────────────────────
+
+def post_daily_clv_summary() -> bool:
+    """
+    Daily pulse check posted to DISCORD_RESULTS_WEBHOOK showing:
+      - Total settled PROD picks (all-time + last 30 days)
+      - How many beat the closing line (clv_pct > 0)
+      - Average CLV (all tracked picks)
+    """
+    if not WEBHOOK_RESULTS:
+        logger.warning("proof_poster: DISCORD_RESULTS_WEBHOOK not set — skip daily CLV summary")
+        return False
+
+    try:
+        row = _db_module.db_helper.execute("""
+            SELECT
+                COUNT(*)                                                        AS total_settled,
+                COUNT(*) FILTER (WHERE clv_pct IS NOT NULL)                     AS clv_tracked,
+                COUNT(*) FILTER (WHERE clv_pct > 0)                            AS clv_positive,
+                ROUND(AVG(clv_pct) FILTER (WHERE clv_pct IS NOT NULL)::numeric, 2) AS avg_clv,
+                ROUND(AVG(clv_pct) FILTER (WHERE clv_pct > 0)::numeric, 2)    AS avg_clv_pos,
+                COUNT(*) FILTER (WHERE outcome = 'won' AND clv_pct IS NOT NULL) AS clv_wins,
+                COUNT(*) FILTER (
+                    WHERE outcome IN ('won','lost')
+                      AND timestamp >= EXTRACT(EPOCH FROM NOW() - INTERVAL '30 days')::BIGINT
+                )                                                               AS last_30_n,
+                COUNT(*) FILTER (WHERE clv_pct > 0 AND
+                    timestamp >= EXTRACT(EPOCH FROM NOW() - INTERVAL '30 days')::BIGINT)
+                                                                                AS last_30_clv_pos
+            FROM football_opportunities
+            WHERE outcome IN ('won', 'lost')
+              AND mode IN ('PROD', 'VALUE_OPP')
+              AND match_id NOT LIKE 'seed_%%'
+        """, fetch='one')
+    except Exception as exc:
+        logger.error("proof_poster daily_clv_summary: DB fetch failed: %s", exc)
+        return False
+
+    if not row or not row[0]:
+        return False
+
+    total, clv_tracked, clv_pos, avg_clv, avg_clv_pos, clv_wins, last30_n, last30_clv_pos = row
+
+    beat_rate     = round(100 * clv_pos / clv_tracked, 1) if clv_tracked else 0
+    beat_rate_30  = round(100 * last30_clv_pos / last30_n, 1) if last30_n else 0
+    clv_wr        = round(100 * clv_wins / clv_tracked, 1) if clv_tracked else 0
+
+    avg_clv_str     = f"{avg_clv:+.2f}%" if avg_clv is not None else "n/a"
+    avg_clv_pos_str = f"{avg_clv_pos:+.2f}%" if avg_clv_pos is not None else "n/a"
+
+    if beat_rate >= 55:
+        color = 0x22c55e
+        trend = "🟢"
+    elif beat_rate >= 45:
+        color = 0xf59e0b
+        trend = "🟡"
+    else:
+        color = 0xef4444
+        trend = "🔴"
+
+    desc = (
+        f"**Totalt avgjorda picks (PROD/VALUE_OPP):** {total}\n"
+        f"**CLV-spårade:** {clv_tracked} av {total} "
+        f"({round(100*clv_tracked/total,1) if total else 0}%)\n\n"
+        f"```\n"
+        f"{'Slog CLV (> 0)':<26} {clv_pos:>5} picks   ({beat_rate}%)\n"
+        f"{'Snitt CLV (alla spårade)':<26} {avg_clv_str:>8}\n"
+        f"{'Snitt CLV (positiva)':<26} {avg_clv_pos_str:>8}\n"
+        f"{'Win rate bland CLV-picks':<26} {clv_wr:>6}%\n"
+        f"```\n"
+        f"**Senaste 30 dagarna:** {last30_n} picks · {last30_clv_pos} slog CLV ({beat_rate_30}%)\n\n"
+        f"{trend} **CLV beat rate (all-time): {beat_rate}%** "
+        f"_(mål: >50%)_"
+    )
+
+    embed = {
+        "title": "📈 Daglig CLV-puls — Closing Line Value",
+        "description": desc,
+        "color": color,
+        "footer": {"text": "PGR Analytics · Daglig CLV-sammanfattning · Uppdateras 22:00 UTC"},
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+
+    try:
+        resp = requests.post(
+            WEBHOOK_RESULTS,
+            json={"embeds": [embed]},
+            timeout=8,
+        )
+        if resp.status_code in (200, 204):
+            logger.info("✅ proof_poster: daily CLV summary posted (%d picks, beat_rate=%.1f%%)", total, beat_rate)
+            return True
+        else:
+            logger.warning("proof_poster daily_clv_summary: webhook %d — %s", resp.status_code, resp.text[:120])
+    except Exception as exc:
+        logger.error("proof_poster daily_clv_summary: request failed: %s", exc)
     return False
