@@ -2472,6 +2472,36 @@ async def send_discord_stats_endpoint():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _compute_pgr_score(db_val, ev_pct, model_prob, confidence=0.0) -> float | None:
+    """
+    Return pgr_score for a pick.
+    Uses the stored DB value when available; otherwise computes a live score
+    from EV, model probability, and confidence so Railway picks always show a score.
+
+    Scale (matches Discord how-it-works):
+      80-100 = Elite Value
+      60-79  = Strong Value
+      40-59  = Standard Value
+      <40    = No signal
+    """
+    if db_val is not None:
+        return round(float(db_val), 1)
+    if not ev_pct and not model_prob:
+        return None
+    ev       = float(ev_pct or 0)
+    mp       = float(model_prob or 0)       # 0-1 scale
+    conf     = float(confidence or 0)       # 0-1 scale
+    # EV component: 40% edge → ~55 pts (capped)
+    ev_part  = min(ev * 1.5, 55)
+    # Model probability premium above market implied (50%): each pp = 0.6 pts
+    mp_pct   = mp * 100
+    mp_part  = max(0, (mp_pct - 50) * 0.6)
+    # Confidence bonus (max 12 pts)
+    conf_part = min(conf * 100 * 0.12, 12)
+    score = ev_part + mp_part + conf_part
+    return round(max(0, min(100, score)), 1)
+
+
 @app.get("/api/picks/today")
 async def get_today_picks():
     """
@@ -2638,7 +2668,7 @@ async def get_today_picks():
                 'age_minutes': int((time.time() - int(r[24])) / 60) if r[24] else None,
                 'is_outlier': is_outlier,
                 'fair_odds': round(_fair_odds_raw, 3) if _fair_odds_raw else None,
-                'pgr_score': round(float(r[29]), 1) if r[29] else None,
+                'pgr_score': _compute_pgr_score(r[29], ev_val, model_p, float(r[7]) if r[7] else 0),
             })
 
         # ── Embed training_data for all matches in ONE batch query ──
