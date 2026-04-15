@@ -669,7 +669,7 @@ function fmtKo(s){
   if(!s) return "—";
   try {
     const d = new Date(isNaN(s) ? s : Number(s)*1000);
-    return d.toLocaleTimeString("sv-SE",{hour:"2-digit",minute:"2-digit"});
+    return d.toLocaleTimeString("sv-SE",{hour:"2-digit",minute:"2-digit",timeZone:"Europe/Stockholm"});
   } catch(e){ return s; }
 }
 function fmtAgo(ts){
