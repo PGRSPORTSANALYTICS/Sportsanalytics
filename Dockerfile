@@ -17,7 +17,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-RUN mkdir -p .streamlit
-RUN echo '[server]\nheadless = true\naddress = "0.0.0.0"\nport = 5000\nenableCORS = false\n' > .streamlit/config.toml
-
-CMD ["python3", "combined_sports_runner.py"]
+CMD ["python3", "railway_start.py"]
