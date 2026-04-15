@@ -110,6 +110,9 @@ LEAGUE_TO_SPORT_KEY: Dict[str, str] = {
     'Brazilian Serie A': 'soccer_brazil_serie_a',
     'Brasileirao': 'soccer_brazil_serie_a',
     'Argentine Primera': 'soccer_argentina_primera_division',
+    # CONMEBOL
+    'Copa Libertadores': 'soccer_conmebol_copa_libertadores',
+    'Copa Sudamericana': 'soccer_conmebol_copa_sudamericana',
     # Asia / Oceania
     'J1 League': 'soccer_japan_j_league',
     'K League 1': 'soccer_korea_kleague1',
