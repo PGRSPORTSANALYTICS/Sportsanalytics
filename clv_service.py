@@ -12,10 +12,13 @@ Fallback: accept any capture within the 8h window.
 """
 
 import logging
+import os
 import re
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+
+import requests
 
 from db_helper import db_helper
 from real_odds_api import RealOddsAPI
@@ -313,7 +316,14 @@ class CLVService:
 
     def fetch_closing_odds(self, bet: Dict) -> Optional[Dict]:
         """
-        Fetch live odds for the bet's match/market.
+        Fetch closing odds for CLV calculation.
+
+        Priority:
+          1. Historical endpoint (kickoff snapshot from Pinnacle/Betfair)
+             — used when we're within 30 min of KO or match has already kicked off.
+             Gives the TRUE closing line regardless of when CLV service runs.
+          2. Live endpoint (real-time sharp average)
+             — used pre-match when historical snapshot may not yet be final.
 
         Returns dict with keys:
             odds (float), bookmaker (str), ts (int),
@@ -323,7 +333,7 @@ class CLVService:
         if not self.odds_api:
             return None
 
-        market = bet.get('market', '')
+        market    = bet.get('market', '')
         selection = bet.get('selection', '')
         if not _is_supported(market):
             logger.debug("CLV: unsupported market '%s' for %s vs %s",
@@ -347,6 +357,27 @@ class CLVService:
                 logger.debug("CLV: unsupported market type '%s' sel='%s'", market, selection)
             return None
 
+        # ── 1. Historical snapshot (primary — true closing line) ──────────────
+        # Use when within 30 min of KO or after KO (historical gives final odds).
+        now       = _now()
+        ko_epoch  = bet.get('kickoff_epoch', 0)
+        mins_to_ko = (ko_epoch - now) // 60 if ko_epoch else 9999
+
+        if ko_epoch and mins_to_ko <= 30:
+            hist = self.fetch_historical_closing_odds(bet)
+            if hist:
+                logger.info(
+                    "CLV: ✅ historical close  bet=%d %s vs %s | %.2f [%s]",
+                    bet['id'], bet['home_team'], bet['away_team'],
+                    hist['odds'], hist['bookmaker']
+                )
+                return hist
+            logger.debug(
+                "CLV: historical returned None for bet=%d — falling back to live",
+                bet['id']
+            )
+
+        # ── 2. Live endpoint (fallback / pre-match real-time) ─────────────────
         try:
             odds_data = self.odds_api.get_live_odds(
                 sport, regions=['eu', 'uk'], markets=[mtype]
@@ -390,6 +421,110 @@ class CLVService:
                 'api_market_type':  mtype,
                 'matched_outcome':  matched_outcome,
             }
+
+        return None
+
+    def fetch_historical_closing_odds(self, bet: Dict) -> Optional[Dict]:
+        """
+        Fetch CLOSING odds using The Odds API historical endpoint.
+
+        Uses a frozen snapshot at kickoff time — much more reliable than live endpoint
+        because it captures where Pinnacle/Betfair actually closed, regardless of when
+        the CLV service happens to run.
+
+        Snapshot timestamp: kickoff_epoch (true closing line = last pre-match odds).
+        Falls back to (kickoff - 60min) if kickoff snapshot has no data.
+
+        Returns same format as fetch_closing_odds: {odds, bookmaker, ts, ...} or None.
+        """
+        if not self.odds_api:
+            return None
+
+        ko_epoch = bet.get('kickoff_epoch', 0)
+        if not ko_epoch:
+            return None
+
+        market = bet.get('market', '')
+        if not _is_supported(market):
+            return None
+
+        sport = _sport_key(bet.get('league', ''))
+        if not sport:
+            return None
+
+        mtype = _market_type(market, bet.get('selection', ''))
+        if not mtype:
+            return None
+
+        api_key = self.odds_api.api_key if hasattr(self.odds_api, 'api_key') else os.getenv('THE_ODDS_API_KEY', '')
+        if not api_key:
+            return None
+
+        # Try kickoff time first, then 60 min before KO as fallback
+        for ts_offset in [0, -3600]:
+            snap_ts  = ko_epoch + ts_offset
+            snap_iso = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(snap_ts))
+
+            try:
+                resp = requests.get(
+                    f'https://api.the-odds-api.com/v4/historical/sports/{sport}/odds',
+                    params={
+                        'apiKey':      api_key,
+                        'date':        snap_iso,
+                        'regions':     'eu,uk',
+                        'markets':     mtype,
+                        'bookmakers':  'pinnacle,betfair_ex_eu,betfair,bet365',
+                        'oddsFormat':  'decimal',
+                    },
+                    timeout=12,
+                )
+            except Exception as exc:
+                logger.debug("CLV historical: request error: %s", exc)
+                continue
+
+            if resp.status_code != 200:
+                logger.debug("CLV historical: HTTP %d for %s", resp.status_code, sport)
+                continue
+
+            payload = resp.json()
+            events  = payload.get('data', [])
+            if not events:
+                continue
+
+            for event in events:
+                if not self._teams_match(event, bet['home_team'], bet['away_team']):
+                    continue
+
+                result = self._best_odds_for_selection(
+                    event, market, bet['selection'], bet['home_team'], bet['away_team']
+                )
+                if result is None:
+                    continue
+
+                close_odds, bookmaker, matched_outcome = result
+                open_odds = bet.get('open_odds', 0)
+
+                if open_odds and open_odds > 1.0:
+                    drift = abs(close_odds - open_odds) / open_odds
+                    if drift > DRIFT_REJECT_PCT:
+                        logger.warning(
+                            "CLV historical: DRIFT REJECT bet=%d open=%.2f close=%.2f drift=%.0f%%",
+                            bet['id'], open_odds, close_odds, drift * 100
+                        )
+                        continue
+
+                logger.info(
+                    "CLV historical ✅ bet=%d %s vs %s | %s %.2f→%.2f [%s] snap=%s",
+                    bet['id'], bet['home_team'], bet['away_team'],
+                    market, open_odds, close_odds, bookmaker, snap_iso
+                )
+                return {
+                    'odds':            close_odds,
+                    'bookmaker':       f"hist:{bookmaker}",
+                    'ts':              _now(),
+                    'api_market_type': mtype,
+                    'matched_outcome': matched_outcome,
+                }
 
         return None
 
