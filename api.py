@@ -3949,7 +3949,7 @@ async def root_redirect(request: Request):
     """
     if is_admin_session(request):
         return RedirectResponse("/home", status_code=302)
-    return HTMLResponse(content=(STATIC_DIR / "home.html").read_text())
+    return HTMLResponse(content=(STATIC_DIR / "home.html").read_text(), headers=_NO_CACHE_HEADERS)
 
 
 # =============================================================================
@@ -3992,13 +3992,16 @@ async def goto_dashboard(request: Request):
     return RedirectResponse("/home", status_code=302)
 
 
+_NO_CACHE_HEADERS = {"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache"}
+
+
 @app.get("/home", include_in_schema=False)
 async def home_dashboard():
-    return HTMLResponse(content=(STATIC_DIR / "home.html").read_text())
+    return HTMLResponse(content=(STATIC_DIR / "home.html").read_text(), headers=_NO_CACHE_HEADERS)
 
 @app.get("/app", include_in_schema=False)
 async def app_alias():
-    return HTMLResponse(content=(STATIC_DIR / "home.html").read_text())
+    return HTMLResponse(content=(STATIC_DIR / "home.html").read_text(), headers=_NO_CACHE_HEADERS)
 
 @app.get("/preview", include_in_schema=False)
 async def preview_dashboard():
