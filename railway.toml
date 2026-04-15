@@ -5,5 +5,3 @@ dockerfilePath = "Dockerfile"
 [deploy]
 startCommand = "python3 railway_start.py"
 restartPolicyType = "ALWAYS"
-healthcheckPath = "/api/health"
-healthcheckTimeout = 300
