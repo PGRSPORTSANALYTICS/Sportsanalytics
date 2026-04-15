@@ -128,6 +128,24 @@ def post_clv_proof(bet: dict, close_odds: float, clv: float, close_book: str,
                      clv, REALTIME_CLV_THRESHOLD, bet['id'])
         return False
 
+    # Block single-source captures from WEBHOOK_PROOF — unreliable as public proof
+    book_str = close_book or ''
+    n_sources = 1
+    import re as _re
+    m = _re.search(r'n=(\d+)', book_str)
+    if m:
+        n_sources = int(m.group(1))
+    if n_sources < 2:
+        logger.info("proof_poster: skip WEBHOOK_PROOF — n=%d source(s) only (book=%s, bet=%d)",
+                    n_sources, book_str, bet['id'])
+        return False
+
+    # Block suspiciously high CLV — likely data noise from thin markets
+    if clv > 30.0:
+        logger.warning("proof_poster: CLV %.1f%% >30%% — likely data noise, skip WEBHOOK_PROOF (bet=%d)",
+                       clv, bet['id'])
+        return False
+
     model_data = _fetch_model_data(bet['id'])
     open_odds  = bet['open_odds']
     match_str  = f"{bet.get('home_team','?')} vs {bet.get('away_team','?')}"
@@ -429,6 +447,18 @@ def post_clv_capture(bet: dict, close_odds: float, clv: float,
         open_str  = f'{open_odds:.2f}' if open_odds else '—'
         close_str = f'{close_odds:.2f}'
 
+        # Data quality check — n=1 or extreme CLV
+        import re as _re
+        n_sources = 1
+        m = _re.search(r'n=(\d+)', book_lbl)
+        if m:
+            n_sources = int(m.group(1))
+        quality_warn = ''
+        if n_sources < 2:
+            quality_warn = '\n⚠️ *En källa (n=1) — behandla med försiktighet*'
+        elif clv > 25.0:
+            quality_warn = '\n⚠️ *Extremt hög CLV — kontrollera datakvalitet*'
+
         timing = ''
         if mins_to_close is not None:
             timing = f'  ·  {mins_to_close}min before KO'
@@ -438,13 +468,14 @@ def post_clv_capture(bet: dict, close_odds: float, clv: float,
             f"{league}  ·  *{selection}*\n\n"
             f"```\n"
             f"{'Du tog':<20} {open_str}\n"
-            f"{'Stänging ({})'.format(book_lbl):<20} {close_str}\n"
+            f"{'Stängning ({})'.format(book_lbl):<20} {close_str}\n"
             f"{'CLV':<20} {clv_str}\n"
             f"```"
             f"{timing}"
+            f"{quality_warn}"
         )
 
-        color = 0x22c55e if beat else 0xef4444
+        color = 0x22c55e if (beat and not quality_warn) else (0xf59e0b if quality_warn else 0xef4444)
 
         embed = {
             "description": desc,

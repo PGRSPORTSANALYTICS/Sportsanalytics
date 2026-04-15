@@ -39,7 +39,8 @@ DRIFT_REJECT_PCT = 0.50             # Reject if odds moved >50% (data error)
 
 SHARP_BOOKS = ['pinnacle', 'bet365', 'matchbook', 'betfair', 'betfair_ex_eu', 'nordicbet', 'unibet']
 
-SHARP_PRIORITY = ['pinnacle', 'bet365', 'matchbook', 'betfair', 'betfair_ex_eu']
+# Matchbook borttagen ur priority — stängde börsen 2019, opålitlig som ensam källa
+SHARP_PRIORITY = ['pinnacle', 'betfair', 'betfair_ex_eu', 'bet365']
 
 LEAGUE_TO_SPORT_KEY: Dict[str, str] = {
     # England
