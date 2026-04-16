@@ -574,6 +574,15 @@ def run_calibration_backfill():
         logger.error(f"❌ Calibration backfill error: {e}")
 
 
+def run_subscription_sync():
+    """Verify all premium users against Stripe every 10 min (safety-net for missed webhooks)."""
+    try:
+        from subscription_sync import sync_stripe_subscriptions
+        sync_stripe_subscriptions()
+    except Exception as e:
+        logger.error(f"❌ Subscription sync error: {e}")
+
+
 def run_live_learning_enrichment():
     """Run LIVE LEARNING pick enrichment - adds syndicate engine data to pending picks"""
     if not LIVE_LEARNING_MODE:
@@ -1156,7 +1165,9 @@ def main():
     schedule.every().day.at("09:00").do(run_daily_analysis)
     schedule.every().day.at("08:00").do(run_smart_picks)  # Smart Value — Daily Top 10 (08:00 UTC = 09:00 CET)
     schedule.every().day.at("08:00").do(run_daily_free_pick)  # 1 free pick to Discord
-    
+
+    schedule.every(10).minutes.do(run_subscription_sync)  # Stripe subscription safety-net
+
     logger.info("✅ All schedules configured. Starting main loop...")
 
     # Fire heartbeat immediately at startup so Discord confirms engine is alive
