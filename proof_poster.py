@@ -711,7 +711,14 @@ def run_results_report(days: int = 3) -> bool:
                     OR (clv_pct > 0 AND clv_source_book ILIKE '%%(line moved%%')
                     OR (close_odds IS NOT NULL AND open_odds IS NOT NULL
                         AND close_odds < open_odds)
-                ) THEN 1 ELSE 0 END)                                              AS edge_signals
+                ) THEN 1 ELSE 0 END)                                              AS edge_signals,
+
+                -- Soft odds coverage (api_football / soft-flagged sources)
+                SUM(CASE WHEN clv_pct IS NOT NULL
+                         AND (clv_status = 'soft'
+                              OR clv_source_book ILIKE '%%api_football%%'
+                              OR clv_source_book ILIKE '~%%')
+                         THEN 1 ELSE 0 END)                                       AS soft_coverage
 
             FROM football_opportunities
             WHERE outcome IN ('won', 'lost')
@@ -732,7 +739,7 @@ def run_results_report(days: int = 3) -> bool:
         logger.info("proof_poster results_report: no settled picks — skip")
         return False
 
-    total, profit_raw, sharp_beat, sharp_total, approx_beat, approx_total, market_moved, edge_signals = rows
+    total, profit_raw, sharp_beat, sharp_total, approx_beat, approx_total, market_moved, edge_signals, soft_coverage = rows
     total         = int(total or 0)
     profit_u      = float(profit_raw or 0)
     sharp_beat    = int(sharp_beat or 0)
@@ -741,6 +748,7 @@ def run_results_report(days: int = 3) -> bool:
     approx_total  = int(approx_total or 0)
     market_moved  = int(market_moved or 0)
     edge_signals  = int(edge_signals or 0)
+    soft_coverage = int(soft_coverage or 0)
 
     if total == 0:
         logger.info("proof_poster results_report: 0 settled picks — skip")
@@ -751,13 +759,15 @@ def run_results_report(days: int = 3) -> bool:
     to_day   = time.strftime("%-d %b", time.gmtime(now))
     period   = f"{from_day} – {to_day}"
 
-    profit_str     = f"+{profit_u:.1f}u" if profit_u >= 0 else f"{profit_u:.1f}u"
-    sharp_str      = f"{sharp_beat}/{sharp_total}" if sharp_total > 0 else "—"
-    approx_str     = f"{approx_beat}/{approx_total}" if approx_total > 0 else "—"
-    market_str     = f"{market_moved}/{total}"
-    edge_str       = f"{edge_signals}/{total}"
-    edge_pct       = round(100 * edge_signals / total) if total > 0 else 0
-    edge_icon      = "✅" if edge_pct >= 50 else "⚠️"
+    profit_str   = f"+{profit_u:.1f}u" if profit_u >= 0 else f"{profit_u:.1f}u"
+    sharp_cov    = f"{sharp_total}/{total}"
+    sharp_beat_s = f"{sharp_beat}/{sharp_total}" if sharp_total > 0 else "—"
+    approx_str   = f"{approx_beat}/{approx_total}" if approx_total > 0 else "—"
+    market_str   = f"{market_moved}/{total}"
+    edge_str     = f"{edge_signals}/{total}"
+    soft_str     = f"{soft_coverage}/{total}"
+    edge_pct     = round(100 * edge_signals / total) if total > 0 else 0
+    edge_icon    = "✅" if edge_pct >= 50 else "⚠️"
 
     color = 0x22c55e if profit_u >= 0 else 0xef4444
 
@@ -765,11 +775,14 @@ def run_results_report(days: int = 3) -> bool:
         f"• **{total} bets placed**",
         f"• **Profit: {profit_str}**",
         "",
-        f"• Sharp CLV:         **{sharp_str}**",
-        f"• Approx CLV:        **{approx_str}**",
-        f"• Market moved:      **{market_str}**",
+        f"• Sharp CLV coverage:       **{sharp_cov}**",
+        f"• Beat the market (sharp):  **{sharp_beat_s}**",
+        f"• Approx CLV:               **{approx_str}**",
+        f"• Market moved:             **{market_str}**",
         "",
-        f"• Total edge signals: **{edge_str}** {edge_icon}",
+        f"• Soft odds coverage:       **{soft_str}** *(signal only — not proof)*",
+        "",
+        f"• Total edge signals:       **{edge_str}** {edge_icon}",
         "",
         "*Still early — CLV is what I'm tracking long-term.*",
         "",
@@ -780,7 +793,7 @@ def run_results_report(days: int = 3) -> bool:
         "title":       f"📊 Results Snapshot  ·  {period}",
         "description": "\n".join(body_lines),
         "color":       color,
-        "footer":      {"text": "PGR Analytics  ·  Sharp CLV = Pinnacle/Betfair exact  ·  Approx = line moved  ·  Market = odds shortened"},
+        "footer":      {"text": "Sharp = Pinnacle/Betfair exact close  ·  Soft = api_football signal only  ·  Not financial advice"},
         "timestamp":   time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
 
