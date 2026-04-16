@@ -154,7 +154,7 @@ PRO_PICK_MAX_ODDS = 2.30
 PRO_PICK_MAX_PER_DAY = 5
 PRO_PICK_MIN_PGR_SCORE = 55.0   # Minimum weighted PGR score required for PRO PICK
 
-VALUE_OPP_MIN_EV = 0.12
+VALUE_OPP_MIN_EV = 0.10  # Lowered from 12% Apr 2026 — more volume needed for data collection
 VALUE_OPP_MIN_CONFIDENCE = 0.60
 VALUE_OPP_MIN_ODDS = 1.60
 VALUE_OPP_MAX_ODDS = 4.00

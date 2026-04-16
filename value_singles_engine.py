@@ -67,7 +67,7 @@ MIN_VALUE_SINGLE_EV = 0.07  # 7% floor — candidates then scored and routed to 
 MAX_VALUE_SINGLES_PER_DAY = 8  # Max 8 PRO picks/day
 
 # Layer 2: VALUE OPPORTUNITY — published in dashboard + Discord, NOT official bets
-VALUE_MIN_EV = 0.12            # 12% EV
+VALUE_MIN_EV = 0.10            # 10% EV (lowered from 12% Apr 2026 — more volume needed)
 VALUE_MIN_CONFIDENCE = 0.60    # 60% model confidence
 VALUE_MIN_ODDS = 2.10          # Raised from 1.60 — data shows edge only at 2.10+ (Apr 2026)
 VALUE_MAX_ODDS = 4.00
@@ -81,9 +81,9 @@ MIN_VALUE_SINGLE_ODDS = 2.10   # Raised from 1.60 — data shows edge only at 2.
 MAX_VALUE_SINGLE_ODDS = 2.30   # PRO upper bound (legacy compat)
 MAX_LEARNING_ODDS = 4.00       # Outer scan ceiling
 
-# Candidate scan floor — raised from 5% to 12% (Apr 2026, bleeding control)
+# Candidate scan floor — raised from 5% to 12% (Apr 2026), lowered to 10% for volume (Apr 2026)
 # PRO picks still need PRO_MIN_EV (25%) via pgr_scoring routing
-MIN_VALUE_SINGLE_EV = 0.12     # 12% floor — raised from 5%
+MIN_VALUE_SINGLE_EV = 0.10     # 10% floor — lowered from 12% for more data collection
 MIN_VALUE_SINGLE_CONFIDENCE = PRO_MIN_CONFIDENCE
 
 # Market-specific EV floors (conservative overrides for high-volume markets)
@@ -142,13 +142,17 @@ TOURNAMENT_LEAGUES = {
 TOURNAMENT_MIN_EV = 0.015  # 1.5% EV for tournaments (less H2H data)
 TOURNAMENT_MIN_CONFIDENCE = 0.50  # 50% confidence for tournaments
 
-# Leagues blocked for Value Singles based on historical performance data (Apr 2026)
+# Leagues flagged for WATCHLIST-only routing (Apr 2026) — poor historical ROI but data still collected.
+# Picks from these leagues are saved with mode='WATCHLIST', never public, never count toward caps.
 # La Liga: 36.5% hit, -13.6u | Championship: 41.3% hit, -17.3u | Serie A: 45.3% hit, -6.2u
-VALUE_SINGLES_BLOCKED_LEAGUES = {
+# Changed from hard block → watchlist flag to keep data flowing for future model retraining.
+WATCHLIST_ONLY_LEAGUES = {
     "soccer_spain_la_liga",       # La Liga
     "soccer_england_efl_champ",   # EFL Championship
     "soccer_italy_serie_a",       # Serie A
 }
+# Keep alias for any legacy references
+VALUE_SINGLES_BLOCKED_LEAGUES: set = set()  # No longer blocking — moved to WATCHLIST_ONLY_LEAGUES
 
 # Leagues in learning mode — picks saved with mode='LEARNING', bet_placed=False.
 # Data collected for model training but never count toward daily caps or real P&L.
@@ -654,9 +658,8 @@ class ValueSinglesEngine:
                 print(f"⏭️ Skipping {home_team} vs {away_team} - league '{league_key}' not in whitelist")
                 continue
 
-            if league_key in VALUE_SINGLES_BLOCKED_LEAGUES:
-                print(f"🚫 Blocked: {home_team} vs {away_team} - '{league_key}' blocked for Value Singles (poor historical ROI)")
-                continue
+            # Flagged leagues → allowed through but forced to WATCHLIST in pass 2
+            _is_flagged_league = league_key in WATCHLIST_ONLY_LEAGUES
             
             # Dynamic thresholds for tournament matches (less H2H data available)
             match_ev_threshold = TOURNAMENT_MIN_EV if is_tournament else MIN_VALUE_SINGLE_EV
@@ -1003,6 +1006,7 @@ class ValueSinglesEngine:
                     "disagreement": float(disagreement),
                     "is_learning_only": is_learning_only,
                     "is_league_learning": _is_league_learning,
+                    "is_flagged_league": _is_flagged_league,
                     "_home_form": home_form,
                     "_away_form": away_form,
                     # CLV Quality Score
@@ -1066,15 +1070,26 @@ class ValueSinglesEngine:
             confidence = c["confidence"]
             is_learning_only = c["is_learning_only"]
             is_league_learning = c.get("is_league_learning", False)
+            is_flagged_league = c.get("is_flagged_league", False)
             selection_text = c["selection"]
             _clv_score_p2 = c.get("clv_score") or 0
+
+            # ── Flagged leagues: force WATCHLIST, bypass CLV gate for data collection ──
+            if is_flagged_league:
+                _routing = "WATCHLIST"
+                _routing_reason = "flagged_league_watchlist"
+                print(f"   🚩 [WATCHLIST/FLAGGED] {home_team} vs {away_team} [{market_key}] — league in watchlist-only mode, collecting data")
+                # Skip CLV gate and routing logic, go straight to save
+            else:
+                # ── CLV liquidity gate ───────────────────────────────────────────────
+                pass  # Continues to CLV gate below
 
             # ── CLV liquidity gate ────────────────────────────────────────────
             # Low-liquidity leagues (Tier C) need sharper odds signal to qualify.
             # Standard/Premium leagues (Tier A/B) require volume-grade CLV quality.
             # League-learning picks bypass this gate — we want all data collected.
             _min_clv = 5 if _league_tier == "C" else 4
-            if _clv_score_p2 < _min_clv and not is_league_learning:
+            if _clv_score_p2 < _min_clv and not is_league_learning and not is_flagged_league:
                 _reject(
                     "rejected_clv_score",
                     home_team, away_team, market_key, float(ev), float(odds)
@@ -1088,7 +1103,10 @@ class ValueSinglesEngine:
             # The daily cap is enforced after unique-match dedup in the selection step,
             # ensuring the best distinct matches fill available slots before overflow
             # candidates are rerouted to VALUE_OPP.
-            if PGR_SCORING_AVAILABLE:
+            # Flagged leagues already have _routing set to WATCHLIST — skip routing call.
+            if is_flagged_league:
+                pass  # _routing already = "WATCHLIST" from flagged-league block above
+            elif PGR_SCORING_AVAILABLE:
                 _routing, _routing_reason = route_candidate(
                     ev=ev,
                     confidence=calibrated_prob,
@@ -1101,7 +1119,7 @@ class ValueSinglesEngine:
             else:
                 if ev >= 0.25 and calibrated_prob >= 0.70 and 1.75 <= odds <= 2.30 and pgr_score >= 55.0:
                     _routing, _routing_reason = "PRO_PICK", "routed_pro_pick"
-                elif ev >= 0.12 and calibrated_prob >= 0.60 and pgr_score >= 35.0:
+                elif ev >= 0.10 and calibrated_prob >= 0.60 and pgr_score >= 35.0:
                     _routing, _routing_reason = "VALUE_OPP", "routed_value_opp"
                 elif pgr_score >= 20.0:
                     _routing, _routing_reason = "WATCHLIST", "routed_watchlist"
