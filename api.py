@@ -2568,10 +2568,7 @@ async def get_today_picks():
                     timestamp, kickoff_epoch, clv_score, clv_tier,
                     fair_odds, pgr_score
                 FROM football_opportunities
-                WHERE (
-                    mode IN ('PROD', 'VALUE_OPP')
-                    OR market IN ('Corners', 'Cards')
-                )
+                WHERE mode IN ('PROD', 'VALUE_OPP')
                   AND (outcome IS NULL OR outcome = '' OR outcome IN ('pending', 'unknown'))
                   AND match_date >= %s
                   AND match_date < %s
