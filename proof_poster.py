@@ -434,9 +434,14 @@ def post_clv_capture(bet: dict, close_odds: float, clv: float,
     when closing odds are captured — regardless of positive or negative CLV.
 
     Lets the user see pick-by-pick: open odds → close odds → CLV result.
-    No threshold — all picks reported.
+    No threshold — all picks reported. Soft sources (api_football) are silently skipped.
     """
     if not WEBHOOK_RESULTS:
+        return False
+
+    # Soft/unreliable sources — save to DB only, never post to Discord
+    _book_lower = (close_book or '').lower()
+    if '(soft)' in _book_lower or 'api_football' in _book_lower or 'api-football' in _book_lower:
         return False
 
     try:

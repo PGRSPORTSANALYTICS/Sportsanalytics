@@ -1403,8 +1403,8 @@ def capture_from_api_football(home_team: str, away_team: str,
     if not market_odds or not home_team or not away_team:
         return 0
 
-    CAPTURE_MIN_BEFORE = 720    # Only capture if kickoff is within 12h
-    CAPTURE_AFTER_KO   = 120    # Allow up to 120 min after kickoff (was 10)
+    CAPTURE_MIN_BEFORE = 180    # Only capture if kickoff is within 3h (was 720/12h — too early)
+    CAPTURE_AFTER_KO   = 120    # Allow up to 120 min after kickoff
     now = int(time.time())
 
     # Time-gate: only update if kickoff is approaching
@@ -1466,7 +1466,7 @@ def capture_from_api_football(home_team: str, away_team: str,
 
         try:
             clv = _clv_pct(open_odds, close_odds)
-            status = _clv_status(clv)
+            status = 'soft'  # api_football is always soft — never sharp proof
         except ValueError:
             continue
 
@@ -1487,7 +1487,7 @@ def capture_from_api_football(home_team: str, away_team: str,
                     clv_source_book = %s,
                     steam_flag      = %s
                 WHERE id = %s AND close_odds IS NULL
-            """, (close_odds, now, clv, status, 'api_football', steam_flag, bet_id))
+            """, (close_odds, now, clv, status, '~api_football (soft)', steam_flag, bet_id))
             logger.info(
                 "CLV(AF): ✅ bet=%d  %s vs %s  %s|%s  "
                 "open=%.3f close=%.3f  CLV=%+.2f%%",
