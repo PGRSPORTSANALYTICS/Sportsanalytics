@@ -707,33 +707,36 @@ def run_results_report(days: int = 3) -> bool:
     to_day    = time.strftime("%-d %b", time.gmtime(now))
     period    = f"{from_day} – {to_day}"
 
-    profit_str = f"+{profit_u:.1f}u" if profit_u >= 0 else f"{profit_u:.1f}u"
+    profit_str = f"+{profit_u:.1f} units profit" if profit_u >= 0 else f"{profit_u:.1f} units profit"
     beat_str   = f"{clv_beat}/{clv_total}" if clv_total > 0 else "—"
 
-    # Taglines rotate across posts for variety
-    taglines = [
-        '"Still early — CLV is what we\'re tracking long-term."',
-        '"Edge first, results follow."',
-        '"Beat the closing line consistently — the rest takes care of itself."',
-        '"Process over outcome. Every time."',
-    ]
-    import hashlib
-    tag = taglines[int(hashlib.md5(period.encode()).hexdigest(), 16) % len(taglines)]
+    # Dynamic market sentiment line based on CLV beat rate
+    beat_rate = round(100 * clv_beat / clv_total) if clv_total > 0 else 0
+    if beat_rate >= 62:
+        market_line = "Market moved in our favor on most plays."
+    elif beat_rate >= 50:
+        market_line = "Slight market edge — holding our ground."
+    elif clv_total == 0:
+        market_line = "CLV tracking in progress."
+    else:
+        market_line = "Mixed signals — variance expected short-term."
 
     color = 0x22c55e if profit_u >= 0 else 0xef4444
 
     body_lines = [
-        f"• Bets:               **{total}**",
-        f"• Profit:             **{profit_str}**",
-        f"• Beat closing line:  **{beat_str}**",
+        f"• **{total} bets placed**",
+        f"• **{profit_str}**",
+        f"• **Beat the market: {beat_str}**",
         "",
-        f"*{tag}*",
+        market_line,
+        "",
+        "*Still early — CLV is what I'm tracking long-term.*",
         "",
         "*Not every bet wins — but price is everything.*",
     ]
 
     embed = {
-        "title":       f"📋 Results Snapshot  ·  {period}",
+        "title":       f"📊 Results Snapshot  ·  {period}",
         "description": "\n".join(body_lines),
         "color":       color,
         "footer":      {"text": "PGR Analytics  ·  PROD + VALUE_OPP picks only  ·  CLV tracked vs sharp lines"},
