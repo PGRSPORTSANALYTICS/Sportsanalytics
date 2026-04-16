@@ -128,9 +128,15 @@ def post_clv_proof(bet: dict, close_odds: float, clv: float, close_book: str,
                      clv, REALTIME_CLV_THRESHOLD, bet['id'])
         return False
 
+    # Block soft_CLV (bronze tier) from WEBHOOK_PROOF — not sharp-book proof
+    book_str = close_book or ''
+    if book_str.startswith('soft_CLV'):
+        logger.info("proof_poster: skip WEBHOOK_PROOF — soft_CLV (bronze) source, not sharp proof (bet=%d, book=%s)",
+                    bet['id'], book_str)
+        return False
+
     # Block single-source captures from WEBHOOK_PROOF — unreliable as public proof
     # Exception: approx_CLV from Pinnacle is allowed (sharp source, different line)
-    book_str = close_book or ''
     import re as _re
     is_approx_sharp = book_str.startswith('approx_CLV') and 'Pinnacle' in book_str
     n_sources = 1

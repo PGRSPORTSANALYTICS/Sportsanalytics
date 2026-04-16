@@ -641,7 +641,8 @@ class CLVService:
             return (round(avg, 4), f"dc_computed({','.join(names)};n={len(sharp_hits)})", f"DC_{dc}")
 
         if fallback_hit:
-            return fallback_hit
+            odds, book_title, matched_out = fallback_hit
+            return (odds, f"soft_CLV({book_title})", matched_out)
 
         return None
 
@@ -752,7 +753,12 @@ class CLVService:
             return (round(avg_odds, 4), source_label, matched_out)
 
         if fallback_hit:
-            return fallback_hit
+            odds, book_title, matched_out = fallback_hit
+            logger.info(
+                "CLV: soft_CLV used — no sharp book found, using %s as bronze source",
+                book_title
+            )
+            return (odds, f"soft_CLV({book_title})", matched_out)
 
         return None
 
@@ -811,6 +817,9 @@ class CLVService:
         try:
             clv = _clv_pct(open_odds, close_odds)
             status = _clv_status(clv)
+            # 3-tier CLV: soft_CLV (bronze) sources are not sharp proof
+            if close_book and 'soft_CLV' in close_book:
+                status = 'soft'
         except ValueError as exc:
             logger.warning("CLV calc error for bet %d: %s", bet_id, exc)
             return False
@@ -1196,8 +1205,10 @@ def get_clv_stats() -> Dict[str, Any]:
         row = db_helper.execute("""
             SELECT
                 COUNT(*)                                            AS total,
-                COUNT(*) FILTER (WHERE close_odds IS NOT NULL)     AS with_clv,
+                COUNT(*) FILTER (WHERE close_odds IS NOT NULL
+                                   AND clv_status != 'soft')       AS with_clv,
                 AVG(clv_pct) FILTER (WHERE close_odds IS NOT NULL
+                                       AND clv_status != 'soft'
                                        AND clv_pct BETWEEN -50 AND 50) AS avg_clv,
                 COUNT(*) FILTER (WHERE clv_status = 'pos')         AS pos_count,
                 COUNT(*) FILTER (WHERE clv_status = 'neg')         AS neg_count
@@ -1229,11 +1240,12 @@ def get_clv_stats() -> Dict[str, Any]:
                 and stats['coverage_pct'] >= 30
             )
 
-        # Last 30 days
+        # Last 30 days (sharp + approx only — exclude soft_CLV bronze)
         row_30 = db_helper.execute("""
             SELECT AVG(clv_pct)
             FROM football_opportunities
             WHERE close_odds IS NOT NULL
+              AND clv_status != 'soft'
               AND clv_pct BETWEEN -50 AND 50
               AND open_ts >= EXTRACT(EPOCH FROM NOW() - INTERVAL '30 days')::BIGINT
               AND match_id NOT LIKE 'seed_%%'
