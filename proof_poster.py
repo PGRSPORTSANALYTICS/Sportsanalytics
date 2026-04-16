@@ -672,18 +672,47 @@ def run_results_report(days: int = 3) -> bool:
     try:
         rows = _db_module.db_helper.execute("""
             SELECT
-                COUNT(*)                                                         AS total,
-                SUM(CASE WHEN outcome = 'won'  THEN (odds - 1) ELSE -1.0 END)   AS profit_u,
+                COUNT(*)                                                           AS total,
+                SUM(CASE WHEN outcome = 'won' THEN (odds - 1) ELSE -1.0 END)     AS profit_u,
+
+                -- Tier 1: Sharp CLV — exact Pinnacle/Betfair close
                 SUM(CASE WHEN clv_pct > 0
                          AND clv_status != 'soft'
                          AND clv_source_book NOT ILIKE '%%api_football%%'
                          AND clv_source_book NOT ILIKE '~%%'
-                         THEN 1 ELSE 0 END)                                      AS clv_beat,
+                         AND clv_source_book NOT ILIKE '%%(line moved%%'
+                         THEN 1 ELSE 0 END)                                       AS sharp_beat,
                 SUM(CASE WHEN clv_status != 'soft'
                          AND clv_pct IS NOT NULL
                          AND clv_source_book NOT ILIKE '%%api_football%%'
                          AND clv_source_book NOT ILIKE '~%%'
-                         THEN 1 ELSE 0 END)                                      AS clv_total
+                         AND clv_source_book NOT ILIKE '%%(line moved%%'
+                         THEN 1 ELSE 0 END)                                       AS sharp_total,
+
+                -- Tier 2: Approx CLV — Pinnacle line moved
+                SUM(CASE WHEN clv_pct > 0
+                         AND clv_source_book ILIKE '%%(line moved%%'
+                         THEN 1 ELSE 0 END)                                       AS approx_beat,
+                SUM(CASE WHEN clv_source_book ILIKE '%%(line moved%%'
+                         AND clv_pct IS NOT NULL
+                         THEN 1 ELSE 0 END)                                       AS approx_total,
+
+                -- Tier 3: Market confirmation — odds shortened (any source)
+                SUM(CASE WHEN close_odds IS NOT NULL
+                         AND open_odds  IS NOT NULL
+                         AND close_odds < open_odds
+                         THEN 1 ELSE 0 END)                                       AS market_moved,
+
+                -- Total edge signals — union of all three (pick had at least one signal)
+                SUM(CASE WHEN (
+                    (clv_pct > 0 AND clv_status != 'soft'
+                      AND clv_source_book NOT ILIKE '%%api_football%%'
+                      AND clv_source_book NOT ILIKE '~%%')
+                    OR (clv_pct > 0 AND clv_source_book ILIKE '%%(line moved%%')
+                    OR (close_odds IS NOT NULL AND open_odds IS NOT NULL
+                        AND close_odds < open_odds)
+                ) THEN 1 ELSE 0 END)                                              AS edge_signals
+
             FROM football_opportunities
             WHERE outcome IN ('won', 'lost')
               AND (
@@ -703,11 +732,15 @@ def run_results_report(days: int = 3) -> bool:
         logger.info("proof_poster results_report: no settled picks — skip")
         return False
 
-    total, profit_raw, clv_beat, clv_total = rows
-    total     = int(total or 0)
-    profit_u  = float(profit_raw or 0)
-    clv_beat  = int(clv_beat or 0)
-    clv_total = int(clv_total or 0)
+    total, profit_raw, sharp_beat, sharp_total, approx_beat, approx_total, market_moved, edge_signals = rows
+    total         = int(total or 0)
+    profit_u      = float(profit_raw or 0)
+    sharp_beat    = int(sharp_beat or 0)
+    sharp_total   = int(sharp_total or 0)
+    approx_beat   = int(approx_beat or 0)
+    approx_total  = int(approx_total or 0)
+    market_moved  = int(market_moved or 0)
+    edge_signals  = int(edge_signals or 0)
 
     if total == 0:
         logger.info("proof_poster results_report: 0 settled picks — skip")
@@ -718,28 +751,25 @@ def run_results_report(days: int = 3) -> bool:
     to_day   = time.strftime("%-d %b", time.gmtime(now))
     period   = f"{from_day} – {to_day}"
 
-    profit_str = f"+{profit_u:.1f} units profit" if profit_u >= 0 else f"{profit_u:.1f} units profit"
-    beat_str   = f"{clv_beat}/{clv_total}" if clv_total > 0 else "—"
-
-    # Dynamic market sentiment line based on CLV beat rate
-    beat_rate = round(100 * clv_beat / clv_total) if clv_total > 0 else 0
-    if beat_rate >= 62:
-        market_line = "Market moved in our favor on most plays."
-    elif beat_rate >= 50:
-        market_line = "Slight market edge — holding our ground."
-    elif clv_total == 0:
-        market_line = "CLV tracking in progress."
-    else:
-        market_line = "Mixed signals — variance expected short-term."
+    profit_str     = f"+{profit_u:.1f}u" if profit_u >= 0 else f"{profit_u:.1f}u"
+    sharp_str      = f"{sharp_beat}/{sharp_total}" if sharp_total > 0 else "—"
+    approx_str     = f"{approx_beat}/{approx_total}" if approx_total > 0 else "—"
+    market_str     = f"{market_moved}/{total}"
+    edge_str       = f"{edge_signals}/{total}"
+    edge_pct       = round(100 * edge_signals / total) if total > 0 else 0
+    edge_icon      = "✅" if edge_pct >= 50 else "⚠️"
 
     color = 0x22c55e if profit_u >= 0 else 0xef4444
 
     body_lines = [
         f"• **{total} bets placed**",
-        f"• **{profit_str}**",
-        f"• **Beat the market: {beat_str}**",
+        f"• **Profit: {profit_str}**",
         "",
-        market_line,
+        f"• Sharp CLV:         **{sharp_str}**",
+        f"• Approx CLV:        **{approx_str}**",
+        f"• Market moved:      **{market_str}**",
+        "",
+        f"• Total edge signals: **{edge_str}** {edge_icon}",
         "",
         "*Still early — CLV is what I'm tracking long-term.*",
         "",
@@ -750,11 +780,12 @@ def run_results_report(days: int = 3) -> bool:
         "title":       f"📊 Results Snapshot  ·  {period}",
         "description": "\n".join(body_lines),
         "color":       color,
-        "footer":      {"text": "PGR Analytics  ·  PROD + VALUE_OPP picks only  ·  CLV tracked vs sharp lines"},
+        "footer":      {"text": "PGR Analytics  ·  Sharp CLV = Pinnacle/Betfair exact  ·  Approx = line moved  ·  Market = odds shortened"},
         "timestamp":   time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
 
     ok = _send_embed(embed, label=f"results snapshot {period} ({total} picks, {profit_str})")
     if ok:
-        logger.info("✅ proof_poster: results snapshot posted — %d picks, %s profit, CLV %s", total, profit_str, beat_str)
+        logger.info("✅ proof_poster: results snapshot posted — %d picks, %s  sharp=%s approx=%s edge=%s/%d",
+                    total, profit_str, sharp_str, approx_str, edge_signals, total)
     return ok
