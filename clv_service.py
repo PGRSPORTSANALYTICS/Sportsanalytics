@@ -672,6 +672,9 @@ class CLVService:
 
         sharp_hits: List[tuple] = []
         fallback_hit: Optional[tuple] = None
+        # For nearest-line fallback: track best sharp candidate per book
+        # (book_title -> (price, line, outcome_name))
+        sharp_nearest: dict = {}
 
         for bk in bookmakers:
             bk_key   = bk.get('key', '').lower()
@@ -694,9 +697,19 @@ class CLVService:
                                      ('under' in sel_lower and 'under' in name)
                         if not side_match:
                             continue
-                        if target_line is not None and abs(float(point) - target_line) > 0.01:
+
+                        point_f = float(point)
+                        line_diff = abs(point_f - target_line) if target_line is not None else 0
+
+                        if target_line is not None and line_diff > 0.01:
+                            # Not an exact match — store as nearest-line candidate for sharp books
+                            if is_sharp and line_diff <= 0.75:
+                                prev = sharp_nearest.get(bk_title)
+                                prev_diff = abs(prev[1] - target_line) if prev else 999
+                                if line_diff < prev_diff:
+                                    sharp_nearest[bk_title] = (float(price), point_f, outcome.get('name', name))
                             continue
-                        # Totals match confirmed
+                        # Exact totals match confirmed
                     else:
                         if not self._sel_matches(sel_lower, name, home, away, mkt_lower):
                             continue
@@ -715,6 +728,27 @@ class CLVService:
             )
             source_label = f"sharp_avg({','.join(book_names)};n={len(sharp_hits)})"
             matched_out  = sharp_hits[0][2]
+            return (round(avg_odds, 4), source_label, matched_out)
+
+        # ── Nearest-line fallback: use Pinnacle/sharp book's closest line ────────
+        # Triggered when sharp books offer totals but on a different line (e.g. 2.75 vs 2.5).
+        # Marked as "approx_CLV" — directionally valid, not a direct comparison.
+        if sharp_nearest and is_totals:
+            sorted_books = sorted(
+                sharp_nearest.items(),
+                key=lambda kv: SHARP_PRIORITY.index(kv[0].lower()) if kv[0].lower() in SHARP_PRIORITY else 99
+            )
+            approx_hits = [(price, title, out_name, line)
+                           for title, (price, line, out_name) in sorted_books]
+            avg_odds = sum(h[0] for h in approx_hits) / len(approx_hits)
+            book_names = [h[1] for h in approx_hits]
+            actual_line = approx_hits[0][3]
+            source_label = f"approx_CLV({','.join(book_names)};line={actual_line};n={len(approx_hits)})"
+            matched_out  = approx_hits[0][2]
+            logger.info(
+                "CLV: approx_CLV used — bet line=%.2f nearest sharp line=%.2f books=%s",
+                target_line or 0, actual_line, book_names
+            )
             return (round(avg_odds, 4), source_label, matched_out)
 
         if fallback_hit:

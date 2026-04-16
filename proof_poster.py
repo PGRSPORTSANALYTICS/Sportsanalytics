@@ -129,13 +129,15 @@ def post_clv_proof(bet: dict, close_odds: float, clv: float, close_book: str,
         return False
 
     # Block single-source captures from WEBHOOK_PROOF — unreliable as public proof
+    # Exception: approx_CLV from Pinnacle is allowed (sharp source, different line)
     book_str = close_book or ''
-    n_sources = 1
     import re as _re
+    is_approx_sharp = book_str.startswith('approx_CLV') and 'Pinnacle' in book_str
+    n_sources = 1
     m = _re.search(r'n=(\d+)', book_str)
     if m:
         n_sources = int(m.group(1))
-    if n_sources < 2:
+    if n_sources < 2 and not is_approx_sharp:
         logger.info("proof_poster: skip WEBHOOK_PROOF — n=%d source(s) only (book=%s, bet=%d)",
                     n_sources, book_str, bet['id'])
         return False
@@ -447,14 +449,20 @@ def post_clv_capture(bet: dict, close_odds: float, clv: float,
         open_str  = f'{open_odds:.2f}' if open_odds else '—'
         close_str = f'{close_odds:.2f}'
 
-        # Data quality check — n=1 or extreme CLV
+        # Data quality check — n=1 or extreme CLV or approx line
         import re as _re
         n_sources = 1
         m = _re.search(r'n=(\d+)', book_lbl)
         if m:
             n_sources = int(m.group(1))
         quality_warn = ''
-        if n_sources < 2:
+        is_approx = book_lbl.startswith('approx_CLV')
+        if is_approx:
+            # Extract line info for display: approx_CLV(Pinnacle;line=2.75;n=1)
+            line_m = _re.search(r'line=([\d.]+)', book_lbl)
+            approx_line = line_m.group(1) if line_m else '?'
+            quality_warn = f'\n⚠️ *Approx CLV — Pinnacle linje {approx_line} (din linje skilde sig)*'
+        elif n_sources < 2:
             quality_warn = '\n⚠️ *En källa (n=1) — behandla med försiktighet*'
         elif clv > 25.0:
             quality_warn = '\n⚠️ *Extremt hög CLV — kontrollera datakvalitet*'
