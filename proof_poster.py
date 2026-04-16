@@ -665,8 +665,22 @@ def run_results_report(days: int = 3) -> bool:
         logger.debug("proof_poster results_report: WEBHOOK_PROOF not set — skip")
         return False
 
-    now      = int(time.time())
-    since_ts = now - days * 86400
+    now = int(time.time())
+
+    # Always floor at CLV era start — never show pre-era picks
+    era_epoch = None
+    try:
+        kv = _db_module.db_helper.execute(
+            "SELECT value FROM system_kv WHERE key = 'clv_era_start'",
+            fetch='one'
+        )
+        if kv and kv[0]:
+            era_epoch = int(kv[0])
+    except Exception as exc:
+        logger.warning("proof_poster results_report: could not read era_start: %s", exc)
+
+    window_ts = now - days * 86400
+    since_ts  = max(window_ts, era_epoch) if era_epoch else window_ts
 
     try:
         rows = _db_module.db_helper.execute("""
@@ -678,9 +692,8 @@ def run_results_report(days: int = 3) -> bool:
                 SUM(CASE WHEN clv_status != 'soft' AND clv_pct IS NOT NULL
                          THEN 1 ELSE 0 END)                                      AS clv_total
             FROM football_opportunities
-            WHERE outcome   IN ('won', 'lost')
-              AND mode       IN ('PROD', 'VALUE_OPP')
-              AND bet_placed  = TRUE
+            WHERE outcome     IN ('won', 'lost')
+              AND mode         IN ('PROD', 'VALUE_OPP')
               AND kickoff_epoch >= %s
               AND match_id NOT LIKE 'seed_%%'
         """, (since_ts,), fetch='one')
@@ -689,7 +702,7 @@ def run_results_report(days: int = 3) -> bool:
         return False
 
     if not rows or not rows[0]:
-        logger.info("proof_poster results_report: no settled picks in last %d days — skip", days)
+        logger.info("proof_poster results_report: no settled picks — skip")
         return False
 
     total, profit_raw, clv_beat, clv_total = rows
@@ -702,10 +715,11 @@ def run_results_report(days: int = 3) -> bool:
         logger.info("proof_poster results_report: 0 settled picks — skip")
         return False
 
-    # Date range label
-    from_day  = time.strftime("%-d %b", time.gmtime(since_ts))
-    to_day    = time.strftime("%-d %b", time.gmtime(now))
-    period    = f"{from_day} – {to_day}"
+    # Date range label — from era_start if that's the binding floor
+    label_from = era_epoch if (era_epoch and era_epoch >= window_ts) else window_ts
+    from_day   = time.strftime("%-d %b", time.gmtime(label_from))
+    to_day     = time.strftime("%-d %b", time.gmtime(now))
+    period     = f"{from_day} – {to_day}"
 
     profit_str = f"+{profit_u:.1f} units profit" if profit_u >= 0 else f"{profit_u:.1f} units profit"
     beat_str   = f"{clv_beat}/{clv_total}" if clv_total > 0 else "—"
