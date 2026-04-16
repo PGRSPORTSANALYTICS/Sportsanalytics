@@ -120,7 +120,7 @@ def _fetch_scanner_stats(start_date: date, end_date: date) -> dict:
                     stats["smart_picks"]["won" if is_win else "lost"] += 1
                     stats["smart_picks"]["profit"] += profit
 
-                # 5. CLV
+                # 5. CLV — only sharp captures (exclude api_football, soft, line-moved)
                 cur.execute("""
                     SELECT AVG(clv_pct),
                            100.0 * SUM(CASE WHEN clv_pct > 0 THEN 1 ELSE 0 END)
@@ -129,7 +129,10 @@ def _fetch_scanner_stats(start_date: date, end_date: date) -> dict:
                     WHERE match_date::date BETWEEN %s AND %s
                       AND clv_pct IS NOT NULL
                       AND mode = 'PROD'
-                """, (start_date, end_date))
+                      AND clv_source_book NOT ILIKE %s
+                      AND clv_source_book NOT ILIKE %s
+                      AND clv_source_book NOT ILIKE %s
+                """, (start_date, end_date, '%api_football%', '~%', '%(line moved%'))
                 row = cur.fetchone()
                 if row and row[0] is not None:
                     stats["clv_avg"] = round(row[0], 2)

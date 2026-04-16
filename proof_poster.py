@@ -528,15 +528,24 @@ def post_clv_capture(bet: dict, close_odds: float, clv: float,
 # ─────────────────────────────────────────────────────────────────
 
 def _clv_stats_query(since_epoch=None):
-    """Fetch CLV stats from a given epoch. If None, fetches all-time."""
+    """Fetch CLV stats from a given epoch. If None, fetches all-time.
+    
+    Only counts SHARP captures (excludes api_football, soft '~' sources, and
+    line-moved captures) so beat rate reflects true closing-line value vs sharp books.
+    """
     where_extra = f"AND timestamp >= {since_epoch}" if since_epoch else ""
+    sharp_filter = (
+        "clv_source_book NOT ILIKE '%%api_football%%' "
+        "AND clv_source_book NOT ILIKE '~%%' "
+        "AND clv_source_book NOT ILIKE '%%(line moved%%'"
+    )
     return _db_module.db_helper.execute(f"""
         SELECT
             COUNT(*)                                                             AS total,
-            COUNT(*) FILTER (WHERE clv_pct IS NOT NULL)                          AS clv_tracked,
-            COUNT(*) FILTER (WHERE clv_pct > 0)                                  AS clv_pos,
-            ROUND(AVG(clv_pct) FILTER (WHERE clv_pct IS NOT NULL)::numeric, 2)  AS avg_clv,
-            ROUND(AVG(clv_pct) FILTER (WHERE clv_pct > 0)::numeric, 2)          AS avg_clv_pos,
+            COUNT(*) FILTER (WHERE clv_pct IS NOT NULL AND {sharp_filter})       AS clv_tracked,
+            COUNT(*) FILTER (WHERE clv_pct > 0 AND {sharp_filter})               AS clv_pos,
+            ROUND(AVG(clv_pct) FILTER (WHERE clv_pct IS NOT NULL AND {sharp_filter})::numeric, 2)  AS avg_clv,
+            ROUND(AVG(clv_pct) FILTER (WHERE clv_pct > 0 AND {sharp_filter})::numeric, 2)          AS avg_clv_pos,
             SUM(CASE WHEN outcome='won' THEN 1 ELSE 0 END)                       AS wins,
             ROUND(SUM(
                 CASE WHEN outcome='won' THEN (odds - 1) ELSE -1.0 END

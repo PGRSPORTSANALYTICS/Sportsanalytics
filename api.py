@@ -1326,16 +1326,27 @@ async def get_clv_breakdown():
     Used to identify which markets and timing patterns drive best CLV.
     """
     try:
-        # Market breakdown
+        # Market breakdown — only sharp captures (exclude api_football, soft, line-moved)
         market_rows = db_helper.execute("""
             SELECT
                 market,
                 COUNT(*)                                                                        AS total,
-                COUNT(clv_pct)                                                                  AS with_clv,
-                ROUND(100.0 * COUNT(clv_pct) / NULLIF(COUNT(*), 0), 1)                        AS coverage,
-                ROUND(AVG(clv_pct)::numeric, 2)                                                AS avg_clv,
-                ROUND(100.0 * SUM(CASE WHEN clv_pct > 0 THEN 1 ELSE 0 END)::numeric
-                      / NULLIF(COUNT(clv_pct), 0), 1)                                         AS pos_rate,
+                COUNT(clv_pct) FILTER (WHERE clv_source_book NOT ILIKE '%%api_football%%'
+                    AND clv_source_book NOT ILIKE '~%%'
+                    AND clv_source_book NOT ILIKE '%%(line moved%%')                          AS with_clv,
+                ROUND(100.0 * COUNT(clv_pct) FILTER (WHERE clv_source_book NOT ILIKE '%%api_football%%'
+                    AND clv_source_book NOT ILIKE '~%%'
+                    AND clv_source_book NOT ILIKE '%%(line moved%%') / NULLIF(COUNT(*), 0), 1) AS coverage,
+                ROUND(AVG(clv_pct) FILTER (WHERE clv_source_book NOT ILIKE '%%api_football%%'
+                    AND clv_source_book NOT ILIKE '~%%'
+                    AND clv_source_book NOT ILIKE '%%(line moved%%')::numeric, 2)              AS avg_clv,
+                ROUND(100.0 * SUM(CASE WHEN clv_pct > 0
+                    AND clv_source_book NOT ILIKE '%%api_football%%'
+                    AND clv_source_book NOT ILIKE '~%%'
+                    AND clv_source_book NOT ILIKE '%%(line moved%%' THEN 1 ELSE 0 END)::numeric
+                      / NULLIF(COUNT(clv_pct) FILTER (WHERE clv_source_book NOT ILIKE '%%api_football%%'
+                          AND clv_source_book NOT ILIKE '~%%'
+                          AND clv_source_book NOT ILIKE '%%(line moved%%'), 0), 1)             AS pos_rate,
                 ROUND(100.0 * SUM(CASE WHEN steam_flag = 'early' THEN 1 ELSE 0 END)::numeric
                       / NULLIF(COUNT(clv_pct), 0), 1)                                         AS steam_early_rate
             FROM football_opportunities
