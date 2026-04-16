@@ -825,6 +825,10 @@ class CLVService:
             # 3-tier CLV: bronze sources (~book (soft)) are not sharp proof
             if close_book and '(soft)' in close_book:
                 status = 'soft'
+            # Line-moved captures compare odds across different markets
+            # (e.g. Over 2.5 vs Over 2.0) — directional only, not sharp proof.
+            if close_book and '(line moved' in close_book:
+                status = 'soft'
         except ValueError as exc:
             logger.warning("CLV calc error for bet %d: %s", bet_id, exc)
             return False
