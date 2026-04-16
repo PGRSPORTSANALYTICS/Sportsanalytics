@@ -684,7 +684,7 @@ def run_engine_heartbeat():
 
         # Next upcoming match with a pick
         next_row = db_helper.execute(
-            "SELECT home, away, kickoff_epoch FROM football_opportunities WHERE kickoff_epoch > %s ORDER BY kickoff_epoch ASC LIMIT 1",
+            "SELECT home_team, away_team, kickoff_epoch FROM football_opportunities WHERE kickoff_epoch > %s AND mode IN ('PROD','VALUE_OPP') ORDER BY kickoff_epoch ASC LIMIT 1",
             (now,), fetch='one'
         )
         if next_row:
