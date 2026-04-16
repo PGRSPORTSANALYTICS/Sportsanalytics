@@ -444,6 +444,14 @@ def post_clv_capture(bet: dict, close_odds: float, clv: float,
     if '(soft)' in _book_lower or 'api_football' in _book_lower or 'api-football' in _book_lower:
         return False
 
+    # Line-moved captures: comparing odds across different totals lines is
+    # mathematically misleading (e.g. Over 2.5 @ 2.43 vs Over 2.0 @ 1.88
+    # produces a fake "+29.3% CLV" — they're different bets). Skip Discord
+    # posting entirely; signal is kept in DB for directional tracking only.
+    if '(line moved' in _book_lower:
+        logger.debug("proof_poster: skipping Discord post — line moved (approx CLV not posted)")
+        return False
+
     try:
         open_odds = float(bet.get('open_odds') or 0)
         market    = _label(bet.get('market', ''))
