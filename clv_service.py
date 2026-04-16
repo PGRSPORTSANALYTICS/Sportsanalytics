@@ -638,11 +638,12 @@ class CLVService:
                 {h[1] for h in sharp_hits},
                 key=lambda b: SHARP_PRIORITY.index(b.lower()) if b.lower() in SHARP_PRIORITY else 99
             )
-            return (round(avg, 4), f"dc_computed({','.join(names)};n={len(sharp_hits)})", f"DC_{dc}")
+            book_label = ' + '.join(names[:2]) + (' ...' if len(names) > 2 else '')
+            return (round(avg, 4), f"vs {book_label} (DC)", f"DC_{dc}")
 
         if fallback_hit:
             odds, book_title, matched_out = fallback_hit
-            return (odds, f"soft_CLV({book_title})", matched_out)
+            return (odds, f"~{book_title} (soft)", matched_out)
 
         return None
 
@@ -727,7 +728,8 @@ class CLVService:
                 {h[1] for h in sharp_hits},
                 key=lambda b: SHARP_PRIORITY.index(b.lower()) if b.lower() in SHARP_PRIORITY else 99
             )
-            source_label = f"sharp_avg({','.join(book_names)};n={len(sharp_hits)})"
+            book_label = ' + '.join(book_names[:2]) + (' ...' if len(book_names) > 2 else '')
+            source_label = f"vs {book_label}"
             matched_out  = sharp_hits[0][2]
             return (round(avg_odds, 4), source_label, matched_out)
 
@@ -744,10 +746,13 @@ class CLVService:
             avg_odds = sum(h[0] for h in approx_hits) / len(approx_hits)
             book_names = [h[1] for h in approx_hits]
             actual_line = approx_hits[0][3]
-            source_label = f"approx_CLV({','.join(book_names)};line={actual_line};n={len(approx_hits)})"
+            book_label  = ' + '.join(book_names[:2]) + (' ...' if len(book_names) > 2 else '')
+            bet_line_str = f"{target_line:.2f}".rstrip('0').rstrip('.') if target_line else '?'
+            act_line_str = f"{actual_line:.2f}".rstrip('0').rstrip('.')
+            source_label = f"vs {book_label} (line moved {bet_line_str} → {act_line_str})"
             matched_out  = approx_hits[0][2]
             logger.info(
-                "CLV: approx_CLV used — bet line=%.2f nearest sharp line=%.2f books=%s",
+                "CLV: approx line — bet=%.2f nearest sharp=%.2f books=%s",
                 target_line or 0, actual_line, book_names
             )
             return (round(avg_odds, 4), source_label, matched_out)
@@ -755,10 +760,10 @@ class CLVService:
         if fallback_hit:
             odds, book_title, matched_out = fallback_hit
             logger.info(
-                "CLV: soft_CLV used — no sharp book found, using %s as bronze source",
+                "CLV: soft source — no sharp book found, using %s (bronze)",
                 book_title
             )
-            return (odds, f"soft_CLV({book_title})", matched_out)
+            return (odds, f"~{book_title} (soft)", matched_out)
 
         return None
 
@@ -817,8 +822,8 @@ class CLVService:
         try:
             clv = _clv_pct(open_odds, close_odds)
             status = _clv_status(clv)
-            # 3-tier CLV: soft_CLV (bronze) sources are not sharp proof
-            if close_book and 'soft_CLV' in close_book:
+            # 3-tier CLV: bronze sources (~book (soft)) are not sharp proof
+            if close_book and '(soft)' in close_book:
                 status = 'soft'
         except ValueError as exc:
             logger.warning("CLV calc error for bet %d: %s", bet_id, exc)

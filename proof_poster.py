@@ -128,17 +128,17 @@ def post_clv_proof(bet: dict, close_odds: float, clv: float, close_book: str,
                      clv, REALTIME_CLV_THRESHOLD, bet['id'])
         return False
 
-    # Block soft_CLV (bronze tier) from WEBHOOK_PROOF — not sharp-book proof
+    # Block soft/bronze tier from WEBHOOK_PROOF — not sharp-book proof
     book_str = close_book or ''
-    if book_str.startswith('soft_CLV'):
-        logger.info("proof_poster: skip WEBHOOK_PROOF — soft_CLV (bronze) source, not sharp proof (bet=%d, book=%s)",
+    if '(soft)' in book_str:
+        logger.info("proof_poster: skip WEBHOOK_PROOF — bronze source, not sharp proof (bet=%d, book=%s)",
                     bet['id'], book_str)
         return False
 
     # Block single-source captures from WEBHOOK_PROOF — unreliable as public proof
-    # Exception: approx_CLV from Pinnacle is allowed (sharp source, different line)
+    # Exception: approx line from Pinnacle is allowed (sharp source, different line)
     import re as _re
-    is_approx_sharp = book_str.startswith('approx_CLV') and 'Pinnacle' in book_str
+    is_approx_sharp = '(line moved' in book_str and 'Pinnacle' in book_str
     n_sources = 1
     m = _re.search(r'n=(\d+)', book_str)
     if m:
@@ -455,21 +455,17 @@ def post_clv_capture(bet: dict, close_odds: float, clv: float,
         open_str  = f'{open_odds:.2f}' if open_odds else '—'
         close_str = f'{close_odds:.2f}'
 
-        # Data quality check — n=1 or extreme CLV or approx line
+        # Data quality check — approx line, extreme CLV
         import re as _re
-        n_sources = 1
-        m = _re.search(r'n=(\d+)', book_lbl)
-        if m:
-            n_sources = int(m.group(1))
         quality_warn = ''
-        is_approx = book_lbl.startswith('approx_CLV')
+        is_approx = '(line moved' in book_lbl
         if is_approx:
-            # Extract line info for display: approx_CLV(Pinnacle;line=2.75;n=1)
-            line_m = _re.search(r'line=([\d.]+)', book_lbl)
-            approx_line = line_m.group(1) if line_m else '?'
-            quality_warn = f'\n⚠️ *Approx CLV — Pinnacle linje {approx_line} (din linje skilde sig)*'
-        elif n_sources < 2:
-            quality_warn = '\n⚠️ *En källa (n=1) — behandla med försiktighet*'
+            # Extract line info: "vs Pinnacle (line moved 2.5 → 2.25)"
+            line_m = _re.search(r'line moved ([\d.]+)\s*→\s*([\d.]+)', book_lbl)
+            if line_m:
+                quality_warn = f'\n⚠️ *Approx CLV — linje rördes {line_m.group(1)} → {line_m.group(2)} hos Pinnacle*'
+            else:
+                quality_warn = '\n⚠️ *Approx CLV — Pinnacle erbjöd annan linje*'
         elif clv > 25.0:
             quality_warn = '\n⚠️ *Extremt hög CLV — kontrollera datakvalitet*'
 
