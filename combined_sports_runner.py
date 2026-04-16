@@ -1148,7 +1148,8 @@ def main():
     schedule.every().sunday.at("23:00").do(run_weekly_learning_report)
     schedule.every().day.at("23:00").do(run_daily_categorizer)
     schedule.every().day.at("22:45").do(run_end_of_day_results)  # Results summary after all games
-    schedule.every().day.at("22:50").do(run_daily_clv_summary)    # Daily CLV pulse: bets, beat-rate, avg CLV
+    schedule.every().day.at("22:50").do(run_daily_clv_summary)    # Kväll CLV-puls: europeiska matcher
+    schedule.every().day.at("07:30").do(run_daily_clv_summary)    # Morgon CLV-puls: Copa/Asien nattmatcher
     schedule.every().day.at("23:30").do(run_evaluation_milestone)  # Auto-post evaluation at 200/400/600 milestones
     schedule.every(1).hours.do(run_engine_heartbeat)                 # Heartbeat varje timme till Discord
     schedule.every().day.at("08:00").do(run_daily_games_reminder)
