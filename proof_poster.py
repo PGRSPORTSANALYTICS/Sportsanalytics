@@ -771,9 +771,17 @@ def run_results_report(days: int = 3) -> bool:
 
     color = 0x22c55e if profit_u >= 0 else 0xef4444
 
+    # Dynamic market confirmation line
+    if edge_pct >= 60:
+        confirm_line = "Market is consistently confirming the edge."
+    elif edge_pct >= 35:
+        confirm_line = "Market is starting to confirm the edge."
+    else:
+        confirm_line = "Still gathering market confirmation."
+
     body_lines = [
-        f"• **{total} bets placed**",
-        f"• **{profit_str} profit**",
+        f"📊 **{total} bets · {profit_str} profit**",
+        confirm_line,
         "",
         f"• **{sharp_total} bets with verified sharp closing line data**",
         f"→ **{sharp_beat_s} beat the market**",
