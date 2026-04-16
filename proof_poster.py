@@ -674,9 +674,15 @@ def run_results_report(days: int = 3) -> bool:
             SELECT
                 COUNT(*)                                                         AS total,
                 SUM(CASE WHEN outcome = 'won'  THEN (odds - 1) ELSE -1.0 END)   AS profit_u,
-                SUM(CASE WHEN clv_pct > 0 AND clv_status != 'soft'
+                SUM(CASE WHEN clv_pct > 0
+                         AND clv_status != 'soft'
+                         AND clv_source_book NOT ILIKE '%%api_football%%'
+                         AND clv_source_book NOT ILIKE '~%%'
                          THEN 1 ELSE 0 END)                                      AS clv_beat,
-                SUM(CASE WHEN clv_status != 'soft' AND clv_pct IS NOT NULL
+                SUM(CASE WHEN clv_status != 'soft'
+                         AND clv_pct IS NOT NULL
+                         AND clv_source_book NOT ILIKE '%%api_football%%'
+                         AND clv_source_book NOT ILIKE '~%%'
                          THEN 1 ELSE 0 END)                                      AS clv_total
             FROM football_opportunities
             WHERE outcome IN ('won', 'lost')
