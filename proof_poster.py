@@ -649,3 +649,96 @@ def post_daily_clv_summary() -> bool:
     except Exception as exc:
         logger.error("proof_poster daily_clv_summary: request failed: %s", exc)
     return False
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 7. RESULTS SNAPSHOT — posts to WEBHOOK_PROOF Wed + Sun
+# ─────────────────────────────────────────────────────────────────────────────
+
+def run_results_report(days: int = 3) -> bool:
+    """
+    Post a results snapshot to WEBHOOK_PROOF covering the last `days` days.
+    Shows: bets, profit (units), beat closing line count.
+    Called Wednesday (days=3) and Sunday (days=4).
+    """
+    if not WEBHOOK_PROOF:
+        logger.debug("proof_poster results_report: WEBHOOK_PROOF not set — skip")
+        return False
+
+    now      = int(time.time())
+    since_ts = now - days * 86400
+
+    try:
+        rows = _db_module.db_helper.execute("""
+            SELECT
+                COUNT(*)                                                         AS total,
+                SUM(CASE WHEN outcome = 'won'  THEN (odds - 1) ELSE -1.0 END)   AS profit_u,
+                SUM(CASE WHEN clv_pct > 0 AND clv_status != 'soft'
+                         THEN 1 ELSE 0 END)                                      AS clv_beat,
+                SUM(CASE WHEN clv_status != 'soft' AND clv_pct IS NOT NULL
+                         THEN 1 ELSE 0 END)                                      AS clv_total
+            FROM football_opportunities
+            WHERE outcome   IN ('won', 'lost')
+              AND mode       IN ('PROD', 'VALUE_OPP')
+              AND bet_placed  = TRUE
+              AND kickoff_epoch >= %s
+              AND match_id NOT LIKE 'seed_%%'
+        """, (since_ts,), fetch='one')
+    except Exception as exc:
+        logger.error("proof_poster results_report: DB error: %s", exc)
+        return False
+
+    if not rows or not rows[0]:
+        logger.info("proof_poster results_report: no settled picks in last %d days — skip", days)
+        return False
+
+    total, profit_raw, clv_beat, clv_total = rows
+    total     = int(total or 0)
+    profit_u  = float(profit_raw or 0)
+    clv_beat  = int(clv_beat or 0)
+    clv_total = int(clv_total or 0)
+
+    if total == 0:
+        logger.info("proof_poster results_report: 0 settled picks — skip")
+        return False
+
+    # Date range label
+    from_day  = time.strftime("%-d %b", time.gmtime(since_ts))
+    to_day    = time.strftime("%-d %b", time.gmtime(now))
+    period    = f"{from_day} – {to_day}"
+
+    profit_str = f"+{profit_u:.1f}u" if profit_u >= 0 else f"{profit_u:.1f}u"
+    beat_str   = f"{clv_beat}/{clv_total}" if clv_total > 0 else "—"
+
+    # Taglines rotate across posts for variety
+    taglines = [
+        '"Still early — CLV is what we\'re tracking long-term."',
+        '"Edge first, results follow."',
+        '"Beat the closing line consistently — the rest takes care of itself."',
+        '"Process over outcome. Every time."',
+    ]
+    import hashlib
+    tag = taglines[int(hashlib.md5(period.encode()).hexdigest(), 16) % len(taglines)]
+
+    color = 0x22c55e if profit_u >= 0 else 0xef4444
+
+    body_lines = [
+        f"• Bets:               **{total}**",
+        f"• Profit:             **{profit_str}**",
+        f"• Beat closing line:  **{beat_str}**",
+        "",
+        f"*{tag}*",
+    ]
+
+    embed = {
+        "title":       f"📋 Results Snapshot  ·  {period}",
+        "description": "\n".join(body_lines),
+        "color":       color,
+        "footer":      {"text": "PGR Analytics  ·  PROD + VALUE_OPP picks only  ·  CLV tracked vs sharp lines"},
+        "timestamp":   time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+
+    ok = _send_embed(embed, label=f"results snapshot {period} ({total} picks, {profit_str})")
+    if ok:
+        logger.info("✅ proof_poster: results snapshot posted — %d picks, %s profit, CLV %s", total, profit_str, beat_str)
+    return ok

@@ -882,6 +882,26 @@ def run_weekly_learning_report():
         logger.error(f"❌ Weekly learning report error: {e}")
 
 
+def run_results_report_wednesday():
+    """Results snapshot Wed 21:00 UTC — covers last 3 days (Mon/Tue/Wed)."""
+    try:
+        from proof_poster import run_results_report
+        logger.info("📋 Running results snapshot (Wednesday, 3 days)...")
+        run_results_report(days=3)
+    except Exception as exc:
+        logger.error("❌ Results snapshot (Wed) error: %s", exc)
+
+
+def run_results_report_sunday():
+    """Results snapshot Sun 21:00 UTC — covers last 4 days (Thu/Fri/Sat/Sun)."""
+    try:
+        from proof_poster import run_results_report
+        logger.info("📋 Running results snapshot (Sunday, 4 days)...")
+        run_results_report(days=4)
+    except Exception as exc:
+        logger.error("❌ Results snapshot (Sun) error: %s", exc)
+
+
 def _migrate_pgr_columns():
     """Add pgr_score, league_tier, routing_reason columns if not present."""
     try:
@@ -1150,7 +1170,9 @@ def main():
     schedule.every(2).hours.do(run_learning_update)
     schedule.every(2).hours.do(run_form_cacher)  # Cache form+H2H for upcoming picks
     
-    schedule.every().monday.at("09:00").do(run_clv_buckets)    # Weekly CLV bucket report
+    schedule.every().monday.at("09:00").do(run_clv_buckets)          # Weekly CLV bucket report
+    schedule.every().wednesday.at("21:00").do(run_results_report_wednesday)  # Results snapshot Wed (22:00 CET)
+    schedule.every().sunday.at("21:00").do(run_results_report_sunday)        # Results snapshot Sun (22:00 CET)
     schedule.every().day.at("21:55").do(run_daily_clv_digest)  # 22:55 CET — before recap
     schedule.every().day.at("22:00").do(run_daily_recap)      # 23:00 CET
     schedule.every().sunday.at("22:00").do(run_weekly_recap)  # 23:00 CET
