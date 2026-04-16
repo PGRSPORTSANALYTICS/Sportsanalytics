@@ -728,6 +728,8 @@ def run_results_report(days: int = 3) -> bool:
         f"• Beat closing line:  **{beat_str}**",
         "",
         f"*{tag}*",
+        "",
+        "*Not every bet wins — but price is everything.*",
     ]
 
     embed = {
