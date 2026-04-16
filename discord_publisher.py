@@ -341,8 +341,13 @@ def _format_odds_shopping(pick: dict) -> str:
     if not isinstance(odds_by_book, dict) or not odds_by_book:
         return ""
 
+    _API_SOURCES = {'api_football', 'api-football', 'football_api', 'api football'}
+
+    def _real_book(name: str) -> bool:
+        return name.strip().lower() not in _API_SOURCES
+
     sorted_books = sorted(
-        [(b, float(o)) for b, o in odds_by_book.items() if o],
+        [(b, float(o)) for b, o in odds_by_book.items() if o and _real_book(b)],
         key=lambda x: x[1], reverse=True
     )
     if not sorted_books:
@@ -352,7 +357,7 @@ def _format_odds_shopping(pick: dict) -> str:
     parts = [f"**{o:.2f}** {b}" for b, o in top3]
     line = "🔍 " + " · ".join(parts)
 
-    if best_value and best_book:
+    if best_value and best_book and _real_book(best_book):
         bv = float(best_value)
         if bv > model_odds * 1.02:
             line += f"\n🔝 Best: **{bv:.2f}** @ {best_book}"

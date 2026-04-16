@@ -2088,7 +2088,11 @@ def render_product_tab(
                 elif not isinstance(odds_by_bookmaker, dict):
                     odds_by_bookmaker = {}
                 
-                sorted_books = sorted(odds_by_bookmaker.items(), key=lambda x: float(x[1]) if x[1] else 0, reverse=True) if odds_by_bookmaker else []
+                _API_SRC = {'api_football', 'api-football', 'football_api', 'api football'}
+                sorted_books = sorted(
+                    [(b, v) for b, v in odds_by_bookmaker.items() if v and b.strip().lower() not in _API_SRC],
+                    key=lambda x: float(x[1]) if x[1] else 0, reverse=True
+                ) if odds_by_bookmaker else []
                 best_book = sorted_books[0] if len(sorted_books) > 0 else None
                 second_best = sorted_books[1] if len(sorted_books) > 1 else None
                 third_best = sorted_books[2] if len(sorted_books) > 2 else None
@@ -2657,7 +2661,11 @@ def render_daily_card_tab():
                 base_odds = float(bet.get('odds', 0) or 0)
                 bookmaker_html = ""
                 if odds_by_bookmaker and isinstance(odds_by_bookmaker, dict) and len(odds_by_bookmaker) > 0:
-                    sorted_books = sorted(odds_by_bookmaker.items(), key=lambda x: float(x[1]) if x[1] else 0, reverse=True)
+                    _API_SRC = {'api_football', 'api-football', 'football_api', 'api football'}
+                    sorted_books = sorted(
+                        [(b, v) for b, v in odds_by_bookmaker.items() if v and b.strip().lower() not in _API_SRC],
+                        key=lambda x: float(x[1]) if x[1] else 0, reverse=True
+                    )
                     best_book = sorted_books[0] if len(sorted_books) > 0 else None
                     second_best = sorted_books[1] if len(sorted_books) > 1 else None
                     third_best = sorted_books[2] if len(sorted_books) > 2 else None
@@ -3141,7 +3149,11 @@ def render_bookmaker_odds_card(row: pd.Series):
         'FanDuel', 'Betsson', '1xBet', 'Bovada', 'BetOnline.ag', 'Marathon Bet'
     ]
     
-    sorted_bookmakers = sorted(odds_by_bookmaker.items(), key=lambda x: float(x[1]) if x[1] else 0, reverse=True) if odds_by_bookmaker else []
+    _API_SRC = {'api_football', 'api-football', 'football_api', 'api football'}
+    sorted_bookmakers = sorted(
+        [(b, v) for b, v in odds_by_bookmaker.items() if v and b.strip().lower() not in _API_SRC],
+        key=lambda x: float(x[1]) if x[1] else 0, reverse=True
+    ) if odds_by_bookmaker else []
     
     best_book = sorted_bookmakers[0] if len(sorted_bookmakers) > 0 else None
     second_best_book = sorted_bookmakers[1] if len(sorted_bookmakers) > 1 else None
