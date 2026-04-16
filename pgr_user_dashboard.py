@@ -156,10 +156,10 @@ def load_hero_stats():
     db = DatabaseHelper()
     row = db.execute("""
         SELECT
-            COUNT(*) FILTER (WHERE UPPER(result) = 'WON')                       AS wins,
-            COUNT(*) FILTER (WHERE UPPER(result) IN ('WON','LOST'))              AS settled,
-            COALESCE(SUM(CASE WHEN UPPER(result)='WON' THEN (odds-1.0)
-                              WHEN UPPER(result)='LOST' THEN -1.0 ELSE 0 END),0) AS profit_units,
+            COUNT(*) FILTER (WHERE UPPER(result) IN ('WON','WIN'))                       AS wins,
+            COUNT(*) FILTER (WHERE UPPER(result) IN ('WON','WIN','LOST','LOSS'))              AS settled,
+            COALESCE(SUM(CASE WHEN UPPER(result) IN ('WON','WIN') THEN (odds-1.0)
+                              WHEN UPPER(result) IN ('LOST','LOSS') THEN -1.0 ELSE 0 END),0) AS profit_units,
             COUNT(*) FILTER (WHERE UPPER(status) = 'PENDING')                   AS pending
         FROM football_opportunities
         WHERE mode = 'PROD'
@@ -258,10 +258,10 @@ def load_performance(days: int = 30):
     rows = db.execute("""
         SELECT
             match_date,
-            COUNT(*) FILTER (WHERE UPPER(result)='WON')             AS wins,
-            COUNT(*) FILTER (WHERE UPPER(result) IN ('WON','LOST'))  AS settled,
-            COALESCE(SUM(CASE WHEN UPPER(result)='WON' THEN (odds-1.0)
-                              WHEN UPPER(result)='LOST' THEN -1.0 ELSE 0 END), 0) AS day_units
+            COUNT(*) FILTER (WHERE UPPER(result) IN ('WON','WIN'))             AS wins,
+            COUNT(*) FILTER (WHERE UPPER(result) IN ('WON','WIN','LOST','LOSS'))  AS settled,
+            COALESCE(SUM(CASE WHEN UPPER(result) IN ('WON','WIN') THEN (odds-1.0)
+                              WHEN UPPER(result) IN ('LOST','LOSS') THEN -1.0 ELSE 0 END), 0) AS day_units
         FROM football_opportunities
         WHERE mode = 'PROD'
           AND UPPER(status) = 'SETTLED'
@@ -312,14 +312,14 @@ def load_all_time_summary():
     db = DatabaseHelper()
     rows = db.execute("""
         SELECT market,
-               COUNT(*) FILTER (WHERE UPPER(result) IN ('WON','LOST')) AS settled,
-               COUNT(*) FILTER (WHERE UPPER(result)='WON')             AS wins,
-               COALESCE(SUM(CASE WHEN UPPER(result)='WON' THEN (odds-1.0)
-                                 WHEN UPPER(result)='LOST' THEN -1.0 ELSE 0 END), 0) AS units
+               COUNT(*) FILTER (WHERE UPPER(result) IN ('WON','WIN','LOST','LOSS')) AS settled,
+               COUNT(*) FILTER (WHERE UPPER(result) IN ('WON','WIN'))             AS wins,
+               COALESCE(SUM(CASE WHEN UPPER(result) IN ('WON','WIN') THEN (odds-1.0)
+                                 WHEN UPPER(result) IN ('LOST','LOSS') THEN -1.0 ELSE 0 END), 0) AS units
         FROM football_opportunities
         WHERE mode='PROD' AND UPPER(status)='SETTLED'
         GROUP BY market
-        HAVING COUNT(*) FILTER (WHERE UPPER(result) IN ('WON','LOST')) >= 5
+        HAVING COUNT(*) FILTER (WHERE UPPER(result) IN ('WON','WIN','LOST','LOSS')) >= 5
         ORDER BY units DESC
     """, fetch='all')
     return rows or []

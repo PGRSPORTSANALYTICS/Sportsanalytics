@@ -78,7 +78,7 @@ def render_smart_picks_tab():
         FROM football_opportunities
         WHERE mode = 'PROD'
           AND UPPER(status) = 'SETTLED'
-          AND UPPER(result) IN ('WON', 'LOST')
+          AND UPPER(result) IN ('WON','WIN','LOST','LOSS')
           AND match_date = CURRENT_DATE::text
         GROUP BY result
     """, fetch='all')
