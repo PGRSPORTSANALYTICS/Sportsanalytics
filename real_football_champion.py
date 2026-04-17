@@ -3968,9 +3968,8 @@ class RealFootballChampion:
                         confidence = EXCLUDED.confidence, analysis = EXCLUDED.analysis,
                         pgr_score = EXCLUDED.pgr_score, league_tier = EXCLUDED.league_tier,
                         routing_reason = EXCLUDED.routing_reason,
-                        bet_placed = false,
-                        stake = 0,
-                        discord_sent = false
+                        bet_placed = EXCLUDED.bet_placed,
+                        stake = EXCLUDED.stake
                 ''', (
                     pick.get('timestamp', int(time.time())),
                     pick.get('match_id'),
@@ -3983,7 +3982,7 @@ class RealFootballChampion:
                     float(pick.get('edge_percentage', 0)),
                     int(pick.get('confidence', 0)),
                     pick.get('analysis', '{}'),
-                    0.0,
+                    float(pick.get('stake', 1)),
                     pick.get('match_date'),
                     pick.get('kickoff_time', ''),
                     pick.get('kickoff_utc'),
@@ -3994,7 +3993,7 @@ class RealFootballChampion:
                     pick_mode,
                     999,
                     pick_mode,
-                    False,
+                    bool(pick.get('bet_placed', True)),
                     odds_value,
                     pick.get('odds_source', 'the_odds_api'),
                     pick.get('trust_level', pick_mode),
