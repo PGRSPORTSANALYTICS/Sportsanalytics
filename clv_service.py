@@ -1007,7 +1007,8 @@ class CLVService:
                     clv_pct         = %s,
                     clv_status      = %s,
                     clv_source_book = %s,
-                    steam_flag      = %s
+                    steam_flag      = %s,
+                    clv_version     = 'v2'
                 WHERE id = %s
             """, (close_odds, close_ts, clv, status, close_book, steam_flag, bet_id))
 

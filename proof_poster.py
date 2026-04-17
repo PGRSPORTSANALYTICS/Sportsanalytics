@@ -149,21 +149,28 @@ def post_clv_proof(bet: dict, close_odds: float, clv: float, close_book: str,
         return False
     # "vs ... (interp ...)" passes through — proof-quality interpolation from Pinnacle/Betfair brackets
 
-    # For GREEN exact-line proof: require 2+ sources from the 'vs ...' portion.
-    # Single-source captures are unreliable as public proof.
-    # For AMBER interp: single proof-book bracket is acceptable (1 source can interpolate).
-    is_interp_local = '(interp' in book_str
-    if not is_interp_local:
-        vs_part = _re.search(r'vs (.+?)(?:\s*\(|$)', book_str)
+    # Source quality check — three accepted formats:
+    #   (a) Direct sharp book: "Pinnacle", "Betfair", "betfair_ex_eu"
+    #   (b) Sharp average:     "sharp_avg(Pinnacle,Matchbook;n=2)"
+    #   (c) Interp bracket:    "vs Pinnacle + Betfair (interp ...)"
+    _DIRECT_PROOF = {'pinnacle', 'betfair', 'betfair_ex_eu', 'matchbook'}
+    is_interp_local  = '(interp' in book_str
+    is_direct_proof  = book_str.lower().strip() in _DIRECT_PROOF
+    is_sharp_avg     = book_str.lower().startswith('sharp_avg(')
+
+    if not is_interp_local and not is_direct_proof and not is_sharp_avg:
+        # Legacy "vs X + Y" multi-source format
+        vs_part   = _re.search(r'vs (.+?)(?:\s*\(|$)', book_str)
         n_sources = vs_part.group(1).count(' + ') + 1 if vs_part else 1
         if n_sources < 2:
             logger.info("proof_poster: skip WEBHOOK_PROOF — n=%d source(s) only (book=%s, bet=%d)",
                         n_sources, book_str, bet['id'])
             return False
 
-    # Block suspiciously high CLV — likely data noise from thin markets
-    if clv > 30.0:
-        logger.warning("proof_poster: CLV %.1f%% >30%% — likely data noise, skip WEBHOOK_PROOF (bet=%d)",
+    # Block suspiciously high CLV — likely data noise from very thin markets.
+    # 50% cap: genuine steam moves (e.g. Liverpool -1.5: 2.20→1.44) can be >30%.
+    if clv > 50.0:
+        logger.warning("proof_poster: CLV %.1f%% >50%% — likely data noise, skip WEBHOOK_PROOF (bet=%d)",
                        clv, bet['id'])
         return False
 
