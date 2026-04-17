@@ -308,7 +308,7 @@ def post_daily_clv_digest() -> bool:
             SELECT
                 home_team, away_team, league, market, selection,
                 open_odds, close_odds, clv_pct, clv_source_book, steam_flag,
-                close_ts, id
+                close_ts, id, best_odds_bookmaker
             FROM football_opportunities
             WHERE close_ts >= %s
               AND clv_pct IS NOT NULL
@@ -351,29 +351,45 @@ def post_daily_clv_digest() -> bool:
     avg_pos    = round(sum(r[7] for r in positive) / pos_count, 2) if positive else 0
     avg_neg    = round(sum(r[7] for r in negative) / neg_count, 2) if negative else 0
 
-    # Build pick lines (show top 8 positive + up to 3 notable negatives)
-    pick_lines = []
-    for r in positive[:8]:
-        home, away, league, market, sel, open_o, close_o, clv, book, flag, close_ts, bid = r
-        league_fmt = (league or "").replace("soccer_", "").replace("_", " ").title()
+    # ── Build pick lines (doctrine: ALWAYS lead with sharp, never with soft) ─
+    # Format per pick:
+    #   ✅  Home vs Away  ·  Selection
+    #       sharp ref : pinnacle 2.08  (close)
+    #       taken     : 2.20 (~unibet at entry)
+    #       edge vs sharp close: +5.8%
+    # Soft books are shown ONLY as the placement venue, never as the headline.
+    def _format_book_label(name: str) -> str:
+        if not name:
+            return "?"
+        # Normalise legacy strings: "sharp_avg(Pinnacle,Matchbook;n=2)" -> "pinnacle+matchbook (sharp avg)"
+        n = name.replace("sharp_avg(", "").replace(")", "").split(";")[0]
+        n = n.replace("hist:", "").replace("vs ", "").replace("~", "")
+        return n.lower().strip()[:32] or "?"
+
+    def _format_pick(r, ok: bool) -> List[str]:
+        home, away, league, market, sel, open_o, close_o, clv, book, flag, close_ts, bid, best_book = r
         mkt = sel or _label(market)
-        # Show source book label — strips "vs " prefix for compact display
-        book_lbl = (book or "").replace("vs ", "").split("(")[0].strip()[:20]
-        pick_lines.append(
-            f"✅  {clv:+.1f}%  {home} vs {away}  ·  {mkt}"
-            f"  {open_o:.2f}→{close_o:.2f}  [{book_lbl}]"
-        )
+        sharp_lbl = _format_book_label(book)
+        taken_lbl = _format_book_label(best_book) if best_book else "unknown"
+        icon = "✅" if ok else "❌"
+        return [
+            f"{icon}  {home} vs {away}  ·  {mkt}",
+            f"      sharp ref : {sharp_lbl} {close_o:.2f}  (close)",
+            f"      taken     : {open_o:.2f} ({taken_lbl} at entry)",
+            f"      CLV vs sharp close : {clv:+.2f}%",
+            "",
+        ]
+
+    pick_lines: List[str] = []
+    for r in positive[:8]:
+        pick_lines.extend(_format_pick(r, ok=True))
 
     if negative:
-        pick_lines.append("")
+        pick_lines.append("--- negative CLV (transparency) ---")
         for r in negative[:3]:
-            home, away, league, market, sel, open_o, close_o, clv, book, flag, close_ts, bid = r
-            if abs(clv) < 2:
+            if abs(r[7]) < 2:
                 continue
-            mkt = sel or _label(market)
-            pick_lines.append(
-                f"❌  {clv:+.1f}%  {home} vs {away}  ·  {mkt}  {open_o:.2f}→{close_o:.2f}"
-            )
+            pick_lines.extend(_format_pick(r, ok=False))
 
     # ── Sample-size discipline ───────────────────────────────────────────
     # Doctrine: never claim a rate (beat-rate, win-rate) on a sample too small
