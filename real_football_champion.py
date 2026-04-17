@@ -963,6 +963,28 @@ class RealFootballChampion:
                                 elif k.startswith('FT_') and k not in odds_map:
                                     odds_map[k] = v
                                     enriched += 1
+                                elif k.startswith('CORNERS_') and k not in odds_map:
+                                    # e.g. CORNERS_OVER_8_5, CORNERS_OVER_9_5, HOME_CORNERS_OVER_3_5
+                                    odds_map[k] = v
+                                    enriched += 1
+                                elif k.startswith('HOME_CORNERS_') and k not in odds_map:
+                                    odds_map[k] = v
+                                    enriched += 1
+                                elif k.startswith('AWAY_CORNERS_') and k not in odds_map:
+                                    odds_map[k] = v
+                                    enriched += 1
+                                elif k.startswith('MATCH_CARDS_OVER_'):
+                                    # APF uses MATCH_CARDS_OVER_X_5; engine expects CARDS_OVER_X_5
+                                    engine_key = k.replace('MATCH_CARDS_OVER_', 'CARDS_OVER_', 1)
+                                    if engine_key not in odds_map:
+                                        odds_map[engine_key] = v
+                                        enriched += 1
+                                elif k.startswith('HOME_CARDS_OVER_') and k not in odds_map:
+                                    odds_map[k] = v
+                                    enriched += 1
+                                elif k.startswith('AWAY_CARDS_OVER_') and k not in odds_map:
+                                    odds_map[k] = v
+                                    enriched += 1
                             if enriched:
                                 print(f"   🔄 API-Football enriched {enriched} market odds for {home_team} vs {away_team}")
                             # CLV capture: update pending picks with current API-Football odds

@@ -162,9 +162,11 @@ def _normalize_markets(markets: dict) -> dict:
     """
     Rename API-Football market keys to match value_singles_engine conventions.
     API-Football _parse_odds_response already produces most correct keys.
-    We only rename the few that differ.
+    We rename the few that differ:
+      - DC / DNB static renames
+      - MATCH_CARDS_OVER_X_5  →  CARDS_OVER_X_5  (dynamic line number)
     """
-    renames = {
+    static_renames = {
         "DOUBLE_CHANCE_1X": "DC_HOME_DRAW",
         "DOUBLE_CHANCE_X2": "DC_DRAW_AWAY",
         "DOUBLE_CHANCE_12": "DC_HOME_AWAY",
@@ -173,7 +175,12 @@ def _normalize_markets(markets: dict) -> dict:
     }
     result = {}
     for k, v in markets.items():
-        result[renames.get(k, k)] = v
+        # Static renames first
+        k = static_renames.get(k, k)
+        # MATCH_CARDS_OVER_X_5 → CARDS_OVER_X_5
+        if k.startswith("MATCH_CARDS_OVER_"):
+            k = k.replace("MATCH_CARDS_OVER_", "CARDS_OVER_", 1)
+        result[k] = v
     return result
 
 
