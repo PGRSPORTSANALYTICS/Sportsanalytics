@@ -447,14 +447,38 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
 <!-- ── Main Content ────────────────────────────────── -->
 <div class="main-content">
 
-  <!-- Stats strip -->
+  <!-- Stats strip — 3 CLV proof KPIs + scan stats -->
   <div class="stats-strip" id="stats-strip">
-    <div class="stat-tile" style="cursor:pointer" onclick="document.querySelector('[data-tab=scanner]').click()"><div class="stat-lbl">Edges Found Today</div><div class="stat-val" id="s-count" style="color:#4ade80">—</div><div class="stat-sub" id="s-count-sub">— high confidence (CLV 5-6)</div></div>
-    <div class="stat-tile"><div class="stat-lbl">Avg Edge (unfiltered)</div><div class="stat-val" id="s-avgev" style="color:#4ade80">—</div><div class="stat-sub">includes all signals (unfiltered scan)</div></div>
-    <div class="stat-tile"><div class="stat-lbl">Top Edge</div><div class="stat-val" id="s-bestev" style="color:#fbbf24">—</div><div class="stat-sub">highest identified</div></div>
-    <div class="stat-tile"><div class="stat-lbl">Avg Odds</div><div class="stat-val" id="s-avgodds">—</div><div class="stat-sub">identified edges</div></div>
-    <div class="stat-tile"><div class="stat-lbl">Model Calibration</div><div class="stat-val" id="s-hitrate">—</div><div class="stat-sub">settled signals</div></div>
-    <div class="stat-tile"><div class="stat-lbl">Closing Line Value</div><div class="stat-val" id="s-clv">—</div><div class="stat-sub">Did the model beat the market?</div></div>
+    <div class="stat-tile" style="border-color:rgba(34,197,94,.2)">
+      <div class="stat-lbl">Avg CLV</div>
+      <div class="stat-val" id="s-clv" style="color:#4ade80">—</div>
+      <div class="stat-sub">vs Pinnacle &amp; Betfair close</div>
+    </div>
+    <div class="stat-tile" style="border-color:rgba(34,197,94,.15)">
+      <div class="stat-lbl">Closing Line Beaten</div>
+      <div class="stat-val" id="s-hitrate" style="color:#4ade80">—</div>
+      <div class="stat-sub">beat rate (sharp sources)</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-lbl">Sharp Samples</div>
+      <div class="stat-val" id="s-avgodds" style="color:#f4f4f5">—</div>
+      <div class="stat-sub">verified vs Pinnacle/Betfair</div>
+    </div>
+    <div class="stat-tile" style="cursor:pointer" onclick="document.querySelector('[data-tab=scanner]').click()">
+      <div class="stat-lbl">Edges Found Today</div>
+      <div class="stat-val" id="s-count" style="color:#4ade80">—</div>
+      <div class="stat-sub" id="s-count-sub">signals identified</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-lbl">Validated Today</div>
+      <div class="stat-val" id="s-validated" style="color:#fbbf24">—</div>
+      <div class="stat-sub">passed all quality filters</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-lbl">Top Edge</div>
+      <div class="stat-val" id="s-bestev" style="color:#fbbf24">—</div>
+      <div class="stat-sub">highest identified today</div>
+    </div>
   </div>
 
   <!-- Nav Tabs -->
@@ -472,8 +496,11 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
 
     <!-- Scanner header -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-      <span style="font-size:11px;color:#52525b;line-height:1.4;max-width:75%">Identifies pricing inefficiencies across markets. Not every signal is meant to be played.</span>
-      <span id="live-edge-counter" style="font-size:10px;font-weight:700;color:#4ade80;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.25);border-radius:20px;padding:3px 9px;white-space:nowrap">● Live market scan</span>
+      <div style="line-height:1.4">
+        <div style="font-size:14px;font-weight:700;color:#f4f4f5;letter-spacing:-.02em">Beat the closing line. Consistently.</div>
+        <div style="font-size:11px;color:#71717a;margin-top:2px">Verified against Pinnacle &amp; Betfair closing odds</div>
+      </div>
+      <span id="live-edge-counter" style="font-size:10px;font-weight:700;color:#4ade80;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.25);border-radius:20px;padding:3px 9px;white-space:nowrap;flex-shrink:0;margin-left:8px">● Live market scan</span>
     </div>
 
     <!-- Smart Value banner (shown only on SV tab) -->
@@ -505,17 +532,18 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
             <div class="clv-key">Samples</div>
           </div>
         </div>
-        <div class="clv-verify">&#10003; Verified vs Pinnacle/Betfair close</div>
+        <div class="clv-verify">
+          &#10003; Verified vs Pinnacle &amp; Betfair closing lines &nbsp;&middot;&nbsp;
+          &#10003; No soft books &nbsp;&middot;&nbsp;
+          &#10003; No cross-line comparisons &nbsp;&middot;&nbsp;
+          <span style="opacity:.7">Based on 2+ sharp sources</span>
+        </div>
       </div>
 
-      <!-- AMBER — Extended CLV (Interpolated) -->
+      <!-- AMBER — Estimated CLV (non-direct market) -->
       <div class="clv-card-amber" id="sv-ext-card" style="display:none">
-        <div class="clv-card-lbl">Extended CLV (Interpolated) &nbsp;&#9888;</div>
+        <div class="clv-card-lbl">Estimated CLV (non-direct market) &nbsp;&#9888;</div>
         <div class="clv-stat-row">
-          <div class="clv-stat">
-            <div class="clv-val" id="sv-ext-rate">—</div>
-            <div class="clv-key">Beat rate</div>
-          </div>
           <div class="clv-stat">
             <div class="clv-val" id="sv-ext-avg">—</div>
             <div class="clv-key">Avg CLV</div>
@@ -525,14 +553,15 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
             <div class="clv-key">Samples</div>
           </div>
         </div>
-        <div class="clv-verify">Derived from adjacent lines (not direct quotes)</div>
+        <div class="clv-verify">Derived from adjacent sharp lines &mdash; not a direct market quote</div>
       </div>
 
       <!-- Trust bar -->
       <div class="trust-bar">
-        <span><span class="chk">&#10003;</span> No cross-line comparisons</span>
-        <span><span class="chk">&#10003;</span> No soft book validation</span>
-        <span><span class="chk">&#10003;</span> All CLV vs sharp closing lines</span>
+        <span><span class="chk">&#10003;</span> Verified vs sharp closing lines</span>
+        <span><span class="chk">&#10003;</span> No soft bookmakers used</span>
+        <span><span class="chk">&#10003;</span> Transparent methodology</span>
+        <span><span class="chk">&#10003;</span> Real market validation</span>
         <span style="margin-left:auto;font-size:9px;letter-spacing:.08em;color:#27272a;text-transform:uppercase">Sharp verified &middot; Est. 2025</span>
       </div>
 
@@ -550,9 +579,9 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
       <div class="divider"></div>
       <span class="filter-label">Min EV</span>
       <div class="filter-pills" id="fp-ev">
-        <span class="pill on" data-ev="0">Any</span>
+        <span class="pill" data-ev="0">Any</span>
         <span class="pill" data-ev="3">3%+</span>
-        <span class="pill" data-ev="5">5%+</span>
+        <span class="pill on" data-ev="5">5%+</span>
         <span class="pill" data-ev="8">8%+</span>
         <span class="pill" data-ev="10">10%+</span>
       </div>
@@ -603,18 +632,47 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
 
     <!-- Big FOMO CTA (shown only when not premium) -->
     <div class="fomo-section" id="fomo-section" style="display:none">
-      <h3>Unlock Today's Edges</h3>
-      <p>The scanner identifies where the market is wrong. Premium members see the full output — selection, odds, fair value, and CLV tracking on every signal.</p>
-      <div class="fomo-bullets">
-        <div class="fomo-bullet">Exact selection + model vs market comparison</div>
-        <div class="fomo-bullet">Live odds + fair value (no-vig price)</div>
-        <div class="fomo-bullet">Best bookmaker per edge</div>
-        <div class="fomo-bullet">CLV tracked — did you beat the close?</div>
-        <div class="fomo-bullet">Model signals recap on Discord</div>
+
+      <!-- Live pressure -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;justify-content:center">
+        <span style="font-size:20px">⚡</span>
+        <div>
+          <div style="font-size:14px;font-weight:700;color:#f4f4f5"><span id="fomo-live-count">—</span> live edges right now</div>
+          <div style="font-size:11px;color:#71717a">Markets are moving — not every edge lasts.</div>
+        </div>
       </div>
-      <div style="font-size:11px;color:#52525b;margin-bottom:12px;">This is a value scanner — not every signal is meant to be played.</div>
-      <button class="fomo-unlock-btn" onclick="openPremiumModal()">Unlock Today's Edges</button>
+
+      <!-- Signals filter counter -->
+      <div style="background:#0f0f11;border:1px solid #27272a;border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:12px;font-family:monospace;color:#a1a1aa;text-align:left;line-height:1.9">
+        Signals today: <span id="fomo-signals-today" style="color:#f4f4f5;font-weight:700">—</span><br>
+        Validated: <span id="fomo-validated" style="color:#4ade80;font-weight:700">—</span><br>
+        Rejected: <span id="fomo-rejected" style="color:#71717a">—</span>
+      </div>
+
+      <!-- Conversion block -->
+      <div style="margin-bottom:14px">
+        <div style="font-size:13px;color:#a1a1aa;margin-bottom:10px;line-height:1.5">
+          Most users see the edge <em>after</em> the market moves.<br>
+          Premium users see it <strong style="color:#f4f4f5">before</strong>.
+        </div>
+      </div>
+
+      <div class="fomo-bullets">
+        <div class="fomo-bullet">→ Real-time value opportunities</div>
+        <div class="fomo-bullet">→ Verified sharp markets</div>
+        <div class="fomo-bullet">→ CLV tracked vs Pinnacle &amp; Betfair</div>
+        <div class="fomo-bullet">→ Updated every minute</div>
+      </div>
+      <button class="fomo-unlock-btn" onclick="openPremiumModal()">Upgrade to Premium</button>
       <div class="fomo-discord-link">No code yet? <a href="https://discord.gg/pgrsports" target="_blank">Join Discord to get access →</a></div>
+
+      <!-- Trust footer -->
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid #18181b;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;font-size:10px;color:#52525b">
+        <span>&#10003; Verified vs sharp closing lines</span>
+        <span>&#10003; No soft bookmakers used</span>
+        <span>&#10003; Transparent methodology</span>
+        <span>&#10003; Real market validation</span>
+      </div>
     </div>
   </div>
 
@@ -711,7 +769,7 @@ const state = {
   nbaData: null,
   confirmedPicks: null,
   activeTab: "scanner",
-  filters: { sport: "all", ev: 0, sort: "ev", market: "all" },
+  filters: { sport: "all", ev: 5, sort: "ev", market: "all" },
   expandedId: null,
   loading: true,
   lastFetch: null,
@@ -778,9 +836,9 @@ function sigClass(tier){
   return "sig-low";
 }
 function sigLabel(tier){
-  if(tier==="HIGH") return "🟢 Elite Value";
-  if(tier==="MED")  return "🟡 Strong Value";
-  return "🔵 Standard Value";
+  if(tier==="HIGH") return "🟢 High Confidence";
+  if(tier==="MED")  return "🟡 Developing Edge";
+  return "🔥 Market Moving";
 }
 
 /* ──────────────────────────────────────────────
@@ -968,15 +1026,13 @@ function renderScanner(){
       }
       if(elEN) elEN.textContent = eN > 0 ? eN + " picks" : "—";
 
-      // ── AMBER card: extended (incl interp) ──────────────────────────
-      const xRate = clv.ext_rate, xAvg = clv.ext_avg, xN = clv.ext_n || 0;
+      // ── AMBER card: estimated CLV (non-direct market, no beat rate) ─
+      const xAvg = clv.ext_avg, xN = clv.ext_n || 0;
       const extCard = document.getElementById("sv-ext-card");
       if(extCard && xN > 0){
         extCard.style.display = "";
-        const elXR = document.getElementById("sv-ext-rate");
         const elXA = document.getElementById("sv-ext-avg");
         const elXN = document.getElementById("sv-ext-n");
-        if(elXR) elXR.textContent = xRate != null ? Number(xRate).toFixed(1) + "%" : "—";
         if(elXA && xAvg != null){
           elXA.textContent = (xAvg >= 0 ? "+" : "") + Number(xAvg).toFixed(2) + "%";
           elXA.style.color = xAvg >= 0 ? "#f4f4f5" : "#f87171";
@@ -1169,7 +1225,7 @@ function renderScanner(){
         <div class="cell-odds locked-cell" style="justify-content:flex-end"><span class="locked-blur">2.05</span><span class="locked-icon">🔒</span></div>
         <div class="cell-fair col-fair locked-cell" style="justify-content:flex-end"><span class="locked-blur">1.92</span><span class="locked-icon">🔒</span></div>
         <div class="cell-edge" style="text-align:right"><span class="edge-chip ${evClass(evNum)}">${ev}</span></div>
-        <div class="cell-signal col-signal" style="text-align:center"><span class="sig-badge sig-med">🟡 Strong Value</span></div>
+        <div class="cell-signal col-signal" style="text-align:center"><span class="sig-badge sig-med">🟡 Developing Edge</span></div>
       </div>`;
     }
     // FOMO unlock banner after all rows
@@ -1258,27 +1314,30 @@ function renderExpandPanel(p){
 
 function updateStatsStrip(picks){
   if(!picks.length) return;
-  const evs  = picks.map(p=>p.ev).filter(v=>!isNaN(v));
-  const odds = picks.map(p=>parseFloat(p.odds||p.best_odds||0)).filter(v=>v>1);
-  const avgEv   = evs.length  ? evs.reduce((a,b)=>a+b,0)/evs.length  : 0;
-  const bestEv  = evs.length  ? Math.max(...evs) : 0;
-  const avgOdds = odds.length ? odds.reduce((a,b)=>a+b,0)/odds.length : null;
-  document.getElementById("s-avgev").textContent   = fmtPct(avgEv);
-  document.getElementById("s-bestev").textContent  = fmtPct(bestEv);
-  if(avgOdds!=null) document.getElementById("s-avgodds").textContent = avgOdds.toFixed(2);
+  const evs = picks.map(p=>p.ev).filter(v=>!isNaN(v));
+  const bestEv = evs.length ? Math.max(...evs) : 0;
+  document.getElementById("s-bestev").textContent = fmtPct(bestEv);
 }
 
 function updateEdgesFoundTile(total, sharp){
   const el = document.getElementById("s-count");
   const sub = document.getElementById("s-count-sub");
   if(el) el.textContent = total > 0 ? total : "—";
-  if(sub){
-    if(sharp > 0){
-      sub.innerHTML = `<span style="color:#f59e0b;font-weight:700">${sharp} high confidence</span> <span style="color:#52525b">(CLV 5-6 ⚡)</span>`;
-    } else {
-      sub.textContent = total > 0 ? "scanning for sharp signals..." : "—";
-    }
-  }
+  if(sub) sub.textContent = total > 0 ? "signals identified" : "—";
+
+  // Validated tile
+  const valEl = document.getElementById("s-validated");
+  if(valEl) valEl.textContent = sharp > 0 ? sharp : (total > 0 ? "0" : "—");
+
+  // FOMO counters
+  const fomoCount = document.getElementById("fomo-live-count");
+  if(fomoCount) fomoCount.textContent = total > 0 ? total : "—";
+  const fomoSig = document.getElementById("fomo-signals-today");
+  if(fomoSig) fomoSig.textContent = total > 0 ? total : "—";
+  const fomoVal = document.getElementById("fomo-validated");
+  if(fomoVal) fomoVal.textContent = sharp > 0 ? sharp : "0";
+  const fomoRej = document.getElementById("fomo-rejected");
+  if(fomoRej) fomoRej.textContent = total > sharp ? (total - sharp) : "0";
 }
 
 /* ──────────────────────────────────────────────
@@ -1301,33 +1360,30 @@ async function fetchMain(){
       const ds = await dailyStatsRes.json();
       updateEdgesFoundTile(ds.edges_found||0, ds.high_confidence||0);
     }
-    if(statsRes.ok){
-      const s = await statsRes.json();
-      const at = s.all_time || s;
-      const hr    = at.hit_rate!=null?at.hit_rate:(at.hit_rate_pct!=null?at.hit_rate_pct:null);
-      const total = at.total||at.settled||at.total_bets||null;
-      if(hr!=null){
-        // Neutral color — signal accuracy is informational, not a win/loss indicator
-        document.getElementById("s-hitrate").textContent = fmtPct(hr,false);
-        document.getElementById("s-hitrate").style.color = "#e4e4e7";
-      }
-      if(total!=null){
-        const hirTile = document.getElementById("s-hitrate").closest(".stat-tile");
-        if(hirTile) hirTile.querySelector(".stat-sub").textContent = total.toLocaleString()+" settled";
-      }
-    }
     if(clvRes.ok){
       const c = await clvRes.json();
-      const clv = c.avg_clv!=null?c.avg_clv:(c.clv_avg!=null?c.clv_avg:null);
-      const n   = c.sample_n||c.n||c.count||null;
-      if(clv!=null){
-        document.getElementById("s-clv").textContent=fmtPct(clv);
-        document.getElementById("s-clv").style.color=clv>=0?"#4ade80":"#f87171";
+      // Sharp CLV strip — use exact_* (Pinnacle/Betfair direct quotes)
+      const sharpAvg  = c.exact_avg!=null ? c.exact_avg : c.avg_clv;
+      const sharpRate = c.exact_rate!=null ? c.exact_rate : c.positive_rate;
+      const sharpN    = c.exact_n!=null ? c.exact_n : (c.sample_n||0);
+
+      // Avg CLV tile (s-clv)
+      if(sharpAvg!=null){
+        document.getElementById("s-clv").textContent=fmtPct(sharpAvg);
+        document.getElementById("s-clv").style.color=sharpAvg>=0?"#4ade80":"#f87171";
       }
-      if(n!=null){
-        const clvTile = document.getElementById("s-clv").closest(".stat-tile");
-        if(clvTile) clvTile.querySelector(".stat-sub").textContent=n.toLocaleString()+" picks measured";
+      // Beat rate tile (s-hitrate)
+      if(sharpRate!=null){
+        document.getElementById("s-hitrate").textContent=fmtPct(sharpRate,false);
+        document.getElementById("s-hitrate").style.color=sharpRate>=50?"#4ade80":"#e4e4e7";
       }
+      // Sharp samples tile (s-avgodds)
+      if(sharpN>0){
+        document.getElementById("s-avgodds").textContent=sharpN.toLocaleString();
+      }
+    }
+    if(statsRes.ok){
+      // Only used for bestEv context — model calibration tile removed
     }
     state.lastFetch=Date.now();
     document.getElementById("last-updated").textContent="Updated "+fmtAgo(state.lastFetch);

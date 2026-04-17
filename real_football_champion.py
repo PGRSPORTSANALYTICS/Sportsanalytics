@@ -4578,24 +4578,25 @@ def run_corners_cards_cycle():
         print(f"⚠️ Stop-loss check failed: {e}")
     
     # ── Edge Management Gate ──────────────────────────────────────────────────
-    # Corners and Cards always run as VALUE_OPP (LEARNING mode / analysis only).
-    # No PROD picks — Discord Analysis Publisher handles distribution.
-    corners_value_opp = True
+    # Corners: PROD when Edge Engine says ACTIVE, VALUE_OPP when DEGRADED/DISABLED.
+    corners_value_opp = False  # default: PROD
     try:
         from edge_management_engine import get_market_edge_status
         edge = get_market_edge_status("Corners")
         if edge["status"] == "DISABLED":
+            corners_value_opp = True
             reason = edge["reasons"][0] if edge["reasons"] else "Edge engine decision"
-            print(f"\n📊 CORNERS → VALUE_OPP mode (Edge: DISABLED)")
-            print(f"   Reason: {reason}")
+            print(f"\n📊 CORNERS → VALUE_OPP mode (Edge: DISABLED — {reason})")
         elif edge["status"] == "DEGRADED":
+            corners_value_opp = True
             reason = edge["reasons"][0] if edge["reasons"] else "Edge engine decision"
-            print(f"\n📊 CORNERS → VALUE_OPP mode (Edge: DEGRADED)")
-            print(f"   Reason: {reason}")
+            print(f"\n📊 CORNERS → VALUE_OPP mode (Edge: DEGRADED — {reason})")
         else:
-            print(f"\n📊 CORNERS → VALUE_OPP mode (analysis only, no PROD picks)")
+            corners_value_opp = False
+            print(f"\n📊 CORNERS → PROD mode (Edge: ACTIVE ✅)")
     except Exception as e:
-        print(f"⚠️ Edge gate check (fail-open): {e}")
+        corners_value_opp = False  # fail-open: default to PROD
+        print(f"⚠️ Edge gate check (fail-open → PROD): {e}")
 
     print("\n" + "="*60)
     print("🔢 CORNERS ENGINE (Independent Cycle)")
