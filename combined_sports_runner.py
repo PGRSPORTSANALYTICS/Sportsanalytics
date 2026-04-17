@@ -139,17 +139,12 @@ def check_daily_stoploss() -> bool:
 
 
 def run_discord_analysis_publisher():
-    """Publish analysis data to league-specific Discord channels (NO units, NO staking)"""
-    try:
-        from discord_publisher import publish_after_cycle
-        logger.info("📡 Publishing analysis data to Discord channels...")
-        count = publish_after_cycle()
-        if count:
-            logger.info(f"📡 Published {count} analysis entries to Discord")
-        else:
-            logger.info("📡 No new analysis data to publish")
-    except Exception as e:
-        logger.error(f"❌ Discord analysis publish error: {e}")
+    """DISABLED (Apr 17 2026) — product is CLV proof-of-work, NOT a tipster feed.
+    Pre-match pick analysis will never be posted to Discord again. The only
+    thing that posts to WEBHOOK_PROOF is proof_poster.py, which fires when
+    CLV is captured (closing-line beat/loss) — real market proof, not forecasts.
+    Left as a no-op so existing call sites don't break."""
+    return
 
 
 def run_form_cacher():

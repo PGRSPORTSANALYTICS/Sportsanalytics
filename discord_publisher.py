@@ -74,7 +74,8 @@ LEAGUE_WEBHOOKS: Dict[str, str] = {
 DEFAULT_WEBHOOK = os.getenv("DISCORD_WEBHOOK_URL", "")
 
 PROOF_WEBHOOK = os.getenv("WEBHOOK_PROOF", "")
-ROUTE_ALL_TO_PROOF = True
+ROUTE_ALL_TO_PROOF = False  # Apr 17 2026: Pre-match publisher disabled entirely.
+                             # proof-of-work channel is CLV-only (proof_poster.py).
 
 RATE_LIMIT_SECONDS = 2.0
 DEDUPE_TTL_HOURS = 48
