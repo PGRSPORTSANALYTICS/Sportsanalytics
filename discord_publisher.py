@@ -73,6 +73,9 @@ LEAGUE_WEBHOOKS: Dict[str, str] = {
 
 DEFAULT_WEBHOOK = os.getenv("DISCORD_WEBHOOK_URL", "")
 
+PROOF_WEBHOOK = os.getenv("WEBHOOK_PROOF", "")
+ROUTE_ALL_TO_PROOF = True
+
 RATE_LIMIT_SECONDS = 2.0
 DEDUPE_TTL_HOURS = 48
 DEDUPE_FILE = "discord_publisher_dedupe.json"
@@ -226,10 +229,12 @@ def _db_contradicts_already_sent(pick: dict) -> bool:
 
 
 def route_webhook(league: str) -> str:
+    if ROUTE_ALL_TO_PROOF and PROOF_WEBHOOK:
+        return PROOF_WEBHOOK
     url = LEAGUE_WEBHOOKS.get(league, "")
     if url:
         return url
-    return DEFAULT_WEBHOOK
+    return PROOF_WEBHOOK or DEFAULT_WEBHOOK
 
 
 def _format_kickoff(match_date) -> str:
