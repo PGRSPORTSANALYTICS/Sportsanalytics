@@ -918,12 +918,13 @@ function renderScanner(){
   const filterBar    = document.querySelector(".filter-bar");
   const svBanner     = document.getElementById("sv-banner");
   const clvProof     = document.getElementById("clv-proof-strip");
+  const isScanner    = state.activeTab === "scanner";
   if(filterBar) filterBar.style.display = isSV ? "none" : "";
   if(svBanner)  svBanner.style.display  = isSV ? "flex" : "none";
-  if(clvProof)  clvProof.style.display  = isSV ? "flex" : "none";
+  if(clvProof)  clvProof.style.display  = (isSV || isScanner) ? "flex" : "none";
 
   // Populate CLV OddsJam hero cards from cached data (or fetch if needed)
-  if(isSV){
+  if(isSV || isScanner){
     const clv = state.clvData;
     if(clv){
       // ── GREEN card: exact-line Pinnacle/Betfair ──────────────────────
