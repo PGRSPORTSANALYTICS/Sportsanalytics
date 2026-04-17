@@ -135,15 +135,20 @@ def post_clv_proof(bet: dict, close_odds: float, clv: float, close_book: str,
                     bet['id'], book_str)
         return False
 
+    # Block line-moved captures from WEBHOOK_PROOF entirely — different line means
+    # CLV isn't apples-to-apples (e.g. Over 3.5 vs Over 3.25 closing odds is misleading)
+    if '(line moved' in book_str:
+        logger.info("proof_poster: skip WEBHOOK_PROOF — line moved, not same-line CLV (book=%s, bet=%d)",
+                    book_str, bet['id'])
+        return False
+
     # Block single-source captures from WEBHOOK_PROOF — unreliable as public proof
-    # Exception: approx line from Pinnacle is allowed (sharp source, different line)
     import re as _re
-    is_approx_sharp = '(line moved' in book_str and 'Pinnacle' in book_str
     n_sources = 1
     m = _re.search(r'n=(\d+)', book_str)
     if m:
         n_sources = int(m.group(1))
-    if n_sources < 2 and not is_approx_sharp:
+    if n_sources < 2:
         logger.info("proof_poster: skip WEBHOOK_PROOF — n=%d source(s) only (book=%s, bet=%d)",
                     n_sources, book_str, bet['id'])
         return False
