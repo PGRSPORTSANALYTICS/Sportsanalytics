@@ -184,25 +184,62 @@ def post_clv_proof(bet: dict, close_odds: float, clv: float, close_book: str,
     market_display = selection if selection else market_lbl
 
     is_interp = '(interp' in (close_book or '')
-    close_odds_label = "Fair odds (interpolated)" if is_interp else "Closing odds         "
 
-    lines = [
-        f"**{match_str}**",
-        f"{league}  ·  *{market_display}*",
-        "",
-        "```",
-        "CLV proof:",
-        "",
-        f"Odds when identified : {open_str}",
-        f"{close_odds_label} : {close_str}  [{close_lbl}]",
-        f"CLV                  : {clv_str}",
-        "",
-        "Market moved → value confirmed ✅",
-        "```",
-    ]
     if is_interp:
-        lines.insert(-1, "(fair odds derived from sharp book adjacent lines)")
-        lines.insert(-1, "")
+        # ── Parse bracket lines + odds from source label ────────────────
+        # Format: "vs Pinnacle (interp 3.25@1.91↔3.75@2.55)"
+        import re as _re2
+        bk_clean = _re2.sub(r'vs\s+', '', close_lbl).strip()
+        m_interp = _re2.search(
+            r'interp\s+([\d.]+)@([\d.]+)[↔<>~]+([\d.]+)@([\d.]+)', close_lbl
+        )
+        if m_interp:
+            lo_line_s, lo_odds_s, hi_line_s, hi_odds_s = m_interp.groups()
+            deriv_lines = [
+                f"  Over {lo_line_s}  →  {lo_odds_s}  [{bk_clean}]",
+                f"  Over {hi_line_s}  →  {hi_odds_s}  [{bk_clean}]",
+            ]
+            bk_display = bk_clean.split('(')[0].strip()
+        else:
+            lo_line_s = hi_line_s = ''
+            deriv_lines = ["  (adjacent lines unavailable)"]
+            bk_display = bk_clean
+
+        lines = [
+            f"**{match_str}**",
+            f"{league}  ·  *{market_display}*",
+            "",
+            "```",
+            "CLV (INTERPOLATED) ⚠️",
+            "",
+            f"Odds when identified : {open_str}",
+            f"Fair odds at target  : {close_str}  [{bk_display}]",
+            f"CLV (interp)         : {clv_str}",
+            "",
+            "How derived:",
+        ] + deriv_lines + [
+            f"→ Linear interp of implied prob at target line",
+            "",
+            "NOT a direct same-line market quote.",
+            "Fair price mathematically derived from",
+            f"{bk_display}'s adjacent line structure.",
+            "```",
+        ]
+    else:
+        lines = [
+            f"**{match_str}**",
+            f"{league}  ·  *{market_display}*",
+            "",
+            "```",
+            "CLV proof:",
+            "",
+            f"Odds when identified : {open_str}",
+            f"Closing odds         : {close_str}  [{close_lbl}]",
+            f"CLV                  : {clv_str}",
+            "",
+            "Market moved → value confirmed ✅",
+            "```",
+        ]
 
     if model_pct and market_pct and ev_str:
         mins_txt = f"within {mins_to_close}min of kickoff" if mins_to_close and mins_to_close > 0 else "at close"
@@ -218,11 +255,18 @@ def post_clv_proof(bet: dict, close_odds: float, clv: float, close_book: str,
             "```",
         ]
 
+    embed_color = 0xf59e0b if is_interp else 0x22c55e
+    embed_title = (f"📊 CLV Proof ⚠️ interp  ·  {clv_str}"
+                   if is_interp else f"📊 CLV Proof  ·  {clv_str}")
+    embed_footer = ("PGR Analytics · CLV interpolated from adjacent sharp lines — NOT a direct quote  ·  Not financial advice"
+                    if is_interp else
+                    "PGR Analytics · CLV = (open/close − 1) × 100  ·  Not financial advice")
+
     embed = {
-        "title": f"📊 CLV Proof  ·  {clv_str}",
+        "title": embed_title,
         "description": "\n".join(lines),
-        "color": 0x22c55e,
-        "footer": {"text": "PGR Analytics · CLV = (open/close − 1) × 100  ·  Not financial advice"},
+        "color": embed_color,
+        "footer": {"text": embed_footer},
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
 
@@ -540,7 +584,7 @@ def post_clv_capture(bet: dict, close_odds: float, clv: float,
 # 5. DAILY CLV SUMMARY — posts to DISCORD_RESULTS_WEBHOOK
 # ─────────────────────────────────────────────────────────────────
 
-def _clv_stats_query(since_epoch=None, version_filter='v2'):
+def _clv_stats_query(since_epoch=None, version_filter='v2', exclude_interp=False):
     """Fetch CLV stats from a given epoch. If None, fetches all-time.
     
     Only counts SHARP captures (excludes api_football, soft '~' sources, and
@@ -548,6 +592,7 @@ def _clv_stats_query(since_epoch=None, version_filter='v2'):
     
     version_filter: 'v2' (default) = clean era only. 'legacy' = pre-2026-04-17 frozen
     data. None = both (all-time including legacy).
+    exclude_interp: True = exact-line only (no interp). False = exact + interp (extended).
     """
     where_extra = f"AND timestamp >= {since_epoch}" if since_epoch else ""
     if version_filter == 'v2':
@@ -559,6 +604,8 @@ def _clv_stats_query(since_epoch=None, version_filter='v2'):
         "AND clv_source_book NOT ILIKE '~%%' "
         "AND clv_source_book NOT ILIKE '%%(line moved%%'"
     )
+    if exclude_interp:
+        sharp_filter += " AND clv_source_book NOT ILIKE '%%(interp%%'"
     return _db_module.db_helper.execute(f"""
         SELECT
             COUNT(*)                                                             AS total,
@@ -607,15 +654,17 @@ def post_daily_clv_summary() -> bool:
         logger.warning("proof_poster: could not read clv_era_start: %s", exc)
 
     try:
-        # v2 era only (clean data from era start)
-        era_row = _clv_stats_query(since_epoch=era_epoch, version_filter='v2')
-        # legacy panel (frozen pre-v2 data, for transparency)
-        all_row = _clv_stats_query(since_epoch=None, version_filter='legacy')
+        # Exact-line only (same line, same market, direct sharp quote)
+        exact_row = _clv_stats_query(since_epoch=era_epoch, version_filter='v2', exclude_interp=True)
+        # Extended (exact + interpolated)
+        ext_row   = _clv_stats_query(since_epoch=era_epoch, version_filter='v2', exclude_interp=False)
+        # Legacy panel (frozen pre-v2 data, for transparency)
+        leg_row   = _clv_stats_query(since_epoch=None, version_filter='legacy')
     except Exception as exc:
         logger.error("proof_poster daily_clv_summary: DB fetch failed: %s", exc)
         return False
 
-    if not era_row or not all_row:
+    if not exact_row or not ext_row:
         return False
 
     def _fmt(row):
@@ -630,10 +679,13 @@ def post_daily_clv_summary() -> bool:
         roi_s       = f"{roi:+.1f}%" if roi is not None else "n/a"
         return total, clv_tracked, clv_pos, beat_rate, wr, avg_clv_s, roi_s
 
-    e_total, e_clv, e_pos, e_beat, e_wr, e_avg, e_roi = _fmt(era_row)
-    a_total, a_clv, a_pos, a_beat, a_wr, a_avg, a_roi = _fmt(all_row)
+    e_total, e_clv, e_pos, e_beat, e_wr, e_avg, e_roi = _fmt(exact_row)
+    x_total, x_clv, x_pos, x_beat, x_wr, x_avg, x_roi = _fmt(ext_row)
+    interp_n = x_clv - e_clv  # how many are interpolated
 
-    # Color based on era beat rate
+    leg_fmt = _fmt(leg_row) if leg_row else None
+
+    # Color based on EXACT beat rate (the real KPI)
     if e_beat >= 55:
         color, trend = 0x22c55e, "🟢"
     elif e_beat >= 45:
@@ -641,36 +693,50 @@ def post_daily_clv_summary() -> bool:
     else:
         color, trend = 0xef4444, "🔴"
 
-    era_block = (
+    exact_block = (
         f"```\n"
-        f"{'Picks avgjorda':<24} {e_total:>5}\n"
-        f"{'CLV-spårade':<24} {e_clv:>5}  ({round(100*e_clv/e_total,0) if e_total else 0:.0f}%)\n"
-        f"{'Slog CLV (>0)':<24} {e_pos:>5}  ({e_beat}%)\n"
-        f"{'Snitt CLV':<24} {e_avg:>8}\n"
+        f"{'Picks settled':<24} {e_total:>5}\n"
+        f"{'CLV tracked (exact)':<24} {e_clv:>5}  ({round(100*e_clv/e_total,0) if e_total else 0:.0f}%)\n"
+        f"{'Beat closing line':<24} {e_pos:>5}  ({e_beat}%)\n"
+        f"{'Avg CLV':<24} {e_avg:>8}\n"
         f"{'Win rate':<24} {e_wr:>6}%\n"
         f"{'ROI':<24} {e_roi:>8}\n"
         f"```"
     )
 
-    all_block = (
+    ext_block = (
         f"```\n"
-        f"{'Picks avgjorda':<24} {a_total:>5}\n"
-        f"{'Slog CLV (>0)':<24} {a_pos:>5}  ({a_beat}%)\n"
-        f"{'Snitt CLV':<24} {a_avg:>8}\n"
-        f"{'ROI':<24} {a_roi:>8}\n"
+        f"{'Exact-line':<20} {e_clv:>4}  beat {e_pos} ({e_beat}%)\n"
+        f"{'Interpolated':<20} {interp_n:>4}  beat {x_pos-e_pos} ({round(100*(x_pos-e_pos)/interp_n,1) if interp_n else 0:.1f}%)\n"
+        f"{'Total extended':<20} {x_clv:>4}  beat {x_pos} ({x_beat}%)\n"
+        f"{'Avg CLV (ext)':<20} {x_avg:>8}\n"
+        f"⚠ Interpolated = mathematically derived fair odds\n"
+        f"  NOT a direct market quote — do not use as main KPI\n"
         f"```"
     )
 
     desc = (
         f"{trend} **{era_label}** — start {era_date}\n"
-        f"_Bara sharp same-line captures (Pinnacle/Betfair/Bet365). "
-        f"API-Football, line-moved & soft sources exkluderade._\n\n"
-        f"**📊 Clean v2 era**\n"
-        + era_block
-        + f"\n**🗄️ Legacy (frozen pre-{era_date})**\n"
-        + all_block
-        + f"\n_{trend} CLV beat rate (v2): **{e_beat}%** · mål >50%_"
+        f"_Sharp same-line captures (Pinnacle/Betfair/Bet365). "
+        f"API-Football, line-moved & soft excluded._\n\n"
+        f"**📊 Sharp CLV — Exact-line only (main KPI)**\n"
+        + exact_block
+        + f"\n**📐 Extended CLV — incl interpolated (secondary)**\n"
+        + ext_block
     )
+
+    if leg_fmt:
+        a_total, a_clv, a_pos, a_beat, a_wr, a_avg, a_roi = leg_fmt
+        desc += (
+            f"\n**🗄️ Legacy (frozen pre-{era_date})**\n"
+            f"```\n"
+            f"{'Picks settled':<24} {a_total:>5}\n"
+            f"{'Beat CLV (>0)':<24} {a_pos:>5}  ({a_beat}%)\n"
+            f"{'Avg CLV':<24} {a_avg:>8}\n"
+            f"```"
+        )
+
+    desc += f"\n_{trend} Sharp CLV beat rate (v2): **{e_beat}%** · mål >50%_"
 
     embed = {
         "title": "📈 Daglig CLV-puls — Closing Line Value v2",

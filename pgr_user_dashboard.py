@@ -169,25 +169,53 @@ def load_hero_stats():
 
 @st.cache_data(ttl=300)
 def load_clv_hero_stats():
+    """Returns (exact_total, exact_positive, exact_avg, total_prod,
+                 ext_total, ext_positive, ext_avg)
+    exact = same-line same-market sharp captures (no interp, no line-moved)
+    extended = exact + interpolated (still excludes line-moved + soft + api-football)
+    """
     db = DatabaseHelper()
     row = db.execute("""
         SELECT
+            -- EXACT (same-line direct sharp quote)
             COUNT(*) FILTER (WHERE clv_pct IS NOT NULL
                 AND clv_source_book NOT ILIKE '%%api_football%%'
                 AND clv_source_book NOT ILIKE '~%%'
-                AND clv_source_book NOT ILIKE '%%(line moved%%' AND clv_version = 'v2') AS clv_total,
+                AND clv_source_book NOT ILIKE '%%(line moved%%'
+                AND clv_source_book NOT ILIKE '%%(interp%%'
+                AND clv_version = 'v2') AS exact_total,
             COUNT(*) FILTER (WHERE clv_pct > 0
                 AND clv_source_book NOT ILIKE '%%api_football%%'
                 AND clv_source_book NOT ILIKE '~%%'
-                AND clv_source_book NOT ILIKE '%%(line moved%%' AND clv_version = 'v2') AS clv_positive,
+                AND clv_source_book NOT ILIKE '%%(line moved%%'
+                AND clv_source_book NOT ILIKE '%%(interp%%'
+                AND clv_version = 'v2') AS exact_positive,
             COALESCE(AVG(clv_pct) FILTER (WHERE clv_pct IS NOT NULL
                 AND clv_source_book NOT ILIKE '%%api_football%%'
                 AND clv_source_book NOT ILIKE '~%%'
-                AND clv_source_book NOT ILIKE '%%(line moved%%' AND clv_version = 'v2'), 0) AS avg_clv,
-            COUNT(*) FILTER (WHERE mode = 'PROD')                AS total_prod
+                AND clv_source_book NOT ILIKE '%%(line moved%%'
+                AND clv_source_book NOT ILIKE '%%(interp%%'
+                AND clv_version = 'v2'), 0) AS exact_avg,
+            COUNT(*) FILTER (WHERE mode = 'PROD') AS total_prod,
+            -- EXTENDED (exact + interpolated)
+            COUNT(*) FILTER (WHERE clv_pct IS NOT NULL
+                AND clv_source_book NOT ILIKE '%%api_football%%'
+                AND clv_source_book NOT ILIKE '~%%'
+                AND clv_source_book NOT ILIKE '%%(line moved%%'
+                AND clv_version = 'v2') AS ext_total,
+            COUNT(*) FILTER (WHERE clv_pct > 0
+                AND clv_source_book NOT ILIKE '%%api_football%%'
+                AND clv_source_book NOT ILIKE '~%%'
+                AND clv_source_book NOT ILIKE '%%(line moved%%'
+                AND clv_version = 'v2') AS ext_positive,
+            COALESCE(AVG(clv_pct) FILTER (WHERE clv_pct IS NOT NULL
+                AND clv_source_book NOT ILIKE '%%api_football%%'
+                AND clv_source_book NOT ILIKE '~%%'
+                AND clv_source_book NOT ILIKE '%%(line moved%%'
+                AND clv_version = 'v2'), 0) AS ext_avg
         FROM football_opportunities WHERE mode = 'PROD'
     """, fetch='one')
-    return row or (0, 0, 0.0, 0)
+    return row or (0, 0, 0.0, 0, 0, 0, 0.0)
 
 
 @st.cache_data(ttl=300)
@@ -478,8 +506,10 @@ wins, settled, profit_units, pending = load_hero_stats()
 hit_rate = (wins / settled * 100) if settled > 0 else 0.0
 roi      = (profit_units / settled * 100) if settled > 0 else 0.0
 
-clv_total, clv_positive, avg_clv, _ = load_clv_hero_stats()
+(_ex_total, _ex_pos, _ex_avg, _, _ext_total, _ext_pos, _ext_avg) = load_clv_hero_stats()
+clv_total    = _ex_total;  clv_positive = _ex_pos;  avg_clv = _ex_avg
 clv_hit_rate = (clv_positive / clv_total * 100) if clv_total > 0 else 0.0
+ext_hit_rate = (_ext_pos / _ext_total * 100)    if _ext_total > 0 else 0.0
 total_settled_hero, clv_covered_hero = load_clv_coverage()
 live_edges_row = load_live_edge_summary()
 live_edges = live_edges_row[0] or 0
@@ -517,31 +547,47 @@ with c3:
 with c4:
     metric_card("Live Picks", str(pending), kicker="Active today", variant="default")
 with c5:
-    metric_card("CLV Hit Rate",
+    metric_card("CLV Beat Rate",
                 f"{clv_hit_rate:.1f}%" if clv_total > 0 else "—",
-                kicker=f"{clv_positive} of {clv_total} beat closing line",
+                kicker=f"Exact-line only · n={clv_total}",
                 variant="good" if clv_hit_rate >= 50 else ("bad" if clv_total > 0 else "default"))
 with c6:
     metric_card("Avg CLV%",
                 f"{avg_clv:+.2f}%" if clv_total > 0 else "—",
-                kicker="vs closing market price",
+                kicker="Exact-line sharp captures",
                 variant="good" if avg_clv >= 0 else ("bad" if clv_total > 0 else "default"))
 
 if clv_total > 0:
     hero_cov_pct   = (clv_covered_hero / total_settled_hero * 100) if total_settled_hero > 0 else 0
     hero_cov_color = "#00F59D" if hero_cov_pct >= 50 else "#FBBF24"
-    note = "" if hero_cov_pct >= 50 else ' · <span style="color:#FBBF24;font-size:0.78rem;">⚠ Preliminary — CLV coverage below 50%</span>'
+    note = "" if hero_cov_pct >= 50 else ' · <span style="color:#FBBF24;font-size:0.78rem;">⚠ Preliminary — CLV coverage building</span>'
     st.markdown(f"""
     <div style="margin:12px 0 4px 0;padding:10px 18px;border-radius:10px;
                 background:rgba(0,245,157,0.06);border:1px solid rgba(0,245,157,0.18);
                 font-size:0.85rem;color:#9BA0B5;text-align:center;">
-        <span style="color:#00F59D;font-weight:600;">{clv_hit_rate:.0f}% of our picks</span>
-        got a better price than what the market settled on —
-        verified against closing odds from sharp bookmakers.
+        <span style="color:#00F59D;font-weight:600;">Sharp CLV (exact-line only)</span> —
+        same market, same line, verified against Pinnacle/Betfair/Bet365 closing price.
+        {clv_hit_rate:.0f}% beat the closing line ({clv_positive}/{clv_total} picks, n={clv_total}).
         <span style="color:{hero_cov_color};font-size:0.78rem;margin-left:8px;">
-            CLV coverage: {hero_cov_pct:.0f}%
+            Coverage: {hero_cov_pct:.0f}%
         </span>
         {note}
+    </div>
+    """, unsafe_allow_html=True)
+
+# Secondary row: Extended CLV (exact + interpolated) — clearly labelled
+if _ext_total > 0:
+    interp_only = _ext_total - clv_total
+    interp_pos  = _ext_pos  - clv_positive
+    st.markdown(f"""
+    <div style="margin:6px 0 4px 0;padding:8px 18px;border-radius:8px;
+                background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.25);
+                font-size:0.82rem;color:#9BA0B5;text-align:center;">
+        <span style="color:#f59e0b;font-weight:600;">Extended CLV (incl interpolated)</span>
+        &nbsp;·&nbsp; Beat rate: <strong>{ext_hit_rate:.1f}%</strong>
+        ({_ext_pos}/{_ext_total}) &nbsp;·&nbsp; Avg: <strong>{_ext_avg:+.2f}%</strong>
+        &nbsp;·&nbsp; includes {interp_only} mathematically-derived same-line-equivalent captures
+        &nbsp;·&nbsp; <span style="color:#f59e0b;">⚠ Not direct market quotes</span>
     </div>
     """, unsafe_allow_html=True)
 

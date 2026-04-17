@@ -777,19 +777,27 @@ class CLVService:
                     fair_odds = round(1.0 / p_interp, 4)
                     lo_str = f"{lo_line:.2f}".rstrip('0').rstrip('.')
                     hi_str = f"{hi_line:.2f}".rstrip('0').rstrip('.')
-                    interp_results.append((fair_odds, bk, f"interp_{lo_str}_{hi_str}", lo_line, hi_line))
+                    interp_results.append((fair_odds, bk, f"interp_{lo_str}_{hi_str}",
+                                           lo_line, hi_line, lo_odds, hi_odds))
 
                 if interp_results:
                     avg_odds   = sum(r[0] for r in interp_results) / len(interp_results)
                     book_names = [r[1] for r in interp_results]
                     lo_str     = f"{interp_results[0][3]:.2f}".rstrip('0').rstrip('.')
                     hi_str     = f"{interp_results[0][4]:.2f}".rstrip('0').rstrip('.')
+                    lo_o       = f"{interp_results[0][5]:.2f}"
+                    hi_o       = f"{interp_results[0][6]:.2f}"
                     book_label = ' + '.join(book_names[:2]) + (' ...' if len(book_names) > 2 else '')
-                    source_label = f"vs {book_label} (interp {lo_str}↔{hi_str})"
+                    # Format includes odds so proof embed can show derivation:
+                    # "vs Pinnacle (interp 3.25@1.91↔3.75@2.55)"
+                    source_label = f"vs {book_label} (interp {lo_str}@{lo_o}↔{hi_str}@{hi_o})"
                     matched_out  = interp_results[0][2]
                     logger.info(
-                        "CLV: interpolated odds %.4f for line %.2f between %.2f↔%.2f — books=%s",
-                        avg_odds, target_line, interp_results[0][3], interp_results[0][4], book_names
+                        "CLV: interpolated odds %.4f for line %.2f between %.2f@%.2f↔%.2f@%.2f — books=%s",
+                        avg_odds, target_line,
+                        interp_results[0][3], interp_results[0][5],
+                        interp_results[0][4], interp_results[0][6],
+                        book_names
                     )
                     return (round(avg_odds, 4), source_label, matched_out)
 
