@@ -2567,7 +2567,10 @@ async def get_today_picks():
                     open_odds, clv_pct, mode,
                     model_prob, disagreement, clv_status, hidden_value_status,
                     timestamp, kickoff_epoch, clv_score, clv_tier,
-                    fair_odds, pgr_score, clv_source_book
+                    fair_odds, pgr_score, clv_source_book,
+                    sharp_price_at_detection, sharp_book_at_detection,
+                    confidence_label, signal_status, soft_anchored,
+                    best_price_book
                 FROM football_opportunities
                 WHERE mode IN ('PROD', 'VALUE_OPP')
                   AND (outcome IS NULL OR outcome = '' OR outcome IN ('pending', 'unknown'))
@@ -2703,6 +2706,13 @@ async def get_today_picks():
                 'fair_odds': round(_fair_odds_raw, 3) if _fair_odds_raw else None,
                 'pgr_score': _compute_pgr_score(r[29], ev_val, model_p, float(r[7]) if r[7] else 0),
                 'clv_source_book': r[30] or None,
+                # ── Doctrine fields (NULL on legacy rows; populated by new pipeline) ──
+                'sharp_price_at_detection': float(r[31]) if r[31] else None,
+                'sharp_book_at_detection':  r[32] or None,
+                'confidence_label':         r[33] or None,        # SHARP_CONFIRMED | INTERPOLATED | UNVERIFIED_LEGACY | None
+                'signal_status':            r[34] or None,        # SIGNAL | VERIFIED | REJECTED
+                'soft_anchored':            bool(r[35]) if r[35] is not None else None,
+                'best_price_book':          r[36] or book,        # falls back to legacy best_odds_bookmaker
             })
 
         # ── Embed training_data for all matches in ONE batch query ──
@@ -4208,6 +4218,12 @@ async def opportunities_alias():
 @app.get("/pgr", include_in_schema=False)
 async def pgr_dashboard():
     return HTMLResponse(content=(STATIC_DIR / "pgr_dashboard.html").read_text())
+
+@app.get("/v2", include_in_schema=False)
+async def v2_dashboard():
+    """v2 dashboard preview — sharp-first design.
+    Lives alongside home.html until validated, then will replace /, /home, /app."""
+    return HTMLResponse(content=(STATIC_DIR / "v2.html").read_text(), headers=_NO_CACHE_HEADERS)
 
 @app.get("/edge-finder", include_in_schema=False)
 async def edge_finder_alias():

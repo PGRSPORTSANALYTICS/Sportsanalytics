@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#0b1220" />
+<title>PGR Analytics — Live Scanner</title>
+<link rel="icon" href="/favicon.ico" />
+<style>
+  /* ── Reset & base ─────────────────────────────────────────────────── */
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:#0b1220;
+    color:#e6edf6;
+    font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Inter','Segoe UI',Roboto,sans-serif;
+    font-size:14px;line-height:1.45;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+    overflow-x:hidden;
+  }
+  a{color:inherit;text-decoration:none}
+  button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
+  ::selection{background:#22c55e33;color:#fff}
+
+  :root{
+    --bg:#0b1220;
+    --panel:#111a2e;
+    --panel-2:#16223c;
+    --line:#1f2c4d;
+    --line-2:#2a3a63;
+    --text:#e6edf6;
+    --muted:#8a9bb5;
+    --muted-2:#5e6e8a;
+    --accent:#22c55e;     /* edge / sharp confirmed */
+    --accent-2:#16a34a;
+    --warn:#f59e0b;       /* developing / market moving */
+    --bad:#ef4444;
+    --info:#60a5fa;
+    --pinny:#fbbf24;      /* sharp anchor highlight */
+    --radius:10px;
+    --radius-sm:6px;
+    --radius-lg:14px;
+    --shadow:0 6px 24px rgba(0,0,0,.35);
+  }
+
+  /* ── Top nav ──────────────────────────────────────────────────────── */
+  .nav{
+    position:sticky;top:0;z-index:50;
+    background:rgba(11,18,32,.86);
+    backdrop-filter:saturate(140%) blur(10px);
+    -webkit-backdrop-filter:saturate(140%) blur(10px);
+    border-bottom:1px solid var(--line);
+    padding:10px 16px;
+  }
+  .nav-inner{
+    max-width:1400px;margin:0 auto;
+    display:flex;align-items:center;gap:14px;
+  }
+  .brand{
+    display:flex;align-items:center;gap:8px;font-weight:700;letter-spacing:.2px;
+  }
+  .brand-mark{
+    width:24px;height:24px;border-radius:6px;
+    background:linear-gradient(135deg,#22c55e,#16a34a);
+    display:grid;place-items:center;color:#06210f;font-weight:900;font-size:12px;
+  }
+  .brand small{color:var(--muted);font-weight:500;margin-left:2px}
+  .live-pill{
+    display:inline-flex;align-items:center;gap:6px;
+    padding:5px 9px;border-radius:999px;
+    background:#0c2818;border:1px solid #1f6b3d;color:#86efac;
+    font-size:12px;font-weight:600;
+  }
+  .live-dot{width:7px;height:7px;border-radius:50%;background:#22c55e;animation:pulse 1.6s infinite}
+  @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.85)}}
+  .nav-spacer{flex:1}
+  .nav-status{font-size:11px;color:var(--muted-2)}
+  .nav-action{
+    padding:7px 12px;border-radius:8px;border:1px solid var(--line-2);
+    background:var(--panel);color:var(--text);font-size:12px;font-weight:600;
+    transition:background .15s,border-color .15s;
+  }
+  .nav-action:hover{background:var(--panel-2);border-color:#3b4b78}
+  .nav-action.primary{
+    background:linear-gradient(135deg,#22c55e,#16a34a);border-color:#16a34a;color:#06210f;
+  }
+  .nav-action.primary:hover{filter:brightness(1.08)}
+  .badge-tier{
+    padding:3px 7px;border-radius:6px;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;
+    background:#1a2540;color:var(--muted);border:1px solid var(--line-2);
+  }
+  .badge-tier.premium{background:#3b1d10;color:#fbbf24;border-color:#7a4920}
+
+  /* ── Layout ───────────────────────────────────────────────────────── */
+  .wrap{max-width:1400px;margin:0 auto;padding:18px 16px 60px}
+
+  /* ── KPI strip ────────────────────────────────────────────────────── */
+  .kpi-row{
+    display:grid;gap:10px;margin-bottom:18px;
+    grid-template-columns:repeat(5,minmax(0,1fr));
+  }
+  .kpi{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:14px;display:flex;flex-direction:column;gap:4px;
+    transition:border-color .15s,transform .15s;
+  }
+  .kpi:hover{border-color:var(--line-2)}
+  .kpi-label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.6px;font-weight:600}
+  .kpi-value{font-size:24px;font-weight:700;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
+  .kpi-sub{color:var(--muted-2);font-size:11px}
+  .kpi-value.pos{color:var(--accent)}
+  .kpi-value.neg{color:var(--bad)}
+  .kpi-value.warn{color:var(--warn)}
+  .kpi-value.info{color:var(--info)}
+  .kpi.featured{
+    background:linear-gradient(135deg,#0f1c33,#142442);
+    border-color:#22335a;
+  }
+
+  /* ── Filter bar ───────────────────────────────────────────────────── */
+  .filters{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:10px;margin-bottom:14px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;
+    position:sticky;top:54px;z-index:40;
+  }
+  .chip{
+    padding:6px 11px;border-radius:999px;background:#1a2540;border:1px solid var(--line-2);
+    color:var(--muted);font-size:12px;font-weight:600;
+    transition:background .15s,color .15s,border-color .15s;
+    user-select:none;white-space:nowrap;
+  }
+  .chip:hover{background:#22335a;color:var(--text)}
+  .chip.active{background:linear-gradient(135deg,#22c55e22,#16a34a22);color:var(--accent);border-color:#1f6b3d}
+  .chip.warn{color:var(--warn);border-color:#7a4920;background:#3b2a1022}
+  .chip-divider{width:1px;height:20px;background:var(--line-2);margin:0 4px}
+  .filter-label{color:var(--muted-2);font-size:10px;text-transform:uppercase;letter-spacing:.6px;margin-right:4px}
+
+  /* ── Scanner: desktop table ───────────────────────────────────────── */
+  .scanner{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    overflow:hidden;
+  }
+  .scanner-head{
+    padding:12px 16px;border-bottom:1px solid var(--line);
+    display:flex;justify-content:space-between;align-items:center;
+    background:#0e1729;
+  }
+  .scanner-title{font-weight:700;font-size:14px;letter-spacing:.2px}
+  .scanner-meta{color:var(--muted-2);font-size:11px}
+
+  table.tbl{width:100%;border-collapse:collapse;font-size:13px}
+  table.tbl thead th{
+    text-align:left;padding:10px 12px;font-size:10px;text-transform:uppercase;
+    letter-spacing:.7px;color:var(--muted);font-weight:600;
+    background:#0e1729;border-bottom:1px solid var(--line);
+    position:sticky;top:0;
+  }
+  table.tbl tbody tr{
+    border-bottom:1px solid var(--line);
+    transition:background .12s;
+  }
+  table.tbl tbody tr:hover{background:#16223c}
+  table.tbl td{padding:11px 12px;vertical-align:middle}
+  .col-edge{font-variant-numeric:tabular-nums;font-weight:700}
+  .col-edge.pos{color:var(--accent)}
+  .col-edge.neg{color:var(--bad)}
+  .col-edge.warn{color:var(--warn)}
+
+  .match-cell{display:flex;flex-direction:column;gap:2px;min-width:170px}
+  .match-teams{font-weight:600;color:var(--text)}
+  .match-meta{color:var(--muted-2);font-size:11px}
+  .market-cell{display:flex;flex-direction:column;gap:2px;min-width:130px}
+  .market-name{font-weight:600;font-size:12px}
+  .market-icon{font-size:14px;margin-right:4px}
+
+  .price-cell{display:flex;flex-direction:column;gap:2px;min-width:110px;font-variant-numeric:tabular-nums}
+  .price-main{font-weight:700;font-size:14px}
+  .price-sub{color:var(--muted-2);font-size:10px;text-transform:uppercase;letter-spacing:.4px}
+  .price-cell.sharp .price-main{color:var(--pinny)}
+  .price-cell.unset .price-main{color:var(--muted-2);font-weight:500;font-style:italic;font-size:11px}
+
+  .badge{
+    display:inline-block;padding:3px 7px;border-radius:6px;font-size:10px;font-weight:700;
+    letter-spacing:.5px;text-transform:uppercase;
+    background:#1a2540;color:var(--muted);border:1px solid var(--line-2);
+    white-space:nowrap;
+  }
+  .badge.sharp{background:#0c2818;color:#86efac;border-color:#1f6b3d}
+  .badge.dev{background:#102540;color:#93c5fd;border-color:#244670}
+  .badge.moving{background:#3b2a10;color:#fcd34d;border-color:#7a4920}
+  .badge.legacy{background:#2a1c2e;color:#c4b5fd;border-color:#4c2c5e}
+  .badge.unverified{background:#2c1414;color:#fca5a5;border-color:#5e2222}
+  .badge.new{background:#0c2818;color:#bbf7d0;border-color:#1f6b3d;animation:newGlow 2s ease-in-out infinite}
+  @keyframes newGlow{0%,100%{box-shadow:0 0 0 0 #22c55e44}50%{box-shadow:0 0 0 4px #22c55e00}}
+
+  .action-btn{
+    padding:6px 10px;border-radius:6px;background:#16223c;border:1px solid var(--line-2);
+    font-size:11px;font-weight:600;color:var(--muted);
+    transition:background .15s,color .15s;
+  }
+  .action-btn:hover{background:#22335a;color:var(--text)}
+  .action-btn.primary{background:linear-gradient(135deg,#22c55e,#16a34a);color:#06210f;border-color:#16a34a}
+
+  /* ── Mobile cards ─────────────────────────────────────────────────── */
+  .card-list{display:none;flex-direction:column;gap:8px;padding:8px}
+  .pick-card{
+    background:#0f1a32;border:1px solid var(--line);border-radius:var(--radius);
+    padding:12px;display:flex;flex-direction:column;gap:8px;
+  }
+  .pick-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+  .pick-card-edge{font-size:18px;font-weight:800;font-variant-numeric:tabular-nums}
+  .pick-card-edge.pos{color:var(--accent)}
+  .pick-card-edge.neg{color:var(--bad)}
+  .pick-card-row{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px}
+  .pick-card-row .lbl{color:var(--muted-2);text-transform:uppercase;letter-spacing:.4px;font-size:10px}
+  .pick-card-row .val{font-weight:600;font-variant-numeric:tabular-nums}
+  .pick-card-row .val.sharp{color:var(--pinny)}
+  .pick-card-row .val.unset{color:var(--muted-2);font-style:italic;font-weight:400}
+  .pick-card-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:4px}
+
+  /* ── Empty / error states ─────────────────────────────────────────── */
+  .empty{
+    padding:60px 20px;text-align:center;color:var(--muted);
+  }
+  .empty-icon{font-size:32px;margin-bottom:8px;opacity:.5}
+  .empty-title{font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px}
+  .empty-sub{font-size:12px}
+
+  /* ── Doctrine notice ──────────────────────────────────────────────── */
+  .notice{
+    background:linear-gradient(135deg,#0e1d33,#16223c);
+    border:1px solid var(--line-2);border-radius:var(--radius);
+    padding:12px 14px;margin-bottom:14px;
+    display:flex;align-items:flex-start;gap:10px;font-size:12px;color:var(--muted);
+  }
+  .notice strong{color:var(--text);font-weight:700}
+  .notice-icon{font-size:18px;line-height:1;margin-top:1px}
+
+  /* ── Mobile breakpoint ────────────────────────────────────────────── */
+  @media (max-width:860px){
+    .kpi-row{grid-template-columns:repeat(2,1fr)}
+    .kpi.featured{grid-column:span 2}
+    .filters{top:50px;padding:8px}
+    table.tbl{display:none}
+    .card-list{display:flex}
+    .scanner-head{padding:10px 12px}
+    .nav-status{display:none}
+  }
+  @media (max-width:480px){
+    .wrap{padding:12px 10px 60px}
+    .kpi-value{font-size:20px}
+    .nav{padding:8px 12px}
+    .brand small{display:none}
+  }
+
+  /* ── Loading shimmer ──────────────────────────────────────────────── */
+  .shimmer{
+    background:linear-gradient(90deg,#16223c 0%,#1f2c4d 50%,#16223c 100%);
+    background-size:200% 100%;
+    animation:shimmer 1.4s infinite;
+    border-radius:4px;color:transparent;
+  }
+  @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+</style>
+</head>
+<body>
+
+<!-- ─── Top nav ───────────────────────────────────────────────────── -->
+<nav class="nav">
+  <div class="nav-inner">
+    <div class="brand">
+      <div class="brand-mark">P</div>
+      PGR Analytics<small>v2</small>
+    </div>
+    <div class="live-pill" title="Live edges right now">
+      <span class="live-dot"></span>
+      <span id="liveCount">—</span> live
+    </div>
+    <div class="nav-spacer"></div>
+    <div class="nav-status" id="updatedAt">syncing…</div>
+    <span class="badge-tier premium" id="tierBadge">FREE</span>
+    <button class="nav-action primary" id="upgradeBtn" style="display:none">Upgrade</button>
+  </div>
+</nav>
+
+<main class="wrap">
+
+  <!-- ─── Doctrine notice ─────────────────────────────────────────── -->
+  <div class="notice" id="noticeBox">
+    <span class="notice-icon">⚖️</span>
+    <div>
+      <strong>Sharp-first:</strong> All EV is being migrated to use Pinnacle/Betfair/Matchbook
+      as the reference anchor. Picks marked <span class="badge sharp">sharp</span> have a verified
+      sharp snapshot. Picks marked <span class="badge legacy">legacy</span> were created under the
+      previous pipeline and lack a sharp anchor — shown for transparency, excluded from CLV proof.
+    </div>
+  </div>
+
+  <!-- ─── KPI strip ───────────────────────────────────────────────── -->
+  <section class="kpi-row" id="kpiRow">
+    <div class="kpi featured">
+      <div class="kpi-label">Live edges right now</div>
+      <div class="kpi-value pos" id="kpiLive">—</div>
+      <div class="kpi-sub">across all sports</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Avg edge today</div>
+      <div class="kpi-value pos" id="kpiAvgEdge">—</div>
+      <div class="kpi-sub">sharp-anchored only</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Sharp CLV (30d)</div>
+      <div class="kpi-value" id="kpiCLV">—</div>
+      <div class="kpi-sub" id="kpiCLVSample">awaiting sample</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Validated samples</div>
+      <div class="kpi-value info" id="kpiSamples">—</div>
+      <div class="kpi-sub">sharp-confirmed picks</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Top edge today</div>
+      <div class="kpi-value warn" id="kpiTop">—</div>
+      <div class="kpi-sub" id="kpiTopMatch">—</div>
+    </div>
+  </section>
+
+  <!-- ─── Filter bar ──────────────────────────────────────────────── -->
+  <section class="filters" id="filterBar">
+    <span class="filter-label">Sport</span>
+    <button class="chip active" data-filter="sport" data-value="all">All</button>
+    <button class="chip" data-filter="sport" data-value="football">Football</button>
+    <button class="chip" data-filter="sport" data-value="basketball">NBA</button>
+    <button class="chip" data-filter="sport" data-value="hockey">NHL</button>
+
+    <span class="chip-divider"></span>
+    <span class="filter-label">Market</span>
+    <button class="chip active" data-filter="market" data-value="all">All</button>
+    <button class="chip" data-filter="market" data-value="OVER">Goals</button>
+    <button class="chip" data-filter="market" data-value="BTTS">BTTS</button>
+    <button class="chip" data-filter="market" data-value="WIN">1X2</button>
+    <button class="chip" data-filter="market" data-value="CORNERS">Corners</button>
+    <button class="chip" data-filter="market" data-value="CARDS">Cards</button>
+
+    <span class="chip-divider"></span>
+    <span class="filter-label">Min edge</span>
+    <button class="chip active" data-filter="edge" data-value="0">All</button>
+    <button class="chip" data-filter="edge" data-value="3">3%+</button>
+    <button class="chip" data-filter="edge" data-value="5">5%+</button>
+    <button class="chip" data-filter="edge" data-value="8">8%+</button>
+    <button class="chip" data-filter="edge" data-value="10">10%+</button>
+
+    <span class="chip-divider"></span>
+    <button class="chip warn" data-filter="sharp" data-value="1" id="sharpOnlyChip">⚡ Sharp confirmed only</button>
+  </section>
+
+  <!-- ─── Live scanner ────────────────────────────────────────────── -->
+  <section class="scanner">
+    <div class="scanner-head">
+      <div class="scanner-title">Live Scanner</div>
+      <div class="scanner-meta" id="scannerMeta">—</div>
+    </div>
+
+    <!-- Desktop table -->
+    <table class="tbl" id="tbl">
+      <thead>
+        <tr>
+          <th>Match</th>
+          <th>Market</th>
+          <th>Sharp ref</th>
+          <th>Best available</th>
+          <th>Model</th>
+          <th>Edge</th>
+          <th>Trust</th>
+          <th>Detected</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="tblBody">
+        <tr><td colspan="9" class="empty"><div class="empty-icon">⏳</div>Loading signals…</td></tr>
+      </tbody>
+    </table>
+
+    <!-- Mobile cards -->
+    <div class="card-list" id="cardList">
+      <div class="empty"><div class="empty-icon">⏳</div>Loading signals…</div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+/* ─── State ─────────────────────────────────────────────────────── */
+const state = {
+  picks: [],
+  filters: { sport:'all', market:'all', edge:0, sharp:false },
+  lastFetch: 0,
+};
+
+/* ─── Helpers ───────────────────────────────────────────────────── */
+const $ = (id) => document.getElementById(id);
+const fmtPct = (v, signed=true) => {
+  if (v === null || v === undefined || isNaN(v)) return '—';
+  const sign = signed && v > 0 ? '+' : '';
+  return `${sign}${(+v).toFixed(2)}%`;
+};
+const fmtOdds = (v) => (v == null || isNaN(v)) ? '—' : (+v).toFixed(2);
+const fmtBook = (b) => {
+  if (!b) return '?';
+  return String(b).replace(/sharp_avg\(/g,'').replace(/\)/g,'').split(';')[0]
+    .replace('hist:','').replace('vs ','').replace(/~/g,'').toLowerCase().slice(0,18);
+};
+const ago = (mins) => {
+  if (mins == null) return '—';
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  return `${Math.floor(mins/60)}h ago`;
+};
+
+/* ─── Doctrine status mapping ───────────────────────────────────── */
+function pickStatus(p) {
+  // SHARP_CONFIRMED -> trustworthy, post-doctrine
+  // INTERPOLATED   -> sharp inferred across lines
+  // UNVERIFIED_LEGACY -> pre-doctrine, no sharp snapshot
+  // null -> brand new pre-pipeline pick
+  const lbl = p.confidence_label || (p.sharp_price_at_detection ? 'SHARP_CONFIRMED' : 'UNVERIFIED_LEGACY');
+  return lbl;
+}
+function statusBadge(p) {
+  const s = pickStatus(p);
+  if (s === 'SHARP_CONFIRMED') return '<span class="badge sharp">sharp</span>';
+  if (s === 'INTERPOLATED')    return '<span class="badge moving">interp</span>';
+  if (s === 'UNVERIFIED_LEGACY') return '<span class="badge legacy">legacy</span>';
+  return '<span class="badge unverified">unverified</span>';
+}
+
+/* ─── Sport detection from league string ────────────────────────── */
+function sportOf(p) {
+  const l = (p.league || '').toLowerCase();
+  if (l.includes('nba') || l.includes('basketball')) return 'basketball';
+  if (l.includes('nhl') || l.includes('hockey'))     return 'hockey';
+  return 'football';
+}
+
+/* ─── Filter chips ──────────────────────────────────────────────── */
+$('filterBar').addEventListener('click', (e) => {
+  const chip = e.target.closest('.chip');
+  if (!chip) return;
+  const f = chip.dataset.filter;
+  const v = chip.dataset.value;
+  if (f === 'sharp') {
+    state.filters.sharp = !state.filters.sharp;
+    chip.classList.toggle('active', state.filters.sharp);
+  } else {
+    document.querySelectorAll(`.chip[data-filter="${f}"]`).forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    state.filters[f] = (f === 'edge') ? +v : v;
+  }
+  render();
+});
+
+/* ─── Apply filters ─────────────────────────────────────────────── */
+function applyFilters(picks) {
+  return picks.filter(p => {
+    if (state.filters.sport !== 'all' && sportOf(p) !== state.filters.sport) return false;
+    if (state.filters.market !== 'all') {
+      const mk = (p.market || '').toUpperCase() + ' ' + (p.selection || '').toUpperCase();
+      if (!mk.includes(state.filters.market)) return false;
+    }
+    if (state.filters.edge > 0 && (p.edge_pct || 0) < state.filters.edge) return false;
+    if (state.filters.sharp && pickStatus(p) !== 'SHARP_CONFIRMED') return false;
+    return true;
+  });
+}
+
+/* ─── Render: KPI strip ─────────────────────────────────────────── */
+function renderKPIs(picks) {
+  const live = picks.length;
+  const sharpPicks = picks.filter(p => pickStatus(p) === 'SHARP_CONFIRMED');
+  const validatedN = sharpPicks.length;
+
+  $('liveCount').textContent = live;
+  $('kpiLive').textContent = live;
+
+  const avgEdge = sharpPicks.length
+    ? sharpPicks.reduce((a,p)=>a+(p.edge_pct||0),0)/sharpPicks.length
+    : null;
+  $('kpiAvgEdge').textContent = avgEdge != null ? fmtPct(avgEdge) : 'awaiting';
+  $('kpiAvgEdge').className = 'kpi-value ' + (avgEdge==null ? '' : (avgEdge>0?'pos':'neg'));
+
+  $('kpiSamples').textContent = validatedN;
+  $('kpiSamples').className = 'kpi-value ' + (validatedN > 0 ? 'info' : '');
+
+  // Top edge
+  const top = picks.slice().sort((a,b)=>(b.edge_pct||0)-(a.edge_pct||0))[0];
+  if (top && top.edge_pct) {
+    $('kpiTop').textContent = fmtPct(top.edge_pct);
+    $('kpiTopMatch').textContent = `${top.home_team} vs ${top.away_team}`;
+  } else {
+    $('kpiTop').textContent = '—';
+    $('kpiTopMatch').textContent = 'no signals';
+  }
+}
+
+/* ─── Render: live scanner table + cards ────────────────────────── */
+function renderScanner(picks) {
+  $('scannerMeta').textContent = `${picks.length} signals · auto-refresh 60s`;
+
+  if (picks.length === 0) {
+    $('tblBody').innerHTML = `<tr><td colspan="9" class="empty">
+      <div class="empty-icon">🌙</div>
+      <div class="empty-title">No signals match your filters</div>
+      <div class="empty-sub">Try lowering the min edge or switching off "Sharp only".</div>
+    </td></tr>`;
+    $('cardList').innerHTML = `<div class="empty">
+      <div class="empty-icon">🌙</div>
+      <div class="empty-title">No signals match your filters</div>
+      <div class="empty-sub">Try lowering the min edge or switching off "Sharp only".</div>
+    </div>`;
+    return;
+  }
+
+  /* ── Desktop rows ── */
+  const rows = picks.map(p => {
+    const st = pickStatus(p);
+    const isSharp = st === 'SHARP_CONFIRMED';
+    const isLegacy = st === 'UNVERIFIED_LEGACY';
+    const isNew = (p.age_minutes != null && p.age_minutes < 12);
+
+    const sharpCell = isSharp
+      ? `<div class="price-cell sharp">
+           <div class="price-main">${fmtOdds(p.sharp_price_at_detection)}</div>
+           <div class="price-sub">${fmtBook(p.sharp_book_at_detection)}</div>
+         </div>`
+      : `<div class="price-cell unset">
+           <div class="price-main">awaiting sharp</div>
+           <div class="price-sub">${isLegacy ? 'legacy pick' : 'pre-pipeline'}</div>
+         </div>`;
+
+    const bestCell = `<div class="price-cell">
+        <div class="price-main">${fmtOdds(p.best_odds_value || p.odds)}</div>
+        <div class="price-sub">${fmtBook(p.best_price_book || p.best_odds_bookmaker)}</div>
+      </div>`;
+
+    const modelPct = p.model_prob != null ? `${(p.model_prob*100).toFixed(1)}%` : '—';
+    const edgeCls = p.edge_pct >= 8 ? 'pos' : (p.edge_pct >= 3 ? 'warn' : '');
+
+    return `<tr data-id="${p.id}">
+      <td>
+        <div class="match-cell">
+          <div class="match-teams">${p.home_team} <span style="color:var(--muted-2)">vs</span> ${p.away_team}</div>
+          <div class="match-meta">${p.league || ''} · ${p.kickoff_str || ''}</div>
+        </div>
+      </td>
+      <td>
+        <div class="market-cell">
+          <div class="market-name"><span class="market-icon">${p.icon||'⚽'}</span>${p.selection || p.market}</div>
+          <div class="match-meta">${(p.market||'').toLowerCase()}</div>
+        </div>
+      </td>
+      <td>${sharpCell}</td>
+      <td>${bestCell}</td>
+      <td><span style="font-variant-numeric:tabular-nums">${modelPct}</span></td>
+      <td class="col-edge ${edgeCls}">${fmtPct(p.edge_pct)}</td>
+      <td>
+        ${statusBadge(p)}
+        ${isNew ? '<span class="badge new" style="margin-left:4px">new</span>' : ''}
+      </td>
+      <td><span class="match-meta">${ago(p.age_minutes)}</span></td>
+      <td><button class="action-btn" onclick="openDetail(${p.id})">View</button></td>
+    </tr>`;
+  }).join('');
+  $('tblBody').innerHTML = rows;
+
+  /* ── Mobile cards ── */
+  const cards = picks.map(p => {
+    const st = pickStatus(p);
+    const isSharp = st === 'SHARP_CONFIRMED';
+    const isNew = (p.age_minutes != null && p.age_minutes < 12);
+    const edgeCls = (p.edge_pct||0) > 0 ? 'pos' : 'neg';
+    const sharpVal = isSharp
+      ? `<span class="val sharp">${fmtOdds(p.sharp_price_at_detection)} · ${fmtBook(p.sharp_book_at_detection)}</span>`
+      : `<span class="val unset">awaiting sharp</span>`;
+
+    return `<div class="pick-card" data-id="${p.id}">
+      <div class="pick-card-head">
+        <div>
+          <div class="match-teams">${p.home_team} vs ${p.away_team}</div>
+          <div class="match-meta">${p.league||''} · ${p.kickoff_str||''}</div>
+        </div>
+        <div class="pick-card-edge ${edgeCls}">${fmtPct(p.edge_pct)}</div>
+      </div>
+      <div class="market-name"><span class="market-icon">${p.icon||'⚽'}</span>${p.selection || p.market}</div>
+      <div class="pick-card-row"><span class="lbl">Sharp ref</span>${sharpVal}</div>
+      <div class="pick-card-row">
+        <span class="lbl">Best available</span>
+        <span class="val">${fmtOdds(p.best_odds_value || p.odds)} · ${fmtBook(p.best_price_book || p.best_odds_bookmaker)}</span>
+      </div>
+      <div class="pick-card-foot">
+        <div>
+          ${statusBadge(p)}
+          ${isNew ? '<span class="badge new" style="margin-left:4px">new</span>' : ''}
+        </div>
+        <button class="action-btn" onclick="openDetail(${p.id})">Details →</button>
+      </div>
+    </div>`;
+  }).join('');
+  $('cardList').innerHTML = cards;
+}
+
+function render() {
+  const filtered = applyFilters(state.picks);
+  renderKPIs(filtered);
+  renderScanner(filtered);
+}
+
+/* ─── Match detail (placeholder until phase 2) ─────────────────── */
+function openDetail(id) {
+  const p = state.picks.find(x => x.id === id);
+  if (!p) return;
+  alert(
+    `${p.home_team} vs ${p.away_team}\n` +
+    `${p.selection || p.market}\n\n` +
+    `Sharp ref : ${p.sharp_price_at_detection ? fmtOdds(p.sharp_price_at_detection)+' ('+fmtBook(p.sharp_book_at_detection)+')' : 'AWAITING SHARP DATA'}\n` +
+    `Best avail: ${fmtOdds(p.best_odds_value || p.odds)} (${fmtBook(p.best_price_book || p.best_odds_bookmaker)})\n` +
+    `Model    : ${p.model_prob != null ? (p.model_prob*100).toFixed(1)+'%' : '—'}\n` +
+    `Edge     : ${fmtPct(p.edge_pct)}\n` +
+    `Status   : ${pickStatus(p)}\n` +
+    `Detected : ${ago(p.age_minutes)}\n\n` +
+    `(Full match detail view ships in next phase.)`
+  );
+}
+
+/* ─── Data fetch ────────────────────────────────────────────────── */
+async function loadAll() {
+  try {
+    const [picksR, statsR, clvR] = await Promise.all([
+      fetch('/api/picks/today').then(r=>r.json()).catch(()=>({picks:[]})),
+      fetch('/api/scanner/daily-stats').then(r=>r.json()).catch(()=>({})),
+      fetch('/api/clv_stats').then(r=>r.json()).catch(()=>({})),
+    ]);
+    state.picks = (picksR.picks || picksR || []).filter(Boolean);
+    state.lastFetch = Date.now();
+    $('updatedAt').textContent = 'updated ' + new Date().toLocaleTimeString().slice(0,5);
+
+    /* CLV KPI: doctrine — withhold rate when sample too small */
+    const clvAvg = clvR && (clvR.avg_clv_30d ?? clvR.avg_clv ?? null);
+    const clvN = clvR && (clvR.sample_30d ?? clvR.sample ?? clvR.n ?? 0);
+    if (clvN >= 30 && clvAvg != null) {
+      $('kpiCLV').textContent = fmtPct(clvAvg);
+      $('kpiCLV').className = 'kpi-value ' + (clvAvg>0?'pos':'neg');
+      $('kpiCLVSample').textContent = `n=${clvN} sharp captures`;
+    } else if (clvN > 0) {
+      $('kpiCLV').textContent = `n=${clvN}`;
+      $('kpiCLV').className = 'kpi-value warn';
+      $('kpiCLVSample').textContent = `early data — rate withheld`;
+    } else {
+      $('kpiCLV').textContent = 'awaiting';
+      $('kpiCLVSample').textContent = `no sharp captures yet`;
+    }
+
+    render();
+  } catch (e) {
+    console.error('loadAll failed', e);
+    $('tblBody').innerHTML = `<tr><td colspan="9" class="empty">
+      <div class="empty-icon">⚠️</div>
+      <div class="empty-title">Backend offline</div>
+      <div class="empty-sub">Retrying in 60s…</div>
+    </td></tr>`;
+  }
+}
+
+/* ─── Boot + auto-refresh ───────────────────────────────────────── */
+loadAll();
+setInterval(loadAll, 60_000);
+
+/* Keep "ago" labels fresh without a full refetch */
+setInterval(() => {
+  if (!state.picks.length) return;
+  state.picks.forEach(p => {
+    if (p.created_ts) p.age_minutes = Math.max(0, Math.floor((Date.now()/1000 - p.created_ts)/60));
+  });
+  render();
+}, 30_000);
+</script>
+</body>
+</html>
