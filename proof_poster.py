@@ -195,34 +195,27 @@ def post_clv_proof(bet: dict, close_odds: float, clv: float, close_book: str,
         )
         if m_interp:
             lo_line_s, lo_odds_s, hi_line_s, hi_odds_s = m_interp.groups()
-            deriv_lines = [
-                f"  Over {lo_line_s}  →  {lo_odds_s}  [{bk_clean}]",
-                f"  Over {hi_line_s}  →  {hi_odds_s}  [{bk_clean}]",
-            ]
             bk_display = bk_clean.split('(')[0].strip()
+            bracket_lbl = f"{bk_display} {lo_line_s} → {hi_line_s}"
         else:
-            lo_line_s = hi_line_s = ''
-            deriv_lines = ["  (adjacent lines unavailable)"]
-            bk_display = bk_clean
+            lo_odds_s = "n/a"
+            bk_display = bk_clean.split('(')[0].strip()
+            bracket_lbl = bk_display
 
         lines = [
             f"**{match_str}**",
             f"{league}  ·  *{market_display}*",
             "",
             "```",
-            "CLV (INTERPOLATED) ⚠️",
+            "CLV proof (INTERPOLATED) ⚠️",
             "",
-            f"Odds when identified : {open_str}",
-            f"Fair odds at target  : {close_str}  [{bk_display}]",
-            f"CLV (interp)         : {clv_str}",
+            f"Fair odds (derived) : {close_str}  [{bracket_lbl}]",
+            f"Nearest sharp line  : {lo_odds_s}",
             "",
-            "How derived:",
-        ] + deriv_lines + [
-            f"→ Linear interp of implied prob at target line",
+            f"Estimated CLV       : {clv_str}",
             "",
-            "NOT a direct same-line market quote.",
-            "Fair price mathematically derived from",
-            f"{bk_display}'s adjacent line structure.",
+            "⚠️ Derived from adjacent lines — not a",
+            "   direct same-line market quote",
             "```",
         ]
     else:
