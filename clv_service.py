@@ -677,6 +677,10 @@ class CLVService:
         # For nearest-line fallback: track best sharp candidate per book
         # (book_title -> (price, line, outcome_name))
         sharp_nearest: dict = {}
+        # For interpolation: track closest line BELOW and ABOVE target per book
+        # (book_title -> (price, line, outcome_name))
+        sharp_below: dict = {}
+        sharp_above: dict = {}
 
         for bk in bookmakers:
             bk_key   = bk.get('key', '').lower()
@@ -710,6 +714,16 @@ class CLVService:
                                 prev_diff = abs(prev[1] - target_line) if prev else 999
                                 if line_diff < prev_diff:
                                     sharp_nearest[bk_title] = (float(price), point_f, outcome.get('name', name))
+                                # Also track for interpolation: separate below/above buckets
+                                entry_t = (float(price), point_f, outcome.get('name', name))
+                                if point_f < target_line:
+                                    prev_b = sharp_below.get(bk_title)
+                                    if prev_b is None or (target_line - point_f) < (target_line - prev_b[1]):
+                                        sharp_below[bk_title] = entry_t
+                                else:
+                                    prev_a = sharp_above.get(bk_title)
+                                    if prev_a is None or (point_f - target_line) < (prev_a[1] - target_line):
+                                        sharp_above[bk_title] = entry_t
                             continue
                         # Exact totals match confirmed
                     else:
@@ -732,6 +746,52 @@ class CLVService:
             source_label = f"vs {book_label}"
             matched_out  = sharp_hits[0][2]
             return (round(avg_odds, 4), source_label, matched_out)
+
+        # ── Interpolation: derive fair odds for exact target line from two adjacent sharp lines ──
+        # Uses linear interpolation of implied probability between the closest line below
+        # and above the target. Tags as "(interp L↔H)" — credible same-line-equivalent proof.
+        # Only runs for totals when no exact sharp match found.
+        if not sharp_hits and is_totals and target_line is not None and sharp_below and sharp_above:
+            # Find best sharp book that has BOTH sides (sorted by SHARP_PRIORITY)
+            both_books = sorted(
+                [bk for bk in sharp_below if bk in sharp_above],
+                key=lambda b: SHARP_PRIORITY.index(b.lower()) if b.lower() in SHARP_PRIORITY else 99
+            )
+            if both_books:
+                interp_results = []
+                for bk in both_books:
+                    lo_odds, lo_line, _ = sharp_below[bk]
+                    hi_odds, hi_line, _ = sharp_above[bk]
+                    span = hi_line - lo_line
+                    if span < 0.01:
+                        continue
+                    # Linear interpolation of implied probability
+                    p_lo = 1.0 / lo_odds
+                    p_hi = 1.0 / hi_odds
+                    # Weight: target closer to lo_line → more weight on lo_line's prob
+                    w_lo = (hi_line - target_line) / span
+                    w_hi = (target_line - lo_line) / span
+                    p_interp = w_lo * p_lo + w_hi * p_hi
+                    if p_interp <= 0:
+                        continue
+                    fair_odds = round(1.0 / p_interp, 4)
+                    lo_str = f"{lo_line:.2f}".rstrip('0').rstrip('.')
+                    hi_str = f"{hi_line:.2f}".rstrip('0').rstrip('.')
+                    interp_results.append((fair_odds, bk, f"interp_{lo_str}_{hi_str}", lo_line, hi_line))
+
+                if interp_results:
+                    avg_odds   = sum(r[0] for r in interp_results) / len(interp_results)
+                    book_names = [r[1] for r in interp_results]
+                    lo_str     = f"{interp_results[0][3]:.2f}".rstrip('0').rstrip('.')
+                    hi_str     = f"{interp_results[0][4]:.2f}".rstrip('0').rstrip('.')
+                    book_label = ' + '.join(book_names[:2]) + (' ...' if len(book_names) > 2 else '')
+                    source_label = f"vs {book_label} (interp {lo_str}↔{hi_str})"
+                    matched_out  = interp_results[0][2]
+                    logger.info(
+                        "CLV: interpolated odds %.4f for line %.2f between %.2f↔%.2f — books=%s",
+                        avg_odds, target_line, interp_results[0][3], interp_results[0][4], book_names
+                    )
+                    return (round(avg_odds, 4), source_label, matched_out)
 
         # ── Nearest-line fallback: use Pinnacle/sharp book's closest line ────────
         # Triggered when sharp books offer totals but on a different line (e.g. 2.75 vs 2.5).

@@ -136,11 +136,13 @@ def post_clv_proof(bet: dict, close_odds: float, clv: float, close_book: str,
         return False
 
     # Block line-moved captures from WEBHOOK_PROOF entirely — different line means
-    # CLV isn't apples-to-apples (e.g. Over 3.5 vs Over 3.25 closing odds is misleading)
+    # CLV isn't apples-to-apples (e.g. Over 3.5 vs Over 3.25 closing odds is misleading).
+    # Exception: "(interp L↔H)" is mathematically derived same-line equivalent — allowed.
     if '(line moved' in book_str:
         logger.info("proof_poster: skip WEBHOOK_PROOF — line moved, not same-line CLV (book=%s, bet=%d)",
                     book_str, bet['id'])
         return False
+    # "(interp ...)" passes through — it is a same-line-equivalent via interpolation
 
     # Block single-source captures from WEBHOOK_PROOF — unreliable as public proof
     import re as _re
@@ -181,6 +183,9 @@ def post_clv_proof(bet: dict, close_odds: float, clv: float, close_book: str,
     close_lbl = close_book.replace("Exchange", "").strip() if close_book else "sharp book"
     market_display = selection if selection else market_lbl
 
+    is_interp = '(interp' in (close_book or '')
+    close_odds_label = "Fair odds (interpolated)" if is_interp else "Closing odds         "
+
     lines = [
         f"**{match_str}**",
         f"{league}  ·  *{market_display}*",
@@ -189,12 +194,15 @@ def post_clv_proof(bet: dict, close_odds: float, clv: float, close_book: str,
         "CLV proof:",
         "",
         f"Odds when identified : {open_str}",
-        f"Closing odds         : {close_str}  [{close_lbl}]",
+        f"{close_odds_label} : {close_str}  [{close_lbl}]",
         f"CLV                  : {clv_str}",
         "",
         "Market moved → value confirmed ✅",
         "```",
     ]
+    if is_interp:
+        lines.insert(-1, "(fair odds derived from sharp book adjacent lines)")
+        lines.insert(-1, "")
 
     if model_pct and market_pct and ev_str:
         mins_txt = f"within {mins_to_close}min of kickoff" if mins_to_close and mins_to_close > 0 else "at close"
