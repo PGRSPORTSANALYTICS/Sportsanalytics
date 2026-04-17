@@ -1310,6 +1310,15 @@ def get_clv_stats() -> Dict[str, Any]:
         'sample_ok':     False,
         'breakdown':     [],
         'recent_20':     [],
+        # ── v2 era exact/extended split ───────────────────────────────────
+        # exact: Pinnacle/Betfair direct same-line quote (green proof)
+        # ext:   exact + interpolated (amber secondary)
+        'exact_avg':     None,
+        'exact_rate':    None,
+        'exact_n':       0,
+        'ext_avg':       None,
+        'ext_rate':      None,
+        'ext_n':         0,
     }
 
     try:
@@ -1364,6 +1373,45 @@ def get_clv_stats() -> Dict[str, Any]:
         """, fetch='one')
         if row_30 and row_30[0]:
             stats['avg_clv_30d'] = round(float(row_30[0]), 2)
+
+        # ── v2 era: exact-line (green proof) ─────────────────────────────
+        exact_row = db_helper.execute("""
+            SELECT
+                COUNT(*) FILTER (WHERE clv_pct IS NOT NULL)  AS n,
+                COUNT(*) FILTER (WHERE clv_pct > 0)           AS pos,
+                AVG(clv_pct) FILTER (WHERE clv_pct IS NOT NULL
+                                       AND clv_pct BETWEEN -50 AND 50) AS avg
+            FROM football_opportunities
+            WHERE clv_version = 'v2'
+              AND clv_source_book NOT ILIKE '~%%'
+              AND clv_source_book NOT ILIKE '%%(line moved%%'
+              AND clv_source_book NOT ILIKE '%%(interp%%'
+              AND match_id NOT LIKE 'seed_%%'
+        """, fetch='one')
+        if exact_row and exact_row[0]:
+            en, ep = int(exact_row[0] or 0), int(exact_row[1] or 0)
+            stats['exact_n']    = en
+            stats['exact_avg']  = round(float(exact_row[2]), 2) if exact_row[2] else None
+            stats['exact_rate'] = round(ep / en * 100, 1) if en > 0 else None
+
+        # ── v2 era: extended (exact + interp, amber secondary) ────────────
+        ext_row = db_helper.execute("""
+            SELECT
+                COUNT(*) FILTER (WHERE clv_pct IS NOT NULL)  AS n,
+                COUNT(*) FILTER (WHERE clv_pct > 0)           AS pos,
+                AVG(clv_pct) FILTER (WHERE clv_pct IS NOT NULL
+                                       AND clv_pct BETWEEN -50 AND 50) AS avg
+            FROM football_opportunities
+            WHERE clv_version = 'v2'
+              AND clv_source_book NOT ILIKE '~%%'
+              AND clv_source_book NOT ILIKE '%%(line moved%%'
+              AND match_id NOT LIKE 'seed_%%'
+        """, fetch='one')
+        if ext_row and ext_row[0]:
+            xn, xp = int(ext_row[0] or 0), int(ext_row[1] or 0)
+            stats['ext_n']    = xn
+            stats['ext_avg']  = round(float(ext_row[2]), 2) if ext_row[2] else None
+            stats['ext_rate'] = round(xp / xn * 100, 1) if xn > 0 else None
 
         # Recent 20 bets debug view
         rows_20 = db_helper.execute("""
