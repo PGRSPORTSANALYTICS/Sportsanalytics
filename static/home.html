@@ -699,6 +699,7 @@ const state = {
   clvBreakdown: null,
   hockeyData: null,
   nbaData: null,
+  confirmedPicks: null,
   activeTab: "scanner",
   filters: { sport: "all", ev: 0, sort: "ev" },
   expandedId: null,
@@ -845,11 +846,18 @@ async function verifyCode(){
 function filteredPicks(){
   let picks = [...state.picks];
 
-  // Smart Value tab: only PROD picks
+  // Confirmed CLV tab: use dedicated endpoint data (includes settled picks with CLV)
   if(state.activeTab === "smartvalue"){
-    picks = picks.filter(p => p.mode === "PROD");
-    // Smart Value always sorted by time (easiest to action)
+    if(state.confirmedPicks !== null){
+      picks = [...state.confirmedPicks];
+    } else {
+      picks = picks.filter(p => p.mode === "PROD");
+    }
+    // Sort: CLV-confirmed first, then by kickoff time
     picks.sort((a,b)=>{
+      const aCLV = (a.clv_pct != null && !String(a.clv_source_book||'').startsWith('~')) ? 0 : 1;
+      const bCLV = (b.clv_pct != null && !String(b.clv_source_book||'').startsWith('~')) ? 0 : 1;
+      if(aCLV !== bCLV) return aCLV - bCLV;
       const ta=new Date(isNaN(a.kickoff_time)?a.kickoff_time:Number(a.kickoff_time)*1000).getTime()||0;
       const tb=new Date(isNaN(b.kickoff_time)?b.kickoff_time:Number(b.kickoff_time)*1000).getTime()||0;
       return ta-tb;
@@ -1302,6 +1310,18 @@ async function fetchMain(){
   renderScanner();
 }
 
+async function fetchConfirmedCLV(){
+  try {
+    const res = await fetch("/api/picks/confirmed-clv");
+    if(res.ok){
+      const d = await res.json();
+      const raw = Array.isArray(d) ? d : (d.picks || d.data || []);
+      state.confirmedPicks = raw.map(normPick);
+    }
+  } catch(e){ console.error("fetchConfirmedCLV",e); }
+  renderScanner();
+}
+
 async function fetchHistory(){
   try {
     const res = await fetch("/api/picks/history?days=90");
@@ -1553,12 +1573,13 @@ function switchTab(id){
   TABS.forEach(t=>{ const el=document.getElementById("tab-"+t); if(el) el.style.display=t===id?"block":"none"; });
   const scannerEl = document.getElementById("tab-scanner");
   if(scannerEl) scannerEl.style.display = showScanner ? "block" : "none";
-  if(id==="history"  && !state.historyPicks.length) fetchHistory();
-  if(id==="clv"      && !state.clvData)             fetchCLV();
-  if(id==="clv"      && !state.clvBreakdown)        fetchCLVBreakdown();
-  if(id==="hockey"   && !state.hockeyData)           fetchHockey();
-  if(id==="nba"      && !state.nbaData)              fetchNba();
-  if(showScanner) renderScanner();
+  if(id==="history"   && !state.historyPicks.length) fetchHistory();
+  if(id==="clv"       && !state.clvData)             fetchCLV();
+  if(id==="clv"       && !state.clvBreakdown)        fetchCLVBreakdown();
+  if(id==="hockey"    && !state.hockeyData)           fetchHockey();
+  if(id==="nba"       && !state.nbaData)              fetchNba();
+  if(id==="smartvalue") fetchConfirmedCLV();
+  if(showScanner && id!=="smartvalue") renderScanner();
 }
 
 /* ──────────────────────────────────────────────
@@ -1646,7 +1667,8 @@ if("serviceWorker" in navigator){
    AUTO-REFRESH
 ──────────────────────────────────────────────── */
 setInterval(()=>{
-  if(state.activeTab==="scanner" || state.activeTab==="smartvalue") fetchMain();
+  if(state.activeTab==="scanner") fetchMain();
+  if(state.activeTab==="smartvalue"){ fetchMain(); fetchConfirmedCLV(); }
 }, 30 * 1000);
 
 setInterval(()=>{

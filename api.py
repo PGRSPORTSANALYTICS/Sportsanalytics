@@ -2974,6 +2974,157 @@ async def get_analysis_today():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/picks/confirmed-clv")
+async def get_confirmed_clv_picks():
+    """
+    Confirmed CLV tab: today's PROD picks that have CLV captured vs sharp books.
+    Returns regardless of outcome (won/lost/pending) — these are the verified picks.
+    Also returns today's pending PROD picks without CLV yet (upcoming, pre-verification).
+    """
+    try:
+        import time as _time
+        from datetime import timedelta
+
+        now_utc = datetime.utcnow()
+        day_start = datetime(now_utc.year, now_utc.month, now_utc.day, 0, 0, 0)
+        today_str   = day_start.strftime('%Y-%m-%d')
+        tomorrow_str = (day_start + timedelta(days=2)).strftime('%Y-%m-%d')
+        now_epoch   = int(now_utc.timestamp())
+        cutoff_epoch = now_epoch - 14400  # 4h post-KO cutoff for upcoming picks
+
+        rows = db_helper.execute("""
+            SELECT
+                id, home_team, away_team, market, selection, odds,
+                edge_percentage, confidence, outcome, profit_loss,
+                odds_by_bookmaker, best_odds_value, best_odds_bookmaker,
+                league, trust_level, kickoff_time, match_date,
+                open_odds, clv_pct, mode,
+                model_prob, disagreement, clv_status, hidden_value_status,
+                timestamp, kickoff_epoch, clv_score, clv_tier,
+                fair_odds, pgr_score, clv_source_book, close_odds
+            FROM football_opportunities
+            WHERE mode = 'PROD'
+              AND match_date >= %s AND match_date < %s
+              AND (
+                  -- CLV confirmed picks: show regardless of outcome/time
+                  (clv_pct IS NOT NULL AND clv_source_book NOT LIKE '~%%')
+                  OR
+                  -- Upcoming picks not yet past 4h cutoff
+                  (
+                    (outcome IS NULL OR outcome = '' OR outcome IN ('pending','unknown'))
+                    AND (kickoff_epoch IS NULL OR kickoff_epoch > %s)
+                  )
+              )
+            ORDER BY
+                (clv_pct IS NOT NULL) DESC,
+                kickoff_epoch ASC NULLS LAST,
+                id DESC
+        """, (today_str, tomorrow_str, cutoff_epoch), fetch='all') or []
+
+        picks = []
+        for r in rows:
+            outcome = (r[8] or '').upper()
+            status = 'upcoming'
+            if outcome in ('WON', 'WIN'):   status = 'won'
+            elif outcome in ('LOST','LOSS'): status = 'lost'
+            elif outcome == 'VOID':          status = 'void'
+
+            ko_time = r[15]
+            match_date = str(r[16]) if r[16] else ''
+            kickoff_epoch_val = r[25]
+
+            ko_str = ''
+            kickoff_epoch_iso = ''
+            if kickoff_epoch_val:
+                try:
+                    import pytz
+                    sthlm = pytz.timezone('Europe/Stockholm')
+                    dt_utc = datetime.utcfromtimestamp(kickoff_epoch_val).replace(tzinfo=pytz.utc)
+                    ko_str = dt_utc.astimezone(sthlm).strftime('%H:%M')
+                    kickoff_epoch_iso = dt_utc.strftime('%Y-%m-%dT%H:%M:%SZ')
+                except Exception:
+                    ko_str = ''
+            if not ko_str and ko_time:
+                ko_str = str(ko_time)[:5] if len(str(ko_time)) >= 5 else str(ko_time)
+            if not ko_str and match_date:
+                ko_str = match_date
+
+            market_icons = {
+                'OVER_UNDER':'⚽','CORNERS':'⛳','CARDS':'🟨',
+                'BTTS':'🎯','HOME_WIN':'🏠','AWAY_WIN':'✈️',
+                'DRAW':'🤝','VALUE_SINGLE':'💎','DOUBLE_CHANCE':'🛡️',
+            }
+            mkt  = (r[3] or '').upper()
+            icon = next((v for k,v in market_icons.items() if k in mkt), '⚽')
+
+            _fair_raw = float(r[28]) if r[28] else None
+            model_p   = float(r[20]) if r[20] else None
+            if not _fair_raw and model_p and model_p > 0:
+                _fair_raw = round(1.0 / model_p, 3)
+            if not model_p and _fair_raw and _fair_raw > 1:
+                model_p = round(1.0 / _fair_raw, 3)
+            odds_f = float(r[5]) if r[5] else None
+            if model_p and odds_f and odds_f > 1.0:
+                ev_raw = (model_p - 1.0 / odds_f) * 100
+                ev_val = round(min(ev_raw, 40.0), 1)
+            else:
+                ev_val = round(min(float(r[6]) if r[6] else 0, 40.0), 1)
+
+            clv_src = r[30] or None
+            if kickoff_epoch_iso:
+                kickoff_iso = kickoff_epoch_iso
+            elif match_date and ko_str and ':' in ko_str:
+                kickoff_iso = f"{match_date}T{ko_str}:00"
+            else:
+                kickoff_iso = match_date
+
+            picks.append({
+                'id': r[0],
+                'home_team': r[1] or '',
+                'away_team': r[2] or '',
+                'match': f"{r[1] or ''} vs {r[2] or ''}",
+                'market': r[3] or '',
+                'selection': r[4] or '',
+                'odds': float(r[5]) if r[5] else 0,
+                'edge_pct': ev_val, 'ev_pct': ev_val, 'ev': ev_val,
+                'confidence': round(float(r[7]),2) if r[7] else 0,
+                'outcome': outcome, 'status': status,
+                'profit_loss': round(float(r[9]),2) if r[9] else None,
+                'odds_by_bookmaker': r[10],
+                'best_odds_value': float(r[11]) if r[11] else None,
+                'best_odds_bookmaker': r[12] or '',
+                'bookmaker': r[12] or '',
+                'league': r[13] or '',
+                'trust_level': r[14] or '',
+                'kickoff_str': ko_str,
+                'kickoff': kickoff_iso,
+                'kickoff_time': kickoff_iso,
+                'match_date': match_date,
+                'open_odds': float(r[17]) if r[17] else None,
+                'close_odds': float(r[31]) if r[31] else None,
+                'clv_pct': round(float(r[18]),2) if r[18] else None,
+                'icon': icon, 'layer': 'PRO PICK', 'badge': 'PRO PICK',
+                'mode': 'PROD',
+                'model_prob': round(model_p,3) if model_p else None,
+                'disagreement': round(float(r[21]),3) if r[21] else None,
+                'clv_status': r[22] or None,
+                'hidden_value_status': r[23] or None,
+                'created_ts': int(r[24]) if r[24] else None,
+                'age_minutes': int((_time.time()-int(r[24]))/60) if r[24] else None,
+                'fair_odds': round(_fair_raw,3) if _fair_raw else None,
+                'pgr_score': _compute_pgr_score(r[29], ev_val, model_p, float(r[7]) if r[7] else 0),
+                'clv_source_book': clv_src,
+                'clv_verified': (clv_src is not None and not clv_src.startswith('~') and r[18] is not None),
+                'confidence_tier': None,
+            })
+
+        return {'picks': picks, 'count': len(picks)}
+
+    except Exception as e:
+        logger.error(f"Error in get_confirmed_clv_picks: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/picks/history")
 async def get_picks_history(days: int = 90):
     """
