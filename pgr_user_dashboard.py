@@ -431,7 +431,7 @@ def load_clv_proof_of_edge(days: int = 30):
         SELECT clv_pct, match_date, market, league, clv_status
         FROM football_opportunities
         WHERE mode='PROD' AND clv_pct IS NOT NULL
-          AND timestamp >= NOW() - (%s || ' days')::INTERVAL
+          AND timestamp >= EXTRACT(EPOCH FROM (NOW() - (%s || ' days')::INTERVAL))::bigint
         ORDER BY timestamp DESC
     """, (str(days),), fetch='all')
     return rows or []
