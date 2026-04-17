@@ -40,10 +40,18 @@ CLOSE_AFTER_KICKOFF_MIN = 90        # Allow capture up to 90 min AFTER kickoff
 TARGET_MINUTES_BEFORE = 60          # Ideal capture point (60 min before KO)
 DRIFT_REJECT_PCT = 0.50             # Reject if odds moved >50% (data error)
 
-SHARP_BOOKS = ['pinnacle', 'bet365', 'matchbook', 'betfair', 'betfair_ex_eu', 'nordicbet', 'unibet']
+# Sharp books hierarchy:
+# Tier 1 (gold): Pinnacle, Betfair Exchange — highest limits, accept winners, move fast
+# Tier 2 (sharp): Matchbook — peer-to-peer exchange, strong signal, same-line proof quality
+# Tier 3 (semi-sharp): Bet365, NordicBet, Unibet — good secondary, lower limits
+SHARP_BOOKS = ['pinnacle', 'betfair', 'betfair_ex_eu', 'matchbook', 'bet365', 'nordicbet', 'unibet']
 
 # Matchbook borttagen ur priority — stängde börsen 2019, opålitlig som ensam källa
-SHARP_PRIORITY = ['pinnacle', 'betfair', 'betfair_ex_eu', 'bet365']
+# Tier 1 (gold — direct proof): Pinnacle, Betfair Exchange
+# Tier 2 (sharp): Bet365 — high volume, good liquidity
+# Tier 3 (semi-sharp — secondary confirmation): NordicBet, Unibet — accept winners in EU,
+#         can confirm exact lines when T1/T2 have moved off
+SHARP_PRIORITY = ['pinnacle', 'betfair', 'betfair_ex_eu', 'bet365', 'nordicbet', 'unibet']
 
 LEAGUE_TO_SPORT_KEY: Dict[str, str] = {
     # England
@@ -476,7 +484,7 @@ class CLVService:
                         'date':        snap_iso,
                         'regions':     'eu,uk',
                         'markets':     mtype,
-                        'bookmakers':  'pinnacle,betfair_ex_eu,betfair,bet365',
+                        'bookmakers':  'pinnacle,betfair_ex_eu,betfair,bet365,nordicbet,unibet',
                         'oddsFormat':  'decimal',
                     },
                     timeout=12,

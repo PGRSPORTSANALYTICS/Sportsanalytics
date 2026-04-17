@@ -145,11 +145,14 @@ def post_clv_proof(bet: dict, close_odds: float, clv: float, close_book: str,
     # "(interp ...)" passes through — it is a same-line-equivalent via interpolation
 
     # Block single-source captures from WEBHOOK_PROOF — unreliable as public proof
+    # Source labels: "vs Pinnacle + Betfair" = 2 books, "vs Pinnacle" = 1 book.
+    # Count by ' + ' separators in the 'vs ...' portion of the label.
     import re as _re
-    n_sources = 1
-    m = _re.search(r'n=(\d+)', book_str)
-    if m:
-        n_sources = int(m.group(1))
+    vs_part = _re.search(r'vs (.+?)(?:\s*\(|$)', book_str)
+    if vs_part:
+        n_sources = vs_part.group(1).count(' + ') + 1
+    else:
+        n_sources = 1
     if n_sources < 2:
         logger.info("proof_poster: skip WEBHOOK_PROOF — n=%d source(s) only (book=%s, bet=%d)",
                     n_sources, book_str, bet['id'])
