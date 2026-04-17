@@ -259,9 +259,10 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
 .edge-low{background:rgba(113,113,122,.1);border:1px solid rgba(113,113,122,.2);color:#71717a}
 .cell-signal{}
 .sig-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:700}
+.sig-top{background:rgba(239,68,68,.14);color:#f87171}
 .sig-high{background:rgba(34,197,94,.12);color:#4ade80}
-.sig-med{background:rgba(99,102,241,.12);color:#818cf8}
-.sig-low{background:rgba(113,113,122,.1);color:#71717a}
+.sig-med{background:rgba(234,179,8,.12);color:#facc15}
+.sig-low{background:rgba(249,115,22,.12);color:#fb923c}
 
 /* ── Locked cell ── */
 .locked-cell{position:relative;display:flex;align-items:center}
@@ -830,16 +831,25 @@ function evClass(ev){
   if(ev>=5)  return "edge-med";
   return "edge-low";
 }
-function sigClass(tier){
-  if(tier==="HIGH") return "sig-high";
-  if(tier==="MED")  return "sig-med";
+/* SIGNAL flatten Apr 17 2026: strength derived from EV (matches dashboard 3/5/8/10 filter pills).
+   Backend now saves all 3%+ ACTIVE/DEGRADED signals — band reflects raw signal strength. */
+function evBandClass(ev){
+  const e = Number(ev) || 0;
+  if(e >= 10) return "sig-top";
+  if(e >= 8)  return "sig-high";
+  if(e >= 5)  return "sig-med";
   return "sig-low";
 }
-function sigLabel(tier){
-  if(tier==="HIGH") return "🟢 High Confidence";
-  if(tier==="MED")  return "🟡 Developing Edge";
-  return "🔥 Market Moving";
+function evBandLabel(ev){
+  const e = Number(ev) || 0;
+  if(e >= 10) return "🔥 Top Edge";
+  if(e >= 8)  return "🟢 High Confidence";
+  if(e >= 5)  return "🟡 Signal";
+  return "🟠 Developing Edge";
 }
+/* Legacy aliases — kept so existing call sites keep working */
+function sigClass(_tier, ev){ return evBandClass(ev); }
+function sigLabel(_tier, ev){ return evBandLabel(ev); }
 
 /* ──────────────────────────────────────────────
    PREMIUM

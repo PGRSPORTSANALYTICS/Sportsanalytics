@@ -275,6 +275,21 @@ def _edge_color(edge: float) -> int:
     return EMBED_COLORS["standard"]
 
 
+def _strength_band(edge: float) -> str:
+    """Classify edge into named strength bands (matches dashboard 3/5/8/10 filter pills)."""
+    try:
+        e = float(edge)
+    except (TypeError, ValueError):
+        return "Developing Edge"
+    if e >= 10:
+        return "🔥 Top Edge"
+    if e >= 8:
+        return "🟢 High Confidence"
+    if e >= 5:
+        return "🟡 Signal"
+    return "🟠 Developing Edge"
+
+
 def _display_ev(pick: dict) -> float:
     """Return calibrated EV for display. Uses stored calibrated_ev_pct if available,
     otherwise applies live calibration to raw edge_percentage."""
@@ -490,7 +505,7 @@ def fetch_analysis_picks() -> List[dict]:
         FROM football_opportunities
         WHERE status = 'pending'
           AND mode IN ('PROD', 'VALUE_OPP', 'WATCHLIST')
-          AND edge_percentage >= 5
+          AND edge_percentage >= 3
           AND odds > 1.0
           AND match_date::date >= CURRENT_DATE
           AND (kickoff_epoch IS NULL OR kickoff_epoch > EXTRACT(EPOCH FROM NOW())::bigint)

@@ -71,7 +71,7 @@ PRO_MIN_ODDS = 2.10            # Raised from 1.75 — data shows edge only at 2.
 PRO_MAX_ODDS = 2.30
 # Minimum Expected Value (EV) for candidate generation scan (three-layer routing, Mar 30 2026)
 # Candidates below 7% EV are rejected before PGR scoring.
-MIN_VALUE_SINGLE_EV = 0.07  # 7% floor — candidates then scored and routed to PRO/VALUE/WATCHLIST
+MIN_VALUE_SINGLE_EV = 0.03  # 3% floor — SIGNAL flatten: dashboard supports 3/5/8/10 bands, backend must too
 MAX_VALUE_SINGLES_PER_DAY = 8  # Max 8 PRO picks/day
 
 # Layer 2: VALUE OPPORTUNITY — published in dashboard + Discord, NOT official bets
@@ -91,7 +91,7 @@ MAX_LEARNING_ODDS = 4.00       # Outer scan ceiling
 
 # Candidate scan floor — raised from 5% to 12% (Apr 2026), lowered to 10% for volume (Apr 2026)
 # PRO picks still need PRO_MIN_EV (25%) via pgr_scoring routing
-MIN_VALUE_SINGLE_EV = 0.10     # 10% floor — lowered from 12% for more data collection
+MIN_VALUE_SINGLE_EV = 0.03     # 3% floor — SIGNAL flatten Apr 17 2026: full coverage of dashboard bands (3/5/8/10)
 MIN_VALUE_SINGLE_CONFIDENCE = PRO_MIN_CONFIDENCE
 
 # Market-specific EV floors (conservative overrides for high-volume markets)

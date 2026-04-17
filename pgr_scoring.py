@@ -160,7 +160,7 @@ VALUE_OPP_MIN_ODDS = 1.60
 VALUE_OPP_MAX_ODDS = 4.00
 VALUE_OPP_MIN_PGR_SCORE = 35.0  # Minimum weighted PGR score required for VALUE OPP
 
-WATCHLIST_MIN_EV = 0.07
+WATCHLIST_MIN_EV = 0.03  # SIGNAL flatten Apr 17 2026: lowered from 7% to expose all 3%+ ACTIVE/DEGRADED signals (Developing Edge band)
 WATCHLIST_MIN_CONFIDENCE = 0.50
 WATCHLIST_MIN_PGR_SCORE = 20.0  # Minimum PGR score for WATCHLIST (below this → REJECTED)
 
