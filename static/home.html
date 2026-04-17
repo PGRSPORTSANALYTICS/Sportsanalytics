@@ -459,7 +459,7 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
 
   <!-- Nav Tabs -->
   <div class="nav-tabs">
-    <button class="nav-tab sv-tab" data-tab="smartvalue">⭐ Smart Value</button>
+    <button class="nav-tab sv-tab" data-tab="smartvalue">✓ Confirmed CLV</button>
     <button class="nav-tab active" data-tab="scanner">⚡ Live Scanner</button>
     <button class="nav-tab" data-tab="history">📊 Track Record</button>
     <button class="nav-tab" data-tab="clv">📈 CLV</button>
@@ -478,9 +478,9 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
 
     <!-- Smart Value banner (shown only on SV tab) -->
     <div class="sv-banner" id="sv-banner" style="display:none">
-      <div class="sv-banner-icon">⭐</div>
+      <div class="sv-banner-icon">✓</div>
       <div class="sv-banner-text">
-        <b>Smart Value</b> — identifies pricing inefficiencies across markets. Not every signal is meant to be played.<br>
+        <b>Confirmed CLV</b> — picks verified against Pinnacle/Betfair closing lines. Positive CLV = you beat the sharp market.<br>
         <span style="color:#fbbf24;font-style:italic">"We don't track wins. We track whether the market moves."</span>
       </div>
     </div>
@@ -974,7 +974,7 @@ function renderScanner(){
 
   if(!picks.length){
     const emptyMsg = isSV
-      ? `<div class="empty-state"><div class="empty-icon">⭐</div><div class="empty-title">No Smart Value picks today</div><div class="empty-sub">Check back closer to kickoff — picks publish 2–4 hours before matches</div></div>`
+      ? `<div class="empty-state"><div class="empty-icon">✓</div><div class="empty-title">No Confirmed CLV picks today</div><div class="empty-sub">Check back closer to kickoff — picks publish 2–4 hours before matches</div></div>`
       : `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">No edges found</div><div class="empty-sub">Try lowering the min EV filter or check back soon</div></div>`;
     body.innerHTML=emptyMsg;
     if(!state.isPremium && !isSV) document.getElementById("fomo-section").style.display="block";
@@ -1057,7 +1057,7 @@ function renderScanner(){
       : unlockHint;
 
     const isProd = p.mode === "PROD";
-    const svMark = (!isSV && isProd) ? '<span class="sv-chip">⭐ SV</span>' : '';
+    const svMark = (!isSV && isProd) ? '<span class="sv-chip">✓ CLV</span>' : '';
     const svRowCls = isProd ? " sv-row" : "";
 
     // CLV verification badge per pick
