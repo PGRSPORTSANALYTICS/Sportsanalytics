@@ -684,9 +684,7 @@ def run_publish_cycle():
 
 
 def publish_after_cycle():
-    # DISABLED — league-specific Discord publishing turned off
-    logger.info("Discord league publishing DISABLED — skipping")
-    return 0
+    return run_publish_cycle()
 
 
 def discover_webhook_status():
