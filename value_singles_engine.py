@@ -1220,9 +1220,10 @@ class ValueSinglesEngine:
                 print(f"   📚 [LEAGUE LEARNING] {c['league']} → mode=LEARNING, bet_placed=False")
                 continue
 
-            # ── VALUE_OPP and WATCHLIST → data_picks (never official P&L) ──────
+            # ── SIGNAL FLATTEN (Phase 1): VALUE_OPP/WATCHLIST → PROD ────────
+            # No tier system. Everything with edge ≥ floor is published as a Signal.
+            # Internal bankroll tracking still uses mode='PROD' under the hood.
             if _routing in ("VALUE_OPP", "WATCHLIST"):
-                _mode = "VALUE_OPP" if _routing == "VALUE_OPP" else "WATCHLIST"
                 data_picks.append({
                     "timestamp": int(time.time()),
                     "match_id": match_id,
@@ -1242,14 +1243,15 @@ class ValueSinglesEngine:
                         "pgr_score": pgr_score,
                         "league_tier": _league_tier,
                         "routing": _routing,
+                        "signal_origin": _routing,
                     }),
                     "match_date": match_date,
                     "kickoff_utc": _ko_utc,
                     "kickoff_epoch": _ko_epoch,
                     "created_at_utc": _created,
-                    "mode": _mode,
-                    "stake": 0,
-                    "bet_placed": False,
+                    "mode": "PROD",
+                    "stake": 1,
+                    "bet_placed": True,
                     "odds_by_bookmaker": bookmaker_data.get('odds_by_bookmaker'),
                     "best_odds_value": bookmaker_data.get('best_odds_value'),
                     "best_odds_bookmaker": bookmaker_data.get('best_odds_bookmaker'),
@@ -1427,14 +1429,12 @@ class ValueSinglesEngine:
         for i, p in enumerate(unique, 1):
             print(f"   #{i}: {p['home_team']} vs {p['away_team']} | {p['selection']} @ {p['odds']:.2f} (EV {p['edge_percentage']:.1f}% PGR={p.get('pgr_score',0):.1f})")
 
-        # ── Reroute PRO candidates dropped by uniqueness/daily cap → VALUE_OPP ──
-        # Any PRO-quality pick that didn't make the final selection is too good to
-        # discard — downgrade to VALUE_OPP so it still appears in the dashboard
-        # and Discord value channel rather than being silently lost.
+        # ── SIGNAL FLATTEN: PRO candidates dropped by daily cap still publish as PROD ──
+        # No tier system. Cap is irrelevant — every quality signal goes public.
         prod_dropped = [p for p in production_picks if p not in unique]
         for dp in prod_dropped:
-            _rr_reason = "routed_value_opp_from_pro_cap"
-            print(f"   🔄 REROUTE PRO→VALUE_OPP (cap/dup): {dp['home_team']} vs {dp['away_team']} | {dp.get('selection')} EV={dp.get('edge_percentage',0):.1f}% PGR={dp.get('pgr_score',0):.1f}")
+            _rr_reason = "signal_overflow_from_cap"
+            print(f"   📡 SIGNAL (overflow): {dp['home_team']} vs {dp['away_team']} | {dp.get('selection')} EV={dp.get('edge_percentage',0):.1f}% PGR={dp.get('pgr_score',0):.1f}")
             data_picks.append({
                 "timestamp": int(time.time()),
                 "match_id": dp["match_id"],
@@ -1451,9 +1451,9 @@ class ValueSinglesEngine:
                 "kickoff_utc": dp.get("kickoff_utc"),
                 "kickoff_epoch": dp.get("kickoff_epoch"),
                 "created_at_utc": dp.get("created_at_utc"),
-                "mode": "VALUE_OPP",
-                "stake": 0,
-                "bet_placed": False,
+                "mode": "PROD",
+                "stake": 1,
+                "bet_placed": True,
                 "odds_by_bookmaker": dp.get("odds_by_bookmaker"),
                 "best_odds_value": dp.get("best_odds_value"),
                 "best_odds_bookmaker": dp.get("best_odds_bookmaker"),
@@ -1473,9 +1473,9 @@ class ValueSinglesEngine:
 
         self._learning_picks = learning_picks
         self._data_picks = data_picks
-        _n_value_opp_final = sum(1 for d in data_picks if d.get('mode') == 'VALUE_OPP')
-        _n_watchlist_final = sum(1 for d in data_picks if d.get('mode') == 'WATCHLIST')
-        print(f"📡 SIGNAL PICKS (Discord): {len(data_picks)} signals queued (VALUE_OPP={_n_value_opp_final}, WATCHLIST={_n_watchlist_final})")
+        _n_signal_final = sum(1 for d in data_picks if d.get('mode') == 'PROD')
+        _n_learning_final = sum(1 for d in data_picks if d.get('mode') == 'LEARNING')
+        print(f"📡 SIGNALS queued: {len(data_picks)} total (PROD/published={_n_signal_final}, LEARNING/internal={_n_learning_final})")
 
         # ── MISSADE SPEL ──────────────────────────────────────────────────────
         all_missed = []

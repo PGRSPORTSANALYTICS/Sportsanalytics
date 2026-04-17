@@ -489,8 +489,8 @@ def fetch_analysis_picks() -> List[dict]:
                pgr_score, league_tier, routing_reason
         FROM football_opportunities
         WHERE status = 'pending'
-          AND mode IN ('PROD', 'VALUE_OPP')
-          AND edge_percentage >= 10
+          AND mode IN ('PROD', 'VALUE_OPP', 'WATCHLIST')
+          AND edge_percentage >= 5
           AND odds > 1.0
           AND match_date::date >= CURRENT_DATE
           AND (kickoff_epoch IS NULL OR kickoff_epoch > EXTRACT(EPOCH FROM NOW())::bigint)

@@ -4577,20 +4577,21 @@ def run_corners_cards_cycle():
     except Exception as e:
         print(f"⚠️ Stop-loss check failed: {e}")
     
-    # ── Edge Management Gate ──────────────────────────────────────────────────
-    # Corners: PROD when Edge Engine says ACTIVE, VALUE_OPP when DEGRADED/DISABLED.
-    corners_value_opp = False  # default: PROD
+    # ── Edge Management Gate (Phase 1: SIGNAL flatten) ───────────────────────
+    # Corners: PROD (publish as Signal) when ACTIVE/DEGRADED. LEARNING when DISABLED.
+    # No more VALUE_OPP tier — Edge Engine only decides publish-vs-internal-only.
+    corners_value_opp = False  # default: PROD (publish)
     try:
         from edge_management_engine import get_market_edge_status
         edge = get_market_edge_status("Corners")
         if edge["status"] == "DISABLED":
-            corners_value_opp = True
+            corners_value_opp = True  # → LEARNING (internal only, not published)
             reason = edge["reasons"][0] if edge["reasons"] else "Edge engine decision"
-            print(f"\n📊 CORNERS → VALUE_OPP mode (Edge: DISABLED — {reason})")
+            print(f"\n📊 CORNERS → LEARNING mode (Edge: DISABLED — {reason})")
         elif edge["status"] == "DEGRADED":
-            corners_value_opp = True
+            corners_value_opp = False  # → PROD (still publish, just flag internally)
             reason = edge["reasons"][0] if edge["reasons"] else "Edge engine decision"
-            print(f"\n📊 CORNERS → VALUE_OPP mode (Edge: DEGRADED — {reason})")
+            print(f"\n📊 CORNERS → PROD mode (Edge: DEGRADED — publishing as Signal — {reason})")
         else:
             corners_value_opp = False
             print(f"\n📊 CORNERS → PROD mode (Edge: ACTIVE ✅)")
