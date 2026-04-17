@@ -77,6 +77,12 @@ PROOF_WEBHOOK = os.getenv("WEBHOOK_PROOF", "")
 ROUTE_ALL_TO_PROOF = False  # Apr 17 2026: Pre-match publisher disabled entirely.
                              # proof-of-work channel is CLV-only (proof_poster.py).
 
+# ── HARD KILL SWITCH (Apr 17 2026) ──────────────────────────────────────────
+# Defence in depth: even if SOMETHING calls publish_after_cycle() / run_publish_cycle()
+# / _post_to_discord() / route_webhook(), the publisher will refuse to send.
+# Set PUBLISHER_KILL_SWITCH=False in env to re-enable (do NOT default-on).
+PUBLISHER_KILL_SWITCH = os.getenv("PUBLISHER_KILL_SWITCH", "true").lower() != "false"
+
 RATE_LIMIT_SECONDS = 2.0
 DEDUPE_TTL_HOURS = 48
 DEDUPE_FILE = "discord_publisher_dedupe.json"
@@ -546,6 +552,9 @@ def mark_discord_sent(pick_ids):
 
 
 def post_to_discord(webhook_url: str, payload: dict) -> bool:
+    if PUBLISHER_KILL_SWITCH:
+        logger.warning("🚫 PUBLISHER_KILL_SWITCH active — refusing to post to Discord (pre-match analysis is disabled, proof-of-work is CLV-only via proof_poster.py)")
+        return False
     if not webhook_url:
         logger.warning("No webhook URL — skipping post")
         return False
@@ -596,6 +605,9 @@ def _best_pick_per_match(picks: List[dict]) -> List[dict]:
 
 
 def run_publish_cycle():
+    if PUBLISHER_KILL_SWITCH:
+        logger.warning("🚫 PUBLISHER_KILL_SWITCH active — run_publish_cycle() short-circuited (no DB read, no Discord post)")
+        return 0
     logger.info("--- Analysis publish cycle start ---")
 
     picks = fetch_analysis_picks()
