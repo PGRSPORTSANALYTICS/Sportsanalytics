@@ -135,28 +135,31 @@ def post_clv_proof(bet: dict, close_odds: float, clv: float, close_book: str,
                     bet['id'], book_str)
         return False
 
-    # Block line-moved captures from WEBHOOK_PROOF entirely — different line means
-    # CLV isn't apples-to-apples (e.g. Over 3.5 vs Over 3.25 closing odds is misleading).
-    # Exception: "(interp L↔H)" is mathematically derived same-line equivalent — allowed.
+    # Block anything that is NOT a PROOF-quality source:
+    #   ~ prefix = fallback/internal only (line avail, soft, approx)
+    #   (line moved ...) = cross-line comparison, not same-line CLV
+    import re as _re
+    if book_str.startswith('~'):
+        logger.info("proof_poster: skip WEBHOOK_PROOF — fallback/internal source (book=%s, bet=%d)",
+                    book_str, bet['id'])
+        return False
     if '(line moved' in book_str:
         logger.info("proof_poster: skip WEBHOOK_PROOF — line moved, not same-line CLV (book=%s, bet=%d)",
                     book_str, bet['id'])
         return False
-    # "(interp ...)" passes through — it is a same-line-equivalent via interpolation
+    # "vs ... (interp ...)" passes through — proof-quality interpolation from Pinnacle/Betfair brackets
 
-    # Block single-source captures from WEBHOOK_PROOF — unreliable as public proof
-    # Source labels: "vs Pinnacle + Betfair" = 2 books, "vs Pinnacle" = 1 book.
-    # Count by ' + ' separators in the 'vs ...' portion of the label.
-    import re as _re
-    vs_part = _re.search(r'vs (.+?)(?:\s*\(|$)', book_str)
-    if vs_part:
-        n_sources = vs_part.group(1).count(' + ') + 1
-    else:
-        n_sources = 1
-    if n_sources < 2:
-        logger.info("proof_poster: skip WEBHOOK_PROOF — n=%d source(s) only (book=%s, bet=%d)",
-                    n_sources, book_str, bet['id'])
-        return False
+    # For GREEN exact-line proof: require 2+ sources from the 'vs ...' portion.
+    # Single-source captures are unreliable as public proof.
+    # For AMBER interp: single proof-book bracket is acceptable (1 source can interpolate).
+    is_interp_local = '(interp' in book_str
+    if not is_interp_local:
+        vs_part = _re.search(r'vs (.+?)(?:\s*\(|$)', book_str)
+        n_sources = vs_part.group(1).count(' + ') + 1 if vs_part else 1
+        if n_sources < 2:
+            logger.info("proof_poster: skip WEBHOOK_PROOF — n=%d source(s) only (book=%s, bet=%d)",
+                        n_sources, book_str, bet['id'])
+            return False
 
     # Block suspiciously high CLV — likely data noise from thin markets
     if clv > 30.0:
@@ -254,9 +257,9 @@ def post_clv_proof(bet: dict, close_odds: float, clv: float, close_book: str,
     embed_color = 0xf59e0b if is_interp else 0x22c55e
     embed_title = (f"📊 CLV Proof ⚠️ interp  ·  {clv_str}"
                    if is_interp else f"📊 CLV Proof  ·  {clv_str}")
-    embed_footer = ("PGR Analytics · CLV interpolated from adjacent sharp lines — NOT a direct quote  ·  Not financial advice"
+    embed_footer = ("PGR Analytics · CLV interpolated from adjacent Pinnacle/Betfair lines — NOT a direct quote  ·  Not financial advice"
                     if is_interp else
-                    "PGR Analytics · CLV = (open/close − 1) × 100  ·  Not financial advice")
+                    "PGR Analytics · Verified vs Pinnacle/Betfair close  ·  Not financial advice")
 
     embed = {
         "title": embed_title,

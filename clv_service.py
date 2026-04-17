@@ -40,18 +40,23 @@ CLOSE_AFTER_KICKOFF_MIN = 90        # Allow capture up to 90 min AFTER kickoff
 TARGET_MINUTES_BEFORE = 60          # Ideal capture point (60 min before KO)
 DRIFT_REJECT_PCT = 0.50             # Reject if odds moved >50% (data error)
 
-# Sharp books hierarchy:
-# Tier 1 (gold): Pinnacle, Betfair Exchange — highest limits, accept winners, move fast
-# Tier 2 (sharp): Matchbook — peer-to-peer exchange, strong signal, same-line proof quality
-# Tier 3 (semi-sharp): Bet365, NordicBet, Unibet — good secondary, lower limits
-SHARP_BOOKS = ['pinnacle', 'betfair', 'betfair_ex_eu', 'matchbook', 'bet365', 'nordicbet', 'unibet']
+# ── CLV book tiers ──────────────────────────────────────────────────────────
+# PROOF books: Pinnacle + Betfair Exchange only.
+#   Highest limits, accept winners, set the true market.
+#   These produce public-quality CLV proof — "verified vs Pinnacle/Betfair close".
+PROOF_BOOKS    = ['pinnacle', 'betfair', 'betfair_ex_eu']
 
-# Matchbook borttagen ur priority — stängde börsen 2019, opålitlig som ensam källa
-# Tier 1 (gold — direct proof): Pinnacle, Betfair Exchange
-# Tier 2 (sharp): Bet365 — high volume, good liquidity
-# Tier 3 (semi-sharp — secondary confirmation): NordicBet, Unibet — accept winners in EU,
-#         can confirm exact lines when T1/T2 have moved off
-SHARP_PRIORITY = ['pinnacle', 'betfair', 'betfair_ex_eu', 'bet365', 'nordicbet', 'unibet']
+# FALLBACK books: Bet365, NordicBet, Unibet.
+#   Semi-sharp — they follow the market, don't set it.
+#   Used INTERNALLY for line availability (finding exact lines + interpolation brackets).
+#   NEVER called "sharp" publicly, NEVER used as standalone CLV proof.
+FALLBACK_BOOKS = ['bet365', 'nordicbet', 'unibet']
+
+# Combined list used for broad matching elsewhere in the codebase
+SHARP_BOOKS    = PROOF_BOOKS + FALLBACK_BOOKS
+
+# Legacy alias — used in sorting/priority logic throughout this file
+SHARP_PRIORITY = PROOF_BOOKS + FALLBACK_BOOKS
 
 LEAGUE_TO_SPORT_KEY: Dict[str, str] = {
     # England
@@ -680,9 +685,10 @@ class CLVService:
         is_totals = 'over' in sel_lower or 'under' in sel_lower
         target_line = _extract_line(sel_lower) if is_totals else None
 
-        sharp_hits: List[tuple] = []
-        fallback_hit: Optional[tuple] = None
-        # For nearest-line fallback: track best sharp candidate per book
+        proof_hits:    List[tuple] = []   # Pinnacle / Betfair — exact same line
+        fallback_hits: List[tuple] = []   # Bet365 / NordicBet / Unibet — exact same line
+        soft_hit: Optional[tuple] = None  # Any other book — last resort, never proof
+        # For nearest-line fallback: track best candidate per book
         # (book_title -> (price, line, outcome_name))
         sharp_nearest: dict = {}
         # For interpolation: track closest line BELOW and ABOVE target per book
@@ -693,7 +699,9 @@ class CLVService:
         for bk in bookmakers:
             bk_key   = bk.get('key', '').lower()
             bk_title = bk.get('title', bk.get('key', 'unknown'))
-            is_sharp = bk_key in SHARP_PRIORITY
+            is_proof     = bk_key in PROOF_BOOKS
+            is_fallback  = bk_key in FALLBACK_BOOKS
+            is_sharp     = is_proof or is_fallback  # for interpolation brackets
 
             for mkt_obj in bk.get('markets', []):
                 for outcome in mkt_obj.get('outcomes', []):
@@ -739,27 +747,44 @@ class CLVService:
                             continue
 
                     entry = (float(price), bk_title, outcome.get('name', name))
-                    if is_sharp:
-                        sharp_hits.append(entry)
-                    elif fallback_hit is None:
-                        fallback_hit = entry
+                    if is_proof:
+                        proof_hits.append(entry)
+                    elif is_fallback:
+                        fallback_hits.append(entry)
+                    elif soft_hit is None:
+                        soft_hit = entry
 
-        if sharp_hits:
-            avg_odds  = sum(h[0] for h in sharp_hits) / len(sharp_hits)
+        # ── Exact-line: PROOF books (Pinnacle / Betfair) — green public proof ──────
+        if proof_hits:
+            avg_odds   = sum(h[0] for h in proof_hits) / len(proof_hits)
             book_names = sorted(
-                {h[1] for h in sharp_hits},
-                key=lambda b: SHARP_PRIORITY.index(b.lower()) if b.lower() in SHARP_PRIORITY else 99
+                {h[1] for h in proof_hits},
+                key=lambda b: PROOF_BOOKS.index(b.lower()) if b.lower() in PROOF_BOOKS else 99
             )
-            book_label = ' + '.join(book_names[:2]) + (' ...' if len(book_names) > 2 else '')
+            book_label   = ' + '.join(book_names[:2]) + (' ...' if len(book_names) > 2 else '')
             source_label = f"vs {book_label}"
-            matched_out  = sharp_hits[0][2]
+            matched_out  = proof_hits[0][2]
             return (round(avg_odds, 4), source_label, matched_out)
 
-        # ── Interpolation: derive fair odds for exact target line from two adjacent sharp lines ──
-        # Uses linear interpolation of implied probability between the closest line below
-        # and above the target. Tags as "(interp L↔H)" — credible same-line-equivalent proof.
-        # Only runs for totals when no exact sharp match found.
-        if not sharp_hits and is_totals and target_line is not None and sharp_below and sharp_above:
+        # ── Exact-line: FALLBACK books (Bet365/NordicBet/Unibet) — internal only ─
+        # Good for line availability but NOT used as public CLV proof.
+        if fallback_hits:
+            avg_odds   = sum(h[0] for h in fallback_hits) / len(fallback_hits)
+            book_names = sorted(
+                {h[1] for h in fallback_hits},
+                key=lambda b: FALLBACK_BOOKS.index(b.lower()) if b.lower() in FALLBACK_BOOKS else 99
+            )
+            book_label   = ' + '.join(book_names[:2]) + (' ...' if len(book_names) > 2 else '')
+            source_label = f"~{book_label} (line avail)"
+            matched_out  = fallback_hits[0][2]
+            logger.debug("CLV: fallback books only (%s) — internal line-avail, no public proof", book_label)
+            return (round(avg_odds, 4), source_label, matched_out)
+
+        # ── Interpolation: derive fair odds from two adjacent sharp lines ─────────
+        # Requires at least ONE PROOF book bracket — amber proof quality.
+        # If only fallback brackets available → internal line-avail only.
+        if not proof_hits and not fallback_hits and is_totals and target_line is not None \
+                and sharp_below and sharp_above:
             # Find best sharp book that has BOTH sides (sorted by SHARP_PRIORITY)
             both_books = sorted(
                 [bk for bk in sharp_below if bk in sharp_above],
@@ -796,9 +821,11 @@ class CLVService:
                     lo_o       = f"{interp_results[0][5]:.2f}"
                     hi_o       = f"{interp_results[0][6]:.2f}"
                     book_label = ' + '.join(book_names[:2]) + (' ...' if len(book_names) > 2 else '')
-                    # Format includes odds so proof embed can show derivation:
-                    # "vs Pinnacle (interp 3.25@1.91↔3.75@2.55)"
-                    source_label = f"vs {book_label} (interp {lo_str}@{lo_o}↔{hi_str}@{hi_o})"
+                    # Proof quality: at least one PROOF book bracket → amber public proof
+                    # Fallback only: label with ~ prefix → internal use, no public post
+                    has_proof_bracket = any(b.lower() in PROOF_BOOKS for b in book_names)
+                    pfx = "vs" if has_proof_bracket else "~"
+                    source_label = f"{pfx} {book_label} (interp {lo_str}@{lo_o}↔{hi_str}@{hi_o})"
                     matched_out  = interp_results[0][2]
                     logger.info(
                         "CLV: interpolated odds %.4f for line %.2f between %.2f@%.2f↔%.2f@%.2f — books=%s",
