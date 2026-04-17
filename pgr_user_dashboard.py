@@ -603,7 +603,7 @@ avg_edge   = float(live_edges_row[2] or 0)
 
 st.markdown(f"""
 <div class="pgr-hero">
-    <div class="pgr-logo-text">PGR Sports Analytics</div>
+    <div class="pgr-logo-text">PGR Sports Analytics &nbsp;·&nbsp; v2.1 · 17 Apr</div>
     <div class="pgr-hero-title">
         AI-Powered <span class="pgr-hero-accent">Value Detection</span>
     </div>
