@@ -1060,9 +1060,34 @@ function renderScanner(){
     const svMark = (!isSV && isProd) ? '<span class="sv-chip">⭐ SV</span>' : '';
     const svRowCls = isProd ? " sv-row" : "";
 
+    // CLV verification badge per pick
+    function clvPickBadge(clvPct, srcBook){
+      if(!srcBook || clvPct == null) return '';
+      const src = String(srcBook);
+      if(src.startsWith('~')) return '';                          // internal fallback — don't display
+      const sign = clvPct >= 0 ? '+' : '';
+      const pctStr = sign + Number(clvPct).toFixed(1) + '%';
+      if(src.toLowerCase().includes('interp')){
+        return `<span style="display:inline-flex;align-items:center;gap:3px;margin-left:6px;
+          background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.20);
+          color:#f59e0b;border-radius:99px;padding:1px 7px;font-size:9px;font-weight:700;
+          vertical-align:middle">⚠ CLV ${pctStr}</span>`;
+      }
+      // Exact sharp source (Pinnacle / Betfair)
+      const bookShortName = src.split('(')[0].trim();
+      const clvCol = clvPct >= 0 ? '#4ade80' : '#f87171';
+      const clvBg  = clvPct >= 0 ? 'rgba(34,197,94,.08)' : 'rgba(248,113,113,.08)';
+      const clvBdr = clvPct >= 0 ? 'rgba(34,197,94,.25)' : 'rgba(248,113,113,.25)';
+      return `<span style="display:inline-flex;align-items:center;gap:3px;margin-left:6px;
+        background:${clvBg};border:1px solid ${clvBdr};
+        color:${clvCol};border-radius:99px;padding:1px 7px;font-size:9px;font-weight:700;
+        vertical-align:middle">✓ ${bookShortName} ${pctStr}</span>`;
+    }
+    const clvBadge = clvPickBadge(p.clv_pct, p.clv_source_book);
+
     html+=`<div class="scanner-row${isExpanded?" expanded":""}${svRowCls} row-new" data-id="${esc(p.id)}">
       <div class="cell-match">
-        <div class="match-teams">${esc(p.match)}${isNew?'<span class="new-chip">NEW</span>':''}${svMark}</div>
+        <div class="match-teams">${esc(p.match)}${isNew?'<span class="new-chip">NEW</span>':''}${svMark}${clvBadge}</div>
         <div class="match-meta">${esc(p.league.replace(/^soccer_/,"").replace(/_/g," "))}</div>
         ${mmeLine}
       </div>
