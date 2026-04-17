@@ -41,6 +41,14 @@ except ImportError:
     def apply_ev_controls(ev): return (ev * 0.4, False, None)
     def is_stability_mode_active(): return False
 
+try:
+    from apf_odds_fallback import get_apf_odds_supplement, clear_session_cache as _apf_clear_cache
+    APF_FALLBACK_AVAILABLE = True
+except ImportError:
+    APF_FALLBACK_AVAILABLE = False
+    def get_apf_odds_supplement(*a, **kw): return {}
+    def _apf_clear_cache(): pass
+
 MIN_COMBINED_CONFIDENCE = 0.01
 
 
@@ -162,8 +170,10 @@ LEARNING_ONLY_LEAGUES = {
     "soccer_chile_campeonato",         # Chilean Primera — new, harder to calibrate
 }
 
-# League filtering mode: False = allow ALL leagues
-LEAGUE_WHITELIST_ENABLED = False  # Disable whitelist - allow all leagues
+# League filtering mode: True = only scan whitelisted leagues
+# Reduces rejected_no_odds noise from obscure leagues with no bookmaker coverage.
+# The 30 whitelisted leagues are the ones API-Football + The Odds API cover reliably.
+LEAGUE_WHITELIST_ENABLED = True   # Option 2: focus on quality-covered leagues
 
 # EXPANDED league whitelist (all supported leagues - approx 30)
 # Includes all leagues with reliable data and predictable outcomes
@@ -482,6 +492,9 @@ class ValueSinglesEngine:
             PGR_SCORING_AVAILABLE = False
             PRO_PICK_MAX_PER_DAY = MAX_VALUE_SINGLES_PER_DAY  # fallback
 
+        # Clear APF in-memory cache at cycle start so stale fixture lookups don't bleed over
+        _apf_clear_cache()
+
         rejection_counts: dict = {}
         _candidates_evaluated = 0  # Total market evaluations (before any filter)
 
@@ -667,13 +680,33 @@ class ValueSinglesEngine:
             if is_tournament:
                 print(f"🏆 Tournament match: {home_team} vs {away_team} - using relaxed thresholds (EV: {match_ev_threshold:.1%}, Conf: {match_confidence_threshold:.0%})")
 
-            # 2) Odds
+            # 2) Odds — primary from The Odds API via champion, fallback from API-Football
             if not hasattr(self.champion, "get_odds_for_match"):
                 continue
             odds_dict = self.champion.get_odds_for_match(match) or {}
+
+            # APF FALLBACK (Option 1): supplement missing markets from API-Football.
+            # The Odds API covers 1X2 + Totals for major leagues; API-Football adds
+            # BTTS, Asian Handicap, Corners, Cards for ALL leagues.
+            # Called when:
+            #   (a) odds_dict has core 1X2 but lacks BTTS/AH/totals — fills gaps
+            #   (b) odds_dict is entirely empty — APF may have full coverage
+            if APF_FALLBACK_AVAILABLE and (home_team and away_team):
+                try:
+                    _apf_extra = get_apf_odds_supplement(
+                        home_team, away_team,
+                        match.get('commence_time', ''),
+                        odds_dict if odds_dict else None
+                    )
+                    if _apf_extra:
+                        odds_dict = {**odds_dict, **_apf_extra}   # APF never overrides primary
+                        print(f"   📡 APF fallback added {len(_apf_extra)} markets: {list(_apf_extra.keys())[:6]}")
+                except Exception as _apf_err:
+                    pass  # Never crash on fallback failure
+
             if not odds_dict:
                 continue
-            
+
             print("🧾 Odds keys found:", list(odds_dict.keys()))
 
             # 3) Real team form analysis pipeline (same as exact score system)
