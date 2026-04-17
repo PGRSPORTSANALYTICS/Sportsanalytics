@@ -375,24 +375,55 @@ def post_daily_clv_digest() -> bool:
                 f"❌  {clv:+.1f}%  {home} vs {away}  ·  {mkt}  {open_o:.2f}→{close_o:.2f}"
             )
 
-    # Colour: green if majority positive, amber if mixed, red if majority negative
-    color = 0x22c55e if beat_rate >= 55 else (0xf59e0b if beat_rate >= 40 else 0xef4444)
+    # ── Sample-size discipline ───────────────────────────────────────────
+    # Doctrine: never claim a rate (beat-rate, win-rate) on a sample too small
+    # to be statistically meaningful. Show the raw count instead. Sharp readers
+    # spot small-sample claims instantly and discount everything else we say.
+    MIN_SAMPLE_FOR_RATE = int(os.getenv("CLV_MIN_SAMPLE_FOR_RATE", "30"))
+    show_rate = total >= MIN_SAMPLE_FOR_RATE
+
+    avg_clv_all = round(sum(r[7] for r in rows) / total, 2) if total else 0
+
+    # Colour: neutral grey for small samples, then real signal once we have data
+    if not show_rate:
+        color = 0x6b7280   # neutral grey — "early data, no claim yet"
+    elif beat_rate >= 55:
+        color = 0x22c55e
+    elif beat_rate >= 40:
+        color = 0xf59e0b
+    else:
+        color = 0xef4444
 
     input_feed_note = (
         f"\n*+{input_feed_n} input-feed captures (API-Football) excluded from proof stats*"
         if input_feed_n > 0 else ""
     )
 
-    summary_block = "\n".join([
-        "```",
-        f"CLV proof digest  ({total} verified captures)",
-        f"Source: Pinnacle / Betfair closing lines",
-        "",
-        f"Beat closing line  : {pos_count}/{total}  ({beat_rate}%)",
-        f"Avg positive CLV   : +{avg_pos}%",
-        f"Avg negative CLV   :  {avg_neg}%",
-        "```",
-    ])
+    if show_rate:
+        summary_lines = [
+            f"CLV proof digest  ({total} verified captures)",
+            f"Source: Pinnacle / Betfair closing lines",
+            "",
+            f"Beat closing line  : {pos_count}/{total}  ({beat_rate}%)",
+            f"Avg CLV (all)      : {avg_clv_all:+.2f}%",
+            f"Avg positive CLV   : +{avg_pos}%",
+            f"Avg negative CLV   :  {avg_neg}%",
+        ]
+        title = f"📈 Daily CLV Proof  ·  {beat_rate}% beat rate  (n={total})"
+    else:
+        # Small-sample: no rate, no hype, just the raw numbers and a disclaimer.
+        summary_lines = [
+            f"CLV proof digest  (early data — n={total})",
+            f"Source: Pinnacle / Betfair closing lines",
+            "",
+            f"sample : {total}",
+            f"clv    : {avg_clv_all:+.2f}%",
+            "",
+            f"(beat-rate withheld until n >= {MIN_SAMPLE_FOR_RATE})",
+        ]
+        title = f"📈 CLV Proof — Daily Update  ·  n={total}"
+
+    summary_block = "\n".join(["```"] + summary_lines + ["```"])
 
     picks_block = ("```\n" + "\n".join(pick_lines) + "\n```") if pick_lines else ""
 
@@ -403,10 +434,10 @@ def post_daily_clv_digest() -> bool:
     ]))
 
     embed = {
-        "title": f"📈 Daily CLV Proof  ·  {beat_rate}% beat rate  (vs Pinnacle/Betfair)",
+        "title": title,
         "description": description,
         "color": color,
-        "footer": {"text": "PGR Analytics · Proof = model odds vs Pinnacle/Betfair closing line  ·  Input feeds excluded"},
+        "footer": {"text": "PGR Analytics · Model odds vs Pinnacle/Betfair closing line · Input feeds excluded"},
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
 
