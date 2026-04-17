@@ -1158,7 +1158,10 @@ class CLVService:
 
             close_result = {
                 'odds':            close_odds,
-                'bookmaker':       'api_football',
+                # ~prefix = internal/not-proof. "input-feed" = this is a model
+                # input source, NOT a sharp reference market. Blocked from
+                # WEBHOOK_PROOF by proof_poster's ~ prefix guard.
+                'bookmaker':       '~api_football (input-feed)',
                 'ts':              _now(),
                 'api_market_type': 'af_fallback',
                 'matched_outcome': db_sel,

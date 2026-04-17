@@ -301,7 +301,10 @@ def post_daily_clv_digest() -> bool:
     try:
         day_start = int(time.time()) - 86400
 
-        rows = _db_module.db_helper.execute("""
+        # ── PROOF-quality only: Pinnacle / Betfair / verified sharp sources ──
+        # Excludes anything starting with ~ (fallback/internal) and api_football
+        # (model input feed — not an authoritative reference market).
+        proof_rows = _db_module.db_helper.execute("""
             SELECT
                 home_team, away_team, league, market, selection,
                 open_odds, close_odds, clv_pct, clv_source_book, steam_flag,
@@ -310,15 +313,31 @@ def post_daily_clv_digest() -> bool:
             WHERE close_ts >= %s
               AND clv_pct IS NOT NULL
               AND clv_pct != 0
+              AND clv_source_book IS NOT NULL
+              AND clv_source_book NOT LIKE '~%%'
+              AND clv_source_book NOT ILIKE '%%api_football%%'
+              AND clv_source_book NOT ILIKE '%%(soft)%%'
             ORDER BY clv_pct DESC
         """, (day_start,), fetch='all') or []
+
+        # ── All captures including input-feed: count only, for transparency ──
+        all_count_row = _db_module.db_helper.execute("""
+            SELECT COUNT(*) FROM football_opportunities
+            WHERE close_ts >= %s
+              AND clv_pct IS NOT NULL
+              AND clv_pct != 0
+        """, (day_start,), fetch='one')
+        all_total = int(all_count_row[0]) if all_count_row else 0
 
     except Exception as exc:
         logger.error("proof_poster digest: DB fetch failed: %s", exc)
         return False
 
+    # Fall back to all captures if proof set is empty (no sharp books active)
+    rows = proof_rows
+    is_proof_only = True
     if not rows:
-        logger.info("proof_poster digest: no CLV captures in last 24h — skip")
+        logger.info("proof_poster digest: no proof-quality CLV in last 24h — skip")
         return False
 
     positive = [r for r in rows if r[7] > 0]
@@ -327,6 +346,7 @@ def post_daily_clv_digest() -> bool:
     pos_count  = len(positive)
     neg_count  = len(negative)
     total      = len(rows)
+    input_feed_n = max(0, all_total - total)  # captures from API-Football/soft sources
     beat_rate  = round(100 * pos_count / total, 1) if total else 0
     avg_pos    = round(sum(r[7] for r in positive) / pos_count, 2) if positive else 0
     avg_neg    = round(sum(r[7] for r in negative) / neg_count, 2) if negative else 0
@@ -337,9 +357,11 @@ def post_daily_clv_digest() -> bool:
         home, away, league, market, sel, open_o, close_o, clv, book, flag, close_ts, bid = r
         league_fmt = (league or "").replace("soccer_", "").replace("_", " ").title()
         mkt = sel or _label(market)
+        # Show source book label — strips "vs " prefix for compact display
+        book_lbl = (book or "").replace("vs ", "").split("(")[0].strip()[:20]
         pick_lines.append(
-            f"✅  {clv:+.1f}%  {home} vs {away}  ·  {mkt}  [{league_fmt}]"
-            f"  {open_o:.2f}→{close_o:.2f}"
+            f"✅  {clv:+.1f}%  {home} vs {away}  ·  {mkt}"
+            f"  {open_o:.2f}→{close_o:.2f}  [{book_lbl}]"
         )
 
     if negative:
@@ -356,9 +378,15 @@ def post_daily_clv_digest() -> bool:
     # Colour: green if majority positive, amber if mixed, red if majority negative
     color = 0x22c55e if beat_rate >= 55 else (0xf59e0b if beat_rate >= 40 else 0xef4444)
 
+    input_feed_note = (
+        f"\n*+{input_feed_n} input-feed captures (API-Football) excluded from proof stats*"
+        if input_feed_n > 0 else ""
+    )
+
     summary_block = "\n".join([
         "```",
-        f"CLV digest  ({total} captures today)",
+        f"CLV proof digest  ({total} verified captures)",
+        f"Source: Pinnacle / Betfair closing lines",
         "",
         f"Beat closing line  : {pos_count}/{total}  ({beat_rate}%)",
         f"Avg positive CLV   : +{avg_pos}%",
@@ -371,17 +399,18 @@ def post_daily_clv_digest() -> bool:
     description = "\n".join(filter(None, [
         summary_block,
         picks_block,
+        input_feed_note,
     ]))
 
     embed = {
-        "title": f"📈 Daily CLV Proof  ·  {beat_rate}% beat rate",
+        "title": f"📈 Daily CLV Proof  ·  {beat_rate}% beat rate  (vs Pinnacle/Betfair)",
         "description": description,
         "color": color,
-        "footer": {"text": "PGR Analytics · Closing Line Value = market beat rate  ·  Not financial advice"},
+        "footer": {"text": "PGR Analytics · Proof = model odds vs Pinnacle/Betfair closing line  ·  Input feeds excluded"},
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
 
-    ok = _send_embed(embed, label=f"daily CLV digest ({pos_count}/{total} positive)")
+    ok = _send_embed(embed, label=f"daily CLV digest ({pos_count}/{total} positive, {input_feed_n} input-feed excl)")
     return ok
 
 
@@ -419,6 +448,10 @@ def post_clv_buckets() -> bool:
             WHERE clv_pct IS NOT NULL
               AND outcome IN ('won', 'lost')
               AND match_id NOT LIKE 'seed_%%'
+              AND clv_source_book IS NOT NULL
+              AND clv_source_book NOT LIKE '~%%'
+              AND clv_source_book NOT ILIKE '%%api_football%%'
+              AND clv_source_book NOT ILIKE '%%(soft)%%'
             GROUP BY bucket_ord
             ORDER BY bucket_ord DESC
         """, fetch='all') or []
@@ -461,12 +494,13 @@ def post_clv_buckets() -> bool:
         "title": "📊 CLV Bucket Analysis — Win Rate by Closing Line Value",
         "description": (
             "Does beating the closing line predict wins?\n"
-            f"Based on **{total_all} settled picks** with CLV tracking.\n\n"
+            f"Based on **{total_all} settled picks** vs **Pinnacle/Betfair** closing lines.\n"
+            "*Input-feed sources (API-Football) excluded — Pinnacle/Betfair only.*\n\n"
             + block
-            + "\n\n*Higher CLV = you got a better price than where the market settled.*"
+            + "\n\n*Higher CLV = you got a better price than where the sharp market settled.*"
         ),
         "color": color,
-        "footer": {"text": "PGR Analytics · CLV Bucket Report · Not financial advice"},
+        "footer": {"text": "PGR Analytics · CLV Bucket Report · Proof source: Pinnacle/Betfair only · Not financial advice"},
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
 
