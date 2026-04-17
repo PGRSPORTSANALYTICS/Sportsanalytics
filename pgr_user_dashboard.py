@@ -175,15 +175,15 @@ def load_clv_hero_stats():
             COUNT(*) FILTER (WHERE clv_pct IS NOT NULL
                 AND clv_source_book NOT ILIKE '%%api_football%%'
                 AND clv_source_book NOT ILIKE '~%%'
-                AND clv_source_book NOT ILIKE '%%(line moved%%') AS clv_total,
+                AND clv_source_book NOT ILIKE '%%(line moved%%' AND clv_version = 'v2') AS clv_total,
             COUNT(*) FILTER (WHERE clv_pct > 0
                 AND clv_source_book NOT ILIKE '%%api_football%%'
                 AND clv_source_book NOT ILIKE '~%%'
-                AND clv_source_book NOT ILIKE '%%(line moved%%') AS clv_positive,
+                AND clv_source_book NOT ILIKE '%%(line moved%%' AND clv_version = 'v2') AS clv_positive,
             COALESCE(AVG(clv_pct) FILTER (WHERE clv_pct IS NOT NULL
                 AND clv_source_book NOT ILIKE '%%api_football%%'
                 AND clv_source_book NOT ILIKE '~%%'
-                AND clv_source_book NOT ILIKE '%%(line moved%%'), 0) AS avg_clv,
+                AND clv_source_book NOT ILIKE '%%(line moved%%' AND clv_version = 'v2'), 0) AS avg_clv,
             COUNT(*) FILTER (WHERE mode = 'PROD')                AS total_prod
         FROM football_opportunities WHERE mode = 'PROD'
     """, fetch='one')

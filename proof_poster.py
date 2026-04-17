@@ -527,13 +527,20 @@ def post_clv_capture(bet: dict, close_odds: float, clv: float,
 # 5. DAILY CLV SUMMARY — posts to DISCORD_RESULTS_WEBHOOK
 # ─────────────────────────────────────────────────────────────────
 
-def _clv_stats_query(since_epoch=None):
+def _clv_stats_query(since_epoch=None, version_filter='v2'):
     """Fetch CLV stats from a given epoch. If None, fetches all-time.
     
     Only counts SHARP captures (excludes api_football, soft '~' sources, and
     line-moved captures) so beat rate reflects true closing-line value vs sharp books.
+    
+    version_filter: 'v2' (default) = clean era only. 'legacy' = pre-2026-04-17 frozen
+    data. None = both (all-time including legacy).
     """
     where_extra = f"AND timestamp >= {since_epoch}" if since_epoch else ""
+    if version_filter == 'v2':
+        where_extra += " AND clv_version = 'v2'"
+    elif version_filter == 'legacy':
+        where_extra += " AND clv_version = 'legacy'"
     sharp_filter = (
         "clv_source_book NOT ILIKE '%%api_football%%' "
         "AND clv_source_book NOT ILIKE '~%%' "
@@ -568,23 +575,29 @@ def post_daily_clv_summary() -> bool:
         logger.warning("proof_poster: DISCORD_RESULTS_WEBHOOK not set — skip daily CLV summary")
         return False
 
-    # Fetch era start from system_kv
+    # Fetch era start + label from system_kv
     era_epoch = None
     era_date  = "okänt datum"
+    era_label = "Clean CLV tracking · v2"
     try:
         kv = _db_module.db_helper.execute(
-            "SELECT value FROM system_kv WHERE key = 'clv_era_start'",
-            fetch='one'
-        )
-        if kv and kv[0]:
-            era_epoch = int(kv[0])
-            era_date  = time.strftime("%d %b %Y", time.gmtime(era_epoch))
+            "SELECT key, value FROM system_kv WHERE key IN ('clv_era_start','clv_era_label')",
+            fetch='all'
+        ) or []
+        for k, v in kv:
+            if k == 'clv_era_start' and v:
+                era_epoch = int(v)
+                era_date  = time.strftime("%d %b %Y", time.gmtime(era_epoch))
+            elif k == 'clv_era_label' and v:
+                era_label = v
     except Exception as exc:
         logger.warning("proof_poster: could not read clv_era_start: %s", exc)
 
     try:
-        era_row = _clv_stats_query(since_epoch=era_epoch)
-        all_row = _clv_stats_query(since_epoch=None)
+        # v2 era only (clean data from era start)
+        era_row = _clv_stats_query(since_epoch=era_epoch, version_filter='v2')
+        # legacy panel (frozen pre-v2 data, for transparency)
+        all_row = _clv_stats_query(since_epoch=None, version_filter='legacy')
     except Exception as exc:
         logger.error("proof_poster daily_clv_summary: DB fetch failed: %s", exc)
         return False
@@ -636,16 +649,18 @@ def post_daily_clv_summary() -> bool:
     )
 
     desc = (
-        f"{trend} **Era-start: {era_date}** — clean baseline, nollställt idag\n\n"
-        f"**📊 Sedan era-start**\n"
+        f"{trend} **{era_label}** — start {era_date}\n"
+        f"_Bara sharp same-line captures (Pinnacle/Betfair/Bet365). "
+        f"API-Football, line-moved & soft sources exkluderade._\n\n"
+        f"**📊 Clean v2 era**\n"
         + era_block
-        + f"\n**📁 All-time (referens)**\n"
+        + f"\n**🗄️ Legacy (frozen pre-{era_date})**\n"
         + all_block
-        + f"\n_{trend} CLV beat rate (era): **{e_beat}%** · mål >50%_"
+        + f"\n_{trend} CLV beat rate (v2): **{e_beat}%** · mål >50%_"
     )
 
     embed = {
-        "title": "📈 Daglig CLV-puls — Closing Line Value",
+        "title": "📈 Daglig CLV-puls — Closing Line Value v2",
         "description": desc,
         "color": color,
         "footer": {"text": f"PGR Analytics · Era start {era_date} · Uppdateras 22:50 UTC"},

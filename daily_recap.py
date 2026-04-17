@@ -132,6 +132,7 @@ def _fetch_scanner_stats(start_date: date, end_date: date) -> dict:
                       AND clv_source_book NOT ILIKE %s
                       AND clv_source_book NOT ILIKE %s
                       AND clv_source_book NOT ILIKE %s
+                      AND clv_version = 'v2'
                 """, (start_date, end_date, '%api_football%', '~%', '%(line moved%'))
                 row = cur.fetchone()
                 if row and row[0] is not None:

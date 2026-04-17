@@ -1351,6 +1351,7 @@ async def get_clv_breakdown():
                       / NULLIF(COUNT(clv_pct), 0), 1)                                         AS steam_early_rate
             FROM football_opportunities
             WHERE open_odds IS NOT NULL
+              AND (clv_version = 'v2' OR clv_pct IS NULL)
             GROUP BY market
             ORDER BY with_clv DESC
         """, fetch='all') or []
