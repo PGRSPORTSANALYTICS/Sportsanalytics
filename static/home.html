@@ -557,6 +557,16 @@ html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSyste
         <span class="pill" data-ev="10">10%+</span>
       </div>
       <div class="divider"></div>
+      <span class="filter-label">Market</span>
+      <div class="filter-pills" id="fp-market">
+        <span class="pill market on" data-market="all">All</span>
+        <span class="pill market" data-market="goals">⚽ Goals</span>
+        <span class="pill market" data-market="btts">🎯 BTTS</span>
+        <span class="pill market" data-market="asian">⚖ Asian</span>
+        <span class="pill market" data-market="corners">⛳ Corners</span>
+        <span class="pill market" data-market="cards">🟨 Cards</span>
+      </div>
+      <div class="divider"></div>
       <span class="filter-label">Sort</span>
       <div class="filter-pills" id="fp-sort">
         <span class="pill on" data-sort="ev">Edge ↓</span>
@@ -701,7 +711,7 @@ const state = {
   nbaData: null,
   confirmedPicks: null,
   activeTab: "scanner",
-  filters: { sport: "all", ev: 0, sort: "ev" },
+  filters: { sport: "all", ev: 0, sort: "ev", market: "all" },
   expandedId: null,
   loading: true,
   lastFetch: null,
@@ -869,6 +879,17 @@ function filteredPicks(){
     picks = picks.filter(p=>(p.sport||"").toLowerCase().includes(state.filters.sport)||
       (state.filters.sport==="football"&&(p.sport||"").toLowerCase().includes("soccer")));
   }
+  if(state.filters.market!=="all"){
+    picks = picks.filter(p=>{
+      const m = (p.market||"").toUpperCase();
+      if(state.filters.market==="btts")    return m.includes("BTTS");
+      if(state.filters.market==="asian")   return m.includes("AH_") || m.includes("ASIAN") || m.includes("HANDICAP");
+      if(state.filters.market==="corners") return m.includes("CORNER");
+      if(state.filters.market==="cards")   return m.includes("CARD");
+      if(state.filters.market==="goals")   return m.includes("OVER_UNDER") || m.includes("FT_OVER") || m.includes("FT_UNDER") || m.includes("GOALS");
+      return true;
+    });
+  }
   if(state.filters.ev>0){
     picks = picks.filter(p=>p.ev>=state.filters.ev);
   }
@@ -1033,7 +1054,12 @@ function renderScanner(){
       "CARDS_OVER_4_5":"Cards O4.5","CARDS_OVER_5_5":"Cards O5.5",
       "DC_HOME_DRAW":"DC Home/Draw","DC_HOME_AWAY":"DC Home/Away","DC_DRAW_AWAY":"DC Draw/Away",
       "AH_HOME_-0.5":"AH Home -0.5","AH_HOME_+0.5":"AH Home +0.5",
+      "AH_HOME_-1.0":"AH Home -1","AH_HOME_+1.0":"AH Home +1",
+      "AH_HOME_-1.5":"AH Home -1.5","AH_HOME_+1.5":"AH Home +1.5",
       "AH_AWAY_-0.5":"AH Away -0.5","AH_AWAY_+0.5":"AH Away +0.5",
+      "AH_AWAY_-1.0":"AH Away -1","AH_AWAY_+1.0":"AH Away +1",
+      "AH_AWAY_-1.5":"AH Away -1.5","AH_AWAY_+1.5":"AH Away +1.5",
+      "ASIAN_HANDICAP":"Asian Handicap","HANDICAP_HOME":"Handicap Home","HANDICAP_AWAY":"Handicap Away",
       "Corners":"Corners","Cards":"Cards",
     };
     const rawMkt = p.market || "";
@@ -1607,6 +1633,14 @@ function setupFilters(){
       document.querySelectorAll("#fp-sort .pill").forEach(x=>x.classList.remove("on"));
       p.classList.add("on");
       state.filters.sort=p.dataset.sort;
+      renderScanner();
+    });
+  });
+  document.querySelectorAll("#fp-market .pill").forEach(p=>{
+    p.addEventListener("click",()=>{
+      document.querySelectorAll("#fp-market .pill").forEach(x=>x.classList.remove("on"));
+      p.classList.add("on");
+      state.filters.market=p.dataset.market;
       renderScanner();
     });
   });
