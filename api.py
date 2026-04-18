@@ -2570,7 +2570,7 @@ async def get_today_picks():
                     fair_odds, pgr_score, clv_source_book,
                     sharp_price_at_detection, sharp_book_at_detection,
                     confidence_label, signal_status, soft_anchored,
-                    best_price_book
+                    best_price_book, close_odds
                 FROM football_opportunities
                 WHERE mode IN ('PROD', 'VALUE_OPP')
                   AND (outcome IS NULL OR outcome = '' OR outcome IN ('pending', 'unknown'))
@@ -2691,6 +2691,11 @@ async def get_today_picks():
                 'kickoff_time': kickoff_iso,
                 'match_date': match_date,
                 'open_odds': float(r[17]) if r[17] else None,
+                'close_odds': float(r[37]) if (len(r) > 37 and r[37]) else None,
+                'movement_pct': (
+                    round((float(r[37]) / float(r[17]) - 1.0) * 100, 2)
+                    if (r[17] and len(r) > 37 and r[37] and float(r[17]) > 0) else None
+                ),
                 'clv_pct': round(float(r[18]), 2) if r[18] else None,
                 'icon': icon,
                 'layer': layer,
