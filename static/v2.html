@@ -6,17 +6,24 @@
 <meta name="theme-color" content="#06060d"/>
 <title>PGR · Live Scanner</title>
 <script>
-/* Kill stale service workers that may serve cached old HTML */
-if('serviceWorker' in navigator){
-  navigator.serviceWorker.getRegistrations().then(regs=>{
-    regs.forEach(r=>r.unregister());
+/* SW killer — runs before anything else.
+   Unregisters stale service workers, clears SW cache, then force-reloads ONCE
+   so the page runs without any SW interference. */
+(function(){
+  if(!('serviceWorker' in navigator)) return;
+  var alreadyCleared = sessionStorage.getItem('pgr_sw_cleared') === '1';
+  navigator.serviceWorker.getRegistrations().then(function(regs){
+    if(regs.length === 0) return; /* No SW — nothing to do */
+    regs.forEach(function(r){ r.unregister(); });
+    if('caches' in window){
+      caches.keys().then(function(keys){ keys.forEach(function(k){ caches.delete(k); }); });
+    }
+    if(!alreadyCleared){
+      sessionStorage.setItem('pgr_sw_cleared','1');
+      location.reload(true); /* Hard reload — bypasses SW cache */
+    }
   });
-  /* Update SW immediately so new version takes over on next load */
-  navigator.serviceWorker.ready.then(reg=>reg.update()).catch(()=>{});
-}
-if('caches' in window){
-  caches.keys().then(keys=>keys.forEach(k=>caches.delete(k)));
-}
+})();
 </script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
