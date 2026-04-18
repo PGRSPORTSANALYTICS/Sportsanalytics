@@ -1,1929 +1,851 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="sv">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>PGR Analytics — Value Scanner</title>
-<meta name="description" content="AI-powered live value scanner. Real edges, real data. 40+ leagues.">
-<meta name="theme-color" content="#000000">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="PGR Analytics">
-<link rel="manifest" href="/manifest.json">
-<link rel="icon" href="/favicon.ico" sizes="any">
-<link rel="apple-touch-icon" href="/icons/icon-192.png">
-<script src="https://cdn.tailwindcss.com"></script>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta name="theme-color" content="#06060d"/>
+<title>PGR · Live Scanner</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;background:#09090b;font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif;color:#e4e4e7;font-size:14px;overflow-x:hidden}
-::-webkit-scrollbar{width:4px;height:4px}
-::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:#27272a;border-radius:3px}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
-@keyframes fadein{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-@keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
-@keyframes spin{to{transform:rotate(360deg)}}
-.pulse{animation:pulse 2s infinite}
-.fadein{animation:fadein .25s ease}
-.spin{animation:spin .8s linear infinite}
+html,body{height:100%;overflow:hidden}
+@media(max-width:860px){html,body{overflow:auto}}
 
-/* ── Layout ── */
-#app{display:flex;flex-direction:column;min-height:100vh}
-.top-bar{position:sticky;top:0;z-index:50;background:rgba(9,9,11,.95);backdrop-filter:blur(12px);border-bottom:1px solid #18181b;padding:0 16px}
-.top-bar-inner{max-width:1400px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;height:52px;gap:12px}
-.main-content{max-width:1400px;margin:0 auto;width:100%;padding:16px;flex:1}
-/* logout span defaults */
-.logout-short{display:none}
-@media(max-width:500px){
-  .top-bar{padding:0 12px}
-  .top-bar-inner{height:48px;gap:8px}
-  .live-badge{display:none}
-  .logo-sub{display:none}
-  .logo-badge{width:32px;height:32px;border-radius:9px}
-  .logo-title{font-size:14px}
-  .btn-premium{padding:5px 9px;font-size:11px;max-width:130px;overflow:hidden;text-overflow:ellipsis}
-  #push-test-btn{display:none!important}
-  .main-content{padding:10px}
-  #hdr-right{flex-wrap:nowrap!important;gap:6px!important}
-  #bell-btn{width:30px;height:30px;flex-shrink:0}
-  .logout-full{display:none}
-  .logout-short{display:inline}
-  #logout-btn{padding:0;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-size:14px}
+body{
+  background:#06060d;
+  color:#c8d4e8;
+  font-family:-apple-system,'SF Pro Display','Segoe UI',system-ui,sans-serif;
+  font-size:13px;line-height:1.4;
+  -webkit-font-smoothing:antialiased;
+}
+.num{font-family:'SF Mono','Fira Code',ui-monospace,monospace}
+a{color:inherit;text-decoration:none}
+button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
+
+:root{
+  --bg:#06060d;
+  --card:#0d0d18;
+  --card2:#121220;
+  --card3:#171728;
+  --line:#1a1a2e;
+  --line2:#222238;
+  --txt:#c8d4e8;
+  --muted:#5a6882;
+  --dim:#2e3550;
+  --green:#22c55e;
+  --green-d:#091c10;
+  --green-b:#155230;
+  --amber:#f59e0b;
+  --red:#ef4444;
+  --blue:#60a5fa;
+  --pinny:#fbbf24;
+  --nav-h:40px;
+  --strip-h:32px;
 }
 
-/* ── Logo ── */
-.logo-wrap{display:flex;align-items:center;gap:11px;text-decoration:none}
-.logo-badge{width:38px;height:38px;border-radius:11px;background:linear-gradient(150deg,#1a9e52,#0f6331);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 0 1px rgba(34,197,94,.25),0 3px 10px rgba(15,99,49,.5)}
-.logo-title{font-size:16px;font-weight:900;letter-spacing:-.04em;line-height:1.15}
-.logo-title .t-pgr{color:#f4f4f5}
-.logo-title .t-dot{color:#22c55e;margin:0 1px}
-.logo-title .t-an{color:#4ade80;font-weight:600;font-size:13px;letter-spacing:-.02em}
-.logo-sub{font-size:10px;color:#3f3f46;letter-spacing:.07em;font-weight:600;text-transform:uppercase;margin-top:1px}
+/* ── Nav ── */
+.nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;height:var(--nav-h);
+  background:rgba(6,6,13,.97);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:10px;padding:0 14px;
+}
+.brand{display:flex;align-items:center;gap:7px;font-weight:700;font-size:13px;letter-spacing:.3px}
+.brand-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px #22c55e88;animation:pulse 2.2s infinite}
+@keyframes pulse{0%,100%{opacity:1}60%{opacity:.3}}
+.brand-v{color:var(--muted);font-weight:400;font-size:11px;margin-left:2px}
+.live-pill{
+  display:flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;
+  background:var(--green-d);border:1px solid var(--green-b);
+  font-size:11px;font-weight:700;color:#86efac;letter-spacing:.2px;
+}
+.nav-sp{flex:1}
+.nav-ts{font-size:10px;color:var(--muted);font-family:'SF Mono',monospace}
+.tier-badge{padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;background:var(--card2);color:var(--muted);border:1px solid var(--line2)}
+.tier-badge.premium{background:#1a0e00;color:var(--pinny);border-color:#5a3500}
 
-/* ── Live badge ── */
-.live-badge{display:inline-flex;align-items:center;gap:5px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.25);border-radius:99px;padding:3px 10px;font-size:11px;font-weight:700;color:#4ade80}
-.live-dot{width:7px;height:7px;border-radius:50%;background:#22c55e}
+/* ── KPI strip ── */
+.kpi-strip{
+  position:fixed;top:var(--nav-h);left:0;right:0;z-index:90;height:var(--strip-h);
+  background:#09090f;border-bottom:1px solid var(--line);
+  display:flex;align-items:center;overflow-x:auto;scrollbar-width:none;
+  gap:0;
+}
+.kpi-strip::-webkit-scrollbar{display:none}
+.ki{
+  display:flex;align-items:center;gap:7px;padding:0 14px;height:100%;
+  border-right:1px solid var(--line);white-space:nowrap;flex-shrink:0;
+}
+.ki-l{font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)}
+.ki-v{font-size:12px;font-weight:800;color:var(--txt);font-family:'SF Mono',monospace}
+.ki-v.g{color:var(--green)}
+.ki-v.r{color:var(--red)}
+.ki-v.a{color:var(--amber)}
+.ki-v.b{color:var(--blue)}
+.ki-v.dim{color:var(--muted);font-size:10px;font-weight:500}
 
-/* ── Premium button ── */
-.btn-premium{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;border:1px solid rgba(250,204,21,.3);background:rgba(250,204,21,.08);color:#fbbf24;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .15s}
-.btn-premium:hover{background:rgba(250,204,21,.14);border-color:rgba(250,204,21,.5)}
-.btn-premium.active{background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.35);color:#4ade80}
-.btn-install{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:8px;border:1px solid #27272a;background:#18181b;color:#a1a1aa;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s}
-.btn-install:hover{background:#27272a;color:#d4d4d8}
-
-/* ── Stats strip ── */
-.stats-strip{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:16px}
-@media(max-width:900px){.stats-strip{grid-template-columns:repeat(3,1fr)}}
-@media(max-width:500px){.stats-strip{grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px}}
-.stat-tile{background:rgba(0,0,0,.4);border:1px solid #18181b;border-radius:12px;padding:12px;transition:border-color .15s}
-.stat-tile:hover{border-color:#27272a}
-.stat-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;font-weight:600;margin-bottom:5px}
-.stat-val{font-size:20px;font-weight:700;line-height:1}
-.stat-sub{font-size:10px;color:#52525b;margin-top:3px}
-@media(max-width:500px){
-  .stat-tile{padding:9px 10px;border-radius:10px}
-  .stat-val{font-size:17px}
-  .stat-lbl{font-size:8px;margin-bottom:3px}
-  .stat-sub{font-size:9px}
+/* ── 3-col terminal ── */
+.terminal{
+  position:fixed;top:calc(var(--nav-h)+var(--strip-h));bottom:0;left:0;right:0;
+  display:grid;grid-template-columns:200px 1fr 0;
+  transition:grid-template-columns .18s ease;
+}
+.terminal.detail-open{grid-template-columns:200px 1fr 340px}
+@media(max-width:860px){
+  .terminal{position:static;display:block;padding-top:calc(var(--nav-h)+var(--strip-h))}
+  .terminal.detail-open{grid-template-columns:unset}
 }
 
-/* ── Nav tabs ── */
-.nav-tabs{display:flex;gap:2px;border-bottom:1px solid #18181b;margin-bottom:16px;overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;padding-right:16px}
-.nav-tabs::-webkit-scrollbar{height:0}
-.nav-tab{padding:10px 14px;font-size:13px;font-weight:600;color:#71717a;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .15s;background:none;border-top:none;border-left:none;border-right:none;scroll-snap-align:start;-webkit-tap-highlight-color:transparent}
-.nav-tab:hover{color:#d4d4d8}
-.nav-tab.active{color:#e4e4e7;border-bottom-color:#22c55e}
-.nav-tab.sv-tab.active{color:#fbbf24;border-bottom-color:#f59e0b}
-@media(max-width:500px){.nav-tab{padding:10px 11px;font-size:12px}}
-
-/* ── Smart Value row marker ── */
-.sv-row{border-left:2px solid rgba(245,158,11,.55)!important;background:rgba(245,158,11,.025)!important}
-.sv-row:hover{background:rgba(245,158,11,.045)!important}
-.sv-chip{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:5px;font-size:9px;font-weight:800;letter-spacing:.06em;background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.35);color:#fbbf24;vertical-align:middle;margin-left:5px}
-
-/* ── Smart Value banner ── */
-.sv-banner{background:linear-gradient(135deg,rgba(245,158,11,.08),rgba(245,158,11,.03));border:1px solid rgba(245,158,11,.2);border-radius:12px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:10px}
-.sv-banner-icon{font-size:22px;flex-shrink:0}
-.sv-banner-text{font-size:11px;color:#a1a1aa;line-height:1.5}
-.sv-banner-text b{color:#fbbf24}
-
-/* ── CLV OddsJam-style hero cards ── */
-.clv-hero-wrap{margin-bottom:14px;display:flex;flex-direction:column;gap:8px}
-.clv-card-green{background:#05130d;border:1px solid rgba(34,197,94,.40);border-radius:12px;
-  padding:14px 18px 12px 18px;box-shadow:0 0 22px rgba(0,245,157,.08)}
-.clv-card-amber{background:#0d0b04;border:1px solid rgba(245,158,11,.25);border-radius:10px;
-  padding:11px 18px 10px 18px;box-shadow:0 0 10px rgba(245,158,11,.04)}
-.clv-card-lbl{font-size:9px;letter-spacing:.13em;text-transform:uppercase;font-weight:700;margin-bottom:10px}
-.clv-card-green .clv-card-lbl{color:#4ade80}
-.clv-card-amber .clv-card-lbl{color:#f59e0b}
-.clv-stat-row{display:flex;gap:22px;flex-wrap:wrap;margin-bottom:10px}
-.clv-stat{display:flex;flex-direction:column}
-.clv-card-green .clv-val{font-size:1.35rem;font-weight:800;color:#f4f4f5;line-height:1}
-.clv-card-amber .clv-val{font-size:1.1rem;font-weight:700;color:#f4f4f5;line-height:1}
-.clv-key{font-size:9px;margin-top:3px}
-.clv-card-green .clv-key{color:#4ade80}
-.clv-card-amber .clv-key{color:#f59e0b}
-.clv-verify{font-size:10px;border-top:1px solid;padding-top:8px;margin-top:2px}
-.clv-card-green .clv-verify{color:#4ade80;border-color:rgba(34,197,94,.15)}
-.clv-card-amber .clv-verify{color:#71717a;border-color:rgba(245,158,11,.12)}
-.trust-bar{display:flex;gap:12px;flex-wrap:wrap;padding:8px 14px;border-radius:8px;
-  background:rgba(15,23,42,.5);border:1px solid #18181b;font-size:10px;color:#3f3f46;
-  margin-bottom:12px}
-.trust-bar .chk{color:#4ade80;font-weight:700;margin-right:3px}
-
-/* ── Filter bar ── */
-.filter-bar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px;padding:10px 12px;background:#0f0f11;border:1px solid #18181b;border-radius:12px}
-.filter-label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#52525b;font-weight:600;white-space:nowrap}
-.filter-pills{display:flex;gap:4px;flex-wrap:wrap}
-.pill{padding:4px 11px;border-radius:99px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #27272a;background:#18181b;color:#71717a;transition:all .12s;white-space:nowrap;-webkit-tap-highlight-color:transparent}
-.pill:hover{background:#27272a;color:#d4d4d8}
-.pill.on{background:#22c55e;border-color:#22c55e;color:#000}
-.pill.sport.on{background:#3b82f6;border-color:#3b82f6;color:#fff}
-.divider{width:1px;height:20px;background:#27272a;flex-shrink:0}
-@media(max-width:500px){
-  .filter-bar{padding:8px 10px;gap:6px;border-radius:10px}
-  .filter-pills{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}
-  .filter-pills::-webkit-scrollbar{height:0}
-  .pill{padding:6px 12px;font-size:11px;min-height:34px;display:inline-flex;align-items:center}
-  .divider{display:none}
+/* ── Sidebar ── */
+.sidebar{
+  border-right:1px solid var(--line);background:#09090f;
+  overflow-y:auto;scrollbar-width:thin;display:flex;flex-direction:column;
 }
+.sidebar::-webkit-scrollbar{width:3px}
+.sidebar::-webkit-scrollbar-thumb{background:var(--line2)}
 
-/* ── Scanner table ── */
-.scanner-wrap{border:1px solid #18181b;border-radius:14px;overflow:hidden;overflow-x:hidden;margin-bottom:20px}
-.scanner-hdr{display:grid;grid-template-columns:var(--scanner-cols);padding:8px 14px;background:#0f0f11;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;font-weight:700;gap:8px}
-.scanner-row{display:grid;grid-template-columns:var(--scanner-cols);padding:11px 14px;gap:8px;border-top:1px solid #18181b;align-items:center;cursor:pointer;transition:background .1s}
-.scanner-row:hover{background:rgba(255,255,255,.025)}
-.scanner-row.expanded{background:rgba(99,102,241,.04);border-left:2px solid rgba(99,102,241,.5)}
-.scanner-row.fomo-cta-row{display:block;padding:0;border-top:none}
+.fs{padding:10px 10px 8px;border-bottom:1px solid var(--line)}
+.fs-h{font-size:9px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:7px;font-weight:700}
+.fc{display:flex;flex-wrap:wrap;gap:4px}
+.chip{
+  padding:4px 9px;border-radius:20px;background:var(--card2);border:1px solid var(--line2);
+  color:var(--muted);font-size:11px;font-weight:600;
+  transition:all .12s;cursor:pointer;user-select:none;
+}
+.chip:hover{border-color:var(--line2);color:var(--txt);background:var(--card3)}
+.chip.active{background:rgba(34,197,94,.12);color:var(--green);border-color:var(--green-b)}
+.chip.a-warn.active{background:rgba(245,158,11,.1);color:var(--amber);border-color:#6b3a00}
 
-/* Column widths: Match | Time | League | Market | Selection | Odds | Fair | Edge | Signal */
-/* Desktop (9 cols) */
-:root{--scanner-cols:2fr 60px 130px 120px 130px 65px 65px 72px 80px}
-@media(max-width:1000px){:root{--scanner-cols:2fr 55px 110px 110px 120px 60px 60px 68px 75px}}
-/* Tablet: hide League */
-@media(max-width:768px){
-  :root{--scanner-cols:2fr 50px 100px 100px 55px 55px 68px 72px}
-  .col-league{display:none!important}
-}
-/* Small screen: hide League + Fair + Signal — 6 cols */
-@media(max-width:580px){
-  :root{--scanner-cols:1.8fr 42px 90px 90px 52px 58px}
-  .col-league,.col-fair,.col-signal{display:none!important}
-}
-/* ── Phone card layout (≤500px) ─────────────────────────────────────────
-   Replace cramped multi-col grid with a 2-col card:
-   LEFT col  → match info (team names + league + mme-line), takes all space
-   RIGHT col → time / odds / edge stacked vertically, right-aligned
-─────────────────────────────────────────────────────────────────────── */
-@media(max-width:500px){
-  .scanner-hdr{display:none!important}
-  /* 2-col card grid */
-  .scanner-row:not(.fomo-cta-row){
-    display:grid!important;
-    grid-template-columns:1fr auto;
-    grid-template-rows:auto auto auto;
-    column-gap:10px;
-    row-gap:2px;
-    padding:12px;
-    overflow:hidden;
+/* CLV in sidebar */
+.clv-blk{padding:10px}
+.clv-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--line);font-size:11px}
+.clv-row:last-child{border-bottom:0}
+.clv-l{color:var(--muted)}
+.clv-v{font-weight:700;font-family:'SF Mono',monospace}
+.hist{display:flex;align-items:flex-end;gap:2px;height:48px;margin-top:8px}
+.hb{display:flex;flex-direction:column;align-items:center;gap:1px;flex:1}
+.hb-f{width:100%;border-radius:2px 2px 0 0;min-height:2px;background:var(--green);opacity:.65}
+.hb-f.n{background:var(--red)}
+.hb-l{font-size:7px;color:var(--dim);text-align:center;margin-top:2px}
+.hb-c{font-size:8px;color:var(--muted)}
+
+@media(max-width:860px){
+  .sidebar{
+    background:transparent;border-right:none;border-bottom:1px solid var(--line);
+    overflow-x:auto;display:block;white-space:nowrap;padding:7px 10px;
   }
-  /* Match: spans all 3 rows on the left */
-  .cell-match{
-    grid-column:1;
-    grid-row:1/span 3;
-    min-width:0;
-    align-self:center;
-  }
-  .match-teams{
-    white-space:normal;
-    font-size:13px;
-    line-height:1.35;
-    overflow:hidden;
-  }
-  .match-meta{font-size:10px;margin-top:2px}
-  .mme-line{
-    white-space:normal;
-    font-size:9.5px;
-    line-height:1.4;
-    margin-top:3px;
-  }
-  /* Right col row 1: kickoff time */
-  .cell-time{
-    grid-column:2;
-    grid-row:1;
-    text-align:right;
-    font-size:11px;
-    font-weight:700;
-    color:#a1a1aa;
-    align-self:start;
-  }
-  /* Right col row 2: odds */
-  .cell-odds{
-    grid-column:2;
-    grid-row:2;
-    text-align:right;
-    align-self:center;
-  }
-  .cell-odds .odds-val{font-size:15px;font-weight:800}
-  /* Right col row 3: edge badge */
-  .cell-edge{
-    grid-column:2;
-    grid-row:3;
-    text-align:right;
-    align-self:end;
-  }
-  .edge-chip{font-size:11px;padding:2px 7px}
-  /* Hide columns not needed in card layout */
-  .col-league,.col-fair,.col-signal,
-  .cell-market,.cell-selection{display:none!important}
+  .fs{display:inline-flex;align-items:center;gap:4px;border-bottom:none;padding:0 8px 0 0;vertical-align:middle}
+  .fs-h{display:none}
+  .fc{flex-wrap:nowrap}
+  .clv-blk{display:none}
 }
 
-/* ── Cell styles ── */
-.cell-match{}
-.match-teams{font-size:13px;font-weight:600;color:#f4f4f5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.match-meta{font-size:10px;color:#52525b;margin-top:2px}
-.mme-line{font-size:10px;color:#71717a;margin-top:3px;white-space:nowrap}.mme-line b{color:#a1a1aa;font-weight:600}
-.cell-time{font-size:11px;font-weight:600;color:#a1a1aa;text-align:center;line-height:1.3}
-.tmrw-badge{display:block;font-size:9px;font-weight:700;color:#f59e0b;letter-spacing:.05em;margin-top:1px}
-.date-divider{grid-column:1/-1;padding:6px 14px 4px;font-size:10px;font-weight:700;color:#52525b;text-transform:uppercase;letter-spacing:.08em;border-top:1px solid #27272a;background:#0a0a0b}
-.cell-league{font-size:11px;color:#71717a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cell-market .market-tag{display:inline-flex;padding:2px 8px;border-radius:99px;background:#18181b;border:1px solid #27272a;font-size:10px;font-weight:600;color:#a1a1aa;white-space:nowrap}
-.cell-selection .sel-text{font-size:12px;font-weight:600;color:#e4e4e7}
-.cell-odds .odds-val{font-size:14px;font-weight:700;color:#4ade80}
-.cell-fair .fair-val{font-size:12px;color:#a78bfa;font-weight:600}
-.cell-edge{}
-.edge-chip{display:inline-flex;padding:3px 9px;border-radius:99px;font-size:12px;font-weight:700;white-space:nowrap}
-.edge-high{background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.3);color:#4ade80}
-.edge-med{background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.25);color:#fbbf24}
-.edge-low{background:rgba(113,113,122,.1);border:1px solid rgba(113,113,122,.2);color:#71717a}
-.cell-signal{}
-.sig-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:700}
-.sig-top{background:rgba(239,68,68,.14);color:#f87171}
-.sig-high{background:rgba(34,197,94,.12);color:#4ade80}
-.sig-med{background:rgba(234,179,8,.12);color:#facc15}
-.sig-low{background:rgba(249,115,22,.12);color:#fb923c}
+/* ── Scanner center ── */
+.scanner{display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
+.sc-head{
+  padding:7px 14px;border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:10px;flex-shrink:0;
+  background:#09090f;
+}
+.sc-h-title{font-size:10px;text-transform:uppercase;letter-spacing:.8px;font-weight:700;color:var(--muted)}
+.sc-h-count{font-size:11px;font-weight:800;color:var(--green);font-family:'SF Mono',monospace}
+.sc-h-sp{flex:1}
+.sc-h-meta{font-size:10px;color:var(--dim);font-family:'SF Mono',monospace}
 
-/* ── Locked cell ── */
-.locked-cell{position:relative;display:flex;align-items:center}
-.locked-blur{filter:blur(6px);user-select:none;pointer-events:none;color:#f4f4f5;font-weight:700;font-size:12px;background:rgba(250,204,21,.04);border-radius:4px;padding:2px 6px}
-.locked-icon{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:13px;z-index:2}
+.sc-body{flex:1;overflow-y:auto;scrollbar-width:thin;padding:6px}
+.sc-body::-webkit-scrollbar{width:3px}
+.sc-body::-webkit-scrollbar-thumb{background:var(--line2)}
+@media(max-width:860px){.sc-body{overflow:visible;padding:0}}
 
-/* ── FOMO CTA row ── */
-.fomo-row{padding:10px 14px;background:rgba(250,204,21,.04);border-top:1px solid rgba(250,204,21,.12);border-bottom:1px solid rgba(250,204,21,.12);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
-.fomo-row-text{font-size:12px;color:#a1a1aa}
-.fomo-row-text b{color:#fbbf24}
-.fomo-row-btn{padding:5px 14px;border-radius:8px;background:rgba(250,204,21,.12);border:1px solid rgba(250,204,21,.3);color:#fbbf24;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .15s}
-.fomo-row-btn:hover{background:rgba(250,204,21,.2)}
+/* ── Match card ── */
+.mc{
+  background:var(--card);border:1px solid var(--line);border-radius:8px;
+  margin-bottom:4px;cursor:pointer;
+  transition:border-color .12s,background .12s;
+  overflow:hidden;
+}
+.mc:hover,.mc.sel{background:var(--card2);border-color:var(--line2)}
+.mc.sel{border-color:#2a2a50}
 
-/* ── Expanded detail ── */
-.expand-panel{padding:14px;border-top:1px solid #18181b;background:#0c0c0e;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;animation:fadein .2s ease}
-@media(max-width:600px){.expand-panel{grid-template-columns:1fr 1fr}}
-.detail-tile{background:rgba(0,0,0,.5);border:1px solid #27272a;border-radius:10px;padding:10px}
-.detail-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;font-weight:600;margin-bottom:4px}
-.detail-val{font-size:16px;font-weight:700;color:#f4f4f5}
-.detail-sub{font-size:10px;color:#52525b;margin-top:2px}
+.mc-top{
+  display:flex;align-items:flex-start;justify-content:space-between;
+  padding:9px 12px 0;gap:8px;
+}
+.mc-match{flex:1;min-width:0}
+.mc-teams{font-size:12px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mc-sub{font-size:10px;color:var(--muted);margin-top:1px}
+.mc-edge{
+  text-align:right;flex-shrink:0;
+  font-size:18px;font-weight:900;font-family:'SF Mono',monospace;
+  line-height:1;
+}
+.mc-edge.g{color:var(--green)}
+.mc-edge.a{color:var(--amber)}
+.mc-edge.r{color:var(--red)}
+.mc-edge-lbl{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:1px;text-align:right}
 
-/* ── Empty state ── */
-.empty-state{text-align:center;padding:60px 20px;color:#52525b}
-.empty-icon{font-size:40px;margin-bottom:12px}
-.empty-title{font-size:16px;font-weight:600;color:#71717a;margin-bottom:6px}
-.empty-sub{font-size:13px}
+.mc-mid{
+  display:flex;align-items:center;gap:6px;padding:5px 12px 6px;
+  flex-wrap:wrap;
+}
+.mc-mkt{font-size:11px;font-weight:600;color:var(--txt)}
+.mc-type{font-size:10px;color:var(--muted)}
 
-/* ── Loading skeleton ── */
-.skel{background:linear-gradient(90deg,#18181b 25%,#27272a 50%,#18181b 75%);background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:4px;height:14px}
+/* Badges */
+.bdg{display:inline-flex;align-items:center;padding:2px 6px;border-radius:20px;font-size:9px;font-weight:800;letter-spacing:.5px;text-transform:uppercase}
+.bdg.sharp{background:#0c2010;color:#6ee7a0;border:1px solid #1a4c30}
+.bdg.legacy{background:#1e1030;color:#c4b5fd;border:1px solid #3a2060}
+.bdg.moving{background:#2a1c00;color:#fcd34d;border:1px solid #5a3800}
+.bdg.unverified{background:#200a0a;color:#fca5a5;border:1px solid #501010}
+.bdg.new{background:#0c2010;color:#bbf7d0;border:1px solid #1a4c30;animation:ng 2.5s infinite}
+@keyframes ng{0%,100%{box-shadow:0 0 0 0 #22c55e44}50%{box-shadow:0 0 0 4px #22c55e00}}
 
-/* ── Premium modal ── */
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadein .2s ease}
-.modal-box{background:#111113;border:1px solid #27272a;border-radius:18px;padding:28px;max-width:420px;width:100%;box-shadow:0 24px 60px rgba(0,0,0,.6)}
-.modal-title{font-size:20px;font-weight:800;color:#f4f4f5;margin-bottom:6px}
-.modal-sub{font-size:13px;color:#71717a;line-height:1.6;margin-bottom:20px}
-.modal-input{width:100%;padding:12px 14px;background:#18181b;border:1px solid #3f3f46;border-radius:10px;color:#f4f4f5;font-size:14px;font-weight:600;outline:none;letter-spacing:.1em;margin-bottom:10px}
-.modal-input:focus{border-color:#22c55e}
-.modal-input.error{border-color:#ef4444}
-.modal-btn{width:100%;padding:12px;border-radius:10px;background:#22c55e;color:#000;font-size:14px;font-weight:800;cursor:pointer;border:none;transition:all .15s;margin-bottom:10px}
-.modal-btn:hover{background:#16a34a}
-.modal-btn:disabled{opacity:.5;cursor:not-allowed}
-.modal-discord{width:100%;padding:12px;border-radius:10px;background:rgba(88,101,242,.15);border:1px solid rgba(88,101,242,.3);color:#818cf8;font-size:13px;font-weight:700;cursor:pointer;transition:all .15s;text-align:center;display:block;text-decoration:none}
-.modal-discord:hover{background:rgba(88,101,242,.25)}
-.modal-err{font-size:12px;color:#f87171;margin-bottom:8px}
-.modal-close{float:right;background:none;border:none;color:#52525b;cursor:pointer;font-size:18px;margin-top:-4px}
-.modal-divider{display:flex;align-items:center;gap:8px;margin:12px 0;color:#3f3f46;font-size:11px}
-.modal-divider::before,.modal-divider::after{content:'';flex:1;height:1px;background:#27272a}
+/* ── Book icon strip ── */
+.mc-books{
+  display:flex;align-items:center;gap:3px;padding:6px 12px 8px;
+  overflow-x:auto;scrollbar-width:none;flex-wrap:nowrap;
+}
+.mc-books::-webkit-scrollbar{display:none}
 
-/* ── Big FOMO CTA section ── */
-.fomo-section{background:rgba(250,204,21,.04);border:1px solid rgba(250,204,21,.12);border-radius:16px;padding:24px;margin-bottom:20px;text-align:center}
-.fomo-section h3{font-size:20px;font-weight:800;color:#fbbf24;margin-bottom:8px}
-.fomo-section p{font-size:13px;color:#a1a1aa;line-height:1.6;margin-bottom:16px}
-.fomo-bullets{display:flex;flex-direction:column;gap:6px;margin-bottom:20px;text-align:left;max-width:320px;margin-left:auto;margin-right:auto}
-.fomo-bullet{font-size:12px;color:#a1a1aa;display:flex;align-items:center;gap:8px}
-.fomo-bullet::before{content:'✓';color:#22c55e;font-weight:700;flex-shrink:0}
-.fomo-unlock-btn{display:inline-flex;align-items:center;gap:8px;padding:12px 28px;border-radius:10px;background:rgba(250,204,21,.12);border:1px solid rgba(250,204,21,.3);color:#fbbf24;font-size:14px;font-weight:800;cursor:pointer;transition:all .15s;margin-bottom:10px}
-.fomo-unlock-btn:hover{background:rgba(250,204,21,.2)}
-.fomo-discord-link{font-size:12px;color:#52525b}
-.fomo-discord-link a{color:#818cf8;text-decoration:none}
-.fomo-discord-link a:hover{text-decoration:underline}
+.bk{
+  display:inline-flex;flex-direction:column;align-items:center;
+  border-radius:6px;padding:4px 6px;border:1px solid var(--line2);
+  font-size:9px;font-weight:700;font-family:'SF Mono',monospace;
+  min-width:44px;flex-shrink:0;cursor:default;
+  transition:transform .1s;
+}
+.bk:hover{transform:translateY(-1px)}
+.bk-name{font-size:8px;font-weight:700;letter-spacing:.3px;margin-bottom:2px;white-space:nowrap}
+.bk-odds{font-size:12px;font-weight:800;line-height:1}
 
-/* ── History tab ── */
-.history-table{border:1px solid #18181b;border-radius:12px;overflow:hidden;margin-bottom:20px}
-.history-hdr{display:grid;grid-template-columns:2fr 100px 80px 80px 70px 70px;padding:8px 14px;background:#0f0f11;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;font-weight:700;gap:8px}
-.history-row{display:grid;grid-template-columns:2fr 100px 80px 80px 70px 70px;padding:10px 14px;gap:8px;border-top:1px solid #18181b;align-items:center;font-size:12px}
-@media(max-width:600px){
-  .history-hdr,.history-row{grid-template-columns:2fr 80px 70px 60px 55px}
-  .col-hide-sm{display:none}
+/* bookmaker color themes */
+.bk.pinn  {background:#1a1200;border-color:#5a3d00;color:var(--pinny)}
+.bk.pinn .bk-name{color:#a07020}
+.bk.bf    {background:#001020;border-color:#003060;color:#60a5fa}
+.bk.bf .bk-name{color:#3060a0}
+.bk.b365  {background:#001800;border-color:#004020;color:#4ade80}
+.bk.b365 .bk-name{color:#206830}
+.bk.uni   {background:#001800;border-color:#004020;color:#86efac}
+.bk.uni .bk-name{color:#1e5c30}
+.bk.sb    {background:#00101a;border-color:#002a40;color:#7dd3fc}
+.bk.sb .bk-name{color:#1a4060}
+.bk.oneX  {background:#1a0800;border-color:#502000;color:#fb923c}
+.bk.oneX .bk-name{color:#803010}
+.bk.mara  {background:#1a0000;border-color:#500000;color:#f87171}
+.bk.mara .bk-name{color:#801010}
+.bk.bwin  {background:#100018;border-color:#300040;color:#c084fc}
+.bk.bwin .bk-name{color:#501870}
+.bk.dflt  {background:var(--card2);border-color:var(--line2);color:var(--muted)}
+.bk.dflt .bk-name{color:var(--dim)}
+.bk.dflt .bk-odds{color:var(--txt)}
+
+.bk-more-pill{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:32px;height:40px;border-radius:6px;
+  background:var(--card3);border:1px solid var(--line2);
+  font-size:10px;font-weight:700;color:var(--muted);flex-shrink:0;
 }
 
-/* ── Result badge ── */
-.result-win{color:#4ade80;font-weight:700}
-.result-loss{color:#f87171;font-weight:700}
-.result-push{color:#a1a1aa;font-weight:600}
-.result-open{color:#71717a;font-weight:600}
-
-/* ── CLV tab ── */
-.clv-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
-@media(max-width:700px){.clv-grid{grid-template-columns:repeat(2,1fr)}}
-
-/* ── PWA Banner ── */
-#pwa-banner{display:none;position:fixed;bottom:0;left:0;right:0;z-index:90;padding:12px 16px;background:rgba(9,9,11,.97);border-top:1px solid #27272a;backdrop-filter:blur(12px)}
-.pwa-banner-row{display:flex;align-items:center;gap:10px}
-.pwa-icon{width:36px;height:36px;border-radius:8px;background:linear-gradient(135deg,#22c55e,#16a34a);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px;color:#000;flex-shrink:0}
-.pwa-body{flex:1;min-width:0}
-.pwa-title{font-size:13px;font-weight:700;color:#e4e4e7}
-.pwa-sub{font-size:11px;color:#71717a;margin-top:1px}
-.pwa-btn{padding:8px 16px;border-radius:8px;background:#22c55e;color:#000;font-size:12px;font-weight:700;cursor:pointer;border:none;white-space:nowrap}
-.pwa-dismiss{background:none;border:none;color:#52525b;cursor:pointer;font-size:18px;padding:4px}
-
-/* ── Spinner ── */
-.spinner{width:18px;height:18px;border:2px solid #27272a;border-top-color:#22c55e;border-radius:50%;display:inline-block}
-
-@media(max-width:580px){
-  .col-selection .locked-blur{font-size:10px}
-  .market-tag{font-size:9px;padding:2px 6px}
-  .odds-val{font-size:12px}
-  .edge-chip{font-size:11px;padding:2px 7px}
-  .match-teams{font-size:12px}
+.mc-move{
+  display:flex;align-items:center;gap:4px;padding:0 12px 8px;
+  font-size:10px;font-weight:600;font-family:'SF Mono',monospace;
 }
+.mc-move.ok{color:#6ee7a0}
+.mc-move.late{color:#fca5a5}
+.mc-move.flat{color:var(--dim)}
 
-/* ── new pick chip ── */
-.new-chip{display:inline-flex;padding:1px 6px;border-radius:99px;background:rgba(139,92,246,.2);border:1px solid rgba(139,92,246,.4);color:#c4b5fd;font-size:9px;font-weight:700;letter-spacing:.05em;margin-left:5px;animation:pulse 2s infinite}
+/* ── Detail panel ── */
+.detail{
+  border-left:1px solid var(--line);background:#09090f;
+  overflow-y:auto;scrollbar-width:thin;min-width:0;display:flex;flex-direction:column;
+}
+.detail::-webkit-scrollbar{width:3px}
+.detail::-webkit-scrollbar-thumb{background:var(--line2)}
+.detail.hidden{display:none}
 
-/* refresh pulsing row */
-.row-new{animation:fadein .4s ease}
+.det-head{
+  padding:10px 12px;border-bottom:1px solid var(--line);flex-shrink:0;
+  background:#0d0d18;position:sticky;top:0;z-index:5;
+  display:flex;align-items:flex-start;gap:8px;
+}
+.det-hi{flex:1;min-width:0}
+.det-title{font-size:12px;font-weight:700;color:var(--txt);line-height:1.3}
+.det-sub{font-size:10px;color:var(--muted);margin-top:2px}
+.det-x{padding:3px 8px;border-radius:4px;background:var(--card2);border:1px solid var(--line2);font-size:11px;color:var(--muted)}
+.det-x:hover{color:var(--txt)}
+.det-body{padding:10px;flex:1}
+
+/* Detail sections */
+.ds{margin-bottom:12px}
+.ds-h{
+  font-size:9px;text-transform:uppercase;letter-spacing:.8px;
+  color:var(--muted);font-weight:700;margin-bottom:8px;
+  border-bottom:1px solid var(--line);padding-bottom:4px;
+}
+.price-snap{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.ps{padding:8px;border-radius:6px;border:1px solid var(--line2);background:var(--card)}
+.ps.sharp-card{border-color:#5a3d00;background:#120c00}
+.ps-l{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.ps-v{font-size:20px;font-weight:800;font-family:'SF Mono',monospace}
+.ps.sharp-card .ps-v{color:var(--pinny)}
+.ps-bk{font-size:9px;color:var(--muted);margin-top:2px}
+
+/* Model bars */
+.mb-wrap{display:flex;flex-direction:column;gap:6px}
+.mb-row{display:flex;align-items:center;gap:6px;font-size:10px}
+.mb-l{width:100px;color:var(--muted);flex-shrink:0;font-size:9px}
+.mb-trk{flex:1;height:3px;background:var(--line2);border-radius:2px;overflow:hidden}
+.mb-f{height:100%;border-radius:2px}
+.mb-f.model{background:var(--green)}
+.mb-f.imp-t{background:var(--blue)}
+.mb-f.imp-s{background:var(--pinny)}
+.mb-val{width:36px;text-align:right;font-family:'SF Mono',monospace;font-weight:700;font-size:10px}
+.edge-inline{display:flex;gap:10px;margin-top:7px;font-size:10px;flex-wrap:wrap}
+.edge-inline .l{color:var(--muted)}
+
+/* Books grid in detail */
+.bk-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.bkc{padding:6px 8px;border-radius:5px;border:1px solid var(--line2);background:var(--card);display:flex;justify-content:space-between;align-items:center;font-size:10px}
+.bkc.is-s{border-color:#5a3d00;background:#120c00}
+.bkc-n{color:var(--muted)}
+.bkc.is-s .bkc-n{color:#a07020}
+.bkc-o{font-weight:800;font-family:'SF Mono',monospace}
+.ep.pos{color:var(--green);font-size:9px}
+.ep.neg{color:var(--red);font-size:9px}
+
+/* Line movement chart */
+.lm-ladder{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:7px}
+.lm-rung{text-align:center}
+.lm-rl{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px}
+.lm-rv{font-size:13px;font-weight:800;font-family:'SF Mono',monospace;margin-top:2px}
+.lm-rung.det .lm-rv{color:var(--green)}
+.lm-arr{color:var(--dim);font-size:12px}
+.lm-sum{font-size:10px;padding:6px 8px;border-radius:5px;background:var(--card2);border:1px solid var(--line2)}
+.lm-sum.ahead{border-color:var(--green-b);background:var(--green-d);color:#86efac}
+.lm-sum.late{border-color:#501010;background:#200a0a;color:#fca5a5}
+.lm-wrap{margin:6px 0;border:1px solid var(--line2);border-radius:5px;overflow:hidden;background:#04040a}
+.lm-svg{display:block;width:100%;height:100px}
+.lm-empty{font-size:10px;color:var(--muted);padding:10px;text-align:center}
+.lm-legend{display:flex;gap:10px;margin-top:5px;font-size:9px;color:var(--muted)}
+.lmd{width:8px;height:2px;border-radius:1px;display:inline-block;margin-right:2px;vertical-align:middle}
+.lmd.s{background:var(--pinny)}
+.lmd.so{background:var(--blue)}
+.lmd.d{background:var(--green)}
+
+/* Similar CLV */
+.sim-tbl{width:100%;border-collapse:collapse;font-size:10px}
+.sim-tbl th{text-align:left;padding:3px 5px;color:var(--muted);font-size:9px;border-bottom:1px solid var(--line)}
+.sim-tbl td{padding:3px 5px;border-bottom:1px solid var(--line);font-family:'SF Mono',monospace}
+.cp{color:var(--green);font-weight:700}
+.cn{color:var(--red);font-weight:700}
+
+/* SS */
+.ss-w{display:grid;grid-template-columns:76px 1fr;gap:10px;align-items:center}
+.ss-c{width:68px;height:68px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:conic-gradient(var(--ssc,var(--green)) calc(var(--ssp,0)*1%),var(--line2) 0);position:relative}
+.ss-c::before{content:'';position:absolute;inset:5px;border-radius:50%;background:#09090f}
+.ss-n{position:relative;font-size:20px;font-weight:800;font-family:'SF Mono',monospace;line-height:1}
+.ss-t{position:relative;font-size:8px;color:var(--muted)}
+.ss-mg{display:grid;grid-template-columns:1fr 1fr;gap:3px 10px;font-size:9px}
+.ss-mr{display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding:3px 0}
+.ss-mr:last-child,.ss-mr:nth-last-child(2){border-bottom:0}
+.ss-ml{color:var(--muted)}
+.ss-mv{font-weight:700;font-family:'SF Mono',monospace}
+.ss-mv.pos{color:var(--green)}
+.ss-mv.neg{color:var(--red)}
+.ss-mv.a{color:var(--amber)}
+.ss-e{font-size:10px;color:var(--muted);padding:10px;text-align:center}
+
+/* Mobile modal */
+.mob-bg{display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.8);align-items:flex-end}
+.mob-bg.open{display:flex}
+.mob-sheet{background:#0d0d18;border-radius:12px 12px 0 0;width:100%;max-height:90vh;overflow-y:auto;padding:0 0 env(safe-area-inset-bottom)}
+.mob-sh-head{padding:12px 14px;border-bottom:1px solid var(--line);display:flex;align-items:flex-start;gap:8px;position:sticky;top:0;background:#0d0d18;z-index:2}
+.mob-sh-title{font-size:13px;font-weight:700;flex:1;color:var(--txt)}
+.mob-sh-x{padding:4px 10px;border-radius:4px;background:var(--card2);border:1px solid var(--line2);font-size:11px;color:var(--muted)}
+.mob-body{padding:10px}
+
+/* Empty */
+.empty-s{padding:40px 20px;text-align:center;color:var(--muted)}
+.empty-i{font-size:24px;margin-bottom:6px;opacity:.4}
+.empty-t{font-size:12px;font-weight:700;color:var(--txt);margin-bottom:3px}
+.empty-sub{font-size:10px}
 </style>
 </head>
 <body>
 
-<!-- ── PWA Install Banner ─────────────────────────── -->
-<div id="pwa-banner">
-  <div class="pwa-banner-row">
-    <div class="pwa-icon">P</div>
-    <div class="pwa-body" onclick="triggerInstall()" style="cursor:pointer;flex:1">
-      <div class="pwa-title">Install PGR Analytics</div>
-      <div class="pwa-sub">Tap to add to home screen</div>
-    </div>
-    <button class="pwa-btn" id="pwa-install-btn" onclick="triggerInstall()" style="display:none">Install</button>
-    <div id="pwa-ios-hint" style="display:none;font-size:11px;color:#71717a">Tap Share → Add to Home Screen</div>
-    <button class="pwa-dismiss" id="pwa-dismiss">×</button>
+<!-- Nav -->
+<nav class="nav">
+  <div class="brand">
+    <span class="brand-dot"></span>
+    PGR <span class="brand-v">analytics</span>
   </div>
+  <div class="live-pill">
+    <span id="liveCount">—</span> live edges
+  </div>
+  <div class="nav-sp"></div>
+  <span class="nav-ts" id="updatedAt">syncing…</span>
+  <span class="tier-badge" id="tierBadge">FREE</span>
+</nav>
+
+<!-- KPI strip -->
+<div class="kpi-strip">
+  <div class="ki"><span class="ki-l">Avg edge</span><span class="ki-v g" id="kpiAvgEdge">—</span></div>
+  <div class="ki"><span class="ki-l">Top</span><span class="ki-v a" id="kpiTop">—</span><span class="ki-v dim" id="kpiTopM"></span></div>
+  <div class="ki"><span class="ki-l">CLV 30d</span><span class="ki-v" id="kpiCLV">—</span></div>
+  <div class="ki"><span class="ki-l">Beat rate</span><span class="ki-v" id="kpiBeat">—</span></div>
+  <div class="ki"><span class="ki-l">Sharp confirmed</span><span class="ki-v b" id="kpiSharp">—</span></div>
+  <div class="ki"><span class="ki-l">Doctrine</span><span class="ki-v dim">NO SHARP = NO SIGNAL</span></div>
 </div>
 
-<!-- ── Premium Unlock Modal ──────────────────────── -->
-<div id="premium-modal" class="modal-overlay" style="display:none">
-  <div class="modal-box">
-    <button class="modal-close" id="modal-close">×</button>
-    <div style="font-size:28px;margin-bottom:8px">🔓</div>
-    <div class="modal-title">Unlock Today's Edges</div>
-    <div class="modal-sub">Enter your member code to reveal all selections, odds, fair odds and get full value scanner access.</div>
-    <input class="modal-input" id="modal-code-input" type="password" placeholder="Member code" autocomplete="off">
-    <div class="modal-err" id="modal-err" style="display:none">Invalid code — try again</div>
-    <button class="modal-btn" id="modal-verify-btn">Unlock All Access</button>
-    <div class="modal-divider">or get access</div>
-    <a class="modal-discord" href="https://discord.gg/pgrsports" target="_blank">
-      Join PGR Premium on Discord →
-    </a>
-    <div style="font-size:11px;color:#52525b;margin-top:10px;text-align:center">Members get daily value picks, CLV data & full scanner access</div>
-    <a href="/admin-login" style="display:block;margin-top:16px;font-size:11px;color:#3f3f46;text-align:center;text-decoration:none;" onmouseover="this.style.color='#71717a'" onmouseout="this.style.color='#3f3f46'">Admin</a>
-  </div>
+<!-- Terminal -->
+<div class="terminal" id="terminal">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="fs">
+      <div class="fs-h">Sport</div>
+      <div class="fc">
+        <button class="chip active" data-filter="sport" data-value="all">All</button>
+        <button class="chip" data-filter="sport" data-value="football">⚽</button>
+        <button class="chip" data-filter="sport" data-value="basketball">🏀</button>
+        <button class="chip" data-filter="sport" data-value="hockey">🏒</button>
+      </div>
+    </div>
+    <div class="fs">
+      <div class="fs-h">Market</div>
+      <div class="fc">
+        <button class="chip active" data-filter="market" data-value="all">All</button>
+        <button class="chip" data-filter="market" data-value="OVER">Goals</button>
+        <button class="chip" data-filter="market" data-value="BTTS">BTTS</button>
+        <button class="chip" data-filter="market" data-value="WIN">1X2</button>
+        <button class="chip" data-filter="market" data-value="CORNERS">Corners</button>
+        <button class="chip" data-filter="market" data-value="CARDS">Cards</button>
+      </div>
+    </div>
+    <div class="fs">
+      <div class="fs-h">Min edge</div>
+      <div class="fc">
+        <button class="chip active" data-filter="edge" data-value="0">All</button>
+        <button class="chip" data-filter="edge" data-value="3">3%+</button>
+        <button class="chip" data-filter="edge" data-value="5">5%+</button>
+        <button class="chip" data-filter="edge" data-value="8">8%+</button>
+        <button class="chip" data-filter="edge" data-value="10">10%+</button>
+      </div>
+    </div>
+    <div class="fs">
+      <div class="fs-h">Anchor</div>
+      <div class="fc">
+        <button class="chip a-warn" data-filter="sharp" data-value="1" id="sharpChip">⚡ Sharp only</button>
+      </div>
+    </div>
+    <div class="clv-blk">
+      <div class="fs-h" style="margin-bottom:8px">CLV Proof · 30d</div>
+      <div class="clv-row"><span class="clv-l">Avg CLV</span><span class="clv-v" id="sAvg">—</span></div>
+      <div class="clv-row"><span class="clv-l">Beat rate</span><span class="clv-v" id="sBeat">—</span></div>
+      <div class="clv-row"><span class="clv-l">Sample n</span><span class="clv-v b" id="sN">0</span></div>
+      <div class="clv-row"><span class="clv-l">Pos / Neg</span><span class="clv-v" id="sSplit">—</span></div>
+      <div class="hist" id="sHist"></div>
+    </div>
+  </aside>
+
+  <!-- Scanner -->
+  <main class="scanner">
+    <div class="sc-head">
+      <span class="sc-h-title">Live scanner</span>
+      <span class="sc-h-count" id="scanCount">—</span>
+      <span class="sc-h-sp"></span>
+      <span class="sc-h-meta" id="scanMeta">refresh 60s</span>
+    </div>
+    <div class="sc-body" id="scBody">
+      <div class="empty-s"><div class="empty-i">⏳</div>Loading signals…</div>
+    </div>
+  </main>
+
+  <!-- Detail panel (desktop) -->
+  <aside class="detail hidden" id="detailCol">
+    <div class="det-head">
+      <div class="det-hi">
+        <div class="det-title" id="detTitle">—</div>
+        <div class="det-sub" id="detSub"></div>
+      </div>
+      <button class="det-x" id="detClose">✕</button>
+    </div>
+    <div class="det-body" id="detBody">
+      <div class="empty-s"><div class="empty-i">👆</div>Click a card</div>
+    </div>
+  </aside>
 </div>
 
-<div id="app">
-
-<!-- ── Top Bar ─────────────────────────────────────── -->
-<div class="top-bar">
-  <div class="top-bar-inner">
-    <a class="logo-wrap" href="/">
-      <div class="logo-badge">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M5 3 L5 21" stroke="white" stroke-width="3" stroke-linecap="round"/>
-          <path d="M5 3 C5 3 17 3 17 9 C17 15 5 15 5 15" stroke="white" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-          <circle cx="19.5" cy="19.5" r="3" fill="#4ade80"/>
-        </svg>
-      </div>
-      <div>
-        <div class="logo-title"><span class="t-pgr">PGR</span><span class="t-dot">·</span><span class="t-an">Analytics</span></div>
-        <div class="logo-sub">Value Scanner</div>
-      </div>
-    </a>
-
-    <div id="hdr-right" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end">
-      <div class="live-badge">
-        <span class="live-dot pulse"></span>
-        <span id="hdr-count">—</span>
-        <span style="color:#71717a;font-weight:500">live edges</span>
-      </div>
-      <button id="bell-btn" onclick="togglePush()" title="Enable notifications" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:background .15s">
-        <svg id="bell-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-opacity="0.7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-      </button>
-      <button id="push-test-btn" onclick="sendTestPush()" title="Send test notification" style="display:none;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:0 10px;height:34px;color:#4ade80;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .15s">TEST</button>
-      <div id="premium-status" class="btn-premium" onclick="openPremiumModal()">Unlock Today's Edges</div>
-      <button id="logout-btn" onclick="logout()" title="Log out" style="display:none;background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:6px 10px;color:#52525b;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;transition:all .15s" onmouseover="this.style.color='#f87171';this.style.borderColor='rgba(248,113,113,0.3)'" onmouseout="this.style.color='#52525b';this.style.borderColor='rgba(255,255,255,0.1)'"><span class="logout-full">Log out</span><span class="logout-short">✕</span></button>
-      <button class="btn-install" id="install-chip" onclick="triggerInstall()" style="display:none">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
-        Install app
-      </button>
+<!-- Mobile bottom sheet -->
+<div class="mob-bg" id="mobBg">
+  <div class="mob-sheet">
+    <div class="mob-sh-head">
+      <div class="mob-sh-title" id="mobTitle">—</div>
+      <button class="mob-sh-x" id="mobClose">Close</button>
+    </div>
+    <div class="mob-body" id="mobBody">
+      <div class="empty-s"><div class="empty-i">⏳</div>Loading…</div>
     </div>
   </div>
 </div>
-
-<!-- ── Main Content ────────────────────────────────── -->
-<div class="main-content">
-
-  <!-- Stats strip — 3 CLV proof KPIs + scan stats -->
-  <div class="stats-strip" id="stats-strip">
-    <div class="stat-tile" style="border-color:rgba(34,197,94,.2)">
-      <div class="stat-lbl">Avg CLV</div>
-      <div class="stat-val" id="s-clv" style="color:#4ade80">—</div>
-      <div class="stat-sub">vs Pinnacle &amp; Betfair close</div>
-    </div>
-    <div class="stat-tile" style="border-color:rgba(34,197,94,.15)">
-      <div class="stat-lbl">Closing Line Beaten</div>
-      <div class="stat-val" id="s-hitrate" style="color:#4ade80">—</div>
-      <div class="stat-sub">beat rate (sharp sources)</div>
-    </div>
-    <div class="stat-tile">
-      <div class="stat-lbl">Sharp Samples</div>
-      <div class="stat-val" id="s-avgodds" style="color:#f4f4f5">—</div>
-      <div class="stat-sub">verified vs Pinnacle/Betfair</div>
-    </div>
-    <div class="stat-tile" style="cursor:pointer" onclick="document.querySelector('[data-tab=scanner]').click()">
-      <div class="stat-lbl">Edges Found Today</div>
-      <div class="stat-val" id="s-count" style="color:#4ade80">—</div>
-      <div class="stat-sub" id="s-count-sub">signals identified</div>
-    </div>
-    <div class="stat-tile">
-      <div class="stat-lbl">Validated Today</div>
-      <div class="stat-val" id="s-validated" style="color:#fbbf24">—</div>
-      <div class="stat-sub">passed all quality filters</div>
-    </div>
-    <div class="stat-tile">
-      <div class="stat-lbl">Top Edge</div>
-      <div class="stat-val" id="s-bestev" style="color:#fbbf24">—</div>
-      <div class="stat-sub">highest identified today</div>
-    </div>
-  </div>
-
-  <!-- Nav Tabs -->
-  <div class="nav-tabs">
-    <button class="nav-tab sv-tab" data-tab="smartvalue">✓ CLV Confirmed</button>
-    <button class="nav-tab active" data-tab="scanner">⚡ Live Scanner</button>
-    <button class="nav-tab" data-tab="history">📊 Track Record</button>
-    <button class="nav-tab" data-tab="clv">📈 CLV</button>
-    <button class="nav-tab" data-tab="hockey">🏒 Hockey</button>
-    <button class="nav-tab" data-tab="nba">🏀 NBA</button>
-  </div>
-
-  <!-- ╔══ SCANNER TAB ══════════════════════════════════╗ -->
-  <div id="tab-scanner">
-
-    <!-- Scanner header -->
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-      <div style="line-height:1.4">
-        <div style="font-size:14px;font-weight:700;color:#f4f4f5;letter-spacing:-.02em">Beat the closing line. Consistently.</div>
-        <div style="font-size:11px;color:#71717a;margin-top:2px">Verified against Pinnacle &amp; Betfair closing odds</div>
-      </div>
-      <span id="live-edge-counter" style="font-size:10px;font-weight:700;color:#4ade80;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.25);border-radius:20px;padding:3px 9px;white-space:nowrap;flex-shrink:0;margin-left:8px">● Live market scan</span>
-    </div>
-
-    <!-- Smart Value banner (shown only on SV tab) -->
-    <div class="sv-banner" id="sv-banner" style="display:none">
-      <div class="sv-banner-icon">✓</div>
-      <div class="sv-banner-text">
-        <b>CLV Confirmed</b> — picks verified against Pinnacle/Betfair closing lines. Positive CLV = you beat the sharp market.<br>
-        <span style="color:#fbbf24;font-style:italic">"We don't track wins. We track whether the market moves."</span>
-      </div>
-    </div>
-
-    <!-- CLV OddsJam hero (shown only on SV tab) -->
-    <div class="clv-hero-wrap" id="clv-proof-strip" style="display:none">
-
-      <!-- GREEN — Sharp CLV (Verified) -->
-      <div class="clv-card-green">
-        <div class="clv-card-lbl">Sharp CLV (Verified)</div>
-        <div class="clv-stat-row">
-          <div class="clv-stat">
-            <div class="clv-val" id="sv-exact-rate">—</div>
-            <div class="clv-key">Beat rate</div>
-          </div>
-          <div class="clv-stat">
-            <div class="clv-val" id="sv-exact-avg">—</div>
-            <div class="clv-key">Avg CLV</div>
-          </div>
-          <div class="clv-stat">
-            <div class="clv-val" id="sv-exact-n">—</div>
-            <div class="clv-key">Samples</div>
-          </div>
-        </div>
-        <div class="clv-verify">
-          &#10003; Verified vs Pinnacle &amp; Betfair closing lines &nbsp;&middot;&nbsp;
-          &#10003; No soft books &nbsp;&middot;&nbsp;
-          &#10003; No cross-line comparisons &nbsp;&middot;&nbsp;
-          <span style="opacity:.7">Based on 2+ sharp sources</span>
-        </div>
-      </div>
-
-      <!-- AMBER — Estimated CLV (non-direct market) -->
-      <div class="clv-card-amber" id="sv-ext-card" style="display:none">
-        <div class="clv-card-lbl">Estimated CLV (non-direct market) &nbsp;&#9888;</div>
-        <div class="clv-stat-row">
-          <div class="clv-stat">
-            <div class="clv-val" id="sv-ext-avg">—</div>
-            <div class="clv-key">Avg CLV</div>
-          </div>
-          <div class="clv-stat">
-            <div class="clv-val" id="sv-ext-n">—</div>
-            <div class="clv-key">Samples</div>
-          </div>
-        </div>
-        <div class="clv-verify">Derived from adjacent sharp lines &mdash; not a direct market quote</div>
-      </div>
-
-      <!-- Trust bar -->
-      <div class="trust-bar">
-        <span><span class="chk">&#10003;</span> Verified vs sharp closing lines</span>
-        <span><span class="chk">&#10003;</span> No soft bookmakers used</span>
-        <span><span class="chk">&#10003;</span> Transparent methodology</span>
-        <span><span class="chk">&#10003;</span> Real market validation</span>
-        <span style="margin-left:auto;font-size:9px;letter-spacing:.08em;color:#27272a;text-transform:uppercase">Sharp verified &middot; Est. 2025</span>
-      </div>
-
-    </div>
-
-    <!-- Filter bar -->
-    <div class="filter-bar">
-      <span class="filter-label">Sport</span>
-      <div class="filter-pills" id="fp-sport">
-        <span class="pill sport on" data-sport="all">All</span>
-        <span class="pill sport" data-sport="football">⚽ Football</span>
-        <span class="pill sport" data-sport="hockey">🏒 Hockey</span>
-        <span class="pill sport" data-sport="nba">🏀 NBA</span>
-      </div>
-      <div class="divider"></div>
-      <span class="filter-label">Min EV</span>
-      <div class="filter-pills" id="fp-ev">
-        <span class="pill" data-ev="0">Any</span>
-        <span class="pill" data-ev="3">3%+</span>
-        <span class="pill on" data-ev="5">5%+</span>
-        <span class="pill" data-ev="8">8%+</span>
-        <span class="pill" data-ev="10">10%+</span>
-      </div>
-      <div class="divider"></div>
-      <span class="filter-label">Market</span>
-      <div class="filter-pills" id="fp-market">
-        <span class="pill market on" data-market="all">All</span>
-        <span class="pill market" data-market="goals">⚽ Goals</span>
-        <span class="pill market" data-market="btts">🎯 BTTS</span>
-        <span class="pill market" data-market="asian">⚖ Asian</span>
-        <span class="pill market" data-market="corners">⛳ Corners</span>
-        <span class="pill market" data-market="cards">🟨 Cards</span>
-      </div>
-      <div class="divider"></div>
-      <span class="filter-label">Sort</span>
-      <div class="filter-pills" id="fp-sort">
-        <span class="pill on" data-sort="ev">Edge ↓</span>
-        <span class="pill" data-sort="time">Kickoff ↑</span>
-        <span class="pill" data-sort="conf">Signal ↓</span>
-      </div>
-      <div style="margin-left:auto;display:flex;align-items:center;gap:6px">
-        <span id="last-updated" style="font-size:10px;color:#52525b"></span>
-        <button id="refresh-btn" style="padding:5px 12px;border-radius:8px;border:1px solid #27272a;background:#18181b;color:#a1a1aa;font-size:11px;font-weight:600;cursor:pointer" onclick="triggerRefresh()">↻ Refresh</button>
-      </div>
-    </div>
-
-    <!-- Table -->
-    <div class="scanner-wrap">
-      <div class="scanner-hdr">
-        <div>Match</div>
-        <div style="text-align:center">Time</div>
-        <div class="col-league">League</div>
-        <div>Market</div>
-        <div>Selection</div>
-        <div style="text-align:right">Odds</div>
-        <div class="col-fair" style="text-align:right">Fair</div>
-        <div style="text-align:right">Edge</div>
-        <div class="col-signal" style="text-align:center">Signal</div>
-      </div>
-      <div id="scanner-body">
-        <!-- Loading skeletons -->
-        <div style="padding:16px;text-align:center;color:#52525b;font-size:13px">
-          <div class="spinner spin" style="margin:0 auto 8px"></div>
-          Scanning 40+ leagues…
-        </div>
-      </div>
-    </div>
-
-    <!-- Big FOMO CTA (shown only when not premium) -->
-    <div class="fomo-section" id="fomo-section" style="display:none">
-
-      <!-- Live pressure -->
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;justify-content:center">
-        <span style="font-size:20px">⚡</span>
-        <div>
-          <div style="font-size:14px;font-weight:700;color:#f4f4f5"><span id="fomo-live-count">—</span> live edges right now</div>
-          <div style="font-size:11px;color:#71717a">Markets are moving — not every edge lasts.</div>
-        </div>
-      </div>
-
-      <!-- Signals filter counter -->
-      <div style="background:#0f0f11;border:1px solid #27272a;border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:12px;font-family:monospace;color:#a1a1aa;text-align:left;line-height:1.9">
-        Signals today: <span id="fomo-signals-today" style="color:#f4f4f5;font-weight:700">—</span><br>
-        Validated: <span id="fomo-validated" style="color:#4ade80;font-weight:700">—</span><br>
-        Rejected: <span id="fomo-rejected" style="color:#71717a">—</span>
-      </div>
-
-      <!-- Conversion block -->
-      <div style="margin-bottom:14px">
-        <div style="font-size:13px;color:#a1a1aa;margin-bottom:10px;line-height:1.5">
-          Most users see the edge <em>after</em> the market moves.<br>
-          Premium users see it <strong style="color:#f4f4f5">before</strong>.
-        </div>
-      </div>
-
-      <div class="fomo-bullets">
-        <div class="fomo-bullet">→ Real-time value opportunities</div>
-        <div class="fomo-bullet">→ Verified sharp markets</div>
-        <div class="fomo-bullet">→ CLV tracked vs Pinnacle &amp; Betfair</div>
-        <div class="fomo-bullet">→ Updated every minute</div>
-      </div>
-      <button class="fomo-unlock-btn" onclick="openPremiumModal()">Upgrade to Premium</button>
-      <div class="fomo-discord-link">No code yet? <a href="https://discord.gg/pgrsports" target="_blank">Join Discord to get access →</a></div>
-
-      <!-- Trust footer -->
-      <div style="margin-top:14px;padding-top:12px;border-top:1px solid #18181b;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;font-size:10px;color:#52525b">
-        <span>&#10003; Verified vs sharp closing lines</span>
-        <span>&#10003; No soft bookmakers used</span>
-        <span>&#10003; Transparent methodology</span>
-        <span>&#10003; Real market validation</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- ╔══ HISTORY TAB ══════════════════════════════════╗ -->
-  <div id="tab-history" style="display:none">
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px" id="history-stats"></div>
-    <div class="history-table">
-      <div class="history-hdr">
-        <div>Match</div>
-        <div>Market</div>
-        <div style="text-align:right">Odds</div>
-        <div style="text-align:right">Edge%</div>
-        <div class="col-hide-sm" style="text-align:right">P&amp;L</div>
-        <div style="text-align:center">Result</div>
-      </div>
-      <div id="history-body"><div style="padding:20px;text-align:center;color:#52525b;font-size:12px"><div class="spinner spin" style="margin:0 auto 8px"></div>Loading history…</div></div>
-    </div>
-    <div id="history-pagination" style="display:flex;justify-content:center;gap:6px;padding:8px 0"></div>
-  </div>
-
-  <!-- ╔══ CLV TAB ═══════════════════════════════════════╗ -->
-  <div id="tab-clv" style="display:none">
-    <div class="clv-grid" id="clv-stats"></div>
-
-    <!-- CLV Breakdown: Market + Timing -->
-    <div id="clv-breakdown-wrap" style="display:none;margin-bottom:14px">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-        <!-- Market breakdown -->
-        <div class="scanner-wrap" style="padding:0">
-          <div style="padding:10px 14px;border-bottom:1px solid #18181b">
-            <div style="font-size:11px;font-weight:700;color:#e4e4e7">CLV by Market</div>
-            <div style="font-size:10px;color:#52525b">Avg CLV % per market type</div>
-          </div>
-          <div id="clv-mkt-body"></div>
-        </div>
-        <!-- Timing breakdown -->
-        <div class="scanner-wrap" style="padding:0">
-          <div style="padding:10px 14px;border-bottom:1px solid #18181b">
-            <div style="font-size:11px;font-weight:700;color:#e4e4e7">CLV by Timing (Value Singles)</div>
-            <div style="font-size:10px;color:#52525b">When pick is posted relative to kickoff</div>
-          </div>
-          <div id="clv-timing-body"></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="scanner-wrap">
-      <div style="display:grid;grid-template-columns:2fr 80px 80px 80px 90px;padding:8px 14px;background:#0f0f11;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;font-weight:700;gap:8px">
-        <div>Match</div><div style="text-align:right">Open</div><div style="text-align:right">Close</div><div style="text-align:right">CLV%</div><div style="text-align:center">Time to KO</div>
-      </div>
-      <div id="clv-body"><div style="padding:20px;text-align:center;color:#52525b;font-size:12px">Loading CLV data…</div></div>
-    </div>
-  </div>
-
-  <!-- ╔══ HOCKEY TAB ════════════════════════════════════╗ -->
-  <div id="tab-hockey" style="display:none">
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px" id="hockey-stats"></div>
-    <div class="scanner-wrap" id="hockey-table">
-      <div style="padding:20px;text-align:center;color:#52525b;font-size:12px">Loading hockey…</div>
-    </div>
-  </div>
-
-  <!-- ╔══ NBA TAB ════════════════════════════════════════╗ -->
-  <div id="tab-nba" style="display:none">
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px" id="nba-stats"></div>
-    <div class="scanner-wrap" id="nba-table">
-      <div style="padding:20px;text-align:center;color:#52525b;font-size:12px">Loading NBA…</div>
-    </div>
-  </div>
-
-  <!-- Footer -->
-  <div style="text-align:center;padding:20px 0 40px;color:#3f3f46;font-size:11px">
-    PGR Analytics · AI-powered value scanning · <a href="https://discord.gg/pgrsports" target="_blank" style="color:#52525b;text-decoration:none">discord.gg/pgrsports</a>
-  </div>
-
-</div><!-- /main-content -->
-</div><!-- /app -->
 
 <script>
-"use strict";
+/* ── State ── */
+const S={picks:[],filters:{sport:'all',market:'all',edge:0,sharp:false}};
 
-/* ──────────────────────────────────────────────
-   STATE
-──────────────────────────────────────────────── */
-const state = {
-  isPremium: false,
-  picks: [],
-  historyPicks: [],
-  historyPage: 0,
-  historyPerPage: 25,
-  clvData: null,
-  clvBreakdown: null,
-  hockeyData: null,
-  nbaData: null,
-  confirmedPicks: null,
-  activeTab: "scanner",
-  filters: { sport: "all", ev: 5, sort: "ev", market: "all" },
-  expandedId: null,
-  loading: true,
-  lastFetch: null,
+/* ── Helpers ── */
+const $=id=>document.getElementById(id);
+const fP=(v,s=true)=>{if(v==null||isNaN(v))return'—';return(s&&v>0?'+':'')+Number(v).toFixed(2)+'%'};
+const fO=v=>(v==null||isNaN(v))?'—':Number(v).toFixed(2);
+const ago=m=>{if(m==null)return'—';if(m<1)return'just now';if(m<60)return`${m}m`;return`${Math.floor(m/60)}h`};
+
+const SHARP_BOOKS=new Set(['Pinnacle','Betfair','Matchbook','betfair_ex_eu','pinnacle','matchbook']);
+
+/* ── Bookmaker icon config ── */
+const BK_CFG={
+  'Pinnacle':{cls:'pinn',lbl:'PINN'},
+  'pinnacle':{cls:'pinn',lbl:'PINN'},
+  'Betfair':{cls:'bf',lbl:'BF'},
+  'betfair_ex_eu':{cls:'bf',lbl:'BF'},
+  'Matchbook':{cls:'bf',lbl:'MB'},
+  'matchbook':{cls:'bf',lbl:'MB'},
+  'Bet365':{cls:'b365',lbl:'B365'},
+  'Unibet':{cls:'uni',lbl:'UNI'},
+  'NordicBet':{cls:'uni',lbl:'NOR'},
+  'nordicbet':{cls:'uni',lbl:'NOR'},
+  'SBOBet':{cls:'sb',lbl:'SBO'},
+  'Betsson':{cls:'b365',lbl:'BESS'},
+  '1xBet':{cls:'oneX',lbl:'1XB'},
+  'Marathonbet':{cls:'mara',lbl:'MARA'},
+  'Bwin':{cls:'bwin',lbl:'BWIN'},
+  'Betway':{cls:'bwin',lbl:'BW'},
+  '188Bet':{cls:'sb',lbl:'188'},
+  '10Bet':{cls:'dflt',lbl:'10B'},
+  'Betano':{cls:'dflt',lbl:'BTAN'},
+  'Coolbet':{cls:'uni',lbl:'COOL'},
+  'Casumo':{cls:'dflt',lbl:'CASU'},
 };
+function bkCfg(name){return BK_CFG[name]||{cls:'dflt',lbl:String(name).slice(0,4).toUpperCase()}}
 
-const DISCORD = "https://discord.gg/pgrsports";
-const FREE_VISIBLE = 0; // free users see match+market+edge but NEVER selection/odds
-const GHOST_ROWS = 6;   // extra locked ghost rows to show volume
+/* ── Book icon HTML ── */
+function bkIcon(name,odds,maxW=46){
+  const c=bkCfg(name);
+  const isSharp=SHARP_BOOKS.has(name);
+  return `<div class="bk ${c.cls}" title="${name}: ${Number(odds).toFixed(2)}">
+    <span class="bk-name">${isSharp?'⚡':''} ${c.lbl}</span>
+    <span class="bk-odds">${Number(odds).toFixed(2)}</span>
+  </div>`;
+}
 
-/* ──────────────────────────────────────────────
-   HELPERS
-──────────────────────────────────────────────── */
-function esc(s){ return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;") }
-function fmt2(v){ return v != null ? Number(v).toFixed(2) : "—" }
-function fmtPct(v,sign=true){ if(v==null||isNaN(v)) return "—"; const n=Number(v).toFixed(1); return (sign&&v>0?"+":"")+n+"%" }
-function fmtOdds(v){ return v ? Number(v).toFixed(2) : "—" }
-function fmtKo(s){
-  if(!s) return "—";
-  try {
-    const d = new Date(isNaN(s) ? s : Number(s)*1000);
-    return d.toLocaleTimeString("sv-SE",{hour:"2-digit",minute:"2-digit",timeZone:"Europe/Stockholm"});
-  } catch(e){ return s; }
-}
-function fmtAgo(ts){
-  if(!ts) return "";
-  const d = Math.floor((Date.now()-ts)/1000);
-  if(d<5) return "just now";
-  if(d<60) return d+"s ago";
-  if(d<3600) return Math.floor(d/60)+"m ago";
-  return Math.floor(d/3600)+"h ago";
-}
-function normPick(b){
-  return {
-    id: String(b.id||b.match_id||(b.home_team+"_"+b.away_team+Math.random())),
-    sport: (b.sport||"football").toLowerCase(),
-    league: b.league||"",
-    match: b.match||((b.home_team||"")+" vs "+(b.away_team||"")),
-    market: b.market||"",
-    selection: b.selection||"",
-    odds: b.odds||0,
-    fairOdds: b.fair_odds||b.fairOdds||null,
-    ev: b.ev_pct!=null?b.ev_pct:(b.ev!=null?b.ev:0),
-    confidence: b.confidence||0,
-    confidence_tier: b.confidence_tier||(b.confidence>=0.7?"HIGH":b.confidence>=0.5?"MED":"LOW"),
-    kickoff_time: b.kickoff_time||b.kickoff||"",
-    bookmaker: b.bookmaker||b.best_book||"",
-    model_prob: b.model_prob!=null?b.model_prob*100:(b.model_prob_pct!=null?b.model_prob_pct:null),
-    clv_pct: b.clv_pct!=null?b.clv_pct:null,
-    status: b.status||"PRE",
-    age_minutes: b.age_minutes!=null?b.age_minutes:null,
-    match_date: b.match_date||"",
-    mode: b.mode||"",
-    pgr_score: b.pgr_score!=null?b.pgr_score:null,
-  };
-}
-function evClass(ev){
-  if(ev>=10) return "edge-high";
-  if(ev>=5)  return "edge-med";
-  return "edge-low";
-}
-/* SIGNAL flatten Apr 17 2026: strength derived from EV (matches dashboard 3/5/8/10 filter pills).
-   Backend now saves all 3%+ ACTIVE/DEGRADED signals — band reflects raw signal strength. */
-function evBandClass(ev){
-  const e = Number(ev) || 0;
-  if(e >= 10) return "sig-top";
-  if(e >= 8)  return "sig-high";
-  if(e >= 5)  return "sig-med";
-  return "sig-low";
-}
-function evBandLabel(ev){
-  const e = Number(ev) || 0;
-  if(e >= 10) return "🔥 Top Edge";
-  if(e >= 8)  return "🟢 High Confidence";
-  if(e >= 5)  return "🟡 Signal";
-  return "🟠 Developing Edge";
-}
-/* Legacy aliases — kept so existing call sites keep working */
-function sigClass(_tier, ev){ return evBandClass(ev); }
-function sigLabel(_tier, ev){ return evBandLabel(ev); }
-
-/* ──────────────────────────────────────────────
-   PREMIUM
-──────────────────────────────────────────────── */
-function checkPremiumCache(){
-  try {
-    const v = localStorage.getItem("pgr_premium");
-    if(v==="1"){ state.isPremium=true; updatePremiumUI(); }
-  } catch(e){}
-}
-function setPremium(val){
-  state.isPremium=val;
-  try{ localStorage.setItem("pgr_premium", val?"1":"0"); } catch(e){}
-  updatePremiumUI();
-  renderScanner();
-}
-function updatePremiumUI(){
-  const el = document.getElementById("premium-status");
-  const logoutBtn = document.getElementById("logout-btn");
-  if(!el) return;
-  if(state.isPremium){
-    el.textContent="✓ Premium Active";
-    el.className="btn-premium active";
-    el.onclick=null;
-    document.getElementById("fomo-section").style.display="none";
-    if(logoutBtn) logoutBtn.style.display="inline-flex";
-  } else {
-    el.textContent="Unlock Today's Edges";
-    el.className="btn-premium";
-    el.onclick=openPremiumModal;
-    if(logoutBtn) logoutBtn.style.display="none";
+function booksStrip(p,maxV=5){
+  let bm={};
+  try{bm=typeof p.odds_by_bookmaker==='string'?JSON.parse(p.odds_by_bookmaker):(p.odds_by_bookmaker||{});}catch(e){}
+  const entries=Object.entries(bm).filter(([,v])=>v>1);
+  if(!entries.length){
+    // fallback: show sharp ref + best if we have them
+    const out=[];
+    if(p.sharp_price_at_detection&&p.sharp_book_at_detection)
+      out.push([p.sharp_book_at_detection,p.sharp_price_at_detection]);
+    if((p.best_odds_value||p.odds)&&(p.best_price_book||p.best_odds_bookmaker))
+      out.push([p.best_price_book||p.best_odds_bookmaker,p.best_odds_value||p.odds]);
+    return out.map(([n,v])=>bkIcon(n,v)).join('')||'<span style="color:var(--dim);font-size:10px">—</span>';
   }
-}
-function logout(){
-  if(!confirm("Log out from premium access?")) return;
-  setPremium(false);
-}
-function openPremiumModal(){
-  document.getElementById("premium-modal").style.display="flex";
-  setTimeout(()=>{ const el=document.getElementById("modal-code-input"); if(el) el.focus(); },100);
-}
-function closePremiumModal(){
-  document.getElementById("premium-modal").style.display="none";
-  document.getElementById("modal-err").style.display="none";
-  document.getElementById("modal-code-input").value="";
-  document.getElementById("modal-code-input").className="modal-input";
-}
-async function verifyCode(){
-  const code = document.getElementById("modal-code-input").value.trim();
-  if(!code) return;
-  const btn = document.getElementById("modal-verify-btn");
-  btn.disabled=true; btn.textContent="Verifying…";
-  try {
-    const res = await fetch("/api/verify-code",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code})});
-    const data = await res.json();
-    if(data.valid){
-      setPremium(true);
-      closePremiumModal();
-    } else {
-      document.getElementById("modal-err").style.display="block";
-      document.getElementById("modal-code-input").className="modal-input error";
-    }
-  } catch(e){
-    document.getElementById("modal-err").style.display="block";
-  }
-  btn.disabled=false; btn.textContent="Unlock All Access";
+  entries.sort((a,b)=>{const as=SHARP_BOOKS.has(a[0])?1:0,bs=SHARP_BOOKS.has(b[0])?1:0;return bs-as||(b[1]-a[1]);});
+  const vis=entries.slice(0,maxV),rest=entries.length-maxV;
+  let h=vis.map(([n,v])=>bkIcon(n,v)).join('');
+  if(rest>0)h+=`<div class="bk-more-pill">+${rest}</div>`;
+  return h;
 }
 
-/* ──────────────────────────────────────────────
-   FILTER & SORT
-──────────────────────────────────────────────── */
-function filteredPicks(){
-  let picks = [...state.picks];
-
-  // Confirmed CLV tab: use dedicated endpoint data (includes settled picks with CLV)
-  if(state.activeTab === "smartvalue"){
-    if(state.confirmedPicks !== null){
-      picks = [...state.confirmedPicks];
-    } else {
-      picks = picks.filter(p => p.mode === "PROD");
-    }
-    // Sort: CLV-confirmed first, then by kickoff time
-    picks.sort((a,b)=>{
-      const aCLV = (a.clv_pct != null && !String(a.clv_source_book||'').startsWith('~')) ? 0 : 1;
-      const bCLV = (b.clv_pct != null && !String(b.clv_source_book||'').startsWith('~')) ? 0 : 1;
-      if(aCLV !== bCLV) return aCLV - bCLV;
-      const ta=new Date(isNaN(a.kickoff_time)?a.kickoff_time:Number(a.kickoff_time)*1000).getTime()||0;
-      const tb=new Date(isNaN(b.kickoff_time)?b.kickoff_time:Number(b.kickoff_time)*1000).getTime()||0;
-      return ta-tb;
-    });
-    return picks;
-  }
-
-  if(state.filters.sport!=="all"){
-    picks = picks.filter(p=>(p.sport||"").toLowerCase().includes(state.filters.sport)||
-      (state.filters.sport==="football"&&(p.sport||"").toLowerCase().includes("soccer")));
-  }
-  if(state.filters.market!=="all"){
-    picks = picks.filter(p=>{
-      const m = (p.market||"").toUpperCase();
-      if(state.filters.market==="btts")    return m.includes("BTTS");
-      if(state.filters.market==="asian")   return m.includes("AH_") || m.includes("ASIAN") || m.includes("HANDICAP");
-      if(state.filters.market==="corners") return m.includes("CORNER");
-      if(state.filters.market==="cards")   return m.includes("CARD");
-      if(state.filters.market==="goals")   return m.includes("OVER_UNDER") || m.includes("FT_OVER") || m.includes("FT_UNDER") || m.includes("GOALS");
-      return true;
-    });
-  }
-  if(state.filters.ev>0){
-    picks = picks.filter(p=>p.ev>=state.filters.ev);
-  }
-  // Helper: epoch ms for a pick (0 if unknown)
-  const koMs = p => {
-    const v = p.kickoff_time;
-    if(!v) return 0;
-    return isNaN(v) ? (new Date(v).getTime()||0) : Number(v)*1000;
-  };
-
-  // Primary sort: today always before tomorrow
-  // Secondary sort: by user-chosen filter
-  const _todayMid = new Date(); _todayMid.setUTCHours(0,0,0,0);
-  const _tmrwMid  = new Date(_todayMid); _tmrwMid.setUTCDate(_todayMid.getUTCDate()+1);
-  const dayBucket = p => {
-    const t = koMs(p);
-    if(!t) return 1;
-    return t < _tmrwMid.getTime() ? 0 : 1;   // 0=today, 1=tomorrow+
-  };
-
-  if(state.filters.sort==="ev"){
-    picks.sort((a,b)=> dayBucket(a)-dayBucket(b) || b.ev-a.ev);
-  } else if(state.filters.sort==="conf"){
-    picks.sort((a,b)=> dayBucket(a)-dayBucket(b) || b.confidence-a.confidence);
-  } else {
-    picks.sort((a,b)=> dayBucket(a)-dayBucket(b) || koMs(a)-koMs(b));
-  }
-  return picks;
+/* ── Status ── */
+function pickStatus(p){return p.confidence_label||(p.sharp_price_at_detection?'SHARP_CONFIRMED':'UNVERIFIED_LEGACY')}
+function badgeHtml(st){
+  if(st==='SHARP_CONFIRMED')   return '<span class="bdg sharp">sharp</span>';
+  if(st==='INTERPOLATED')      return '<span class="bdg moving">interp</span>';
+  if(st==='UNVERIFIED_LEGACY') return '<span class="bdg legacy">legacy</span>';
+  return '<span class="bdg unverified">unverified</span>';
+}
+function sportOf(p){
+  const l=(p.league||'').toLowerCase();
+  if(l.includes('nba')||l.includes('basketball'))return'basketball';
+  if(l.includes('nhl')||l.includes('hockey'))return'hockey';
+  return'football';
 }
 
-/* ──────────────────────────────────────────────
-   RENDER SCANNER
-──────────────────────────────────────────────── */
-function renderScanner(){
-  const body = document.getElementById("scanner-body");
-  const picks = filteredPicks();
-  const isSV = state.activeTab === "smartvalue";
+/* ── Move badge ── */
+function mvBadge(p){
+  if(p.movement_pct==null)return'';
+  const m=p.movement_pct;
+  const cls=m<=-1.5?'ok':(m>=1.5?'late':'flat');
+  const ic=m<=-1.5?'↑ market moved ':(m>=1.5?'↓ market drifted ':'→ flat ');
+  return `<div class="mc-move ${cls}"><span>${ic}</span><span>${m>0?'+':''}${m.toFixed(1)}% after detect</span></div>`;
+}
 
-  document.getElementById("hdr-count").textContent = picks.length;
-  updateStatsStrip(picks);
+/* ── Filters ── */
+document.querySelectorAll('.chip[data-filter]').forEach(c=>{
+  c.addEventListener('click',()=>{
+    const f=c.dataset.filter,v=c.dataset.value;
+    if(f==='sharp'){S.filters.sharp=!S.filters.sharp;c.classList.toggle('active',S.filters.sharp);}
+    else{document.querySelectorAll(`.chip[data-filter="${f}"]`).forEach(x=>x.classList.remove('active'));c.classList.add('active');S.filters[f]=f==='edge'?+v:v;}
+    render();
+  });
+});
+function applyFilters(picks){
+  return picks.filter(p=>{
+    if(S.filters.sport!=='all'&&sportOf(p)!==S.filters.sport)return false;
+    if(S.filters.market!=='all'){const mk=(p.market||'').toUpperCase()+' '+(p.selection||'').toUpperCase();if(!mk.includes(S.filters.market))return false;}
+    if(S.filters.edge>0&&(p.edge_pct||0)<S.filters.edge)return false;
+    if(S.filters.sharp&&pickStatus(p)!=='SHARP_CONFIRMED')return false;
+    return true;
+  });
+}
 
-  // Live edge counter badge — shows real count as FOMO
-  const allPicks = state.picks.length;
-  const counter = document.getElementById("live-edge-counter");
-  if(counter){
-    if(allPicks > 0){
-      counter.textContent = `⚡ ${allPicks} live edges right now`;
-      counter.style.color = "#4ade80";
-    } else {
-      counter.textContent = "● Live market scan";
-    }
-  }
+/* ── KPI strip ── */
+function renderKPIs(picks){
+  $('liveCount').textContent=picks.length;
+  $('scanCount').textContent=picks.length+' signals';
+  const sp=picks.filter(p=>pickStatus(p)==='SHARP_CONFIRMED');
+  $('kpiSharp').textContent=sp.length;
+  const avg=sp.length?sp.reduce((a,p)=>a+(p.edge_pct||0),0)/sp.length:null;
+  const ka=$('kpiAvgEdge');ka.textContent=avg!=null?fP(avg):'—';ka.className='ki-v '+(avg==null?'':(avg>0?'g':'r'));
+  const top=picks.slice().sort((a,b)=>(b.edge_pct||0)-(a.edge_pct||0))[0];
+  $('kpiTop').textContent=top&&top.edge_pct?fP(top.edge_pct):'—';
+  $('kpiTopM').textContent=top?`${top.home_team||''} vs ${top.away_team||''}`.slice(0,20):'';
+}
 
-  // Show/hide filter bar, SV banner, and CLV proof strip
-  const filterBar    = document.querySelector(".filter-bar");
-  const svBanner     = document.getElementById("sv-banner");
-  const clvProof     = document.getElementById("clv-proof-strip");
-  const isScanner    = state.activeTab === "scanner";
-  if(filterBar) filterBar.style.display = isSV ? "none" : "";
-  if(svBanner)  svBanner.style.display  = isSV ? "flex" : "none";
-  if(clvProof)  clvProof.style.display  = (isSV || isScanner) ? "flex" : "none";
-
-  // Populate CLV OddsJam hero cards from cached data (or fetch if needed)
-  if(isSV || isScanner){
-    const clv = state.clvData;
-    if(clv){
-      // ── GREEN card: exact-line Pinnacle/Betfair ──────────────────────
-      const eRate = clv.exact_rate, eAvg = clv.exact_avg, eN = clv.exact_n || 0;
-      const elER = document.getElementById("sv-exact-rate");
-      const elEA = document.getElementById("sv-exact-avg");
-      const elEN = document.getElementById("sv-exact-n");
-      if(elER) elER.textContent = eRate != null ? Number(eRate).toFixed(1) + "%" : "—";
-      if(elEA && eAvg != null){
-        elEA.textContent = (eAvg >= 0 ? "+" : "") + Number(eAvg).toFixed(2) + "%";
-        elEA.style.color = eAvg >= 0 ? "#f4f4f5" : "#f87171";
-      }
-      if(elEN) elEN.textContent = eN > 0 ? eN + " picks" : "—";
-
-      // ── AMBER card: estimated CLV (non-direct market, no beat rate) ─
-      const xAvg = clv.ext_avg, xN = clv.ext_n || 0;
-      const extCard = document.getElementById("sv-ext-card");
-      if(extCard && xN > 0){
-        extCard.style.display = "";
-        const elXA = document.getElementById("sv-ext-avg");
-        const elXN = document.getElementById("sv-ext-n");
-        if(elXA && xAvg != null){
-          elXA.textContent = (xAvg >= 0 ? "+" : "") + Number(xAvg).toFixed(2) + "%";
-          elXA.style.color = xAvg >= 0 ? "#f4f4f5" : "#f87171";
-        }
-        if(elXN) elXN.textContent = xN + " picks";
-      }
-
-      // Fallback: use legacy fields if v2 exact data not yet available
-      if(eN === 0){
-        const avg30 = clv.avg_clv_30d != null ? clv.avg_clv_30d : clv.avg_clv;
-        const rate  = clv.positive_rate;
-        const n     = clv.sample_n || clv.n || 0;
-        if(elEA && avg30 != null){
-          elEA.textContent = (avg30 >= 0 ? "+" : "") + Number(avg30).toFixed(2) + "%";
-          elEA.style.color = avg30 >= 0 ? "#f4f4f5" : "#f87171";
-        }
-        if(elER && rate != null) elER.textContent = Number(rate).toFixed(1) + "%";
-        if(elEN && n > 0)        elEN.textContent = n + " picks";
-      }
-    } else {
-      fetchCLV();
-    }
-  }
-
+/* ── Render scanner cards ── */
+function renderScanner(picks){
+  $('scanMeta').textContent=`${picks.length} · 60s`;
   if(!picks.length){
-    const emptyMsg = isSV
-      ? `<div class="empty-state"><div class="empty-icon">✓</div><div class="empty-title">No Confirmed CLV picks today</div><div class="empty-sub">Check back closer to kickoff — picks publish 2–4 hours before matches</div></div>`
-      : `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">No edges found</div><div class="empty-sub">Try lowering the min EV filter or check back soon</div></div>`;
-    body.innerHTML=emptyMsg;
-    if(!state.isPremium && !isSV) document.getElementById("fomo-section").style.display="block";
+    $('scBody').innerHTML=`<div class="empty-s"><div class="empty-i">🌙</div><div class="empty-t">No signals</div><div class="empty-sub">Lower min edge or clear sharp-only filter</div></div>`;
     return;
   }
-
-  // Determine today/tomorrow date strings for divider logic
-  const _now = new Date();
-  const _todayStr = _now.toISOString().slice(0,10);
-  const _tmrwDate = new Date(_now); _tmrwDate.setDate(_tmrwDate.getDate()+1);
-  const _tmrwStr = _tmrwDate.toISOString().slice(0,10);
-
-  let html = "";
-  let _shownToday = false, _shownTmrw = false;
-
-  picks.forEach((p,i)=>{
-    // Determine which day this pick belongs to
-    const _pDate = (p.match_date||"").slice(0,10);
-    const _isTmrw = _pDate >= _tmrwStr;
-
-    // Insert date dividers
-    if(!_isTmrw && !_shownToday){
-      _shownToday = true;
-      html+=`<div class="scanner-row" style="display:block"><div class="date-divider">📅 Today</div></div>`;
-    }
-    if(_isTmrw && !_shownTmrw){
-      _shownTmrw = true;
-      html+=`<div class="scanner-row" style="display:block"><div class="date-divider">📅 Tomorrow — ${_tmrwDate.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})}</div></div>`;
-    }
-
-    // Free users: first row is a teaser (fully visible), rest are locked
-    const isLocked = !state.isPremium && (isSV || i > 0);
-    const isExpanded = state.expandedId === p.id;
-    const isNew = p.age_minutes!=null && p.age_minutes<=15;
-    const leagueShort = (p.league||"").replace(/^soccer_/,"").replace(/_/," ").replace(/\b\w/g,c=>c.toUpperCase()).substring(0,18);
-    const MARKET_LABELS = {
-      "Value Single":"Edge Detected","Value Singles":"Edge Detected","value_single":"Edge Detected",
-      "PRO PICK":"Edge Detected","VALUE OPP":"Edge Detected","VALUE_OPP":"Edge Detected",
-      "BTTS_YES":"BTTS Yes","BTTS_NO":"BTTS No","BTTS":"BTTS",
-      "HOME_WIN":"Home Win","AWAY_WIN":"Away Win","DRAW":"Draw",
-      "FT_OVER_0_5":"Over 0.5","FT_OVER_1_5":"Over 1.5","FT_OVER_2_5":"Over 2.5",
-      "FT_OVER_3_5":"Over 3.5","FT_OVER_4_5":"Over 4.5",
-      "FT_UNDER_2_5":"Under 2.5","FT_UNDER_3_5":"Under 3.5",
-      "CORNERS_OVER_7_5":"Corners O7.5","CORNERS_OVER_8_5":"Corners O8.5",
-      "CORNERS_OVER_9_5":"Corners O9.5","CORNERS_OVER_10_5":"Corners O10.5",
-      "CORNERS_OVER_11_5":"Corners O11.5","CORNERS_OVER_12_5":"Corners O12.5",
-      "CARDS_OVER_2_5":"Cards O2.5","CARDS_OVER_3_5":"Cards O3.5",
-      "CARDS_OVER_4_5":"Cards O4.5","CARDS_OVER_5_5":"Cards O5.5",
-      "DC_HOME_DRAW":"DC Home/Draw","DC_HOME_AWAY":"DC Home/Away","DC_DRAW_AWAY":"DC Draw/Away",
-      "AH_HOME_-0.5":"AH Home -0.5","AH_HOME_+0.5":"AH Home +0.5",
-      "AH_HOME_-1.0":"AH Home -1","AH_HOME_+1.0":"AH Home +1",
-      "AH_HOME_-1.5":"AH Home -1.5","AH_HOME_+1.5":"AH Home +1.5",
-      "AH_AWAY_-0.5":"AH Away -0.5","AH_AWAY_+0.5":"AH Away +0.5",
-      "AH_AWAY_-1.0":"AH Away -1","AH_AWAY_+1.0":"AH Away +1",
-      "AH_AWAY_-1.5":"AH Away -1.5","AH_AWAY_+1.5":"AH Away +1.5",
-      "ASIAN_HANDICAP":"Asian Handicap","HANDICAP_HOME":"Handicap Home","HANDICAP_AWAY":"Handicap Away",
-      "Corners":"Corners","Cards":"Cards",
-    };
-    const rawMkt = p.market || "";
-    const marketLabel = MARKET_LABELS[rawMkt] || rawMkt.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
-    const selectionText = p.selection || "—";
-    const evStr = fmtPct(p.ev);
-    const _mp = p.model_prob;
-    const modelPct  = _mp ? Math.round(_mp > 1 ? _mp : _mp * 100) : null;
-    const marketPct = p.odds && p.odds > 1 ? Math.round(100 / p.odds) : null;
-    const edgeSign  = (p.ev||0) >= 0 ? '+' : '';
-    const bookShort = (p.bookmaker||"").replace(/Exchange.*/i,"").trim();
-    const mmeBook   = (!isLocked && bookShort) ? ` · <span style="color:#52525b">Best odds at: ${esc(bookShort)}</span>` : '';
-    const unlockHint = isLocked
-      ? `<div style="font-size:10px;color:#a16207;margin-top:2px;cursor:pointer" onclick="openPremiumModal()">🔒 Unlock odds &amp; full analysis →</div>`
-      : '';
-    const pgrScore  = p.pgr_score != null ? p.pgr_score : null;
-    function pgrChip(s){
-      if(s==null) return '';
-      let dot,col,bg,border,lbl;
-      if(s>=80){dot='🟢';col='#4ade80';bg='rgba(34,197,94,.12)';border='rgba(34,197,94,.3)';lbl='Elite Value';}
-      else if(s>=60){dot='🟡';col='#fbbf24';bg='rgba(234,179,8,.12)';border='rgba(234,179,8,.3)';lbl='Strong Value';}
-      else if(s>=40){dot='🔵';col='#60a5fa';bg='rgba(96,165,250,.12)';border='rgba(96,165,250,.3)';lbl='Standard Value';}
-      else{dot='⚪';col='#71717a';bg='rgba(113,113,122,.1)';border='rgba(113,113,122,.2)';lbl='No signal';}
-      return `<span style="display:inline-flex;align-items:center;gap:4px;margin-left:8px;background:${bg};border:1px solid ${border};color:${col};border-radius:99px;padding:1px 8px;font-size:10px;font-weight:700">${dot} ${Math.round(s)} · ${lbl}</span>`;
-    }
-    const scoreChip = pgrChip(pgrScore);
-    const mmeLine   = (modelPct && marketPct)
-      ? `<div class="mme-line">Model: <b>${modelPct}%</b> · Market: <b>${marketPct}%</b> · Edge: <b>${edgeSign}${(p.ev||0).toFixed(1)}%</b>${mmeBook}</div>${scoreChip?`<div style="margin-top:4px">${scoreChip}</div>`:''}${unlockHint}`
-      : unlockHint;
-
-    const isProd = p.mode === "PROD";
-    const svMark = (!isSV && isProd) ? '<span class="sv-chip">✓ CLV</span>' : '';
-    const svRowCls = isProd ? " sv-row" : "";
-
-    // CLV verification badge per pick
-    function clvPickBadge(clvPct, srcBook){
-      if(!srcBook || clvPct == null) return '';
-      const src = String(srcBook);
-      if(src.startsWith('~')) return '';                          // internal fallback — don't display
-      const sign = clvPct >= 0 ? '+' : '';
-      const pctStr = sign + Number(clvPct).toFixed(1) + '%';
-      if(src.toLowerCase().includes('interp')){
-        return `<span style="display:inline-flex;align-items:center;gap:3px;margin-left:6px;
-          background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.20);
-          color:#f59e0b;border-radius:99px;padding:1px 7px;font-size:9px;font-weight:700;
-          vertical-align:middle">⚠ CLV ${pctStr}</span>`;
-      }
-      // Exact sharp source (Pinnacle / Betfair)
-      const bookShortName = src.split('(')[0].trim();
-      const clvCol = clvPct >= 0 ? '#4ade80' : '#f87171';
-      const clvBg  = clvPct >= 0 ? 'rgba(34,197,94,.08)' : 'rgba(248,113,113,.08)';
-      const clvBdr = clvPct >= 0 ? 'rgba(34,197,94,.25)' : 'rgba(248,113,113,.25)';
-      return `<span style="display:inline-flex;align-items:center;gap:3px;margin-left:6px;
-        background:${clvBg};border:1px solid ${clvBdr};
-        color:${clvCol};border-radius:99px;padding:1px 7px;font-size:9px;font-weight:700;
-        vertical-align:middle">✓ ${bookShortName} ${pctStr}</span>`;
-    }
-    const clvBadge = clvPickBadge(p.clv_pct, p.clv_source_book);
-
-    html+=`<div class="scanner-row${isExpanded?" expanded":""}${svRowCls} row-new" data-id="${esc(p.id)}">
-      <div class="cell-match">
-        <div class="match-teams">${esc(p.match)}${isNew?'<span class="new-chip">NEW</span>':''}${svMark}${clvBadge}</div>
-        <div class="match-meta">${esc(p.league.replace(/^soccer_/,"").replace(/_/g," "))}</div>
-        ${mmeLine}
-      </div>
-      <div class="cell-time">${fmtKo(p.kickoff_time)}${_isTmrw?'<span class="tmrw-badge">TMRW</span>':''}</div>
-      <div class="cell-league col-league" style="font-size:11px;color:#71717a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(leagueShort)}</div>
-      <div class="cell-market"><span class="market-tag">${esc(marketLabel)}</span></div>
-      ${isLocked
-        ? `<div class="cell-selection locked-cell"><span class="locked-blur">${esc(selectionText)}</span><span class="locked-icon">🔒</span></div>`
-        : `<div class="cell-selection"><span class="sel-text">${esc(selectionText)}</span></div>`}
-      ${isLocked
-        ? `<div class="cell-odds locked-cell" style="justify-content:flex-end"><span class="locked-blur">${fmtOdds(p.odds)}</span><span class="locked-icon">🔒</span></div>`
-        : `<div class="cell-odds" style="text-align:right"><span class="odds-val">${fmtOdds(p.odds)}</span></div>`}
-      ${isLocked
-        ? `<div class="cell-fair col-fair locked-cell" style="justify-content:flex-end"><span class="locked-blur">${p.fairOdds?fmtOdds(p.fairOdds):"—"}</span><span class="locked-icon">🔒</span></div>`
-        : `<div class="cell-fair col-fair" style="text-align:right"><span class="fair-val">${p.fairOdds?fmtOdds(p.fairOdds):"—"}</span></div>`}
-      <div class="cell-edge" style="text-align:right"><span class="edge-chip ${evClass(p.ev)}">${evStr}</span></div>
-      <div class="cell-signal col-signal" style="text-align:center"><span class="sig-badge ${sigClass(p.confidence_tier)}">${sigLabel(p.confidence_tier)}</span></div>
-    </div>`;
-
-    // Expand panel (premium only)
-    if(isExpanded && !isLocked){
-      html+=renderExpandPanel(p);
-    }
-  });
-
-  // Ghost rows — show in scanner tab only, not in Smart Value tab
-  if(!state.isPremium && !isSV){
-    const ghostMarkets = ["Over 2.5 Goals","BTTS Yes","1X2 Home","Double Chance","Over 3.5","Under 2.5","BTTS No","1X2 Away","Corners Over","Cards Over"];
-    const ghostLeagues = ["Premier League","La Liga","Bundesliga","Serie A","Ligue 1","Champions League","Europa League","Championship","Eredivisie","Primeira Liga"];
-    const ghostEvs = ["+8.2%","+11.4%","+6.7%","+9.1%","+14.3%","+7.8%","+12.5%","+5.9%","+10.2%","+8.8%"];
-    for(let g=0;g<GHOST_ROWS;g++){
-      const mkt = ghostMarkets[g % ghostMarkets.length];
-      const lge = ghostLeagues[g % ghostLeagues.length];
-      const ev  = ghostEvs[g % ghostEvs.length];
-      const evNum = parseFloat(ev);
-      html+=`<div class="scanner-row" style="opacity:${0.55-g*0.05}" onclick="openPremiumModal()">
-        <div class="cell-match">
-          <div class="match-teams" style="filter:blur(6px);user-select:none">Hidden Match ${g+picks.length+1}</div>
-          <div class="match-meta" style="filter:blur(4px);user-select:none">${esc(lge)}</div>
+  $('scBody').innerHTML=picks.map(p=>{
+    const st=pickStatus(p);
+    const isNew=p.age_minutes!=null&&p.age_minutes<12;
+    const ec=(p.edge_pct||0)>=8?'g':((p.edge_pct||0)>=3?'a':'r');
+    return `<div class="mc${isNew?' new-mc':''}" data-id="${p.id}" onclick="openDetail(${p.id},this)">
+      <div class="mc-top">
+        <div class="mc-match">
+          <div class="mc-teams">${p.home_team} <span style="color:var(--muted)">vs</span> ${p.away_team}</div>
+          <div class="mc-sub">${p.league||''} · ${p.kickoff_str||ago(p.age_minutes)}</div>
         </div>
-        <div class="cell-time" style="filter:blur(4px);user-select:none">18:30</div>
-        <div class="cell-league col-league" style="filter:blur(4px);user-select:none;font-size:11px;color:#71717a">${esc(lge)}</div>
-        <div class="cell-market"><span class="market-tag" style="filter:blur(3px);user-select:none">${esc(mkt)}</span></div>
-        <div class="cell-selection locked-cell"><span class="locked-blur">Premium Pick</span><span class="locked-icon">🔒</span></div>
-        <div class="cell-odds locked-cell" style="justify-content:flex-end"><span class="locked-blur">2.05</span><span class="locked-icon">🔒</span></div>
-        <div class="cell-fair col-fair locked-cell" style="justify-content:flex-end"><span class="locked-blur">1.92</span><span class="locked-icon">🔒</span></div>
-        <div class="cell-edge" style="text-align:right"><span class="edge-chip ${evClass(evNum)}">${ev}</span></div>
-        <div class="cell-signal col-signal" style="text-align:center"><span class="sig-badge sig-med">🟡 Developing Edge</span></div>
-      </div>`;
-    }
-    // FOMO unlock banner after all rows
-    const totalVisible = picks.length + GHOST_ROWS;
-    html+=`<div class="fomo-cta-row scanner-row">
-      <div class="fomo-row">
         <div>
-          <div style="font-size:11px;color:#a1a1aa;margin-bottom:4px;font-style:italic">"This tool finds pricing inefficiencies. Not every signal is meant to be played."</div>
-          <div style="font-size:10px;color:#52525b;margin-bottom:3px">${totalVisible}+ live edges identified right now — you're seeing ${picks.length}</div>
-          <div class="fomo-row-text">Unlock full scanner access →</div>
+          <div class="mc-edge ${ec}">${fP(p.edge_pct)}</div>
+          <div class="mc-edge-lbl">edge</div>
         </div>
-        <button class="fomo-row-btn" onclick="openPremiumModal()">See All Live Edges</button>
       </div>
+      <div class="mc-mid">
+        <span class="mc-mkt">${p.icon||'⚽'} ${p.selection||p.market}</span>
+        <span class="mc-type">${(p.market||'').toLowerCase()}</span>
+        ${badgeHtml(st)}
+        ${isNew?'<span class="bdg new">new</span>':''}
+      </div>
+      <div class="mc-books">${booksStrip(p,6)}</div>
+      ${mvBadge(p)}
     </div>`;
-  }
-
-  body.innerHTML=html;
-  if(!state.isPremium){
-    document.getElementById("fomo-section").style.display="block";
-  } else {
-    document.getElementById("fomo-section").style.display="none";
-  }
-
-  // Row click handlers
-  body.querySelectorAll(".scanner-row[data-id]").forEach(row=>{
-    row.addEventListener("click",()=>{
-      const id = row.dataset.id;
-      if(state.expandedId===id) state.expandedId=null;
-      else state.expandedId=id;
-      renderScanner();
-    });
-  });
+  }).join('');
 }
 
-function renderExpandPanel(p){
-  const mktProb = p.odds>0 ? (100/p.odds).toFixed(1) : null;
-  const _mpRaw  = p.model_prob!=null ? Number(p.model_prob) : null;
-  const modelProbStr = _mpRaw!=null ? (_mpRaw>1?_mpRaw.toFixed(1):(_mpRaw*100).toFixed(1))+"%" : "—";
-  const mktProbStr   = mktProb ? mktProb+"%" : "—";
-  const bookStr      = p.bookmaker||"—";
-  const selText      = p.selection||"—";
-  const rawMkt2      = p.market||"";
-  const MLBL2 = {
-    "BTTS_YES":"BTTS Yes","BTTS_NO":"BTTS No","HOME_WIN":"Home Win","AWAY_WIN":"Away Win","DRAW":"Draw",
-    "FT_OVER_1_5":"Over 1.5 Goals","FT_OVER_2_5":"Over 2.5 Goals","FT_OVER_3_5":"Over 3.5 Goals",
-    "FT_UNDER_2_5":"Under 2.5 Goals","CORNERS_OVER_9_5":"Corners Over 9.5","CARDS_OVER_3_5":"Cards Over 3.5",
-    "Value Single":"1X2 / Totals","Value Singles":"1X2 / Totals"
-  };
-  const mktDisplay = MLBL2[rawMkt2] || rawMkt2.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
-  return `<div class="expand-panel">
-    <!-- Prominent selection header -->
-    <div style="grid-column:1/-1;background:#131920;border:1px solid rgba(74,222,128,0.2);border-radius:10px;padding:12px 16px;margin-bottom:4px">
-      <div style="font-size:10px;font-weight:700;color:#4ade80;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Signal</div>
-      <div style="font-size:17px;font-weight:700;color:#f4f4f5">${esc(selText)}</div>
-      <div style="font-size:11px;color:#71717a;margin-top:2px">${esc(mktDisplay)} · ${p.odds>0?'@ '+fmtOdds(p.odds):'odds unavailable'} · ${esc(bookStr)}</div>
-    </div>
-    <div class="detail-tile">
-      <div class="detail-lbl">Model Probability</div>
-      <div class="detail-val" style="color:#4ade80">${modelProbStr}</div>
-      <div class="detail-sub">vs market implied ${mktProbStr}</div>
-    </div>
-    <div class="detail-tile">
-      <div class="detail-lbl">Edge (EV)</div>
-      <div class="detail-val" style="color:#fbbf24">${fmtPct(p.ev)}</div>
-      <div class="detail-sub">model vs market</div>
-    </div>
-    <div class="detail-tile">
-      <div class="detail-lbl">Fair Odds</div>
-      <div class="detail-val" style="color:#a78bfa">${p.fairOdds?fmtOdds(p.fairOdds):"—"}</div>
-      <div class="detail-sub">no-vig price</div>
-    </div>
-    <div class="detail-tile">
-      <div class="detail-lbl">Closing Line Value</div>
-      ${p.clv_pct!=null
-        ? `<div class="detail-val" style="color:${p.clv_pct>0?"#4ade80":"#f87171"}">${fmtPct(p.clv_pct)}</div><div class="detail-sub">vs closing line</div>`
-        : `<div class="detail-val" style="font-size:13px;color:#52525b">Monitoring…</div><div class="detail-sub" style="color:#3f3f46">captured near kickoff</div>`
-      }
-    </div>
-    <div class="detail-tile">
-      <div class="detail-lbl">Kickoff</div>
-      <div class="detail-val" style="font-size:13px">${fmtKo(p.kickoff_time)}</div>
-      <div class="detail-sub">${esc(p.league.replace(/^soccer_/,"").replace(/_/g," "))}</div>
+function render(){const f=applyFilters(S.picks);renderKPIs(f);renderScanner(f);}
+
+/* ── Detail ── */
+const isMob=()=>window.innerWidth<=860;
+
+function openDetail(id,el){
+  document.querySelectorAll('.mc.sel').forEach(x=>x.classList.remove('sel'));
+  if(el)el.classList.add('sel');
+  if(isMob()){
+    $('mobBg').classList.add('open');document.body.style.overflow='hidden';
+    $('mobTitle').textContent='Loading…';
+    $('mobBody').innerHTML=`<div class="empty-s"><div class="empty-i">⏳</div>Loading…</div>`;
+    fetchDetail(id,'mob');
+  } else {
+    $('terminal').classList.add('detail-open');
+    $('detailCol').classList.remove('hidden');
+    $('detTitle').textContent='Loading…';$('detSub').textContent='';
+    $('detBody').innerHTML=`<div class="empty-s"><div class="empty-i">⏳</div>Loading…</div>`;
+    fetchDetail(id,'desk');
+  }
+}
+$('detClose').addEventListener('click',closeDesk);
+$('mobClose').addEventListener('click',closeMob);
+$('mobBg').addEventListener('click',e=>{if(e.target===$('mobBg'))closeMob();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeDesk();closeMob();}});
+function closeDesk(){$('terminal').classList.remove('detail-open');$('detailCol').classList.add('hidden');document.querySelectorAll('.mc.sel').forEach(x=>x.classList.remove('sel'));}
+function closeMob(){$('mobBg').classList.remove('open');document.body.style.overflow='';}
+
+async function fetchDetail(id,tgt){
+  let data=null;
+  try{const r=await fetch(`/api/v2/pick/${id}/detail`);data=await r.json();}
+  catch(e){const err=`<div class="empty-s"><div class="empty-i">⚠️</div>Failed to load</div>`;if(tgt==='desk')$('detBody').innerHTML=err;else $('mobBody').innerHTML=err;return;}
+  if(!data||!data.pick){const err=`<div class="empty-s"><div class="empty-i">🤷</div>Not found</div>`;if(tgt==='desk')$('detBody').innerHTML=err;else $('mobBody').innerHTML=err;return;}
+  const html=buildDetail(data);
+  if(tgt==='desk'){
+    const p=data.pick,st=data.doctrine_status||'UNKNOWN';
+    $('detTitle').innerHTML=`${p.home_team} <span style="color:var(--muted)">vs</span> ${p.away_team}`;
+    $('detSub').innerHTML=`${p.league||''} · ${p.selection||''} · ${badgeHtml(st)}`;
+    $('detBody').innerHTML=html;
+  } else {
+    $('mobTitle').textContent=`${data.pick.home_team} vs ${data.pick.away_team}`;
+    $('mobBody').innerHTML=html;
+  }
+  loadSS(id,'ssMount');
+}
+
+function buildDetail(d){
+  const p=d.pick,sr=d.sharp_ref,ba=d.best_available,m=d.model,lm=d.line_movement,sc=d.similar_clv;
+
+  const priceHtml=`<div class="ds"><div class="ds-h">Price snapshot</div>
+    <div class="price-snap">
+      <div class="ps ${sr?'sharp-card':''}"><div class="ps-l">⚡ Sharp ref</div><div class="ps-v">${sr?fO(sr.odds):'awaiting'}</div><div class="ps-bk">${sr?bkCfg(sr.book).lbl:'no sharp anchor'}</div></div>
+      <div class="ps"><div class="ps-l">Best available</div><div class="ps-v">${ba?fO(ba.odds):'—'}</div><div class="ps-bk">${ba?bkCfg(ba.book).lbl:''}</div></div>
+    </div></div>`;
+
+  let modelHtml='';
+  if(m){const w=x=>Math.max(0,Math.min(100,x*100)).toFixed(1)+'%';
+    modelHtml=`<div class="ds"><div class="ds-h">Model vs market</div>
+      <div class="mb-wrap">
+        <div class="mb-row"><span class="mb-l">Model prob</span><div class="mb-trk"><div class="mb-f model" style="width:${w(m.model_prob)}"></div></div><span class="mb-val">${(m.model_prob*100).toFixed(1)}%</span></div>
+        <div class="mb-row"><span class="mb-l">Implied @ taken</span><div class="mb-trk"><div class="mb-f imp-t" style="width:${w(m.implied_prob_taken)}"></div></div><span class="mb-val">${(m.implied_prob_taken*100).toFixed(1)}%</span></div>
+        ${m.implied_prob_sharp!=null?`<div class="mb-row"><span class="mb-l">Implied @ sharp</span><div class="mb-trk"><div class="mb-f imp-s" style="width:${w(m.implied_prob_sharp)}"></div></div><span class="mb-val">${(m.implied_prob_sharp*100).toFixed(1)}%</span></div>`:''}
+      </div>
+      <div class="edge-inline">
+        <div><span class="l">vs taken:</span> <strong style="color:${m.edge_vs_taken_pct>0?'var(--green)':'var(--red)'}">${fP(m.edge_vs_taken_pct)}</strong></div>
+        ${m.edge_vs_sharp_pct!=null?`<div><span class="l">vs sharp:</span> <strong style="color:${m.edge_vs_sharp_pct>0?'var(--green)':'var(--red)'}">${fP(m.edge_vs_sharp_pct)}</strong></div>`:`<div style="color:var(--dim)">vs sharp: awaiting</div>`}
+        <div><span class="l">Fair:</span> <strong>${fO(m.fair_odds)}</strong></div>
+      </div></div>`;
+  }
+
+  const ssHtml=`<div class="ds"><div class="ds-h">Signal strength</div><div id="ssMount"><div class="ss-e">⏳ Computing…</div></div></div>`;
+
+  const hasLadder=!lm.has_data&&p.open_odds&&p.close_odds;
+  let ladderHtml='';
+  if(hasLadder){const mv=(p.close_odds/p.open_odds-1)*100;const cls=mv<=-1.5?'ahead':(mv>=1.5?'late':'');
+    const txt=mv<=-1.5?`Shortened <strong>${mv.toFixed(1)}%</strong> — you were ahead.`:(mv>=1.5?`Drifted <strong>+${mv.toFixed(1)}%</strong> — market disagreed.`:`Flat (${mv>0?'+':''}${mv.toFixed(1)}%) — consensus.`);
+    const dT=p.created_ts?new Date(p.created_ts*1000).toISOString().slice(11,16):'—';
+    ladderHtml=`<div class="lm-ladder">
+      <div class="lm-rung det"><div class="lm-rl">Detected</div><div class="lm-rv">${fO(p.open_odds)}</div><div style="font-size:8px;color:var(--muted)">${dT} UTC</div></div>
+      <span class="lm-arr">→</span>
+      <div class="lm-rung"><div class="lm-rl">Best now</div><div class="lm-rv">${fO(p.best_odds_value||p.odds)}</div></div>
+      <span class="lm-arr">→</span>
+      <div class="lm-rung"><div class="lm-rl">Close (sharp)</div><div class="lm-rv">${fO(p.close_odds)}</div></div>
+    </div><div class="lm-sum ${cls}">${txt}</div>`;
+  }
+  const lmHtml=`<div class="ds"><div class="ds-h">Movement after detection</div>
+    ${lm.has_data?renderLM(lm):(hasLadder?ladderHtml:`<div class="lm-empty">📡 No snapshots yet — captured automatically as kickoff approaches.</div>`)}
+    ${lm.has_data?`<div class="lm-legend"><span><span class="lmd s"></span>Pinnacle/Betfair</span><span><span class="lmd so"></span>Soft</span><span><span class="lmd d"></span>Detected</span></div>`:''}
+  </div>`;
+
+  const booksHtml=d.books&&d.books.length?`<div class="ds"><div class="ds-h">Book by book · ${d.books.length}</div>
+    <div class="bk-grid">${d.books.map(b=>`<div class="bkc ${b.is_sharp?'is-s':''}">
+      <span class="bkc-n">${b.is_sharp?'⚡':''}${b.book}</span>
+      <span>${b.edge_pct!=null?`<span class="ep ${b.edge_pct>0?'pos':'neg'}">${fP(b.edge_pct)} </span>`:''}
+      <span class="bkc-o">${fO(b.odds)}</span></span></div>`).join('')}</div></div>`:'';
+
+  const simHtml=`<div class="ds"><div class="ds-h">CLV history · same league+market · 30d</div>
+    ${sc.rows.length?`<div class="edge-inline" style="margin-bottom:7px"><div><span class="l">n: </span><strong>${sc.sample_n}</strong></div><div><span class="l">Avg CLV: </span><strong style="color:${sc.avg_clv>0?'var(--green)':'var(--red)'}">${fP(sc.avg_clv)}</strong></div>${sc.rate_reliable?`<div><span class="l">Beat: </span><strong>${sc.beat_rate}%</strong></div>`:`<div style="color:var(--dim)">rate withheld (n&lt;30)</div>`}</div>
+    <table class="sim-tbl"><thead><tr><th>Match</th><th>Sel</th><th>Open</th><th>Close</th><th>CLV</th></tr></thead><tbody>
+      ${sc.rows.map(r=>`<tr><td>${r.home_team} vs ${r.away_team}</td><td style="color:var(--muted)">${r.selection}</td><td>${fO(r.open_odds)}</td><td>${fO(r.close_odds)}</td><td class="${r.clv_pct>0?'cp':'cn'}">${fP(r.clv_pct)}</td></tr>`).join('')}
+    </tbody></table>`:`<div class="lm-empty">No CLV captures yet for ${p.league} · ${p.market}</div>`}
+  </div>`;
+
+  return priceHtml+modelHtml+ssHtml+lmHtml+booksHtml+simHtml;
+}
+
+/* ── Signal Strength ── */
+async function loadSS(id,mountId){
+  const mount=document.getElementById(mountId);if(!mount)return;
+  let s=null;try{const r=await fetch(`/api/v2/pick/${id}/signal_strength`);s=await r.json();}catch(e){mount.innerHTML=`<div class="ss-e">⚠️ Error</div>`;return;}
+  if(!s||!s.has_data){mount.innerHTML=`<div class="ss-e">📡 No snapshots yet.</div>`;return;}
+  const sc=s.score??0,tier=sc>=80?'ELITE':sc>=60?'STRONG':sc>=40?'MODEST':'WEAK';
+  const col=sc>=80?'var(--green)':sc>=60?'#fcb900':sc>=40?'var(--amber)':'var(--red)';
+  const mc=(s.move_size_pct??0)<0?'pos':((s.move_size_pct??0)>0?'neg':'');
+  const ttm=s.time_to_move_min==null?'—':`${s.time_to_move_min}m`;
+  const ttmC=s.time_to_move_min!=null&&s.time_to_move_min<=5?'pos':(s.time_to_move_min!=null&&s.time_to_move_min<=30?'a':'');
+  mount.innerHTML=`<div class="ss-w">
+    <div class="ss-c" style="--ssp:${sc};--ssc:${col}"><div class="ss-n">${sc}</div><div class="ss-t">${tier}</div></div>
+    <div class="ss-mg">
+      <div class="ss-mr"><span class="ss-ml">Instant move</span><span class="ss-mv ${s.instant_move?'pos':''}">${s.instant_move?'Yes':'No'}</span></div>
+      <div class="ss-mr"><span class="ss-ml">Move size</span><span class="ss-mv ${mc}">${s.move_size_pct>0?'+':''}${s.move_size_pct}%</span></div>
+      <div class="ss-mr"><span class="ss-ml">Books aligned</span><span class="ss-mv">${s.books_aligned}/${s.books_total}</span></div>
+      <div class="ss-mr"><span class="ss-ml">Time to move</span><span class="ss-mv ${ttmC}">${ttm}</span></div>
     </div>
   </div>`;
 }
 
-function updateStatsStrip(picks){
-  if(!picks.length) return;
-  const evs = picks.map(p=>p.ev).filter(v=>!isNaN(v));
-  const bestEv = evs.length ? Math.max(...evs) : 0;
-  document.getElementById("s-bestev").textContent = fmtPct(bestEv);
+/* ── Line movement SVG ── */
+function renderLM(lm){
+  const W=560,H=100,PL=28,PR=6,PT=8,PB=18;
+  const all=[...lm.sharp,...lm.soft];if(!all.length)return'<div class="lm-empty">No data</div>';
+  const ts=all.map(p=>p.t),od=all.map(p=>p.odds);
+  let tMn=Math.min(...ts),tMx=Math.max(...ts),oMn=Math.min(...od),oMx=Math.max(...od);
+  if(lm.detected_at){tMn=Math.min(tMn,lm.detected_at);tMx=Math.max(tMx,lm.detected_at);}
+  if(lm.detected_odds){oMn=Math.min(oMn,lm.detected_odds);oMx=Math.max(oMx,lm.detected_odds);}
+  if(tMx===tMn)tMx=tMn+60;
+  const op=Math.max(.05,(oMx-oMn)*.15);oMn-=op;oMx+=op;
+  const xF=t=>PL+(t-tMn)/(tMx-tMn)*(W-PL-PR);
+  const yF=o=>PT+(1-(o-oMn)/(oMx-oMn))*(H-PT-PB);
+  const pl=(pts,col,sw=1.4)=>{
+    if(!pts.length)return'';
+    const s=pts.slice().sort((a,b)=>a.t-b.t);
+    const d=s.map((p,i)=>(i?'L':'M')+xF(p.t).toFixed(1)+','+yF(p.odds).toFixed(1)).join(' ');
+    return `<path d="${d}" stroke="${col}" stroke-width="${sw}" fill="none" stroke-linejoin="round"/>`;
+  };
+  const tks=[oMn,(oMn+oMx)/2,oMx];
+  const tkL=tks.map(o=>{const y=yF(o).toFixed(1);return`<line x1="${PL}" y1="${y}" x2="${W-PR}" y2="${y}" stroke="#1a1a2e" stroke-width="1" stroke-dasharray="2,3"/><text x="${PL-3}" y="${(+y+3)}" fill="#2e3550" font-size="7" text-anchor="end">${o.toFixed(2)}</text>`;}).join('');
+  let det='';
+  if(lm.detected_at&&lm.detected_odds){const dx=xF(lm.detected_at).toFixed(1),dy=yF(lm.detected_odds).toFixed(1);
+    det=`<line x1="${dx}" y1="${PT}" x2="${dx}" y2="${H-PB}" stroke="#22c55e" stroke-width="1" stroke-dasharray="2,3" opacity=".5"/>
+         <circle cx="${dx}" cy="${dy}" r="3" fill="#22c55e" stroke="#04040a" stroke-width="1.5"/>`;
+  }
+  return `<div class="lm-wrap"><svg class="lm-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${tkL}${pl(lm.soft,'#60a5fa',1.2)}${pl(lm.sharp,'#fbbf24',1.8)}${det}</svg></div>`;
 }
 
-function updateEdgesFoundTile(total, sharp){
-  const el = document.getElementById("s-count");
-  const sub = document.getElementById("s-count-sub");
-  if(el) el.textContent = total > 0 ? total : "—";
-  if(sub) sub.textContent = total > 0 ? "signals identified" : "—";
-
-  // Validated tile
-  const valEl = document.getElementById("s-validated");
-  if(valEl) valEl.textContent = sharp > 0 ? sharp : (total > 0 ? "0" : "—");
-
-  // FOMO counters
-  const fomoCount = document.getElementById("fomo-live-count");
-  if(fomoCount) fomoCount.textContent = total > 0 ? total : "—";
-  const fomoSig = document.getElementById("fomo-signals-today");
-  if(fomoSig) fomoSig.textContent = total > 0 ? total : "—";
-  const fomoVal = document.getElementById("fomo-validated");
-  if(fomoVal) fomoVal.textContent = sharp > 0 ? sharp : "0";
-  const fomoRej = document.getElementById("fomo-rejected");
-  if(fomoRej) fomoRej.textContent = total > sharp ? (total - sharp) : "0";
+/* ── CLV sidebar ── */
+function renderProof(d){
+  if(!d)return;const s=d.summary||{};
+  $('sN').textContent=s.sample_n||0;
+  $('sSplit').textContent=(s.positive_n||0)+'/'+(s.negative_n||0);
+  if(s.avg_clv!=null){$('sAvg').textContent=fP(s.avg_clv);$('sAvg').style.color=s.avg_clv>0?'var(--green)':(s.avg_clv<0?'var(--red)':'');}
+  else $('sAvg').textContent='awaiting';
+  if(s.rate_reliable&&s.beat_rate!=null){$('sBeat').textContent=s.beat_rate+'%';$('sBeat').style.color=s.beat_rate>=55?'var(--green)':(s.beat_rate>=40?'var(--amber)':'var(--red)');}
+  else $('sBeat').textContent=s.sample_n>0?`n=${s.sample_n}`:'—';
+  const kC=$('kpiCLV');
+  if(s.avg_clv!=null){kC.textContent=fP(s.avg_clv);kC.className='ki-v '+(s.avg_clv>0?'g':'r');}
+  const kB=$('kpiBeat');
+  if(s.rate_reliable&&s.beat_rate!=null){kB.textContent=s.beat_rate+'%';kB.style.color=s.beat_rate>=55?'var(--green)':(s.beat_rate>=40?'var(--amber)':'var(--red)');}
+  if(d.distribution&&d.distribution.length){
+    const mx=Math.max(...d.distribution.map(b=>b.count),1);
+    $('sHist').innerHTML=d.distribution.map((b,i)=>{
+      const h=Math.max(2,b.count/mx*42);
+      return `<div class="hb" title="${b.label}: ${b.count}"><div class="hb-c">${b.count||''}</div><div class="hb-f ${i<3?'n':''}" style="height:${h}px"></div><div class="hb-l">${b.label}</div></div>`;
+    }).join('');
+  }
 }
 
-/* ──────────────────────────────────────────────
-   FETCH DATA
-──────────────────────────────────────────────── */
-async function fetchMain(){
-  try {
-    const [picksRes, statsRes, clvRes, dailyStatsRes] = await Promise.all([
-      fetch("/api/picks/today"),
-      fetch("/api/stats/summary?days=365"),
-      fetch("/api/clv_stats"),
-      fetch("/api/scanner/daily-stats"),
+/* ── Fetch ── */
+async function loadAll(){
+  try{
+    const [picksR,,proofR]=await Promise.all([
+      fetch('/api/picks/today').then(r=>r.json()).catch(()=>({picks:[]})),
+      fetch('/api/scanner/daily-stats').then(r=>r.json()).catch(()=>({})),
+      fetch('/api/v2/clv/proof?days=30&sharp_only=true').then(r=>r.json()).catch(()=>null),
     ]);
-    if(picksRes.ok){
-      const d = await picksRes.json();
-      const raw = Array.isArray(d) ? d : (d.picks||d.data||[]);
-      state.picks = raw.map(normPick);
-    }
-    if(dailyStatsRes.ok){
-      const ds = await dailyStatsRes.json();
-      updateEdgesFoundTile(ds.edges_found||0, ds.high_confidence||0);
-    }
-    if(clvRes.ok){
-      const c = await clvRes.json();
-      // Sharp CLV strip — use exact_* (Pinnacle/Betfair direct quotes)
-      const sharpAvg  = c.exact_avg!=null ? c.exact_avg : c.avg_clv;
-      const sharpRate = c.exact_rate!=null ? c.exact_rate : c.positive_rate;
-      const sharpN    = c.exact_n!=null ? c.exact_n : (c.sample_n||0);
-
-      // Avg CLV tile (s-clv)
-      if(sharpAvg!=null){
-        document.getElementById("s-clv").textContent=fmtPct(sharpAvg);
-        document.getElementById("s-clv").style.color=sharpAvg>=0?"#4ade80":"#f87171";
-      }
-      // Beat rate tile (s-hitrate)
-      if(sharpRate!=null){
-        document.getElementById("s-hitrate").textContent=fmtPct(sharpRate,false);
-        document.getElementById("s-hitrate").style.color=sharpRate>=50?"#4ade80":"#e4e4e7";
-      }
-      // Sharp samples tile (s-avgodds)
-      if(sharpN>0){
-        document.getElementById("s-avgodds").textContent=sharpN.toLocaleString();
-      }
-    }
-    if(statsRes.ok){
-      // Only used for bestEv context — model calibration tile removed
-    }
-    state.lastFetch=Date.now();
-    document.getElementById("last-updated").textContent="Updated "+fmtAgo(state.lastFetch);
-  } catch(e){ console.error("fetchMain",e); }
-  state.loading=false;
-  renderScanner();
-}
-
-async function fetchConfirmedCLV(){
-  try {
-    const res = await fetch("/api/picks/confirmed-clv");
-    if(res.ok){
-      const d = await res.json();
-      const raw = Array.isArray(d) ? d : (d.picks || d.data || []);
-      state.confirmedPicks = raw.map(normPick);
-    }
-  } catch(e){ console.error("fetchConfirmedCLV",e); }
-  renderScanner();
-}
-
-async function fetchHistory(){
-  try {
-    const res = await fetch("/api/picks/history?days=90");
-    if(!res.ok) return;
-    const d = await res.json();
-    state.historyPicks = Array.isArray(d)?d:(d.picks||d.data||[]);
-    renderHistory();
-  } catch(e){}
-}
-
-async function fetchCLV(){
-  try {
-    const res = await fetch("/api/clv_stats");
-    if(!res.ok) return;
-    state.clvData = await res.json();
-    renderCLV();
-    // Repopulate SV tab CLV strip if it's visible
-    if(state.activeTab === "smartvalue") renderScanner();
-  } catch(e){}
-}
-
-async function fetchCLVBreakdown(){
-  try {
-    const res = await fetch("/api/clv_breakdown");
-    if(!res.ok) return;
-    state.clvBreakdown = await res.json();
-    renderCLVBreakdown();
-  } catch(e){}
-}
-
-function renderCLVBreakdown(){
-  const d = state.clvBreakdown;
-  if(!d) return;
-  const wrap = document.getElementById("clv-breakdown-wrap");
-  if(wrap) wrap.style.display = "";
-
-  // Market table
-  const mktEl = document.getElementById("clv-mkt-body");
-  if(mktEl && d.markets){
-    let h = "";
-    d.markets.filter(m=>m.with_clv>0).forEach(m=>{
-      const clvColor = (m.avg_clv||0) >= 0 ? "#4ade80" : "#f87171";
-      const bar = m.avg_clv != null ? `<div style="height:3px;background:${clvColor};width:${Math.min(Math.abs(m.avg_clv)*8,100)}%;border-radius:2px;margin-top:4px"></div>` : "";
-      h+=`<div style="display:grid;grid-template-columns:1fr 60px 60px 50px;padding:8px 14px;gap:8px;border-top:1px solid #18181b;align-items:center;font-size:11px">
-        <div>
-          <div style="font-weight:600;color:#e4e4e7">${esc(m.market)}</div>
-          ${bar}
-        </div>
-        <div style="text-align:right;font-weight:700;color:${clvColor}">${m.avg_clv!=null?(m.avg_clv>=0?"+":"")+m.avg_clv.toFixed(2)+"%":"—"}</div>
-        <div style="text-align:right;color:#a1a1aa">${m.pos_rate!=null?m.pos_rate.toFixed(0)+"%":"—"}</div>
-        <div style="text-align:right;color:#52525b;font-size:10px">n=${m.with_clv}</div>
-      </div>`;
-    });
-    mktEl.innerHTML = h || `<div style="padding:12px 14px;color:#52525b;font-size:11px">No CLV data</div>`;
-  }
-
-  // Timing table
-  const timEl = document.getElementById("clv-timing-body");
-  if(timEl && d.timing){
-    let h="<div style='display:grid;grid-template-columns:1fr 55px 55px 50px;padding:6px 14px;background:#0f0f11;font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:#52525b;font-weight:700;gap:8px'><div>Timing</div><div style='text-align:right'>Avg CLV</div><div style='text-align:right'>Hit%</div><div style='text-align:right'>n</div></div>";
-    d.timing.forEach(t=>{
-      const clvColor = (t.avg_clv||0) >= 0 ? "#4ade80" : "#f87171";
-      const isBest = d.timing.reduce((best,x)=>(!best||((x.avg_clv||0)>(best.avg_clv||0))?x:best), null) === t;
-      h+=`<div style="display:grid;grid-template-columns:1fr 55px 55px 50px;padding:9px 14px;gap:8px;border-top:1px solid #18181b;align-items:center;font-size:11px">
-        <div style="font-weight:600;color:#e4e4e7">${esc(t.bucket)}${isBest?" <span style='font-size:9px;color:#fbbf24;margin-left:4px'>★ best</span>":""}</div>
-        <div style="text-align:right;font-weight:700;color:${clvColor}">${t.avg_clv!=null?(t.avg_clv>=0?"+":"")+t.avg_clv.toFixed(2)+"%":"—"}</div>
-        <div style="text-align:right;color:#a1a1aa">${t.pos_rate!=null?t.pos_rate.toFixed(0)+"%":"—"}</div>
-        <div style="text-align:right;color:#52525b;font-size:10px">${t.with_clv||0}</div>
-      </div>`;
-    });
-    timEl.innerHTML = h;
+    S.picks=(picksR.picks||picksR||[]).filter(Boolean);
+    $('updatedAt').textContent='updated '+new Date().toLocaleTimeString().slice(0,5);
+    if(proofR)renderProof(proofR);
+    render();
+  }catch(e){
+    console.error('loadAll',e);
+    $('scBody').innerHTML=`<div class="empty-s"><div class="empty-i">⚠️</div><div class="empty-t">Backend offline</div><div class="empty-sub">Retrying in 60s…</div></div>`;
   }
 }
-
-async function fetchHockey(){
-  try {
-    const res = await fetch("/api/hockey/stats");
-    if(!res.ok) return;
-    state.hockeyData = await res.json();
-    renderHockey();
-  } catch(e){}
-}
-
-async function fetchNba(){
-  try {
-    const res = await fetch("/api/nba/stats");
-    if(!res.ok) return;
-    state.nbaData = await res.json();
-    renderNba();
-  } catch(e){}
-}
-
-function triggerRefresh(){
-  const btn = document.getElementById("refresh-btn");
-  if(btn){ btn.textContent="↻ Refreshing…"; btn.disabled=true; }
-  fetchMain().finally(()=>{
-    if(btn){ btn.textContent="↻ Refresh"; btn.disabled=false; }
-  });
-}
-
-/* ──────────────────────────────────────────────
-   RENDER HISTORY
-──────────────────────────────────────────────── */
-function renderHistory(){
-  const picks = state.historyPicks;
-  const stats = calcHistoryStats(picks);
-
-  document.getElementById("history-stats").innerHTML=`
-    <div class="stat-tile"><div class="stat-lbl">Signals</div><div class="stat-val">${stats.total}</div><div class="stat-sub">settled</div></div>
-    <div class="stat-tile"><div class="stat-lbl">Model Calibration</div><div class="stat-val" style="color:#e4e4e7">${fmtPct(stats.hitRate,false)}</div><div class="stat-sub">correct signals</div></div>
-    <div class="stat-tile"><div class="stat-lbl">Avg Odds</div><div class="stat-val">${fmt2(stats.avgOdds)}</div><div class="stat-sub">identified edges</div></div>`;
-
-  const start = state.historyPage * state.historyPerPage;
-  const page  = picks.slice(start, start+state.historyPerPage);
-
-  let html = "";
-  page.forEach(p=>{
-    const match = p.match||((p.home_team||"")+" vs "+(p.away_team||""));
-    const status = (p.status||"").toUpperCase();
-    const isLocked = !state.isPremium;
-    const pnl = p.profit_units!=null?p.profit_units:(p.profit!=null?p.profit:null);
-    const pnlStr = pnl!=null?(pnl>=0?"+":"")+Number(pnl).toFixed(2)+"u":"—";
-
-    let resultClass="result-open", resultLabel="—";
-    if(status==="WON"||status==="WIN"){resultClass="result-win";resultLabel="✓ WON";}
-    else if(status==="LOST"||status==="LOSS"){resultClass="result-loss";resultLabel="✗ LOST";}
-    else if(status==="PUSH"){resultClass="result-push";resultLabel="PUSH";}
-    else if(status==="SETTLED"){resultClass="result-open";resultLabel="SETTLED";}
-
-    const oddsCell = isLocked
-      ? `<div style="text-align:right"><span style="filter:blur(5px);color:#4ade80;font-weight:700">${fmtOdds(p.odds)}</span></div>`
-      : `<div style="text-align:right;color:#4ade80;font-weight:700">${fmtOdds(p.odds)}</div>`;
-
-    const pnlCell = isLocked
-      ? `<div class="col-hide-sm" style="text-align:right;filter:blur(5px);color:${pnl>=0?"#4ade80":"#f87171"};font-weight:600">${pnlStr}</div>`
-      : `<div class="col-hide-sm" style="text-align:right;color:${pnl!=null&&pnl>=0?"#4ade80":"#f87171"};font-weight:600">${pnlStr}</div>`;
-
-    html+=`<div class="history-row">
-      <div style="min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(match)}</div><div style="font-size:10px;color:#52525b">${esc(p.league||"")}</div></div>
-      <div style="font-size:11px;color:#a1a1aa">${esc(p.market||"—")}</div>
-      ${oddsCell}
-      <div style="text-align:right;color:#fbbf24;font-weight:600">${fmtPct(p.ev_pct!=null?p.ev_pct:(p.ev||0))}</div>
-      ${pnlCell}
-      <div style="text-align:center" class="${resultClass}">${resultLabel}</div>
-    </div>`;
-  });
-  if(!html) html=`<div class="empty-state"><div class="empty-icon">📊</div><div class="empty-title">No history yet</div></div>`;
-  document.getElementById("history-body").innerHTML=html;
-  renderHistoryPagination(picks.length);
-}
-
-function calcHistoryStats(picks){
-  const settled = picks.filter(p=>{ const s=(p.status||"").toUpperCase(); return s==="WON"||s==="WIN"||s==="LOST"||s==="LOSS"; });
-  const won = settled.filter(p=>{ const s=(p.status||"").toUpperCase(); return s==="WON"||s==="WIN"; });
-  const roi = settled.length ? (won.reduce((a,p)=>a+(p.profit_units||p.profit||0),0)/settled.length)*100 : 0;
-  const avgOdds = settled.length ? settled.reduce((a,p)=>a+(p.odds||0),0)/settled.length : 0;
-  return { total:picks.length, hitRate:settled.length?(won.length/settled.length)*100:0, roi, avgOdds };
-}
-
-function renderHistoryPagination(total){
-  const pages = Math.ceil(total/state.historyPerPage);
-  const el = document.getElementById("history-pagination");
-  if(pages<=1){el.innerHTML="";return;}
-  let html="";
-  for(let i=0;i<pages;i++){
-    html+=`<button onclick="goHistoryPage(${i})" style="padding:5px 10px;border-radius:6px;border:1px solid ${i===state.historyPage?"#22c55e":"#27272a"};background:${i===state.historyPage?"rgba(34,197,94,.15)":"#18181b"};color:${i===state.historyPage?"#4ade80":"#71717a"};font-size:12px;font-weight:600;cursor:pointer">${i+1}</button>`;
-  }
-  el.innerHTML=html;
-}
-function goHistoryPage(p){ state.historyPage=p; renderHistory(); window.scrollTo(0,0); }
-
-/* ──────────────────────────────────────────────
-   RENDER CLV
-──────────────────────────────────────────────── */
-function renderCLV(){
-  const d = state.clvData;
-  if(!d){ document.getElementById("clv-body").innerHTML=`<div class="empty-state"><div class="empty-title">No CLV data</div></div>`; return; }
-  const avgClv = d.avg_clv!=null?d.avg_clv:(d.clv_avg!=null?d.clv_avg:null);
-  const posRate = d.positive_rate!=null?d.positive_rate:(d.positive_pct!=null?d.positive_pct:null);
-  const coverage = d.coverage_pct!=null?d.coverage_pct:(d.coverage!=null?d.coverage*100:null);
-  const sampleN = d.sample_n||d.n||d.count||null;
-
-  document.getElementById("clv-stats").innerHTML=`
-    <div class="stat-tile"><div class="stat-lbl">Avg CLV</div><div class="stat-val" style="color:${avgClv>=0?"#4ade80":"#f87171"}">${fmtPct(avgClv)}</div><div class="stat-sub">all time</div></div>
-    <div class="stat-tile"><div class="stat-lbl">Positive Rate</div><div class="stat-val" style="color:#4ade80">${fmtPct(posRate,false)}</div><div class="stat-sub">% of picks beating close</div></div>
-    <div class="stat-tile"><div class="stat-lbl">Coverage</div><div class="stat-val">${fmtPct(coverage,false)}</div><div class="stat-sub">picks with closing line</div></div>
-    <div class="stat-tile"><div class="stat-lbl">Sample N</div><div class="stat-val">${sampleN!=null?sampleN:"—"}</div><div class="stat-sub">picks measured</div></div>`;
-
-  const recent = d.recent || d.debug_rows || [];
-  if(!recent.length){ document.getElementById("clv-body").innerHTML=`<div class="empty-state"><div class="empty-sub">No CLV rows to display</div></div>`; return; }
-  let html="";
-  recent.forEach(r=>{
-    const match = r.match||((r.home_team||"")+" vs "+(r.away_team||""));
-    const clvColor = (r.clv_pct||0)>=0?"#4ade80":"#f87171";
-    html+=`<div style="display:grid;grid-template-columns:2fr 80px 80px 80px 90px;padding:10px 14px;gap:8px;border-top:1px solid #18181b;align-items:center;font-size:12px">
-      <div style="min-width:0"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(match)}</div><div style="font-size:10px;color:#52525b">${esc(r.market||"")}</div></div>
-      <div style="text-align:right;color:#a1a1aa">${fmt2(r.open_odds)}</div>
-      <div style="text-align:right;color:#a1a1aa">${fmt2(r.close_odds)}</div>
-      <div style="text-align:right;font-weight:700;color:${clvColor}">${fmtPct(r.clv_pct)}</div>
-      <div style="text-align:center;color:#52525b;font-size:10px">${r.time_to_ko_at_close||"—"}</div>
-    </div>`;
-  });
-  document.getElementById("clv-body").innerHTML=html;
-}
-
-/* ──────────────────────────────────────────────
-   RENDER HOCKEY / NBA
-──────────────────────────────────────────────── */
-function renderSport(data, statsEl, tableEl, sportLabel){
-  if(!data){ document.getElementById(tableEl).innerHTML=`<div class="empty-state"><div class="empty-icon">${sportLabel==="Hockey"?"🏒":"🏀"}</div><div class="empty-title">No ${sportLabel} data</div></div>`; return; }
-  const picks = Array.isArray(data)?data:(data.picks||data.data||[]);
-  const s = Array.isArray(data)?{}:(data.stats||data);
-  const roi = s.roi_pct!=null?s.roi_pct:(s.roi!=null?s.roi:null);
-  const hr  = s.hit_rate_pct!=null?s.hit_rate_pct:(s.hit_rate!=null?s.hit_rate*100:null);
-
-  document.getElementById(statsEl).innerHTML=`
-    <div class="stat-tile"><div class="stat-lbl">Signals</div><div class="stat-val">${picks.length}</div><div class="stat-sub">tracked</div></div>
-    <div class="stat-tile"><div class="stat-lbl">Model Calibration</div><div class="stat-val" style="color:#e4e4e7">${hr!=null?fmtPct(hr,false):"—"}</div><div class="stat-sub">correct signals</div></div>
-    <div class="stat-tile"><div class="stat-lbl">Mode</div><div class="stat-val" style="font-size:12px;color:#a78bfa">Learning</div><div class="stat-sub">no units tracked</div></div>`;
-
-  if(!picks.length){ document.getElementById(tableEl).innerHTML=`<div class="empty-state"><div class="empty-sub">No ${sportLabel} picks today</div></div>`; return; }
-  let html=`<div style="display:grid;grid-template-columns:2fr 80px 110px 65px 65px 60px;padding:8px 14px;background:#0f0f11;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#52525b;font-weight:700;gap:8px"><div>Match</div><div style="text-align:center">Time</div><div>Market</div><div style="text-align:right">Odds</div><div style="text-align:right">Edge%</div><div style="text-align:center">Signal</div></div>`;
-  picks.forEach(p=>{
-    const match = p.match||((p.home_team||"")+" vs "+(p.away_team||""));
-    const ev = p.ev_pct!=null?p.ev_pct:(p.ev!=null?p.ev:0);
-    html+=`<div style="display:grid;grid-template-columns:2fr 80px 110px 65px 65px 60px;padding:10px 14px;gap:8px;border-top:1px solid #18181b;align-items:center;font-size:12px">
-      <div style="min-width:0"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(match)}</div></div>
-      <div style="text-align:center;color:#a1a1aa">${fmtKo(p.kickoff_time||p.kickoff)}</div>
-      <div style="color:#a1a1aa">${esc(p.market||"—")}</div>
-      <div style="text-align:right;color:#4ade80;font-weight:700">${fmtOdds(p.odds)}</div>
-      <div style="text-align:right"><span class="edge-chip ${evClass(ev)}">${fmtPct(ev)}</span></div>
-      <div style="text-align:center"><span class="sig-badge ${sigClass(p.confidence_tier||(p.confidence>=0.7?"HIGH":"MED"))}" style="font-size:9px">${sigLabel(p.confidence_tier||(p.confidence>=0.7?"HIGH":"MED"))}</span></div>
-    </div>`;
-  });
-  document.getElementById(tableEl).innerHTML=html;
-}
-function renderHockey(){ renderSport(state.hockeyData,"hockey-stats","hockey-table","Hockey"); }
-function renderNba()    { renderSport(state.nbaData,"nba-stats","nba-table","NBA"); }
-
-/* ──────────────────────────────────────────────
-   TABS
-──────────────────────────────────────────────── */
-const TABS = ["scanner","history","clv","hockey","nba"];
-function switchTab(id){
-  state.activeTab=id;
-  document.querySelectorAll(".nav-tab").forEach(b=>b.classList.toggle("active",b.dataset.tab===id));
-  // "smartvalue" shares tab-scanner div — show it for both scanner + smartvalue
-  const showScanner = id==="scanner" || id==="smartvalue";
-  TABS.forEach(t=>{ const el=document.getElementById("tab-"+t); if(el) el.style.display=t===id?"block":"none"; });
-  const scannerEl = document.getElementById("tab-scanner");
-  if(scannerEl) scannerEl.style.display = showScanner ? "block" : "none";
-  if(id==="history"   && !state.historyPicks.length) fetchHistory();
-  if(id==="clv"       && !state.clvData)             fetchCLV();
-  if(id==="clv"       && !state.clvBreakdown)        fetchCLVBreakdown();
-  if(id==="hockey"    && !state.hockeyData)           fetchHockey();
-  if(id==="nba"       && !state.nbaData)              fetchNba();
-  if(id==="smartvalue") fetchConfirmedCLV();
-  if(showScanner && id!=="smartvalue") renderScanner();
-}
-
-/* ──────────────────────────────────────────────
-   FILTER PILLS
-──────────────────────────────────────────────── */
-function setupFilters(){
-  document.querySelectorAll("#fp-sport .pill").forEach(p=>{
-    p.addEventListener("click",()=>{
-      document.querySelectorAll("#fp-sport .pill").forEach(x=>x.classList.remove("on"));
-      p.classList.add("on");
-      state.filters.sport=p.dataset.sport;
-      renderScanner();
-    });
-  });
-  document.querySelectorAll("#fp-ev .pill").forEach(p=>{
-    p.addEventListener("click",()=>{
-      document.querySelectorAll("#fp-ev .pill").forEach(x=>x.classList.remove("on"));
-      p.classList.add("on");
-      state.filters.ev=Number(p.dataset.ev);
-      renderScanner();
-    });
-  });
-  document.querySelectorAll("#fp-sort .pill").forEach(p=>{
-    p.addEventListener("click",()=>{
-      document.querySelectorAll("#fp-sort .pill").forEach(x=>x.classList.remove("on"));
-      p.classList.add("on");
-      state.filters.sort=p.dataset.sort;
-      renderScanner();
-    });
-  });
-  document.querySelectorAll("#fp-market .pill").forEach(p=>{
-    p.addEventListener("click",()=>{
-      document.querySelectorAll("#fp-market .pill").forEach(x=>x.classList.remove("on"));
-      p.classList.add("on");
-      state.filters.market=p.dataset.market;
-      renderScanner();
-    });
-  });
-}
-
-/* ──────────────────────────────────────────────
-   PWA
-──────────────────────────────────────────────── */
-let _deferredPrompt=null;
-window.addEventListener("beforeinstallprompt",e=>{
-  e.preventDefault(); _deferredPrompt=e;
-  document.getElementById("install-chip").style.display="inline-flex";
-  document.getElementById("pwa-install-btn").style.display="inline-flex";
-  if(!sessionStorage.getItem("pwa_dismissed") && !window.matchMedia("(display-mode: standalone)").matches){
-    setTimeout(()=>{ document.getElementById("pwa-banner").style.display="block"; },3000);
-  }
-});
-function triggerInstall(){
-  if(_deferredPrompt){ _deferredPrompt.prompt(); _deferredPrompt.userChoice.then(()=>{ _deferredPrompt=null; document.getElementById("install-chip").style.display="none"; document.getElementById("pwa-banner").style.display="none"; }); }
-}
-document.getElementById("pwa-dismiss").addEventListener("click",()=>{ document.getElementById("pwa-banner").style.display="none"; sessionStorage.setItem("pwa_dismissed","1"); });
-document.getElementById("pwa-install-btn").addEventListener("click",triggerInstall);
-
-// iOS hint
-const isIos=/iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase());
-const isInStandalone=window.matchMedia("(display-mode: standalone)").matches;
-if(isIos&&!isInStandalone){
-  document.getElementById("pwa-install-btn").style.display="none";
-  document.getElementById("pwa-ios-hint").style.display="block";
-  if(!sessionStorage.getItem("pwa_dismissed")){
-    setTimeout(()=>{ document.getElementById("pwa-banner").style.display="block"; },3500);
-  }
-}
-
-/* ──────────────────────────────────────────────
-   MODAL EVENTS
-──────────────────────────────────────────────── */
-document.getElementById("modal-close").addEventListener("click",closePremiumModal);
-document.getElementById("premium-modal").addEventListener("click",e=>{ if(e.target===document.getElementById("premium-modal")) closePremiumModal(); });
-document.getElementById("modal-verify-btn").addEventListener("click",verifyCode);
-document.getElementById("modal-code-input").addEventListener("keydown",e=>{ if(e.key==="Enter") verifyCode(); });
-
-/* ──────────────────────────────────────────────
-   NAV TAB EVENTS
-──────────────────────────────────────────────── */
-document.querySelectorAll(".nav-tab").forEach(b=>{
-  b.addEventListener("click",()=>switchTab(b.dataset.tab));
-});
-
-/* ──────────────────────────────────────────────
-   SERVICE WORKER
-──────────────────────────────────────────────── */
-if("serviceWorker" in navigator){
-  navigator.serviceWorker.register("/sw.js",{scope:"/"}).catch(()=>{});
-}
-
-/* ──────────────────────────────────────────────
-   AUTO-REFRESH
-──────────────────────────────────────────────── */
+loadAll();
+setInterval(loadAll,60_000);
 setInterval(()=>{
-  if(state.activeTab==="scanner") fetchMain();
-  if(state.activeTab==="smartvalue"){ fetchMain(); fetchConfirmedCLV(); }
-}, 30 * 1000);
-
-setInterval(()=>{
-  if(state.lastFetch) document.getElementById("last-updated").textContent="Updated "+fmtAgo(state.lastFetch);
-}, 10000);
-
-/* ──────────────────────────────────────────────
-   INIT
-──────────────────────────────────────────────── */
-checkPremiumCache();
-setupFilters();
-fetchMain();
-fetchConfirmedCLV();
-initPush();
-
-/* ──────────────────────────────────────────────
-   PUSH NOTIFICATIONS
-──────────────────────────────────────────────── */
-const VAPID_PUBLIC_KEY = "BD48tz4SopeY-Auj054ymk_tZWXg2uwKDRVX9meG46HhWw5IfixLiDBYN6zl998Uf9y46uNb6eZvvVzfz_-_IzI";
-
-function urlBase64ToUint8Array(base64String) {
-  const padding = '='.repeat((4 - base64String.length % 4) % 4);
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const rawData = atob(base64);
-  return new Uint8Array([...rawData].map(c => c.charCodeAt(0)));
-}
-
-async function initPush() {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
-  const reg = await navigator.serviceWorker.ready;
-  const sub = await reg.pushManager.getSubscription();
-  if (sub) updateBellActive(true);
-}
-
-async function togglePush() {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-    alert("Push notifications are not supported in this browser.");
-    return;
-  }
-  const reg = await navigator.serviceWorker.ready;
-  const existing = await reg.pushManager.getSubscription();
-  if (existing) {
-    await existing.unsubscribe();
-    await fetch('/api/push/unsubscribe?endpoint=' + encodeURIComponent(existing.endpoint), { method: 'DELETE' });
-    updateBellActive(false);
-    return;
-  }
-  const perm = await Notification.requestPermission();
-  if (perm !== 'granted') { alert("Notifications blocked. Enable them in browser settings."); return; }
-  try {
-    const sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
-    });
-    const k = sub.getKey('p256dh');
-    const a = sub.getKey('auth');
-    const p256dh = k ? btoa(String.fromCharCode.apply(null, new Uint8Array(k))) : '';
-    const auth   = a ? btoa(String.fromCharCode.apply(null, new Uint8Array(a))) : '';
-    const resp = await fetch('/api/push/subscribe', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        endpoint:  sub.endpoint,
-        p256dh,
-        auth,
-        userAgent: navigator.userAgent
-      })
-    });
-    if (!resp.ok) {
-      const errText = await resp.text();
-      console.error('Push subscribe API error:', resp.status, errText);
-      alert('Push subscribe failed (' + resp.status + '): ' + errText);
-      return;
-    }
-    const data = await resp.json();
-    console.log('Push subscribed:', data);
-    if (!data.ok) {
-      alert('Subscribe saved ok=false. Subscribers: ' + data.subscribers + '. Check console.');
-      return;
-    }
-    updateBellActive(true);
-  } catch(e) {
-    console.error('Push subscribe failed:', e);
-    alert('Push subscribe error: ' + e.message);
-  }
-}
-
-function updateBellActive(on) {
-  const btn      = document.getElementById('bell-btn');
-  const icon     = document.getElementById('bell-icon');
-  const testBtn  = document.getElementById('push-test-btn');
-  if (!btn || !icon) return;
-  if (on) {
-    btn.style.background  = 'rgba(34,197,94,0.15)';
-    btn.style.borderColor = 'rgba(34,197,94,0.4)';
-    icon.style.stroke     = '#4ade80';
-    icon.style.strokeOpacity = '1';
-    btn.title = 'Notifications ON — tap to disable';
-    if (testBtn) testBtn.style.display = 'flex';
-  } else {
-    btn.style.background  = 'rgba(255,255,255,0.06)';
-    btn.style.borderColor = 'rgba(255,255,255,0.1)';
-    icon.style.stroke     = 'white';
-    icon.style.strokeOpacity = '0.7';
-    btn.title = 'Enable notifications';
-    if (testBtn) testBtn.style.display = 'none';
-  }
-}
-
-async function sendTestPush() {
-  const btn = document.getElementById('push-test-btn');
-  if (btn) { btn.textContent = '...'; btn.disabled = true; }
-  try {
-    const res  = await fetch('/api/push/self-test', { method: 'POST' });
-    if (res.status === 429) {
-      if (btn) { btn.textContent = 'WAIT'; btn.style.color = '#f59e0b'; }
-      setTimeout(() => { if(btn){btn.textContent='TEST';btn.style.color='#4ade80';btn.disabled=false;} }, 60000);
-      return;
-    }
-    const data = await res.json();
-    if (data.ok && data.sent > 0) {
-      if (btn) { btn.textContent = '✓ SENT'; btn.style.color = '#4ade80'; }
-    } else if (data.detail === 'No subscribers registered yet') {
-      if (btn) { btn.textContent = 'NO SUBS'; btn.style.color = '#f87171'; }
-      alert('No subscribers found. Click the bell icon to subscribe first.');
-    } else if (data.vapid_missing) {
-      if (btn) { btn.textContent = 'NO KEY'; btn.style.color = '#f87171'; }
-      alert('VAPID keys missing on server.\n\nSet VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY in Railway environment variables.');
-    } else if (data.pywebpush_missing) {
-      if (btn) { btn.textContent = 'NO LIB'; btn.style.color = '#f87171'; }
-      alert('Push library (pywebpush) not installed on server. Railway needs to redeploy to pick up the new package.');
-    } else if (data.ok && data.sent === 0 && (data.failed > 0 || data.cleaned > 0)) {
-      if (btn) { btn.textContent = 'RE-SUB'; btn.style.color = '#f59e0b'; }
-      const errDetail = data.error ? '\n\nError: ' + data.error : '';
-      alert('Subscription expired or invalid. Click the 🔔 bell to unsubscribe, then click it again to re-subscribe.' + errDetail);
-    } else {
-      if (btn) { btn.textContent = 'ERR'; btn.style.color = '#f87171'; }
-      alert('Push error. Detail: ' + (data.detail || JSON.stringify(data)));
-    }
-  } catch(e) {
-    if (btn) { btn.textContent = 'ERR'; btn.style.color = '#f87171'; }
-  }
-  setTimeout(() => {
-    if (btn) { btn.textContent = 'TEST'; btn.style.color = '#4ade80'; btn.disabled = false; }
-  }, 3000);
-}
+  if(!S.picks.length)return;
+  S.picks.forEach(p=>{if(p.created_ts)p.age_minutes=Math.max(0,Math.floor((Date.now()/1000-p.created_ts)/60));});
+  render();
+},30_000);
 </script>
-
-<!-- ── Footer ─────────────────────────────────────────────── -->
-<div style="text-align:center;padding:24px 16px 32px;margin-top:auto">
-  <p style="font-size:10px;color:#27272a;letter-spacing:.04em">
-    PGR Analytics · AI-powered edge detection ·
-    <a href="/admin-login" style="color:#27272a;text-decoration:none">⚙</a>
-  </p>
-</div>
-
 </body>
 </html>
