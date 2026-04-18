@@ -4140,15 +4140,36 @@ async def upgrade_page():
 # Root — smart redirect based on auth state
 # =============================================================================
 
+_SW_KILL_HTML = """<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>html,body{background:#06060d;margin:0;height:100%}</style>
+<script>
+(function(){
+  function go(){window.location.replace('/live');}
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.getRegistrations().then(function(regs){
+      regs.forEach(function(r){r.unregister();});
+      if('caches' in window){
+        caches.keys().then(function(k){k.forEach(function(c){caches.delete(c);});});
+      }
+      go();
+    }).catch(go);
+  } else { go(); }
+})();
+</script>
+</head><body></body></html>"""
+
 @app.get("/", include_in_schema=False)
 async def root_redirect(request: Request):
-    """
-    Serve the terminal scanner (v2.html) for everyone.
-    Premium gate is handled client-side via /api/verify-code.
-    Admin sessions are redirected to the internal dashboard.
-    """
     if is_admin_session(request):
         return RedirectResponse("/home", status_code=302)
+    # Serve SW-killer splash — redirects to /live (uncached URL)
+    return HTMLResponse(content=_SW_KILL_HTML, headers=_NO_CACHE_HEADERS)
+
+@app.get("/live", include_in_schema=False)
+async def live_scanner():
+    """Primary scanner — served at fresh URL so no stale SW cache hits."""
     return HTMLResponse(content=(STATIC_DIR / "v2.html").read_text(), headers=_NO_CACHE_HEADERS)
 
 
