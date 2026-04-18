@@ -808,44 +808,42 @@ function renderProof(d){
   }
 }
 
-/* ── Fetch with timeout ── */
-function fetchT(url,ms=8000){
-  const ctrl=new AbortController();
-  const t=setTimeout(()=>ctrl.abort(),ms);
-  return fetch(url,{signal:ctrl.signal}).finally(()=>clearTimeout(t));
+/* ── Load & render ── */
+let _rendered=false;
+
+function safeRender(){
+  try{render();}catch(e){console.error('render error',e);}
+  _rendered=true;
+  document.getElementById('updatedAt').textContent=new Date().toLocaleTimeString().slice(0,5);
 }
 
-/* ── Fetch ── */
 async function loadAll(){
-  /* Step 1: load picks fast — render immediately */
+  S.picks=[];
   try{
-    const picksR=await fetchT('/api/picks/today',6000).then(r=>r.json()).catch(()=>({picks:[]}));
-    S.picks=(picksR.picks||picksR||[]).filter(Boolean);
-    $('updatedAt').textContent=new Date().toLocaleTimeString().slice(0,5);
-    render();
-  }catch(e){
-    $('scBody').innerHTML=`<div class="empty-s"><div class="empty-t">Backend offline</div><div class="empty-sub">Retrying in 60s…</div></div>`;
-    return;
-  }
-  /* Step 2: load CLV proof in background — non-blocking */
-  fetchT('/api/v2/clv/proof?days=30&sharp_only=true',10000)
+    const race=Promise.race([
+      fetch('/api/picks/today'),
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),7000))
+    ]);
+    const r=await race;
+    const d=await r.json();
+    S.picks=(d.picks||d||[]).filter(Boolean);
+  }catch(e){S.picks=[];}
+  safeRender();
+  /* CLV in background — non-blocking */
+  fetch('/api/v2/clv/proof?days=30&sharp_only=true')
     .then(r=>r.json()).then(d=>{if(d)renderProof(d);}).catch(()=>{});
 }
-/* ── Hard deadline: always render within 3s of page load ── */
-const _deadline=setTimeout(()=>{
-  if($('updatedAt').textContent==='syncing…'){
-    $('updatedAt').textContent=new Date().toLocaleTimeString().slice(0,5);
-    render();
-  }
-},3000);
 
-loadAll().then(()=>clearTimeout(_deadline));
-setInterval(loadAll,60_000);
+/* Safety net: always render within 5s */
+setTimeout(()=>{if(!_rendered)safeRender();},5000);
+
+loadAll();
+setInterval(loadAll,60000);
 setInterval(()=>{
   if(!S.picks.length)return;
   S.picks.forEach(p=>{if(p.created_ts)p.age_minutes=Math.max(0,Math.floor((Date.now()/1000-p.created_ts)/60));});
-  render();
-},30_000);
+  try{render();}catch(e){};
+},30000);
 </script>
 </body>
 </html>
