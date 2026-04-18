@@ -5,6 +5,19 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
 <meta name="theme-color" content="#06060d"/>
 <title>PGR · Live Scanner</title>
+<script>
+/* Kill stale service workers that may serve cached old HTML */
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.getRegistrations().then(regs=>{
+    regs.forEach(r=>r.unregister());
+  });
+  /* Update SW immediately so new version takes over on next load */
+  navigator.serviceWorker.ready.then(reg=>reg.update()).catch(()=>{});
+}
+if('caches' in window){
+  caches.keys().then(keys=>keys.forEach(k=>caches.delete(k)));
+}
+</script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden}

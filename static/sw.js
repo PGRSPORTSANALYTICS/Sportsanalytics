@@ -2,7 +2,7 @@
    Strategy: Cache-first for static assets only.
    API routes use network-first with stale fallback for offline resilience.
 */
-const SW_VERSION = "pgr-v3";
+const SW_VERSION = "pgr-v5";
 const STATIC_CACHE = `${SW_VERSION}-static`;
 
 // Static assets to pre-cache on install

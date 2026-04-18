@@ -4192,7 +4192,11 @@ async def goto_dashboard(request: Request):
     return RedirectResponse("/home", status_code=302)
 
 
-_NO_CACHE_HEADERS = {"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache"}
+_NO_CACHE_HEADERS = {
+    "Cache-Control": "no-cache, no-store, must-revalidate",
+    "Pragma": "no-cache",
+    "Clear-Site-Data": '"cache"',
+}
 
 
 @app.get("/home", include_in_schema=False)
