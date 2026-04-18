@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# BUILD: 20260418-1
 """
 Railway Start Script
 Detects which service is running and starts accordingly:
