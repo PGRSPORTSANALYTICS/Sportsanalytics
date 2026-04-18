@@ -90,6 +90,9 @@ class FootballOpportunity:
     best_odds_bookmaker: str = None
     avg_odds: float = None
     fair_odds: float = None
+    # Sharp anchor fields — doctrine layer (Apr 2026)
+    sharp_price: float = None
+    sharp_book: str = None
 
 class RealFootballChampion:
     """🏆 Advanced Real Football Betting Champion"""
@@ -648,7 +651,8 @@ class RealFootballChampion:
                                     'home_team': teams.get('home', {}).get('name', 'Unknown'),
                                     'away_team': teams.get('away', {}).get('name', 'Unknown'),
                                     'bookmakers': [],  # Will trigger synthetic odds generation
-                                    'use_synthetic_odds': True  # Flag for synthetic odds
+                                    'use_synthetic_odds': True,
+                                    '_odds_source': 'api_football_soft',  # [SOFT] no sharp anchor available
                                 }
                                 all_matches.append(match_data)
                         else:
@@ -2432,7 +2436,7 @@ class RealFootballChampion:
                     if matched and price > 0:
                         odds_by_bookmaker[book_name] = round(price, 3)
         
-        # Compute aggregated values
+        # Compute aggregated values (display layer — all books including soft)
         if odds_by_bookmaker:
             odds_values = list(odds_by_bookmaker.values())
             best_odds_value = max(odds_values)
@@ -2442,12 +2446,42 @@ class RealFootballChampion:
             best_odds_value = None
             best_odds_bookmaker = None
             avg_odds = None
-        
+
+        # ── Sharp anchor via pricing_engine (doctrine layer) ─────────────────
+        sharp_price = None
+        sharp_book  = None
+        fair_odds   = None
+        devigged_prob = None
+        try:
+            from pricing_engine import get_sharp_anchor, get_best_price
+            _anchor = get_sharp_anchor(match, market_key, selection, point=point)
+            if _anchor:
+                sharp_price   = _anchor.price
+                sharp_book    = _anchor.book
+                devigged_prob = _anchor.devigged_prob
+                fair_odds     = round(1.0 / _anchor.devigged_prob, 4) if _anchor.devigged_prob else None
+                # Override best_price with pricing_engine result when it finds a better sharp price
+                _bp = get_best_price(match, market_key, selection, point=point)
+                if _bp and (_bp.price or 0) > (best_odds_value or 0):
+                    best_odds_value    = _bp.price
+                    best_odds_bookmaker = _bp.book
+            else:
+                # No sharp anchor found — log; downstream validation will flag this
+                _soft_src = match.get('_odds_source', '')
+                _label = 'AF_SOFT' if 'api_football' in _soft_src else 'NO_SHARP'
+                print(f"⚠️ [PRICING] No sharp anchor for {selection} ({market_key}) — {_label}")
+        except Exception as _pe:
+            print(f"⚠️ [PRICING] pricing_engine error: {_pe}")
+
         return {
             'odds_by_bookmaker': odds_by_bookmaker,
-            'best_odds_value': best_odds_value,
+            'best_odds_value':   best_odds_value,
             'best_odds_bookmaker': best_odds_bookmaker,
-            'avg_odds': avg_odds
+            'avg_odds':          avg_odds,
+            'sharp_price':       sharp_price,
+            'sharp_book':        sharp_book,
+            'fair_odds':         fair_odds,
+            'devigged_prob':     devigged_prob,
         }
     
     def create_opportunity(self, match: Dict, selection: str, odds: float, edge: float,
@@ -2567,12 +2601,17 @@ class RealFootballChampion:
         
         fair_odds = round(1.0 / model_prob, 3) if model_prob and model_prob > 0 else None
         
-        # Extract bookmaker odds data
-        bm_odds = bookmaker_odds.get('odds_by_bookmaker', {}) if bookmaker_odds else {}
-        best_val = bookmaker_odds.get('best_odds_value') if bookmaker_odds else None
+        # Extract bookmaker odds data (display layer + sharp anchor)
+        bm_odds  = bookmaker_odds.get('odds_by_bookmaker', {}) if bookmaker_odds else {}
+        best_val  = bookmaker_odds.get('best_odds_value')   if bookmaker_odds else None
         best_book = bookmaker_odds.get('best_odds_bookmaker') if bookmaker_odds else None
-        avg_val = bookmaker_odds.get('avg_odds') if bookmaker_odds else None
-        
+        avg_val   = bookmaker_odds.get('avg_odds')           if bookmaker_odds else None
+        # Prefer pricing_engine fair_odds over model-derived; fall back to model
+        _pe_fair  = bookmaker_odds.get('fair_odds')          if bookmaker_odds else None
+        fair_odds = _pe_fair or fair_odds
+        _sp       = bookmaker_odds.get('sharp_price')        if bookmaker_odds else None
+        _sbk      = bookmaker_odds.get('sharp_book')         if bookmaker_odds else None
+
         return FootballOpportunity(
             match_id=f"{match['home_team']}_vs_{match['away_team']}_{int(time.time())}",
             home_team=match['home_team'],
@@ -2594,7 +2633,9 @@ class RealFootballChampion:
             best_odds_value=best_val,
             best_odds_bookmaker=best_book,
             avg_odds=avg_val,
-            fair_odds=fair_odds
+            fair_odds=fair_odds,
+            sharp_price=_sp,
+            sharp_book=_sbk,
         )
     
     def get_todays_count(self):
@@ -4048,6 +4089,51 @@ class RealFootballChampion:
                     return False
             # ─────────────────────────────────────────────────────────────────
 
+            # ── Soft-odds flag (API-Football source — no sharp anchor) ────────
+            _odds_src = str(opp_dict.get('odds_source', '') or opp_dict.get('_odds_source', ''))
+            _is_soft  = 'api_football' in _odds_src.lower() or opp_dict.get('_soft_odds') is True
+            if _is_soft:
+                print(f"⚠️ [SOFT_ODDS] {opp_dict.get('home_team')} vs {opp_dict.get('away_team')} "
+                      f"— odds from API-Football (soft, non-sharp anchor)")
+                try:
+                    _an = json.loads(opp_dict.get('analysis', '{}'))
+                    _an['soft_odds'] = True
+                    _an['soft_flag'] = 'API_FOOTBALL_SOFT'
+                    opp_dict = dict(opp_dict)
+                    opp_dict['analysis'] = json.dumps(_an)
+                except Exception:
+                    pass
+
+            # ── Doctrine validation — dry_run (logs would-reject, never blocks) ─
+            try:
+                from validation_engine import validate_signal
+                _an2 = json.loads(opp_dict.get('analysis', '{}'))
+                _model_prob = _an2.get('p_model') or opp_dict.get('model_prob')
+                _sharp_p    = opp_dict.get('sharp_price') or opp_dict.get('fair_odds')
+                _sharp_bk   = opp_dict.get('sharp_book')
+                if not _sharp_bk:
+                    _bm_name = opp_dict.get('best_odds_bookmaker', '')
+                    if _bm_name in {'Pinnacle', 'Betfair', 'Matchbook'}:
+                        _sharp_bk = _bm_name
+                _vd = validate_signal({
+                    'match_id':       opp_dict.get('match_id'),
+                    'market':         opp_dict.get('market'),
+                    'selection':      opp_dict.get('selection'),
+                    'best_price':     opp_dict.get('best_odds_value') or opp_dict.get('odds'),
+                    'best_price_book': opp_dict.get('best_odds_bookmaker'),
+                    'sharp_price':    _sharp_p,
+                    'sharp_book':     _sharp_bk,
+                    'timestamp_utc':  int(time.time()),
+                    'model_prob':     _model_prob,
+                }, mode='dry_run')
+                _tag = f"{opp_dict.get('home_team')} vs {opp_dict.get('away_team')} {opp_dict.get('selection')}"
+                if _vd.would_reject_reasons:
+                    print(f"⚠️ [DOCTRINE DRY_RUN] {_tag} — would reject: {_vd.would_reject_reasons}")
+                else:
+                    print(f"✅ [DOCTRINE] {_tag} — {_vd.as_log()}")
+            except Exception as _ve:
+                print(f"⚠️ [DOCTRINE] validation error: {_ve}")
+
             # Get bet_placed flag from value singles engine
             bet_placed = opp_dict.get('bet_placed', True)
             
@@ -5093,6 +5179,33 @@ def _save_bet_candidates_to_db(candidates, market_label: str, force_learning: bo
             best_odds_bookmaker = 'API-Football'
             avg_odds = base_odds
             fair_odds = round(1 / candidate.confidence, 2) if candidate.confidence > 0 else base_odds
+
+            # ── Corners/Cards always come from API-Football (soft source) ─────
+            if not is_learning:
+                print(f"⚠️ [SOFT_ODDS] {getattr(candidate,'home_team','')} vs "
+                      f"{getattr(candidate,'away_team','')} {getattr(candidate,'selection','')} "
+                      f"— {market_label} odds via API-Football (soft)")
+
+            # ── Doctrine validation dry_run ───────────────────────────────────
+            try:
+                from validation_engine import validate_signal
+                _vd = validate_signal({
+                    'match_id':        getattr(candidate, 'match_id', None) or getattr(candidate, 'match', None),
+                    'market':          market_label,
+                    'selection':       getattr(candidate, 'selection', None),
+                    'best_price':      base_odds,
+                    'best_price_book': 'API-Football',
+                    'sharp_price':     None,   # API-Football is not a sharp source
+                    'sharp_book':      None,
+                    'timestamp_utc':   int(time.time()),
+                    'model_prob':      float(candidate.confidence),
+                }, mode='dry_run')
+                _ctag = (f"{getattr(candidate,'home_team','')} vs "
+                         f"{getattr(candidate,'away_team','')} {getattr(candidate,'selection','')}")
+                if _vd.would_reject_reasons:
+                    print(f"⚠️ [DOCTRINE DRY_RUN] {market_label} {_ctag} — would reject: {_vd.would_reject_reasons}")
+            except Exception as _cve:
+                print(f"⚠️ [DOCTRINE] {market_label} validation error: {_cve}")
             
             odds_by_bookmaker_json = json.dumps(odds_by_bookmaker)
             
