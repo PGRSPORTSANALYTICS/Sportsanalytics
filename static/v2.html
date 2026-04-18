@@ -3,413 +3,415 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
-<meta name="theme-color" content="#080e1a"/>
+<meta name="theme-color" content="#06060d"/>
 <title>PGR · Live Scanner</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden}
-@media(max-width:900px){html,body{overflow:auto}}
+@media(max-width:860px){html,body{overflow:auto}}
+
 body{
-  background:#080e1a;color:#d4ddf0;
-  font-family:'SF Mono','Fira Code','Cascadia Code',ui-monospace,monospace;
+  background:#06060d;
+  color:#c8d4e8;
+  font-family:-apple-system,'SF Pro Display','Segoe UI',system-ui,sans-serif;
   font-size:13px;line-height:1.4;
   -webkit-font-smoothing:antialiased;
 }
+.num{font-family:'SF Mono','Fira Code',ui-monospace,monospace}
 a{color:inherit;text-decoration:none}
 button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
+
 :root{
-  --bg:#080e1a;--panel:#0d1526;--panel2:#111d33;--line:#1a2540;--line2:#223060;
-  --txt:#d4ddf0;--muted:#6b7fa3;--dim:#3f4f70;
-  --green:#22c55e;--green-dim:#0c2818;--green-border:#1a5c35;
-  --amber:#f59e0b;--red:#ef4444;--blue:#60a5fa;--pinny:#fbbf24;
-  --nav-h:42px;--strip-h:36px;
+  --bg:#06060d;
+  --card:#0d0d18;
+  --card2:#121220;
+  --card3:#171728;
+  --line:#1a1a2e;
+  --line2:#222238;
+  --txt:#c8d4e8;
+  --muted:#5a6882;
+  --dim:#2e3550;
+  --green:#22c55e;
+  --green-d:#091c10;
+  --green-b:#155230;
+  --amber:#f59e0b;
+  --red:#ef4444;
+  --blue:#60a5fa;
+  --pinny:#fbbf24;
+  --nav-h:40px;
+  --strip-h:32px;
 }
 
 /* ── Nav ── */
 .nav{
   position:fixed;top:0;left:0;right:0;z-index:100;height:var(--nav-h);
-  background:rgba(8,14,26,.95);border-bottom:1px solid var(--line);
-  display:flex;align-items:center;gap:12px;padding:0 14px;
+  background:rgba(6,6,13,.97);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:10px;padding:0 14px;
 }
-.brand{font-weight:700;font-size:12px;letter-spacing:.8px;text-transform:uppercase;color:var(--txt);display:flex;align-items:center;gap:6px}
-.brand-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:blink 2s infinite}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:.4}}
-.brand-sub{color:var(--muted);font-weight:400;font-size:11px}
-.nav-live{display:flex;align-items:center;gap:5px;padding:3px 8px;border-radius:4px;background:var(--green-dim);border:1px solid var(--green-border);font-size:11px;color:#86efac;font-weight:600}
+.brand{display:flex;align-items:center;gap:7px;font-weight:700;font-size:13px;letter-spacing:.3px}
+.brand-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px #22c55e88;animation:pulse 2.2s infinite}
+@keyframes pulse{0%,100%{opacity:1}60%{opacity:.3}}
+.brand-v{color:var(--muted);font-weight:400;font-size:11px;margin-left:2px}
+.live-pill{
+  display:flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;
+  background:var(--green-d);border:1px solid var(--green-b);
+  font-size:11px;font-weight:700;color:#86efac;letter-spacing:.2px;
+}
 .nav-sp{flex:1}
-.nav-txt{font-size:10px;color:var(--dim);font-family:inherit}
-.nav-tier{padding:2px 6px;border-radius:3px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;background:var(--panel2);color:var(--muted);border:1px solid var(--line2)}
-.nav-tier.premium{background:#2a1600;color:var(--pinny);border-color:#6b3800}
+.nav-ts{font-size:10px;color:var(--muted);font-family:'SF Mono',monospace}
+.tier-badge{padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;background:var(--card2);color:var(--muted);border:1px solid var(--line2)}
+.tier-badge.premium{background:#1a0e00;color:var(--pinny);border-color:#5a3500}
 
-/* ── KPI micro-strip ── */
+/* ── KPI strip ── */
 .kpi-strip{
   position:fixed;top:var(--nav-h);left:0;right:0;z-index:90;height:var(--strip-h);
-  background:var(--panel);border-bottom:1px solid var(--line);
-  display:flex;align-items:stretch;overflow-x:auto;scrollbar-width:none;
+  background:#09090f;border-bottom:1px solid var(--line);
+  display:flex;align-items:center;overflow-x:auto;scrollbar-width:none;
+  gap:0;
 }
 .kpi-strip::-webkit-scrollbar{display:none}
-.kpi-item{
-  display:flex;align-items:center;gap:8px;padding:0 16px;
-  border-right:1px solid var(--line);white-space:nowrap;min-width:max-content;
+.ki{
+  display:flex;align-items:center;gap:7px;padding:0 14px;height:100%;
+  border-right:1px solid var(--line);white-space:nowrap;flex-shrink:0;
 }
-.kpi-item:first-child{border-left:none}
-.kpi-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
-.kpi-val{font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--txt)}
-.kpi-val.g{color:var(--green)}
-.kpi-val.r{color:var(--red)}
-.kpi-val.a{color:var(--amber)}
-.kpi-val.b{color:var(--blue)}
+.ki-l{font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)}
+.ki-v{font-size:12px;font-weight:800;color:var(--txt);font-family:'SF Mono',monospace}
+.ki-v.g{color:var(--green)}
+.ki-v.r{color:var(--red)}
+.ki-v.a{color:var(--amber)}
+.ki-v.b{color:var(--blue)}
+.ki-v.dim{color:var(--muted);font-size:10px;font-weight:500}
 
-/* ── Terminal layout ── */
+/* ── 3-col terminal ── */
 .terminal{
-  position:fixed;top:calc(var(--nav-h) + var(--strip-h));bottom:0;left:0;right:0;
-  display:grid;grid-template-columns:220px 1fr 0px;
-  transition:grid-template-columns .2s ease;
+  position:fixed;top:calc(var(--nav-h)+var(--strip-h));bottom:0;left:0;right:0;
+  display:grid;grid-template-columns:200px 1fr 0;
+  transition:grid-template-columns .18s ease;
 }
-.terminal.detail-open{grid-template-columns:220px 1fr 360px}
-
-@media(max-width:900px){
-  .terminal{
-    position:static;display:block;
-    padding-top:calc(var(--nav-h) + var(--strip-h));
-  }
+.terminal.detail-open{grid-template-columns:200px 1fr 340px}
+@media(max-width:860px){
+  .terminal{position:static;display:block;padding-top:calc(var(--nav-h)+var(--strip-h))}
   .terminal.detail-open{grid-template-columns:unset}
 }
 
-/* ── Left sidebar ── */
-.filter-col{
-  border-right:1px solid var(--line);overflow-y:auto;scrollbar-width:thin;
-  background:var(--panel);display:flex;flex-direction:column;
+/* ── Sidebar ── */
+.sidebar{
+  border-right:1px solid var(--line);background:#09090f;
+  overflow-y:auto;scrollbar-width:thin;display:flex;flex-direction:column;
 }
-.filter-col::-webkit-scrollbar{width:4px}
-.filter-col::-webkit-scrollbar-thumb{background:var(--line2)}
+.sidebar::-webkit-scrollbar{width:3px}
+.sidebar::-webkit-scrollbar-thumb{background:var(--line2)}
 
-.f-section{border-bottom:1px solid var(--line);padding:10px}
-.f-title{font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:8px;font-weight:600}
-.f-chips{display:flex;flex-wrap:wrap;gap:4px}
+.fs{padding:10px 10px 8px;border-bottom:1px solid var(--line)}
+.fs-h{font-size:9px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:7px;font-weight:700}
+.fc{display:flex;flex-wrap:wrap;gap:4px}
 .chip{
-  padding:4px 9px;border-radius:3px;background:var(--panel2);border:1px solid var(--line2);
-  color:var(--muted);font-size:11px;font-weight:600;font-family:inherit;
-  transition:background .12s,color .12s;user-select:none;cursor:pointer;
+  padding:4px 9px;border-radius:20px;background:var(--card2);border:1px solid var(--line2);
+  color:var(--muted);font-size:11px;font-weight:600;
+  transition:all .12s;cursor:pointer;user-select:none;
 }
-.chip:hover{background:var(--line2);color:var(--txt)}
-.chip.active{background:rgba(34,197,94,.12);color:var(--green);border-color:var(--green-border)}
-.chip.warn.active{background:rgba(245,158,11,.1);color:var(--amber);border-color:#7a4900}
+.chip:hover{border-color:var(--line2);color:var(--txt);background:var(--card3)}
+.chip.active{background:rgba(34,197,94,.12);color:var(--green);border-color:var(--green-b)}
+.chip.a-warn.active{background:rgba(245,158,11,.1);color:var(--amber);border-color:#6b3a00}
 
-/* CLV summary in sidebar */
-.clv-mini{padding:10px}
-.clv-mini-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--line);font-size:11px}
-.clv-mini-row:last-child{border-bottom:0}
-.clv-lbl{color:var(--muted)}
-.clv-val{font-weight:700;font-variant-numeric:tabular-nums}
+/* CLV in sidebar */
+.clv-blk{padding:10px}
+.clv-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--line);font-size:11px}
+.clv-row:last-child{border-bottom:0}
+.clv-l{color:var(--muted)}
+.clv-v{font-weight:700;font-family:'SF Mono',monospace}
+.hist{display:flex;align-items:flex-end;gap:2px;height:48px;margin-top:8px}
+.hb{display:flex;flex-direction:column;align-items:center;gap:1px;flex:1}
+.hb-f{width:100%;border-radius:2px 2px 0 0;min-height:2px;background:var(--green);opacity:.65}
+.hb-f.n{background:var(--red)}
+.hb-l{font-size:7px;color:var(--dim);text-align:center;margin-top:2px}
+.hb-c{font-size:8px;color:var(--muted)}
 
-@media(max-width:900px){
-  .filter-col{
+@media(max-width:860px){
+  .sidebar{
     background:transparent;border-right:none;border-bottom:1px solid var(--line);
-    overflow-x:auto;display:block;white-space:nowrap;padding:8px;
+    overflow-x:auto;display:block;white-space:nowrap;padding:7px 10px;
   }
-  .f-section{display:inline-flex;align-items:center;gap:4px;border-bottom:none;padding:0 6px 0 0;vertical-align:middle}
-  .f-title{display:none}
-  .f-chips{flex-wrap:nowrap;gap:4px}
-  .clv-mini{display:none}
+  .fs{display:inline-flex;align-items:center;gap:4px;border-bottom:none;padding:0 8px 0 0;vertical-align:middle}
+  .fs-h{display:none}
+  .fc{flex-wrap:nowrap}
+  .clv-blk{display:none}
 }
 
 /* ── Scanner center ── */
-.scanner-col{
-  display:flex;flex-direction:column;overflow:hidden;
-  background:var(--bg);
-}
-.scanner-head{
-  padding:8px 12px;border-bottom:1px solid var(--line);
+.scanner{display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
+.sc-head{
+  padding:7px 14px;border-bottom:1px solid var(--line);
   display:flex;align-items:center;gap:10px;flex-shrink:0;
-  background:var(--panel);
+  background:#09090f;
 }
-.scanner-h-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px}
-.scanner-h-count{font-size:11px;color:var(--green);font-variant-numeric:tabular-nums}
-.scanner-h-sp{flex:1}
-.scanner-h-meta{font-size:10px;color:var(--dim)}
-.scanner-body{flex:1;overflow-y:auto;scrollbar-width:thin}
-.scanner-body::-webkit-scrollbar{width:4px}
-.scanner-body::-webkit-scrollbar-thumb{background:var(--line2)}
+.sc-h-title{font-size:10px;text-transform:uppercase;letter-spacing:.8px;font-weight:700;color:var(--muted)}
+.sc-h-count{font-size:11px;font-weight:800;color:var(--green);font-family:'SF Mono',monospace}
+.sc-h-sp{flex:1}
+.sc-h-meta{font-size:10px;color:var(--dim);font-family:'SF Mono',monospace}
 
-@media(max-width:900px){
-  .scanner-col{overflow:visible}
-  .scanner-body{overflow:visible}
+.sc-body{flex:1;overflow-y:auto;scrollbar-width:thin;padding:6px}
+.sc-body::-webkit-scrollbar{width:3px}
+.sc-body::-webkit-scrollbar-thumb{background:var(--line2)}
+@media(max-width:860px){.sc-body{overflow:visible;padding:0}}
+
+/* ── Match card ── */
+.mc{
+  background:var(--card);border:1px solid var(--line);border-radius:8px;
+  margin-bottom:4px;cursor:pointer;
+  transition:border-color .12s,background .12s;
+  overflow:hidden;
+}
+.mc:hover,.mc.sel{background:var(--card2);border-color:var(--line2)}
+.mc.sel{border-color:#2a2a50}
+
+.mc-top{
+  display:flex;align-items:flex-start;justify-content:space-between;
+  padding:9px 12px 0;gap:8px;
+}
+.mc-match{flex:1;min-width:0}
+.mc-teams{font-size:12px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mc-sub{font-size:10px;color:var(--muted);margin-top:1px}
+.mc-edge{
+  text-align:right;flex-shrink:0;
+  font-size:18px;font-weight:900;font-family:'SF Mono',monospace;
+  line-height:1;
+}
+.mc-edge.g{color:var(--green)}
+.mc-edge.a{color:var(--amber)}
+.mc-edge.r{color:var(--red)}
+.mc-edge-lbl{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:1px;text-align:right}
+
+.mc-mid{
+  display:flex;align-items:center;gap:6px;padding:5px 12px 6px;
+  flex-wrap:wrap;
+}
+.mc-mkt{font-size:11px;font-weight:600;color:var(--txt)}
+.mc-type{font-size:10px;color:var(--muted)}
+
+/* Badges */
+.bdg{display:inline-flex;align-items:center;padding:2px 6px;border-radius:20px;font-size:9px;font-weight:800;letter-spacing:.5px;text-transform:uppercase}
+.bdg.sharp{background:#0c2010;color:#6ee7a0;border:1px solid #1a4c30}
+.bdg.legacy{background:#1e1030;color:#c4b5fd;border:1px solid #3a2060}
+.bdg.moving{background:#2a1c00;color:#fcd34d;border:1px solid #5a3800}
+.bdg.unverified{background:#200a0a;color:#fca5a5;border:1px solid #501010}
+.bdg.new{background:#0c2010;color:#bbf7d0;border:1px solid #1a4c30;animation:ng 2.5s infinite}
+@keyframes ng{0%,100%{box-shadow:0 0 0 0 #22c55e44}50%{box-shadow:0 0 0 4px #22c55e00}}
+
+/* ── Book icon strip ── */
+.mc-books{
+  display:flex;align-items:center;gap:3px;padding:6px 12px 8px;
+  overflow-x:auto;scrollbar-width:none;flex-wrap:nowrap;
+}
+.mc-books::-webkit-scrollbar{display:none}
+
+.bk{
+  display:inline-flex;flex-direction:column;align-items:center;
+  border-radius:6px;padding:4px 6px;border:1px solid var(--line2);
+  font-size:9px;font-weight:700;font-family:'SF Mono',monospace;
+  min-width:44px;flex-shrink:0;cursor:default;
+  transition:transform .1s;
+}
+.bk:hover{transform:translateY(-1px)}
+.bk-name{font-size:8px;font-weight:700;letter-spacing:.3px;margin-bottom:2px;white-space:nowrap}
+.bk-odds{font-size:12px;font-weight:800;line-height:1}
+
+/* bookmaker color themes */
+.bk.pinn  {background:#1a1200;border-color:#5a3d00;color:var(--pinny)}
+.bk.pinn .bk-name{color:#a07020}
+.bk.bf    {background:#001020;border-color:#003060;color:#60a5fa}
+.bk.bf .bk-name{color:#3060a0}
+.bk.b365  {background:#001800;border-color:#004020;color:#4ade80}
+.bk.b365 .bk-name{color:#206830}
+.bk.uni   {background:#001800;border-color:#004020;color:#86efac}
+.bk.uni .bk-name{color:#1e5c30}
+.bk.sb    {background:#00101a;border-color:#002a40;color:#7dd3fc}
+.bk.sb .bk-name{color:#1a4060}
+.bk.oneX  {background:#1a0800;border-color:#502000;color:#fb923c}
+.bk.oneX .bk-name{color:#803010}
+.bk.mara  {background:#1a0000;border-color:#500000;color:#f87171}
+.bk.mara .bk-name{color:#801010}
+.bk.bwin  {background:#100018;border-color:#300040;color:#c084fc}
+.bk.bwin .bk-name{color:#501870}
+.bk.dflt  {background:var(--card2);border-color:var(--line2);color:var(--muted)}
+.bk.dflt .bk-name{color:var(--dim)}
+.bk.dflt .bk-odds{color:var(--txt)}
+
+.bk-more-pill{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:32px;height:40px;border-radius:6px;
+  background:var(--card3);border:1px solid var(--line2);
+  font-size:10px;font-weight:700;color:var(--muted);flex-shrink:0;
 }
 
-/* ── Desktop scanner table ── */
-.s-table{width:100%;border-collapse:collapse;font-size:12px}
-.s-table thead th{
-  text-align:left;padding:7px 10px;font-size:10px;text-transform:uppercase;
-  letter-spacing:.6px;color:var(--muted);font-weight:600;
-  background:var(--panel);border-bottom:1px solid var(--line);
-  position:sticky;top:0;z-index:2;white-space:nowrap;
+.mc-move{
+  display:flex;align-items:center;gap:4px;padding:0 12px 8px;
+  font-size:10px;font-weight:600;font-family:'SF Mono',monospace;
 }
-.s-table tbody tr{border-bottom:1px solid var(--line);cursor:pointer;transition:background .1s}
-.s-table tbody tr:hover,.s-table tbody tr.sel{background:var(--panel2)}
-.s-table td{padding:8px 10px;vertical-align:middle}
+.mc-move.ok{color:#6ee7a0}
+.mc-move.late{color:#fca5a5}
+.mc-move.flat{color:var(--dim)}
 
-/* Cell types */
-.c-match{min-width:160px}
-.c-match-teams{font-size:12px;font-weight:600;color:var(--txt);white-space:nowrap}
-.c-match-sub{font-size:10px;color:var(--muted);margin-top:1px;white-space:nowrap}
-.c-mkt{font-size:12px;font-weight:600;white-space:nowrap}
-.c-mkt-sub{font-size:10px;color:var(--muted);margin-top:1px}
-.c-price{font-variant-numeric:tabular-nums;white-space:nowrap}
-.c-price-val{font-size:12px;font-weight:700}
-.c-price-bk{font-size:10px;color:var(--muted);margin-top:1px}
-.c-price.sharp .c-price-val{color:var(--pinny)}
-.c-price.nodata .c-price-val{color:var(--dim);font-style:italic;font-weight:400;font-size:11px}
-.c-edge{font-size:13px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
-.c-edge.g{color:var(--green)}
-.c-edge.a{color:var(--amber)}
-.c-edge.r{color:var(--red)}
-
-/* Inline books */
-.bk-row{display:flex;flex-wrap:nowrap;gap:3px;align-items:center}
-.bk-pill{
-  display:inline-flex;align-items:center;gap:3px;padding:2px 5px;
-  border-radius:3px;border:1px solid var(--line2);background:var(--panel2);
-  font-size:10px;white-space:nowrap;color:var(--muted);font-family:inherit;
+/* ── Detail panel ── */
+.detail{
+  border-left:1px solid var(--line);background:#09090f;
+  overflow-y:auto;scrollbar-width:thin;min-width:0;display:flex;flex-direction:column;
 }
-.bk-pill b{color:var(--txt);font-weight:700}
-.bk-pill.sharp{border-color:#5a3d00;background:#1f1400;color:#e9ae50}
-.bk-pill.sharp b{color:var(--pinny)}
-.bk-more{font-size:10px;color:var(--dim);padding:2px 4px;cursor:pointer}
+.detail::-webkit-scrollbar{width:3px}
+.detail::-webkit-scrollbar-thumb{background:var(--line2)}
+.detail.hidden{display:none}
 
-/* Signal / doctrine badge */
-.badge{
-  display:inline-block;padding:2px 6px;border-radius:3px;font-size:10px;font-weight:700;
-  letter-spacing:.4px;text-transform:uppercase;white-space:nowrap;font-family:inherit;
+.det-head{
+  padding:10px 12px;border-bottom:1px solid var(--line);flex-shrink:0;
+  background:#0d0d18;position:sticky;top:0;z-index:5;
+  display:flex;align-items:flex-start;gap:8px;
 }
-.badge.sharp{background:#0c2818;color:#86efac;border:1px solid var(--green-border)}
-.badge.legacy{background:#2a1c2e;color:#c4b5fd;border:1px solid #4c2c5e}
-.badge.moving{background:#3b2a10;color:#fcd34d;border:1px solid #7a4920}
-.badge.unverified{background:#2c1414;color:#fca5a5;border:1px solid #5e2222}
-.badge.new{background:#0c2818;color:#bbf7d0;border:1px solid var(--green-border);animation:nglow 2s infinite}
-@keyframes nglow{0%,100%{box-shadow:0 0 0 0 #22c55e44}50%{box-shadow:0 0 0 3px #22c55e00}}
+.det-hi{flex:1;min-width:0}
+.det-title{font-size:12px;font-weight:700;color:var(--txt);line-height:1.3}
+.det-sub{font-size:10px;color:var(--muted);margin-top:2px}
+.det-x{padding:3px 8px;border-radius:4px;background:var(--card2);border:1px solid var(--line2);font-size:11px;color:var(--muted)}
+.det-x:hover{color:var(--txt)}
+.det-body{padding:10px;flex:1}
 
-/* Move badge in row */
-.mv{display:inline-flex;align-items:center;gap:3px;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:3px}
-.mv.ok{background:rgba(34,197,94,.1);color:#86efac;border:1px solid rgba(34,197,94,.2)}
-.mv.late{background:rgba(239,68,68,.1);color:#fca5a5;border:1px solid rgba(239,68,68,.2)}
-.mv.flat{color:var(--dim);background:transparent;border:1px solid transparent}
-
-/* ── Mobile scanner cards ── */
-.m-list{display:none;flex-direction:column;gap:1px}
-.m-card{
-  background:var(--panel);border-bottom:1px solid var(--line);padding:10px 12px;
-  display:flex;flex-direction:column;gap:6px;cursor:pointer;transition:background .1s;
-}
-.m-card:active{background:var(--panel2)}
-.m-card-row1{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
-.m-card-match{font-size:12px;font-weight:600;color:var(--txt)}
-.m-card-edge{font-size:16px;font-weight:800;font-variant-numeric:tabular-nums}
-.m-card-row2{display:flex;gap:6px;align-items:center;font-size:11px;flex-wrap:wrap}
-.m-card-mkt{color:var(--txt);font-weight:600}
-.m-card-sub{color:var(--muted)}
-.m-card-row3{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px}
-.m-card-prices{display:flex;gap:6px;align-items:center;font-size:11px}
-.m-price-sharp{color:var(--pinny);font-weight:700;font-variant-numeric:tabular-nums}
-.m-price-best{color:var(--txt);font-weight:600;font-variant-numeric:tabular-nums}
-.m-price-bk{color:var(--muted);font-size:10px}
-
-@media(max-width:900px){
-  .s-table{display:none}
-  .m-list{display:flex}
-}
-@media(min-width:901px){
-  .m-list{display:none!important}
-}
-
-/* ── Right detail panel ── */
-.detail-col{
-  border-left:1px solid var(--line);background:var(--panel);
-  overflow-y:auto;display:flex;flex-direction:column;
-  scrollbar-width:thin;min-width:0;
-}
-.detail-col::-webkit-scrollbar{width:4px}
-.detail-col::-webkit-scrollbar-thumb{background:var(--line2)}
-.detail-col.hidden{display:none}
-
-.detail-head{
-  padding:10px 14px;border-bottom:1px solid var(--line);flex-shrink:0;
-  display:flex;align-items:flex-start;gap:8px;background:var(--panel2);position:sticky;top:0;z-index:5;
-}
-.detail-head-inner{flex:1;min-width:0}
-.detail-title{font-size:12px;font-weight:700;color:var(--txt);line-height:1.3}
-.detail-sub{font-size:10px;color:var(--muted);margin-top:2px}
-.det-close{padding:4px 8px;border-radius:3px;background:var(--panel);border:1px solid var(--line2);font-size:11px;color:var(--muted)}
-.det-close:hover{color:var(--txt)}
-
-.detail-body{padding:12px;flex:1;overflow-y:auto}
-
-/* Sections inside detail */
+/* Detail sections */
 .ds{margin-bottom:12px}
-.ds-h{font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:700;margin-bottom:8px;border-bottom:1px solid var(--line);padding-bottom:4px}
+.ds-h{
+  font-size:9px;text-transform:uppercase;letter-spacing:.8px;
+  color:var(--muted);font-weight:700;margin-bottom:8px;
+  border-bottom:1px solid var(--line);padding-bottom:4px;
+}
+.price-snap{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.ps{padding:8px;border-radius:6px;border:1px solid var(--line2);background:var(--card)}
+.ps.sharp-card{border-color:#5a3d00;background:#120c00}
+.ps-l{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.ps-v{font-size:20px;font-weight:800;font-family:'SF Mono',monospace}
+.ps.sharp-card .ps-v{color:var(--pinny)}
+.ps-bk{font-size:9px;color:var(--muted);margin-top:2px}
 
-.price-snap{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.ps-card{padding:10px;border-radius:4px;border:1px solid var(--line2);background:var(--panel2)}
-.ps-card.sharp{border-color:#5a3d00;background:#160e00}
-.ps-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
-.ps-val{font-size:18px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--txt)}
-.ps-card.sharp .ps-val{color:var(--pinny)}
-.ps-bk{font-size:10px;color:var(--muted);margin-top:2px}
+/* Model bars */
+.mb-wrap{display:flex;flex-direction:column;gap:6px}
+.mb-row{display:flex;align-items:center;gap:6px;font-size:10px}
+.mb-l{width:100px;color:var(--muted);flex-shrink:0;font-size:9px}
+.mb-trk{flex:1;height:3px;background:var(--line2);border-radius:2px;overflow:hidden}
+.mb-f{height:100%;border-radius:2px}
+.mb-f.model{background:var(--green)}
+.mb-f.imp-t{background:var(--blue)}
+.mb-f.imp-s{background:var(--pinny)}
+.mb-val{width:36px;text-align:right;font-family:'SF Mono',monospace;font-weight:700;font-size:10px}
+.edge-inline{display:flex;gap:10px;margin-top:7px;font-size:10px;flex-wrap:wrap}
+.edge-inline .l{color:var(--muted)}
 
-.mod-bars{display:flex;flex-direction:column;gap:6px}
-.mb-row{display:flex;align-items:center;gap:6px;font-size:11px}
-.mb-lbl{width:110px;color:var(--muted);flex-shrink:0}
-.mb-track{flex:1;height:4px;background:var(--line2);border-radius:2px;overflow:hidden}
-.mb-fill{height:100%;border-radius:2px}
-.mb-fill.model{background:var(--green)}
-.mb-fill.implied-taken{background:var(--blue)}
-.mb-fill.implied-sharp{background:var(--pinny)}
-.mb-val{width:40px;text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
-.edge-row{display:flex;gap:12px;margin-top:8px;font-size:11px;flex-wrap:wrap}
-.edge-row .lbl{color:var(--muted)}
-
-/* Books table in detail */
+/* Books grid in detail */
 .bk-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px}
-.bk-cell{padding:6px 8px;border-radius:3px;border:1px solid var(--line2);background:var(--panel2);display:flex;justify-content:space-between;align-items:center;font-size:11px}
-.bk-cell.is-sharp{border-color:#5a3d00;background:#160e00}
-.bk-name{color:var(--muted)}
-.bk-cell.is-sharp .bk-name{color:#e9ae50}
-.bk-odds{font-weight:700;font-variant-numeric:tabular-nums}
-.bk-e.pos{color:var(--green);font-size:10px}
-.bk-e.neg{color:var(--red);font-size:10px}
+.bkc{padding:6px 8px;border-radius:5px;border:1px solid var(--line2);background:var(--card);display:flex;justify-content:space-between;align-items:center;font-size:10px}
+.bkc.is-s{border-color:#5a3d00;background:#120c00}
+.bkc-n{color:var(--muted)}
+.bkc.is-s .bkc-n{color:#a07020}
+.bkc-o{font-weight:800;font-family:'SF Mono',monospace}
+.ep.pos{color:var(--green);font-size:9px}
+.ep.neg{color:var(--red);font-size:9px}
 
-/* Line movement */
-.lm-ladder{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
-.lm-rung{text-align:center;font-size:11px}
-.lm-rung-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
-.lm-rung-val{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
-.lm-rung.detect .lm-rung-val{color:var(--green)}
-.lm-arr{color:var(--muted)}
-.lm-summary{font-size:11px;padding:7px;border-radius:4px;background:var(--panel2);border:1px solid var(--line2)}
-.lm-summary.ahead{border-color:var(--green-border);background:var(--green-dim);color:#86efac}
-.lm-summary.late{border-color:#5e2222;background:#2c1414;color:#fca5a5}
-.lm-chart-wrap{margin:8px 0;border:1px solid var(--line2);border-radius:4px;overflow:hidden;background:#060c18}
-.lm-chart{display:block;width:100%;height:120px}
-.lm-empty{font-size:11px;color:var(--muted);padding:10px;text-align:center}
-.lm-legend{display:flex;gap:12px;margin-top:6px;font-size:10px;color:var(--muted)}
-.lm-ld{width:8px;height:2px;border-radius:1px;display:inline-block;margin-right:3px;vertical-align:middle}
-.lm-ld.sharp{background:var(--pinny)}
-.lm-ld.soft{background:var(--blue)}
-.lm-ld.detect{background:var(--green)}
+/* Line movement chart */
+.lm-ladder{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:7px}
+.lm-rung{text-align:center}
+.lm-rl{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px}
+.lm-rv{font-size:13px;font-weight:800;font-family:'SF Mono',monospace;margin-top:2px}
+.lm-rung.det .lm-rv{color:var(--green)}
+.lm-arr{color:var(--dim);font-size:12px}
+.lm-sum{font-size:10px;padding:6px 8px;border-radius:5px;background:var(--card2);border:1px solid var(--line2)}
+.lm-sum.ahead{border-color:var(--green-b);background:var(--green-d);color:#86efac}
+.lm-sum.late{border-color:#501010;background:#200a0a;color:#fca5a5}
+.lm-wrap{margin:6px 0;border:1px solid var(--line2);border-radius:5px;overflow:hidden;background:#04040a}
+.lm-svg{display:block;width:100%;height:100px}
+.lm-empty{font-size:10px;color:var(--muted);padding:10px;text-align:center}
+.lm-legend{display:flex;gap:10px;margin-top:5px;font-size:9px;color:var(--muted)}
+.lmd{width:8px;height:2px;border-radius:1px;display:inline-block;margin-right:2px;vertical-align:middle}
+.lmd.s{background:var(--pinny)}
+.lmd.so{background:var(--blue)}
+.lmd.d{background:var(--green)}
 
 /* Similar CLV */
-.sim-tbl{width:100%;border-collapse:collapse;font-size:11px}
-.sim-tbl th{text-align:left;padding:4px 6px;color:var(--muted);font-size:10px;border-bottom:1px solid var(--line)}
-.sim-tbl td{padding:4px 6px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
-.clv-pos{color:var(--green);font-weight:700}
-.clv-neg{color:var(--red);font-weight:700}
+.sim-tbl{width:100%;border-collapse:collapse;font-size:10px}
+.sim-tbl th{text-align:left;padding:3px 5px;color:var(--muted);font-size:9px;border-bottom:1px solid var(--line)}
+.sim-tbl td{padding:3px 5px;border-bottom:1px solid var(--line);font-family:'SF Mono',monospace}
+.cp{color:var(--green);font-weight:700}
+.cn{color:var(--red);font-weight:700}
 
-/* SS score */
-.ss-wrap{display:grid;grid-template-columns:90px 1fr;gap:12px;align-items:center}
-.ss-circ{width:80px;height:80px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:conic-gradient(var(--ssc,var(--green)) calc(var(--ssp,0)*1%),var(--line2) 0);position:relative}
-.ss-circ::before{content:'';position:absolute;inset:6px;border-radius:50%;background:var(--panel)}
-.ss-num{position:relative;font-size:22px;font-weight:800;line-height:1}
-.ss-tier{position:relative;font-size:9px;color:var(--muted)}
-.ss-meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:10px}
+/* SS */
+.ss-w{display:grid;grid-template-columns:76px 1fr;gap:10px;align-items:center}
+.ss-c{width:68px;height:68px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:conic-gradient(var(--ssc,var(--green)) calc(var(--ssp,0)*1%),var(--line2) 0);position:relative}
+.ss-c::before{content:'';position:absolute;inset:5px;border-radius:50%;background:#09090f}
+.ss-n{position:relative;font-size:20px;font-weight:800;font-family:'SF Mono',monospace;line-height:1}
+.ss-t{position:relative;font-size:8px;color:var(--muted)}
+.ss-mg{display:grid;grid-template-columns:1fr 1fr;gap:3px 10px;font-size:9px}
 .ss-mr{display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding:3px 0}
 .ss-mr:last-child,.ss-mr:nth-last-child(2){border-bottom:0}
 .ss-ml{color:var(--muted)}
-.ss-mv{font-weight:700}
+.ss-mv{font-weight:700;font-family:'SF Mono',monospace}
 .ss-mv.pos{color:var(--green)}
 .ss-mv.neg{color:var(--red)}
 .ss-mv.a{color:var(--amber)}
-.ss-empty{font-size:11px;color:var(--muted);padding:10px;text-align:center}
+.ss-e{font-size:10px;color:var(--muted);padding:10px;text-align:center}
 
-/* Hist (proof) */
-.proof-wrap{padding:10px 0}
-.proof-stats{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px;font-size:11px}
-.proof-stat .l{color:var(--muted)}
-.proof-stat .v{font-weight:700;font-variant-numeric:tabular-nums}
-.hist{display:flex;align-items:flex-end;gap:3px;height:60px;margin:8px 0}
-.hb{display:flex;flex-direction:column;align-items:center;gap:1px;flex:1}
-.hb-cnt{font-size:9px;color:var(--muted)}
-.hb-fill{width:100%;border-radius:2px 2px 0 0;min-height:2px;background:var(--green);opacity:.7}
-.hb-fill.neg{background:var(--red)}
-.hb-lbl{font-size:8px;color:var(--dim);text-align:center;white-space:nowrap}
+/* Mobile modal */
+.mob-bg{display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.8);align-items:flex-end}
+.mob-bg.open{display:flex}
+.mob-sheet{background:#0d0d18;border-radius:12px 12px 0 0;width:100%;max-height:90vh;overflow-y:auto;padding:0 0 env(safe-area-inset-bottom)}
+.mob-sh-head{padding:12px 14px;border-bottom:1px solid var(--line);display:flex;align-items:flex-start;gap:8px;position:sticky;top:0;background:#0d0d18;z-index:2}
+.mob-sh-title{font-size:13px;font-weight:700;flex:1;color:var(--txt)}
+.mob-sh-x{padding:4px 10px;border-radius:4px;background:var(--card2);border:1px solid var(--line2);font-size:11px;color:var(--muted)}
+.mob-body{padding:10px}
 
-/* Mobile modal (fallback for mobile detail) */
-.modal-bg{display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.7);align-items:flex-end}
-.modal-bg.open{display:flex}
-.modal-sheet{background:var(--panel);border-radius:12px 12px 0 0;width:100%;max-height:90vh;overflow-y:auto;padding:0 0 env(safe-area-inset-bottom)}
-.modal-sheet-head{padding:12px 14px;border-bottom:1px solid var(--line);display:flex;align-items:flex-start;gap:8px;position:sticky;top:0;background:var(--panel);z-index:2}
-.modal-sheet-title{font-size:13px;font-weight:700;flex:1}
-.modal-sheet-close{padding:4px 10px;border-radius:4px;background:var(--panel2);border:1px solid var(--line2);font-size:12px;color:var(--muted)}
-.modal-sheet-body{padding:12px}
-
-/* Empty states */
-.empty-state{padding:40px 20px;text-align:center;color:var(--muted)}
-.empty-icon{font-size:28px;margin-bottom:6px;opacity:.5}
-.empty-title{font-size:13px;font-weight:600;color:var(--txt);margin-bottom:3px}
-.empty-sub{font-size:11px}
+/* Empty */
+.empty-s{padding:40px 20px;text-align:center;color:var(--muted)}
+.empty-i{font-size:24px;margin-bottom:6px;opacity:.4}
+.empty-t{font-size:12px;font-weight:700;color:var(--txt);margin-bottom:3px}
+.empty-sub{font-size:10px}
 </style>
 </head>
 <body>
 
-<!-- ── Nav ── -->
+<!-- Nav -->
 <nav class="nav">
   <div class="brand">
     <span class="brand-dot"></span>
-    PGR <span class="brand-sub">/ live scanner</span>
+    PGR <span class="brand-v">analytics</span>
   </div>
-  <div class="nav-live">
-    <span id="liveCount">—</span> signals
+  <div class="live-pill">
+    <span id="liveCount">—</span> live edges
   </div>
   <div class="nav-sp"></div>
-  <div class="nav-txt" id="updatedAt">syncing…</div>
-  <span class="nav-tier" id="tierBadge">FREE</span>
+  <span class="nav-ts" id="updatedAt">syncing…</span>
+  <span class="tier-badge" id="tierBadge">FREE</span>
 </nav>
 
-<!-- ── KPI micro-strip ── -->
+<!-- KPI strip -->
 <div class="kpi-strip">
-  <div class="kpi-item">
-    <span class="kpi-lbl">Avg edge</span>
-    <span class="kpi-val g" id="kpiAvgEdge">—</span>
-  </div>
-  <div class="kpi-item">
-    <span class="kpi-lbl">Top edge</span>
-    <span class="kpi-val a" id="kpiTop">—</span>
-    <span class="kpi-val" style="font-size:10px;color:var(--muted)" id="kpiTopMatch"></span>
-  </div>
-  <div class="kpi-item">
-    <span class="kpi-lbl">CLV 30d</span>
-    <span class="kpi-val" id="kpiCLV">—</span>
-  </div>
-  <div class="kpi-item">
-    <span class="kpi-lbl">Beat rate</span>
-    <span class="kpi-val" id="kpiBeat">—</span>
-  </div>
-  <div class="kpi-item">
-    <span class="kpi-lbl">Sharp confirmed</span>
-    <span class="kpi-val b" id="kpiSharp">—</span>
-  </div>
-  <div class="kpi-item">
-    <span class="kpi-lbl">Doctrine</span>
-    <span class="kpi-val" style="font-size:10px;color:var(--muted)">NO SHARP = NO SIGNAL</span>
-  </div>
+  <div class="ki"><span class="ki-l">Avg edge</span><span class="ki-v g" id="kpiAvgEdge">—</span></div>
+  <div class="ki"><span class="ki-l">Top</span><span class="ki-v a" id="kpiTop">—</span><span class="ki-v dim" id="kpiTopM"></span></div>
+  <div class="ki"><span class="ki-l">CLV 30d</span><span class="ki-v" id="kpiCLV">—</span></div>
+  <div class="ki"><span class="ki-l">Beat rate</span><span class="ki-v" id="kpiBeat">—</span></div>
+  <div class="ki"><span class="ki-l">Sharp confirmed</span><span class="ki-v b" id="kpiSharp">—</span></div>
+  <div class="ki"><span class="ki-l">Doctrine</span><span class="ki-v dim">NO SHARP = NO SIGNAL</span></div>
 </div>
 
-<!-- ── Terminal 3-col layout ── -->
+<!-- Terminal -->
 <div class="terminal" id="terminal">
 
-  <!-- LEFT: Filters + CLV summary -->
-  <aside class="filter-col" id="filterCol">
-    <div class="f-section">
-      <div class="f-title">Sport</div>
-      <div class="f-chips">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="fs">
+      <div class="fs-h">Sport</div>
+      <div class="fc">
         <button class="chip active" data-filter="sport" data-value="all">All</button>
         <button class="chip" data-filter="sport" data-value="football">⚽</button>
         <button class="chip" data-filter="sport" data-value="basketball">🏀</button>
         <button class="chip" data-filter="sport" data-value="hockey">🏒</button>
       </div>
     </div>
-    <div class="f-section">
-      <div class="f-title">Market</div>
-      <div class="f-chips">
+    <div class="fs">
+      <div class="fs-h">Market</div>
+      <div class="fc">
         <button class="chip active" data-filter="market" data-value="all">All</button>
         <button class="chip" data-filter="market" data-value="OVER">Goals</button>
         <button class="chip" data-filter="market" data-value="BTTS">BTTS</button>
@@ -418,9 +420,9 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
         <button class="chip" data-filter="market" data-value="CARDS">Cards</button>
       </div>
     </div>
-    <div class="f-section">
-      <div class="f-title">Min edge</div>
-      <div class="f-chips">
+    <div class="fs">
+      <div class="fs-h">Min edge</div>
+      <div class="fc">
         <button class="chip active" data-filter="edge" data-value="0">All</button>
         <button class="chip" data-filter="edge" data-value="3">3%+</button>
         <button class="chip" data-filter="edge" data-value="5">5%+</button>
@@ -428,550 +430,401 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
         <button class="chip" data-filter="edge" data-value="10">10%+</button>
       </div>
     </div>
-    <div class="f-section">
-      <div class="f-title">Anchor</div>
-      <div class="f-chips">
-        <button class="chip warn" data-filter="sharp" data-value="1" id="sharpChip">⚡ Sharp only</button>
+    <div class="fs">
+      <div class="fs-h">Anchor</div>
+      <div class="fc">
+        <button class="chip a-warn" data-filter="sharp" data-value="1" id="sharpChip">⚡ Sharp only</button>
       </div>
     </div>
-
-    <!-- CLV summary (sidebar only) -->
-    <div class="clv-mini" id="clvMini">
-      <div class="f-title">CLV Proof · 30d</div>
-      <div class="clv-mini-row"><span class="clv-lbl">Avg CLV</span><span class="clv-val" id="sAvg">—</span></div>
-      <div class="clv-mini-row"><span class="clv-lbl">Beat rate</span><span class="clv-val" id="sBeat">—</span></div>
-      <div class="clv-mini-row"><span class="clv-lbl">Sample n</span><span class="clv-val b" id="sN">0</span></div>
-      <div class="clv-mini-row"><span class="clv-lbl">Pos / Neg</span><span class="clv-val" id="sSplit">—</span></div>
-      <div style="margin-top:8px">
-        <div class="f-title" style="margin-bottom:6px">Distribution</div>
-        <div class="hist" id="sHist"></div>
-      </div>
+    <div class="clv-blk">
+      <div class="fs-h" style="margin-bottom:8px">CLV Proof · 30d</div>
+      <div class="clv-row"><span class="clv-l">Avg CLV</span><span class="clv-v" id="sAvg">—</span></div>
+      <div class="clv-row"><span class="clv-l">Beat rate</span><span class="clv-v" id="sBeat">—</span></div>
+      <div class="clv-row"><span class="clv-l">Sample n</span><span class="clv-v b" id="sN">0</span></div>
+      <div class="clv-row"><span class="clv-l">Pos / Neg</span><span class="clv-v" id="sSplit">—</span></div>
+      <div class="hist" id="sHist"></div>
     </div>
   </aside>
 
-  <!-- CENTER: Scanner -->
-  <main class="scanner-col">
-    <div class="scanner-head">
-      <span class="scanner-h-title">Live scanner</span>
-      <span class="scanner-h-count" id="scanCount">—</span>
-      <span class="scanner-h-sp"></span>
-      <span class="scanner-h-meta" id="scanMeta">auto-refresh 60s</span>
+  <!-- Scanner -->
+  <main class="scanner">
+    <div class="sc-head">
+      <span class="sc-h-title">Live scanner</span>
+      <span class="sc-h-count" id="scanCount">—</span>
+      <span class="sc-h-sp"></span>
+      <span class="sc-h-meta" id="scanMeta">refresh 60s</span>
     </div>
-    <div class="scanner-body">
-      <!-- Desktop table -->
-      <table class="s-table" id="sTable">
-        <thead>
-          <tr>
-            <th>Match</th>
-            <th>Market</th>
-            <th>Sharp ref</th>
-            <th>Best</th>
-            <th>Edge</th>
-            <th>Books</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody id="sTbody">
-          <tr><td colspan="7"><div class="empty-state"><div class="empty-icon">⏳</div>Loading…</div></td></tr>
-        </tbody>
-      </table>
-      <!-- Mobile list -->
-      <div class="m-list" id="mList">
-        <div class="empty-state"><div class="empty-icon">⏳</div>Loading…</div>
-      </div>
+    <div class="sc-body" id="scBody">
+      <div class="empty-s"><div class="empty-i">⏳</div>Loading signals…</div>
     </div>
   </main>
 
-  <!-- RIGHT: Detail panel (desktop) -->
-  <aside class="detail-col hidden" id="detailCol">
-    <div class="detail-head" id="detailHead">
-      <div class="detail-head-inner">
-        <div class="detail-title" id="detTitle">—</div>
-        <div class="detail-sub" id="detSub"></div>
+  <!-- Detail panel (desktop) -->
+  <aside class="detail hidden" id="detailCol">
+    <div class="det-head">
+      <div class="det-hi">
+        <div class="det-title" id="detTitle">—</div>
+        <div class="det-sub" id="detSub"></div>
       </div>
-      <button class="det-close" id="detClose">✕</button>
+      <button class="det-x" id="detClose">✕</button>
     </div>
-    <div class="detail-body" id="detBody">
-      <div class="empty-state"><div class="empty-icon">👆</div>Click a row</div>
+    <div class="det-body" id="detBody">
+      <div class="empty-s"><div class="empty-i">👆</div>Click a card</div>
     </div>
   </aside>
 </div>
 
-<!-- Mobile detail modal (bottom sheet) -->
-<div class="modal-bg" id="modalBg">
-  <div class="modal-sheet">
-    <div class="modal-sheet-head">
-      <div class="modal-sheet-title" id="mobTitle">—</div>
-      <button class="modal-sheet-close" id="mobClose">Close</button>
+<!-- Mobile bottom sheet -->
+<div class="mob-bg" id="mobBg">
+  <div class="mob-sheet">
+    <div class="mob-sh-head">
+      <div class="mob-sh-title" id="mobTitle">—</div>
+      <button class="mob-sh-x" id="mobClose">Close</button>
     </div>
-    <div class="modal-sheet-body" id="mobBody">
-      <div class="empty-state"><div class="empty-icon">⏳</div>Loading…</div>
+    <div class="mob-body" id="mobBody">
+      <div class="empty-s"><div class="empty-i">⏳</div>Loading…</div>
     </div>
   </div>
 </div>
 
 <script>
 /* ── State ── */
-const S = {
-  picks: [], filters: {sport:'all',market:'all',edge:0,sharp:false},
-  selectedId: null,
-};
+const S={picks:[],filters:{sport:'all',market:'all',edge:0,sharp:false}};
 
 /* ── Helpers ── */
-const $  = id => document.getElementById(id);
-const fP = (v,s=true) => {
-  if (v==null||isNaN(v)) return '—';
-  return (s&&v>0?'+':'')+Number(v).toFixed(2)+'%';
-};
-const fO = v => (v==null||isNaN(v)) ? '—' : Number(v).toFixed(2);
-const fB = b => {
-  if (!b) return '?';
-  const m={Pinnacle:'Pinn',pinnacle:'Pinn',betfair_ex_eu:'BF',Betfair:'BF',Matchbook:'MB',
-    Bet365:'B365',Unibet:'Uni','William Hill':'WH',Betsson:'Bess',NordicBet:'Nor',
-    nordicbet:'Nor','Nordic Bet':'Nor',Bwin:'Bwin',Betway:'BW','1xBet':'1xB',
-    SBOBet:'SBO',Marathonbet:'Mara','BetOnline.ag':'BetOn','LowVig.ag':'LowV',
-    Coolbet:'Cool',Casumo:'Casu','Best Line':'Best'};
-  return m[b] || String(b).replace(/sharp_avg\(/g,'').split(';')[0].slice(0,7);
-};
-const ago = m => {
-  if (m==null) return '—';
-  if (m<1) return 'just now';
-  if (m<60) return `${m}m ago`;
-  return `${Math.floor(m/60)}h ago`;
-};
+const $=id=>document.getElementById(id);
+const fP=(v,s=true)=>{if(v==null||isNaN(v))return'—';return(s&&v>0?'+':'')+Number(v).toFixed(2)+'%'};
+const fO=v=>(v==null||isNaN(v))?'—':Number(v).toFixed(2);
+const ago=m=>{if(m==null)return'—';if(m<1)return'just now';if(m<60)return`${m}m`;return`${Math.floor(m/60)}h`};
 
-/* ── Pick status ── */
-const SHARP_BOOKS = new Set(['Pinnacle','Betfair','Matchbook','betfair_ex_eu','pinnacle','matchbook']);
-function pickStatus(p) {
-  return p.confidence_label || (p.sharp_price_at_detection ? 'SHARP_CONFIRMED' : 'UNVERIFIED_LEGACY');
-}
-function badgeHtml(st) {
-  if (st==='SHARP_CONFIRMED')   return '<span class="badge sharp">sharp</span>';
-  if (st==='INTERPOLATED')      return '<span class="badge moving">interp</span>';
-  if (st==='UNVERIFIED_LEGACY') return '<span class="badge legacy">legacy</span>';
-  return '<span class="badge unverified">unverified</span>';
-}
-function sportOf(p) {
-  const l=(p.league||'').toLowerCase();
-  if (l.includes('nba')||l.includes('basketball')) return 'basketball';
-  if (l.includes('nhl')||l.includes('hockey'))     return 'hockey';
-  return 'football';
+const SHARP_BOOKS=new Set(['Pinnacle','Betfair','Matchbook','betfair_ex_eu','pinnacle','matchbook']);
+
+/* ── Bookmaker icon config ── */
+const BK_CFG={
+  'Pinnacle':{cls:'pinn',lbl:'PINN'},
+  'pinnacle':{cls:'pinn',lbl:'PINN'},
+  'Betfair':{cls:'bf',lbl:'BF'},
+  'betfair_ex_eu':{cls:'bf',lbl:'BF'},
+  'Matchbook':{cls:'bf',lbl:'MB'},
+  'matchbook':{cls:'bf',lbl:'MB'},
+  'Bet365':{cls:'b365',lbl:'B365'},
+  'Unibet':{cls:'uni',lbl:'UNI'},
+  'NordicBet':{cls:'uni',lbl:'NOR'},
+  'nordicbet':{cls:'uni',lbl:'NOR'},
+  'SBOBet':{cls:'sb',lbl:'SBO'},
+  'Betsson':{cls:'b365',lbl:'BESS'},
+  '1xBet':{cls:'oneX',lbl:'1XB'},
+  'Marathonbet':{cls:'mara',lbl:'MARA'},
+  'Bwin':{cls:'bwin',lbl:'BWIN'},
+  'Betway':{cls:'bwin',lbl:'BW'},
+  '188Bet':{cls:'sb',lbl:'188'},
+  '10Bet':{cls:'dflt',lbl:'10B'},
+  'Betano':{cls:'dflt',lbl:'BTAN'},
+  'Coolbet':{cls:'uni',lbl:'COOL'},
+  'Casumo':{cls:'dflt',lbl:'CASU'},
+};
+function bkCfg(name){return BK_CFG[name]||{cls:'dflt',lbl:String(name).slice(0,4).toUpperCase()}}
+
+/* ── Book icon HTML ── */
+function bkIcon(name,odds,maxW=46){
+  const c=bkCfg(name);
+  const isSharp=SHARP_BOOKS.has(name);
+  return `<div class="bk ${c.cls}" title="${name}: ${Number(odds).toFixed(2)}">
+    <span class="bk-name">${isSharp?'⚡':''} ${c.lbl}</span>
+    <span class="bk-odds">${Number(odds).toFixed(2)}</span>
+  </div>`;
 }
 
-/* ── Inline books renderer ── */
-function booksInline(p, maxV=4) {
+function booksStrip(p,maxV=5){
   let bm={};
-  try{ bm=typeof p.odds_by_bookmaker==='string'?JSON.parse(p.odds_by_bookmaker):(p.odds_by_bookmaker||{}); }catch(e){}
+  try{bm=typeof p.odds_by_bookmaker==='string'?JSON.parse(p.odds_by_bookmaker):(p.odds_by_bookmaker||{});}catch(e){}
   const entries=Object.entries(bm).filter(([,v])=>v>1);
-  if (!entries.length) return '<span style="color:var(--dim);font-size:10px">—</span>';
+  if(!entries.length){
+    // fallback: show sharp ref + best if we have them
+    const out=[];
+    if(p.sharp_price_at_detection&&p.sharp_book_at_detection)
+      out.push([p.sharp_book_at_detection,p.sharp_price_at_detection]);
+    if((p.best_odds_value||p.odds)&&(p.best_price_book||p.best_odds_bookmaker))
+      out.push([p.best_price_book||p.best_odds_bookmaker,p.best_odds_value||p.odds]);
+    return out.map(([n,v])=>bkIcon(n,v)).join('')||'<span style="color:var(--dim);font-size:10px">—</span>';
+  }
   entries.sort((a,b)=>{const as=SHARP_BOOKS.has(a[0])?1:0,bs=SHARP_BOOKS.has(b[0])?1:0;return bs-as||(b[1]-a[1]);});
-  const vis=entries.slice(0,maxV), rest=entries.length-maxV;
-  let h=vis.map(([nm,od])=>{
-    const s=SHARP_BOOKS.has(nm);
-    return `<span class="bk-pill${s?' sharp':''}">${s?'⚡':''}${fB(nm)} <b>${Number(od).toFixed(2)}</b></span>`;
-  }).join('');
-  if (rest>0) h+=`<span class="bk-more">+${rest}</span>`;
-  return `<div class="bk-row">${h}</div>`;
+  const vis=entries.slice(0,maxV),rest=entries.length-maxV;
+  let h=vis.map(([n,v])=>bkIcon(n,v)).join('');
+  if(rest>0)h+=`<div class="bk-more-pill">+${rest}</div>`;
+  return h;
 }
 
-/* ── Movement badge ── */
-function mvBadge(p) {
-  if (p.movement_pct==null) return '';
+/* ── Status ── */
+function pickStatus(p){return p.confidence_label||(p.sharp_price_at_detection?'SHARP_CONFIRMED':'UNVERIFIED_LEGACY')}
+function badgeHtml(st){
+  if(st==='SHARP_CONFIRMED')   return '<span class="bdg sharp">sharp</span>';
+  if(st==='INTERPOLATED')      return '<span class="bdg moving">interp</span>';
+  if(st==='UNVERIFIED_LEGACY') return '<span class="bdg legacy">legacy</span>';
+  return '<span class="bdg unverified">unverified</span>';
+}
+function sportOf(p){
+  const l=(p.league||'').toLowerCase();
+  if(l.includes('nba')||l.includes('basketball'))return'basketball';
+  if(l.includes('nhl')||l.includes('hockey'))return'hockey';
+  return'football';
+}
+
+/* ── Move badge ── */
+function mvBadge(p){
+  if(p.movement_pct==null)return'';
   const m=p.movement_pct;
   const cls=m<=-1.5?'ok':(m>=1.5?'late':'flat');
-  const ic=m<=-1.5?'↑':(m>=1.5?'↓':'→');
-  return `<div class="mv ${cls}">${ic} ${m>0?'+':''}${m.toFixed(1)}% after detect</div>`;
+  const ic=m<=-1.5?'↑ market moved ':(m>=1.5?'↓ market drifted ':'→ flat ');
+  return `<div class="mc-move ${cls}"><span>${ic}</span><span>${m>0?'+':''}${m.toFixed(1)}% after detect</span></div>`;
 }
 
 /* ── Filters ── */
 document.querySelectorAll('.chip[data-filter]').forEach(c=>{
   c.addEventListener('click',()=>{
     const f=c.dataset.filter,v=c.dataset.value;
-    if (f==='sharp'){
-      S.filters.sharp=!S.filters.sharp;
-      c.classList.toggle('active',S.filters.sharp);
-    } else {
-      document.querySelectorAll(`.chip[data-filter="${f}"]`).forEach(x=>x.classList.remove('active'));
-      c.classList.add('active');
-      S.filters[f]=f==='edge'?+v:v;
-    }
+    if(f==='sharp'){S.filters.sharp=!S.filters.sharp;c.classList.toggle('active',S.filters.sharp);}
+    else{document.querySelectorAll(`.chip[data-filter="${f}"]`).forEach(x=>x.classList.remove('active'));c.classList.add('active');S.filters[f]=f==='edge'?+v:v;}
     render();
   });
 });
-
-function applyFilters(picks) {
+function applyFilters(picks){
   return picks.filter(p=>{
-    if (S.filters.sport!=='all'&&sportOf(p)!==S.filters.sport) return false;
-    if (S.filters.market!=='all'){
-      const mk=(p.market||'').toUpperCase()+' '+(p.selection||'').toUpperCase();
-      if (!mk.includes(S.filters.market)) return false;
-    }
-    if (S.filters.edge>0&&(p.edge_pct||0)<S.filters.edge) return false;
-    if (S.filters.sharp&&pickStatus(p)!=='SHARP_CONFIRMED') return false;
+    if(S.filters.sport!=='all'&&sportOf(p)!==S.filters.sport)return false;
+    if(S.filters.market!=='all'){const mk=(p.market||'').toUpperCase()+' '+(p.selection||'').toUpperCase();if(!mk.includes(S.filters.market))return false;}
+    if(S.filters.edge>0&&(p.edge_pct||0)<S.filters.edge)return false;
+    if(S.filters.sharp&&pickStatus(p)!=='SHARP_CONFIRMED')return false;
     return true;
   });
 }
 
 /* ── KPI strip ── */
-function renderKPIs(picks) {
-  $('liveCount').textContent = picks.length;
-  $('scanCount').textContent = picks.length + ' signals';
+function renderKPIs(picks){
+  $('liveCount').textContent=picks.length;
+  $('scanCount').textContent=picks.length+' signals';
   const sp=picks.filter(p=>pickStatus(p)==='SHARP_CONFIRMED');
   $('kpiSharp').textContent=sp.length;
   const avg=sp.length?sp.reduce((a,p)=>a+(p.edge_pct||0),0)/sp.length:null;
-  const kAvg=$('kpiAvgEdge');
-  kAvg.textContent=avg!=null?fP(avg):'—';
-  kAvg.className='kpi-val '+(avg==null?'':(avg>0?'g':'r'));
+  const ka=$('kpiAvgEdge');ka.textContent=avg!=null?fP(avg):'—';ka.className='ki-v '+(avg==null?'':(avg>0?'g':'r'));
   const top=picks.slice().sort((a,b)=>(b.edge_pct||0)-(a.edge_pct||0))[0];
   $('kpiTop').textContent=top&&top.edge_pct?fP(top.edge_pct):'—';
-  $('kpiTopMatch').textContent=top?`${fB(top.home_team)||''} vs ${fB(top.away_team)||''}`.slice(0,22):'';
+  $('kpiTopM').textContent=top?`${top.home_team||''} vs ${top.away_team||''}`.slice(0,20):'';
 }
 
-/* ── Scanner render ── */
-function renderScanner(picks) {
-  $('scanMeta').textContent=`${picks.length} · refresh 60s`;
-  if (!picks.length) {
-    const e=`<div class="empty-state"><div class="empty-icon">🌙</div><div class="empty-title">No signals match filters</div><div class="empty-sub">Lower min edge or clear sharp-only filter.</div></div>`;
-    $('sTbody').innerHTML=`<tr><td colspan="7">${e}</td></tr>`;
-    $('mList').innerHTML=e;
+/* ── Render scanner cards ── */
+function renderScanner(picks){
+  $('scanMeta').textContent=`${picks.length} · 60s`;
+  if(!picks.length){
+    $('scBody').innerHTML=`<div class="empty-s"><div class="empty-i">🌙</div><div class="empty-t">No signals</div><div class="empty-sub">Lower min edge or clear sharp-only filter</div></div>`;
     return;
   }
-  /* Desktop rows */
-  $('sTbody').innerHTML = picks.map(p=>{
+  $('scBody').innerHTML=picks.map(p=>{
     const st=pickStatus(p);
     const isNew=p.age_minutes!=null&&p.age_minutes<12;
-    const ec=p.edge_pct>=8?'g':(p.edge_pct>=3?'a':'');
-    const sharpHtml=st==='SHARP_CONFIRMED'
-      ?`<div class="c-price sharp"><div class="c-price-val">${fO(p.sharp_price_at_detection)}</div><div class="c-price-bk">⚡${fB(p.sharp_book_at_detection)}</div></div>`
-      :`<div class="c-price nodata"><div class="c-price-val">awaiting sharp</div><div class="c-price-bk">${st==='UNVERIFIED_LEGACY'?'legacy':'pre-pipeline'}</div></div>`;
-    const bestBk=p.best_price_book||p.best_odds_bookmaker;
-    const bestVal=p.best_odds_value||p.odds;
-    return `<tr data-id="${p.id}" onclick="openDetail(${p.id},this)">
-      <td class="c-match">
-        <div class="c-match-teams">${p.home_team} <span style="color:var(--muted)">vs</span> ${p.away_team}</div>
-        <div class="c-match-sub">${p.league||''} · ${p.kickoff_str||ago(p.age_minutes)}</div>
-        ${mvBadge(p)}
-      </td>
-      <td>
-        <div class="c-mkt">${p.icon||'⚽'} ${p.selection||p.market}</div>
-        <div class="c-mkt-sub">${(p.market||'').toLowerCase()}</div>
-      </td>
-      <td>${sharpHtml}</td>
-      <td>
-        <div class="c-price"><div class="c-price-val">${fO(bestVal)}</div><div class="c-price-bk">${fB(bestBk)}</div></div>
-      </td>
-      <td><span class="c-edge ${ec}">${fP(p.edge_pct)}</span></td>
-      <td>${booksInline(p,4)}</td>
-      <td>${badgeHtml(st)}${isNew?' <span class="badge new">new</span>':''}</td>
-    </tr>`;
-  }).join('');
-
-  /* Mobile cards */
-  $('mList').innerHTML = picks.map(p=>{
-    const st=pickStatus(p);
-    const ec=(p.edge_pct||0)>0?'g':'r';
-    const sharpTxt=st==='SHARP_CONFIRMED'
-      ?`<span class="m-price-sharp">⚡${fO(p.sharp_price_at_detection)} <span class="m-price-bk">${fB(p.sharp_book_at_detection)}</span></span>`
-      :`<span style="color:var(--dim);font-style:italic;font-size:10px">no sharp anchor</span>`;
-    return `<div class="m-card" data-id="${p.id}" onclick="openDetail(${p.id},null)">
-      <div class="m-card-row1">
+    const ec=(p.edge_pct||0)>=8?'g':((p.edge_pct||0)>=3?'a':'r');
+    return `<div class="mc${isNew?' new-mc':''}" data-id="${p.id}" onclick="openDetail(${p.id},this)">
+      <div class="mc-top">
+        <div class="mc-match">
+          <div class="mc-teams">${p.home_team} <span style="color:var(--muted)">vs</span> ${p.away_team}</div>
+          <div class="mc-sub">${p.league||''} · ${p.kickoff_str||ago(p.age_minutes)}</div>
+        </div>
         <div>
-          <div class="m-card-match">${p.home_team} vs ${p.away_team}</div>
-          <div class="c-match-sub">${p.league||''} · ${p.kickoff_str||''}</div>
+          <div class="mc-edge ${ec}">${fP(p.edge_pct)}</div>
+          <div class="mc-edge-lbl">edge</div>
         </div>
-        <div class="c-edge ${ec}">${fP(p.edge_pct)}</div>
       </div>
-      <div class="m-card-row2">
-        <span class="m-card-mkt">${p.icon||'⚽'} ${p.selection||p.market}</span>
-        <span class="m-card-sub">${(p.market||'').toLowerCase()}</span>
+      <div class="mc-mid">
+        <span class="mc-mkt">${p.icon||'⚽'} ${p.selection||p.market}</span>
+        <span class="mc-type">${(p.market||'').toLowerCase()}</span>
         ${badgeHtml(st)}
+        ${isNew?'<span class="bdg new">new</span>':''}
       </div>
+      <div class="mc-books">${booksStrip(p,6)}</div>
       ${mvBadge(p)}
-      <div class="m-card-row3">
-        <div class="m-card-prices">${sharpTxt}
-          <span class="m-price-best">${fO(p.best_odds_value||p.odds)} <span class="m-price-bk">${fB(p.best_price_book||p.best_odds_bookmaker)}</span></span>
-        </div>
-        <div>${booksInline(p,2)}</div>
-      </div>
     </div>`;
   }).join('');
 }
 
-function render() {
-  const f=applyFilters(S.picks);
-  renderKPIs(f);
-  renderScanner(f);
-}
+function render(){const f=applyFilters(S.picks);renderKPIs(f);renderScanner(f);}
 
-/* ── Detail panel / modal ── */
-const isMobile = () => window.innerWidth<=900;
-let currentDetailId = null;
+/* ── Detail ── */
+const isMob=()=>window.innerWidth<=860;
 
-function openDetail(id, rowEl) {
-  currentDetailId=id;
-  /* Highlight row */
-  document.querySelectorAll('.s-table tr.sel').forEach(r=>r.classList.remove('sel'));
-  if (rowEl) rowEl.classList.add('sel');
-
-  if (isMobile()) {
-    $('modalBg').classList.add('open');
-    document.body.style.overflow='hidden';
+function openDetail(id,el){
+  document.querySelectorAll('.mc.sel').forEach(x=>x.classList.remove('sel'));
+  if(el)el.classList.add('sel');
+  if(isMob()){
+    $('mobBg').classList.add('open');document.body.style.overflow='hidden';
     $('mobTitle').textContent='Loading…';
-    $('mobBody').innerHTML=`<div class="empty-state"><div class="empty-icon">⏳</div>Loading…</div>`;
-    fetchAndRenderDetail(id, 'mobile');
+    $('mobBody').innerHTML=`<div class="empty-s"><div class="empty-i">⏳</div>Loading…</div>`;
+    fetchDetail(id,'mob');
   } else {
-    const term=$('terminal'), det=$('detailCol');
-    term.classList.add('detail-open');
-    det.classList.remove('hidden');
-    $('detTitle').textContent='Loading…';
-    $('detSub').textContent='';
-    $('detBody').innerHTML=`<div class="empty-state"><div class="empty-icon">⏳</div>Loading…</div>`;
-    fetchAndRenderDetail(id, 'desktop');
+    $('terminal').classList.add('detail-open');
+    $('detailCol').classList.remove('hidden');
+    $('detTitle').textContent='Loading…';$('detSub').textContent='';
+    $('detBody').innerHTML=`<div class="empty-s"><div class="empty-i">⏳</div>Loading…</div>`;
+    fetchDetail(id,'desk');
   }
 }
+$('detClose').addEventListener('click',closeDesk);
+$('mobClose').addEventListener('click',closeMob);
+$('mobBg').addEventListener('click',e=>{if(e.target===$('mobBg'))closeMob();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeDesk();closeMob();}});
+function closeDesk(){$('terminal').classList.remove('detail-open');$('detailCol').classList.add('hidden');document.querySelectorAll('.mc.sel').forEach(x=>x.classList.remove('sel'));}
+function closeMob(){$('mobBg').classList.remove('open');document.body.style.overflow='';}
 
-$('detClose').addEventListener('click', closeDesktopDetail);
-$('mobClose').addEventListener('click', closeMobileDetail);
-$('modalBg').addEventListener('click', e=>{ if(e.target===$('modalBg')) closeMobileDetail(); });
-document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeDesktopDetail(); closeMobileDetail(); }});
-
-function closeDesktopDetail() {
-  $('terminal').classList.remove('detail-open');
-  $('detailCol').classList.add('hidden');
-  document.querySelectorAll('.s-table tr.sel').forEach(r=>r.classList.remove('sel'));
-}
-function closeMobileDetail() {
-  $('modalBg').classList.remove('open');
-  document.body.style.overflow='';
-}
-
-async function fetchAndRenderDetail(id, target) {
+async function fetchDetail(id,tgt){
   let data=null;
-  try {
-    const r=await fetch(`/api/v2/pick/${id}/detail`);
-    data=await r.json();
-  } catch(e) {
-    const err=`<div class="empty-state"><div class="empty-icon">⚠️</div>Failed to load</div>`;
-    if(target==='desktop') $('detBody').innerHTML=err;
-    else $('mobBody').innerHTML=err;
-    return;
-  }
-  if (!data||!data.pick) {
-    const err=`<div class="empty-state"><div class="empty-icon">🤷</div>Pick not found</div>`;
-    if(target==='desktop') $('detBody').innerHTML=err;
-    else $('mobBody').innerHTML=err;
-    return;
-  }
-  const html=buildDetailHtml(data);
-  if (target==='desktop') {
-    const p=data.pick;
-    const st=data.doctrine_status||'UNKNOWN';
+  try{const r=await fetch(`/api/v2/pick/${id}/detail`);data=await r.json();}
+  catch(e){const err=`<div class="empty-s"><div class="empty-i">⚠️</div>Failed to load</div>`;if(tgt==='desk')$('detBody').innerHTML=err;else $('mobBody').innerHTML=err;return;}
+  if(!data||!data.pick){const err=`<div class="empty-s"><div class="empty-i">🤷</div>Not found</div>`;if(tgt==='desk')$('detBody').innerHTML=err;else $('mobBody').innerHTML=err;return;}
+  const html=buildDetail(data);
+  if(tgt==='desk'){
+    const p=data.pick,st=data.doctrine_status||'UNKNOWN';
     $('detTitle').innerHTML=`${p.home_team} <span style="color:var(--muted)">vs</span> ${p.away_team}`;
     $('detSub').innerHTML=`${p.league||''} · ${p.selection||''} · ${badgeHtml(st)}`;
     $('detBody').innerHTML=html;
-    loadSS(id,'ssMount');
   } else {
-    const p=data.pick;
-    $('mobTitle').textContent=`${p.home_team} vs ${p.away_team}`;
+    $('mobTitle').textContent=`${data.pick.home_team} vs ${data.pick.away_team}`;
     $('mobBody').innerHTML=html;
-    loadSS(id,'ssMount');
   }
+  loadSS(id,'ssMount');
 }
 
-function buildDetailHtml(d) {
-  const p=d.pick, sr=d.sharp_ref, ba=d.best_available, m=d.model, lm=d.line_movement, sc=d.similar_clv;
+function buildDetail(d){
+  const p=d.pick,sr=d.sharp_ref,ba=d.best_available,m=d.model,lm=d.line_movement,sc=d.similar_clv;
 
-  /* Price snapshot */
-  const priceHtml=`<div class="ds">
-    <div class="ds-h">Price snapshot</div>
+  const priceHtml=`<div class="ds"><div class="ds-h">Price snapshot</div>
     <div class="price-snap">
-      <div class="ps-card ${sr?'sharp':''}">
-        <div class="ps-lbl">⚡ Sharp ref</div>
-        <div class="ps-val">${sr?fO(sr.odds):'awaiting'}</div>
-        <div class="ps-bk">${sr?fB(sr.book):'no sharp anchor'}</div>
-      </div>
-      <div class="ps-card">
-        <div class="ps-lbl">Best available</div>
-        <div class="ps-val">${ba?fO(ba.odds):'—'}</div>
-        <div class="ps-bk">${ba?fB(ba.book):''}</div>
-      </div>
-    </div>
-  </div>`;
+      <div class="ps ${sr?'sharp-card':''}"><div class="ps-l">⚡ Sharp ref</div><div class="ps-v">${sr?fO(sr.odds):'awaiting'}</div><div class="ps-bk">${sr?bkCfg(sr.book).lbl:'no sharp anchor'}</div></div>
+      <div class="ps"><div class="ps-l">Best available</div><div class="ps-v">${ba?fO(ba.odds):'—'}</div><div class="ps-bk">${ba?bkCfg(ba.book).lbl:''}</div></div>
+    </div></div>`;
 
-  /* Model vs market */
   let modelHtml='';
-  if (m) {
-    const w=x=>Math.max(0,Math.min(100,x*100)).toFixed(1)+'%';
-    const edgeCls=t=>t>0?'pos':'neg';
-    modelHtml=`<div class="ds">
-      <div class="ds-h">Model vs market</div>
-      <div class="mod-bars">
-        <div class="mb-row"><span class="mb-lbl">Model prob</span><div class="mb-track"><div class="mb-fill model" style="width:${w(m.model_prob)}"></div></div><span class="mb-val">${(m.model_prob*100).toFixed(1)}%</span></div>
-        <div class="mb-row"><span class="mb-lbl">Implied @ taken</span><div class="mb-track"><div class="mb-fill implied-taken" style="width:${w(m.implied_prob_taken)}"></div></div><span class="mb-val">${(m.implied_prob_taken*100).toFixed(1)}%</span></div>
-        ${m.implied_prob_sharp!=null?`<div class="mb-row"><span class="mb-lbl">Implied @ sharp</span><div class="mb-track"><div class="mb-fill implied-sharp" style="width:${w(m.implied_prob_sharp)}"></div></div><span class="mb-val">${(m.implied_prob_sharp*100).toFixed(1)}%</span></div>`:''}
+  if(m){const w=x=>Math.max(0,Math.min(100,x*100)).toFixed(1)+'%';
+    modelHtml=`<div class="ds"><div class="ds-h">Model vs market</div>
+      <div class="mb-wrap">
+        <div class="mb-row"><span class="mb-l">Model prob</span><div class="mb-trk"><div class="mb-f model" style="width:${w(m.model_prob)}"></div></div><span class="mb-val">${(m.model_prob*100).toFixed(1)}%</span></div>
+        <div class="mb-row"><span class="mb-l">Implied @ taken</span><div class="mb-trk"><div class="mb-f imp-t" style="width:${w(m.implied_prob_taken)}"></div></div><span class="mb-val">${(m.implied_prob_taken*100).toFixed(1)}%</span></div>
+        ${m.implied_prob_sharp!=null?`<div class="mb-row"><span class="mb-l">Implied @ sharp</span><div class="mb-trk"><div class="mb-f imp-s" style="width:${w(m.implied_prob_sharp)}"></div></div><span class="mb-val">${(m.implied_prob_sharp*100).toFixed(1)}%</span></div>`:''}
       </div>
-      <div class="edge-row">
-        <div><span class="lbl">Edge vs taken:</span> <strong style="color:${m.edge_vs_taken_pct>0?'var(--green)':'var(--red)'}">${fP(m.edge_vs_taken_pct)}</strong></div>
-        ${m.edge_vs_sharp_pct!=null?`<div><span class="lbl">Edge vs sharp:</span> <strong style="color:${m.edge_vs_sharp_pct>0?'var(--green)':'var(--red)'}">${fP(m.edge_vs_sharp_pct)}</strong></div>`:`<div style="color:var(--dim)">Edge vs sharp: awaiting</div>`}
-        <div><span class="lbl">Fair odds:</span> <strong>${fO(m.fair_odds)}</strong></div>
-      </div>
-    </div>`;
+      <div class="edge-inline">
+        <div><span class="l">vs taken:</span> <strong style="color:${m.edge_vs_taken_pct>0?'var(--green)':'var(--red)'}">${fP(m.edge_vs_taken_pct)}</strong></div>
+        ${m.edge_vs_sharp_pct!=null?`<div><span class="l">vs sharp:</span> <strong style="color:${m.edge_vs_sharp_pct>0?'var(--green)':'var(--red)'}">${fP(m.edge_vs_sharp_pct)}</strong></div>`:`<div style="color:var(--dim)">vs sharp: awaiting</div>`}
+        <div><span class="l">Fair:</span> <strong>${fO(m.fair_odds)}</strong></div>
+      </div></div>`;
   }
 
-  /* Signal strength placeholder */
-  const ssHtml=`<div class="ds">
-    <div class="ds-h">Signal strength</div>
-    <div id="ssMount"><div class="ss-empty">⏳ Computing…</div></div>
-  </div>`;
+  const ssHtml=`<div class="ds"><div class="ds-h">Signal strength</div><div id="ssMount"><div class="ss-e">⏳ Computing…</div></div></div>`;
 
-  /* Line movement */
   const hasLadder=!lm.has_data&&p.open_odds&&p.close_odds;
   let ladderHtml='';
-  if (hasLadder) {
-    const mv=(p.close_odds/p.open_odds-1)*100;
-    const cls=mv<=-1.5?'ahead':(mv>=1.5?'late':'');
-    const txt=mv<=-1.5?`Price shortened <strong>${mv.toFixed(1)}%</strong> — you were ahead of the market.`
-      :(mv>=1.5?`Price drifted <strong>+${mv.toFixed(1)}%</strong> — market disagreed.`
-        :`Line flat (${mv>0?'+':''}${mv.toFixed(1)}%) — consensus.`);
+  if(hasLadder){const mv=(p.close_odds/p.open_odds-1)*100;const cls=mv<=-1.5?'ahead':(mv>=1.5?'late':'');
+    const txt=mv<=-1.5?`Shortened <strong>${mv.toFixed(1)}%</strong> — you were ahead.`:(mv>=1.5?`Drifted <strong>+${mv.toFixed(1)}%</strong> — market disagreed.`:`Flat (${mv>0?'+':''}${mv.toFixed(1)}%) — consensus.`);
     const dT=p.created_ts?new Date(p.created_ts*1000).toISOString().slice(11,16):'—';
     ladderHtml=`<div class="lm-ladder">
-      <div class="lm-rung detect"><div class="lm-rung-lbl">Detected</div><div class="lm-rung-val">${fO(p.open_odds)}</div><div style="font-size:9px;color:var(--muted)">${dT} UTC</div></div>
+      <div class="lm-rung det"><div class="lm-rl">Detected</div><div class="lm-rv">${fO(p.open_odds)}</div><div style="font-size:8px;color:var(--muted)">${dT} UTC</div></div>
       <span class="lm-arr">→</span>
-      <div class="lm-rung"><div class="lm-rung-lbl">Best now</div><div class="lm-rung-val">${fO(p.best_odds_value||p.odds)}</div><div style="font-size:9px;color:var(--muted)">${fB(p.best_price_book||p.best_odds_bookmaker)}</div></div>
+      <div class="lm-rung"><div class="lm-rl">Best now</div><div class="lm-rv">${fO(p.best_odds_value||p.odds)}</div></div>
       <span class="lm-arr">→</span>
-      <div class="lm-rung"><div class="lm-rung-lbl">Close (sharp)</div><div class="lm-rung-val">${fO(p.close_odds)}</div></div>
-    </div>
-    <div class="lm-summary ${cls}">${txt}</div>`;
+      <div class="lm-rung"><div class="lm-rl">Close (sharp)</div><div class="lm-rv">${fO(p.close_odds)}</div></div>
+    </div><div class="lm-sum ${cls}">${txt}</div>`;
   }
-  const lmHtml=`<div class="ds">
-    <div class="ds-h">Movement after detection ${lm.has_data?lm.sharp.length+lm.soft.length+' snapshots':''}</div>
-    ${lm.has_data?renderLM(lm):(hasLadder?ladderHtml:`<div class="lm-empty">📡 No snapshots yet — runs automatically as kickoff approaches.</div>`)}
-    ${lm.has_data?`<div class="lm-legend">
-      <span><span class="lm-ld sharp"></span>Pinnacle/Betfair</span>
-      <span><span class="lm-ld soft"></span>Soft books</span>
-      <span><span class="lm-ld detect"></span>Detected here</span>
-    </div>`:''}
+  const lmHtml=`<div class="ds"><div class="ds-h">Movement after detection</div>
+    ${lm.has_data?renderLM(lm):(hasLadder?ladderHtml:`<div class="lm-empty">📡 No snapshots yet — captured automatically as kickoff approaches.</div>`)}
+    ${lm.has_data?`<div class="lm-legend"><span><span class="lmd s"></span>Pinnacle/Betfair</span><span><span class="lmd so"></span>Soft</span><span><span class="lmd d"></span>Detected</span></div>`:''}
   </div>`;
 
-  /* Books */
-  const booksHtml=d.books&&d.books.length?`<div class="ds">
-    <div class="ds-h">Book by book · ${d.books.length} books</div>
-    <div class="bk-grid">
-      ${d.books.map(b=>`<div class="bk-cell ${b.is_sharp?'is-sharp':''}">
-        <span class="bk-name">${b.is_sharp?'⚡':''}${b.book}</span>
-        <span>${b.edge_pct!=null?`<span class="bk-e ${b.edge_pct>0?'pos':'neg'}">${fP(b.edge_pct)}</span> `:''}<span class="bk-odds">${fO(b.odds)}</span></span>
-      </div>`).join('')}
-    </div>
-  </div>`:'';
+  const booksHtml=d.books&&d.books.length?`<div class="ds"><div class="ds-h">Book by book · ${d.books.length}</div>
+    <div class="bk-grid">${d.books.map(b=>`<div class="bkc ${b.is_sharp?'is-s':''}">
+      <span class="bkc-n">${b.is_sharp?'⚡':''}${b.book}</span>
+      <span>${b.edge_pct!=null?`<span class="ep ${b.edge_pct>0?'pos':'neg'}">${fP(b.edge_pct)} </span>`:''}
+      <span class="bkc-o">${fO(b.odds)}</span></span></div>`).join('')}</div></div>`:'';
 
-  /* Similar CLV */
-  const simHtml=`<div class="ds">
-    <div class="ds-h">CLV history · same league+market · 30d</div>
-    ${sc.rows.length?`<div class="proof-stats">
-      <div class="proof-stat"><span class="l">n: </span><span class="v">${sc.sample_n}</span></div>
-      <div class="proof-stat"><span class="l">Avg CLV: </span><span class="v ${sc.avg_clv>0?'clv-pos':'clv-neg'}">${fP(sc.avg_clv)}</span></div>
-      ${sc.rate_reliable?`<div class="proof-stat"><span class="l">Beat: </span><span class="v">${sc.beat_rate}%</span></div>`:`<div class="proof-stat" style="color:var(--dim)">rate withheld (n<30)</div>`}
-    </div>
+  const simHtml=`<div class="ds"><div class="ds-h">CLV history · same league+market · 30d</div>
+    ${sc.rows.length?`<div class="edge-inline" style="margin-bottom:7px"><div><span class="l">n: </span><strong>${sc.sample_n}</strong></div><div><span class="l">Avg CLV: </span><strong style="color:${sc.avg_clv>0?'var(--green)':'var(--red)'}">${fP(sc.avg_clv)}</strong></div>${sc.rate_reliable?`<div><span class="l">Beat: </span><strong>${sc.beat_rate}%</strong></div>`:`<div style="color:var(--dim)">rate withheld (n&lt;30)</div>`}</div>
     <table class="sim-tbl"><thead><tr><th>Match</th><th>Sel</th><th>Open</th><th>Close</th><th>CLV</th></tr></thead><tbody>
-      ${sc.rows.map(r=>`<tr><td>${r.home_team} vs ${r.away_team}</td><td style="color:var(--muted)">${r.selection}</td><td>${fO(r.open_odds)}</td><td>${fO(r.close_odds)}</td><td class="${r.clv_pct>0?'clv-pos':'clv-neg'}">${fP(r.clv_pct)}</td></tr>`).join('')}
-    </tbody></table>`:`<div class="lm-empty">No comparable CLV captures yet for ${p.league} · ${p.market}.</div>`}
+      ${sc.rows.map(r=>`<tr><td>${r.home_team} vs ${r.away_team}</td><td style="color:var(--muted)">${r.selection}</td><td>${fO(r.open_odds)}</td><td>${fO(r.close_odds)}</td><td class="${r.clv_pct>0?'cp':'cn'}">${fP(r.clv_pct)}</td></tr>`).join('')}
+    </tbody></table>`:`<div class="lm-empty">No CLV captures yet for ${p.league} · ${p.market}</div>`}
   </div>`;
 
   return priceHtml+modelHtml+ssHtml+lmHtml+booksHtml+simHtml;
 }
 
 /* ── Signal Strength ── */
-async function loadSS(id, mountId) {
-  const mount=document.getElementById(mountId);
-  if (!mount) return;
-  let s=null;
-  try { const r=await fetch(`/api/v2/pick/${id}/signal_strength`); s=await r.json(); }
-  catch(e) { mount.innerHTML=`<div class="ss-empty">⚠️ Error</div>`; return; }
-  if (!s||!s.has_data) {
-    mount.innerHTML=`<div class="ss-empty">📡 No snapshots yet — check back after 15 min.</div>`;
-    return;
-  }
-  const sc=s.score??0;
-  const tier=sc>=80?'ELITE':sc>=60?'STRONG':sc>=40?'MODEST':'WEAK';
+async function loadSS(id,mountId){
+  const mount=document.getElementById(mountId);if(!mount)return;
+  let s=null;try{const r=await fetch(`/api/v2/pick/${id}/signal_strength`);s=await r.json();}catch(e){mount.innerHTML=`<div class="ss-e">⚠️ Error</div>`;return;}
+  if(!s||!s.has_data){mount.innerHTML=`<div class="ss-e">📡 No snapshots yet.</div>`;return;}
+  const sc=s.score??0,tier=sc>=80?'ELITE':sc>=60?'STRONG':sc>=40?'MODEST':'WEAK';
   const col=sc>=80?'var(--green)':sc>=60?'#fcb900':sc>=40?'var(--amber)':'var(--red)';
   const mc=(s.move_size_pct??0)<0?'pos':((s.move_size_pct??0)>0?'neg':'');
   const ttm=s.time_to_move_min==null?'—':`${s.time_to_move_min}m`;
-  const ttmCls=s.time_to_move_min!=null&&s.time_to_move_min<=5?'pos':(s.time_to_move_min!=null&&s.time_to_move_min<=30?'a':'');
-  mount.innerHTML=`<div class="ss-wrap">
-    <div class="ss-circ" style="--ssp:${sc};--ssc:${col}">
-      <div class="ss-num">${sc}</div>
-      <div class="ss-tier">${tier}</div>
-    </div>
-    <div class="ss-meta-grid">
+  const ttmC=s.time_to_move_min!=null&&s.time_to_move_min<=5?'pos':(s.time_to_move_min!=null&&s.time_to_move_min<=30?'a':'');
+  mount.innerHTML=`<div class="ss-w">
+    <div class="ss-c" style="--ssp:${sc};--ssc:${col}"><div class="ss-n">${sc}</div><div class="ss-t">${tier}</div></div>
+    <div class="ss-mg">
       <div class="ss-mr"><span class="ss-ml">Instant move</span><span class="ss-mv ${s.instant_move?'pos':''}">${s.instant_move?'Yes':'No'}</span></div>
       <div class="ss-mr"><span class="ss-ml">Move size</span><span class="ss-mv ${mc}">${s.move_size_pct>0?'+':''}${s.move_size_pct}%</span></div>
       <div class="ss-mr"><span class="ss-ml">Books aligned</span><span class="ss-mv">${s.books_aligned}/${s.books_total}</span></div>
-      <div class="ss-mr"><span class="ss-ml">Time to move</span><span class="ss-mv ${ttmCls}">${ttm}</span></div>
+      <div class="ss-mr"><span class="ss-ml">Time to move</span><span class="ss-mv ${ttmC}">${ttm}</span></div>
     </div>
   </div>`;
 }
 
-/* ── SVG line movement chart ── */
-function renderLM(lm) {
-  const W=600,H=110,PL=32,PR=8,PT=10,PB=20;
-  const all=[...lm.sharp,...lm.soft];
-  if (!all.length) return '<div class="lm-empty">No data</div>';
-  const ts=all.map(p=>p.t), od=all.map(p=>p.odds);
-  let tMn=Math.min(...ts),tMx=Math.max(...ts);
-  let oMn=Math.min(...od),oMx=Math.max(...od);
-  if (lm.detected_at){tMn=Math.min(tMn,lm.detected_at);tMx=Math.max(tMx,lm.detected_at);}
-  if (lm.detected_odds){oMn=Math.min(oMn,lm.detected_odds);oMx=Math.max(oMx,lm.detected_odds);}
-  if (tMx===tMn) tMx=tMn+60;
-  const op=Math.max(.05,(oMx-oMn)*.15); oMn-=op; oMx+=op;
+/* ── Line movement SVG ── */
+function renderLM(lm){
+  const W=560,H=100,PL=28,PR=6,PT=8,PB=18;
+  const all=[...lm.sharp,...lm.soft];if(!all.length)return'<div class="lm-empty">No data</div>';
+  const ts=all.map(p=>p.t),od=all.map(p=>p.odds);
+  let tMn=Math.min(...ts),tMx=Math.max(...ts),oMn=Math.min(...od),oMx=Math.max(...od);
+  if(lm.detected_at){tMn=Math.min(tMn,lm.detected_at);tMx=Math.max(tMx,lm.detected_at);}
+  if(lm.detected_odds){oMn=Math.min(oMn,lm.detected_odds);oMx=Math.max(oMx,lm.detected_odds);}
+  if(tMx===tMn)tMx=tMn+60;
+  const op=Math.max(.05,(oMx-oMn)*.15);oMn-=op;oMx+=op;
   const xF=t=>PL+(t-tMn)/(tMx-tMn)*(W-PL-PR);
   const yF=o=>PT+(1-(o-oMn)/(oMx-oMn))*(H-PT-PB);
-  const pl=(pts,col,sw=1.6)=>{
-    if (!pts.length) return '';
+  const pl=(pts,col,sw=1.4)=>{
+    if(!pts.length)return'';
     const s=pts.slice().sort((a,b)=>a.t-b.t);
     const d=s.map((p,i)=>(i?'L':'M')+xF(p.t).toFixed(1)+','+yF(p.odds).toFixed(1)).join(' ');
     return `<path d="${d}" stroke="${col}" stroke-width="${sw}" fill="none" stroke-linejoin="round"/>`;
   };
   const tks=[oMn,(oMn+oMx)/2,oMx];
-  const tkLines=tks.map(o=>{const y=yF(o).toFixed(1);return `<line x1="${PL}" y1="${y}" x2="${W-PR}" y2="${y}" stroke="#1a2540" stroke-width="1" stroke-dasharray="2,3"/><text x="${PL-4}" y="${(+y+3)}" fill="#3f4f70" font-size="8" text-anchor="end">${o.toFixed(2)}</text>`;}).join('');
+  const tkL=tks.map(o=>{const y=yF(o).toFixed(1);return`<line x1="${PL}" y1="${y}" x2="${W-PR}" y2="${y}" stroke="#1a1a2e" stroke-width="1" stroke-dasharray="2,3"/><text x="${PL-3}" y="${(+y+3)}" fill="#2e3550" font-size="7" text-anchor="end">${o.toFixed(2)}</text>`;}).join('');
   let det='';
-  if (lm.detected_at&&lm.detected_odds){
-    const dx=xF(lm.detected_at).toFixed(1),dy=yF(lm.detected_odds).toFixed(1);
-    det=`<line x1="${dx}" y1="${PT}" x2="${dx}" y2="${H-PB}" stroke="#22c55e" stroke-width="1" stroke-dasharray="3,3" opacity=".5"/>
-         <circle cx="${dx}" cy="${dy}" r="3.5" fill="#22c55e" stroke="#060c18" stroke-width="1.5"/>`;
+  if(lm.detected_at&&lm.detected_odds){const dx=xF(lm.detected_at).toFixed(1),dy=yF(lm.detected_odds).toFixed(1);
+    det=`<line x1="${dx}" y1="${PT}" x2="${dx}" y2="${H-PB}" stroke="#22c55e" stroke-width="1" stroke-dasharray="2,3" opacity=".5"/>
+         <circle cx="${dx}" cy="${dy}" r="3" fill="#22c55e" stroke="#04040a" stroke-width="1.5"/>`;
   }
-  return `<div class="lm-chart-wrap"><svg class="lm-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${tkLines}${pl(lm.soft,'#60a5fa',1.2)}${pl(lm.sharp,'#fbbf24',1.8)}${det}</svg></div>`;
+  return `<div class="lm-wrap"><svg class="lm-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${tkL}${pl(lm.soft,'#60a5fa',1.2)}${pl(lm.sharp,'#fbbf24',1.8)}${det}</svg></div>`;
 }
 
-/* ── CLV Proof (sidebar) ── */
-function renderProofSidebar(d) {
-  if (!d) return;
-  const s=d.summary||{};
+/* ── CLV sidebar ── */
+function renderProof(d){
+  if(!d)return;const s=d.summary||{};
   $('sN').textContent=s.sample_n||0;
-  if (s.avg_clv!=null) {
-    $('sAvg').textContent=fP(s.avg_clv);
-    $('sAvg').style.color=s.avg_clv>0?'var(--green)':(s.avg_clv<0?'var(--red)':'');
-  } else { $('sAvg').textContent='awaiting'; }
-  if (s.rate_reliable&&s.beat_rate!=null) {
-    $('sBeat').textContent=s.beat_rate+'%';
-    $('sBeat').style.color=s.beat_rate>=55?'var(--green)':(s.beat_rate>=40?'var(--amber)':'var(--red)');
-  } else { $('sBeat').textContent=s.sample_n>0?`n=${s.sample_n} (need 30)`:'—'; }
   $('sSplit').textContent=(s.positive_n||0)+'/'+(s.negative_n||0);
-  const kAvg=$('kpiCLV');
-  if (s.avg_clv!=null){ kAvg.textContent=fP(s.avg_clv); kAvg.className='kpi-val '+(s.avg_clv>0?'g':'r'); }
-  const kBeat=$('kpiBeat');
-  if (s.rate_reliable&&s.beat_rate!=null){ kBeat.textContent=s.beat_rate+'%'; kBeat.style.color=s.beat_rate>=55?'var(--green)':(s.beat_rate>=40?'var(--amber)':'var(--red)'); }
-  if (d.distribution&&d.distribution.length) {
+  if(s.avg_clv!=null){$('sAvg').textContent=fP(s.avg_clv);$('sAvg').style.color=s.avg_clv>0?'var(--green)':(s.avg_clv<0?'var(--red)':'');}
+  else $('sAvg').textContent='awaiting';
+  if(s.rate_reliable&&s.beat_rate!=null){$('sBeat').textContent=s.beat_rate+'%';$('sBeat').style.color=s.beat_rate>=55?'var(--green)':(s.beat_rate>=40?'var(--amber)':'var(--red)');}
+  else $('sBeat').textContent=s.sample_n>0?`n=${s.sample_n}`:'—';
+  const kC=$('kpiCLV');
+  if(s.avg_clv!=null){kC.textContent=fP(s.avg_clv);kC.className='ki-v '+(s.avg_clv>0?'g':'r');}
+  const kB=$('kpiBeat');
+  if(s.rate_reliable&&s.beat_rate!=null){kB.textContent=s.beat_rate+'%';kB.style.color=s.beat_rate>=55?'var(--green)':(s.beat_rate>=40?'var(--amber)':'var(--red)');}
+  if(d.distribution&&d.distribution.length){
     const mx=Math.max(...d.distribution.map(b=>b.count),1);
     $('sHist').innerHTML=d.distribution.map((b,i)=>{
-      const h=Math.max(2,b.count/mx*50);
-      return `<div class="hb" title="${b.label}: ${b.count}"><div class="hb-cnt">${b.count}</div><div class="hb-fill ${i<3?'neg':''}" style="height:${h}px"></div><div class="hb-lbl">${b.label}</div></div>`;
+      const h=Math.max(2,b.count/mx*42);
+      return `<div class="hb" title="${b.label}: ${b.count}"><div class="hb-c">${b.count||''}</div><div class="hb-f ${i<3?'n':''}" style="height:${h}px"></div><div class="hb-l">${b.label}</div></div>`;
     }).join('');
   }
 }
 
-/* ── Data fetch ── */
-async function loadAll() {
-  try {
+/* ── Fetch ── */
+async function loadAll(){
+  try{
     const [picksR,,proofR]=await Promise.all([
       fetch('/api/picks/today').then(r=>r.json()).catch(()=>({picks:[]})),
       fetch('/api/scanner/daily-stats').then(r=>r.json()).catch(()=>({})),
@@ -979,21 +832,20 @@ async function loadAll() {
     ]);
     S.picks=(picksR.picks||picksR||[]).filter(Boolean);
     $('updatedAt').textContent='updated '+new Date().toLocaleTimeString().slice(0,5);
-    if (proofR) renderProofSidebar(proofR);
+    if(proofR)renderProof(proofR);
     render();
-  } catch(e) {
+  }catch(e){
     console.error('loadAll',e);
-    $('sTbody').innerHTML=`<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">Backend offline</div><div class="empty-sub">Retry in 60s</div></div></td></tr>`;
+    $('scBody').innerHTML=`<div class="empty-s"><div class="empty-i">⚠️</div><div class="empty-t">Backend offline</div><div class="empty-sub">Retrying in 60s…</div></div>`;
   }
 }
-
 loadAll();
-setInterval(loadAll, 60_000);
+setInterval(loadAll,60_000);
 setInterval(()=>{
-  if (!S.picks.length) return;
-  S.picks.forEach(p=>{ if(p.created_ts) p.age_minutes=Math.max(0,Math.floor((Date.now()/1000-p.created_ts)/60)); });
+  if(!S.picks.length)return;
+  S.picks.forEach(p=>{if(p.created_ts)p.age_minutes=Math.max(0,Math.floor((Date.now()/1000-p.created_ts)/60));});
   render();
-}, 30_000);
+},30_000);
 </script>
 </body>
 </html>
