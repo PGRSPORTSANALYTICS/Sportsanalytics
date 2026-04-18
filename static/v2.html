@@ -374,6 +374,7 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
   </div>
   <div class="nav-sp"></div>
   <span class="nav-ts" id="updatedAt">syncing…</span>
+  <span class="nav-ts" style="font-size:8px;opacity:.4;margin-right:4px">v20260418c</span>
   <span class="tier-badge" id="tierBadge">FREE</span>
 </nav>
 
@@ -830,7 +831,15 @@ async function loadAll(){
   fetchT('/api/v2/clv/proof?days=30&sharp_only=true',10000)
     .then(r=>r.json()).then(d=>{if(d)renderProof(d);}).catch(()=>{});
 }
-loadAll();
+/* ── Hard deadline: always render within 3s of page load ── */
+const _deadline=setTimeout(()=>{
+  if($('updatedAt').textContent==='syncing…'){
+    $('updatedAt').textContent=new Date().toLocaleTimeString().slice(0,5);
+    render();
+  }
+},3000);
+
+loadAll().then(()=>clearTimeout(_deadline));
 setInterval(loadAll,60_000);
 setInterval(()=>{
   if(!S.picks.length)return;
