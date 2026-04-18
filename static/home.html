@@ -857,6 +857,14 @@ async function loadAll(){
 /* Safety net: always render within 5s */
 setTimeout(()=>{if(!_rendered)safeRender();},5000);
 
+/* Debug: prove JS is alive after 1s — shows version + status */
+setTimeout(()=>{
+  const sb=$('scBody');
+  if(sb && sb.innerHTML.includes('Loading signals')){
+    sb.innerHTML='<div class="empty-s"><div class="empty-t" style="color:#4ade80">JS OK · fetching data…</div><div class="empty-sub">v20260418f · if stuck, check URL = /live</div></div>';
+  }
+},1000);
+
 loadAll();
 setInterval(loadAll,60000);
 setInterval(()=>{
