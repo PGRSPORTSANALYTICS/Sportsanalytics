@@ -1121,6 +1121,18 @@ def main():
     # Schedule CLV update - Every 5 minutes for closing odds capture
     schedule.every(5).minutes.do(run_clv_update_cycle)
 
+    # Snapshot writer — every 15 min, logs sharp odds for upcoming picks (next 6h).
+    # Powers "Movement after detection" graph + Signal Strength Score.
+    def _run_snapshots():
+        try:
+            from snapshot_writer import run_snapshot_cycle
+            res = run_snapshot_cycle()
+            logger.info(f"📸 Snapshot writer: {res.get('picks',0)} picks → {res.get('snapshots',0)} rows")
+        except Exception as e:
+            logger.error(f"❌ Snapshot writer error: {e}")
+    schedule.every(15).minutes.do(_run_snapshots)
+    _run_snapshots()  # one shot at startup
+
     # CLV retroactive sweep — hourly, catches BTTS + missed real-time captures
     schedule.every(1).hours.do(run_clv_sweep)
     run_clv_sweep()   # Run once at startup to recover recent missed picks

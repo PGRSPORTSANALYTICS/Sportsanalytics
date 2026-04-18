@@ -4605,6 +4605,28 @@ async def v2_clv_proof(days: int = 30, sharp_only: bool = True):
         logger.error(f"v2_clv_proof error: {e}")
         return out
 
+@app.get("/api/v2/pick/{pick_id}/signal_strength")
+async def v2_signal_strength(pick_id: int):
+    """
+    Composite Signal Strength Score (0–100) for a pick, computed from
+    sharp odds snapshots logged after detection.
+
+    Returns:
+      score (int|null), instant_move (bool), move_size_pct (float),
+      books_aligned (int), books_total (int), time_to_move_min (int|null),
+      snapshot_count (int), sharp_books_seen (list[str]), has_data (bool)
+    """
+    try:
+        from snapshot_writer import compute_signal_strength
+        out = compute_signal_strength(pick_id)
+        if not out:
+            return {'has_data': False, 'reason': 'pick not found'}
+        return out
+    except Exception as e:
+        logger.error(f"signal_strength error pick={pick_id}: {e}")
+        return {'has_data': False, 'reason': 'error', 'error': str(e)}
+
+
 @app.get("/edge-finder", include_in_schema=False)
 async def edge_finder_alias():
     return HTMLResponse(content=(STATIC_DIR / "pgr_dashboard.html").read_text())
