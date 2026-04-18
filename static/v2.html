@@ -254,6 +254,147 @@
     .brand small{display:none}
   }
 
+  /* ── Modal (match detail) ─────────────────────────────────────────── */
+  .modal-backdrop{
+    position:fixed;inset:0;background:rgba(5,9,18,.78);
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+    display:none;align-items:flex-start;justify-content:center;
+    z-index:100;padding:24px 12px;overflow-y:auto;
+  }
+  .modal-backdrop.open{display:flex;animation:fadeIn .18s ease-out}
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  .modal{
+    background:var(--panel);border:1px solid var(--line-2);border-radius:var(--radius-lg);
+    width:100%;max-width:920px;box-shadow:var(--shadow);
+    display:flex;flex-direction:column;animation:slideUp .22s ease-out;
+  }
+  @keyframes slideUp{from{transform:translateY(12px);opacity:.5}to{transform:translateY(0);opacity:1}}
+  .modal-head{
+    padding:14px 18px;border-bottom:1px solid var(--line);
+    display:flex;justify-content:space-between;align-items:flex-start;gap:12px;
+    background:linear-gradient(135deg,#0f1c33,#142442);border-radius:var(--radius-lg) var(--radius-lg) 0 0;
+  }
+  .modal-title{font-size:15px;font-weight:700;line-height:1.3}
+  .modal-sub{font-size:11px;color:var(--muted);margin-top:3px}
+  .modal-close{
+    width:30px;height:30px;border-radius:8px;background:#1a2540;color:var(--muted);
+    display:grid;place-items:center;font-size:16px;border:1px solid var(--line-2);
+    transition:background .15s,color .15s;flex-shrink:0;
+  }
+  .modal-close:hover{background:#2a3a63;color:var(--text)}
+
+  .modal-body{padding:14px 18px;display:flex;flex-direction:column;gap:14px}
+
+  .mod-section{
+    background:#0e1729;border:1px solid var(--line);border-radius:var(--radius);
+    padding:12px 14px;
+  }
+  .mod-section h4{
+    font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);
+    font-weight:700;margin-bottom:10px;display:flex;justify-content:space-between;
+  }
+
+  /* Price snapshot */
+  .price-snapshot{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .price-card{
+    border-radius:var(--radius-sm);padding:12px;
+    background:#0b1426;border:1px solid var(--line-2);
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .price-card.sharp{border-color:#7a4920;background:linear-gradient(135deg,#1a1408,#241808)}
+  .price-card.unset{opacity:.65}
+  .price-card-label{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
+  .price-card-val{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.5px}
+  .price-card.sharp .price-card-val{color:var(--pinny)}
+  .price-card-book{font-size:11px;color:var(--muted-2);text-transform:uppercase;letter-spacing:.4px}
+
+  /* Model bars */
+  .mod-bars{display:flex;flex-direction:column;gap:8px}
+  .mod-bar{display:flex;align-items:center;gap:8px;font-size:12px}
+  .mod-bar-lbl{width:130px;color:var(--muted);font-size:11px}
+  .mod-bar-track{flex:1;height:10px;background:#0b1426;border-radius:6px;overflow:hidden;border:1px solid var(--line)}
+  .mod-bar-fill{height:100%;border-radius:6px;transition:width .4s ease}
+  .mod-bar-fill.model{background:linear-gradient(90deg,#22c55e,#16a34a)}
+  .mod-bar-fill.implied-taken{background:linear-gradient(90deg,#60a5fa,#3b82f6)}
+  .mod-bar-fill.implied-sharp{background:linear-gradient(90deg,#fbbf24,#f59e0b)}
+  .mod-bar-val{width:60px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+
+  /* Line movement chart (SVG) */
+  .lm-chart-wrap{position:relative}
+  .lm-chart{width:100%;height:170px;display:block;background:#0b1426;border-radius:6px;border:1px solid var(--line)}
+  .lm-legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:11px;color:var(--muted)}
+  .lm-legend-dot{display:inline-block;width:10px;height:2px;background:#fbbf24;margin-right:5px;vertical-align:middle;border-radius:1px}
+  .lm-legend-dot.soft{background:#60a5fa}
+  .lm-legend-dot.detect{background:#22c55e;height:8px;width:8px;border-radius:50%}
+  .lm-empty{
+    height:170px;background:#0b1426;border:1px dashed var(--line-2);border-radius:6px;
+    display:grid;place-items:center;color:var(--muted-2);font-size:12px;text-align:center;padding:14px;
+  }
+
+  /* Books grid */
+  .books-grid{
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px;
+  }
+  .book-cell{
+    background:#0b1426;border:1px solid var(--line);border-radius:var(--radius-sm);
+    padding:8px 10px;display:flex;flex-direction:column;gap:2px;font-size:12px;
+  }
+  .book-cell.is-sharp{border-color:#7a4920;background:linear-gradient(135deg,#1a1408,#0b1426)}
+  .book-cell-name{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.4px}
+  .book-cell-odds{font-weight:700;font-variant-numeric:tabular-nums;font-size:14px}
+  .book-cell-edge{font-size:10px;font-variant-numeric:tabular-nums}
+  .book-cell-edge.pos{color:var(--accent)}
+  .book-cell-edge.neg{color:var(--bad)}
+
+  /* Similar CLV table */
+  .sim-table{width:100%;border-collapse:collapse;font-size:12px}
+  .sim-table th{text-align:left;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.5px;font-weight:600;padding:6px 8px;border-bottom:1px solid var(--line)}
+  .sim-table td{padding:7px 8px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+  .sim-table tbody tr:last-child td{border-bottom:0}
+  .clv-pos{color:var(--accent);font-weight:700}
+  .clv-neg{color:var(--bad);font-weight:700}
+
+  /* CLV proof histogram */
+  .proof-section{
+    background:linear-gradient(135deg,#0f1c33,#142442);
+    border:1px solid var(--line-2);border-radius:var(--radius-lg);
+    padding:18px;margin-top:18px;
+  }
+  .proof-head{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px;margin-bottom:14px}
+  .proof-head h3{font-size:18px;font-weight:700;letter-spacing:-.3px}
+  .proof-tagline{color:var(--muted);font-size:12px;font-style:italic;max-width:340px;text-align:right}
+  .proof-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+  .proof-kpi{
+    background:#0b1426;border:1px solid var(--line);border-radius:var(--radius);
+    padding:12px;display:flex;flex-direction:column;gap:3px;
+  }
+  .proof-kpi-lbl{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.5px}
+  .proof-kpi-val{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.4px}
+  .proof-kpi-sub{color:var(--muted-2);font-size:11px}
+
+  .hist{display:flex;align-items:flex-end;gap:4px;height:120px;padding:8px;background:#0b1426;border:1px solid var(--line);border-radius:var(--radius-sm)}
+  .hist-bar{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:3px;min-width:0}
+  .hist-bar-fill{
+    width:100%;background:linear-gradient(180deg,#3b82f6,#1d4ed8);border-radius:3px 3px 0 0;
+    transition:height .5s ease;min-height:2px;
+  }
+  .hist-bar-fill.pos{background:linear-gradient(180deg,#22c55e,#15803d)}
+  .hist-bar-fill.neg{background:linear-gradient(180deg,#ef4444,#991b1b)}
+  .hist-bar-lbl{font-size:9px;color:var(--muted-2);text-align:center;line-height:1.1}
+  .hist-bar-cnt{font-size:10px;color:var(--text);font-weight:700;font-variant-numeric:tabular-nums}
+
+  .proof-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+  .proof-card{background:#0b1426;border:1px solid var(--line);border-radius:var(--radius);padding:12px}
+
+  @media (max-width:720px){
+    .price-snapshot{grid-template-columns:1fr}
+    .proof-kpis{grid-template-columns:repeat(2,1fr)}
+    .proof-grid{grid-template-columns:1fr}
+    .modal{border-radius:var(--radius)}
+    .modal-body{padding:12px}
+    .mod-bar-lbl{width:100px}
+  }
+
   /* ── Loading shimmer ──────────────────────────────────────────────── */
   .shimmer{
     background:linear-gradient(90deg,#16223c 0%,#1f2c4d 50%,#16223c 100%);
@@ -388,7 +529,77 @@
     </div>
   </section>
 
+  <!-- ─── CLV Proof of Work (Phase 3) ─────────────────────────────── -->
+  <section class="proof-section" id="proofSection">
+    <div class="proof-head">
+      <div>
+        <h3>CLV Proof of Work · last 30 days</h3>
+        <div style="color:var(--muted);font-size:12px;margin-top:4px">
+          Sharp-anchored captures only (Pinnacle / Betfair / Matchbook). Soft-only legacy captures are excluded.
+        </div>
+      </div>
+      <div class="proof-tagline">"We don't sell picks. We show measurable edge."</div>
+    </div>
+
+    <div class="proof-kpis">
+      <div class="proof-kpi">
+        <div class="proof-kpi-lbl">Avg CLV</div>
+        <div class="proof-kpi-val" id="proofAvg">—</div>
+        <div class="proof-kpi-sub" id="proofAvgSub">awaiting</div>
+      </div>
+      <div class="proof-kpi">
+        <div class="proof-kpi-lbl">% beating close</div>
+        <div class="proof-kpi-val" id="proofBeat">—</div>
+        <div class="proof-kpi-sub" id="proofBeatSub">need n ≥ 30</div>
+      </div>
+      <div class="proof-kpi">
+        <div class="proof-kpi-lbl">Sample size</div>
+        <div class="proof-kpi-val info" id="proofN">0</div>
+        <div class="proof-kpi-sub">sharp captures</div>
+      </div>
+      <div class="proof-kpi">
+        <div class="proof-kpi-lbl">Pos / Neg split</div>
+        <div class="proof-kpi-val" id="proofSplit">—</div>
+        <div class="proof-kpi-sub" id="proofSplitSub">—</div>
+      </div>
+    </div>
+
+    <div class="mod-section" style="background:#0b1426;margin-bottom:12px">
+      <h4>Distribution <span style="color:var(--muted-2);text-transform:none;letter-spacing:0;font-weight:500">honest spread, not just average</span></h4>
+      <div class="hist" id="proofHist">
+        <div class="hist-bar"><div class="hist-bar-cnt">—</div><div class="hist-bar-fill" style="height:0"></div><div class="hist-bar-lbl">awaiting</div></div>
+      </div>
+    </div>
+
+    <div class="proof-grid">
+      <div class="proof-card">
+        <h4 style="font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:700;margin-bottom:8px">By market</h4>
+        <table class="sim-table" id="proofMarketTbl"><thead><tr><th>Market</th><th>n</th><th>Avg CLV</th><th>Beat %</th></tr></thead><tbody><tr><td colspan="4" style="color:var(--muted-2);text-align:center;padding:14px">awaiting sharp captures</td></tr></tbody></table>
+      </div>
+      <div class="proof-card">
+        <h4 style="font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:700;margin-bottom:8px">By league</h4>
+        <table class="sim-table" id="proofLeagueTbl"><thead><tr><th>League</th><th>n</th><th>Avg CLV</th><th>Beat %</th></tr></thead><tbody><tr><td colspan="4" style="color:var(--muted-2);text-align:center;padding:14px">awaiting sharp captures</td></tr></tbody></table>
+      </div>
+    </div>
+  </section>
+
 </main>
+
+<!-- ─── Match Detail Modal (Phase 2) ───────────────────────────────── -->
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal" id="modal" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="modTitle">Loading…</div>
+        <div class="modal-sub" id="modSub"></div>
+      </div>
+      <button class="modal-close" id="modClose" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body" id="modBody">
+      <div class="empty"><div class="empty-icon">⏳</div>Loading match detail…</div>
+    </div>
+  </div>
+</div>
 
 <script>
 /* ─── State ─────────────────────────────────────────────────────── */
@@ -615,50 +826,303 @@ function render() {
   renderScanner(filtered);
 }
 
-/* ─── Match detail (placeholder until phase 2) ─────────────────── */
-function openDetail(id) {
-  const p = state.picks.find(x => x.id === id);
-  if (!p) return;
-  alert(
-    `${p.home_team} vs ${p.away_team}\n` +
-    `${p.selection || p.market}\n\n` +
-    `Sharp ref : ${p.sharp_price_at_detection ? fmtOdds(p.sharp_price_at_detection)+' ('+fmtBook(p.sharp_book_at_detection)+')' : 'AWAITING SHARP DATA'}\n` +
-    `Best avail: ${fmtOdds(p.best_odds_value || p.odds)} (${fmtBook(p.best_price_book || p.best_odds_bookmaker)})\n` +
-    `Model    : ${p.model_prob != null ? (p.model_prob*100).toFixed(1)+'%' : '—'}\n` +
-    `Edge     : ${fmtPct(p.edge_pct)}\n` +
-    `Status   : ${pickStatus(p)}\n` +
-    `Detected : ${ago(p.age_minutes)}\n\n` +
-    `(Full match detail view ships in next phase.)`
-  );
+/* ─── Match Detail Modal (Phase 2) ──────────────────────────────── */
+const modal = $('modalBackdrop');
+$('modClose').addEventListener('click', closeModal);
+modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
+function closeModal(){ modal.classList.remove('open'); document.body.style.overflow=''; }
+
+async function openDetail(id) {
+  modal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  $('modBody').innerHTML = `<div class="empty"><div class="empty-icon">⏳</div>Loading match detail…</div>`;
+  $('modTitle').textContent = 'Loading…';
+  $('modSub').textContent = '';
+
+  let data = null;
+  try {
+    const r = await fetch(`/api/v2/pick/${id}/detail`);
+    data = await r.json();
+  } catch (e) {
+    $('modBody').innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div>Failed to load — try again.</div>`;
+    return;
+  }
+  if (!data || !data.pick) {
+    $('modBody').innerHTML = `<div class="empty"><div class="empty-icon">🤷</div>Pick not found.</div>`;
+    return;
+  }
+  renderDetail(data);
+}
+
+function renderDetail(d) {
+  const p = d.pick;
+  const sr = d.sharp_ref;
+  const ba = d.best_available;
+  const m  = d.model;
+  const lm = d.line_movement;
+  const sc = d.similar_clv;
+  const status = d.doctrine_status || 'UNKNOWN';
+  const statusBadgeMap = {
+    'SHARP_CONFIRMED': '<span class="badge sharp">sharp confirmed</span>',
+    'INTERPOLATED':    '<span class="badge moving">interpolated</span>',
+    'UNVERIFIED_LEGACY': '<span class="badge legacy">legacy · no sharp anchor</span>',
+  };
+  const statusBadgeHtml = statusBadgeMap[status] || '<span class="badge unverified">unverified</span>';
+
+  $('modTitle').innerHTML = `${p.home_team} <span style="color:var(--muted-2);font-weight:400">vs</span> ${p.away_team}`;
+  $('modSub').innerHTML = `${p.league || ''} · kickoff ${p.kickoff_time || '—'} · ${(p.market||'').toLowerCase()} → <strong style="color:var(--text)">${p.selection||''}</strong> &nbsp; ${statusBadgeHtml}`;
+
+  /* ── Section 1: Price snapshot ── */
+  const priceHtml = `
+    <div class="mod-section">
+      <h4>Price snapshot</h4>
+      <div class="price-snapshot">
+        <div class="price-card sharp ${sr ? '' : 'unset'}">
+          <div class="price-card-label">⚡ Sharp reference</div>
+          <div class="price-card-val">${sr ? fmtOdds(sr.odds) : 'awaiting'}</div>
+          <div class="price-card-book">${sr ? fmtBook(sr.book) : 'no sharp anchor on this pick'}</div>
+        </div>
+        <div class="price-card">
+          <div class="price-card-label">Best available</div>
+          <div class="price-card-val">${ba ? fmtOdds(ba.odds) : '—'}</div>
+          <div class="price-card-book">${ba ? fmtBook(ba.book) : ''}</div>
+        </div>
+      </div>
+    </div>`;
+
+  /* ── Section 2: Model vs market ── */
+  let modelHtml = '';
+  if (m) {
+    const w = (x) => Math.max(0, Math.min(100, x*100)).toFixed(1) + '%';
+    modelHtml = `
+      <div class="mod-section">
+        <h4>Model vs market</h4>
+        <div class="mod-bars">
+          <div class="mod-bar"><div class="mod-bar-lbl">Model probability</div><div class="mod-bar-track"><div class="mod-bar-fill model" style="width:${w(m.model_prob)}"></div></div><div class="mod-bar-val">${(m.model_prob*100).toFixed(1)}%</div></div>
+          <div class="mod-bar"><div class="mod-bar-lbl">Implied @ taken</div><div class="mod-bar-track"><div class="mod-bar-fill implied-taken" style="width:${w(m.implied_prob_taken)}"></div></div><div class="mod-bar-val">${(m.implied_prob_taken*100).toFixed(1)}%</div></div>
+          ${m.implied_prob_sharp != null ? `
+          <div class="mod-bar"><div class="mod-bar-lbl">Implied @ sharp</div><div class="mod-bar-track"><div class="mod-bar-fill implied-sharp" style="width:${w(m.implied_prob_sharp)}"></div></div><div class="mod-bar-val">${(m.implied_prob_sharp*100).toFixed(1)}%</div></div>
+          ` : ''}
+        </div>
+        <div style="display:flex;gap:14px;margin-top:10px;font-size:11px;color:var(--muted)">
+          <div>Edge vs taken: <strong style="color:${m.edge_vs_taken_pct>0?'var(--accent)':'var(--bad)'}">${fmtPct(m.edge_vs_taken_pct)}</strong></div>
+          ${m.edge_vs_sharp_pct != null ? `<div>Edge vs sharp: <strong style="color:${m.edge_vs_sharp_pct>0?'var(--accent)':'var(--bad)'}">${fmtPct(m.edge_vs_sharp_pct)}</strong></div>` : '<div style="color:var(--muted-2)">Edge vs sharp: awaiting anchor</div>'}
+          <div>Fair odds: <strong style="color:var(--text)">${fmtOdds(m.fair_odds)}</strong></div>
+        </div>
+      </div>`;
+  }
+
+  /* ── Section 3: Line movement ── */
+  const lmHtml = `
+    <div class="mod-section">
+      <h4>Sharp line movement <span style="color:var(--muted-2);text-transform:none;letter-spacing:0;font-weight:500">${lm.has_data ? lm.sharp.length+lm.soft.length+' snapshots' : ''}</span></h4>
+      ${lm.has_data ? renderLineMovement(lm) : `
+        <div class="lm-empty">
+          📡 Line movement tracking not yet available for this pick<br>
+          <span style="font-size:11px;opacity:.7">Sharp odds snapshots are recorded once the new pipeline is wired into the engine.</span>
+        </div>`}
+      ${lm.has_data ? `
+      <div class="lm-legend">
+        <span><span class="lm-legend-dot"></span>Sharp (Pinnacle/Betfair)</span>
+        <span><span class="lm-legend-dot soft"></span>Soft books</span>
+        <span><span class="lm-legend-dot detect"></span>You detected here</span>
+      </div>` : ''}
+    </div>`;
+
+  /* ── Section 4: Book by book ── */
+  const booksHtml = d.books.length ? `
+    <div class="mod-section">
+      <h4>Book by book <span style="color:var(--muted-2);text-transform:none;letter-spacing:0;font-weight:500">${d.books.length} bookmakers</span></h4>
+      <div class="books-grid">
+        ${d.books.map(b => `
+          <div class="book-cell ${b.is_sharp ? 'is-sharp' : ''}">
+            <div class="book-cell-name">${b.is_sharp ? '⚡ ':''}${b.book}</div>
+            <div class="book-cell-odds">${fmtOdds(b.odds)}</div>
+            ${b.edge_pct != null ? `<div class="book-cell-edge ${b.edge_pct>0?'pos':'neg'}">${fmtPct(b.edge_pct)}</div>` : ''}
+          </div>
+        `).join('')}
+      </div>
+    </div>` : '';
+
+  /* ── Section 5: Similar bets CLV ── */
+  const simHtml = `
+    <div class="mod-section">
+      <h4>CLV history · similar bets <span style="color:var(--muted-2);text-transform:none;letter-spacing:0;font-weight:500">same league + market, last 30d</span></h4>
+      ${sc.rows.length ? `
+        <div style="display:flex;gap:14px;margin-bottom:10px;font-size:11px">
+          <div><span style="color:var(--muted)">Sample:</span> <strong>${sc.sample_n}</strong></div>
+          <div><span style="color:var(--muted)">Avg CLV:</span> <strong style="color:${sc.avg_clv>0?'var(--accent)':'var(--bad)'}">${fmtPct(sc.avg_clv)}</strong></div>
+          ${sc.rate_reliable ? `<div><span style="color:var(--muted)">Beat rate:</span> <strong>${sc.beat_rate}%</strong></div>` : `<div style="color:var(--muted-2);font-style:italic">beat rate withheld (n &lt; 30)</div>`}
+        </div>
+        <table class="sim-table"><thead><tr><th>Match</th><th>Selection</th><th>Open</th><th>Close</th><th>CLV</th></tr></thead><tbody>
+          ${sc.rows.map(r => `<tr>
+            <td>${r.home_team} vs ${r.away_team}</td>
+            <td style="color:var(--muted)">${r.selection}</td>
+            <td>${fmtOdds(r.open_odds)}</td>
+            <td>${fmtOdds(r.close_odds)}</td>
+            <td class="${r.clv_pct>0?'clv-pos':'clv-neg'}">${fmtPct(r.clv_pct)}</td>
+          </tr>`).join('')}
+        </tbody></table>
+      ` : `<div style="color:var(--muted-2);font-size:12px;padding:10px 0">No comparable CLV captures yet for ${p.league} · ${p.market}.</div>`}
+    </div>`;
+
+  $('modBody').innerHTML = priceHtml + modelHtml + lmHtml + booksHtml + simHtml;
+}
+
+/* ── SVG line-movement chart ── */
+function renderLineMovement(lm) {
+  const W = 800, H = 170, PAD_L = 36, PAD_R = 12, PAD_T = 12, PAD_B = 24;
+  const all = [...lm.sharp, ...lm.soft];
+  if (!all.length) return '<div class="lm-empty">No data</div>';
+
+  const ts = all.map(p => p.t);
+  const od = all.map(p => p.odds);
+  let tMin = Math.min(...ts), tMax = Math.max(...ts);
+  let oMin = Math.min(...od), oMax = Math.max(...od);
+  if (lm.detected_at) { tMin = Math.min(tMin, lm.detected_at); tMax = Math.max(tMax, lm.detected_at); }
+  if (lm.detected_odds) { oMin = Math.min(oMin, lm.detected_odds); oMax = Math.max(oMax, lm.detected_odds); }
+  if (tMax === tMin) tMax = tMin + 60;
+  const oPad = Math.max(0.05, (oMax - oMin) * 0.15);
+  oMin -= oPad; oMax += oPad;
+
+  const xOf = (t) => PAD_L + (t - tMin) / (tMax - tMin) * (W - PAD_L - PAD_R);
+  const yOf = (o) => PAD_T + (1 - (o - oMin) / (oMax - oMin)) * (H - PAD_T - PAD_B);
+
+  const polyline = (pts, color, sw=1.8) => {
+    if (!pts.length) return '';
+    const sorted = pts.slice().sort((a,b)=>a.t-b.t);
+    const d = sorted.map((p,i) => (i?'L':'M') + xOf(p.t).toFixed(1) + ',' + yOf(p.odds).toFixed(1)).join(' ');
+    const dots = sorted.map(p => `<circle cx="${xOf(p.t).toFixed(1)}" cy="${yOf(p.odds).toFixed(1)}" r="2" fill="${color}" opacity=".75"/>`).join('');
+    return `<path d="${d}" stroke="${color}" stroke-width="${sw}" fill="none" stroke-linejoin="round"/>${dots}`;
+  };
+
+  // y-axis ticks
+  const ticks = [oMin, (oMin+oMax)/2, oMax];
+  const tickLines = ticks.map(o => {
+    const y = yOf(o).toFixed(1);
+    return `<line x1="${PAD_L}" y1="${y}" x2="${W-PAD_R}" y2="${y}" stroke="#1f2c4d" stroke-width="1" stroke-dasharray="2,3"/>
+            <text x="${PAD_L-6}" y="${(+y+3)}" fill="#5e6e8a" font-size="9" text-anchor="end" font-family="monospace">${o.toFixed(2)}</text>`;
+  }).join('');
+
+  // Detection marker
+  let detect = '';
+  if (lm.detected_at && lm.detected_odds) {
+    const dx = xOf(lm.detected_at).toFixed(1), dy = yOf(lm.detected_odds).toFixed(1);
+    detect = `<line x1="${dx}" y1="${PAD_T}" x2="${dx}" y2="${H-PAD_B}" stroke="#22c55e" stroke-width="1" stroke-dasharray="3,3" opacity=".6"/>
+              <circle cx="${dx}" cy="${dy}" r="5" fill="#22c55e" stroke="#06210f" stroke-width="2"/>
+              <text x="${dx}" y="${PAD_T-2}" fill="#86efac" font-size="9" text-anchor="middle">detected</text>`;
+  }
+
+  // x-axis: start/end timestamps
+  const fmtT = (e) => new Date(e*1000).toLocaleString([], {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+  return `<div class="lm-chart-wrap">
+    <svg class="lm-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+      ${tickLines}
+      ${polyline(lm.soft, '#60a5fa', 1.4)}
+      ${polyline(lm.sharp, '#fbbf24', 2.2)}
+      ${detect}
+      <text x="${PAD_L}" y="${H-6}" fill="#5e6e8a" font-size="9">${fmtT(tMin)}</text>
+      <text x="${W-PAD_R}" y="${H-6}" fill="#5e6e8a" font-size="9" text-anchor="end">${fmtT(tMax)}</text>
+    </svg>
+  </div>`;
+}
+
+/* ─── CLV Proof renderer (Phase 3) ──────────────────────────────── */
+function renderProof(d) {
+  if (!d) return;
+  const s = d.summary || {};
+  $('proofN').textContent = s.sample_n || 0;
+
+  if (s.avg_clv != null) {
+    $('proofAvg').textContent = fmtPct(s.avg_clv);
+    $('proofAvg').className = 'proof-kpi-val ' + (s.avg_clv > 0 ? 'pos' : 'neg');
+    $('proofAvgSub').textContent = `last ${s.days || 30} days`;
+  } else {
+    $('proofAvg').textContent = 'awaiting';
+    $('proofAvg').className = 'proof-kpi-val';
+    $('proofAvgSub').textContent = 'no sharp captures yet';
+  }
+  $('proofAvg').style.color = s.avg_clv > 0 ? 'var(--accent)' : (s.avg_clv < 0 ? 'var(--bad)' : '');
+
+  if (s.rate_reliable && s.beat_rate != null) {
+    $('proofBeat').textContent = s.beat_rate + '%';
+    $('proofBeat').style.color = s.beat_rate >= 55 ? 'var(--accent)' : (s.beat_rate >= 40 ? 'var(--warn)' : 'var(--bad)');
+    $('proofBeatSub').textContent = `${s.positive_n}/${s.sample_n} beat close`;
+  } else {
+    $('proofBeat').textContent = '—';
+    $('proofBeat').style.color = '';
+    $('proofBeatSub').textContent = s.sample_n > 0 ? `n=${s.sample_n} (need 30)` : 'need n ≥ 30';
+  }
+
+  $('proofSplit').textContent = (s.positive_n||0) + ' / ' + (s.negative_n||0);
+  $('proofSplitSub').textContent = s.sample_n ? `${Math.round((s.positive_n||0)/s.sample_n*100)}% positive` : '—';
+
+  /* Histogram */
+  if (d.distribution && d.distribution.length) {
+    const maxC = Math.max(...d.distribution.map(b => b.count), 1);
+    $('proofHist').innerHTML = d.distribution.map((b, i) => {
+      const cls = i < 3 ? 'neg' : 'pos';
+      const h = Math.max(2, b.count / maxC * 90);
+      return `<div class="hist-bar" title="${b.label}: ${b.count} captures (${b.pct}%)">
+        <div class="hist-bar-cnt">${b.count}</div>
+        <div class="hist-bar-fill ${cls}" style="height:${h}px"></div>
+        <div class="hist-bar-lbl">${b.label}</div>
+      </div>`;
+    }).join('');
+  }
+
+  /* Per market */
+  if (d.per_market && d.per_market.length) {
+    $('proofMarketTbl').querySelector('tbody').innerHTML = d.per_market.map(r => `
+      <tr>
+        <td>${(r.market||'').toLowerCase()}</td>
+        <td>${r.n}</td>
+        <td class="${r.avg_clv>0?'clv-pos':'clv-neg'}">${fmtPct(r.avg_clv)}</td>
+        <td>${r.beat_rate != null ? r.beat_rate+'%' : '—'}</td>
+      </tr>`).join('');
+  }
+  /* Per league */
+  if (d.per_league && d.per_league.length) {
+    $('proofLeagueTbl').querySelector('tbody').innerHTML = d.per_league.map(r => `
+      <tr>
+        <td>${r.league}</td>
+        <td>${r.n}</td>
+        <td class="${r.avg_clv>0?'clv-pos':'clv-neg'}">${fmtPct(r.avg_clv)}</td>
+        <td>${r.beat_rate != null ? r.beat_rate+'%' : '—'}</td>
+      </tr>`).join('');
+  }
 }
 
 /* ─── Data fetch ────────────────────────────────────────────────── */
 async function loadAll() {
   try {
-    const [picksR, statsR, clvR] = await Promise.all([
+    const [picksR, statsR, proofR] = await Promise.all([
       fetch('/api/picks/today').then(r=>r.json()).catch(()=>({picks:[]})),
       fetch('/api/scanner/daily-stats').then(r=>r.json()).catch(()=>({})),
-      fetch('/api/clv_stats').then(r=>r.json()).catch(()=>({})),
+      fetch('/api/v2/clv/proof?days=30&sharp_only=true').then(r=>r.json()).catch(()=>null),
     ]);
     state.picks = (picksR.picks || picksR || []).filter(Boolean);
     state.lastFetch = Date.now();
     $('updatedAt').textContent = 'updated ' + new Date().toLocaleTimeString().slice(0,5);
 
-    /* CLV KPI: doctrine — withhold rate when sample too small */
-    const clvAvg = clvR && (clvR.avg_clv_30d ?? clvR.avg_clv ?? null);
-    const clvN = clvR && (clvR.sample_30d ?? clvR.sample ?? clvR.n ?? 0);
-    if (clvN >= 30 && clvAvg != null) {
-      $('kpiCLV').textContent = fmtPct(clvAvg);
-      $('kpiCLV').className = 'kpi-value ' + (clvAvg>0?'pos':'neg');
-      $('kpiCLVSample').textContent = `n=${clvN} sharp captures`;
-    } else if (clvN > 0) {
-      $('kpiCLV').textContent = `n=${clvN}`;
-      $('kpiCLV').className = 'kpi-value warn';
-      $('kpiCLVSample').textContent = `early data — rate withheld`;
+    /* KPI "Sharp CLV (30d)" — driven by doctrine endpoint, sharp-anchored only */
+    const s = proofR && proofR.summary;
+    if (s && s.sample_n > 0 && s.avg_clv != null) {
+      $('kpiCLV').textContent = fmtPct(s.avg_clv);
+      $('kpiCLV').className = 'kpi-value ' + (s.avg_clv>0?'pos':'neg');
+      const beatTxt = s.rate_reliable && s.beat_rate != null
+        ? `${s.beat_rate}% beat · n=${s.sample_n}`
+        : `n=${s.sample_n} (rate withheld)`;
+      $('kpiCLVSample').textContent = beatTxt;
     } else {
       $('kpiCLV').textContent = 'awaiting';
+      $('kpiCLV').className = 'kpi-value';
       $('kpiCLVSample').textContent = `no sharp captures yet`;
     }
+
+    /* Render the proof section using the same payload (no extra request) */
+    if (proofR) renderProof(proofR);
 
     render();
   } catch (e) {

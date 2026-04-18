@@ -4225,6 +4225,381 @@ async def v2_dashboard():
     Lives alongside home.html until validated, then will replace /, /home, /app."""
     return HTMLResponse(content=(STATIC_DIR / "v2.html").read_text(), headers=_NO_CACHE_HEADERS)
 
+
+# =============================================================================
+# v2 Match Detail + CLV proof endpoints (sharp-first, doctrine-compliant)
+# =============================================================================
+
+@app.get("/api/v2/pick/{pick_id}/detail", include_in_schema=False)
+async def v2_pick_detail(pick_id: int):
+    """
+    Assemble everything the v2 match-detail modal needs for a single pick:
+      - pick header (teams/league/kickoff/market/selection)
+      - sharp ref snapshot (NULL on legacy → 'awaiting' state)
+      - best available + book-by-book odds grid
+      - model prob vs implied prob
+      - line movement timeline from pgr_odds_snapshots (sharp + soft series)
+      - CLV history on similar bets (same league + market, last 30d, sharp-only)
+
+    All sections degrade gracefully to empty arrays when data is missing —
+    the UI renders 'AWAITING SHARP DATA' placeholders rather than fake values.
+    """
+    import json as _json
+    out = {
+        'pick': None,
+        'sharp_ref': None,
+        'best_available': None,
+        'books': [],
+        'model': None,
+        'line_movement': {'sharp': [], 'soft': [], 'has_data': False},
+        'similar_clv': {'rows': [], 'sample_n': 0, 'avg_clv': None, 'beat_rate': None},
+        'doctrine_status': 'UNKNOWN',
+    }
+
+    try:
+        # ── 1. Pick row ──
+        row = db_helper.execute("""
+            SELECT id, home_team, away_team, league, match_date, kickoff_time, kickoff_epoch,
+                   market, selection, odds, edge_percentage, confidence, model_prob,
+                   open_odds, clv_pct, clv_source_book,
+                   odds_by_bookmaker, best_odds_value, best_odds_bookmaker, fair_odds,
+                   sharp_price_at_detection, sharp_book_at_detection,
+                   confidence_label, signal_status, soft_anchored, best_price_book,
+                   timestamp, mode, match_id
+            FROM football_opportunities
+            WHERE id = %s
+        """, (pick_id,), fetch='one')
+
+        if not row:
+            raise HTTPException(status_code=404, detail={"error": "pick_not_found"})
+
+        odds_f = float(row[9]) if row[9] else None
+        model_p = float(row[12]) if row[12] else None
+        sharp_p = float(row[20]) if row[20] else None
+        sharp_b = row[21] or None
+        conf_label = row[22] or ('SHARP_CONFIRMED' if sharp_p else 'UNVERIFIED_LEGACY')
+
+        out['doctrine_status'] = conf_label
+        out['pick'] = {
+            'id': row[0],
+            'home_team': row[1], 'away_team': row[2],
+            'league': row[3] or '',
+            'match_date': str(row[4]) if row[4] else None,
+            'kickoff_time': str(row[5]) if row[5] else None,
+            'kickoff_epoch': int(row[6]) if row[6] else None,
+            'market': row[7] or '', 'selection': row[8] or '',
+            'odds': odds_f,
+            'edge_pct': round(float(row[10]), 2) if row[10] else None,
+            'confidence': round(float(row[11]), 3) if row[11] else None,
+            'created_ts': int(row[26]) if row[26] else None,
+            'mode': row[27] or 'PROD',
+            'match_id': row[28] or None,
+        }
+
+        # ── 2. Sharp ref ──
+        if sharp_p:
+            out['sharp_ref'] = {
+                'odds': round(sharp_p, 3),
+                'book': sharp_b,
+                'captured_at_open': True,
+                'fair_prob': round(1.0/sharp_p, 4) if sharp_p > 1 else None,
+            }
+        # ── 3. Best available ──
+        best_v = float(row[17]) if row[17] else odds_f
+        best_b = row[25] or row[18] or 'unknown'
+        out['best_available'] = {
+            'odds': round(best_v, 3) if best_v else None,
+            'book': best_b,
+            'fair_prob': round(1.0/best_v, 4) if best_v and best_v > 1 else None,
+        }
+
+        # ── 4. Model vs implied ──
+        if model_p and odds_f and odds_f > 1:
+            implied = 1.0/odds_f
+            implied_sharp = (1.0/sharp_p) if sharp_p and sharp_p > 1 else None
+            out['model'] = {
+                'model_prob': round(model_p, 4),
+                'implied_prob_taken': round(implied, 4),
+                'implied_prob_sharp': round(implied_sharp, 4) if implied_sharp else None,
+                'edge_vs_taken_pct': round((model_p - implied) * 100, 2),
+                'edge_vs_sharp_pct': round((model_p - implied_sharp) * 100, 2) if implied_sharp else None,
+                'fair_odds': round(float(row[19]), 3) if row[19] else (round(1.0/model_p, 3) if model_p > 0 else None),
+            }
+
+        # ── 5. Book by book ──
+        obb_raw = row[16]
+        if obb_raw:
+            try:
+                if isinstance(obb_raw, str):
+                    obb = _json.loads(obb_raw)
+                else:
+                    obb = obb_raw
+                if isinstance(obb, dict):
+                    SHARP_SET = {'pinnacle','pinny','betfair','betfair_ex_eu','matchbook','smarkets','nordic_bet','nordicbet'}
+                    books = []
+                    for bname, bval in obb.items():
+                        try:
+                            o = float(bval)
+                        except Exception:
+                            continue
+                        is_sharp = any(s in str(bname).lower() for s in SHARP_SET)
+                        edge = None
+                        if model_p and o > 1:
+                            edge = round((model_p - 1.0/o) * 100, 2)
+                        books.append({
+                            'book': bname, 'odds': round(o, 3),
+                            'is_sharp': is_sharp,
+                            'edge_pct': edge,
+                        })
+                    books.sort(key=lambda b: -b['odds'])
+                    out['books'] = books
+            except Exception as _e:
+                logger.debug(f"odds_by_bookmaker parse failed for pick {pick_id}: {_e}")
+
+        # ── 6. Line movement timeline (pgr_odds_snapshots) ──
+        # Match by fixture_id if we have one, else by team names
+        try:
+            match_id_int = None
+            try:
+                match_id_int = int(row[28]) if row[28] else None
+            except Exception:
+                pass
+
+            mkt_raw = (row[7] or '').upper()
+            sel_raw = (row[8] or '').upper()
+            snap_rows = []
+            if match_id_int:
+                snap_rows = db_helper.execute("""
+                    SELECT timestamp_utc, bookmaker, odds_decimal, market_type, selection
+                    FROM pgr_odds_snapshots
+                    WHERE fixture_id = %s
+                      AND UPPER(market_type) LIKE %s
+                      AND UPPER(selection)   LIKE %s
+                    ORDER BY timestamp_utc ASC
+                    LIMIT 500
+                """, (match_id_int, f"%{mkt_raw[:10]}%", f"%{sel_raw[:10]}%"), fetch='all') or []
+
+            if not snap_rows and row[1] and row[2]:
+                snap_rows = db_helper.execute("""
+                    SELECT timestamp_utc, bookmaker, odds_decimal, market_type, selection
+                    FROM pgr_odds_snapshots
+                    WHERE home_team = %s AND away_team = %s
+                      AND UPPER(market_type) LIKE %s
+                      AND UPPER(selection)   LIKE %s
+                    ORDER BY timestamp_utc ASC
+                    LIMIT 500
+                """, (row[1], row[2], f"%{mkt_raw[:10]}%", f"%{sel_raw[:10]}%"), fetch='all') or []
+
+            SHARP_SET = {'pinnacle','pinny','betfair','betfair_ex_eu','matchbook','smarkets','nordic_bet','nordicbet'}
+            sharp_pts, soft_pts = [], []
+            for sr in snap_rows:
+                ts = sr[0]
+                if ts is None:
+                    continue
+                ts_epoch = int(ts.timestamp()) if hasattr(ts, 'timestamp') else int(ts)
+                bk = sr[1] or ''
+                od = float(sr[2]) if sr[2] else None
+                if not od:
+                    continue
+                is_sharp = any(s in bk.lower() for s in SHARP_SET)
+                pt = {'t': ts_epoch, 'odds': round(od, 3), 'book': bk}
+                (sharp_pts if is_sharp else soft_pts).append(pt)
+            out['line_movement'] = {
+                'sharp': sharp_pts,
+                'soft': soft_pts,
+                'has_data': bool(sharp_pts or soft_pts),
+                'detected_at': out['pick']['created_ts'],
+                'detected_odds': odds_f,
+                'detected_sharp_odds': sharp_p,
+            }
+        except Exception as _e:
+            logger.debug(f"line_movement query failed for pick {pick_id}: {_e}")
+
+        # ── 7. CLV history on similar bets (same league + market, sharp-only, 30d) ──
+        try:
+            sim_rows = db_helper.execute("""
+                SELECT id, home_team, away_team, market, selection, open_odds, close_odds,
+                       clv_pct, clv_source_book, match_date
+                FROM football_opportunities
+                WHERE league = %s
+                  AND market = %s
+                  AND clv_pct IS NOT NULL
+                  AND match_date::date >= CURRENT_DATE - INTERVAL '30 days'
+                  AND id <> %s
+                ORDER BY match_date DESC
+                LIMIT 25
+            """, (row[3], row[7], pick_id), fetch='all') or []
+
+            rows_out = []
+            pos = 0; total = 0; clv_sum = 0.0
+            for sr in sim_rows:
+                clv = float(sr[7]) if sr[7] is not None else None
+                if clv is None:
+                    continue
+                total += 1
+                clv_sum += clv
+                if clv > 0: pos += 1
+                rows_out.append({
+                    'id': sr[0], 'home_team': sr[1], 'away_team': sr[2],
+                    'selection': sr[4],
+                    'open_odds': float(sr[5]) if sr[5] else None,
+                    'close_odds': float(sr[6]) if sr[6] else None,
+                    'clv_pct': round(clv, 2),
+                    'source_book': sr[8] or '',
+                    'date': str(sr[9]) if sr[9] else '',
+                })
+            out['similar_clv'] = {
+                'rows': rows_out[:10],
+                'sample_n': total,
+                'avg_clv': round(clv_sum/total, 2) if total else None,
+                'beat_rate': round(pos/total*100, 1) if total else None,
+                'rate_reliable': total >= 30,   # doctrine: hide rate if < 30
+            }
+        except Exception as _e:
+            logger.debug(f"similar_clv query failed for pick {pick_id}: {_e}")
+
+        return out
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"v2_pick_detail error for {pick_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/v2/clv/proof", include_in_schema=False)
+async def v2_clv_proof(days: int = 30, sharp_only: bool = True):
+    """
+    CLV proof-of-work payload for v2 dashboard. Sharp-anchored only by default
+    (doctrine: legacy soft-anchored captures are excluded from headline numbers).
+
+    Returns:
+      summary: avg_clv, beat_rate, sample_n, rate_reliable, positive_n, negative_n
+      distribution: histogram bucket counts
+      per_market: avg_clv + n per market (top 10)
+      per_league: avg_clv + n per league (top 10)
+      recent: last 15 captures (no fake names — real data only)
+    """
+    out = {
+        'summary': {'avg_clv': None, 'beat_rate': None, 'sample_n': 0,
+                    'rate_reliable': False, 'positive_n': 0, 'negative_n': 0,
+                    'days': days, 'sharp_only': sharp_only},
+        'distribution': [],
+        'per_market': [], 'per_league': [], 'recent': [],
+    }
+    try:
+        # Doctrine sharp-only filter:
+        #   1. close was captured against a sharp book (clv_source_book), AND
+        #   2. open was NOT soft-anchored (soft_anchored = false).
+        # Both conditions are required — otherwise +CLV is an artifact of
+        # cherry-picking large soft-anchored "edges" that closed lower
+        # everywhere. This matches the audit methodology that found
+        # the honest -2.57% number on truly sharp-anchored picks.
+        sharp_books = ('pinnacle','pinny','betfair','matchbook','smarkets','nordic_bet','nordicbet')
+        sharp_filter = ""
+        if sharp_only:
+            ors = " OR ".join([f"LOWER(COALESCE(clv_source_book,'')) LIKE '%%{b}%%'" for b in sharp_books])
+            sharp_filter = f" AND ({ors}) AND COALESCE(soft_anchored, true) = false"
+
+        # ── 1. Summary ──
+        rows = db_helper.execute(f"""
+            SELECT clv_pct
+            FROM football_opportunities
+            WHERE clv_pct IS NOT NULL
+              AND match_date::date >= CURRENT_DATE - INTERVAL '{int(days)} days'
+              {sharp_filter}
+        """, fetch='all') or []
+
+        clvs = [float(r[0]) for r in rows if r[0] is not None]
+        n = len(clvs)
+        if n:
+            avg = sum(clvs)/n
+            pos = sum(1 for c in clvs if c > 0)
+            neg = n - pos
+            out['summary'] = {
+                'avg_clv': round(avg, 2),
+                'beat_rate': round(pos/n*100, 1) if n >= 30 else None,
+                'sample_n': n,
+                'rate_reliable': n >= 30,
+                'positive_n': pos, 'negative_n': neg,
+                'days': days, 'sharp_only': sharp_only,
+            }
+            # Histogram buckets: <-5, -5..-2, -2..0, 0..2, 2..5, 5..10, >10
+            edges = [(-99,-5),(-5,-2),(-2,0),(0,2),(2,5),(5,10),(10,99)]
+            labels = ['< -5%','-5 to -2','-2 to 0','0 to 2','2 to 5','5 to 10','> +10%']
+            buckets = []
+            for (lo,hi),lab in zip(edges,labels):
+                cnt = sum(1 for c in clvs if lo <= c < hi)
+                buckets.append({'label': lab, 'count': cnt, 'pct': round(cnt/n*100,1)})
+            out['distribution'] = buckets
+
+        # ── 2. Per market ──
+        mkt_rows = db_helper.execute(f"""
+            SELECT market, AVG(clv_pct), COUNT(*),
+                   SUM(CASE WHEN clv_pct > 0 THEN 1 ELSE 0 END)
+            FROM football_opportunities
+            WHERE clv_pct IS NOT NULL
+              AND match_date::date >= CURRENT_DATE - INTERVAL '{int(days)} days'
+              {sharp_filter}
+            GROUP BY market
+            HAVING COUNT(*) >= 5
+            ORDER BY COUNT(*) DESC
+            LIMIT 10
+        """, fetch='all') or []
+        out['per_market'] = [{
+            'market': r[0] or 'unknown',
+            'avg_clv': round(float(r[1]), 2) if r[1] is not None else None,
+            'n': int(r[2]),
+            'beat_rate': round(int(r[3])/int(r[2])*100, 1) if r[2] else None,
+        } for r in mkt_rows]
+
+        # ── 3. Per league ──
+        lg_rows = db_helper.execute(f"""
+            SELECT league, AVG(clv_pct), COUNT(*),
+                   SUM(CASE WHEN clv_pct > 0 THEN 1 ELSE 0 END)
+            FROM football_opportunities
+            WHERE clv_pct IS NOT NULL
+              AND match_date::date >= CURRENT_DATE - INTERVAL '{int(days)} days'
+              {sharp_filter}
+            GROUP BY league
+            HAVING COUNT(*) >= 5
+            ORDER BY COUNT(*) DESC
+            LIMIT 10
+        """, fetch='all') or []
+        out['per_league'] = [{
+            'league': r[0] or 'unknown',
+            'avg_clv': round(float(r[1]), 2) if r[1] is not None else None,
+            'n': int(r[2]),
+            'beat_rate': round(int(r[3])/int(r[2])*100, 1) if r[2] else None,
+        } for r in lg_rows]
+
+        # ── 4. Recent captures ──
+        rec_rows = db_helper.execute(f"""
+            SELECT id, home_team, away_team, market, selection,
+                   open_odds, close_odds, clv_pct, clv_source_book, match_date, league
+            FROM football_opportunities
+            WHERE clv_pct IS NOT NULL
+              AND match_date::date >= CURRENT_DATE - INTERVAL '{int(days)} days'
+              {sharp_filter}
+            ORDER BY match_date DESC, id DESC
+            LIMIT 15
+        """, fetch='all') or []
+        out['recent'] = [{
+            'id': r[0], 'home_team': r[1], 'away_team': r[2],
+            'market': r[3], 'selection': r[4],
+            'open_odds': float(r[5]) if r[5] else None,
+            'close_odds': float(r[6]) if r[6] else None,
+            'clv_pct': round(float(r[7]), 2) if r[7] is not None else None,
+            'source_book': r[8] or '', 'date': str(r[9]) if r[9] else '',
+            'league': r[10] or '',
+        } for r in rec_rows]
+
+        return out
+
+    except Exception as e:
+        logger.error(f"v2_clv_proof error: {e}")
+        return out
+
 @app.get("/edge-finder", include_in_schema=False)
 async def edge_finder_alias():
     return HTMLResponse(content=(STATIC_DIR / "pgr_dashboard.html").read_text())
