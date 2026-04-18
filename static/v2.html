@@ -807,13 +807,20 @@ function renderProof(d){
   }
 }
 
+/* ── Fetch with timeout ── */
+function fetchT(url,ms=8000){
+  const ctrl=new AbortController();
+  const t=setTimeout(()=>ctrl.abort(),ms);
+  return fetch(url,{signal:ctrl.signal}).finally(()=>clearTimeout(t));
+}
+
 /* ── Fetch ── */
 async function loadAll(){
   try{
     const [picksR,,proofR]=await Promise.all([
-      fetch('/api/picks/today').then(r=>r.json()).catch(()=>({picks:[]})),
-      fetch('/api/scanner/daily-stats').then(r=>r.json()).catch(()=>({})),
-      fetch('/api/v2/clv/proof?days=30&sharp_only=true').then(r=>r.json()).catch(()=>null),
+      fetchT('/api/picks/today').then(r=>r.json()).catch(()=>({picks:[]})),
+      fetchT('/api/scanner/daily-stats').then(r=>r.json()).catch(()=>({})),
+      fetchT('/api/v2/clv/proof?days=30&sharp_only=true').then(r=>r.json()).catch(()=>null),
     ]);
     S.picks=(picksR.picks||picksR||[]).filter(Boolean);
     $('updatedAt').textContent=new Date().toLocaleTimeString().slice(0,5);
