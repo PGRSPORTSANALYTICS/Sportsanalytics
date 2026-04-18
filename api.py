@@ -4143,13 +4143,13 @@ async def upgrade_page():
 @app.get("/", include_in_schema=False)
 async def root_redirect(request: Request):
     """
-    Serve the public value scanner (home.html) for everyone.
+    Serve the terminal scanner (v2.html) for everyone.
     Premium gate is handled client-side via /api/verify-code.
     Admin sessions are redirected to the internal dashboard.
     """
     if is_admin_session(request):
         return RedirectResponse("/home", status_code=302)
-    return HTMLResponse(content=(STATIC_DIR / "home.html").read_text(), headers=_NO_CACHE_HEADERS)
+    return HTMLResponse(content=(STATIC_DIR / "v2.html").read_text(), headers=_NO_CACHE_HEADERS)
 
 
 # =============================================================================
