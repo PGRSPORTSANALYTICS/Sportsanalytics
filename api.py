@@ -4172,6 +4172,37 @@ async def live_scanner():
     """Primary scanner — served at fresh URL so no stale SW cache hits."""
     return HTMLResponse(content=(STATIC_DIR / "v2.html").read_text(), headers=_NO_CACHE_HEADERS)
 
+@app.get("/test", include_in_schema=False)
+async def js_test_page():
+    """Minimal JS diagnostic page — used to isolate fetch/CSP issues."""
+    html = """<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{background:#06060d;color:#e2e8f0;font-family:monospace;padding:20px;font-size:18px}
+.ok{color:#4ade80}.err{color:#f87171}</style>
+</head><body>
+<div id="js">❌ JS not running</div>
+<div id="api">⏳ Fetching API...</div>
+<div id="time" style="font-size:12px;opacity:.5;margin-top:12px"></div>
+<script>
+document.getElementById('js').innerHTML='<span class="ok">✅ JS running</span>';
+document.getElementById('time').textContent = new Date().toLocaleTimeString();
+fetch('/api/picks/today')
+  .then(function(r){
+    document.getElementById('api').textContent='HTTP ' + r.status;
+    return r.json();
+  })
+  .then(function(d){
+    var picks = d.picks || d || [];
+    document.getElementById('api').innerHTML='<span class="ok">✅ API OK — ' + picks.length + ' picks</span>';
+  })
+  .catch(function(e){
+    document.getElementById('api').innerHTML='<span class="err">❌ ' + e.message + '</span>';
+  });
+</script>
+</body></html>"""
+    return HTMLResponse(content=html, headers=_NO_CACHE_HEADERS)
+
 
 # =============================================================================
 # Protected app routes
