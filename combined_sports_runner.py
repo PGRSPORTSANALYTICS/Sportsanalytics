@@ -139,13 +139,8 @@ def check_daily_stoploss() -> bool:
 
 
 def run_discord_analysis_publisher():
-    """Post positive-EV picks to league-specific Discord channels via discord_publisher."""
-    try:
-        from discord_publisher import run_publish_cycle
-        posted = run_publish_cycle()
-        logger.info(f"📣 Discord publisher: {posted} picks posted")
-    except Exception as e:
-        logger.error(f"❌ Discord publisher error: {e}")
+    """DISABLED — no pre-match picks posted to Discord. No-op."""
+    return
 
 
 def run_form_cacher():

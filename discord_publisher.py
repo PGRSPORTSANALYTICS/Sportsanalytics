@@ -78,8 +78,8 @@ PROOF_WEBHOOK = os.getenv("WEBHOOK_PROOF", "")
 ROUTE_ALL_TO_PROOF = False  # Apr 17 2026: Pre-match publisher disabled entirely.
                              # proof-of-work channel is CLV-only (proof_poster.py).
 
-# Set PUBLISHER_KILL_SWITCH=true in env to disable all Discord pick posting.
-PUBLISHER_KILL_SWITCH = os.getenv("PUBLISHER_KILL_SWITCH", "false").lower() != "false"
+# Set PUBLISHER_KILL_SWITCH=false in env to re-enable Discord pick posting.
+PUBLISHER_KILL_SWITCH = os.getenv("PUBLISHER_KILL_SWITCH", "true").lower() != "false"
 
 RATE_LIMIT_SECONDS = 2.0
 DEDUPE_TTL_HOURS = 48
