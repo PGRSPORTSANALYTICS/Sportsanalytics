@@ -4291,7 +4291,7 @@ async def v2_dashboard():
 # =============================================================================
 
 @app.get("/api/v2/pick/{pick_id}/detail", include_in_schema=False)
-async def v2_pick_detail(pick_id: int):
+def v2_pick_detail(pick_id: int):
     """
     Assemble everything the v2 match-detail modal needs for a single pick:
       - pick header (teams/league/kickoff/market/selection)
@@ -4661,7 +4661,7 @@ async def v2_clv_proof(days: int = 30, sharp_only: bool = True):
         return out
 
 @app.get("/api/v2/pick/{pick_id}/signal_strength")
-async def v2_signal_strength(pick_id: int):
+def v2_signal_strength(pick_id: int):
     """
     Composite Signal Strength Score (0–100) for a pick, computed from
     sharp odds snapshots logged after detection.
