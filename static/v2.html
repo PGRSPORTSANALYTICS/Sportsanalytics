@@ -494,6 +494,9 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
 
 /* ── Decision Brain v2 cards ── */
 .mk-card2{padding:11px 12px 9px 15px;position:relative;cursor:default;transition:background .07s}
+.mk-card2[onclick]{cursor:pointer}
+.mk-card2[onclick]:hover{background:rgba(255,255,255,.03)}
+.mk-tap-hint{font-size:8px;color:var(--dim);text-align:right;margin-top:5px;letter-spacing:.3px}
 .mk-card2::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px}
 .mk-card2.ec-g::before{background:var(--green)}
 .mk-card2.ec-a::before{background:var(--amber)}
@@ -1034,8 +1037,9 @@ function buildMkCard(mk,tgt,uid){
   var expandBtn=mk.why&&mk.why.length
     ?'<div class="mk-expand" onclick="event.stopPropagation();mmExpand(\''+rid+'\')"><span id="mk-exp-lbl-'+rid+'">why \u25be</span></div>':''
   ;
+  var mkClick=mk.id?(' onclick="openMarketDetail('+mk.id+',\''+tgt+'\')" style="cursor:pointer"'):'';
   return'<div class="mm-entry">'
-    +'<div class="mk-card2 ec-'+ec+(isBest?' is-best':'')+'">'
+    +'<div class="mk-card2 ec-'+ec+(isBest?' is-best':'')+'"'+mkClick+'>'
     +(isBest?'<div class="mk-best-angle">BEST OPPORTUNITY IN MATCH</div>':'')
     // top row: name + market state
     +'<div class="mk-top">'
@@ -1065,8 +1069,9 @@ function buildMkCard(mk,tgt,uid){
     +(mk.stake_hint&&mk.stake_hint!=='0u'&&mk.stake_hint!=='0.0u'?'<div class="mk2-stake">stake hint <strong>'+mk.stake_hint+'</strong></div>':'')
     // price row
     +(pi.length?'<div class="mk2-prices">'+pi.join('<span style="color:var(--line2)"> \u00b7 </span>')+'</div>':'')
-    // expand + why
+    // expand + why + tap hint
     +expandBtn+whyHtml
+    +(mk.id?'<div class="mk-tap-hint">full analysis \u2192</div>':'')
     +'</div></div>';
 }
 function buildMatchMarkets(data,tgt){
