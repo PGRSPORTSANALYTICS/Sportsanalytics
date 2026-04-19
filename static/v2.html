@@ -6,7 +6,13 @@
 <meta name="theme-color" content="#06060d"/>
 <title>PGR · Live Scanner</title>
 <script>
-/* Passive SW cleanup — no reload, no sessionStorage, no crashes */
+/* Set onerror FIRST so it catches any syntax error in the main script block */
+window.onerror=function(msg,src,line,col,err){
+  var el=document.getElementById('updatedAt');
+  if(el)el.textContent='ERR:L'+line+' '+(String(msg||'').slice(0,22));
+  return false;
+};
+/* Passive SW cleanup */
 try{
   if('serviceWorker' in navigator){
     navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(x){x.unregister();});});
@@ -385,7 +391,7 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
   </div>
   <div class="nav-sp"></div>
   <span class="nav-ts" id="updatedAt">syncing…</span>
-  <span class="nav-ts" style="font-size:8px;opacity:.4;margin-right:4px">v20260419c</span>
+  <span class="nav-ts" style="font-size:8px;opacity:.4;margin-right:4px">v20260419d</span>
   <span class="tier-badge" id="tierBadge">FREE</span>
 </nav>
 
@@ -504,7 +510,7 @@ window.onerror=function(msg,src,line,col,err){
   return false;
 };
 /* Synchronous probe — runs before anything else */
-(function(){var el=document.getElementById('updatedAt');if(el)el.textContent='JS:v20260419c';})();
+(function(){var el=document.getElementById('updatedAt');if(el)el.textContent='JS:v20260419d';})();
 const S={picks:[],filters:{sport:'all',market:'all',edge:0,sharp:false}};
 const $=id=>document.getElementById(id);
 const fP=(v,s=true)=>{if(v==null||isNaN(v))return'—';return(s&&v>0?'+':'')+Number(v).toFixed(1)+'%'};
@@ -869,7 +875,7 @@ setTimeout(()=>{if(!_rendered)safeRender();},5000);
 setTimeout(()=>{
   const sb=$('scBody');
   if(sb && sb.innerHTML.includes('Loading signals')){
-    sb.innerHTML='<div class="empty-s"><div class="empty-t" style="color:#4ade80">JS OK · fetching data…</div><div class="empty-sub">v20260419c · if stuck, check URL = /live</div></div>';
+    sb.innerHTML='<div class="empty-s"><div class="empty-t" style="color:#4ade80">JS OK · fetching data…</div><div class="empty-sub">v20260419d · if stuck, check URL = /live</div></div>';
   }
 },1000);
 
