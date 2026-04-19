@@ -497,6 +497,8 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
 </div>
 
 <script>
+/* Synchronous probe — runs before anything else */
+(function(){var el=document.getElementById('updatedAt');if(el)el.textContent='JS:v20260419a';})();
 const S={picks:[],filters:{sport:'all',market:'all',edge:0,sharp:false}};
 const $=id=>document.getElementById(id);
 const fP=(v,s=true)=>{if(v==null||isNaN(v))return'—';return(s&&v>0?'+':'')+Number(v).toFixed(1)+'%'};
