@@ -391,7 +391,7 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
   </div>
   <div class="nav-sp"></div>
   <span class="nav-ts" id="updatedAt">syncing…</span>
-  <span class="nav-ts" style="font-size:8px;opacity:.4;margin-right:4px">v20260419d</span>
+  <span class="nav-ts" style="font-size:8px;opacity:.4;margin-right:4px">v20260419e</span>
   <span class="tier-badge" id="tierBadge">FREE</span>
 </nav>
 
@@ -510,7 +510,7 @@ window.onerror=function(msg,src,line,col,err){
   return false;
 };
 /* Synchronous probe — runs before anything else */
-(function(){var el=document.getElementById('updatedAt');if(el)el.textContent='JS:v20260419d';})();
+(function(){var el=document.getElementById('updatedAt');if(el)el.textContent='JS:v20260419e';})();
 const S={picks:[],filters:{sport:'all',market:'all',edge:0,sharp:false}};
 const $=id=>document.getElementById(id);
 const fP=(v,s=true)=>{if(v==null||isNaN(v))return'—';return(s&&v>0?'+':'')+Number(v).toFixed(1)+'%'};
@@ -633,8 +633,8 @@ function renderScanner(picks){
         </div>
         <div class="r-books">${books||'<span class="r-bk soft">—</span>'}</div>
         <div class="r-meta">
-          ${mv.txt?`<span class="r-move ${mv.cls}">${mv.txt}</span>`:''}
-          ${sb.txt?`<span class="r-badge ${sb.cls}">${sb.txt}</span>`:''}
+          ${mv.txt?('<span class="r-move '+mv.cls+'">'+mv.txt+'</span>'):''}
+          ${sb.txt?('<span class="r-badge '+sb.cls+'">'+sb.txt+'</span>'):''}
           ${isNew?'<span class="r-badge new-sig">NEW</span>':''}
         </div>
       </div>`;
@@ -704,9 +704,9 @@ function buildDetail(d){
 
   /* Price snapshot */
   const priceHtml=`<div class="ds"><div class="ds-h">Price snapshot</div>
-    <div class="dkv"><span class="dk">⚡ Sharp ref</span><span class="dv a">${sr?fO(sr.odds):'awaiting'}${sr?` <span style="color:var(--muted);font-size:9px">${sr.book.toUpperCase().slice(0,4)}</span>':''}</span></div>
-    <div class="dkv"><span class="dk">Best available</span><span class="dv g">${ba?fO(ba.odds):'—'}${ba?` <span style="color:var(--muted);font-size:9px">${ba.book.toUpperCase().slice(0,4)}</span>`:''}</span></div>
-    ${m&&m.fair_odds?`<div class="dkv"><span class="dk">Fair odds</span><span class="dv">${fO(m.fair_odds)}</span></div>`:''}
+    <div class="dkv"><span class="dk">⚡ Sharp ref</span><span class="dv a">${sr?fO(sr.odds):'awaiting'}${sr?(' <span style="color:var(--muted);font-size:9px">'+sr.book.toUpperCase().slice(0,4)+'</span>'):''}</span></div>
+    <div class="dkv"><span class="dk">Best available</span><span class="dv g">${ba?fO(ba.odds):'—'}${ba?(' <span style="color:var(--muted);font-size:9px">'+ba.book.toUpperCase().slice(0,4)+'</span>'):''}</span></div>
+    ${m&&m.fair_odds?('<div class="dkv"><span class="dk">Fair odds</span><span class="dv">'+fO(m.fair_odds)+'</span></div>'):''}
   </div>`;
 
   /* Model */
@@ -716,11 +716,11 @@ function buildDetail(d){
       <div class="mb-wrap">
         <div class="mb-row"><span class="mb-l">Model prob</span><div class="mb-trk"><div class="mb-f model" style="width:${w(m.model_prob)}"></div></div><span class="mb-val">${(m.model_prob*100).toFixed(1)}%</span></div>
         <div class="mb-row"><span class="mb-l">Impl @ taken</span><div class="mb-trk"><div class="mb-f imp-t" style="width:${w(m.implied_prob_taken)}"></div></div><span class="mb-val">${(m.implied_prob_taken*100).toFixed(1)}%</span></div>
-        ${m.implied_prob_sharp!=null?`<div class="mb-row"><span class="mb-l">Impl @ sharp</span><div class="mb-trk"><div class="mb-f imp-s" style="width:${w(m.implied_prob_sharp)}"></div></div><span class="mb-val">${(m.implied_prob_sharp*100).toFixed(1)}%</span></div>`:''}
+        ${m.implied_prob_sharp!=null?('<div class="mb-row"><span class="mb-l">Impl @ sharp</span><div class="mb-trk"><div class="mb-f imp-s" style="width:'+w(m.implied_prob_sharp)+'"></div></div><span class="mb-val">'+(m.implied_prob_sharp*100).toFixed(1)+'%</span></div>'):''}
       </div>
       <div class="edge-inline" style="margin-top:5px">
         <span><span class="l">vs taken:</span> <strong style="color:${m.edge_vs_taken_pct>0?'var(--green)':'var(--red)'}">${fP(m.edge_vs_taken_pct)}</strong></span>
-        ${m.edge_vs_sharp_pct!=null?`<span><span class="l">vs sharp:</span> <strong style="color:${m.edge_vs_sharp_pct>0?'var(--green)':'var(--red)'}">${fP(m.edge_vs_sharp_pct)}</strong></span>`:`<span style="color:var(--dim)">vs sharp: awaiting</span>`}
+        ${m.edge_vs_sharp_pct!=null?('<span><span class="l">vs sharp:</span> <strong style="color:'+(m.edge_vs_sharp_pct>0?'var(--green)':'var(--red)')+'">'+fP(m.edge_vs_sharp_pct)+'</strong></span>'):'<span style="color:var(--dim)">vs sharp: awaiting</span>'}
       </div></div>`;
   }
 
@@ -747,26 +747,23 @@ function buildDetail(d){
   </div>`;
 
   /* Books table */
-  const booksHtml=d.books&&d.books.length?`<div class="ds"><div class="ds-h">Books · ${d.books.length}</div>
-    <table class="bk-tbl"><tbody>
-    ${d.books.map(b=>`<tr class="${b.is_sharp?'bk-sharp-row':''}">
-      <td>${b.is_sharp?'⚡':''}${b.book}</td>
-      <td style="text-align:right">${b.edge_pct!=null?`<span class="${b.edge_pct>0?'ep':'en'}">${fP(b.edge_pct)} </span>`:''}</td>
-      <td style="text-align:right;color:var(--txt)">${fO(b.odds)}</td>
-    </tr>`).join('')}
-    </tbody></table></div>`:'';
+  function _bkRow(b){
+    var sc2=b.is_sharp?'bk-sharp-row':'';
+    var ic=b.is_sharp?'⚡':'';
+    var ec=b.edge_pct!=null?('<span class="'+(b.edge_pct>0?'ep':'en')+'">'+fP(b.edge_pct)+' </span>'):'';
+    return '<tr class="'+sc2+'"><td>'+ic+b.book+'</td><td style="text-align:right">'+ec+'</td><td style="text-align:right;color:var(--txt)">'+fO(b.odds)+'</td></tr>';
+  }
+  const booksHtml=d.books&&d.books.length?('<div class="ds"><div class="ds-h">Books · '+d.books.length+'</div><table class="bk-tbl"><tbody>'+d.books.map(_bkRow).join('')+'</tbody></table></div>'):'';
 
   /* CLV history */
-  const simHtml=`<div class="ds"><div class="ds-h">CLV history · ${p.league||''} · 30d</div>
-    ${sc.rows.length?`<div class="edge-inline" style="margin-bottom:5px">
-      <span><span class="l">n: </span><strong>${sc.sample_n}</strong></span>
-      <span><span class="l">Avg CLV: </span><strong style="color:${sc.avg_clv>0?'var(--green)':'var(--red)'}">${fP(sc.avg_clv)}</strong></span>
-      ${sc.rate_reliable?`<span><span class="l">Beat: </span><strong>${sc.beat_rate}%</strong></span>`:`<span style="color:var(--dim)">rate withheld (n&lt;30)</span>`}
-    </div>
-    <table class="sim-tbl"><thead><tr><th>Match</th><th>Sel</th><th>Open</th><th>Close</th><th>CLV</th></tr></thead><tbody>
-      ${sc.rows.map(r=>`<tr><td>${r.home_team} vs ${r.away_team}</td><td style="color:var(--muted)">${r.selection}</td><td>${fO(r.open_odds)}</td><td>${fO(r.close_odds)}</td><td class="${r.clv_pct>0?'cp':'cn'}">${fP(r.clv_pct)}</td></tr>`).join('')}
-    </tbody></table>`:`<div class="lm-empty">No CLV captures for ${p.league} · ${p.market}</div>`}
-  </div>`;
+  function _simRow(r){
+    return '<tr><td>'+r.home_team+' vs '+r.away_team+'</td><td style="color:var(--muted)">'+r.selection+'</td><td>'+fO(r.open_odds)+'</td><td>'+fO(r.close_odds)+'</td><td class="'+(r.clv_pct>0?'cp':'cn')+'">'+fP(r.clv_pct)+'</td></tr>';
+  }
+  var _simBeat=sc.rate_reliable?('<span><span class="l">Beat: </span><strong>'+sc.beat_rate+'%</strong></span>'):'<span style="color:var(--dim)">rate withheld (n&lt;30)</span>';
+  var _simInner=sc.rows.length
+    ?('<div class="edge-inline" style="margin-bottom:5px"><span><span class="l">n: </span><strong>'+sc.sample_n+'</strong></span><span><span class="l">Avg CLV: </span><strong style="color:'+(sc.avg_clv>0?'var(--green)':'var(--red)')+'">'+fP(sc.avg_clv)+'</strong></span>'+_simBeat+'</div><table class="sim-tbl"><thead><tr><th>Match</th><th>Sel</th><th>Open</th><th>Close</th><th>CLV</th></tr></thead><tbody>'+sc.rows.map(_simRow).join('')+'</tbody></table>')
+    :('<div class="lm-empty">No CLV captures for '+(p.league||'')+' · '+p.market+'</div>');
+  const simHtml='<div class="ds"><div class="ds-h">CLV history · '+(p.league||'')+' · 30d</div>'+_simInner+'</div>';
 
   return priceHtml+modelHtml+ssHtml+lmHtml+booksHtml+simHtml;
 }
@@ -875,7 +872,7 @@ setTimeout(()=>{if(!_rendered)safeRender();},5000);
 setTimeout(()=>{
   const sb=$('scBody');
   if(sb && sb.innerHTML.includes('Loading signals')){
-    sb.innerHTML='<div class="empty-s"><div class="empty-t" style="color:#4ade80">JS OK · fetching data…</div><div class="empty-sub">v20260419d · if stuck, check URL = /live</div></div>';
+    sb.innerHTML='<div class="empty-s"><div class="empty-t" style="color:#4ade80">JS OK · fetching data…</div><div class="empty-sub">v20260419e · if stuck, check URL = /live</div></div>';
   }
 },1000);
 
