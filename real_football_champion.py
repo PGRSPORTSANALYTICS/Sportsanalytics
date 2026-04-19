@@ -241,7 +241,7 @@ class RealFootballChampion:
             'soccer_chile_primera_division': 'Chilean Primera Division',
             'soccer_colombia_primera_a': 'Colombian Primera A',
             'soccer_uruguay_primera_division': 'Uruguayan Primera Division',
-            'soccer_conmebol_libertadores': 'Copa Libertadores',
+            'soccer_conmebol_copa_libertadores': 'Copa Libertadores',
             'soccer_conmebol_sudamericana': 'Copa Sudamericana',
             
             # North America
@@ -3027,7 +3027,10 @@ class RealFootballChampion:
             'soccer_netherlands_eredivisie', 'soccer_portugal_primeira_liga',
             'soccer_usa_mls', 'soccer_sweden_allsvenskan', 'soccer_norway_eliteserien',
             'soccer_brazil_campeonato', 'soccer_argentina_primera_division', 'soccer_mexico_ligamx',
-            'soccer_australia_aleague', 'soccer_japan_j_league', 'soccer_korea_kleague1'
+            'soccer_australia_aleague', 'soccer_japan_j_league', 'soccer_korea_kleague1',
+            'soccer_austria_bundesliga', 'soccer_poland_ekstraklasa',
+            'soccer_switzerland_superleague', 'soccer_england_league1',
+            'soccer_conmebol_copa_libertadores'
         }
         
         # Score each match for prioritization (no API calls, just odds analysis)

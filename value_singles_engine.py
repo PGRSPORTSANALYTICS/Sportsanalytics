@@ -214,6 +214,13 @@ VALUE_SINGLE_LEAGUE_WHITELIST = {
     "soccer_australia_aleague",      # A-League
     "soccer_japan_j_league",         # J-League
     "soccer_korea_kleague1",         # K-League 1
+    # Additional European (Pinnacle-covered)
+    "soccer_austria_bundesliga",          # Austrian Bundesliga
+    "soccer_poland_ekstraklasa",          # Polish Ekstraklasa
+    "soccer_switzerland_superleague",     # Swiss Super League
+    "soccer_england_league1",             # League One
+    # South American Cup
+    "soccer_conmebol_copa_libertadores",  # Copa Libertadores
 }
 
 

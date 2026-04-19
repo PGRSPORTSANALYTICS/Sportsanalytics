@@ -69,6 +69,7 @@ LEAGUE_WEBHOOKS: Dict[str, str] = {
     "French Ligue 2":               os.getenv("DISCORD_WH_LIGUE_2", ""),
     "Dutch Eerste Divisie":         os.getenv("DISCORD_WH_EERSTE_DIVISIE", ""),
     "Portuguese Segunda Liga":      os.getenv("DISCORD_WH_SEGUNDA_LIGA", ""),
+    "Copa Libertadores":            os.getenv("DISCORD_ANALYTICS_WEBHOOK_URL", ""),
 }
 
 DEFAULT_WEBHOOK = os.getenv("DISCORD_WEBHOOK_URL", "")
