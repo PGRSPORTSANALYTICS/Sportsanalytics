@@ -380,8 +380,8 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
 .mm-hdr div{text-align:right}.mm-hdr div:first-child{text-align:left}
 .mm-row{
   display:grid;grid-template-columns:1fr 52px 52px 54px 58px;
-  padding:0 10px 0 15px;height:44px;align-items:center;
-  border-bottom:1px solid var(--line);cursor:pointer;transition:background .07s;
+  padding:7px 10px 7px 15px;min-height:52px;height:auto;align-items:start;
+  border-bottom:none;cursor:pointer;transition:background .07s;
   position:relative;
 }
 .mm-row::before{content:'';position:absolute;left:0;top:4px;bottom:4px;width:3px;border-radius:0 2px 2px 0;background:var(--dim)}
@@ -404,7 +404,43 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
 .mm-badge.sharp{color:#86efac;background:rgba(34,197,94,.1)}
 .mm-badge.legacy{color:#9d8ccc;background:rgba(139,92,246,.08)}
 .mm-badge.interp{color:var(--amber);background:rgba(245,200,66,.08)}
-/* Tier section headers */
+/* ── Decision labels ── */
+.dec-label{font-size:7px;font-weight:900;text-transform:uppercase;letter-spacing:.4px;padding:2px 5px;border-radius:2px;white-space:nowrap}
+.dec-bet{color:#86efac;background:rgba(34,197,94,.14);border:1px solid rgba(34,197,94,.25)}
+.dec-watch{color:var(--amber);background:rgba(245,200,66,.1);border:1px solid rgba(245,200,66,.2)}
+.dec-pass{color:var(--dim);background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07)}
+/* ── Urgency states ── */
+.urg-label{font-size:6.5px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;padding:1px 4px;border-radius:2px;display:inline-block}
+.urg-early{color:#6b9de8;background:rgba(107,157,232,.1)}
+.urg-live{color:var(--green);background:rgba(34,197,94,.1);animation:upulse 2s infinite}
+.urg-fading{color:var(--red);background:rgba(239,68,68,.1)}
+.urg-gone{color:var(--dim);background:rgba(255,255,255,.05)}
+@keyframes upulse{0%,100%{opacity:1}50%{opacity:.45}}
+/* ── Best angle badge ── */
+.best-angle{font-size:6.5px;font-weight:800;color:#ffd700;background:rgba(255,215,0,.1);border:1px solid rgba(255,215,0,.25);padding:1px 4px;border-radius:2px;letter-spacing:.3px}
+/* ── Match summary strip ── */
+.mm-summary{display:flex;gap:1px;background:var(--line);border-bottom:2px solid var(--line2);overflow-x:auto;scrollbar-width:none}
+.mm-summary::-webkit-scrollbar{display:none}
+.mm-sum-stat{background:var(--bg);padding:8px 12px;display:flex;flex-direction:column;gap:2px;flex-shrink:0;min-width:64px}
+.mm-sum-val{font-size:14px;font-weight:800;color:var(--txt);line-height:1}
+.mm-sum-lbl{font-size:7px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.4px}
+/* ── Filter bar ── */
+.mm-filters{display:flex;gap:5px;padding:7px 10px;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none;background:var(--bg2)}
+.mm-filters::-webkit-scrollbar{display:none}
+.mm-filter-pill{font-size:8px;font-weight:700;padding:3px 9px;border-radius:10px;border:1px solid var(--line2);color:var(--muted);cursor:pointer;white-space:nowrap;transition:all .15s;flex-shrink:0}
+.mm-filter-pill.on{color:var(--bg);background:var(--txt);border-color:var(--txt)}
+/* ── Why panel ── */
+.mm-entry{display:block;border-bottom:1px solid var(--line)}
+.why-panel{display:none;background:rgba(255,255,255,.025);border-top:1px solid var(--line);padding:9px 12px;font-size:8.5px;line-height:1.7}
+.why-panel.open{display:block}
+.why-row{display:flex;justify-content:space-between;gap:8px;padding:1px 0;border-bottom:1px solid rgba(255,255,255,.03)}
+.why-row:last-child{border-bottom:none}
+.why-key{color:var(--dim)}
+.why-val{font-weight:700;color:var(--txt);text-align:right}
+.why-val.pos{color:var(--green)}.why-val.neg{color:var(--red)}.why-val.neu{color:var(--amber)}
+.why-detail-link{display:block;text-align:right;margin-top:6px;font-size:7.5px;color:var(--muted);cursor:pointer;letter-spacing:.3px}
+.why-detail-link:hover{color:var(--txt)}
+/* ── Tier section headers ── */
 .mm-tier-h{padding:3px 10px 3px 15px;font-size:7.5px;font-weight:900;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.01)}
 .mm-tier-h.strong{color:var(--green)}.mm-tier-h.medium{color:var(--amber)}.mm-tier-h.developing{color:var(--dim)}
 /* Show more toggle */
@@ -412,7 +448,7 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
 .mm-more:hover{color:var(--txt);background:rgba(255,255,255,.025)}
 @media(max-width:860px){
   .mm-hdr{display:none}
-  .mm-row{grid-template-columns:1fr 56px 60px;padding:0 8px 0 12px;height:48px}
+  .mm-row{grid-template-columns:1fr 56px 62px;padding:6px 8px 6px 12px;min-height:48px;height:auto;align-items:start}
   .mm-sharp{display:none}.mm-best{display:none}
   .mm-edge{grid-column:2;grid-row:1}
   .mm-sig{grid-column:3;grid-row:1}
@@ -766,6 +802,7 @@ async function fetchMatchMarkets(id,tgt){
     if(tgt==='desk')$('detBody').innerHTML=err;else $('mobBody').innerHTML=err;return;}
   if(!data||!data.match){const err='<div class="empty-s"><div class="empty-t">Not found</div></div>';
     if(tgt==='desk')$('detBody').innerHTML=err;else $('mobBody').innerHTML=err;return;}
+  _mmState.data=data;_mmState.tgt=tgt;
   const html=buildMatchMarkets(data,tgt);
   const m=data.match;
   const ko=m.kickoff_epoch?new Date(m.kickoff_epoch*1000).toISOString().slice(11,16)+' UTC':'';
@@ -779,84 +816,214 @@ async function fetchMatchMarkets(id,tgt){
   }
 }
 
-function _mmRow(mk,tgt){
-  const ec=mk.tier==='strong'?'g':(mk.tier==='medium'?'a':'r');
-  const sharpH=mk.sharp_ref?'<span style="color:var(--amber)">⚡'+fO(mk.sharp_ref)+'</span>':'<span class="mm-no">—</span>';
-  const bestH=mk.best_available?fO(mk.best_available):'<span class="mm-no">—</span>';
-  var mvH='';
-  if(mk.movement_pct!=null){var s=mk.movement_pct>0?'+':'';mvH='<div class="mm-mv '+mk.movement_type+'">'+s+mk.movement_pct.toFixed(1)+'%</div>';}
-  const bdg='<div class="mm-badge '+mk.signal_cls+'">'+(mk.signal_cls==='sharp'?'SHARP':mk.signal_cls==='interp'?'INTERP':'LEGACY')+'</div>';
-  return '<div class="mm-row ec-'+ec+'" onclick="openMarketDetail('+mk.id+',\''+tgt+'\')">'
-    +'<div class="mm-mkt"><div class="mm-sel">'+((mk.selection||mk.market||'').toUpperCase())+'</div>'
-    +'<div class="mm-type">'+((mk.market||'').toUpperCase())+'</div></div>'
-    +'<div class="mm-sharp">'+sharpH+'</div>'
-    +'<div class="mm-best">'+bestH+'</div>'
-    +'<div class="mm-edge '+ec+'">'+fP(mk.edge_pct)+'</div>'
-    +'<div class="mm-sig">'+mvH+bdg+'</div>'
+/* ── Decision engine globals ── */
+var _mmFilters={betOnly:false,sharpOnly:false,hideLegacy:false,hideSoft:false,showFading:false};
+var _mmState={data:null,tgt:null};
+
+function getDecision(mk){
+  const e=mk.edge_pct||0,sharp=!!mk.sharp_ref,moved=mk.movement_type==='moved',drift=mk.movement_type==='drift',books=mk.book_count||0;
+  if(mk.tier==='developing'&&!sharp&&books<2)return'pass';
+  if(drift&&e<5)return'pass';
+  if(mk.tier==='strong'&&sharp&&!drift)return'bet';
+  if(mk.tier==='strong'&&moved&&books>=2)return'bet';
+  if(mk.tier==='strong'&&e>=15&&!drift)return'bet';
+  return'watch';
+}
+function getUrgency(ko,mvType){
+  const now=Date.now()/1000,diff=ko?(ko-now):null;
+  if(mvType==='drift')return{cls:'urg-fading',lbl:'FADING'};
+  if(diff===null)return{cls:'urg-early',lbl:'EARLY'};
+  if(diff<0&&diff>-7200)return{cls:'urg-live',lbl:'LIVE NOW'};
+  if(diff<0)return{cls:'urg-gone',lbl:'GONE'};
+  if(diff<3600)return{cls:'urg-live',lbl:'SOON'};
+  if(diff<28800)return{cls:'urg-early',lbl:'TODAY'};
+  return{cls:'urg-early',lbl:'EARLY'};
+}
+function mmFilterMarkets(markets){
+  return markets.filter(function(mk){
+    if(_mmFilters.betOnly&&getDecision(mk)!=='bet')return false;
+    if(_mmFilters.sharpOnly&&!mk.sharp_ref)return false;
+    if(_mmFilters.hideLegacy&&mk.signal_cls==='legacy')return false;
+    if(_mmFilters.hideSoft&&!mk.sharp_ref&&(mk.book_count||0)<2)return false;
+    if(!_mmFilters.showFading&&mk.movement_type==='drift'&&mk.tier!=='strong')return false;
+    return true;
+  });
+}
+function mmFilterToggle(uid,key){
+  _mmFilters[key]=!_mmFilters[key];
+  var btn=document.getElementById('mmf-'+uid+'-'+key);
+  if(btn)btn.classList.toggle('on',_mmFilters[key]);
+  if(_mmState.data&&_mmState.tgt){
+    var c=_mmState.tgt==='desk'?$('detBody'):$('mobBody');
+    c.innerHTML=buildMatchMarkets(_mmState.data,_mmState.tgt);
+  }
+}
+function mmExpand(id){
+  var el=document.getElementById('why-'+id);
+  if(!el)return;
+  el.classList.toggle('open');
+}
+function buildMatchSummary(m,markets){
+  var vis=markets.filter(function(mk){return mk.tier!=='noise';});
+  var strong=vis.filter(function(mk){return mk.tier==='strong';});
+  var medium=vis.filter(function(mk){return mk.tier==='medium';});
+  var bestE=vis.length?Math.max.apply(null,vis.map(function(mk){return mk.edge_pct||0;})):0;
+  var avgE=vis.length?(vis.reduce(function(s,mk){return s+(mk.edge_pct||0);},0)/vis.length):0;
+  var hasSharp=vis.some(function(mk){return!!mk.sharp_ref;});
+  var hasMoved=vis.some(function(mk){return mk.movement_type==='moved';});
+  var hasDrift=vis.some(function(mk){return mk.movement_type==='drift';});
+  var sharpTxt=hasSharp?'SHARP \u2713':'NO SHARP';
+  var sharpCol=hasSharp?'var(--green)':'var(--red)';
+  var stateTxt=hasDrift?'FADING':(hasMoved?'MOVING':'STABLE');
+  var stateCol=hasDrift?'var(--red)':(hasMoved?'var(--green)':'var(--muted)');
+  var sigTxt=strong.length+'S\u00b7'+medium.length+'M';
+  var bestCol=bestE>=10?'var(--green)':(bestE>=5?'var(--amber)':'var(--txt)');
+  return'<div class="mm-summary">'
+    +'<div class="mm-sum-stat"><div class="mm-sum-val" style="color:'+bestCol+'">'+fP(bestE)+'</div><div class="mm-sum-lbl">Best Edge</div></div>'
+    +'<div class="mm-sum-stat"><div class="mm-sum-val">'+sigTxt+'</div><div class="mm-sum-lbl">Signals</div></div>'
+    +'<div class="mm-sum-stat"><div class="mm-sum-val" style="color:'+stateCol+'">'+stateTxt+'</div><div class="mm-sum-lbl">Market State</div></div>'
+    +'<div class="mm-sum-stat"><div class="mm-sum-val" style="color:'+sharpCol+';font-size:9px;margin-top:3px">'+sharpTxt+'</div><div class="mm-sum-lbl">Sharp Status</div></div>'
+    +'<div class="mm-sum-stat"><div class="mm-sum-val" style="color:var(--amber)">'+fP(avgE)+'</div><div class="mm-sum-lbl">Avg Edge</div></div>'
     +'</div>';
 }
-function _mmSection(label,tier,items,tgt){
+function buildFilterBar(uid){
+  var pills=[
+    {key:'betOnly',lbl:'BET NOW'},
+    {key:'sharpOnly',lbl:'Sharp only'},
+    {key:'hideLegacy',lbl:'Hide legacy'},
+    {key:'hideSoft',lbl:'Hide soft'},
+    {key:'showFading',lbl:'Show fading'},
+  ];
+  return'<div class="mm-filters">'+pills.map(function(f){
+    return'<div class="mm-filter-pill'+(_mmFilters[f.key]?' on':'')+'" id="mmf-'+uid+'-'+f.key+'" onclick="mmFilterToggle(\''+uid+'\',\''+f.key+'\')">'+f.lbl+'</div>';
+  }).join('')+'</div>';
+}
+function buildWhyPanel(mk,tgt){
+  var fair=mk.model_prob?(1/mk.model_prob).toFixed(2):'\u2014';
+  var impl=mk.best_available?((1/mk.best_available)*100).toFixed(1)+'%':'\u2014';
+  var modP=mk.model_prob?(mk.model_prob*100).toFixed(1)+'%':'\u2014';
+  var sharpTxt=mk.sharp_ref?('\u2713 '+(mk.sharp_book||'Sharp')+' '+fO(mk.sharp_ref)):'\u2717 Not confirmed';
+  var sharpCls=mk.sharp_ref?'pos':'neg';
+  var mvTxt=mk.movement_pct!=null?((mk.movement_type||'').toUpperCase()+' '+(mk.movement_pct>0?'+':'')+mk.movement_pct.toFixed(1)+'%'):'No data';
+  var mvCls=mk.movement_type==='moved'?'pos':(mk.movement_type==='drift'?'neg':'neu');
+  var bkTxt=(mk.book_count||0)>=3?((mk.book_count)+' books aligned'):(mk.book_count||0)>=2?'2 books':'Single source';
+  var bkCls=(mk.book_count||0)>=2?'pos':'neg';
+  var edgeChg=mk.edge_pct!=null?fP(mk.edge_pct)+' (at detect)':'—';
+  return'<div class="why-panel" id="why-'+mk.id+'">'
+    +'<div class="why-row"><span class="why-key">Sharp confirmed</span><span class="why-val '+sharpCls+'">'+sharpTxt+'</span></div>'
+    +'<div class="why-row"><span class="why-key">Market movement</span><span class="why-val '+mvCls+'">'+mvTxt+'</span></div>'
+    +'<div class="why-row"><span class="why-key">Books aligned</span><span class="why-val '+bkCls+'">'+bkTxt+'</span></div>'
+    +'<div class="why-row"><span class="why-key">Model probability</span><span class="why-val">'+modP+' <span style="color:var(--dim)">vs</span> '+impl+' implied</span></div>'
+    +'<div class="why-row"><span class="why-key">Fair odds / Best</span><span class="why-val">'+fair+' <span style="color:var(--dim)">\u2192</span> '+fO(mk.best_available)+'</span></div>'
+    +'<div class="why-row"><span class="why-key">Edge at detection</span><span class="why-val">'+edgeChg+'</span></div>'
+    +'<div class="why-detail-link" onclick="event.stopPropagation();openMarketDetail('+mk.id+',\''+tgt+'\')">Full detail \u2192</div>'
+    +'</div>';
+}
+function _mmRow(mk,tgt,isBest,ko){
+  const ec=mk.tier==='strong'?'g':(mk.tier==='medium'?'a':'r');
+  const dec=getDecision(mk);
+  const urg=getUrgency(ko,mk.movement_type);
+  const decCls=dec==='bet'?'dec-bet':(dec==='watch'?'dec-watch':'dec-pass');
+  const decLbl=dec==='bet'?'BET NOW':(dec==='watch'?'WATCH':'PASS');
+  const sharpH=mk.sharp_ref?'<span style="color:var(--amber)">\u26a1'+fO(mk.sharp_ref)+'</span>':'<span class="mm-no">\u2014</span>';
+  const bestH=mk.best_available?fO(mk.best_available):'<span class="mm-no">\u2014</span>';
+  const fairH=mk.model_prob?('<span style="color:var(--dim)">f:</span>'+(1/mk.model_prob).toFixed(2)):'';
+  var mvH='';
+  if(mk.movement_pct!=null){var s=mk.movement_pct>0?'+':'';mvH='<div class="mm-mv '+mk.movement_type+'">'+s+mk.movement_pct.toFixed(1)+'%</div>';}
+  const badges='<div style="display:flex;gap:3px;margin-top:2px;flex-wrap:wrap">'
+    +'<span class="urg-label '+urg.cls+'">'+urg.lbl+'</span>'
+    +(isBest?'<span class="best-angle">BEST ANGLE</span>':'')
+    +'</div>';
+  const showWhy=mk.tier==='strong'||mk.tier==='medium';
+  const rowClick=showWhy?'onclick="mmExpand('+mk.id+')"':'onclick="openMarketDetail('+mk.id+',\''+tgt+'\')"';
+  return'<div class="mm-entry">'
+    +'<div class="mm-row ec-'+ec+'" '+rowClick+'>'
+    +'<div class="mm-mkt"><div class="mm-sel">'+((mk.selection||mk.market||'').toUpperCase())+'</div>'
+    +'<div class="mm-type">'+((mk.market||'').toUpperCase())+'</div>'+badges+'</div>'
+    +'<div class="mm-sharp">'+sharpH+'</div>'
+    +'<div class="mm-best"><div>'+bestH+'</div><div style="font-size:7.5px;color:var(--dim)">'+fairH+'</div></div>'
+    +'<div class="mm-edge '+ec+'">'+fP(mk.edge_pct)+'</div>'
+    +'<div class="mm-sig">'+mvH+'<span class="dec-label '+decCls+'">'+decLbl+'</span></div>'
+    +'</div>'
+    +(showWhy?buildWhyPanel(mk,tgt):'')
+    +'</div>';
+}
+function _mmSection(label,tier,items,tgt,ko,bestId){
   if(!items.length)return'';
-  return'<div class="mm-tier-h '+tier+'">'+label+'</div>'+items.map(function(mk){return _mmRow(mk,tgt);}).join('');
+  return'<div class="mm-tier-h '+tier+'">'+label+'</div>'
+    +items.map(function(mk){return _mmRow(mk,tgt,mk.id===bestId,ko);}).join('');
 }
 function mmToggle(uid){
   var el=document.getElementById('mm-hidden-'+uid);
   var lbl=document.getElementById('mm-btn-lbl-'+uid);
   if(!el)return;
-  if(el.style.display==='none'){el.style.display='block';if(lbl)lbl.textContent='− Hide extra markets';}
+  if(el.style.display==='none'){el.style.display='block';if(lbl)lbl.textContent='\u2212 Hide extra markets';}
   else{el.style.display='none';if(lbl&&lbl._orig)lbl.textContent=lbl._orig;}
 }
 function buildMatchMarkets(data,tgt){
   const m=data.match;
-  const all=(data.markets||[]).filter(function(mk){return mk.tier!=='noise';});
-  const ko=m.kickoff_epoch?new Date(m.kickoff_epoch*1000).toISOString().slice(11,16):'';
+  const ko=m.kickoff_epoch||null;
+  const koStr=ko?new Date(ko*1000).toISOString().slice(11,16):'';
+  const uid='mmx'+m.home_team.replace(/\W/g,'')+m.away_team.replace(/\W/g,'');
 
-  const strong=all.filter(function(mk){return mk.tier==='strong';});
-  const medium=all.filter(function(mk){return mk.tier==='medium';});
-  const developing=all.filter(function(mk){return mk.tier==='developing';});
+  // Filter noise then apply user filters
+  const raw=(data.markets||[]).filter(function(mk){return mk.tier!=='noise';});
+  const all=mmFilterMarkets(raw);
+
+  // Best market by signal_score
+  const bestId=raw.length?raw.reduce(function(b,mk){return(mk.signal_score||0)>(b.signal_score||0)?mk:b;},raw[0]).id:null;
 
   const parts=[];
-  if(strong.length)parts.push(strong.length+(strong.length===1?' STRONG SIGNAL':' STRONG SIGNALS'));
-  if(medium.length)parts.push(medium.length+' MEDIUM');
-  if(developing.length)parts.push(developing.length+' DEVELOPING');
-  const tagTxt=parts.length?parts.join(' · '):(all.length+' MARKETS');
+  const s0=raw.filter(function(mk){return mk.tier==='strong';}).length;
+  const m0=raw.filter(function(mk){return mk.tier==='medium';}).length;
+  const d0=raw.filter(function(mk){return mk.tier==='developing';}).length;
+  if(s0)parts.push(s0+(s0===1?' STRONG':' STRONG'));
+  if(m0)parts.push(m0+' MED');
+  if(d0)parts.push(d0+' DEV');
 
   const hdr='<div class="mm-head">'
     +'<div class="mm-title">'+m.home_team+' vs '+m.away_team+'</div>'
     +'<div class="mm-sub">'
     +(m.league?'<span>'+m.league+'</span>':'')
-    +(ko?'<span>'+ko+' UTC</span>':(m.match_date?'<span>'+m.match_date+'</span>':''))
-    +'<span class="mm-tag">'+tagTxt+'</span>'
+    +(koStr?'<span>'+koStr+' UTC</span>':(m.match_date?'<span>'+m.match_date+'</span>':''))
+    +'<span class="mm-tag">'+(parts.join(' \u00b7 ')||raw.length+' MARKETS')+'</span>'
     +'</div></div>';
 
-  if(!all.length)return hdr+'<div class="empty-s"><div class="empty-t">No qualifying markets</div></div>';
+  const summary=buildMatchSummary(m,raw);
+  const filterBar=buildFilterBar(uid);
 
-  const colHdr='<div class="mm-hdr"><div>Market</div><div>Sharp</div><div>Best</div><div>Edge</div><div>Signal</div></div>';
+  if(!all.length){
+    const empMsg=raw.length?'All markets filtered out — adjust filters':'No qualifying markets';
+    return hdr+summary+filterBar+'<div class="empty-s"><div class="empty-t">'+empMsg+'</div></div>';
+  }
 
-  // Default: all strong + top (8 - strong.length) medium, minimum 3 total shown
+  const strong=all.filter(function(mk){return mk.tier==='strong';});
+  const medium=all.filter(function(mk){return mk.tier==='medium';});
+  const developing=all.filter(function(mk){return mk.tier==='developing';});
+
+  const colHdr='<div class="mm-hdr"><div>Market</div><div>Sharp</div><div>Best/Fair</div><div>Edge</div><div>Decision</div></div>';
+
   const maxDef=Math.max(8,strong.length);
   const medSlot=Math.max(0,maxDef-strong.length);
   const medShow=medium.slice(0,medSlot);
   const medHide=medium.slice(medSlot);
 
-  const visHtml=_mmSection('\u25cf Strong signal','strong',strong,tgt)
-               +_mmSection('\u25d1 Medium signal','medium',medShow,tgt);
+  const visHtml=_mmSection('\u25cf Strong signal','strong',strong,tgt,ko,bestId)
+               +_mmSection('\u25d1 Medium signal','medium',medShow,tgt,ko,bestId);
 
   const hidItems=medHide.concat(developing);
-  const uid='mmx'+m.home_team.replace(/\W/g,'')+m.away_team.replace(/\W/g,'');
-
   var moreBtn='',hiddenDiv='';
   if(hidItems.length){
     const moreLabel='+ '+hidItems.length+' more market'+(hidItems.length>1?'s':'');
     moreBtn='<div class="mm-more" onclick="mmToggle(\''+uid+'\')">'
       +'<span id="mm-btn-lbl-'+uid+'">'+moreLabel+'</span></div>';
-    const hidHtml=_mmSection('\u25d1 Medium signal','medium',medHide,tgt)
-                 +_mmSection('\u25cb Developing','developing',developing,tgt);
+    const hidHtml=_mmSection('\u25d1 Medium signal','medium',medHide,tgt,ko,bestId)
+                 +_mmSection('\u25cb Developing','developing',developing,tgt,ko,bestId);
     hiddenDiv='<div id="mm-hidden-'+uid+'" style="display:none">'+hidHtml+'</div>';
     setTimeout(function(){var l=document.getElementById('mm-btn-lbl-'+uid);if(l)l._orig=moreLabel;},50);
   }
 
-  return hdr+colHdr+visHtml+moreBtn+hiddenDiv;
+  return hdr+summary+filterBar+colHdr+visHtml+moreBtn+hiddenDiv;
 }
 
 function openMarketDetail(id,tgt){
