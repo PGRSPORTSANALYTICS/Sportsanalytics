@@ -1298,10 +1298,10 @@ function safeRender(){
   if(tsEl&&!tsEl.textContent.startsWith('RErr:'))tsEl.textContent=new Date().toLocaleTimeString().slice(0,5);
 }
 
-/* ── Auth-aware fetch — redirects to /login on 401/403 ── */
+/* ── Auth-aware fetch — always sends cookies, redirects to /login on 401/403 ── */
 async function authFetch(url, opts){
   let r;
-  try{ r=await fetch(url,opts||{}); }
+  try{ r=await fetch(url,{credentials:'include',...(opts||{})}); }
   catch(e){ throw e; }
   if(r.status===401||r.status===403){
     window.location.href='/login';
