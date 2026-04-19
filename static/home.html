@@ -581,7 +581,7 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
   </div>
   <div class="nav-sp"></div>
   <span class="nav-ts" id="updatedAt">syncing…</span>
-  <span class="nav-ts" style="font-size:8px;opacity:.4;margin-right:4px">v20260419f</span>
+  <span class="nav-ts" style="font-size:8px;opacity:.4;margin-right:4px">v20260419g</span>
   <span class="tier-badge" id="tierBadge">FREE</span>
 </nav>
 
@@ -1335,11 +1335,43 @@ setTimeout(()=>{if(!_rendered)safeRender();},5000);
 setTimeout(()=>{
   const sb=$('scBody');
   if(sb && sb.innerHTML.includes('Loading signals')){
-    sb.innerHTML='<div class="empty-s"><div class="empty-t" style="color:#4ade80">JS OK · fetching data…</div><div class="empty-sub">v20260419f · if stuck, check URL = /live</div></div>';
+    sb.innerHTML='<div class="empty-s"><div class="empty-t" style="color:#4ade80">JS OK · fetching data…</div><div class="empty-sub">v20260419g · if stuck, check URL = /live</div></div>';
   }
 },1000);
 
-loadAll();
+/* ── Auth boot: verify session + set tier badge ── */
+async function bootAuth(){
+  try{
+    const r=await fetch('/auth/discord/me',{credentials:'include'});
+    if(r.status===401){
+      window.location.href='/login';
+      return false;
+    }
+    const d=await r.json();
+    if(!d.authenticated){
+      window.location.href='/login';
+      return false;
+    }
+    const badge=$('tierBadge');
+    if(badge){
+      if(d.premium){
+        badge.textContent='PREMIUM';
+        badge.classList.add('premium');
+      } else {
+        badge.textContent='FREE';
+        badge.classList.remove('premium');
+      }
+    }
+    return true;
+  }catch(e){
+    // Network error — don't block load, but don't redirect
+    return true;
+  }
+}
+
+bootAuth().then(function(ok){
+  if(ok) loadAll();
+});
 setInterval(loadAll,60000);
 setInterval(()=>{
   if(!S.picks.length)return;
