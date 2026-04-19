@@ -4247,7 +4247,6 @@ async def goto_dashboard(request: Request):
 _NO_CACHE_HEADERS = {
     "Cache-Control": "no-cache, no-store, must-revalidate",
     "Pragma": "no-cache",
-    "Clear-Site-Data": '"cache"',
 }
 
 

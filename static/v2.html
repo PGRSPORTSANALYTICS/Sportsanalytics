@@ -385,7 +385,7 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
   </div>
   <div class="nav-sp"></div>
   <span class="nav-ts" id="updatedAt">syncing…</span>
-  <span class="nav-ts" style="font-size:8px;opacity:.4;margin-right:4px">v20260419b</span>
+  <span class="nav-ts" style="font-size:8px;opacity:.4;margin-right:4px">v20260419c</span>
   <span class="tier-badge" id="tierBadge">FREE</span>
 </nav>
 
@@ -497,8 +497,14 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
 </div>
 
 <script>
+/* Error trap — catches ANY JS error and shows it in nav */
+window.onerror=function(msg,src,line,col,err){
+  var el=document.getElementById('updatedAt');
+  if(el)el.textContent='ERR:L'+line+' '+(String(msg||'').slice(0,25));
+  return false;
+};
 /* Synchronous probe — runs before anything else */
-(function(){var el=document.getElementById('updatedAt');if(el)el.textContent='JS:v20260419b';})();
+(function(){var el=document.getElementById('updatedAt');if(el)el.textContent='JS:v20260419c';})();
 const S={picks:[],filters:{sport:'all',market:'all',edge:0,sharp:false}};
 const $=id=>document.getElementById(id);
 const fP=(v,s=true)=>{if(v==null||isNaN(v))return'—';return(s&&v>0?'+':'')+Number(v).toFixed(1)+'%'};
@@ -829,9 +835,14 @@ function renderProof(d){
 let _rendered=false;
 
 function safeRender(){
-  try{render();}catch(e){console.error('render error',e);}
+  try{render();}catch(e){
+    var eEl=document.getElementById('updatedAt');
+    if(eEl)eEl.textContent='RErr:'+(e.message||'?').slice(0,20);
+    console.error('render error',e);
+  }
   _rendered=true;
-  document.getElementById('updatedAt').textContent=new Date().toLocaleTimeString().slice(0,5);
+  var tsEl=document.getElementById('updatedAt');
+  if(tsEl&&!tsEl.textContent.startsWith('RErr:'))tsEl.textContent=new Date().toLocaleTimeString().slice(0,5);
 }
 
 async function loadAll(){
@@ -858,7 +869,7 @@ setTimeout(()=>{if(!_rendered)safeRender();},5000);
 setTimeout(()=>{
   const sb=$('scBody');
   if(sb && sb.innerHTML.includes('Loading signals')){
-    sb.innerHTML='<div class="empty-s"><div class="empty-t" style="color:#4ade80">JS OK · fetching data…</div><div class="empty-sub">v20260419b · if stuck, check URL = /live</div></div>';
+    sb.innerHTML='<div class="empty-s"><div class="empty-t" style="color:#4ade80">JS OK · fetching data…</div><div class="empty-sub">v20260419c · if stuck, check URL = /live</div></div>';
   }
 },1000);
 
