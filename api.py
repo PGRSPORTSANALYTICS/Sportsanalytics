@@ -4290,6 +4290,101 @@ async def v2_dashboard():
 # v2 Match Detail + CLV proof endpoints (sharp-first, doctrine-compliant)
 # =============================================================================
 
+@app.get("/api/v2/match/{pick_id}/markets", include_in_schema=False)
+def v2_match_markets(pick_id: int):
+    """
+    All markets detected for the same match as pick_id.
+    Returns sorted by edge desc. Used by the Match Market View panel.
+    """
+    import json as _json
+    try:
+        anchor = db_helper.execute(
+            "SELECT home_team, away_team, league, match_date, kickoff_epoch FROM football_opportunities WHERE id = %s",
+            (pick_id,), fetch='one'
+        )
+        if not anchor:
+            raise HTTPException(status_code=404, detail="pick_not_found")
+        home, away, league, match_date, kickoff = anchor
+
+        rows = db_helper.execute("""
+            SELECT id, market, selection, odds, edge_percentage, model_prob,
+                   open_odds, close_odds, sharp_price_at_detection, sharp_book_at_detection,
+                   confidence_label, signal_status, best_odds_value, best_price_book,
+                   odds_by_bookmaker
+            FROM football_opportunities
+            WHERE home_team = %s AND away_team = %s
+              AND match_date = %s
+              AND edge_percentage IS NOT NULL
+            ORDER BY edge_percentage DESC
+            LIMIT 60
+        """, (home, away, match_date), fetch='all') or []
+
+        SHARP_SET = {'pinnacle','pinny','betfair','betfair_ex_eu','matchbook','smarkets','nordic_bet','nordicbet'}
+        markets = []
+        for r in rows:
+            edge   = float(r[4]) if r[4] else None
+            model_p= float(r[5]) if r[5] else None
+            open_o = float(r[6]) if r[6] else None
+            close_o= float(r[7]) if r[7] else None
+            sharp_p= float(r[8]) if r[8] else None
+            odds_f = float(r[3]) if r[3] else None
+
+            mv_pct = None; mv_type = 'flat'
+            if open_o and close_o and open_o > 1:
+                mv_pct = round((close_o / open_o - 1) * 100, 2)
+                mv_type = 'moved' if mv_pct <= -1.5 else ('drift' if mv_pct >= 1.5 else 'flat')
+
+            best_v = float(r[12]) if r[12] else odds_f
+            best_b = r[13] or 'unknown'
+
+            # Count books with positive edge from odds_by_bookmaker
+            book_count = 0
+            try:
+                obb = r[14]
+                if isinstance(obb, str): obb = _json.loads(obb)
+                if isinstance(obb, dict) and model_p:
+                    book_count = sum(1 for bv in obb.values() if model_p > 0 and float(bv or 0) > 1 and (model_p - 1.0/float(bv)) * 100 >= 2)
+            except Exception:
+                pass
+
+            conf = r[10] or ('SHARP_CONFIRMED' if sharp_p else 'LEGACY')
+            sig_cls = 'sharp' if 'SHARP' in conf else ('interp' if 'INTERP' in conf else 'legacy')
+
+            markets.append({
+                'id': r[0],
+                'market': r[1] or '', 'selection': r[2] or '',
+                'odds': round(odds_f, 3) if odds_f else None,
+                'edge_pct': round(edge, 1) if edge else None,
+                'model_prob': round(model_p, 3) if model_p else None,
+                'sharp_ref': round(sharp_p, 3) if sharp_p else None,
+                'sharp_book': r[9] or None,
+                'best_available': round(best_v, 3) if best_v else None,
+                'best_book': best_b,
+                'open_odds': round(open_o, 3) if open_o else None,
+                'close_odds': round(close_o, 3) if close_o else None,
+                'movement_pct': mv_pct,
+                'movement_type': mv_type,
+                'signal': conf,
+                'signal_cls': sig_cls,
+                'book_count': book_count,
+            })
+
+        return {
+            'match': {
+                'home_team': home, 'away_team': away,
+                'league': league or '', 'match_date': str(match_date) if match_date else None,
+                'kickoff_epoch': int(kickoff) if kickoff else None,
+            },
+            'markets': markets,
+            'count': len(markets),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"v2_match_markets error pick={pick_id}: {e}")
+        raise HTTPException(status_code=500, detail="internal_error")
+
+
 @app.get("/api/v2/pick/{pick_id}/detail", include_in_schema=False)
 def v2_pick_detail(pick_id: int):
     """

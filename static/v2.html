@@ -371,6 +371,50 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
 .ss-mv.neg{color:var(--red)}
 .ss-mv.a{color:var(--amber)}
 .ss-e{font-size:9px;color:var(--muted);padding:8px;text-align:center}
+/* ── Match Market View ── */
+.mm-head{padding:8px 10px 7px;border-bottom:1px solid var(--line);background:var(--bg2)}
+.mm-title{font-size:11px;font-weight:700;color:var(--txt)}
+.mm-sub{font-size:9px;color:var(--muted);margin-top:2px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.mm-tag{background:var(--bg2);border:1px solid var(--line2);border-radius:2px;padding:1px 5px;font-size:7.5px;font-weight:900;letter-spacing:.4px;text-transform:uppercase;color:var(--txt)}
+.mm-hdr{display:grid;grid-template-columns:1fr 52px 52px 54px 58px;padding:3px 10px 3px 15px;font-size:7.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--line);font-weight:700}
+.mm-hdr div{text-align:right}.mm-hdr div:first-child{text-align:left}
+.mm-row{
+  display:grid;grid-template-columns:1fr 52px 52px 54px 58px;
+  padding:0 10px 0 15px;height:44px;align-items:center;
+  border-bottom:1px solid var(--line);cursor:pointer;transition:background .07s;
+  position:relative;
+}
+.mm-row::before{content:'';position:absolute;left:0;top:4px;bottom:4px;width:3px;border-radius:0 2px 2px 0;background:var(--dim)}
+.mm-row.ec-g::before{background:var(--green)}
+.mm-row.ec-a::before{background:var(--amber)}
+.mm-row.ec-r::before{background:#6b2121}
+.mm-row:hover{background:rgba(255,255,255,.025)}
+.mm-mkt{display:flex;flex-direction:column;gap:1px;min-width:0}
+.mm-sel{font-size:10px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mm-type{font-size:8px;color:var(--muted)}
+.mm-sharp,.mm-best{font-size:11px;font-weight:800;font-family:'SF Mono',monospace;white-space:nowrap;text-align:right}
+.mm-sharp{color:var(--amber)}.mm-best{color:var(--green)}
+.mm-no{color:var(--dim);font-size:10px;font-weight:400}
+.mm-edge{font-size:12px;font-weight:900;font-family:'SF Mono',monospace;text-align:right;white-space:nowrap}
+.mm-edge.g{color:var(--green)}.mm-edge.a{color:var(--amber)}.mm-edge.r{color:var(--red)}
+.mm-sig{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+.mm-mv{font-size:8px;font-weight:700;font-family:'SF Mono',monospace}
+.mm-mv.moved{color:var(--green)}.mm-mv.drift{color:var(--red)}.mm-mv.flat{color:var(--dim)}
+.mm-badge{font-size:7px;font-weight:900;letter-spacing:.4px;text-transform:uppercase;padding:1px 3px;border-radius:2px}
+.mm-badge.sharp{color:#86efac;background:rgba(34,197,94,.1)}
+.mm-badge.legacy{color:#9d8ccc;background:rgba(139,92,246,.08)}
+.mm-badge.interp{color:var(--amber);background:rgba(245,200,66,.08)}
+@media(max-width:860px){
+  .mm-hdr{display:none}
+  .mm-row{grid-template-columns:1fr 56px 60px;padding:0 8px 0 12px;height:48px}
+  .mm-sharp{display:none}.mm-best{display:none}
+  .mm-edge{grid-column:2;grid-row:1}
+  .mm-sig{grid-column:3;grid-row:1}
+}
+/* Back button */
+.det-back{display:flex;align-items:center;gap:5px;padding:6px 10px;font-size:9px;color:var(--muted);cursor:pointer;border-bottom:1px solid var(--line);background:var(--bg2);font-weight:700;text-transform:uppercase;letter-spacing:.4px;transition:color .1s}
+.det-back:hover{color:var(--txt)}.det-back-arr{font-size:13px;line-height:1}
+
 
 /* Mobile bottom sheet */
 .mob-bg{display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.85);align-items:flex-end}
@@ -664,8 +708,9 @@ function renderScanner(picks){
 
 function render(){const f=applyFilters(S.picks);renderKPIs(f);renderScanner(f);}
 
-/* ── Detail ── */
+/* ── Detail / Match Market View ── */
 const isMob=()=>window.innerWidth<=860;
+let _mmParentId=null;
 
 function openDetail(id,el){
   document.querySelectorAll('.row.sel').forEach(x=>x.classList.remove('sel'));
@@ -673,14 +718,14 @@ function openDetail(id,el){
   if(isMob()){
     $('mobBg').classList.add('open');document.body.style.overflow='hidden';
     $('mobTitle').textContent='Loading…';
-    $('mobBody').innerHTML=`<div class="empty-s"><div class="empty-t">Loading…</div></div>`;
-    fetchDetail(id,'mob');
+    $('mobBody').innerHTML='<div class="empty-s"><div class="empty-t">Loading…</div></div>';
+    fetchMatchMarkets(id,'mob');
   } else {
     $('terminal').classList.add('detail-open');
     $('detailCol').classList.remove('hidden');
     $('detTitle').textContent='Loading…';$('detSub').textContent='';
-    $('detBody').innerHTML=`<div class="empty-s"><div class="empty-t">Loading…</div></div>`;
-    fetchDetail(id,'desk');
+    $('detBody').innerHTML='<div class="empty-s"><div class="empty-t">Loading…</div></div>';
+    fetchMatchMarkets(id,'desk');
   }
 }
 $('detClose').addEventListener('click',closeDesk);
@@ -690,19 +735,88 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeDesk();closeMo
 function closeDesk(){$('terminal').classList.remove('detail-open');$('detailCol').classList.add('hidden');document.querySelectorAll('.row.sel').forEach(x=>x.classList.remove('sel'));}
 function closeMob(){$('mobBg').classList.remove('open');document.body.style.overflow='';}
 
-async function fetchDetail(id,tgt){
+async function fetchMatchMarkets(id,tgt){
+  _mmParentId=id;
+  const load='<div class="empty-s"><div class="empty-t">Loading…</div></div>';
+  if(tgt==='desk'){$('detTitle').textContent='Loading…';$('detSub').textContent='';$('detBody').innerHTML=load;}
+  else $('mobBody').innerHTML=load;
   let data=null;
-  try{const r=await fetch(`/api/v2/pick/${id}/detail`);data=await r.json();}
-  catch(e){const err=`<div class="empty-s"><div class="empty-t">Failed to load</div></div>`;if(tgt==='desk')$('detBody').innerHTML=err;else $('mobBody').innerHTML=err;return;}
-  if(!data||!data.pick){const err=`<div class="empty-s"><div class="empty-t">Not found</div></div>`;if(tgt==='desk')$('detBody').innerHTML=err;else $('mobBody').innerHTML=err;return;}
-  const html=buildDetail(data);
+  try{const r=await fetch('/api/v2/match/'+id+'/markets');data=await r.json();}
+  catch(e){const err='<div class="empty-s"><div class="empty-t">Failed to load</div></div>';
+    if(tgt==='desk')$('detBody').innerHTML=err;else $('mobBody').innerHTML=err;return;}
+  if(!data||!data.match){const err='<div class="empty-s"><div class="empty-t">Not found</div></div>';
+    if(tgt==='desk')$('detBody').innerHTML=err;else $('mobBody').innerHTML=err;return;}
+  const html=buildMatchMarkets(data,tgt);
+  const m=data.match;
+  const ko=m.kickoff_epoch?new Date(m.kickoff_epoch*1000).toISOString().slice(11,16)+' UTC':'';
   if(tgt==='desk'){
-    const p=data.pick,st=data.doctrine_status||'UNKNOWN';
-    $('detTitle').innerHTML=`${p.home_team} vs ${p.away_team}`;
-    $('detSub').innerHTML=`${p.league||''} · ${p.selection||''} · <span class="r-badge ${statusLbl(st).cls}">${statusLbl(st).txt}</span>`;
+    $('detTitle').innerHTML=m.home_team+' vs '+m.away_team;
+    $('detSub').textContent=(m.league||'')+' · '+(ko||m.match_date||'')+' · '+data.count+' markets';
     $('detBody').innerHTML=html;
   } else {
-    $('mobTitle').textContent=`${data.pick.home_team} vs ${data.pick.away_team}`;
+    $('mobTitle').textContent=m.home_team+' vs '+m.away_team;
+    $('mobBody').innerHTML=html;
+  }
+}
+
+function buildMatchMarkets(data,tgt){
+  const m=data.match,markets=data.markets||[];
+  const ko=m.kickoff_epoch?new Date(m.kickoff_epoch*1000).toISOString().slice(11,16):'';
+  const hdr='<div class="mm-head">'+
+    '<div class="mm-title">'+m.home_team+' vs '+m.away_team+'</div>'+
+    '<div class="mm-sub">'+
+    (m.league?'<span>'+m.league+'</span>':'')+
+    (ko?'<span>'+ko+' UTC</span>':(m.match_date?'<span>'+m.match_date+'</span>':''))+
+    '<span class="mm-tag">'+markets.length+' MARKETS</span>'+
+    '</div></div>';
+  if(!markets.length) return hdr+'<div class="empty-s"><div class="empty-t">No markets found</div></div>';
+  const colHdr='<div class="mm-hdr"><div>Market</div><div>Sharp</div><div>Best</div><div>Edge</div><div>Signal</div></div>';
+  const rows=markets.map(function(mk){
+    const ec=(mk.edge_pct||0)>=8?'g':((mk.edge_pct||0)>=3?'a':'r');
+    const sharpH=mk.sharp_ref?'<span style="color:var(--amber)">⚡'+fO(mk.sharp_ref)+'</span>':'<span class="mm-no">—</span>';
+    const bestH=mk.best_available?fO(mk.best_available):'<span class="mm-no">—</span>';
+    var mvH='';
+    if(mk.movement_pct!=null){var sign=mk.movement_pct>0?'+':'';mvH='<div class="mm-mv '+mk.movement_type+'">'+(sign)+mk.movement_pct.toFixed(1)+'%</div>';}
+    const bdg='<div class="mm-badge '+mk.signal_cls+'">'+(mk.signal_cls==='sharp'?'SHARP':mk.signal_cls==='interp'?'INTERP':'LEGACY')+'</div>';
+    return '<div class="mm-row ec-'+ec+'" onclick="openMarketDetail('+mk.id+',''+tgt+'')">'
+      +'<div class="mm-mkt"><div class="mm-sel">'+((mk.selection||mk.market||'').toUpperCase())+'</div>'
+      +'<div class="mm-type">'+((mk.market||'').toUpperCase())+'</div></div>'
+      +'<div class="mm-sharp">'+sharpH+'</div>'
+      +'<div class="mm-best">'+bestH+'</div>'
+      +'<div class="mm-edge '+ec+'">'+fP(mk.edge_pct)+'</div>'
+      +'<div class="mm-sig">'+mvH+bdg+'</div>'
+      +'</div>';
+  }).join('');
+  return hdr+colHdr+rows;
+}
+
+function openMarketDetail(id,tgt){
+  if(tgt==='desk'){$('detTitle').textContent='Loading…';$('detSub').textContent='';$('detBody').innerHTML='<div class="empty-s"><div class="empty-t">Loading…</div></div>';}
+  else $('mobBody').innerHTML='<div class="empty-s"><div class="empty-t">Loading…</div></div>';
+  fetchDetail(id,tgt);
+}
+
+function _backBtn(parentId,tgt){
+  if(!parentId)return'';
+  return'<div class="det-back" onclick="fetchMatchMarkets('+parentId+',''+tgt+'')">'
+    +'<span class="det-back-arr">←</span> All markets</div>';
+}
+
+async function fetchDetail(id,tgt){
+  let data=null;
+  try{const r=await fetch('/api/v2/pick/'+id+'/detail');data=await r.json();}
+  catch(e){const err=_backBtn(_mmParentId,tgt)+'<div class="empty-s"><div class="empty-t">Failed to load</div></div>';
+    if(tgt==='desk')$('detBody').innerHTML=err;else $('mobBody').innerHTML=err;return;}
+  if(!data||!data.pick){const err=_backBtn(_mmParentId,tgt)+'<div class="empty-s"><div class="empty-t">Not found</div></div>';
+    if(tgt==='desk')$('detBody').innerHTML=err;else $('mobBody').innerHTML=err;return;}
+  const html=_backBtn(_mmParentId,tgt)+buildDetail(data);
+  if(tgt==='desk'){
+    const p=data.pick,st=data.doctrine_status||'UNKNOWN';
+    $('detTitle').innerHTML=p.home_team+' vs '+p.away_team;
+    $('detSub').innerHTML=(p.league||'')+' · '+(p.selection||'')+' · <span class="r-badge '+statusLbl(st).cls+'">'+statusLbl(st).txt+'</span>';
+    $('detBody').innerHTML=html;
+  } else {
+    $('mobTitle').textContent=data.pick.home_team+' vs '+data.pick.away_team;
     $('mobBody').innerHTML=html;
   }
   loadSS(id,'ssMount');
