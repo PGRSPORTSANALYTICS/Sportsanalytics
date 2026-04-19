@@ -842,7 +842,7 @@ async function fetchMatchMarkets(id,tgt){
   if(tgt==='desk'){$('detTitle').textContent='Loading…';$('detSub').textContent='';$('detBody').innerHTML=load;}
   else $('mobBody').innerHTML=load;
   let data=null;
-  try{const r=await fetch('/api/v2/match/'+id+'/markets');data=await r.json();}
+  try{const r=await authFetch('/api/v2/match/'+id+'/markets');data=await r.json();}
   catch(e){const err='<div class="empty-s"><div class="empty-t">Failed to load</div></div>';
     if(tgt==='desk')$('detBody').innerHTML=err;else $('mobBody').innerHTML=err;return;}
   if(!data||!data.match){const err='<div class="empty-s"><div class="empty-t">Not found</div></div>';
@@ -1075,7 +1075,7 @@ function _backBtn(parentId,tgt){
 
 async function fetchDetail(id,tgt){
   let data=null;
-  try{const r=await fetch('/api/v2/pick/'+id+'/detail');data=await r.json();}
+  try{const r=await authFetch('/api/v2/pick/'+id+'/detail');data=await r.json();}
   catch(e){const err=_backBtn(_mmParentId,tgt)+'<div class="empty-s"><div class="empty-t">Failed to load</div></div>';
     if(tgt==='desk')$('detBody').innerHTML=err;else $('mobBody').innerHTML=err;return;}
   if(!data||!data.pick){const err=_backBtn(_mmParentId,tgt)+'<div class="empty-s"><div class="empty-t">Not found</div></div>';
@@ -1165,7 +1165,7 @@ function buildDetail(d){
 /* ── Signal Strength ── */
 async function loadSS(id,mountId){
   const mount=document.getElementById(mountId);if(!mount)return;
-  let s=null;try{const r=await fetch(`/api/v2/pick/${id}/signal_strength`);s=await r.json();}catch(e){mount.innerHTML=`<div class="ss-e">Error</div>`;return;}
+  let s=null;try{const r=await authFetch(`/api/v2/pick/${id}/signal_strength`);s=await r.json();}catch(e){mount.innerHTML=`<div class="ss-e">Error</div>`;return;}
   if(!s||!s.has_data){mount.innerHTML=`<div class="ss-e">No snapshots yet.</div>`;return;}
   const sc=s.score??0,tier=sc>=80?'ELITE':sc>=60?'STRONG':sc>=40?'MODEST':'WEAK';
   const col=sc>=80?'var(--green)':sc>=60?'#fcb900':sc>=40?'var(--amber)':'var(--red)';
@@ -1242,11 +1242,24 @@ function safeRender(){
   if(tsEl&&!tsEl.textContent.startsWith('RErr:'))tsEl.textContent=new Date().toLocaleTimeString().slice(0,5);
 }
 
+/* ── Auth-aware fetch — redirects to /login on 401/403 ── */
+async function authFetch(url, opts){
+  let r;
+  try{ r=await fetch(url,opts||{}); }
+  catch(e){ throw e; }
+  if(r.status===401||r.status===403){
+    window.location.href='/login';
+    throw new Error('auth_required');
+  }
+  return r;
+}
+
+
 async function loadAll(){
   S.picks=[];
   try{
     const race=Promise.race([
-      fetch('/api/picks/today'),
+      authFetch('/api/picks/today'),
       new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),7000))
     ]);
     const r=await race;
@@ -1255,7 +1268,7 @@ async function loadAll(){
   }catch(e){S.picks=[];}
   safeRender();
   /* CLV in background — non-blocking */
-  fetch('/api/v2/clv/proof?days=30&sharp_only=true')
+  authFetch('/api/v2/clv/proof?days=30&sharp_only=true')
     .then(r=>r.json()).then(d=>{if(d)renderProof(d);}).catch(()=>{});
 }
 

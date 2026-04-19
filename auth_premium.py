@@ -42,7 +42,8 @@ def is_production() -> bool:
 # Routes that require an active premium session (HTML pages)
 PROTECTED_HTML = {"/home", "/app", "/preview", "/value", "/opportunities", "/live"}
 # API routes that require premium (return 401 JSON instead of redirect)
-PROTECTED_API  = {"/api/bets", "/bets"}
+# Prefix matching: /api/v2 covers /api/v2/match/..., /api/v2/pick/..., etc.
+PROTECTED_API  = {"/api/bets", "/bets", "/api/v2", "/api/picks"}
 
 
 # ─── DB bootstrap ────────────────────────────────────────────────────────────
