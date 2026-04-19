@@ -1256,9 +1256,11 @@ async def get_decision(match_id: str):
         first = markets[0]
         scored = _score_match(markets)
 
-        # Strip internal rank key before returning
+        # Strip internal rank key; promote _id → id for frontend onclick
         for m in scored:
             m.pop("_rank_score", None)
+            if "_id" in m:
+                m["id"] = m.pop("_id")
 
         # Find best opportunity
         best = next((m for m in scored if m.get("is_best_opportunity")), None)
