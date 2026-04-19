@@ -853,7 +853,8 @@ function openMarketDetail(id,tgt){
 
 function _backBtn(parentId,tgt){
   if(!parentId)return'';
-  return'<div class="det-back" onclick="fetchMatchMarkets('+parentId+',''+tgt+'')">'
+  return'<div class="det-back" onclick="fetchMatchMarkets('+parentId+',\''+tgt+'\')">'
+    
     +'<span class="det-back-arr">←</span> All markets</div>';
 }
 
