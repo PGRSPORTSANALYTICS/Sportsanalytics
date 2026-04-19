@@ -187,30 +187,36 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
 .row{
   display:grid;
   grid-template-columns:56px 92px 1fr 148px 72px;
-  padding:0 10px;gap:6px;
+  padding:0 10px 0 13px;gap:6px;
   height:36px;
   align-items:center;
   border-bottom:1px solid var(--line);
   cursor:pointer;
   transition:background .07s;
+  position:relative;
 }
+.row::before{content:'';position:absolute;left:0;top:4px;bottom:4px;width:3px;border-radius:0 2px 2px 0;background:var(--dim);transition:background .15s}
+.row.ec-g::before{background:var(--green)}
+.row.ec-a::before{background:var(--amber)}
+.row.ec-r::before{background:#6b2121}
 .row:hover{background:rgba(255,255,255,.025)}
-.row.sel{background:rgba(34,197,94,.04);border-left:2px solid rgba(34,197,94,.4);padding-left:8px}
-.row.is-new{border-left:2px solid var(--green);padding-left:8px}
+.row.sel{background:rgba(34,197,94,.04)}
+.row.is-new::before{background:var(--green);box-shadow:0 0 6px var(--green)}
 
 @media(max-width:860px){
   .row{
-    grid-template-columns:54px 1fr 100px;
-    height:52px;
-    padding:0 8px;
+    grid-template-columns:54px 1fr 104px;
+    height:42px;
+    padding:0 8px 0 12px;
   }
 }
 
 /* Edge cell */
 .r-edge{
   font-family:'SF Mono','Fira Code',monospace;
-  font-size:15px;font-weight:800;line-height:1;
+  font-size:13px;font-weight:900;line-height:1;
   white-space:nowrap;
+  letter-spacing:-.3px;
 }
 .r-edge.g{color:var(--green)}
 .r-edge.a{color:var(--amber)}
@@ -230,7 +236,7 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
 
 /* Books cell */
 .r-books{display:flex;align-items:center;gap:5px;overflow:hidden;font-family:'SF Mono',monospace}
-.r-bk{font-size:11px;font-weight:700;white-space:nowrap;line-height:1}
+.r-bk{font-size:12px;font-weight:800;white-space:nowrap;line-height:1}
 .r-bk.sharp{color:var(--amber)}
 .r-bk.best{color:var(--green)}
 .r-bk.soft{color:var(--muted);font-weight:500}
@@ -239,13 +245,13 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
 /* Movement / status cell */
 .r-meta{display:flex;flex-direction:column;align-items:flex-end;gap:1px;min-width:0}
 .r-move{font-family:'SF Mono',monospace;font-size:9px;font-weight:700;white-space:nowrap}
-.r-move.ok{color:var(--green)}
+.r-move.ok{color:var(--green);font-weight:800}
 .r-move.late{color:var(--red)}
 .r-move.flat{color:var(--dim)}
-.r-badge{font-size:8px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;white-space:nowrap}
-.r-badge.sharp{color:#6ee7a0}
-.r-badge.interp{color:var(--amber)}
-.r-badge.legacy{color:#7c6cac}
+.r-badge{font-size:7.5px;font-weight:900;letter-spacing:.5px;text-transform:uppercase;white-space:nowrap;padding:1px 3px;border-radius:2px}
+.r-badge.sharp{color:#86efac;background:rgba(34,197,94,.1)}
+.r-badge.interp{color:var(--amber);background:rgba(245,200,66,.08)}
+.r-badge.legacy{color:#9d8ccc;background:rgba(139,92,246,.08)}
 .r-badge.new-sig{color:var(--green);animation:nblink 2s infinite}
 @keyframes nblink{0%,100%{opacity:1}50%{opacity:.4}}
 
@@ -253,7 +259,7 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
 @media(max-width:860px){
   .r-match{display:none}
   .r-mkt-mob{display:flex;flex-direction:column;gap:2px}
-  .r-bks-mob{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+  .r-bks-mob{display:flex;flex-direction:column;align-items:flex-end;gap:1px}
 }
 @media(min-width:861px){
   .r-mkt-mob-teams{display:none}
@@ -391,7 +397,7 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
   </div>
   <div class="nav-sp"></div>
   <span class="nav-ts" id="updatedAt">syncing…</span>
-  <span class="nav-ts" style="font-size:8px;opacity:.4;margin-right:4px">v20260419e</span>
+  <span class="nav-ts" style="font-size:8px;opacity:.4;margin-right:4px">v20260419f</span>
   <span class="tier-badge" id="tierBadge">FREE</span>
 </nav>
 
@@ -510,7 +516,7 @@ window.onerror=function(msg,src,line,col,err){
   return false;
 };
 /* Synchronous probe — runs before anything else */
-(function(){var el=document.getElementById('updatedAt');if(el)el.textContent='JS:v20260419e';})();
+(function(){var el=document.getElementById('updatedAt');if(el)el.textContent='JS:v20260419f';})();
 const S={picks:[],filters:{sport:'all',market:'all',edge:0,sharp:false}};
 const $=id=>document.getElementById(id);
 const fP=(v,s=true)=>{if(v==null||isNaN(v))return'—';return(s&&v>0?'+':'')+Number(v).toFixed(1)+'%'};
@@ -620,7 +626,7 @@ function renderScanner(picks){
       const teams=`${p.home_team||''} vs ${p.away_team||''}`;
       const sub=`${p.league||''} · ${p.kickoff_str||ago(p.age_minutes)}`;
       const books=rowBooks(p,3);
-      return `<div class="row${isNew?' is-new':''}" data-id="${p.id||''}" onclick="openDetail(${p.id||0},this)">
+      return `<div class="row ec-${ec}${isNew?' is-new':''}" data-id="${p.id||''}" onclick="openDetail(${p.id||0},this)">
         <div class="r-edge ${ec}">${fP(p.edge_pct)}</div>
         <div class="r-mkt">
           <div class="r-mkt-main">${mkt}</div>
@@ -872,7 +878,7 @@ setTimeout(()=>{if(!_rendered)safeRender();},5000);
 setTimeout(()=>{
   const sb=$('scBody');
   if(sb && sb.innerHTML.includes('Loading signals')){
-    sb.innerHTML='<div class="empty-s"><div class="empty-t" style="color:#4ade80">JS OK · fetching data…</div><div class="empty-sub">v20260419e · if stuck, check URL = /live</div></div>';
+    sb.innerHTML='<div class="empty-s"><div class="empty-t" style="color:#4ade80">JS OK · fetching data…</div><div class="empty-sub">v20260419f · if stuck, check URL = /live</div></div>';
   }
 },1000);
 
