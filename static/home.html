@@ -385,7 +385,7 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
   </div>
   <div class="nav-sp"></div>
   <span class="nav-ts" id="updatedAt">syncing…</span>
-  <span class="nav-ts" style="font-size:8px;opacity:.4;margin-right:4px">v20260419a</span>
+  <span class="nav-ts" style="font-size:8px;opacity:.4;margin-right:4px">v20260419b</span>
   <span class="tier-badge" id="tierBadge">FREE</span>
 </nav>
 
@@ -498,7 +498,7 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
 
 <script>
 /* Synchronous probe — runs before anything else */
-(function(){var el=document.getElementById('updatedAt');if(el)el.textContent='JS:v20260419a';})();
+(function(){var el=document.getElementById('updatedAt');if(el)el.textContent='JS:v20260419b';})();
 const S={picks:[],filters:{sport:'all',market:'all',edge:0,sharp:false}};
 const $=id=>document.getElementById(id);
 const fP=(v,s=true)=>{if(v==null||isNaN(v))return'—';return(s&&v>0?'+':'')+Number(v).toFixed(1)+'%'};
@@ -597,44 +597,48 @@ function renderScanner(picks){
     return;
   }
   $('scBody').innerHTML=picks.map(p=>{
-    const st=pickStatus(p);
-    const isNew=p.age_minutes!=null&&p.age_minutes<12;
-    const ec=(p.edge_pct||0)>=8?'g':((p.edge_pct||0)>=3?'a':'r');
-    const mv=mvLabel(p);
-    const sb=statusLbl(st);
-    const mkt=(p.selection||p.market||'').toUpperCase();
-    const mktSub=(p.market||'').toUpperCase();
-    const teams=`${p.home_team||''} vs ${p.away_team||''}`;
-    const sub=`${p.league||''} · ${p.kickoff_str||ago(p.age_minutes)}`;
-    const books=rowBooks(p,3);
-
-    return `<div class="row${isNew?' is-new':''}" data-id="${p.id}" onclick="openDetail(${p.id},this)">
-      <div class="r-edge ${ec}">${fP(p.edge_pct)}</div>
-      <div class="r-mkt">
-        <div class="r-mkt-main">${mkt}</div>
-        <div class="r-mkt-sub r-mkt-mob-teams">${teams.slice(0,22)}</div>
-        <div class="r-mkt-sub" style="display:none" id="mkt-sub-${p.id}">${mktSub}</div>
-      </div>
-      <div class="r-match">
-        <div class="r-match-teams">${teams}</div>
-        <div class="r-match-sub">${sub}</div>
-      </div>
-      <div class="r-books">${books||'<span class="r-bk soft">—</span>'}</div>
-      <div class="r-meta">
-        ${mv.txt?`<span class="r-move ${mv.cls}">${mv.txt}</span>`:''}
-        ${sb.txt?`<span class="r-badge ${sb.cls}">${sb.txt}</span>`:''}
-        ${isNew?'<span class="r-badge new-sig">NEW</span>':''}
-      </div>
-    </div>`;
+    try{
+      const st=pickStatus(p);
+      const isNew=p.age_minutes!=null&&p.age_minutes<12;
+      const ec=(p.edge_pct||0)>=8?'g':((p.edge_pct||0)>=3?'a':'r');
+      const mv=mvLabel(p);
+      const sb=statusLbl(st);
+      const mkt=(p.selection||p.market||'').toUpperCase();
+      const mktSub=(p.market||'').toUpperCase();
+      const teams=`${p.home_team||''} vs ${p.away_team||''}`;
+      const sub=`${p.league||''} · ${p.kickoff_str||ago(p.age_minutes)}`;
+      const books=rowBooks(p,3);
+      return `<div class="row${isNew?' is-new':''}" data-id="${p.id||''}" onclick="openDetail(${p.id||0},this)">
+        <div class="r-edge ${ec}">${fP(p.edge_pct)}</div>
+        <div class="r-mkt">
+          <div class="r-mkt-main">${mkt}</div>
+          <div class="r-mkt-sub r-mkt-mob-teams">${teams.slice(0,22)}</div>
+          <div class="r-mkt-sub" style="display:none" id="mkt-sub-${p.id||''}">${mktSub}</div>
+        </div>
+        <div class="r-match">
+          <div class="r-match-teams">${teams}</div>
+          <div class="r-match-sub">${sub}</div>
+        </div>
+        <div class="r-books">${books||'<span class="r-bk soft">—</span>'}</div>
+        <div class="r-meta">
+          ${mv.txt?`<span class="r-move ${mv.cls}">${mv.txt}</span>`:''}
+          ${sb.txt?`<span class="r-badge ${sb.cls}">${sb.txt}</span>`:''}
+          ${isNew?'<span class="r-badge new-sig">NEW</span>':''}
+        </div>
+      </div>`;
+    }catch(e){
+      return `<div class="row"><div class="r-edge r">ERR</div><div class="r-mkt"><div class="r-mkt-main">${(p.selection||p.market||'?').toUpperCase()}</div></div><div class="r-match"><div class="r-match-teams">${p.home_team||'?'} vs ${p.away_team||'?'}</div><div class="r-match-sub">${e.message}</div></div><div class="r-books"></div><div class="r-meta"></div></div>`;
+    }
   }).join('');
 
-  // on mobile, hide the mkt-sub-desktop and show teams in mkt-sub
-  if(window.innerWidth<=860){
-    picks.forEach(p=>{
-      const el=document.getElementById(`mkt-sub-${p.id}`);
-      if(el){el.style.display='block';el.textContent=(p.market||'').toUpperCase();}
-    });
-  }
+  try{
+    if(window.innerWidth<=860){
+      picks.forEach(p=>{
+        const el=document.getElementById(`mkt-sub-${p.id}`);
+        if(el){el.style.display='block';el.textContent=(p.market||'').toUpperCase();}
+      });
+    }
+  }catch(e){}
 }
 
 function render(){const f=applyFilters(S.picks);renderKPIs(f);renderScanner(f);}
@@ -854,7 +858,7 @@ setTimeout(()=>{if(!_rendered)safeRender();},5000);
 setTimeout(()=>{
   const sb=$('scBody');
   if(sb && sb.innerHTML.includes('Loading signals')){
-    sb.innerHTML='<div class="empty-s"><div class="empty-t" style="color:#4ade80">JS OK · fetching data…</div><div class="empty-sub">v20260419a · if stuck, check URL = /live</div></div>';
+    sb.innerHTML='<div class="empty-s"><div class="empty-t" style="color:#4ade80">JS OK · fetching data…</div><div class="empty-sub">v20260419b · if stuck, check URL = /live</div></div>';
   }
 },1000);
 
