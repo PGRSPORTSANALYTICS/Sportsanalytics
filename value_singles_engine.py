@@ -187,11 +187,11 @@ VALUE_SINGLE_LEAGUE_WHITELIST = {
     # European Cups
     "soccer_uefa_champs_league",     # Champions League
     "soccer_uefa_europa_league",     # Europa League
-    "soccer_uefa_europa_conf_league", # Conference League
+    "soccer_uefa_europa_conference_league", # Conference League
     # Second Tier European
     "soccer_germany_bundesliga2",    # Bundesliga 2
-    "soccer_england_efl_champ",      # EFL Championship
-    "soccer_spain_segunda",          # La Liga 2
+    "soccer_efl_champ",              # EFL Championship
+    "soccer_spain_segunda_division", # La Liga 2
     "soccer_italy_serie_b",          # Serie B
     "soccer_france_ligue_two",       # Ligue 2
     # Other Major European
@@ -207,8 +207,8 @@ VALUE_SINGLE_LEAGUE_WHITELIST = {
     "soccer_denmark_superliga",      # Danish Superliga
     # Americas
     "soccer_usa_mls",                # MLS
-    "soccer_brazil_serie_a",         # Brasileirao
-    "soccer_argentina_primera",      # Argentina Primera
+    "soccer_brazil_campeonato",      # Brasileirao
+    "soccer_argentina_primera_division", # Argentina Primera
     "soccer_mexico_ligamx",          # Liga MX
     # Other
     "soccer_australia_aleague",      # A-League

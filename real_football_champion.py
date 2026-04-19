@@ -236,7 +236,7 @@ class RealFootballChampion:
             'soccer_russia_premier_league': 'Russian Premier League',
             
             # South America
-            'soccer_brazil_serie_a': 'Brazilian Serie A',
+            'soccer_brazil_campeonato': 'Brazilian Serie A',
             'soccer_argentina_primera_division': 'Argentinian Primera Division',
             'soccer_chile_primera_division': 'Chilean Primera Division',
             'soccer_colombia_primera_a': 'Colombian Primera A',
@@ -3026,7 +3026,7 @@ class RealFootballChampion:
             'soccer_uefa_champs_league', 'soccer_uefa_europa_league',
             'soccer_netherlands_eredivisie', 'soccer_portugal_primeira_liga',
             'soccer_usa_mls', 'soccer_sweden_allsvenskan', 'soccer_norway_eliteserien',
-            'soccer_brazil_serie_a', 'soccer_argentina_primera', 'soccer_mexico_ligamx',
+            'soccer_brazil_campeonato', 'soccer_argentina_primera_division', 'soccer_mexico_ligamx',
             'soccer_australia_aleague', 'soccer_japan_j_league', 'soccer_korea_kleague1'
         }
         

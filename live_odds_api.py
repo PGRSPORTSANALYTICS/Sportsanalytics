@@ -87,7 +87,7 @@ class TheOddsAPI:
             'soccer_russia_premier_league', # Russian Premier League
             
             # South America (Different Time Zone - More Coverage)
-            'soccer_brazil_serie_a',        # Brazilian Serie A
+            'soccer_brazil_campeonato',        # Brazilian Serie A
             'soccer_argentina_primera_division', # Argentinian Primera
             'soccer_chile_primera_division', # Chilean Primera
             'soccer_colombia_primera_a',    # Colombian Primera A
