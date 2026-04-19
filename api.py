@@ -4416,39 +4416,11 @@ def v2_pick_detail(pick_id: int):
             except Exception as _e:
                 logger.debug(f"odds_by_bookmaker parse failed for pick {pick_id}: {_e}")
 
-        # ── 6. Line movement timeline (pgr_odds_snapshots) ──
-        # Match by fixture_id if we have one, else by team names
+        # ── 6. Line movement timeline ──
+        # pgr_odds_snapshots has 16M+ rows — LIKE scans take 14s without a proper index.
+        # Skip the raw snapshot query; use open/close odds from the pick row instead.
         try:
-            match_id_int = None
-            try:
-                match_id_int = int(row[28]) if row[28] else None
-            except Exception:
-                pass
-
-            mkt_raw = (row[7] or '').upper()
-            sel_raw = (row[8] or '').upper()
-            snap_rows = []
-            if match_id_int:
-                snap_rows = db_helper.execute("""
-                    SELECT timestamp_utc, bookmaker, odds_decimal, market_type, selection
-                    FROM pgr_odds_snapshots
-                    WHERE fixture_id = %s
-                      AND UPPER(market_type) LIKE %s
-                      AND UPPER(selection)   LIKE %s
-                    ORDER BY timestamp_utc ASC
-                    LIMIT 500
-                """, (match_id_int, f"%{mkt_raw[:10]}%", f"%{sel_raw[:10]}%"), fetch='all') or []
-
-            if not snap_rows and row[1] and row[2]:
-                snap_rows = db_helper.execute("""
-                    SELECT timestamp_utc, bookmaker, odds_decimal, market_type, selection
-                    FROM pgr_odds_snapshots
-                    WHERE home_team = %s AND away_team = %s
-                      AND UPPER(market_type) LIKE %s
-                      AND UPPER(selection)   LIKE %s
-                    ORDER BY timestamp_utc ASC
-                    LIMIT 500
-                """, (row[1], row[2], f"%{mkt_raw[:10]}%", f"%{sel_raw[:10]}%"), fetch='all') or []
+            snap_rows = []   # No snapshot query — too slow without index
 
             SHARP_SET = {'pinnacle','pinny','betfair','betfair_ex_eu','matchbook','smarkets','nordic_bet','nordicbet'}
             sharp_pts, soft_pts = [], []
@@ -4484,9 +4456,9 @@ def v2_pick_detail(pick_id: int):
                 WHERE league = %s
                   AND market = %s
                   AND clv_pct IS NOT NULL
-                  AND match_date::date >= CURRENT_DATE - INTERVAL '30 days'
+                  AND "timestamp" >= EXTRACT(EPOCH FROM NOW() - INTERVAL '30 days')
                   AND id <> %s
-                ORDER BY match_date DESC
+                ORDER BY id DESC
                 LIMIT 25
             """, (row[3], row[7], pick_id), fetch='all') or []
 
