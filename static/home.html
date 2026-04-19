@@ -662,12 +662,25 @@ function renderKPIs(picks){
 
 /* ── Render scanner rows ── */
 function renderScanner(picks){
-  $('scanMeta').textContent=`${picks.length} · 60s`;
-  if(!picks.length){
+  // ── Deduplicate: one row per match (highest edge is representative) ──
+  const _matchMap=new Map();
+  picks.forEach(p=>{
+    const key=(p.home_team||'')+'|'+(p.away_team||'')+'|'+(p.kickoff_epoch||p.match_date||'');
+    if(!_matchMap.has(key))_matchMap.set(key,[]);
+    _matchMap.get(key).push(p);
+  });
+  const matchRows=Array.from(_matchMap.values()).map(grp=>{
+    grp.sort((a,b)=>(b.edge_pct||0)-(a.edge_pct||0));
+    return Object.assign({},grp[0],{_mkt_count:grp.length});
+  });
+  matchRows.sort((a,b)=>(b.edge_pct||0)-(a.edge_pct||0));
+
+  $('scanMeta').textContent=`${matchRows.length} matches · 60s`;
+  if(!matchRows.length){
     $('scBody').innerHTML=`<div class="empty-s"><div class="empty-t">No signals</div><div class="empty-sub">Lower min edge or clear sharp-only filter</div></div>`;
     return;
   }
-  $('scBody').innerHTML=picks.map(p=>{
+  $('scBody').innerHTML=matchRows.map(p=>{
     try{
       const st=pickStatus(p);
       const isNew=p.age_minutes!=null&&p.age_minutes<12;
@@ -677,8 +690,9 @@ function renderScanner(picks){
       const mkt=(p.selection||p.market||'').toUpperCase();
       const mktSub=(p.market||'').toUpperCase();
       const teams=`${p.home_team||''} vs ${p.away_team||''}`;
+      const mktCtTxt=p._mkt_count>1?` · ${p._mkt_count} mkts`:'';
       const subParts=[p.league,p.kickoff_str||ago(p.age_minutes)].filter(Boolean);
-      const sub=subParts.join(' · ');
+      const sub=subParts.join(' · ')+mktCtTxt;
       const books=rowBooks(p,3);
       return `<div class="row ec-${ec}${isNew?' is-new':''}" data-id="${p.id||''}" onclick="openDetail(${p.id||0},this)">
         <div class="r-edge ${ec}">${fP(p.edge_pct)}</div>
