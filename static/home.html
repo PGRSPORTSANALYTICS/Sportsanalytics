@@ -6,24 +6,15 @@
 <meta name="theme-color" content="#06060d"/>
 <title>PGR · Live Scanner</title>
 <script>
-/* SW killer — runs before anything else.
-   Unregisters stale service workers, clears SW cache, then force-reloads ONCE
-   so the page runs without any SW interference. */
-(function(){
-  if(!('serviceWorker' in navigator)) return;
-  var alreadyCleared = sessionStorage.getItem('pgr_sw_cleared') === '1';
-  navigator.serviceWorker.getRegistrations().then(function(regs){
-    if(regs.length === 0) return; /* No SW — nothing to do */
-    regs.forEach(function(r){ r.unregister(); });
-    if('caches' in window){
-      caches.keys().then(function(keys){ keys.forEach(function(k){ caches.delete(k); }); });
-    }
-    if(!alreadyCleared){
-      sessionStorage.setItem('pgr_sw_cleared','1');
-      location.reload(true); /* Hard reload — bypasses SW cache */
-    }
-  });
-})();
+/* Passive SW cleanup — no reload, no sessionStorage, no crashes */
+try{
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(x){x.unregister();});});
+  }
+  if('caches' in window){
+    caches.keys().then(function(k){k.forEach(function(c){caches.delete(c);});});
+  }
+}catch(e){}
 </script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -394,7 +385,7 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
   </div>
   <div class="nav-sp"></div>
   <span class="nav-ts" id="updatedAt">syncing…</span>
-  <span class="nav-ts" style="font-size:8px;opacity:.4;margin-right:4px">v20260418f</span>
+  <span class="nav-ts" style="font-size:8px;opacity:.4;margin-right:4px">v20260419a</span>
   <span class="tier-badge" id="tierBadge">FREE</span>
 </nav>
 
@@ -861,7 +852,7 @@ setTimeout(()=>{if(!_rendered)safeRender();},5000);
 setTimeout(()=>{
   const sb=$('scBody');
   if(sb && sb.innerHTML.includes('Loading signals')){
-    sb.innerHTML='<div class="empty-s"><div class="empty-t" style="color:#4ade80">JS OK · fetching data…</div><div class="empty-sub">v20260418f · if stuck, check URL = /live</div></div>';
+    sb.innerHTML='<div class="empty-s"><div class="empty-t" style="color:#4ade80">JS OK · fetching data…</div><div class="empty-sub">v20260419a · if stuck, check URL = /live</div></div>';
   }
 },1000);
 
