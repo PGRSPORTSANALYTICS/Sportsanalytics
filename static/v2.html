@@ -404,6 +404,12 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
 .mm-badge.sharp{color:#86efac;background:rgba(34,197,94,.1)}
 .mm-badge.legacy{color:#9d8ccc;background:rgba(139,92,246,.08)}
 .mm-badge.interp{color:var(--amber);background:rgba(245,200,66,.08)}
+/* Tier section headers */
+.mm-tier-h{padding:3px 10px 3px 15px;font-size:7.5px;font-weight:900;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.01)}
+.mm-tier-h.strong{color:var(--green)}.mm-tier-h.medium{color:var(--amber)}.mm-tier-h.developing{color:var(--dim)}
+/* Show more toggle */
+.mm-more{padding:9px 10px;text-align:center;cursor:pointer;font-size:9px;font-weight:700;color:var(--muted);border-top:1px solid var(--line);letter-spacing:.4px;transition:color .1s,background .1s}
+.mm-more:hover{color:var(--txt);background:rgba(255,255,255,.025)}
 @media(max-width:860px){
   .mm-hdr{display:none}
   .mm-row{grid-template-columns:1fr 56px 60px;padding:0 8px 0 12px;height:48px}
@@ -759,35 +765,84 @@ async function fetchMatchMarkets(id,tgt){
   }
 }
 
+function _mmRow(mk,tgt){
+  const ec=mk.tier==='strong'?'g':(mk.tier==='medium'?'a':'r');
+  const sharpH=mk.sharp_ref?'<span style="color:var(--amber)">⚡'+fO(mk.sharp_ref)+'</span>':'<span class="mm-no">—</span>';
+  const bestH=mk.best_available?fO(mk.best_available):'<span class="mm-no">—</span>';
+  var mvH='';
+  if(mk.movement_pct!=null){var s=mk.movement_pct>0?'+':'';mvH='<div class="mm-mv '+mk.movement_type+'">'+s+mk.movement_pct.toFixed(1)+'%</div>';}
+  const bdg='<div class="mm-badge '+mk.signal_cls+'">'+(mk.signal_cls==='sharp'?'SHARP':mk.signal_cls==='interp'?'INTERP':'LEGACY')+'</div>';
+  return '<div class="mm-row ec-'+ec+'" onclick="openMarketDetail('+mk.id+',\''+tgt+'\')">'
+    +'<div class="mm-mkt"><div class="mm-sel">'+((mk.selection||mk.market||'').toUpperCase())+'</div>'
+    +'<div class="mm-type">'+((mk.market||'').toUpperCase())+'</div></div>'
+    +'<div class="mm-sharp">'+sharpH+'</div>'
+    +'<div class="mm-best">'+bestH+'</div>'
+    +'<div class="mm-edge '+ec+'">'+fP(mk.edge_pct)+'</div>'
+    +'<div class="mm-sig">'+mvH+bdg+'</div>'
+    +'</div>';
+}
+function _mmSection(label,tier,items,tgt){
+  if(!items.length)return'';
+  return'<div class="mm-tier-h '+tier+'">'+label+'</div>'+items.map(function(mk){return _mmRow(mk,tgt);}).join('');
+}
+function mmToggle(uid){
+  var el=document.getElementById('mm-hidden-'+uid);
+  var lbl=document.getElementById('mm-btn-lbl-'+uid);
+  if(!el)return;
+  if(el.style.display==='none'){el.style.display='block';if(lbl)lbl.textContent='− Hide extra markets';}
+  else{el.style.display='none';if(lbl&&lbl._orig)lbl.textContent=lbl._orig;}
+}
 function buildMatchMarkets(data,tgt){
-  const m=data.match,markets=data.markets||[];
+  const m=data.match;
+  const all=(data.markets||[]).filter(function(mk){return mk.tier!=='noise';});
   const ko=m.kickoff_epoch?new Date(m.kickoff_epoch*1000).toISOString().slice(11,16):'';
-  const hdr='<div class="mm-head">'+
-    '<div class="mm-title">'+m.home_team+' vs '+m.away_team+'</div>'+
-    '<div class="mm-sub">'+
-    (m.league?'<span>'+m.league+'</span>':'')+
-    (ko?'<span>'+ko+' UTC</span>':(m.match_date?'<span>'+m.match_date+'</span>':''))+
-    '<span class="mm-tag">'+markets.length+' MARKETS</span>'+
-    '</div></div>';
-  if(!markets.length) return hdr+'<div class="empty-s"><div class="empty-t">No markets found</div></div>';
+
+  const strong=all.filter(function(mk){return mk.tier==='strong';});
+  const medium=all.filter(function(mk){return mk.tier==='medium';});
+  const developing=all.filter(function(mk){return mk.tier==='developing';});
+
+  const parts=[];
+  if(strong.length)parts.push(strong.length+(strong.length===1?' STRONG SIGNAL':' STRONG SIGNALS'));
+  if(medium.length)parts.push(medium.length+' MEDIUM');
+  if(developing.length)parts.push(developing.length+' DEVELOPING');
+  const tagTxt=parts.length?parts.join(' · '):(all.length+' MARKETS');
+
+  const hdr='<div class="mm-head">'
+    +'<div class="mm-title">'+m.home_team+' vs '+m.away_team+'</div>'
+    +'<div class="mm-sub">'
+    +(m.league?'<span>'+m.league+'</span>':'')
+    +(ko?'<span>'+ko+' UTC</span>':(m.match_date?'<span>'+m.match_date+'</span>':''))
+    +'<span class="mm-tag">'+tagTxt+'</span>'
+    +'</div></div>';
+
+  if(!all.length)return hdr+'<div class="empty-s"><div class="empty-t">No qualifying markets</div></div>';
+
   const colHdr='<div class="mm-hdr"><div>Market</div><div>Sharp</div><div>Best</div><div>Edge</div><div>Signal</div></div>';
-  const rows=markets.map(function(mk){
-    const ec=(mk.edge_pct||0)>=8?'g':((mk.edge_pct||0)>=3?'a':'r');
-    const sharpH=mk.sharp_ref?'<span style="color:var(--amber)">⚡'+fO(mk.sharp_ref)+'</span>':'<span class="mm-no">—</span>';
-    const bestH=mk.best_available?fO(mk.best_available):'<span class="mm-no">—</span>';
-    var mvH='';
-    if(mk.movement_pct!=null){var sign=mk.movement_pct>0?'+':'';mvH='<div class="mm-mv '+mk.movement_type+'">'+(sign)+mk.movement_pct.toFixed(1)+'%</div>';}
-    const bdg='<div class="mm-badge '+mk.signal_cls+'">'+(mk.signal_cls==='sharp'?'SHARP':mk.signal_cls==='interp'?'INTERP':'LEGACY')+'</div>';
-    return '<div class="mm-row ec-'+ec+'" onclick="openMarketDetail('+mk.id+',''+tgt+'')">'
-      +'<div class="mm-mkt"><div class="mm-sel">'+((mk.selection||mk.market||'').toUpperCase())+'</div>'
-      +'<div class="mm-type">'+((mk.market||'').toUpperCase())+'</div></div>'
-      +'<div class="mm-sharp">'+sharpH+'</div>'
-      +'<div class="mm-best">'+bestH+'</div>'
-      +'<div class="mm-edge '+ec+'">'+fP(mk.edge_pct)+'</div>'
-      +'<div class="mm-sig">'+mvH+bdg+'</div>'
-      +'</div>';
-  }).join('');
-  return hdr+colHdr+rows;
+
+  // Default: all strong + top (8 - strong.length) medium, minimum 3 total shown
+  const maxDef=Math.max(8,strong.length);
+  const medSlot=Math.max(0,maxDef-strong.length);
+  const medShow=medium.slice(0,medSlot);
+  const medHide=medium.slice(medSlot);
+
+  const visHtml=_mmSection('\u25cf Strong signal','strong',strong,tgt)
+               +_mmSection('\u25d1 Medium signal','medium',medShow,tgt);
+
+  const hidItems=medHide.concat(developing);
+  const uid='mmx'+m.home_team.replace(/\W/g,'')+m.away_team.replace(/\W/g,'');
+
+  var moreBtn='',hiddenDiv='';
+  if(hidItems.length){
+    const moreLabel='+ '+hidItems.length+' more market'+(hidItems.length>1?'s':'');
+    moreBtn='<div class="mm-more" onclick="mmToggle(\''+uid+'\')">'
+      +'<span id="mm-btn-lbl-'+uid+'">'+moreLabel+'</span></div>';
+    const hidHtml=_mmSection('\u25d1 Medium signal','medium',medHide,tgt)
+                 +_mmSection('\u25cb Developing','developing',developing,tgt);
+    hiddenDiv='<div id="mm-hidden-'+uid+'" style="display:none">'+hidHtml+'</div>';
+    setTimeout(function(){var l=document.getElementById('mm-btn-lbl-'+uid);if(l)l._orig=moreLabel;},50);
+  }
+
+  return hdr+colHdr+visHtml+moreBtn+hiddenDiv;
 }
 
 function openMarketDetail(id,tgt){

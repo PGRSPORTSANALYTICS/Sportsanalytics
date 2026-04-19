@@ -4319,6 +4319,15 @@ def v2_match_markets(pick_id: int):
             LIMIT 60
         """, (home, away, match_date), fetch='all') or []
 
+        # Deduplicate: same market+selection → keep highest edge (most recent id as tiebreak)
+        seen_sel: dict = {}
+        for r in rows:
+            key = (r[1] or '').upper() + '|' + (r[2] or '').upper()
+            cur_edge = float(r[4]) if r[4] else 0.0
+            if key not in seen_sel or cur_edge > float(seen_sel[key][4] or 0):
+                seen_sel[key] = r
+        rows = sorted(seen_sel.values(), key=lambda x: float(x[4] or 0), reverse=True)
+
         SHARP_SET = {'pinnacle','pinny','betfair','betfair_ex_eu','matchbook','smarkets','nordic_bet','nordicbet'}
         markets = []
         for r in rows:
@@ -4350,6 +4359,20 @@ def v2_match_markets(pick_id: int):
             conf = r[10] or ('SHARP_CONFIRMED' if sharp_p else 'LEGACY')
             sig_cls = 'sharp' if 'SHARP' in conf else ('interp' if 'INTERP' in conf else 'legacy')
 
+            # ── Tier scoring ──
+            # Combines edge strength with signal quality bonuses
+            score = float(edge or 0)
+            if sharp_p:                       score += 3.0   # sharp price confirmed
+            if mv_type == 'moved':            score += 2.0   # market moved our way
+            elif mv_type == 'drift':          score -= 1.0   # market disagreed
+            if book_count >= 3:               score += 1.0   # multi-book consensus
+            if 'SHARP' in (conf or ''):       score += 2.0   # confidence_label override
+
+            tier = ('strong'    if score >= 12
+                    else 'medium'     if score >= 5
+                    else 'developing' if score >= 2
+                    else 'noise')
+
             markets.append({
                 'id': r[0],
                 'market': r[1] or '', 'selection': r[2] or '',
@@ -4367,6 +4390,8 @@ def v2_match_markets(pick_id: int):
                 'signal': conf,
                 'signal_cls': sig_cls,
                 'book_count': book_count,
+                'tier': tier,
+                'signal_score': round(score, 1),
             })
 
         return {
