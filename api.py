@@ -1156,12 +1156,23 @@ async def get_match_scout(match_id: str):
 @app.get("/api/v2/decision/{match_id}", tags=["Decision"])
 async def get_decision(match_id: str):
     """
-    Decision Brain v1: full decision object for every market in a match.
-    Returns scored markets with verdict, confidence, edge decay, and why-panel.
+    Decision Brain v2: full decision object for every market in a match.
+    Accepts string match_id OR integer pick_id. Returns scored markets with
+    verdict, confidence score, edge decay, stake hint, and why-panel.
     """
     try:
         from decision_brain import score_match as _score_match
         import json as _json
+
+        # Integer pick_id → look up its match_id first
+        _resolved_id = match_id
+        if match_id.lstrip('-').isdigit():
+            _id_row = db_helper.execute(
+                "SELECT match_id FROM football_opportunities WHERE id = %s LIMIT 1",
+                (int(match_id),), fetch='one'
+            )
+            if _id_row and _id_row[0]:
+                _resolved_id = _id_row[0]
 
         rows = db_helper.execute("""
             SELECT
@@ -1178,11 +1189,12 @@ async def get_decision(match_id: str):
                 mode
             FROM football_opportunities
             WHERE (match_id = %s
+                   OR id::text = %s
                    OR (home_team || '_' || away_team) = %s
                    OR (home_team || ' vs ' || away_team) = %s)
               AND mode != 'TEST'
             ORDER BY timestamp DESC
-        """, (match_id, match_id, match_id), fetch='all') or []
+        """, (_resolved_id, match_id, _resolved_id, _resolved_id), fetch='all') or []
 
         if not rows:
             raise HTTPException(status_code=404, detail={"error": "match_not_found"})

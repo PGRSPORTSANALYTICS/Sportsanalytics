@@ -491,6 +491,56 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
 /* Show more toggle */
 .mm-more{padding:9px 10px;text-align:center;cursor:pointer;font-size:9px;font-weight:700;color:var(--muted);border-top:1px solid var(--line);letter-spacing:.4px;transition:color .1s,background .1s}
 .mm-more:hover{color:var(--txt);background:rgba(255,255,255,.025)}
+
+/* ── Decision Brain v2 cards ── */
+.mk-card2{padding:11px 12px 9px 15px;position:relative;cursor:default;transition:background .07s}
+.mk-card2::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px}
+.mk-card2.ec-g::before{background:var(--green)}
+.mk-card2.ec-a::before{background:var(--amber)}
+.mk-card2.ec-r::before{background:#6b2121}
+.mk-card2.is-best{background:rgba(255,215,0,.025)}
+.mk-card2.is-best::before{background:#ffd700}
+
+/* Verdict badges */
+.vd-badge{display:inline-block;font-size:8px;font-weight:900;text-transform:uppercase;letter-spacing:.6px;padding:2px 8px;border-radius:3px;line-height:1.4}
+.vd-play{color:#86efac;background:rgba(34,197,94,.14);border:1px solid rgba(34,197,94,.3)}
+.vd-late{color:var(--amber);background:rgba(245,200,66,.1);border:1px solid rgba(245,200,66,.25)}
+.vd-watch{color:#93c5fd;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.2)}
+.vd-pass{color:var(--muted);background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07)}
+
+/* Market state badges */
+.ms-badge{display:inline-block;font-size:7px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:2px 5px;border-radius:2px;flex-shrink:0}
+.ms-live{color:var(--green);background:rgba(34,197,94,.1);animation:upulse 2s infinite}
+.ms-building{color:#93c5fd;background:rgba(96,165,250,.08)}
+.ms-fading{color:var(--amber);background:rgba(245,200,66,.08)}
+.ms-gone{color:var(--dim);background:rgba(255,255,255,.04)}
+.ms-flat{color:var(--muted);background:rgba(255,255,255,.03)}
+
+/* Card sub-elements */
+.mk2-edge-row{display:flex;align-items:baseline;gap:14px;margin:5px 0 6px 0;flex-wrap:wrap}
+.mk2-edge{font-size:22px;font-weight:900;line-height:1;font-family:'SF Mono',monospace}
+.mk2-edge.ec-g{color:var(--green)}.mk2-edge.ec-a{color:var(--amber)}.mk2-edge.ec-r{color:var(--red)}
+.mk2-peak{font-size:9px;color:var(--muted);display:flex;flex-direction:column;gap:1px;padding-bottom:3px}
+.mk2-decay{color:var(--red);font-weight:700}
+.mk2-verdict{display:flex;align-items:center;gap:7px;margin-bottom:6px;flex-wrap:wrap}
+.mk2-vr{font-size:8px;color:var(--muted)}
+.mk2-conf-row{display:flex;align-items:center;gap:7px;margin-bottom:5px}
+.mk2-conf-lbl{font-size:7.5px;font-weight:900;letter-spacing:.4px;text-transform:uppercase;min-width:44px;flex-shrink:0}
+.cb-high{color:var(--green)}.cb-medium{color:var(--amber)}.cb-low{color:var(--muted)}.cb-vlow{color:var(--red)}
+.mk2-conf-bar-wrap{flex:1;height:3px;background:var(--line2);border-radius:2px;overflow:hidden}
+.mk2-conf-bar{height:100%;border-radius:2px;transition:width .3s}
+.mk2-conf-score{font-size:10px;font-weight:800;font-family:'SF Mono',monospace;flex-shrink:0;min-width:22px;text-align:right}
+.mk2-mv{font-size:8px;color:var(--dim);font-style:italic;margin-bottom:4px}
+.mk2-stake{font-size:8px;color:var(--muted);margin-bottom:4px}
+.mk2-stake strong{color:var(--green);font-family:'SF Mono',monospace}
+.mk2-prices{display:flex;gap:8px;font-size:9px;margin-bottom:5px;flex-wrap:wrap;align-items:center}
+.mk2-why{display:none;margin-top:8px;padding-top:7px;border-top:1px solid var(--line);font-size:8.5px;line-height:1.9}
+.mk2-why.open{display:block}
+.mk2-why-item{display:flex;align-items:baseline;gap:6px}
+.mk2-why-dot{font-size:10px;flex-shrink:0;color:var(--muted)}
+.mk2-breakdown{display:grid;grid-template-columns:1fr 1fr;gap:1px 12px;margin-top:7px;padding-top:6px;border-top:1px solid var(--line);font-size:8px}
+.mk2-breakdown-row{display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid rgba(255,255,255,.03)}
+.mk2-bd-l{color:var(--dim)}.mk2-bd-v{font-family:'SF Mono',monospace;font-weight:700;color:var(--txt)}
 @media(max-width:860px){
   .mm-hdr{display:none}
   .mm-row{grid-template-columns:1fr 56px 62px;padding:6px 8px 6px 12px;min-height:48px;height:auto;align-items:start}
@@ -842,65 +892,53 @@ async function fetchMatchMarkets(id,tgt){
   if(tgt==='desk'){$('detTitle').textContent='Loading…';$('detSub').textContent='';$('detBody').innerHTML=load;}
   else $('mobBody').innerHTML=load;
   let data=null;
-  try{const r=await authFetch('/api/v2/match/'+id+'/markets');data=await r.json();}
-  catch(e){const err='<div class="empty-s"><div class="empty-t">Failed to load</div></div>';
-    if(tgt==='desk')$('detBody').innerHTML=err;else $('mobBody').innerHTML=err;return;}
-  if(!data||!data.match){const err='<div class="empty-s"><div class="empty-t">Not found</div></div>';
-    if(tgt==='desk')$('detBody').innerHTML=err;else $('mobBody').innerHTML=err;return;}
+  try{
+    // Decision Brain endpoint — accepts integer pick_id or string match_id
+    const r=await authFetch('/api/v2/decision/'+id);
+    data=await r.json();
+  }catch(e){
+    const err='<div class="empty-s"><div class="empty-t">Failed to load</div></div>';
+    if(tgt==='desk')$('detBody').innerHTML=err;else $('mobBody').innerHTML=err;return;
+  }
+  if(!data||data.error){
+    const err='<div class="empty-s"><div class="empty-t">'+(data&&data.error?data.error:'Not found')+'</div></div>';
+    if(tgt==='desk')$('detBody').innerHTML=err;else $('mobBody').innerHTML=err;return;
+  }
   _mmState.data=data;_mmState.tgt=tgt;
   const html=buildMatchMarkets(data,tgt);
-  const m=data.match;
-  const ko=m.kickoff_epoch?new Date(m.kickoff_epoch*1000).toISOString().slice(11,16)+' UTC':'';
+  const ko=data.kickoff_epoch?new Date(data.kickoff_epoch*1000).toISOString().slice(11,16)+' UTC':'';
   if(tgt==='desk'){
-    $('detTitle').innerHTML=m.home_team+' vs '+m.away_team;
-    $('detSub').textContent=(m.league||'')+' · '+(ko||m.match_date||'')+' · '+data.count+' markets';
+    $('detTitle').innerHTML=(data.home_team||'?')+' vs '+(data.away_team||'?');
+    $('detSub').textContent=(data.league||'')+' · '+(ko||'')+' · '+(data.total_markets||0)+' markets';
     $('detBody').innerHTML=html;
   } else {
-    $('mobTitle').textContent=m.home_team+' vs '+m.away_team;
+    $('mobTitle').textContent=(data.home_team||'?')+' vs '+(data.away_team||'?');
     $('mobBody').innerHTML=html;
   }
 }
 
-/* ── Decision engine v2 ── */
-var _mmFilters={betOnly:false,sharpOnly:false,hideLegacy:false,hideSoft:false,showFading:false};
+/* ── Decision Brain v2 rendering ── */
+var _mmFilters={showPass:false,sharpOnly:false,hideSoft:false};
 var _mmState={data:null,tgt:null};
 
-function calcEdges(mk){
-  var det=parseFloat(mk.edge_pct)||0;
-  var nowE=(mk.model_prob&&mk.best_available)?Math.round((mk.model_prob*mk.best_available-1)*1000)/10:det;
-  var peak=Math.max(det,nowE);
-  return{detected:parseFloat(det.toFixed(1)),now:parseFloat(nowE.toFixed(1)),peak:parseFloat(peak.toFixed(1)),delta:parseFloat((nowE-peak).toFixed(1))};
+function _vdStyle(v){
+  if(v==='PLAY_NOW')return{cls:'vd-play',lbl:'PLAY NOW'};
+  if(v==='LATE')return{cls:'vd-late',lbl:'LATE'};
+  if(v==='WATCH')return{cls:'vd-watch',lbl:'WATCH'};
+  return{cls:'vd-pass',lbl:'PASS'};
 }
-function getDecision4(mk,e){
-  var drift=mk.movement_type==='drift';
-  var pctFP=e.peak>0?((e.now-e.peak)/e.peak)*100:0;
-  if(e.now<2)return{state:'pass',reason:'line gone'};
-  if(mk.tier==='developing'&&!mk.sharp_ref&&(mk.book_count||0)<2)return{state:'pass',reason:'insufficient data'};
-  if(pctFP<-25||(drift&&e.delta<-4))return{state:'late',reason:'value reduced'};
-  if(mk.tier==='strong'&&!drift&&pctFP>=-25)return{state:'bet',reason:'edge still live'};
-  if(mk.tier==='medium'&&!drift&&pctFP>=-20)return{state:'watch',reason:'needs confirmation'};
-  if(drift)return{state:'watch',reason:'needs confirmation'};
-  return{state:'watch',reason:'needs confirmation'};
+function _bsStyle(b){
+  if(b==='HIGH')return{cls:'cb-high',col:'var(--green)'};
+  if(b==='MEDIUM')return{cls:'cb-medium',col:'var(--amber)'};
+  if(b==='LOW')return{cls:'cb-low',col:'var(--muted)'};
+  return{cls:'cb-vlow',col:'var(--red)'};
 }
-function getMarketState(mk,e,ko){
-  var drift=mk.movement_type==='drift',moved=mk.movement_type==='moved';
-  var diff=ko?(ko-Date.now()/1000):null;
-  if(e.now<2||e.delta<-12)return{state:'GONE',desc:'market corrected too far',cls:'gone'};
-  if(drift&&e.delta<-3)return{state:'FADING',desc:'sharp money already hit this line',cls:'fading'};
-  if(moved)return{state:'BUILDING',desc:'market moving toward signal',cls:'building'};
-  if(diff!==null&&diff<3600)return{state:'LIVE NOW',desc:'edge active and still strong',cls:'live'};
-  if(mk.tier==='strong'&&e.now>=8)return{state:'LIVE NOW',desc:'edge active and still strong',cls:'live'};
-  return{state:'BUILDING',desc:'market moving toward signal',cls:'building'};
-}
-function mmFilterMarkets(markets){
-  return markets.filter(function(mk){
-    if(_mmFilters.betOnly&&getDecision4(mk,calcEdges(mk)).state!=='bet')return false;
-    if(_mmFilters.sharpOnly&&!mk.sharp_ref)return false;
-    if(_mmFilters.hideLegacy&&mk.signal_cls==='legacy')return false;
-    if(_mmFilters.hideSoft&&!mk.sharp_ref&&(mk.book_count||0)<2)return false;
-    if(!_mmFilters.showFading&&mk.movement_type==='drift'&&mk.tier!=='strong')return false;
-    return true;
-  });
+function _stStyle(s){
+  if(s==='LIVE_NOW')return{cls:'ms-live',col:'var(--green)'};
+  if(s==='BUILDING')return{cls:'ms-building',col:'#93c5fd'};
+  if(s==='FADING')return{cls:'ms-fading',col:'var(--amber)'};
+  if(s==='GONE')return{cls:'ms-gone',col:'var(--dim)'};
+  return{cls:'ms-flat',col:'var(--muted)'};
 }
 function mmFilterToggle(uid,key){
   _mmFilters[key]=!_mmFilters[key];
@@ -912,107 +950,7 @@ function mmExpand(id){
   var el=document.getElementById('why-'+id),lbl=document.getElementById('mk-exp-lbl-'+id);
   if(!el)return;
   var open=el.classList.toggle('open');
-  if(lbl)lbl.textContent=open?'why \u25b4':'why \u25be';
-}
-function buildMatchSummary(m,markets){
-  var vis=markets.filter(function(mk){return mk.tier!=='noise';});
-  var sct=vis.filter(function(mk){return mk.tier==='strong';}).length;
-  var mct=vis.filter(function(mk){return mk.tier==='medium';}).length;
-  var bestE=vis.length?Math.max.apply(null,vis.map(function(mk){return mk.edge_pct||0;})):0;
-  var avgE=vis.length?vis.reduce(function(s,mk){return s+(mk.edge_pct||0);},0)/vis.length:0;
-  var hasSharp=vis.some(function(mk){return!!mk.sharp_ref;});
-  var hasMoved=vis.some(function(mk){return mk.movement_type==='moved';});
-  var hasDrift=vis.some(function(mk){return mk.movement_type==='drift';});
-  var sharpTxt=hasSharp?'SHARP \u2713':'NO SHARP ANCHOR';
-  var sharpSub=hasSharp?'sharp book anchor confirmed':'lower confidence signal';
-  var sharpCol=hasSharp?'var(--green)':'var(--red)';
-  var stateTxt=hasDrift?'FADING':(hasMoved?'BUILDING':'STABLE');
-  var stateCol=hasDrift?'var(--red)':(hasMoved?'var(--green)':'var(--muted)');
-  var bestCol=bestE>=10?'var(--green)':(bestE>=5?'var(--amber)':'var(--txt)');
-  return'<div class="mm-summary">'
-    +'<div class="mm-sum-stat"><div class="mm-sum-val" style="color:'+bestCol+'">'+fP(bestE)+'</div><div class="mm-sum-lbl">Best Edge</div></div>'
-    +'<div class="mm-sum-stat"><div class="mm-sum-val">'+sct+'S\u00b7'+mct+'M</div><div class="mm-sum-lbl">Signals</div></div>'
-    +'<div class="mm-sum-stat"><div class="mm-sum-val" style="color:'+stateCol+';font-size:10px;margin-top:3px">'+stateTxt+'</div><div class="mm-sum-lbl">Market State</div></div>'
-    +'<div class="mm-sum-stat"><div class="mm-sum-val" style="color:'+sharpCol+';font-size:9px;line-height:1.3">'+sharpTxt+'<br><span style="color:var(--dim);font-size:6.5px;font-weight:400">'+sharpSub+'</span></div><div class="mm-sum-lbl">Sharp Status</div></div>'
-    +'<div class="mm-sum-stat"><div class="mm-sum-val" style="color:var(--amber)">'+fP(avgE)+'</div><div class="mm-sum-lbl">Avg Edge</div></div>'
-    +'</div>';
-}
-function buildFilterBar(uid){
-  var pills=[{key:'betOnly',lbl:'BET NOW'},{key:'sharpOnly',lbl:'Sharp only'},{key:'hideLegacy',lbl:'Hide legacy'},{key:'hideSoft',lbl:'Hide soft'},{key:'showFading',lbl:'Show fading'}];
-  return'<div class="mm-filters">'+pills.map(function(f){
-    return'<div class="mm-filter-pill'+(_mmFilters[f.key]?' on':'')+'" id="mmf-'+uid+'-'+f.key+'" onclick="mmFilterToggle(\''+uid+'\',\''+f.key+'\')">'+f.lbl+'</div>';
-  }).join('')+'</div>';
-}
-function buildMkCard(mk,tgt,isBest,ko){
-  var e=calcEdges(mk);
-  var dec=getDecision4(mk,e);
-  var mst=getMarketState(mk,e,ko);
-  var ec=mk.tier==='strong'?'g':(mk.tier==='medium'?'a':'r');
-  var hasSharp=!!mk.sharp_ref,hasMoved=mk.movement_type==='moved',hasDrift=mk.movement_type==='drift';
-  var booksOk=(mk.book_count||0)>=2,pricingOk=!!(mk.best_available&&mk.model_prob);
-  // Edge delta display
-  var showPeak=Math.abs(e.delta)>0.3||e.detected!==e.now;
-  var edgeDeltaCls=e.delta<-2?'down':(e.delta>0.5?'up':'flat');
-  var edgeDeltaTxt=Math.abs(e.delta)>0.2?(e.delta>0?'+':'')+e.delta+'% from peak':'at peak';
-  // Confidence
-  var cc=[{lbl:'pricing',ok:pricingOk},{lbl:'movement',ok:hasMoved},{lbl:'books',ok:booksOk},{lbl:'sharp',ok:hasSharp}];
-  var cs=cc.filter(function(c){return c.ok;}).length;
-  var clv=cs>=3?'HIGH':(cs>=2?'MEDIUM':'LOW');
-  var ccls=cs>=3?'pos':(cs>=2?'neu':'neg');
-  // Movement text
-  var mvAbs=Math.abs(mk.movement_pct||0).toFixed(1);
-  var mvDir=hasMoved?('market moved in your favor, '+mvAbs+'%'):(hasDrift?('market drifted away, +'+mvAbs+'%'):'flat since detection');
-  // Sharp status
-  var sharpSt=hasSharp
-    ?'<span style="color:var(--green)">\u26a1 '+(mk.sharp_book||'Sharp')+' anchor confirmed</span>'
-    :'<span style="color:var(--dim)">NO SHARP ANCHOR \u00b7 lower confidence signal</span>';
-  // Mini odds row
-  var mp=[];
-  if(mk.sharp_ref)mp.push('\u26a1'+fO(mk.sharp_ref));
-  if(mk.best_available)mp.push('best '+fO(mk.best_available));
-  if(mk.model_prob)mp.push('fair '+(1/mk.model_prob).toFixed(2));
-  // Action map
-  var amap={bet:'mk-action bet',late:'mk-action late',watch:'mk-action watch',pass:'mk-action pass'};
-  var albl={bet:'BET NOW',late:'LATE',watch:'WATCH',pass:'PASS'};
-  // Why panel
-  var showWhy=mk.tier==='strong'||mk.tier==='medium';
-  var whyHtml='';
-  if(showWhy){
-    var wi=[
-      {ok:hasSharp,txt:hasSharp?('sharp confirmed \u2014 '+(mk.sharp_book||'Sharp')+' '+fO(mk.sharp_ref)):'sharp not confirmed'},
-      {ok:hasMoved,txt:hasMoved?('market moved '+(mk.movement_pct||0).toFixed(1)+'% after detect'):(hasDrift?('market drifted +'+(mk.movement_pct||0).toFixed(1)+'% away'):'flat since detection')},
-      {ok:booksOk,txt:booksOk?(( mk.book_count||1)+' books aligned'):'single source \u2014 low confirmation'},
-      {ok:Math.abs(e.delta)<5,txt:'edge: '+fP(e.now)+(showPeak?' vs '+fP(e.peak)+' peak':' \u2014 at peak')},
-    ];
-    whyHtml='<div class="mk-why" id="why-'+mk.id+'">'
-      +wi.map(function(item){return'<div class="mk-why-item"><span class="mk-why-dot '+(item.ok?'ok':'no')+'">'+(item.ok?'\u2713':'\u2717')+'</span><span>'+item.txt+'</span></div>';}).join('')
-      +'<div class="mk-why-full" onclick="event.stopPropagation();openMarketDetail('+mk.id+',\''+tgt+'\')">full detail \u2192</div>'
-      +'</div>';
-  }
-  var expandBtn=showWhy?'<div class="mk-expand" onclick="event.stopPropagation();mmExpand('+mk.id+')"><span id="mk-exp-lbl-'+mk.id+'">why \u25be</span></div>':'';
-  return'<div class="mm-entry">'
-    +'<div class="mk-card ec-'+ec+'" onclick="mmExpand('+mk.id+')">'
-    +(isBest?'<div class="mk-best-angle">BEST OPPORTUNITY IN MATCH</div>':'')
-    +'<div class="mk-top"><div class="mk-name">'+((mk.selection||mk.market||'').toUpperCase())+'</div>'
-    +'<div class="state-'+mst.cls+'">'+mst.state+'</div></div>'
-    +'<div class="mk-edge-row">'
-    +'<div class="mk-edge-now-w"><div class="mk-edge-now ec-'+ec+'">'+(e.now>=0?'+':'')+e.now+'%</div><div class="mk-edge-lbl">now</div></div>'
-    +(showPeak?'<div class="mk-edge-peak-w"><div class="mk-edge-peak">'+fP(e.peak)+' peak</div><div class="mk-edge-delta '+edgeDeltaCls+'">'+edgeDeltaTxt+'</div></div>':'')
-    +'</div>'
-    +'<div class="'+amap[dec.state]+'">'+albl[dec.state]+' \u2014 '+dec.reason+'</div>'
-    +(mp.length?'<div class="mk-mini-row">'+mp.join('<span class="mk-sep"> \u00b7 </span>')+'</div>':'')
-    +'<div class="mk-conf-block"><span class="mk-cl '+ccls+'">'+clv+'</span>'
-    +cc.map(function(c){return'<span class="mk-chk '+(c.ok?'ok':'no')+'">'+c.lbl+' '+(c.ok?'\u2714':'\u2716')+'</span>';}).join('')
-    +'</div>'
-    +'<div class="mk-mv-text">'+mvDir+'</div>'
-    +'<div class="mk-sharp-status">'+sharpSt+'</div>'
-    +expandBtn+whyHtml
-    +'</div></div>';
-}
-function _mmSection(label,tier,items,tgt,ko,bestId){
-  if(!items.length)return'';
-  return'<div class="mm-tier-h '+tier+'">'+label+'</div>'
-    +items.map(function(mk){return buildMkCard(mk,tgt,mk.id===bestId,ko);}).join('');
+  if(lbl)lbl.textContent=open?'hide \u25b4':'why \u25be';
 }
 function mmToggle(uid){
   var el=document.getElementById('mm-hidden-'+uid),lbl=document.getElementById('mm-btn-lbl-'+uid);
@@ -1020,41 +958,159 @@ function mmToggle(uid){
   if(el.style.display==='none'){el.style.display='block';if(lbl)lbl.textContent='\u2212 Hide extra markets';}
   else{el.style.display='none';if(lbl&&lbl._orig)lbl.textContent=lbl._orig;}
 }
-function buildMatchMarkets(data,tgt){
-  var m=data.match,ko=m.kickoff_epoch||null;
-  var koStr=ko?new Date(ko*1000).toISOString().slice(11,16):'';
-  var uid='mmx'+m.home_team.replace(/\W/g,'')+m.away_team.replace(/\W/g,'');
-  var raw=(data.markets||[]).filter(function(mk){return mk.tier!=='noise';});
-  var all=mmFilterMarkets(raw);
-  var bestId=raw.length?raw.reduce(function(b,mk){return(mk.signal_score||0)>(b.signal_score||0)?mk:b;},raw[0]).id:null;
-  var s0=raw.filter(function(mk){return mk.tier==='strong';}).length;
-  var m0=raw.filter(function(mk){return mk.tier==='medium';}).length;
-  var d0=raw.filter(function(mk){return mk.tier==='developing';}).length;
-  var parts=[];
-  if(s0)parts.push(s0+' STRONG');if(m0)parts.push(m0+' MED');if(d0)parts.push(d0+' DEV');
-  var hdr='<div class="mm-head"><div class="mm-title">'+m.home_team+' vs '+m.away_team+'</div>'
-    +'<div class="mm-sub">'+(m.league?'<span>'+m.league+'</span>':'')
-    +(koStr?'<span>'+koStr+' UTC</span>':(m.match_date?'<span>'+m.match_date+'</span>':''))
-    +'<span class="mm-tag">'+(parts.join(' \u00b7 ')||raw.length+' MARKETS')+'</span></div></div>';
-  var summary=buildMatchSummary(m,raw);
-  var filterBar=buildFilterBar(uid);
-  if(!all.length){
-    return hdr+summary+filterBar+'<div class="empty-s"><div class="empty-t">'+(raw.length?'All filtered \u2014 adjust filters':'No qualifying markets')+'</div></div>';
+function _mmFilterMarkets(markets){
+  return markets.filter(function(mk){
+    if(!_mmFilters.showPass&&mk.verdict==='PASS')return false;
+    if(_mmFilters.sharpOnly&&mk.confidence_label!=='SHARP_CONFIRMED')return false;
+    if(_mmFilters.hideSoft&&mk.soft_odds)return false;
+    return true;
+  });
+}
+function buildMatchSummary(markets){
+  var play=markets.filter(function(m){return m.verdict==='PLAY_NOW';}).length;
+  var late=markets.filter(function(m){return m.verdict==='LATE';}).length;
+  var watch=markets.filter(function(m){return m.verdict==='WATCH';}).length;
+  var bestE=markets.length?Math.max.apply(null,markets.map(function(m){return m.adjusted_edge_pct||m.raw_edge_pct||0;})):0;
+  var hasSharp=markets.some(function(m){return m.confidence_label==='SHARP_CONFIRMED';});
+  var best=markets.find(function(m){return m.best_opportunity_in_match;})||markets[0];
+  var bestConf=best?best.confidence_score:0;
+  var sharpCol=hasSharp?'var(--green)':'var(--red)';
+  var sharpTxt=hasSharp?'SHARP \u2713':'NO SHARP';
+  var bestECol=bestE>=10?'var(--green)':(bestE>=5?'var(--amber)':'var(--txt)');
+  var vdHtml='';
+  if(play)vdHtml+='<span style="color:var(--green)">'+play+'\u00d7NOW</span>';
+  if(late)vdHtml+=(vdHtml?' ':'')+'<span style="color:var(--amber)">'+late+'L</span>';
+  if(watch)vdHtml+=(vdHtml?' ':'')+'<span style="color:#93c5fd">'+watch+'W</span>';
+  if(!vdHtml)vdHtml='\u2014';
+  return'<div class="mm-summary">'
+    +'<div class="mm-sum-stat"><div class="mm-sum-val" style="color:'+bestECol+'">+'+bestE.toFixed(1)+'%</div><div class="mm-sum-lbl">Best adj edge</div></div>'
+    +'<div class="mm-sum-stat"><div class="mm-sum-val" style="font-size:11px">'+vdHtml+'</div><div class="mm-sum-lbl">Verdicts</div></div>'
+    +'<div class="mm-sum-stat"><div class="mm-sum-val" style="color:'+sharpCol+';font-size:9px;margin-top:2px">'+sharpTxt+'</div><div class="mm-sum-lbl">Sharp status</div></div>'
+    +(best?'<div class="mm-sum-stat"><div class="mm-sum-val" style="color:'+(bestConf>=70?'var(--green)':(bestConf>=50?'var(--amber)':'var(--muted)'))+';font-family:\'SF Mono\',monospace">'+bestConf+'</div><div class="mm-sum-lbl">Best confidence</div></div>':'')
+    +'</div>';
+}
+function buildFilterBar(uid){
+  var pills=[{key:'showPass',lbl:'Show PASS'},{key:'sharpOnly',lbl:'Sharp only'},{key:'hideSoft',lbl:'Hide soft'}];
+  return'<div class="mm-filters">'+pills.map(function(f){
+    return'<div class="mm-filter-pill'+(_mmFilters[f.key]?' on':'')+'" id="mmf-'+uid+'-'+f.key+'" onclick="mmFilterToggle(\''+uid+'\',\''+f.key+'\')">'+f.lbl+'</div>';
+  }).join('')+'</div>';
+}
+function buildMkCard(mk,tgt,uid){
+  var vd=_vdStyle(mk.verdict);
+  var bs=_bsStyle(mk.confidence_band);
+  var st=_stStyle(mk.market_state);
+  var adjE=mk.adjusted_edge_pct||mk.raw_edge_pct||0;
+  var peakE=mk.peak_edge_pct||adjE;
+  var decay=mk.edge_decay_pct||0;
+  var score=mk.confidence_score||0;
+  var isBest=!!mk.best_opportunity_in_match;
+  var ec=adjE>=8?'g':(adjE>=5?'a':'r');
+  var rid='mkr'+(mk.id||Math.random().toString(36).slice(2,8));
+  // Price items
+  var pi=[];
+  if(mk.sharp_price&&mk.sharp_book)pi.push('<span style="color:var(--amber)">\u26a1'+parseFloat(mk.sharp_price).toFixed(2)+'</span><span style="color:var(--dim);font-size:8px"> '+(mk.sharp_book||'').toUpperCase().slice(0,4)+'</span>');
+  if(mk.best_price&&mk.best_book&&mk.best_book!==mk.sharp_book)pi.push('<span style="color:var(--green)">'+parseFloat(mk.best_price).toFixed(2)+'</span><span style="color:var(--dim);font-size:8px"> '+(mk.best_book||'').toUpperCase().slice(0,4)+'</span>');
+  if(mk.fair_odds)pi.push('<span style="color:var(--muted)">fair '+parseFloat(mk.fair_odds).toFixed(2)+'</span>');
+  // Why panel
+  var whyHtml='';
+  if(mk.why&&mk.why.length){
+    whyHtml='<div class="mk2-why" id="why-'+rid+'">'
+      +mk.why.map(function(w){
+        var isPos=w.charAt(0)!=='\u2217'&&w.indexOf('not ')<0&&w.indexOf('no ')<0&&w.indexOf('soft')<0;
+        return'<div class="mk2-why-item"><span class="mk2-why-dot" style="color:'+(isPos?'var(--green)':'var(--muted)')+'">'+(isPos?'\u2713':'\u00b7')+'</span><span>'+w+'</span></div>';
+      }).join('');
+    // Breakdown scores if available
+    if(mk.confidence_breakdown){
+      var bd=mk.confidence_breakdown;
+      whyHtml+='<div class="mk2-breakdown">'
+        +['edge','sharp','movement','books','data_quality'].map(function(k){
+          var v=bd[k]!==undefined?bd[k]:null;
+          return v!==null?'<div class="mk2-breakdown-row"><span class="mk2-bd-l">'+k+'</span><span class="mk2-bd-v">'+v+'</span></div>':'';
+        }).join('')
+        +'</div>';
+    }
+    whyHtml+='</div>';
   }
-  var strong=all.filter(function(mk){return mk.tier==='strong';});
-  var medium=all.filter(function(mk){return mk.tier==='medium';});
-  var developing=all.filter(function(mk){return mk.tier==='developing';});
-  var maxDef=Math.max(8,strong.length),medSlot=Math.max(0,maxDef-strong.length);
-  var medShow=medium.slice(0,medSlot),medHide=medium.slice(medSlot);
-  var visHtml=_mmSection('\u25cf Strong signal','strong',strong,tgt,ko,bestId)
-             +_mmSection('\u25d1 Medium signal','medium',medShow,tgt,ko,bestId);
-  var hidItems=medHide.concat(developing),moreBtn='',hiddenDiv='';
-  if(hidItems.length){
-    var ml='+ '+hidItems.length+' more market'+(hidItems.length>1?'s':'');
+  var expandBtn=mk.why&&mk.why.length
+    ?'<div class="mk-expand" onclick="event.stopPropagation();mmExpand(\''+rid+'\')"><span id="mk-exp-lbl-'+rid+'">why \u25be</span></div>':''
+  ;
+  return'<div class="mm-entry">'
+    +'<div class="mk-card2 ec-'+ec+(isBest?' is-best':'')+'">'
+    +(isBest?'<div class="mk-best-angle">BEST OPPORTUNITY IN MATCH</div>':'')
+    // top row: name + market state
+    +'<div class="mk-top">'
+    +'<div class="mk-name">'+((mk.market_name||mk.selection||mk.market||'').toUpperCase())+'</div>'
+    +'<span class="ms-badge '+st.cls+'" style="color:'+st.col+'">'+mk.market_state.replace(/_/g,' ')+'</span>'
+    +'</div>'
+    // large edge + peak/decay
+    +'<div class="mk2-edge-row">'
+    +'<div class="mk2-edge ec-'+ec+'">'+(adjE>=0?'+':'')+adjE.toFixed(1)+'%</div>'
+    +(decay>0.4
+      ?'<div class="mk2-peak"><span style="color:var(--muted)">peak</span> +'+peakE.toFixed(1)+'% <span class="mk2-decay">\u2212'+decay.toFixed(1)+'%</span></div>'
+      :'<div class="mk2-peak" style="color:var(--muted)">at peak</div>')
+    +'</div>'
+    // verdict + reason
+    +'<div class="mk2-verdict">'
+    +'<span class="vd-badge '+vd.cls+'">'+vd.lbl+'</span>'
+    +(mk.verdict_reason?'<span class="mk2-vr">'+mk.verdict_reason+'</span>':'')
+    +'</div>'
+    // confidence band bar score
+    +'<div class="mk2-conf-row">'
+    +'<span class="mk2-conf-lbl '+bs.cls+'">'+mk.confidence_band+'</span>'
+    +'<div class="mk2-conf-bar-wrap"><div class="mk2-conf-bar" style="width:'+Math.min(100,score)+'%;background:'+bs.col+'"></div></div>'
+    +'<span class="mk2-conf-score" style="color:'+bs.col+'">'+score+'</span>'
+    +'</div>'
+    // movement text + stake hint
+    +(mk.movement_text?'<div class="mk2-mv">'+mk.movement_text+'</div>':'')
+    +(mk.stake_hint&&mk.stake_hint!=='0u'&&mk.stake_hint!=='0.0u'?'<div class="mk2-stake">stake hint <strong>'+mk.stake_hint+'</strong></div>':'')
+    // price row
+    +(pi.length?'<div class="mk2-prices">'+pi.join('<span style="color:var(--line2)"> \u00b7 </span>')+'</div>':'')
+    // expand + why
+    +expandBtn+whyHtml
+    +'</div></div>';
+}
+function buildMatchMarkets(data,tgt){
+  var home=data.home_team||'';
+  var away=data.away_team||'';
+  var league=data.league||'';
+  var ko=data.kickoff_epoch||null;
+  var koStr=ko?new Date(ko*1000).toISOString().slice(11,16):'';
+  var uid='mmx'+(home+away).replace(/\W/g,'');
+  var allMkts=data.markets||[];
+  var raw=_mmFilterMarkets(allMkts);
+  // Header
+  var playN=allMkts.filter(function(m){return m.verdict==='PLAY_NOW';}).length;
+  var tagParts=[];
+  if(playN)tagParts.push(playN+' NOW');
+  tagParts.push(allMkts.length+' MARKETS');
+  var hdr='<div class="mm-head"><div class="mm-title">'+home+' vs '+away+'</div>'
+    +'<div class="mm-sub">'+(league?'<span>'+league+'</span>':'')
+    +(koStr?'<span>'+koStr+' UTC</span>':'')
+    +'<span class="mm-tag">'+tagParts.join(' \u00b7 ')+'</span></div></div>';
+  var summary=buildMatchSummary(allMkts);
+  var filterBar=buildFilterBar(uid);
+  if(!raw.length){
+    return hdr+summary+filterBar+'<div class="empty-s"><div class="empty-t">'+(allMkts.length?'All filtered \u2014 adjust filters':'No qualifying markets')+'</div></div>';
+  }
+  // Sort: PLAY_NOW first, then LATE, WATCH, PASS; within each by confidence_score desc
+  var order={PLAY_NOW:0,LATE:1,WATCH:2,PASS:3};
+  raw.sort(function(a,b){
+    var od=(order[a.verdict]||3)-(order[b.verdict]||3);
+    if(od!==0)return od;
+    return(b.confidence_score||0)-(a.confidence_score||0);
+  });
+  // best_opportunity always first
+  var bestIdx=raw.findIndex(function(m){return m.best_opportunity_in_match;});
+  if(bestIdx>0){var b=raw.splice(bestIdx,1)[0];raw.unshift(b);}
+  // Show up to 8 by default, rest in "show more"
+  var MAX_VIS=8;
+  var vis=raw.slice(0,MAX_VIS),hidden=raw.slice(MAX_VIS);
+  var visHtml=vis.map(function(mk){return buildMkCard(mk,tgt,uid);}).join('');
+  var moreBtn='',hiddenDiv='';
+  if(hidden.length){
+    var ml='+ '+hidden.length+' more market'+(hidden.length>1?'s':'');
     moreBtn='<div class="mm-more" onclick="mmToggle(\''+uid+'\')"><span id="mm-btn-lbl-'+uid+'">'+ml+'</span></div>';
-    hiddenDiv='<div id="mm-hidden-'+uid+'" style="display:none">'
-      +_mmSection('\u25d1 Medium signal','medium',medHide,tgt,ko,bestId)
-      +_mmSection('\u25cb Developing','developing',developing,tgt,ko,bestId)+'</div>';
+    hiddenDiv='<div id="mm-hidden-'+uid+'" style="display:none">'+hidden.map(function(mk){return buildMkCard(mk,tgt,uid);}).join('')+'</div>';
     setTimeout(function(){var l=document.getElementById('mm-btn-lbl-'+uid);if(l)l._orig=ml;},50);
   }
   return hdr+summary+filterBar+visHtml+moreBtn+hiddenDiv;
