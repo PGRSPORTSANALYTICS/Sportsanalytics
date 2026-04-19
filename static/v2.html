@@ -581,7 +581,7 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
   </div>
   <div class="nav-sp"></div>
   <span class="nav-ts" id="updatedAt">syncing…</span>
-  <span class="nav-ts" style="font-size:8px;opacity:.4;margin-right:4px">v20260419g</span>
+  <span class="nav-ts" style="font-size:8px;opacity:.4;margin-right:4px">v20260419h</span>
   <span class="tier-badge" id="tierBadge">FREE</span>
 </nav>
 
@@ -1335,36 +1335,46 @@ setTimeout(()=>{if(!_rendered)safeRender();},5000);
 setTimeout(()=>{
   const sb=$('scBody');
   if(sb && sb.innerHTML.includes('Loading signals')){
-    sb.innerHTML='<div class="empty-s"><div class="empty-t" style="color:#4ade80">JS OK · fetching data…</div><div class="empty-sub">v20260419g · if stuck, check URL = /live</div></div>';
+    sb.innerHTML='<div class="empty-s"><div class="empty-t" style="color:#4ade80">JS OK · fetching data…</div><div class="empty-sub">v20260419h · if stuck, check URL = /live</div></div>';
   }
 },1000);
 
 /* ── Auth boot: verify session + set tier badge ── */
 async function bootAuth(){
   try{
+    // Check Discord session first
     const r=await fetch('/auth/discord/me',{credentials:'include'});
-    if(r.status===401){
-      window.location.href='/login';
-      return false;
-    }
-    const d=await r.json();
-    if(!d.authenticated){
-      window.location.href='/login';
-      return false;
-    }
-    const badge=$('tierBadge');
-    if(badge){
-      if(d.premium){
-        badge.textContent='PREMIUM';
-        badge.classList.add('premium');
-      } else {
-        badge.textContent='FREE';
-        badge.classList.remove('premium');
+    if(r.status!==401){
+      const d=await r.json();
+      if(d.authenticated){
+        const badge=$('tierBadge');
+        if(badge){
+          if(d.premium){
+            badge.textContent='PREMIUM';
+            badge.classList.add('premium');
+          } else {
+            badge.textContent='FREE';
+            badge.classList.remove('premium');
+          }
+        }
+        return true;
       }
     }
-    return true;
+    // Not a Discord session — check for admin session
+    const ra=await fetch('/admin-status',{credentials:'include'});
+    if(ra.ok){
+      const da=await ra.json();
+      if(da.admin_active){
+        const badge=$('tierBadge');
+        if(badge){badge.textContent='ADMIN';badge.style.cssText='background:rgba(139,92,246,.12);color:#c4b5fd;border-color:rgba(139,92,246,.35)';}
+        return true;
+      }
+    }
+    // No valid session — redirect to login
+    window.location.href='/login';
+    return false;
   }catch(e){
-    // Network error — don't block load, but don't redirect
+    // Network error — don't block load, avoid redirect loop
     return true;
   }
 }
