@@ -245,11 +245,15 @@ def route_candidate(
 
 
 def ensure_pgr_columns() -> None:
-    """Add pgr_score, league_tier, routing_reason columns to football_opportunities if missing."""
+    """Add pgr_score, league_tier, routing_reason and decision-brain columns to football_opportunities if missing."""
     ddl_statements = [
         "ALTER TABLE football_opportunities ADD COLUMN IF NOT EXISTS pgr_score REAL",
         "ALTER TABLE football_opportunities ADD COLUMN IF NOT EXISTS league_tier TEXT",
         "ALTER TABLE football_opportunities ADD COLUMN IF NOT EXISTS routing_reason TEXT",
+        "ALTER TABLE football_opportunities ADD COLUMN IF NOT EXISTS clv_score REAL",
+        "ALTER TABLE football_opportunities ADD COLUMN IF NOT EXISTS clv_tier TEXT",
+        "ALTER TABLE football_opportunities ADD COLUMN IF NOT EXISTS kickoff_epoch BIGINT",
+        "ALTER TABLE football_opportunities ADD COLUMN IF NOT EXISTS tier TEXT",
     ]
     try:
         from db_helper import DatabaseConnection

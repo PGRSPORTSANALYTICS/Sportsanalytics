@@ -1153,6 +1153,122 @@ async def get_match_scout(match_id: str):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@app.get("/api/v2/decision/{match_id}", tags=["Decision"])
+async def get_decision(match_id: str):
+    """
+    Decision Brain v1: full decision object for every market in a match.
+    Returns scored markets with verdict, confidence, edge decay, and why-panel.
+    """
+    try:
+        from decision_brain import score_match as _score_match
+        import json as _json
+
+        rows = db_helper.execute("""
+            SELECT
+                id, match_id, home_team, away_team, league,
+                market, selection, odds, edge_percentage, confidence,
+                model_prob, calibrated_prob, sim_probability, ev_sim,
+                trust_level, tier, disagreement, profile_boost_score,
+                open_odds, close_odds, clv_pct, analysis,
+                odds_by_bookmaker, best_odds_bookmaker, best_odds_value,
+                fair_odds, kickoff_epoch,
+                COALESCE(pgr_score, 0)    AS pgr_score,
+                COALESCE(league_tier, '') AS league_tier,
+                COALESCE(clv_score, 0)    AS clv_score,
+                mode
+            FROM football_opportunities
+            WHERE (match_id = %s
+                   OR (home_team || '_' || away_team) = %s
+                   OR (home_team || ' vs ' || away_team) = %s)
+              AND mode != 'TEST'
+            ORDER BY timestamp DESC
+        """, (match_id, match_id, match_id), fetch='all') or []
+
+        if not rows:
+            raise HTTPException(status_code=404, detail={"error": "match_not_found"})
+
+        # De-duplicate by market+selection (keep freshest)
+        seen = set()
+        markets = []
+        for r in rows:
+            key = f"{r[5]}|{r[6]}"
+            if key in seen:
+                continue
+            seen.add(key)
+
+            # Parse analysis JSON for extra fields
+            _ana = {}
+            if r[21]:
+                try:
+                    _ana = _json.loads(r[21]) if isinstance(r[21], str) else r[21]
+                except Exception:
+                    pass
+
+            markets.append({
+                "id":               r[0],
+                "match_id":         r[1],
+                "home_team":        r[2],
+                "away_team":        r[3],
+                "league":           r[4],
+                "market":           r[5],
+                "selection":        r[6],
+                "odds":             float(r[7]) if r[7] else None,
+                "ev_pct":           float(r[8]) if r[8] else None,
+                "confidence":       float(r[9]) if r[9] is not None else 0.0,
+                "model_prob":       float(r[10]) if r[10] else None,
+                "calibrated_prob":  float(r[11]) if r[11] else None,
+                "sim_probability":  float(r[12]) if r[12] else None,
+                "ev_sim":           float(r[13]) if r[13] else None,
+                "trust_level":      r[14],
+                "tier":             r[15] or _ana.get("league_tier"),
+                "disagreement":     float(r[16]) if r[16] else None,
+                "profile_boost":    float(r[17]) if r[17] else None,
+                "open_odds":        float(r[18]) if r[18] else None,
+                "close_odds":       float(r[19]) if r[19] else None,
+                "clv_pct":          float(r[20]) if r[20] else None,
+                "analysis_raw":     r[21],
+                "bookmakers":       r[22] if isinstance(r[22], dict) else (
+                                        _json.loads(r[22]) if r[22] else {}),
+                "best_odds_bookmaker": r[23],
+                "best_odds_value":  float(r[24]) if r[24] else None,
+                "fair_odds":        float(r[25]) if r[25] else None,
+                "kickoff_epoch":    int(r[26]) if r[26] else None,
+                "pgr_score":        float(r[27]) if r[27] else None,
+                "league_tier":      r[28],
+                "clv_score":        float(r[29]) if r[29] else 0.0,
+                "mode":             r[30],
+                # steam_flag lives in the analysis JSON
+                "steam_flag":       _ana.get("steam_flag") or _ana.get("steam") or "",
+            })
+
+        first = markets[0]
+        scored = _score_match(markets)
+
+        # Strip internal rank key before returning
+        for m in scored:
+            m.pop("_rank_score", None)
+
+        # Find best opportunity
+        best = next((m for m in scored if m.get("is_best_opportunity")), None)
+
+        return {
+            "match_id":    match_id,
+            "home_team":   first["home_team"],
+            "away_team":   first["away_team"],
+            "league":      first["league"],
+            "kickoff_epoch": first["kickoff_epoch"],
+            "markets":     scored,
+            "best_opportunity": best,
+            "total_markets":   len(scored),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Decision engine error for {match_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Decision engine error")
+
+
 @app.get("/api/best-odds/today", tags=["Odds"])
 async def get_today_best_odds():
     """
