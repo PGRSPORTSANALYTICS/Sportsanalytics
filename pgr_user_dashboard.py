@@ -453,7 +453,7 @@ def load_live_edge_summary():
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def _clean_market(m: str) -> str:
     label_map = {
-        "value single": "Value Single", "corners_over": "Corners Over",
+        "value single": "Market Signal", "corners_over": "Corners Over",
         "corners_under": "Corners Under", "corners_handicap": "Corners Handicap",
         "cards_over": "Cards Over", "cards_under": "Cards Under",
         "btts": "Both Teams Score", "double_chance": "Double Chance",
@@ -1513,7 +1513,7 @@ with tab_bt:
 
 **🌍 Ligor:** {pos_leagues} av {pos_leagues + neg_leagues} ligor är lönsamma historiskt. Ligorna i botten bör antingen rensas ur systemet eller flaggas för manuell granskning.
 
-{"**📊 Value Singles per oddszon:**<br>" + "<br>".join(vs_by_range) if vs_by_range else ""}
+{"**📊 Market signals per oddszon:**<br>" + "<br>".join(vs_by_range) if vs_by_range else ""}
 
 </div>
 """, unsafe_allow_html=True)
