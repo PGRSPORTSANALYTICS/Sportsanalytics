@@ -835,9 +835,9 @@ const SC_ORDER={strong:4,medium:3,developing:2,noise:1};
 function sigClass(p){return p.signal_class||(((p.edge_pct||0)>=15)?'strong':((p.edge_pct||0)>=5?'medium':((p.edge_pct||0)>=2?'developing':'noise')));}
 function actionBadge(p){
   const a=p.action||'';
-  if(a==='BET_FULL')  return '<span class="mk-action bet" title="Strong + sharp + movement">BET FULL ◆</span>';
-  if(a==='BET_SMALL') return '<span class="mk-action late" title="Strong tier, sharp or movement absent">BET SMALL</span>';
-  if(a==='WATCH')     return '<span class="mk-action watch" title="Medium + movement confirming">WATCH</span>';
+  if(a==='BET_FULL')  return '<span class="mk-action bet" title="Strong + sharp + movement">EDGE ACTIVE</span>';
+  if(a==='BET_SMALL') return '<span class="mk-action late" title="Strong tier, sharp or movement absent">LOW CONFIDENCE</span>';
+  if(a==='WATCH')     return '<span class="mk-action watch" title="Medium + movement confirming">DEVELOPING</span>';
   return '';
 }
 function applyFilters(picks){
