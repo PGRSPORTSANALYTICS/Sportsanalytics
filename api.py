@@ -2650,6 +2650,33 @@ def classify_signal(edge_pct) -> str:
         return "noise"
 
 
+def decide_action(tier: str, sharp_price, movement_pct) -> str:
+    """
+    Signal decision layer.
+
+    BET_FULL  — strong tier + sharp anchor confirmed + positive line movement
+    BET_SMALL — strong tier, sharp or movement absent
+    WATCH     — medium tier with positive line movement (market confirming)
+    SKIP      — developing / noise, or medium with no movement
+
+    movement_pct convention: (close_odds / open_odds - 1) * 100
+    Positive = odds drifted up; negative = odds shortened (sharp money).
+    The caller decides which direction is "movement > 0" — sign can be flipped
+    at the call site without changing this function.
+    """
+    sharp = sharp_price is not None
+    movement = float(movement_pct or 0)
+
+    if tier == "strong" and sharp and movement > 0:
+        return "BET_FULL"
+    elif tier == "strong":
+        return "BET_SMALL"
+    elif tier == "medium" and movement > 0:
+        return "WATCH"
+    else:
+        return "SKIP"
+
+
 def _compute_pgr_score(db_val, ev_pct, model_prob, confidence=0.0) -> float | None:
     """
     Return pgr_score for a pick.
@@ -2809,6 +2836,14 @@ async def get_today_picks():
             else:
                 kickoff_iso = ''
 
+            # ── Decision-layer locals (used in dict + decide_action) ──
+            _tier          = classify_signal(ev_val)
+            _sharp_price   = float(r[31]) if r[31] else None
+            _movement_pct  = (
+                round((float(r[37]) / float(r[17]) - 1.0) * 100, 2)
+                if (r[17] and len(r) > 37 and r[37] and float(r[17]) > 0) else None
+            )
+
             picks.append({
                 'id': r[0],
                 'home_team': r[1] or '',
@@ -2836,10 +2871,7 @@ async def get_today_picks():
                 'match_date': match_date,
                 'open_odds': float(r[17]) if r[17] else None,
                 'close_odds': float(r[37]) if (len(r) > 37 and r[37]) else None,
-                'movement_pct': (
-                    round((float(r[37]) / float(r[17]) - 1.0) * 100, 2)
-                    if (r[17] and len(r) > 37 and r[37] and float(r[17]) > 0) else None
-                ),
+                'movement_pct': _movement_pct,
                 'clv_pct': round(float(r[18]), 2) if r[18] else None,
                 'icon': icon,
                 'layer': layer,
@@ -2856,13 +2888,15 @@ async def get_today_picks():
                 'pgr_score': _compute_pgr_score(r[29], ev_val, model_p, float(r[7]) if r[7] else 0),
                 'clv_source_book': r[30] or None,
                 # ── Doctrine fields (NULL on legacy rows; populated by new pipeline) ──
-                'sharp_price_at_detection': float(r[31]) if r[31] else None,
+                'sharp_price_at_detection': _sharp_price,
                 'sharp_book_at_detection':  r[32] or None,
-                'confidence_label':         r[33] or None,        # SHARP_CONFIRMED | INTERPOLATED | UNVERIFIED_LEGACY | None
-                'signal_status':            r[34] or None,        # SIGNAL | VERIFIED | REJECTED
+                'confidence_label':         r[33] or None,
+                'signal_status':            r[34] or None,
                 'soft_anchored':            bool(r[35]) if r[35] is not None else None,
-                'best_price_book':          r[36] or book,        # falls back to legacy best_odds_bookmaker
-                'signal_class':             classify_signal(ev_val),
+                'best_price_book':          r[36] or book,
+                'signal_class':             _tier,
+                # ── Decision layer ──────────────────────────────────────────────────
+                'action': decide_action(_tier, _sharp_price, _movement_pct),
             })
 
         # ── Embed training_data for all matches in ONE batch query ──
