@@ -311,7 +311,7 @@ return'other';
 }
 
 const MARKET_GROUPS=[
-{key:'singles', label:'&#9917; Value Singles', color:'var(--accent)', desc:'1X2 / Moneyline'},
+{key:'singles', label:'&#9917; Market Signals', color:'var(--accent)', desc:'Goals, BTTS, DC, Asian H/cap'},
 {key:'ou',      label:'&#128202; Over / Under', color:'var(--blue)',   desc:'Total goals markets'},
 {key:'btts',    label:'&#127919; BTTS',          color:'var(--purple)', desc:'Both Teams To Score'},
 {key:'dc',      label:'&#128737; Double Chance', color:'#06b6d4',      desc:'1X / X2 / 12'},
@@ -393,7 +393,7 @@ return`
 <div class="bet-icon" style="font-size:1.15rem">${p.icon||'⚽'}</div>
 <div class="bet-main">
 <h4>${p.home_team} vs ${p.away_team}</h4>
-<div class="mkt" style="color:${mktColor}">${p.market}: ${p.selection}</div>
+<div class="mkt" style="color:${mktColor}">${p.selection}</div>
 <div class="meta">${p.league||''} | ${p.kickoff_str||p.match_date||''} | ${p.trust_level||''}</div>
 </div>
 <div class="bet-odds"><div class="big">${(p.odds||0).toFixed(2)}</div><div class="fair" style="color:${edgeColor}">Edge ${p.edge_pct>=0?'+':''}${p.edge_pct}%</div></div>
@@ -408,8 +408,7 @@ ${p.clv_pct!=null?`<div style="font-size:.72rem;color:var(--text3)">CLV ${p.clv_
 <div>
 <h5 style="color:var(--text3);font-size:.72rem;text-transform:uppercase;margin-bottom:.4rem">Pick Details</h5>
 <table class="book-table">
-<tr><td style="color:var(--text3)">Market</td><td>${p.market}</td></tr>
-<tr><td style="color:var(--text3)">Selection</td><td style="font-weight:700">${p.selection}</td></tr>
+<tr><td style="color:var(--text3)">Market</td><td>${p.selection}</td></tr>
 <tr><td style="color:var(--text3)">Odds</td><td style="font-weight:700">${(p.odds||0).toFixed(2)}</td></tr>
 ${p.open_odds?`<tr><td style="color:var(--text3)">Open Odds</td><td>${p.open_odds.toFixed(2)}</td></tr>`:''}
 <tr><td style="color:var(--text3)">Edge</td><td style="color:${edgeColor}">${p.edge_pct>=0?'+':''}${p.edge_pct}%</td></tr>
@@ -574,13 +573,13 @@ return`
 <div class="bet-icon" style="font-size:1.1rem">${icon}</div>
 <div class="bet-main">
 <h4>${p.home_team} vs ${p.away_team}</h4>
-<div class="mkt" style="color:${mktColor}">${p.market}: ${p.selection}</div>
+<div class="mkt" style="color:${mktColor}">${p.selection}</div>
 <div class="meta">${p.league||''} | ${kickoffStr} | ${p.trust||''}</div>
 ${liveInfo}
 </div>
 <div class="bet-odds"><div class="big">${(p.odds||0).toFixed(2)}</div><div class="fair">EV: ${(p.ev||0).toFixed(1)}%</div></div>
 <div class="bet-status">${statusBadge}</div>
-<div class="bet-conf"><span class="badge" style="background:${isCards?'var(--yellow-bg)':'rgba(6,182,212,.12)'};color:${mktColor}">${p.market}</span></div>
+<div class="bet-conf"><span class="badge" style="background:${isCards?'var(--yellow-bg)':'rgba(6,182,212,.12)'};color:${mktColor}">${p.market==='Corners'?'Corners':p.market==='Cards'?'Cards':(p.selection||'').split(' ').slice(0,2).join(' ')}</span></div>
 </div>`;
 }
 

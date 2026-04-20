@@ -653,7 +653,8 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
         <button class="chip active" data-filter="market" data-value="all">All</button>
         <button class="chip" data-filter="market" data-value="OVER">Goals</button>
         <button class="chip" data-filter="market" data-value="BTTS">BTTS</button>
-        <button class="chip" data-filter="market" data-value="WIN">1X2</button>
+        <button class="chip" data-filter="market" data-value="DOUBLE">Double Chance</button>
+        <button class="chip" data-filter="market" data-value="AH_">Asian Handicap</button>
         <button class="chip" data-filter="market" data-value="CORNERS">Corners</button>
         <button class="chip" data-filter="market" data-value="CARDS">Cards</button>
       </div>
@@ -833,6 +834,19 @@ document.querySelectorAll('.chip[data-filter]').forEach(c=>{
 });
 const SC_ORDER={strong:4,medium:3,developing:2,noise:1};
 function sigClass(p){return p.signal_class||(((p.edge_pct||0)>=15)?'strong':((p.edge_pct||0)>=5?'medium':((p.edge_pct||0)>=2?'developing':'noise')));}
+function mktCategory(p){
+  /* Returns a clean market-type label — never "Value Single". */
+  const sel=(p.selection||'').toUpperCase();
+  const mkt=(p.market||'').toUpperCase();
+  if(mkt==='CORNERS'||sel.includes('CORNER'))return'Corners';
+  if(mkt==='CARDS'||sel.includes('CARD'))return'Cards';
+  if(sel.includes('BTTS')||sel.includes('BOTH TEAMS'))return'BTTS';
+  if(sel.includes('OVER')||sel.includes('UNDER'))return'Goals O/U';
+  if(sel.includes('OR DRAW')||sel.includes('HOME OR')||sel.includes('DRAW OR'))return'Double Chance';
+  if(p.market&&p.market.startsWith('AH_')||sel.includes('AH_')||sel.includes('HANDICAP'))return'Asian H/cap';
+  if(mkt==='CORNERS')return'Corners';
+  return sel.slice(0,18)||mkt.slice(0,18)||'Signal';
+}
 function actionBadge(p){
   const a=p.action||'';
   if(a==='BET_FULL')  return '<span class="mk-action bet" title="Strong + sharp + movement">EDGE ACTIVE</span>';
@@ -900,7 +914,7 @@ function renderScanner(picks){
       const mv=mvLabel(p);
       const sb=statusLbl(st);
       const mkt=(p.selection||p.market||'').toUpperCase();
-      const mktSub=(p.market||'').toUpperCase();
+      const mktSub=mktCategory(p);
       const teams=`${p.home_team||''} vs ${p.away_team||''}`;
       const mktCtTxt=p._mkt_count>1?` · ${p._mkt_count} mkts`:'';
       const subParts=[p.league,p.kickoff_str||ago(p.age_minutes)].filter(Boolean);
@@ -925,7 +939,7 @@ function renderScanner(picks){
         </div>
       </div>`;
     }catch(e){
-      return `<div class="row"><div class="r-edge r">ERR</div><div class="r-mkt"><div class="r-mkt-main">${p.home_team||'?'} vs ${p.away_team||'?'}</div><div class="r-mkt-sub">${e.message}</div></div><div class="r-match"><div class="r-match-teams">${(p.market||'').toUpperCase()}</div></div><div class="r-books"></div><div class="r-meta"></div></div>`;
+      return `<div class="row"><div class="r-edge r">ERR</div><div class="r-mkt"><div class="r-mkt-main">${p.home_team||'?'} vs ${p.away_team||'?'}</div><div class="r-mkt-sub">${e.message}</div></div><div class="r-match"><div class="r-match-teams">${mktCategory(p)}</div></div><div class="r-books"></div><div class="r-meta"></div></div>`;
     }
   }).join('');
 
@@ -933,7 +947,7 @@ function renderScanner(picks){
     if(window.innerWidth<=860){
       picks.forEach(p=>{
         const el=document.getElementById(`mkt-sub-${p.id}`);
-        if(el){el.style.display='block';el.textContent=(p.market||'').toUpperCase();}
+        if(el){el.style.display='block';el.textContent=mktCategory(p);}
       });
     }
   }catch(e){}
