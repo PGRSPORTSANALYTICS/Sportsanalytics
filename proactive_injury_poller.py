@@ -256,6 +256,8 @@ class ProactiveInjuryPoller:
         """
         count = 0
         for player in players:
+            if not player.get("player_name"):
+                continue
             reason_raw = player.get("reason", "")
             # Fix 1: Skip "Inactive" — tactical omission, not an absence signal
             if reason_raw.strip().lower() in self._SKIP_REASONS:
