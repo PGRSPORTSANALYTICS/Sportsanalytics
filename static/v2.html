@@ -580,11 +580,11 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
     PGR <span class="brand-v">analytics</span>
   </div>
   <div class="live-pill">
-    <span id="liveCount">—</span>&nbsp;live
+    <span id="liveCount">—</span>&nbsp;signals
   </div>
   <div class="nav-sp"></div>
   <span class="nav-ts" id="updatedAt">syncing…</span>
-  <span class="nav-ts" style="font-size:8px;opacity:.4;margin-right:4px">v20260419i</span>
+  <span class="nav-ts" style="font-size:8px;opacity:.4;margin-right:4px">v20260419j</span>
   <span class="tier-badge" id="tierBadge">FREE</span>
 </nav>
 
@@ -613,7 +613,7 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
       </div>
     </div>
     <div class="fs">
-      <div class="fs-h">Market</div>
+      <div class="fs-h">Signal type</div>
       <div class="fc">
         <button class="chip active" data-filter="market" data-value="all">All</button>
         <button class="chip" data-filter="market" data-value="OVER">Goals</button>
@@ -652,14 +652,14 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
   <!-- Scanner -->
   <main class="scanner">
     <div class="sc-head">
-      <span class="sc-h-title">Live scanner</span>
+      <span class="sc-h-title">Signal scanner</span>
       <span class="sc-h-count" id="scanCount">—</span>
       <span class="sc-h-sp"></span>
       <span class="sc-h-meta" id="scanMeta">60s</span>
     </div>
     <div class="tbl-hdr">
       <span class="th">Edge</span>
-      <span class="th">Market</span>
+      <span class="th">Signal</span>
       <span class="th th-match">Match</span>
       <span class="th">Books</span>
       <span class="th th-move" style="text-align:right">Status</span>
@@ -925,10 +925,10 @@ var _mmFilters={showPass:false,sharpOnly:false,hideSoft:false};
 var _mmState={data:null,tgt:null};
 
 function _vdStyle(v){
-  if(v==='PLAY_NOW')return{cls:'vd-play',lbl:'PLAY NOW'};
-  if(v==='LATE')return{cls:'vd-late',lbl:'LATE'};
-  if(v==='WATCH')return{cls:'vd-watch',lbl:'WATCH'};
-  return{cls:'vd-pass',lbl:'PASS'};
+  if(v==='PLAY_NOW')return{cls:'vd-play',lbl:'EDGE LIVE'};
+  if(v==='LATE')return{cls:'vd-late',lbl:'STRONG SIGNAL'};
+  if(v==='WATCH')return{cls:'vd-watch',lbl:'MEDIUM SIGNAL'};
+  return{cls:'vd-pass',lbl:'DEVELOPING'};
 }
 function _bsStyle(b){
   if(b==='HIGH')return{cls:'cb-high',col:'var(--green)'};
@@ -981,19 +981,19 @@ function buildMatchSummary(markets){
   var sharpTxt=hasSharp?'SHARP \u2713':'NO SHARP';
   var bestECol=bestE>=10?'var(--green)':(bestE>=5?'var(--amber)':'var(--txt)');
   var vdHtml='';
-  if(play)vdHtml+='<span style="color:var(--green)">'+play+'\u00d7NOW</span>';
-  if(late)vdHtml+=(vdHtml?' ':'')+'<span style="color:var(--amber)">'+late+'L</span>';
-  if(watch)vdHtml+=(vdHtml?' ':'')+'<span style="color:#93c5fd">'+watch+'W</span>';
+  if(play)vdHtml+='<span style="color:var(--green)">'+play+'\u00d7LIVE</span>';
+  if(late)vdHtml+=(vdHtml?' ':'')+'<span style="color:var(--amber)">'+late+'S</span>';
+  if(watch)vdHtml+=(vdHtml?' ':'')+'<span style="color:#93c5fd">'+watch+'M</span>';
   if(!vdHtml)vdHtml='\u2014';
   return'<div class="mm-summary">'
-    +'<div class="mm-sum-stat"><div class="mm-sum-val" style="color:'+bestECol+'">+'+bestE.toFixed(1)+'%</div><div class="mm-sum-lbl">Best adj edge</div></div>'
-    +'<div class="mm-sum-stat"><div class="mm-sum-val" style="font-size:11px">'+vdHtml+'</div><div class="mm-sum-lbl">Verdicts</div></div>'
-    +'<div class="mm-sum-stat"><div class="mm-sum-val" style="color:'+sharpCol+';font-size:9px;margin-top:2px">'+sharpTxt+'</div><div class="mm-sum-lbl">Sharp status</div></div>'
-    +(best?'<div class="mm-sum-stat"><div class="mm-sum-val" style="color:'+(bestConf>=70?'var(--green)':(bestConf>=50?'var(--amber)':'var(--muted)'))+';font-family:\'SF Mono\',monospace">'+bestConf+'</div><div class="mm-sum-lbl">Best confidence</div></div>':'')
+    +'<div class="mm-sum-stat"><div class="mm-sum-val" style="color:'+bestECol+'">+'+bestE.toFixed(1)+'%</div><div class="mm-sum-lbl">Best edge</div></div>'
+    +'<div class="mm-sum-stat"><div class="mm-sum-val" style="font-size:11px">'+vdHtml+'</div><div class="mm-sum-lbl">Signals</div></div>'
+    +'<div class="mm-sum-stat"><div class="mm-sum-val" style="color:'+sharpCol+';font-size:9px;margin-top:2px">'+sharpTxt+'</div><div class="mm-sum-lbl">Sharp anchor</div></div>'
+    +(best?'<div class="mm-sum-stat"><div class="mm-sum-val" style="color:'+(bestConf>=70?'var(--green)':(bestConf>=50?'var(--amber)':'var(--muted)'))+';font-family:\'SF Mono\',monospace">'+bestConf+'</div><div class="mm-sum-lbl">Confidence</div></div>':'')
     +'</div>';
 }
 function buildFilterBar(uid){
-  var pills=[{key:'showPass',lbl:'Show PASS'},{key:'sharpOnly',lbl:'Sharp only'},{key:'hideSoft',lbl:'Hide soft'}];
+  var pills=[{key:'showPass',lbl:'Show developing'},{key:'sharpOnly',lbl:'Sharp only'},{key:'hideSoft',lbl:'Hide soft'}];
   return'<div class="mm-filters">'+pills.map(function(f){
     return'<div class="mm-filter-pill'+(_mmFilters[f.key]?' on':'')+'" id="mmf-'+uid+'-'+f.key+'" onclick="mmFilterToggle(\''+uid+'\',\''+f.key+'\')">'+f.lbl+'</div>';
   }).join('')+'</div>';
@@ -1340,7 +1340,7 @@ setTimeout(()=>{if(!_rendered)safeRender();},5000);
 setTimeout(()=>{
   const sb=$('scBody');
   if(sb && sb.innerHTML.includes('Loading signals')){
-    sb.innerHTML='<div class="empty-s"><div class="empty-t" style="color:#4ade80">JS OK · fetching data…</div><div class="empty-sub">v20260419i · if stuck, check URL = /live</div></div>';
+    sb.innerHTML='<div class="empty-s"><div class="empty-t" style="color:#4ade80">JS OK · fetching data…</div><div class="empty-sub">v20260419j · if stuck, check URL = /live</div></div>';
   }
 },1000);
 

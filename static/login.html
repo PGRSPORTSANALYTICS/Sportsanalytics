@@ -153,7 +153,7 @@
     <div class="pwa-row">
       <div class="pwa-icon">P</div>
       <div class="pwa-text">
-        <div class="pwa-title">Install PGR — get live value opportunities</div>
+        <div class="pwa-title">Install PGR — market intelligence signals</div>
         <div class="pwa-sub">Snabbare åtkomst, inga annonser, fungerar som en app</div>
       </div>
       <button class="pwa-dismiss" id="pwa-dismiss">×</button>
@@ -188,19 +188,19 @@
 
   <div style="margin-bottom:16px;text-align:left;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:16px;">
     <div style="font-size:14px;opacity:0.9;line-height:1.7;margin-bottom:12px;">
-      Most people bet on teams.<br>
+      Most people follow opinions.<br>
       <br>
-      We bet on wrong odds.
+      We follow the sharp money.
     </div>
     <div style="border-top:1px solid rgba(255,255,255,0.06);padding-top:10px;margin-bottom:10px;">
       <div style="font-size:12px;color:#71717a;line-height:2;">
-        • Positive EV edges across 40+ markets<br>
-        • Updated live as odds move<br>
+        • Edge signals across 40+ markets<br>
+        • Updated live as lines move<br>
         • CLV tracked on every signal
       </div>
     </div>
     <div style="border-top:1px solid rgba(255,255,255,0.06);padding-top:10px;">
-      <a href="/auth/discord/login" style="font-size:13px;font-weight:700;color:#4ade80;text-decoration:none;">Unlock all value spots →</a>
+      <a href="/auth/discord/login" style="font-size:13px;font-weight:700;color:#4ade80;text-decoration:none;">Unlock all signals →</a>
     </div>
   </div>
 
@@ -247,7 +247,7 @@
     const cards = spots.map(s => {
       const badge = s.is_live
         ? `<span style="background:rgba(239,68,68,.15);color:#f87171;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:.06em;">● LIVE</span>`
-        : `<span style="background:rgba(99,102,241,.15);color:#818cf8;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:.06em;">⬡ VALUE EDGE</span>`;
+        : `<span style="background:rgba(99,102,241,.15);color:#818cf8;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:.06em;">⬡ SIGNAL</span>`;
 
       const mktLine = marketLabel(s.market, s.selection);
       const edgeStr = s.edge ? `Model edge: +${s.edge}% vs implied` : "—";
@@ -299,7 +299,7 @@
 
     container.innerHTML = cards +
       `<div style="text-align:center;font-size:12px;color:#52525b;padding:6px 0 2px;">
-         More value spots hidden — <a href="/auth/discord/login" style="color:#818cf8;text-decoration:none;font-weight:700;">unlock today's edges →</a>
+         More signals hidden — <a href="/auth/discord/login" style="color:#818cf8;text-decoration:none;font-weight:700;">unlock today's signals →</a>
        </div>`;
   }
 
