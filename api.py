@@ -2638,6 +2638,18 @@ async def send_discord_stats_endpoint():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def classify_signal(edge_pct) -> str:
+    score = float(edge_pct or 0)
+    if score >= 15:
+        return "strong"
+    elif score >= 5:
+        return "medium"
+    elif score >= 2:
+        return "developing"
+    else:
+        return "noise"
+
+
 def _compute_pgr_score(db_val, ev_pct, model_prob, confidence=0.0) -> float | None:
     """
     Return pgr_score for a pick.
@@ -2689,7 +2701,7 @@ async def get_today_picks():
 
         rows = db_helper.execute("""
             SELECT * FROM (
-                SELECT DISTINCT ON (home_team, away_team, market)
+                SELECT DISTINCT ON (home_team, away_team, market, selection)
                     id, home_team, away_team, market, selection, odds,
                     edge_percentage, confidence, outcome, profit_loss,
                     odds_by_bookmaker, best_odds_value, best_odds_bookmaker,
@@ -2702,7 +2714,7 @@ async def get_today_picks():
                     confidence_label, signal_status, soft_anchored,
                     best_price_book, close_odds
                 FROM football_opportunities
-                WHERE mode IN ('PROD', 'VALUE_OPP')
+                WHERE mode IN ('PROD', 'VALUE_OPP', 'LEARNING_ONLY')
                   AND (outcome IS NULL OR outcome = '' OR outcome IN ('pending', 'unknown'))
                   AND match_date >= %s
                   AND match_date < %s
@@ -2715,12 +2727,12 @@ async def get_today_picks():
                           OR (match_date::date + kickoff_time::time) > NOW() - INTERVAL '4 hours'
                       ))
                   )
-                ORDER BY home_team, away_team, market,
+                ORDER BY home_team, away_team, market, selection,
                          (CASE WHEN mode='PROD' THEN 0 ELSE 1 END),
                          COALESCE(edge_percentage, 0) DESC,
                          id DESC
             ) sub
-            ORDER BY kickoff_epoch ASC NULLS LAST, id DESC
+            ORDER BY kickoff_epoch ASC NULLS LAST, COALESCE(edge_percentage, 0) DESC, id DESC
         """, (today_str, tomorrow_str, cutoff_epoch), fetch='all') or []
 
         picks = []
@@ -2783,7 +2795,9 @@ async def get_today_picks():
 
             book = r[12] or ''
             mode_val = r[19] or 'PROD'
-            layer = 'PRO PICK' if mode_val == 'PROD' else 'VALUE OPP'
+            layer = ('PRO PICK' if mode_val == 'PROD'
+                     else 'DEVELOPING' if mode_val == 'LEARNING_ONLY'
+                     else 'VALUE OPP')
 
             # Build full ISO kickoff string — prefer UTC from epoch (avoids midnight date bug)
             if kickoff_epoch_iso:
@@ -2848,6 +2862,7 @@ async def get_today_picks():
                 'signal_status':            r[34] or None,        # SIGNAL | VERIFIED | REJECTED
                 'soft_anchored':            bool(r[35]) if r[35] is not None else None,
                 'best_price_book':          r[36] or book,        # falls back to legacy best_odds_bookmaker
+                'signal_class':             classify_signal(ev_val),
             })
 
         # ── Embed training_data for all matches in ONE batch query ──

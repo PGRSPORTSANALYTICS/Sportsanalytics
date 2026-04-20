@@ -26,6 +26,8 @@ TOTALS_MARKETS = {
     "FT_UNDER_2_5": ("under_25", "Under 2.5 Goals"),
     "FT_OVER_3_5": ("over_35", "Over 3.5 Goals"),
     "FT_UNDER_3_5": ("under_35", "Under 3.5 Goals"),
+    "FT_OVER_4_5": ("over_45", "Over 4.5 Goals"),
+    "FT_UNDER_4_5": ("under_45", "Under 4.5 Goals"),
 }
 
 
@@ -74,20 +76,17 @@ class TotalsEngine:
                 continue
             
             ev = (p_model * odds) - 1.0
-            
-            if ev < self.config.min_ev:
-                continue
-            
+
             sim_approved = ev >= 0.03
-            
+
             if ev >= self.config.l1_min_ev and p_model >= self.config.l1_min_confidence and sim_approved:
                 tier = "L1_HIGH_TRUST"
             elif ev >= self.config.l2_min_ev and p_model >= self.config.l2_min_confidence and sim_approved:
                 tier = "L2_MEDIUM_TRUST"
-            elif ev >= self.config.l3_min_ev and p_model >= self.config.l3_min_confidence:
+            elif ev >= 0 and p_model >= self.config.l3_min_confidence:
                 tier = "L3_SOFT_VALUE"
             else:
-                continue
+                tier = "L3_SOFT_VALUE"
             
             selection_text = TOTALS_MARKETS.get(market_key, (None, market_key))[1]
             
@@ -114,41 +113,18 @@ class TotalsEngine:
         return candidates
     
     def select_best_per_match(self, candidates: List[BetCandidate]) -> List[BetCandidate]:
-        by_match: Dict[str, List[BetCandidate]] = {}
+        by_line: Dict[str, BetCandidate] = {}
         for c in candidates:
-            if c.match not in by_match:
-                by_match[c.match] = []
-            by_match[c.match].append(c)
-        
-        selected = []
-        for match, match_candidates in by_match.items():
-            sorted_cands = sorted(match_candidates, key=lambda x: (
-                0 if x.tier == "L1_HIGH_TRUST" else (1 if x.tier == "L2_MEDIUM_TRUST" else 2),
-                -x.ev_sim
-            ))
-            selected.append(sorted_cands[0])
-        
-        return selected
+            key = f"{c.match}|{c.market}"
+            if key not in by_line or c.ev_sim > by_line[key].ev_sim:
+                by_line[key] = c
+        return list(by_line.values())
     
     def apply_daily_filter(self, candidates: List[BetCandidate]) -> List[BetCandidate]:
-        l1 = [c for c in candidates if c.tier == "L1_HIGH_TRUST"]
-        l2 = [c for c in candidates if c.tier == "L2_MEDIUM_TRUST"]
-        l3 = [c for c in candidates if c.tier == "L3_SOFT_VALUE"]
-        
-        l1_sorted = sorted(l1, key=lambda x: x.ev_sim, reverse=True)[:3]
-        l2_sorted = sorted(l2, key=lambda x: x.ev_sim, reverse=True)
-        l3_sorted = sorted(l3, key=lambda x: x.ev_sim, reverse=True)
-        
-        selected = list(l1_sorted)
-        
-        remaining = self.config.max_per_day - len(selected)
-        selected.extend(l2_sorted[:remaining])
-        
-        if len(selected) < 5 and l3_sorted:
-            remaining = min(5 - len(selected), len(l3_sorted))
-            selected.extend(l3_sorted[:remaining])
-        
-        return selected
+        l1 = sorted([c for c in candidates if c.tier == "L1_HIGH_TRUST"], key=lambda x: x.ev_sim, reverse=True)
+        l2 = sorted([c for c in candidates if c.tier == "L2_MEDIUM_TRUST"], key=lambda x: x.ev_sim, reverse=True)
+        l3 = sorted([c for c in candidates if c.tier == "L3_SOFT_VALUE"], key=lambda x: x.ev_sim, reverse=True)
+        return l1 + l2 + l3
     
     def get_summary(self, bets: List[BetCandidate]) -> Dict:
         tier_counts = {"L1_HIGH_TRUST": 0, "L2_MEDIUM_TRUST": 0, "L3_SOFT_VALUE": 0}

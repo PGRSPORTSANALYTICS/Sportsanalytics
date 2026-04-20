@@ -584,7 +584,7 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
   </div>
   <div class="nav-sp"></div>
   <span class="nav-ts" id="updatedAt">syncing…</span>
-  <span class="nav-ts" style="font-size:8px;opacity:.4;margin-right:4px">v20260419j</span>
+  <span class="nav-ts" style="font-size:8px;opacity:.4;margin-right:4px">v20260419k</span>
   <span class="tier-badge" id="tierBadge">FREE</span>
 </nav>
 
@@ -624,13 +624,13 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
       </div>
     </div>
     <div class="fs">
-      <div class="fs-h">Min edge</div>
+      <div class="fs-h">Signal class</div>
       <div class="fc">
-        <button class="chip active" data-filter="edge" data-value="0">All</button>
-        <button class="chip" data-filter="edge" data-value="3">3%+</button>
-        <button class="chip" data-filter="edge" data-value="5">5%+</button>
-        <button class="chip" data-filter="edge" data-value="8">8%+</button>
-        <button class="chip" data-filter="edge" data-value="10">10%+</button>
+        <button class="chip active" data-filter="sigclass" data-value="auto">Auto</button>
+        <button class="chip" data-filter="sigclass" data-value="strong">Strong</button>
+        <button class="chip" data-filter="sigclass" data-value="medium">Medium+</button>
+        <button class="chip" data-filter="sigclass" data-value="developing">Developing+</button>
+        <button class="chip" data-filter="sigclass" data-value="all">All</button>
       </div>
     </div>
     <div class="fs">
@@ -704,7 +704,7 @@ window.onerror=function(msg,src,line,col,err){
 };
 /* Synchronous probe — runs before anything else */
 (function(){var el=document.getElementById('updatedAt');if(el)el.textContent='JS:v20260419f';})();
-const S={picks:[],filters:{sport:'all',market:'all',edge:0,sharp:false}};
+const S={picks:[],filters:{sport:'all',market:'all',sigclass:'auto',sharp:false}};
 const $=id=>document.getElementById(id);
 const fP=(v,s=true)=>{if(v==null||isNaN(v))return'—';return(s&&v>0?'+':'')+Number(v).toFixed(1)+'%'};
 const fO=v=>(v==null||isNaN(v))?'—':Number(v).toFixed(2);
@@ -767,18 +767,28 @@ document.querySelectorAll('.chip[data-filter]').forEach(c=>{
   c.addEventListener('click',()=>{
     const f=c.dataset.filter,v=c.dataset.value;
     if(f==='sharp'){S.filters.sharp=!S.filters.sharp;c.classList.toggle('active',S.filters.sharp);}
-    else{document.querySelectorAll(`.chip[data-filter="${f}"]`).forEach(x=>x.classList.remove('active'));c.classList.add('active');S.filters[f]=f==='edge'?+v:v;}
+    else{document.querySelectorAll(`.chip[data-filter="${f}"]`).forEach(x=>x.classList.remove('active'));c.classList.add('active');S.filters[f]=v;}
     render();
   });
 });
+const SC_ORDER={strong:4,medium:3,developing:2,noise:1};
+function sigClass(p){return p.signal_class||(((p.edge_pct||0)>=15)?'strong':((p.edge_pct||0)>=5?'medium':((p.edge_pct||0)>=2?'developing':'noise')));}
 function applyFilters(picks){
-  return picks.filter(p=>{
+  const sc=S.filters.sigclass||'auto';
+  const base=picks.filter(p=>{
     if(S.filters.sport!=='all'&&sportOf(p)!==S.filters.sport)return false;
     if(S.filters.market!=='all'){const mk=(p.market||'').toUpperCase()+' '+(p.selection||'').toUpperCase();if(!mk.includes(S.filters.market))return false;}
-    if(S.filters.edge>0&&(p.edge_pct||0)<S.filters.edge)return false;
     if(S.filters.sharp&&pickStatus(p)!=='SHARP_CONFIRMED')return false;
     return true;
   });
+  if(sc==='all')return base;
+  if(sc==='strong')return base.filter(p=>sigClass(p)==='strong');
+  if(sc==='medium')return base.filter(p=>SC_ORDER[sigClass(p)]>=SC_ORDER['medium']);
+  if(sc==='developing')return base.filter(p=>SC_ORDER[sigClass(p)]>=SC_ORDER['developing']);
+  // auto: strong (all) + medium (max 8)
+  const strong=base.filter(p=>sigClass(p)==='strong');
+  const medium=base.filter(p=>sigClass(p)==='medium').slice(0,8);
+  return [...strong,...medium];
 }
 
 /* ── KPI strip ── */
@@ -811,14 +821,15 @@ function renderScanner(picks){
 
   $('scanMeta').textContent=`${matchRows.length} matches · 60s`;
   if(!matchRows.length){
-    $('scBody').innerHTML=`<div class="empty-s"><div class="empty-t">No signals</div><div class="empty-sub">Lower min edge or clear sharp-only filter</div></div>`;
+    $('scBody').innerHTML=`<div class="empty-s"><div class="empty-t">No signals</div><div class="empty-sub">Try "Developing+" or "All" signal class, or clear sharp-only filter</div></div>`;
     return;
   }
   $('scBody').innerHTML=matchRows.map(p=>{
     try{
       const st=pickStatus(p);
       const isNew=p.age_minutes!=null&&p.age_minutes<12;
-      const ec=(p.edge_pct||0)>=8?'g':((p.edge_pct||0)>=3?'a':'r');
+      const sc=sigClass(p);
+      const ec=sc==='strong'?'g':(sc==='medium'?'a':'r');
       const mv=mvLabel(p);
       const sb=statusLbl(st);
       const mkt=(p.selection||p.market||'').toUpperCase();
@@ -828,6 +839,7 @@ function renderScanner(picks){
       const subParts=[p.league,p.kickoff_str||ago(p.age_minutes)].filter(Boolean);
       const sub=subParts.join(' · ')+mktCtTxt;
       const books=rowBooks(p,3);
+      const scBadge=sc==='strong'?'<span class="r-badge" style="background:rgba(74,222,128,.15);color:#4ade80">STRONG</span>':(sc==='medium'?'<span class="r-badge" style="background:rgba(251,191,36,.12);color:#fbbf24">MEDIUM</span>':'<span class="r-badge" style="background:rgba(148,163,184,.1);color:#94a3b8">DEV</span>');
       return `<div class="row ec-${ec}${isNew?' is-new':''}" data-id="${p.id||''}" onclick="openDetail(${p.id||0},this)">
         <div class="r-edge ${ec}">${fP(p.edge_pct)}</div>
         <div class="r-mkt">
@@ -840,6 +852,7 @@ function renderScanner(picks){
         </div>
         <div class="r-books">${books||'<span class="r-bk soft">—</span>'}</div>
         <div class="r-meta">
+          ${scBadge}
           ${mv.txt?('<span class="r-move '+mv.cls+'">'+mv.txt+'</span>'):''}
           ${sb.txt?('<span class="r-badge '+sb.cls+'">'+sb.txt+'</span>'):''}
           ${isNew?'<span class="r-badge new-sig">NEW</span>':''}
@@ -1340,7 +1353,7 @@ setTimeout(()=>{if(!_rendered)safeRender();},5000);
 setTimeout(()=>{
   const sb=$('scBody');
   if(sb && sb.innerHTML.includes('Loading signals')){
-    sb.innerHTML='<div class="empty-s"><div class="empty-t" style="color:#4ade80">JS OK · fetching data…</div><div class="empty-sub">v20260419j · if stuck, check URL = /live</div></div>';
+    sb.innerHTML='<div class="empty-s"><div class="empty-t" style="color:#4ade80">JS OK · fetching data…</div><div class="empty-sub">v20260419k · if stuck, check URL = /live</div></div>';
   }
 },1000);
 

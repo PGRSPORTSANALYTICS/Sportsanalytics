@@ -60,6 +60,20 @@ MARKET_MAP = {
     'h2h': 'moneyline',
     'spreads': 'asian_handicap',
     'totals': 'totals',
+    'alternate_totals': 'alternate_totals',
+    'alternate_spreads': 'alternate_asian_handicap',
+}
+
+PRIORITY_SPORT_KEYS = {
+    'soccer_epl',
+    'soccer_spain_la_liga',
+    'soccer_germany_bundesliga',
+    'soccer_italy_serie_a',
+    'soccer_france_ligue_one',
+    'soccer_netherlands_eredivisie',
+    'soccer_portugal_primeira_liga',
+    'soccer_uefa_champs_league',
+    'soccer_uefa_europa_league',
 }
 
 STALE_THRESHOLD_MINUTES = 30
@@ -324,7 +338,10 @@ def run_ingestion_cycle(sport_keys: List[str] = None, markets: str = 'h2h,totals
 
     for sport_key in sport_keys:
         try:
-            snapshots = ingest_sport_odds(sport_key, markets=markets)
+            use_markets = markets
+            if sport_key in PRIORITY_SPORT_KEYS:
+                use_markets = 'h2h,totals,spreads,alternate_totals,alternate_spreads'
+            snapshots = ingest_sport_odds(sport_key, markets=use_markets)
             if snapshots:
                 stored = store_snapshots(snapshots)
                 total_snapshots += stored

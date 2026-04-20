@@ -173,9 +173,7 @@ class CornerHandicapEngine:
                     continue
                 
                 ev = self.calculate_ev(model_prob, book_odds)
-                if ev < min_ev:
-                    continue
-                
+
                 trust_tier = self.classify_trust_tier(ev, model_prob, sim_approved=True)
                 if trust_tier == "REJECTED":
                     continue

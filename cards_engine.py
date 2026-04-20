@@ -639,9 +639,6 @@ class CardsEngine:
                         continue
                     
                     ev = self.calculate_ev(model_prob, book_odds)
-                    effective_min_ev = CARDS_LEARNING_MIN_EV if is_learning_line else min_ev
-                    if ev < effective_min_ev:
-                        continue
                     
                     if is_learning_line:
                         trust_tier = "LEARNING"
