@@ -278,7 +278,7 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
 .r-bk-sep{color:var(--dim);font-size:9px}
 
 /* Movement / status cell */
-.r-meta{display:flex;flex-direction:column;align-items:flex-end;gap:1px;min-width:0}
+.r-meta{display:flex;flex-direction:row;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:4px;min-width:0}
 .r-move{font-family:'SF Mono',monospace;font-size:9px;font-weight:700;white-space:nowrap}
 .r-move.ok{color:var(--green);font-weight:800}
 .r-move.late{color:var(--red)}
@@ -491,7 +491,7 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
 .mk-edge-peak{font-size:9px;color:var(--muted)}
 .mk-edge-delta{font-size:9px;font-weight:700}
 .mk-edge-delta.down{color:var(--red)}.mk-edge-delta.up{color:var(--green)}.mk-edge-delta.flat{color:var(--dim)}
-.mk-action{display:inline-block;font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:3px 9px;border-radius:3px;margin-bottom:6px}
+.mk-action{display:inline-block;font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:2px 7px;border-radius:3px;white-space:nowrap}
 .mk-action.bet{color:#86efac;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.25)}
 .mk-action.late{color:var(--amber);background:rgba(245,200,66,.1);border:1px solid rgba(245,200,66,.2)}
 .mk-action.watch{color:#6b9de8;background:rgba(107,157,232,.1);border:1px solid rgba(107,157,232,.2)}
@@ -920,9 +920,7 @@ function renderScanner(picks){
         <div class="r-books">${books||'<span class="r-bk soft">—</span>'}</div>
         <div class="r-meta">
           ${actionBadge(p)}
-          ${scBadge}
           ${mv.txt?('<span class="r-move '+mv.cls+'">'+mv.txt+'</span>'):''}
-          ${sb.txt?('<span class="r-badge '+sb.cls+'">'+sb.txt+'</span>'):''}
           ${isNew?'<span class="r-badge new-sig">NEW</span>':''}
         </div>
       </div>`;
