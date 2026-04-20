@@ -1,7 +1,7 @@
 """
-PGR Sports Analytics — Public FOMO dashboard with premium gate.
-Free: hero stats, track record, CLV proof, teaser picks.
-Premium: full picks, selections, odds, scanner, Smart Value details.
+PGR Sports Analytics — Market intelligence dashboard.
+Surfaces where genuine edge exists in the market.
+Data-only platform: no picks, no tipster output.
 """
 
 import os
@@ -674,13 +674,13 @@ with col_clv:
         """, unsafe_allow_html=True)
 
 with col_kpi:
-    metric_card("All-Time ROI", f"{roi:+.1f}%", kicker=f"{settled} settled picks",
+    metric_card("All-Time ROI", f"{roi:+.1f}%", kicker=f"{settled} settled signals",
                 variant="good" if roi >= 0 else "bad")
     metric_card("Hit Rate", f"{hit_rate:.1f}%", kicker="Wins / settled",
                 variant="good" if hit_rate >= 45 else "bad")
     metric_card("Profit", f"{profit_units:+.1f}u", kicker="Flat 1-unit staking",
                 variant="good" if profit_units >= 0 else "bad")
-    metric_card("Live Picks", str(pending), kicker="Active today", variant="default")
+    metric_card("Active Signals", str(pending), kicker="Live today", variant="default")
 
 st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)
 
@@ -693,7 +693,7 @@ if scan_status:
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin:0 0 18px 0;align-items:center;">
         <span style="font-size:0.72rem;letter-spacing:0.08em;text-transform:uppercase;color:#9BA0B5;margin-right:4px;">Scan status</span>
         <span class="stat-pill">
-            💰 Value Singles &nbsp;·&nbsp; <b>Last:</b>&nbsp;<b style="color:#F2F5F8;">{_fmt_ago(vs["last"])}</b>
+            💰 Market Signals &nbsp;·&nbsp; <b>Last:</b>&nbsp;<b style="color:#F2F5F8;">{_fmt_ago(vs["last"])}</b>
             &nbsp;·&nbsp; <b>Next:</b>&nbsp;<b style="color:#00F59D;">{_next_scan_str(vs["last"],vs["interval_min"])}</b>
             &nbsp;·&nbsp; <b>Today:</b>&nbsp;<b style="color:#F2F5F8;">{vs["count_today"]}</b>
         </span>
@@ -716,9 +716,8 @@ else:
 # ─────────────────────────────────────────────────────────────────────────────
 # TABS
 # ─────────────────────────────────────────────────────────────────────────────
-tab_today, tab_smart, tab_scanner, tab_track, tab_clv, tab_bt = st.tabs([
-    "⚡ Today's Picks",
-    "🧠 Smart Value",
+tab_today, tab_scanner, tab_track, tab_clv, tab_bt = st.tabs([
+    "⚡ Today's Signals",
     "🔍 Market Scanner",
     "📈 Track Record",
     "🎯 Proof of Edge",
@@ -727,7 +726,7 @@ tab_today, tab_smart, tab_scanner, tab_track, tab_clv, tab_bt = st.tabs([
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TAB 1 — TODAY'S PICKS
+# TAB 1 — TODAY'S SIGNALS
 # ─────────────────────────────────────────────────────────────────────────────
 with tab_today:
     picks = load_todays_picks()
@@ -751,7 +750,7 @@ with tab_today:
         st.markdown("""
         <div class="empty-state">
             <div class="big">⚡</div>
-            <p>No picks generated yet today.<br>Engine scans every 12 minutes — check back soon.</p>
+            <p>No signals detected yet today.<br>Engine scans every 12 minutes — check back soon.</p>
         </div>
         """, unsafe_allow_html=True)
     else:
@@ -813,7 +812,7 @@ with tab_today:
             </div>
             """, unsafe_allow_html=True)
         else:
-            # ── FREE: FOMO picks ─────────────────────────────────────────────
+            # ── FREE: teaser signals ─────────────────────────────────────────
             PREVIEW_FREE = 2
             col_a, col_b = st.columns(2)
             for i, p in enumerate(picks):
@@ -833,7 +832,7 @@ with tab_today:
                 <div style="margin:8px 0;padding:14px 20px;border-radius:10px;
                             border:1px solid #1C2030;background:#101320;
                             text-align:center;color:#9BA0B5;font-size:0.88rem;">
-                    🔒 &nbsp; <b style="color:#F2F5F8;">{remaining} more picks</b> available today — selection &amp; odds visible for members only
+                    🔒 &nbsp; <b style="color:#F2F5F8;">{remaining} more signals</b> available today — details visible for members only
                 </div>
                 """, unsafe_allow_html=True)
 
@@ -841,99 +840,7 @@ with tab_today:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TAB 2 — SMART PICKS
-# ─────────────────────────────────────────────────────────────────────────────
-with tab_smart:
-    smart = load_smart_picks()
-
-    st.markdown("""
-    <div style="padding:14px 20px;border-radius:12px;background:rgba(0,245,157,0.05);
-                border:1px solid rgba(0,245,157,0.2);margin-bottom:20px;">
-        <div style="font-size:1rem;font-weight:700;color:#00F59D;margin-bottom:6px;">
-            🧠 Smart Value — AI Curated
-        </div>
-        <div style="font-size:0.85rem;color:#C4C9DC;line-height:1.6;">
-            One best pick per match, ranked by SmartScore (model confidence × CLV × form).
-            These are the highest-conviction opportunities from today's scan.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    if not smart:
-        st.markdown("""
-        <div class="empty-state">
-            <div class="big">🧠</div>
-            <p>Smart Value for today not yet generated.<br>They're published once daily around 09:00 UTC.</p>
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        col_a, col_b = st.columns(2)
-        for i, row in enumerate(smart):
-            home, away, league, market, selection, odds = row[0],row[1],row[2],row[3],row[4],row[5]
-            smart_score, confidence, grade = float(row[6] or 0), row[7], row[8]
-            conf_icon = "🟢" if confidence == "Strong" else ("🟡" if confidence == "Medium" else "🔴")
-            score_color = "#00F59D" if smart_score >= 80 else ("#FBBF24" if smart_score >= 65 else "#9BA0B5")
-
-            if is_premium:
-                html = f"""
-                <div class="pick-card pick-card-pending">
-                    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
-                        <span style="font-size:0.78rem;color:#9BA0B5;">{league}</span>
-                        <span style="font-size:0.82rem;font-weight:700;color:{score_color};">
-                            SmartScore {smart_score:.1f} · {grade}
-                        </span>
-                    </div>
-                    <div class="pick-match">{home} vs {away}</div>
-                    <div class="pick-selection">{selection}</div>
-                    <div class="pick-meta">
-                        <span>Odds <b style="color:#F2F5F8;">{float(odds):.2f}</b></span>
-                        <span>{_clean_market(market)}</span>
-                        <span>{conf_icon} {confidence}</span>
-                    </div>
-                </div>"""
-            else:
-                blur_part = '<span class="fomo-blur" style="font-size:1.05rem;font-weight:700;color:#00F59D;">██████ @ x.xx</span>'
-                show_full = i < 2
-                if show_full:
-                    html = f"""
-                    <div class="pick-card pick-card-pending">
-                        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
-                            <span style="font-size:0.78rem;color:#9BA0B5;">{league}</span>
-                            <span style="font-size:0.82rem;font-weight:700;color:{score_color};">
-                                SmartScore {smart_score:.1f}
-                            </span>
-                        </div>
-                        <div class="pick-match">{home} vs {away}</div>
-                        <div class="pick-meta" style="margin-top:4px;">
-                            <span>{_clean_market(market)}</span>
-                            <span>{conf_icon} {confidence}</span>
-                        </div>
-                        <div style="margin-top:10px;display:flex;align-items:center;gap:10px;">
-                            {blur_part}
-                            <span class="lock-pill">🔒 Premium</span>
-                        </div>
-                    </div>"""
-                else:
-                    html = f"""
-                    <div class="fomo-card">
-                        <span style="font-size:0.78rem;color:#9BA0B5;">{league} · SmartScore {smart_score:.1f}</span>
-                        <div style="margin-top:6px;display:flex;align-items:center;gap:10px;">
-                            {blur_part}
-                            <span class="lock-pill">🔒 Premium</span>
-                        </div>
-                    </div>"""
-
-            if i % 2 == 0:
-                col_a.markdown(html, unsafe_allow_html=True)
-            else:
-                col_b.markdown(html, unsafe_allow_html=True)
-
-        if not is_premium:
-            _cta_banner()
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB 3 — MARKET SCANNER
+# TAB 2 — MARKET SCANNER
 # ─────────────────────────────────────────────────────────────────────────────
 with tab_scanner:
     scanner_rows = load_market_scanner()
@@ -1011,7 +918,7 @@ with tab_track:
         st.markdown("""
         <div class="empty-state">
             <div class="big">📈</div>
-            <p>Not enough settled picks yet to show performance.<br>Check back as results come in.</p>
+            <p>Not enough settled signals yet to show performance.<br>Check back as results come in.</p>
         </div>
         """, unsafe_allow_html=True)
     else:
@@ -1038,7 +945,7 @@ with tab_track:
             metric_card("Hit Rate", f"{total_hr:.1f}%", kicker=f"{total_wins}W / {total_settled - total_wins}L",
                         variant="good" if total_hr >= 45 else "bad")
         with c4:
-            metric_card("Picks", str(total_settled), kicker="Settled this period", variant="default")
+            metric_card("Signals", str(total_settled), kicker="Settled this period", variant="default")
 
         st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
 

@@ -230,13 +230,15 @@
 
   /* ── Value Spots Teaser ─────────────────────────────────── */
   function marketLabel(market, selection) {
-    if (!market) return selection || "";
-    const m = market.toLowerCase();
-    if (m.includes("corner")) return "Corners";
-    if (m.includes("card"))   return "Cards";
-    if (m.includes("over") || m.includes("under") || m.includes("total")) return "Totals";
-    if (m.includes("btts"))   return "BTTS";
-    return market;
+    const src = (selection || market || "").toLowerCase();
+    if (src.includes("corner")) return "Corners";
+    if (src.includes("card"))   return "Cards";
+    if (src.includes("btts") || src.includes("both teams")) return "BTTS";
+    if (src.includes("over") || src.includes("under")) return "Goals O/U";
+    if (src.includes("or draw") || src.includes("home or") || src.includes("draw or")) return "Double Chance";
+    if (src.includes("handicap") || src.includes("ah_")) return "Asian H/cap";
+    if (src === "value single" || src === "value singles") return "Market Signal";
+    return selection || "Market Signal";
   }
 
   function renderSpots(spots) {

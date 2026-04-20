@@ -176,18 +176,18 @@ table.dt tr:hover td{background:var(--card2)}
 <button class="win-btn" id="tf-cards" onclick="filterToday('cards',this)">&#127183; Cards</button>
 <span style="margin-left:auto;font-size:.72rem;color:var(--text3)" id="todayLastRefresh"></span>
 </div>
-<div id="todayPicksList" class="bet-list"><div class="loading">Loading today's picks...</div></div>
+<div id="todayPicksList" class="bet-list"><div class="loading">Loading today's signals...</div></div>
 </div>
 
 <div id="p-live" class="page">
-<div class="section-hdr"><h2>&#9917; Live Picks Tracker</h2>
+<div class="section-hdr"><h2>&#9917; Live Signal Tracker</h2>
 <div class="window-btns">
 <div class="win-btn active" onclick="filterLive('all')">All</div>
 <div class="win-btn" onclick="filterLive('cards')">&#127183; Cards</div>
 <div class="win-btn" onclick="filterLive('corners')">&#9971; Corners</div>
 </div>
 </div>
-<div id="livePicksList" class="bet-list"><div class="loading">Loading live picks...</div></div>
+<div id="livePicksList" class="bet-list"><div class="loading">Loading live signals...</div></div>
 </div>
 
 <div id="p-bets" class="page">
@@ -274,7 +274,7 @@ renderTodayPicks(todayAllPicks);
 
 async function loadTodayPicks(){
 const c=document.getElementById('todayPicksList');
-c.innerHTML='<div class="loading">Loading today\'s picks...</div>';
+c.innerHTML='<div class="loading">Loading today\'s signals...</div>';
 try{
 const r=await fetch(TODAY_API);
 const d=await r.json();
@@ -287,7 +287,7 @@ const lost=d.lost||0;
 const upcoming=total-won-lost-(d.void||0);
 const hr=d.hit_rate;
 sb.innerHTML=`
-<div class="stat-pill a"><div class="val">${total}</div><div class="lbl">Today's Picks</div></div>
+<div class="stat-pill a"><div class="val">${total}</div><div class="lbl">Today's Signals</div></div>
 <div class="stat-pill"><div class="val" style="color:var(--accent)">${upcoming}</div><div class="lbl">Upcoming</div></div>
 <div class="stat-pill g"><div class="val">${won}</div><div class="lbl">Won</div></div>
 <div class="stat-pill r"><div class="val">${lost}</div><div class="lbl">Lost</div></div>
@@ -296,7 +296,7 @@ ${hr!=null?`<div class="stat-pill ${hr>=55?'g':hr>=45?'':'r'}"><div class="val">
 
 document.getElementById('todayLastRefresh').textContent='Updated '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
 renderTodayPicks(todayAllPicks);
-}catch(e){c.innerHTML=`<div class="empty">Error loading picks: ${e.message}</div>`;}
+}catch(e){c.innerHTML=`<div class="empty">Error loading signals: ${e.message}</div>`;}
 }
 
 function classifyMarket(market){

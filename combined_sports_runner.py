@@ -974,36 +974,11 @@ def main():
     except Exception as _e:
         logger.warning(f"⚠️ pgr_scoring migration check failed (non-fatal): {_e}")
 
-    # Smart Value catchup — if it's past 08:00 UTC and engine just started, run it now
+    # Smart picks catchup disabled — platform is data-only, no pick engine
     import datetime as _dt
     _now_utc = _dt.datetime.utcnow()
-    if _now_utc.hour >= 8:
-        def _smart_picks_catchup():
-            time.sleep(120)  # wait for Value Singles engine to populate DB first
-            try:
-                logger.info("🧠 Smart Value catchup: running missed 08:00 cycle...")
-                run_smart_picks()
-            except Exception as e:
-                logger.error(f"❌ Smart Value catchup error: {e}")
-        import threading as _sp_thread
-        _sp_thread.Thread(target=_smart_picks_catchup, daemon=True, name="smart-picks-catchup").start()
 
-    # Free Picks catchup — if it's past 08:00 UTC and no free pick sent today, run it now
-    if _now_utc.hour >= 8:
-        def _free_picks_catchup():
-            time.sleep(20)
-            try:
-                from free_picks_engine import was_free_pick_sent_today, ensure_free_pick_sent_column
-                ensure_free_pick_sent_column()
-                if not was_free_pick_sent_today():
-                    logger.info("🎁 Free Picks catchup: running missed 08:00 cycle...")
-                    run_daily_free_pick()
-                else:
-                    logger.info("🎁 Free Picks catchup: already sent today, skipping")
-            except Exception as e:
-                logger.error(f"❌ Free Picks catchup error: {e}")
-        import threading as _fp_thread
-        _fp_thread.Thread(target=_free_picks_catchup, daemon=True, name="free-picks-catchup").start()
+    # Free picks catchup disabled — platform is data-only, no pick output
 
     # Run enabled engines on startup — each wrapped individually so one crash can't kill startup
     logger.info("🎬 Running initial prediction cycles...")
@@ -1112,8 +1087,8 @@ def main():
     schedule.every(5).minutes.do(verify_basketball_results)  # Basketball separate
     schedule.every(30).minutes.do(run_player_props_settlement)  # NBA player props settlement
     schedule.every(30).minutes.do(run_multi_sport_settlement)   # Multi-sport settlement
-    schedule.every(30).minutes.do(run_smart_picks_settlement)   # Smart Value result scanner + Discord
-    run_smart_picks_settlement()  # Run once at startup to catch any overnight results
+    # Smart picks settlement disabled — platform is data-only, no pick engine
+    # schedule.every(30).minutes.do(run_smart_picks_settlement)
     
     # Schedule CLV update - Every 5 minutes for closing odds capture
     schedule.every(5).minutes.do(run_clv_update_cycle)
@@ -1189,8 +1164,10 @@ def main():
     schedule.every(1).hours.do(run_engine_heartbeat)                 # Heartbeat varje timme till Discord
     schedule.every().day.at("08:00").do(run_daily_games_reminder)
     schedule.every().day.at("09:00").do(run_daily_analysis)
-    schedule.every().day.at("08:00").do(run_smart_picks)  # Smart Value — Daily Top 10 (08:00 UTC = 09:00 CET)
-    schedule.every().day.at("08:00").do(run_daily_free_pick)  # 1 free pick to Discord
+    # Smart picks disabled — platform is data-only market intelligence
+    # schedule.every().day.at("08:00").do(run_smart_picks)
+    # Free pick to Discord disabled — platform is data-only, no pick output
+    # schedule.every().day.at("08:00").do(run_daily_free_pick)
 
     schedule.every(10).minutes.do(run_subscription_sync)  # Stripe subscription safety-net
 

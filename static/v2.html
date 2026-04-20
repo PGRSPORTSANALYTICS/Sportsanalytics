@@ -844,8 +844,9 @@ function mktCategory(p){
   if(sel.includes('OVER')||sel.includes('UNDER'))return'Goals O/U';
   if(sel.includes('OR DRAW')||sel.includes('HOME OR')||sel.includes('DRAW OR'))return'Double Chance';
   if(p.market&&p.market.startsWith('AH_')||sel.includes('AH_')||sel.includes('HANDICAP'))return'Asian H/cap';
-  if(mkt==='CORNERS')return'Corners';
-  return sel.slice(0,18)||mkt.slice(0,18)||'Signal';
+  if(sel==='VALUE SINGLE'||mkt==='VALUE SINGLE')return'Market Signal';
+  if(sel&&sel!=='VALUE SINGLE')return sel.slice(0,18);
+  return'Signal';
 }
 function actionBadge(p){
   const a=p.action||'';
@@ -915,6 +916,7 @@ function renderScanner(picks){
       const sb=statusLbl(st);
       const mkt=(p.selection||p.market||'').toUpperCase();
       const mktSub=mktCategory(p);
+      const mktDisplay=(mkt==='VALUE SINGLE'||mkt==='VALUE SINGLES')?'':mkt.slice(0,28);
       const teams=`${p.home_team||''} vs ${p.away_team||''}`;
       const mktCtTxt=p._mkt_count>1?` · ${p._mkt_count} mkts`:'';
       const subParts=[p.league,p.kickoff_str||ago(p.age_minutes)].filter(Boolean);
@@ -929,7 +931,7 @@ function renderScanner(picks){
         </div>
         <div class="r-match">
           <div class="r-match-teams">${mktSub}</div>
-          <div class="r-match-sub">${mkt.slice(0,28)}</div>
+          <div class="r-match-sub">${mktDisplay}</div>
         </div>
         <div class="r-books">${books||'<span class="r-bk soft">—</span>'}</div>
         <div class="r-meta">
