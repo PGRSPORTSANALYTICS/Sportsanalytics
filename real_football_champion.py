@@ -4042,6 +4042,22 @@ class RealFootballChampion:
     def save_opportunity(self, opp_dict: Dict) -> bool:
         """Save Value Singles prediction (dict format) to database"""
         try:
+            # ── Data Quality Gate ─────────────────────────────────────────────
+            # Verify signal is based on real market data before publishing.
+            # Philosophy: don't push value for the sake of it — data must be solid.
+            _dq_status, _dq_reason = _data_quality_gate(opp_dict)
+            _tag = (f"{opp_dict.get('home_team','?')} vs {opp_dict.get('away_team','?')} "
+                    f"[{opp_dict.get('selection','')}]")
+            if _dq_status == 'BLOCK':
+                print(f"🚫 [DATA GATE BLOCK] {_tag} — {_dq_reason} — no real market data")
+                return False
+            if _dq_status == 'DEVELOPING':
+                print(f"⚠️ [DATA GATE] {_tag} — {_dq_reason} → tier capped at DEVELOPING")
+                opp_dict = dict(opp_dict)
+                opp_dict['recommended_tier'] = 'DEVELOPING'
+                opp_dict['tier'] = 'DEVELOPING'
+            # ─────────────────────────────────────────────────────────────────
+
             # Calculate quality score
             quality_score = (opp_dict.get('edge_percentage', 0) * 0.6) + (opp_dict.get('confidence', 0) * 0.4)
             today_date = datetime.now().strftime('%Y-%m-%d')
@@ -5106,6 +5122,49 @@ def _lookup_league_for_team(team_name: str) -> Optional[str]:
         return None
 
 
+# ── Data Quality Gate ─────────────────────────────────────────────────────────
+# Doctrine: a signal must be based on real market data before being published.
+# Soft-only sources (API-Football) and single-book signals are unreliable.
+
+_GATE_SHARP_BOOKS   = {'Pinnacle', 'Betfair', 'Matchbook', 'Betfair Exchange', 'SBO'}
+_GATE_SOFT_SOURCES  = {'API-Football', 'api_football', 'sofascore', 'SofaScore'}
+_GATE_MIN_BOOKS     = 3   # Minimum unique bookmakers for a MEDIUM/STRONG signal
+
+
+def _data_quality_gate(opp_dict: Dict) -> tuple:
+    """
+    Verify a signal's data quality before saving to the database.
+
+    Returns (status, reason) where status is one of:
+        'BLOCK'      — do NOT save. Single soft source only; no real market data.
+        'DEVELOPING' — save but cap recommended_tier at DEVELOPING.
+                       Fewer than _GATE_MIN_BOOKS or no sharp-book anchor.
+        'PASS'       — sufficient data. Normal tier assignment applies.
+    """
+    bm_odds = opp_dict.get('odds_by_bookmaker') or {}
+    if isinstance(bm_odds, str):
+        try:
+            bm_odds = json.loads(bm_odds)
+        except Exception:
+            bm_odds = {}
+
+    book_names = set(bm_odds.keys()) if isinstance(bm_odds, dict) else set()
+    n_books    = len(book_names)
+
+    # Rule 1 — BLOCK: single soft source (API-Football, SofaScore, etc.)
+    if n_books <= 1 and book_names and book_names <= _GATE_SOFT_SOURCES:
+        source = next(iter(book_names))
+        return ('BLOCK', f"single_soft_source:{source}")
+
+    # Rule 2 — DEVELOPING: too few books or no recognised sharp anchor
+    has_sharp = bool(book_names & _GATE_SHARP_BOOKS)
+    if n_books < _GATE_MIN_BOOKS or not has_sharp:
+        return ('DEVELOPING', f"books={n_books},sharp={'yes' if has_sharp else 'no'}")
+
+    return ('PASS', '')
+# ─────────────────────────────────────────────────────────────────────────────
+
+
 def _save_bet_candidates_to_db(candidates, market_label: str, force_learning: bool = False) -> int:
     """Save BetCandidate picks to football_opportunities with proper market label.
     
@@ -5157,6 +5216,22 @@ def _save_bet_candidates_to_db(candidates, market_label: str, force_learning: bo
             best_odds_bookmaker = 'API-Football'
             avg_odds = base_odds
             fair_odds = round(1 / candidate.confidence, 2) if candidate.confidence > 0 else base_odds
+
+            # ── Data Quality Gate for Corners/Cards ──────────────────────────
+            # API-Football is a single soft source — not a real market anchor.
+            # Downgrade to learning/DEVELOPING instead of blocking entirely,
+            # so the data feeds CLV tracking but doesn't appear as PROD signal.
+            _cand_dq_dict = {'odds_by_bookmaker': odds_by_bookmaker}
+            _cand_dq, _cand_dq_reason = _data_quality_gate(_cand_dq_dict)
+            _ctag2 = (f"{getattr(candidate,'home_team','')} vs "
+                      f"{getattr(candidate,'away_team','')} [{getattr(candidate,'selection','')}]")
+            if _cand_dq == 'BLOCK':
+                print(f"🚫 [DATA GATE BLOCK] {_ctag2} — {_cand_dq_reason}")
+                continue
+            if _cand_dq in ('DEVELOPING',) and not is_learning:
+                print(f"⚠️ [DATA GATE] {_ctag2} — {_cand_dq_reason} → saved as DEVELOPING (not PROD)")
+                is_learning = True   # Treat as learning pick — soft source only
+            # ─────────────────────────────────────────────────────────────────
 
             # ── Corners/Cards always come from API-Football (soft source) ─────
             if not is_learning:
