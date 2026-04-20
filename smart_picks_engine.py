@@ -2,10 +2,10 @@
 Smart Value Engine — Daily Top 10
 
 Generates exactly 10 curated Smart Value picks per day based on SmartScore.
-Picks are stored in the DB and displayed in the dashboard — no Discord posting.
+Picks are stored in the DB and posted to the DISCORD_WH_SMART_PICKS channel.
 
 STRICT RULES:
-- Odds range: 1.75 – 2.10
+- Odds range: 1.75 – 2.30
 - One pick per match, max 2 per league
 - SmartScore-based ranking (NOT EV-based)
 - Generated once per day, locked after generation
@@ -15,6 +15,7 @@ import os
 import json
 import time
 import logging
+import requests
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional
 
@@ -249,6 +250,46 @@ def _select_top_picks(candidates: List[Dict], target: int = 10) -> List[Dict]:
     return selected
 
 
+def _post_to_discord(picks: List[Dict], today: str) -> None:
+    """Post Smart Value picks to the DISCORD_WH_SMART_PICKS channel."""
+    webhook_url = os.environ.get("DISCORD_WH_SMART_PICKS")
+    if not webhook_url:
+        logger.warning("DISCORD_WH_SMART_PICKS not configured — skipping Discord post")
+        return
+
+    grade_emoji = {"A": "🟢", "B": "🟡", "C": "🔴"}
+    conf_emoji  = {"Strong": "💪", "Medium": "👍", "Low": "🔵"}
+
+    lines = []
+    for i, p in enumerate(picks, 1):
+        match = f"{p.get('home_team','')} vs {p.get('away_team','')}"
+        league = p.get("league") or "–"
+        sel    = p.get("selection", "–")
+        odds   = p.get("odds", 0)
+        score  = p.get("smart_score", 0)
+        grade  = p.get("model_grade", "C")
+        conf   = p.get("confidence", "Low")
+        lines.append(
+            f"{grade_emoji.get(grade,'⚪')} **{i}. {match}**\n"
+            f"   {league} | {sel} @ `{odds:.2f}`\n"
+            f"   SmartScore: **{score:.1f}** · {conf_emoji.get(conf,'')} {conf}"
+        )
+
+    header = f"📊 **Smart Value Picks — {today}** ({len(picks)} picks)\n" + "─" * 36
+    chunk_size = 5
+    for chunk_start in range(0, len(lines), chunk_size):
+        chunk = lines[chunk_start:chunk_start + chunk_size]
+        content = header + "\n\n" + "\n\n".join(chunk) if chunk_start == 0 else "\n\n".join(chunk)
+        try:
+            resp = requests.post(webhook_url, json={"content": content}, timeout=10)
+            if resp.status_code not in (200, 204):
+                logger.error(f"Discord webhook returned {resp.status_code}: {resp.text[:200]}")
+            else:
+                logger.info(f"Smart Picks posted to Discord (batch {chunk_start//chunk_size + 1})")
+        except Exception as exc:
+            logger.error(f"Discord post failed: {exc}")
+
+
 def generate_smart_picks() -> List[Dict]:
     _ensure_table()
 
@@ -297,7 +338,7 @@ def generate_smart_picks() -> List[Dict]:
 
 
 def run_smart_picks() -> List[Dict]:
-    """Generate and store today's Smart Value picks. Dashboard reads them from DB."""
+    """Generate, store, and post today's Smart Value picks to Discord."""
     if _picks_exist_today():
         logger.info("Smart Value: picks already generated today — skipping")
         return []
@@ -307,6 +348,9 @@ def run_smart_picks() -> List[Dict]:
     logger.info("========================================")
 
     picks = generate_smart_picks()
+    if picks:
+        today = _get_server_date()
+        _post_to_discord(picks, today)
     logger.info(f"Smart Value complete: {len(picks)} picks stored in DB")
     return picks
 

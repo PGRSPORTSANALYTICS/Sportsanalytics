@@ -3057,6 +3057,117 @@ async def get_scanner_daily_stats():
         return {'edges_found': 0, 'high_confidence': 0, 'volume_plays': 0, 'date': ''}
 
 
+@app.get("/api/signal_stats", tags=["Analytics"])
+async def get_signal_stats(days: int = 7):
+    """
+    Pipeline audit endpoint — aggregated signal stats for the last N days.
+    Returns per-date, per-market, per-league tier breakdowns plus gate-unlock analysis
+    (signals that would have been blocked by the pre-Apr-20-2026 hard gates).
+    """
+    try:
+        from datetime import timedelta
+        cutoff_date = (datetime.utcnow() - timedelta(days=days)).strftime('%Y-%m-%d')
+        today_str = datetime.utcnow().strftime('%Y-%m-%d')
+
+        by_date = db_helper.execute("""
+            SELECT
+                match_date::text,
+                COUNT(*) AS total,
+                COUNT(CASE WHEN edge_percentage >= 15 THEN 1 END) AS strong,
+                COUNT(CASE WHEN edge_percentage >= 5 AND edge_percentage < 15 THEN 1 END) AS medium,
+                COUNT(CASE WHEN edge_percentage >= 2 AND edge_percentage < 5 THEN 1 END) AS developing,
+                COUNT(CASE WHEN edge_percentage < 2 THEN 1 END) AS noise
+            FROM football_opportunities
+            WHERE mode IN ('PROD', 'VALUE_OPP', 'WATCHLIST')
+              AND match_date >= %s
+            GROUP BY match_date
+            ORDER BY match_date DESC
+        """, (cutoff_date,), fetch='all') or []
+
+        by_market = db_helper.execute("""
+            SELECT
+                COALESCE(market, 'Unknown') AS market,
+                COUNT(*) AS total,
+                COUNT(CASE WHEN edge_percentage >= 15 THEN 1 END) AS strong,
+                COUNT(CASE WHEN edge_percentage >= 5 AND edge_percentage < 15 THEN 1 END) AS medium,
+                COUNT(CASE WHEN edge_percentage >= 2 AND edge_percentage < 5 THEN 1 END) AS developing
+            FROM football_opportunities
+            WHERE mode IN ('PROD', 'VALUE_OPP', 'WATCHLIST')
+              AND match_date >= %s
+            GROUP BY market
+            ORDER BY total DESC
+        """, (cutoff_date,), fetch='all') or []
+
+        by_league = db_helper.execute("""
+            SELECT
+                COALESCE(league, 'Unknown') AS league,
+                COUNT(*) AS total,
+                COUNT(CASE WHEN edge_percentage >= 15 THEN 1 END) AS strong,
+                COUNT(CASE WHEN edge_percentage >= 5 AND edge_percentage < 15 THEN 1 END) AS medium,
+                COUNT(CASE WHEN edge_percentage >= 2 AND edge_percentage < 5 THEN 1 END) AS developing
+            FROM football_opportunities
+            WHERE mode IN ('PROD', 'VALUE_OPP', 'WATCHLIST')
+              AND match_date >= %s
+            GROUP BY league
+            ORDER BY total DESC
+            LIMIT 15
+        """, (cutoff_date,), fetch='all') or []
+
+        gate_row = db_helper.execute("""
+            SELECT
+                COUNT(CASE WHEN edge_percentage < 12 AND market = 'Value Single' THEN 1 END),
+                COUNT(CASE WHEN market = 'Value Single'
+                            AND odds IS NOT NULL
+                            AND odds < 2.10 THEN 1 END),
+                COUNT(CASE WHEN trust_level = 'L3_SOFT_VALUE' THEN 1 END)
+            FROM football_opportunities
+            WHERE mode IN ('PROD', 'VALUE_OPP', 'WATCHLIST')
+              AND match_date >= %s
+        """, (cutoff_date,), fetch='one')
+
+        low_ev    = int(gate_row[0] or 0) if gate_row else 0
+        low_odds  = int(gate_row[1] or 0) if gate_row else 0
+        l3_corners = int(gate_row[2] or 0) if gate_row else 0
+
+        # Today snapshot
+        today_rows = [r for r in by_date if r[0] == today_str]
+        today = {"total": 0, "strong": 0, "medium": 0, "developing": 0, "noise": 0}
+        if today_rows:
+            r = today_rows[0]
+            today = {"total": int(r[1] or 0), "strong": int(r[2] or 0),
+                     "medium": int(r[3] or 0), "developing": int(r[4] or 0), "noise": int(r[5] or 0)}
+
+        return {
+            "period_days": days,
+            "today": today,
+            "by_date": [
+                {"date": r[0], "total": int(r[1] or 0), "strong": int(r[2] or 0),
+                 "medium": int(r[3] or 0), "developing": int(r[4] or 0), "noise": int(r[5] or 0)}
+                for r in by_date
+            ],
+            "by_market": [
+                {"market": r[0], "total": int(r[1] or 0), "strong": int(r[2] or 0),
+                 "medium": int(r[3] or 0), "developing": int(r[4] or 0)}
+                for r in by_market
+            ],
+            "by_league": [
+                {"league": r[0], "total": int(r[1] or 0), "strong": int(r[2] or 0),
+                 "medium": int(r[3] or 0), "developing": int(r[4] or 0)}
+                for r in by_league
+            ],
+            "gate_unlock": {
+                "low_ev_gate": low_ev,
+                "low_odds_gate": low_odds,
+                "l3_corners_gate": l3_corners,
+                "total": low_ev + low_odds + l3_corners
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error in get_signal_stats: {e}")
+        return {"error": str(e), "period_days": days, "today": {},
+                "by_date": [], "by_market": [], "by_league": [], "gate_unlock": {}}
+
+
 @app.get("/api/analysis/today")
 async def get_analysis_today():
     """

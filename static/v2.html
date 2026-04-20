@@ -161,6 +161,41 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
 .sc-h-sp{flex:1}
 .sc-h-meta{font-size:9px;color:var(--dim);font-family:'SF Mono',monospace}
 
+/* ── Pipeline Audit bar ── */
+.audit-bar{
+  padding:5px 10px;border-bottom:1px solid var(--line2);
+  display:flex;align-items:center;gap:8px;flex-shrink:0;
+  background:rgba(255,255,255,.018);font-size:10px;cursor:pointer;
+  user-select:none;
+}
+.audit-bar:hover{background:rgba(255,255,255,.03)}
+.audit-lbl{font-size:8px;text-transform:uppercase;letter-spacing:.6px;font-weight:700;color:var(--dim);white-space:nowrap}
+.audit-tiers{display:flex;gap:6px;align-items:center;flex:1}
+.audit-dot{display:flex;align-items:center;gap:3px;font-size:10px;font-family:'SF Mono',monospace;font-weight:700}
+.audit-dot .ad-n{font-size:11px}
+.audit-dot.str .ad-n{color:var(--green)}
+.audit-dot.med .ad-n{color:var(--amber)}
+.audit-dot.dev .ad-n{color:#60a5fa}
+.audit-dot.nse .ad-n{color:var(--dim)}
+.audit-sep{color:var(--dim);font-size:9px}
+.audit-gate{font-size:9px;color:#a78bfa;font-family:'SF Mono',monospace;white-space:nowrap}
+.audit-toggle{font-size:9px;color:var(--dim);white-space:nowrap;margin-left:4px}
+.audit-detail{
+  border-bottom:1px solid var(--line2);background:rgba(255,255,255,.012);
+  padding:8px 10px;display:none;
+}
+.audit-detail.open{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.audit-section{display:flex;flex-direction:column;gap:4px}
+.audit-sh{font-size:8px;text-transform:uppercase;letter-spacing:.6px;font-weight:700;color:var(--dim);margin-bottom:2px}
+.audit-row{display:flex;align-items:center;gap:6px;font-size:10px;padding:2px 0}
+.audit-name{flex:1;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px}
+.audit-bar2{height:3px;border-radius:2px;background:var(--green);min-width:2px}
+.audit-n{font-family:'SF Mono',monospace;font-size:10px;font-weight:700;color:var(--fg);margin-left:2px}
+.audit-mini{display:flex;gap:2px;margin-left:4px}
+.audit-mini span{font-size:8px;font-family:'SF Mono',monospace}
+.audit-mini .s{color:var(--green)}.audit-mini .m{color:var(--amber)}.audit-mini .d{color:#60a5fa}
+@media(max-width:860px){.audit-detail.open{grid-template-columns:1fr}.audit-name{max-width:80px}}
+
 /* ── Table header ── */
 .tbl-hdr{
   display:grid;
@@ -657,6 +692,31 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
       <span class="sc-h-sp"></span>
       <span class="sc-h-meta" id="scanMeta">60s</span>
     </div>
+
+    <!-- Pipeline Audit Bar -->
+    <div class="audit-bar" id="auditBar" onclick="toggleAudit()">
+      <span class="audit-lbl">7d audit</span>
+      <div class="audit-tiers" id="auditTiers">
+        <span class="audit-dot str"><span class="ad-n" id="aud-s">—</span><span style="font-size:8px;color:var(--dim)">str</span></span>
+        <span class="audit-sep">·</span>
+        <span class="audit-dot med"><span class="ad-n" id="aud-m">—</span><span style="font-size:8px;color:var(--dim)">med</span></span>
+        <span class="audit-sep">·</span>
+        <span class="audit-dot dev"><span class="ad-n" id="aud-d">—</span><span style="font-size:8px;color:var(--dim)">dev</span></span>
+        <span class="audit-sep">·</span>
+        <span class="audit-dot nse"><span class="ad-n" id="aud-n">—</span><span style="font-size:8px;color:var(--dim)">noise</span></span>
+      </div>
+      <span class="audit-gate" id="auditGate"></span>
+      <span class="audit-toggle" id="auditToggle">▼ details</span>
+    </div>
+    <div class="audit-detail" id="auditDetail">
+      <div class="audit-section" id="auditMktSection">
+        <div class="audit-sh">By market</div>
+      </div>
+      <div class="audit-section" id="auditLgSection">
+        <div class="audit-sh">By league</div>
+      </div>
+    </div>
+
     <div class="tbl-hdr">
       <span class="th">Edge</span>
       <span class="th">Signal</span>
@@ -1344,6 +1404,88 @@ async function loadAll(){
   /* CLV in background — non-blocking */
   authFetch('/api/v2/clv/proof?days=30&sharp_only=true')
     .then(r=>r.json()).then(d=>{if(d)renderProof(d);}).catch(()=>{});
+  /* Pipeline audit — non-blocking */
+  loadAudit();
+}
+
+/* ── Pipeline Audit ── */
+let _auditOpen = false;
+let _auditData = null;
+
+function toggleAudit(){
+  _auditOpen = !_auditOpen;
+  const det=$('auditDetail');
+  const tog=$('auditToggle');
+  if(det) det.classList.toggle('open', _auditOpen);
+  if(tog) tog.textContent = _auditOpen ? '▲ hide' : '▼ details';
+  if(_auditOpen && _auditData) renderAuditDetail(_auditData);
+}
+
+async function loadAudit(){
+  try{
+    const r = await authFetch('/api/signal_stats?days=7');
+    const d = await r.json();
+    if(d.error) return;
+    _auditData = d;
+    renderAuditBar(d);
+    if(_auditOpen) renderAuditDetail(d);
+  }catch(e){}
+}
+
+function renderAuditBar(d){
+  const totals = d.by_date.reduce((acc,row)=>{
+    acc.strong += row.strong; acc.medium += row.medium;
+    acc.developing += row.developing; acc.noise += row.noise;
+    return acc;
+  },{strong:0,medium:0,developing:0,noise:0});
+  const set = (id,v) => { const el=$(id); if(el) el.textContent=v; };
+  set('aud-s', totals.strong);
+  set('aud-m', totals.medium);
+  set('aud-d', totals.developing);
+  set('aud-n', totals.noise);
+  const gate = d.gate_unlock || {};
+  const gateTotal = (gate.low_ev_gate||0) + (gate.low_odds_gate||0) + (gate.l3_corners_gate||0);
+  const gEl = $('auditGate');
+  if(gEl && gateTotal > 0) gEl.textContent = `+${gateTotal} from unlocked gates`;
+}
+
+function renderAuditDetail(d){
+  const mkt = $('auditMktSection');
+  const lg = $('auditLgSection');
+  if(!mkt || !lg) return;
+
+  const maxMkt = Math.max(...(d.by_market||[]).map(r=>r.total), 1);
+  const maxLg  = Math.max(...(d.by_league||[]).map(r=>r.total), 1);
+
+  const mkRow = (name, row, max) => {
+    const pct = Math.round((row.total/max)*100);
+    return `<div class="audit-row">
+      <span class="audit-name" title="${name}">${name}</span>
+      <div class="audit-bar2" style="width:${Math.max(pct,2)}px"></div>
+      <span class="audit-n">${row.total}</span>
+      <div class="audit-mini">
+        <span class="s">${row.strong}</span>
+        <span style="color:var(--dim)">·</span>
+        <span class="m">${row.medium}</span>
+        <span style="color:var(--dim)">·</span>
+        <span class="d">${row.developing}</span>
+      </div>
+    </div>`;
+  };
+
+  mkt.innerHTML = '<div class="audit-sh">By market</div>' +
+    (d.by_market||[]).slice(0,5).map(r=>mkRow(r.market,r,maxMkt)).join('');
+  lg.innerHTML  = '<div class="audit-sh">By league</div>' +
+    (d.by_league||[]).slice(0,8).map(r=>mkRow(r.league,r,maxLg)).join('');
+
+  /* Gate unlock detail */
+  const gate = d.gate_unlock || {};
+  if(gate.low_ev_gate || gate.low_odds_gate || gate.l3_corners_gate){
+    mkt.innerHTML += `<div class="audit-sh" style="margin-top:8px;color:#a78bfa">Gate unlocks (7d)</div>
+      <div class="audit-row"><span class="audit-name">EV gate &lt;12%</span><span class="audit-n" style="color:#a78bfa">${gate.low_ev_gate||0}</span></div>
+      <div class="audit-row"><span class="audit-name">Odds gate &lt;2.10</span><span class="audit-n" style="color:#a78bfa">${gate.low_odds_gate||0}</span></div>
+      <div class="audit-row"><span class="audit-name">Corners L3 tier</span><span class="audit-n" style="color:#a78bfa">${gate.l3_corners_gate||0}</span></div>`;
+  }
 }
 
 /* Safety net: always render within 5s */
