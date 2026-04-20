@@ -222,8 +222,8 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
 .row{
   display:grid;
   grid-template-columns:56px 92px 1fr 148px 72px;
-  padding:0 10px 0 13px;gap:6px;
-  height:36px;
+  padding:8px 10px 8px 13px;gap:6px;
+  min-height:46px;
   align-items:center;
   border-bottom:1px solid var(--line);
   cursor:pointer;
@@ -240,9 +240,9 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
 
 @media(max-width:860px){
   .row{
-    grid-template-columns:52px 1fr 104px;
-    height:48px;
-    padding:0 8px 0 12px;
+    grid-template-columns:52px 1fr 108px;
+    min-height:64px;
+    padding:8px 8px 8px 12px;
   }
 }
 
@@ -296,8 +296,8 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
   .r-mkt-mob{display:flex;flex-direction:column;gap:2px}
   .r-bks-mob{display:flex;flex-direction:column;align-items:flex-end;gap:1px}
   /* Explicit placement: books top-right, meta bottom-right — prevents meta wrapping to col1 */
-  .r-books{grid-column:3;grid-row:1;align-self:start;justify-self:end;padding-top:5px}
-  .r-meta{grid-column:3;grid-row:1;align-self:end;justify-self:end;padding-bottom:4px}
+  .r-books{grid-column:3;grid-row:1;align-self:start;justify-self:end;padding-top:0}
+  .r-meta{grid-column:3;grid-row:1;align-self:end;justify-self:end;padding-bottom:0}
 }
 @media(min-width:861px){
   .r-mkt-mob-teams{display:none}
@@ -905,7 +905,7 @@ function renderScanner(picks){
       const mktCtTxt=p._mkt_count>1?` · ${p._mkt_count} mkts`:'';
       const subParts=[p.league,p.kickoff_str||ago(p.age_minutes)].filter(Boolean);
       const sub=subParts.join(' · ')+mktCtTxt;
-      const books=rowBooks(p,3);
+      const books=rowBooks(p, window.innerWidth<=860?2:3);
       const scBadge=sc==='strong'?'<span class="r-badge" style="background:rgba(74,222,128,.15);color:#4ade80">STRONG</span>':(sc==='medium'?'<span class="r-badge" style="background:rgba(251,191,36,.12);color:#fbbf24">MEDIUM</span>':'<span class="r-badge" style="background:rgba(148,163,184,.1);color:#94a3b8">DEV</span>');
       return `<div class="row ec-${ec}${isNew?' is-new':''}" data-id="${p.id||''}" onclick="openDetail(${p.id||0},this)">
         <div class="r-edge ${ec}">${fP(p.edge_pct)}</div>
