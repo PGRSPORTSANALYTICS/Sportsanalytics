@@ -36,9 +36,9 @@ MARKETS:
 Daily Limits: 6 match corners, 4 team corners, 6 corner handicaps
 
 VOLUME CONTROL (Jan 10, 2026):
-- Global daily cap: 20 CORNERS picks maximum (HARD STOP)
-- Per-match limit: 3 picks maximum per fixture
-- L3_SOFT_VALUE tier: BLOCKED from production
+- Global daily cap: 10 CORNERS picks maximum (HARD STOP)
+- Per-match limit: 2 picks maximum per fixture (raised Apr 20 2026)
+- L3_SOFT_VALUE tier: INCLUDED in production (unblocked Apr 20 2026 for signal volume)
 - DB check: Queries all_bets table before generating new picks
 """
 
@@ -55,7 +55,7 @@ from bet_filter import BetCandidate
 from multimarket_config import PRODUCT_CONFIGS, get_market_label, MarketType
 
 CORNERS_GLOBAL_DAILY_CAP = 10
-CORNERS_MAX_PICKS_PER_MATCH = 1  # Max 1 corners pick per match — correlated lines skew results
+CORNERS_MAX_PICKS_PER_MATCH = 2  # Max 2 corners picks per match (raised Apr 20 2026 for signal volume)
 
 try:
     from live_learning_config import apply_ev_controls, is_stability_mode_active
@@ -900,8 +900,9 @@ class CornersEngine:
         def filter_by_tier_and_match(candidates, max_count, current_match_counts):
             l1 = sorted([c for c in candidates if c.tier == "L1_HIGH_TRUST"], key=lambda x: -x.ev_sim)
             l2 = sorted([c for c in candidates if c.tier == "L2_MEDIUM_TRUST"], key=lambda x: -x.ev_sim)
+            l3 = sorted([c for c in candidates if c.tier == "L3_SOFT_VALUE"], key=lambda x: -x.ev_sim)
             
-            all_valid = l1 + l2
+            all_valid = l1 + l2 + l3
             
             selected = []
             
@@ -944,7 +945,7 @@ class CornersEngine:
         
         total_selected = len(match_selected) + len(team_selected) + len(handicap_selected)
         logger.info(
-            f"🔢 CORNERS filter: L3 BLOCKED | {total_selected} picks selected "
+            f"🔢 CORNERS filter: L1+L2+L3 | {total_selected} picks selected "
             f"({existing_count} already in DB, {CORNERS_GLOBAL_DAILY_CAP} cap)"
         )
         
@@ -1056,7 +1057,7 @@ def run_corners_cycle(
     
     logger.info(
         f"🔢 CORNERS ENGINE: {len(match_sel)} match + {len(team_sel)} team + {len(hc_sel)} handicap = "
-        f"{len(match_sel) + len(team_sel) + len(hc_sel)} total picks (L3 BLOCKED, max {CORNERS_MAX_PICKS_PER_MATCH}/match)"
+        f"{len(match_sel) + len(team_sel) + len(hc_sel)} total picks (L1+L2+L3, max {CORNERS_MAX_PICKS_PER_MATCH}/match)"
     )
     
     return match_sel, team_sel, hc_sel

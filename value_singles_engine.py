@@ -85,20 +85,17 @@ WATCHLIST_MIN_EV = 0.07        # 7% EV
 WATCHLIST_MIN_CONFIDENCE = 0.50
 
 # Broad scan floor — all candidates enter here, routing decides their layer
-MIN_VALUE_SINGLE_ODDS = 2.10   # Raised from 1.60 — data shows edge only at 2.10+ (Apr 2026)
+MIN_VALUE_SINGLE_ODDS = 1.60   # Lowered Apr 20 2026 — allow standard totals odds range for signal coverage
 MAX_VALUE_SINGLE_ODDS = 2.30   # PRO upper bound (legacy compat)
 MAX_LEARNING_ODDS = 4.00       # Outer scan ceiling
 
-# Candidate scan floor — raised from 5% to 12% (Apr 2026), lowered to 10% for volume (Apr 2026)
+# Candidate scan floor — Apr 20 2026: 2% floor to match signal classify_signal() DEVELOPING band
 # PRO picks still need PRO_MIN_EV (25%) via pgr_scoring routing
-MIN_VALUE_SINGLE_EV = 0.03     # 3% floor — SIGNAL flatten Apr 17 2026: full coverage of dashboard bands (3/5/8/10)
+MIN_VALUE_SINGLE_EV = 0.02     # 2% floor — full signal coverage incl. DEVELOPING band
 MIN_VALUE_SINGLE_CONFIDENCE = PRO_MIN_CONFIDENCE
 
-# Market-specific EV floors (conservative overrides for high-volume markets)
-MARKET_SPECIFIC_MIN_EV: dict = {
-    "FT_OVER_2_5": 0.14,
-    "FT_OVER_3_5": 0.14,
-}
+# Market-specific EV floors — cleared Apr 20 2026 (was 14% for OUs, blocking most signals)
+MARKET_SPECIFIC_MIN_EV: dict = {}
 
 MARKET_SPECIFIC_MIN_ODDS: dict = {}  # Handled by pgr_scoring module
 
@@ -132,7 +129,7 @@ MARKET_SPECIFIC_MIN_ODDS = {
 
 # Odds range for candidate generation (three-layer routing, Mar 30 2026)
 # Routing tiers apply tighter filters: PRO 2.10-2.30, VALUE/WATCHLIST up to 4.00
-MIN_VALUE_SINGLE_ODDS = 2.10  # Candidate floor — raised from 1.60 (Apr 2026)
+MIN_VALUE_SINGLE_ODDS = 1.60  # Apr 20 2026: restored to 1.60 — 2.10 was blocking all standard-odds signals
 MAX_VALUE_SINGLE_ODDS = 2.30  # PRO PICK upper limit (kept for save_value_singles legacy usage)
 MAX_LEARNING_ODDS = 4.00      # Candidate ceiling
 

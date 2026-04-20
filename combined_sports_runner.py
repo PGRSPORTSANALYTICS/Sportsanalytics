@@ -159,18 +159,19 @@ def run_value_singles():
         logger.warning("⏭️ Value Singles SKIPPED - Daily stop-loss active")
         _record_scan_event("value_singles_skipped")
     else:
-        # ── Edge Management Gate ──────────────────────────────────────────────
+        # ── Edge Management Gate (signal-only — never blocks scan) ───────────
+        # Apr 20 2026: Changed from hard-block to advisory-only.
+        # Market intelligence platform generates signals regardless of model ROI.
+        # DISABLED/DEGRADED status is surfaced in signal metadata, not used to stop scanning.
         try:
             from edge_management_engine import get_market_edge_status
             edge = get_market_edge_status("Value Single")
             if edge["status"] == "DISABLED":
                 reason = edge["reasons"][0] if edge["reasons"] else "Edge engine"
-                logger.warning(f"🚫 Value Singles BLOCKED by Edge Management: {reason}")
-                _record_scan_event("value_singles_skipped")
-                return
+                logger.warning(f"⚠️ Value Singles edge DISABLED (advisory only — scan continues): {reason}")
             elif edge["status"] == "DEGRADED":
                 reason = edge["reasons"][0] if edge["reasons"] else "Edge engine"
-                logger.warning(f"⚠️ Value Singles DEGRADED — proceeding with caution: {reason}")
+                logger.warning(f"⚠️ Value Singles DEGRADED — proceeding: {reason}")
         except Exception as e:
             logger.warning(f"⚠️ Edge gate check failed (fail-open): {e}")
         # ─────────────────────────────────────────────────────────────────────
