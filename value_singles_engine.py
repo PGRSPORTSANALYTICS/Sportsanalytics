@@ -750,6 +750,12 @@ class ValueSinglesEngine:
 
             # 4) Evaluate each market
             for market_key, p_model in probs.items():
+                # ── Market intelligence tool — pure 1X2 excluded ──────────────────
+                # Home Win / Draw / Away Win are the least efficient markets.
+                # This platform finds value, not picks. CLV is the metric.
+                if market_key in ("HOME_WIN", "AWAY_WIN", "DRAW"):
+                    continue
+                # ─────────────────────────────────────────────────────────────────
                 bookmaker_data = {}  # Reset per market to avoid stale data leaking between markets
                 odds = odds_dict.get(market_key)
                 _candidates_evaluated += 1  # Count every market evaluation before any filter

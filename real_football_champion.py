@@ -2071,36 +2071,11 @@ class RealFootballChampion:
                             else:
                                 print(f"🚨 UNDER FILTERED LOW EDGE: {match['home_team']} vs {match['away_team']} - {edge:.1f}% < {self.min_edge_under}%")
                 
-                elif market_key == 'h2h':  # Moneyline markets
+                elif market_key == 'h2h':  # Moneyline — data only, no signals
+                    # 1X2 (Home Win / Draw / Away Win) excluded from signal output.
+                    # This is a market intelligence tool — CLV is the metric, not tips.
+                    # h2h data still used for model probabilities (home_win_prob etc.)
                     found_h2h = True
-                    for outcome in outcomes:
-                        name = outcome.get('name')
-                        odds = outcome.get('price', 0)
-                        
-                        # Process Home Win, Away Win (skip Draw - less predictable)
-                        if name in [match['home_team'], match['away_team']] and 1.55 <= odds <= 2.50:
-                            if name == match['home_team']:  # Home Win
-                                implied_prob = 1.0 / odds
-                                true_prob = xg_analysis.get('home_win_prob', 0.33)
-                                edge = (true_prob - implied_prob) * 100
-                                selection = 'Home Win'
-                            else:  # Away Win
-                                implied_prob = 1.0 / odds
-                                true_prob = xg_analysis.get('away_win_prob', 0.33)
-                                edge = (true_prob - implied_prob) * 100
-                                selection = 'Away Win'
-                            
-                            if edge >= self.min_edge:
-                                bm_odds = self.collect_bookmaker_odds(match, selection, 'h2h')
-                                opportunity = self.create_opportunity(
-                                    match, selection, odds, edge,
-                                    home_form, away_form, h2h, xg_analysis, bm_odds
-                                )
-                                # 🔧 CRITICAL: Enforce confidence filtering
-                                if opportunity.confidence >= self.min_confidence:
-                                    potential_opportunities.append((opportunity, edge))
-                                else:
-                                    print(f"⚠️ FILTERED LOW CONFIDENCE: {opportunity.home_team} vs {opportunity.away_team} - {opportunity.confidence}% < {self.min_confidence}%")
                 
                 elif market_key == 'spreads':  # Asian Handicap markets
                     found_spreads = True
@@ -4464,10 +4439,10 @@ def get_seasonal_caps() -> tuple:
     return euro_cap, summer_cap
 
 # Per-match-date caps: max PROD picks for any single match day (regardless of when created)
-MATCH_DATE_CAP_VALUE_SINGLES = 10  # Mar 22, 2026: lowered from 20 — max 10 PROD picks/day quality gate
-MATCH_DATE_CAP_CORNERS = 25   # Mar 19, 2026: scaled up, 62% hit rate proven
-MATCH_DATE_CAP_CARDS = 15     # Mar 19, 2026: scaled up, 87.2% hit rate proven
-MAX_PROD_PICKS_PER_MATCH = 2  # Mar 21, 2026: cross-engine cap — max 2 PROD picks per match total
+MATCH_DATE_CAP_VALUE_SINGLES = 80  # Apr 2026: raised — 1X2 excluded, quality gate is EV ≥ 5%
+MATCH_DATE_CAP_CORNERS = 80   # Apr 2026: raised — volume controlled by EV threshold
+MATCH_DATE_CAP_CARDS = 60     # Apr 2026: raised — volume controlled by EV threshold
+MAX_PROD_PICKS_PER_MATCH = 6  # Apr 2026: raised — 1X2 excluded, multiple markets per match are valid signals
 
 SUMMER_LEAGUE_KEYS = {
     'soccer_usa_mls',
@@ -4649,7 +4624,7 @@ def run_single_cycle():
         return False
 
 
-CORNERS_CARDS_DAILY_CAP = 25
+CORNERS_CARDS_DAILY_CAP = 100  # Apr 2026: raised — signal volume controlled by EV threshold, not arbitrary cap
 
 def run_corners_cards_cycle():
     """Run corners as INDEPENDENT cycle with own daily cap. Cards are handled separately by run_late_cards_cycle() (2-3h before kickoff only)."""
@@ -4848,7 +4823,7 @@ def run_corners_cards_cycle():
         print(f"   ⚠️ Discord props webhook error: {e}")
 
 
-CARDS_DAILY_CAP = 15
+CARDS_DAILY_CAP = 60  # Apr 2026: raised — EV filter is the gate, not volume cap
 
 def run_late_cards_cycle():
     """
