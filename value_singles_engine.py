@@ -892,13 +892,11 @@ class ValueSinglesEngine:
                         elif dynamic_status == 'LEARNING_ONLY':
                             is_learning_only = True
 
-                if is_learning_only:
-                    _reject("rejected_market_type", home_team, away_team, market_key, float(ev), float(odds))
-                    continue
-
                 # League-level learning mode: candidate is allowed through but will be saved
                 # with mode='LEARNING', bet_placed=False (never counts toward caps or P&L).
-                _is_league_learning = _lk in LEARNING_ONLY_LEAGUES
+                # Market-level LEARNING_ONLY also routes here so that learning_stats
+                # accumulates data — without this, AH can never reach 80 bets for promotion.
+                _is_league_learning = _lk in LEARNING_ONLY_LEAGUES or is_learning_only
 
                 if LEARNING_ENGINE_AVAILABLE:
                     combined_conf = compute_bet_confidence(ev, _lk, market_key, 'football')
