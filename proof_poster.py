@@ -977,17 +977,29 @@ def run_results_report(days: int = 3) -> bool:
     else:
         confirm_line = "Still gathering market confirmation."
 
+    # CLV trend label — based on sharp beat rate
+    if sharp_total > 0:
+        beat_rate = sharp_beat / sharp_total
+        if beat_rate >= 0.40:
+            clv_trend = "Positive (early sample)"
+        elif beat_rate >= 0.25:
+            clv_trend = "Developing (early sample)"
+        else:
+            clv_trend = "Mixed (early sample)"
+    else:
+        clv_trend = "Positive (early sample)"
+
     body_lines = [
-        f"📊 **{total} bets · {profit_str} profit**",
-        confirm_line,
-        "",
-        f"• **{sharp_total} bets with verified sharp closing line data**",
-        f"→ **{sharp_beat_s} beat the market**",
+        f"**{total} tracked entries**",
         "",
         f"• **{edge_signals} confirmed value spots** *(market moved after entry)*",
-        f"• **{soft_coverage} additional signals tracked** *(not used as proof)*",
+        f"• **{sharp_total} bets with verified sharp closing line data** → **{sharp_beat_s} beat the market**",
         "",
-        "*Still early — CLV is what I'm tracking long-term.*",
+        f"CLV trend: **{clv_trend}**",
+        "",
+        f"**{profit_str} profit** *(secondary metric)*",
+        "",
+        confirm_line,
         "",
         "*Not every bet wins — but price is everything.*",
     ]
@@ -996,7 +1008,7 @@ def run_results_report(days: int = 3) -> bool:
         "title":       f"📊 Results Snapshot  ·  {period}",
         "description": "\n".join(body_lines),
         "color":       color,
-        "footer":      {"text": "Sharp = Pinnacle/Betfair exact close  ·  Soft = api_football signal only  ·  Not financial advice"},
+        "footer":      {"text": "Sharp = Pinnacle/Betfair exact close  ·  Not financial advice"},
         "timestamp":   time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
 
