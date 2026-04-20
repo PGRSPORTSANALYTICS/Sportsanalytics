@@ -157,7 +157,7 @@ table.dt tr:hover td{background:var(--card2)}
 </div>
 
 <div class="nav">
-<div class="nav-item active" onclick="nav('today')">&#127919; Today's Picks</div>
+<div class="nav-item active" onclick="nav('today')">&#127919; Today's Signals</div>
 <div class="nav-item" onclick="nav('live')">&#128308; Live Tracker</div>
 <div class="nav-item" onclick="nav('bets')">Bets Feed</div>
 <div class="nav-item" onclick="nav('clv')">CLV Analytics</div>
@@ -328,7 +328,7 @@ else if(todayFilter==='cards')filtered=picks.filter(p=>classifyMarket(p.market)=
 else if(todayFilter==='singles')filtered=picks.filter(p=>!['corners','cards'].includes(classifyMarket(p.market)));
 
 if(!filtered.length){
-c.innerHTML='<div class="empty" style="padding:2.5rem;text-align:center"><div style="font-size:2rem;margin-bottom:.5rem">&#127919;</div><div style="color:var(--text2)">No picks for today yet</div><div style="color:var(--text3);font-size:.75rem;margin-top:.3rem">New picks appear here as engines run throughout the day</div></div>';
+c.innerHTML='<div class="empty" style="padding:2.5rem;text-align:center"><div style="font-size:2rem;margin-bottom:.5rem">&#127919;</div><div style="color:var(--text2)">No signals detected today yet</div><div style="color:var(--text3);font-size:.75rem;margin-top:.3rem">New signals appear here as the engine scans throughout the day</div></div>';
 return;
 }
 
@@ -348,7 +348,7 @@ const lost=grpPicks.filter(p=>p.status==='lost').length;
 const upcoming=grpPicks.filter(p=>p.status==='upcoming').length;
 let statsStr='';
 if(won||lost){statsStr=`<span style="font-size:.7rem;color:var(--text3);margin-left:.5rem">${upcoming>0?upcoming+' upcoming · ':''}${won>0?'<span style="color:var(--green)">'+won+' won</span>':''} ${lost>0?'<span style="color:var(--red)">'+lost+' lost</span>':''}</span>`;}
-else{statsStr=`<span style="font-size:.7rem;color:var(--text3);margin-left:.5rem">${grpPicks.length} pick${grpPicks.length>1?'s':''}</span>`;}
+else{statsStr=`<span style="font-size:.7rem;color:var(--text3);margin-left:.5rem">${grpPicks.length} signal${grpPicks.length>1?'s':''}</span>`;}
 html+=`<div style="margin:1rem 0 .5rem;display:flex;align-items:center;gap:.5rem;border-bottom:1px solid var(--border);padding-bottom:.4rem">
 <span style="font-size:.88rem;font-weight:700;color:${g.color}">${g.label}</span>
 ${statsStr}
@@ -406,7 +406,7 @@ ${p.clv_pct!=null?`<div style="font-size:.72rem;color:var(--text3)">CLV ${p.clv_
 <div class="bet-detail" id="${uid}">
 <div class="detail-grid">
 <div>
-<h5 style="color:var(--text3);font-size:.72rem;text-transform:uppercase;margin-bottom:.4rem">Pick Details</h5>
+<h5 style="color:var(--text3);font-size:.72rem;text-transform:uppercase;margin-bottom:.4rem">Signal Details</h5>
 <table class="book-table">
 <tr><td style="color:var(--text3)">Market</td><td>${p.selection}</td></tr>
 <tr><td style="color:var(--text3)">Odds</td><td style="font-weight:700">${(p.odds||0).toFixed(2)}</td></tr>
@@ -474,13 +474,13 @@ const d=await r.json();
 renderLivePicks(d.picks||[]);
 }catch(e){
 if(e.name==='AbortError'){c.innerHTML='<div class="empty" style="padding:2rem;text-align:center"><div style="font-size:2rem;margin-bottom:.5rem">&#9203;</div><div style="color:var(--text2)">Loading timed out</div><div style="color:var(--text3);font-size:.75rem;margin-top:.3rem">API is busy — try refreshing in a moment</div></div>';}
-else{c.innerHTML=`<div class="empty">Error loading live picks: ${e.message}</div>`;}
+else{c.innerHTML=`<div class="empty">Error loading live signals: ${e.message}</div>`;}
 }
 }
 
 function renderLivePicks(picks){
 const c=document.getElementById('livePicksList');
-if(!picks.length){c.innerHTML='<div class="empty" style="padding:2rem;text-align:center"><div style="font-size:2rem;margin-bottom:.5rem">&#128247;</div><div style="color:var(--text2)">No pending picks right now</div><div style="color:var(--text3);font-size:.75rem;margin-top:.3rem">Cards &amp; Corners picks will appear here when generated</div></div>';return}
+if(!picks.length){c.innerHTML='<div class="empty" style="padding:2rem;text-align:center"><div style="font-size:2rem;margin-bottom:.5rem">&#128247;</div><div style="color:var(--text2)">No live signals right now</div><div style="color:var(--text3);font-size:.75rem;margin-top:.3rem">Cards &amp; Corners signals will appear here when detected</div></div>';return}
 
 const live=picks.filter(p=>p.match_status==='LIVE');
 const upcoming=picks.filter(p=>p.match_status==='UPCOMING'||p.match_status==='IN_PROGRESS_NO_DATA'||p.match_status==='IN_PROGRESS_NO_ID');
