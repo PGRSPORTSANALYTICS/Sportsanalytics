@@ -1189,9 +1189,25 @@ function buildMatchMarkets(data,tgt){
     +'<span class="mm-tag">'+tagParts.join(' \u00b7 ')+'</span></div></div>';
   var summary=buildMatchSummary(allMkts);
   var filterBar=buildFilterBar(uid);
-  if(!raw.length){
-    return hdr+summary+filterBar+'<div class="empty-s"><div class="empty-t">'+(allMkts.length?'All filtered \u2014 adjust filters':'No qualifying markets')+'</div></div>';
+  var showingPass=false;
+  if(!raw.length&&allMkts.length){
+    // All signals filtered out — if it's because they're all PASS, show them anyway with a banner
+    var passOnly=allMkts.every(function(m){return m.verdict==='PASS';});
+    if(passOnly){
+      raw=allMkts.slice();
+      showingPass=true;
+    } else {
+      return hdr+summary+filterBar+'<div class="empty-s"><div class="empty-t">All filtered \u2014 adjust filters</div></div>';
+    }
   }
+  if(!raw.length){
+    return hdr+summary+filterBar+'<div class="empty-s"><div class="empty-t">No qualifying markets</div></div>';
+  }
+  var developingBanner=showingPass
+    ?'<div style="margin:8px 12px 4px;padding:8px 12px;border-radius:8px;background:rgba(251,146,60,0.08);border:1px solid rgba(251,146,60,0.2);font-size:11px;color:#fb923c;line-height:1.4">'
+     +'<b>Developing signals only</b> \u2014 edge detected but no sharp confirmation or strong book agreement yet. Monitor for updates.'
+     +'</div>'
+    :'';
   // Sort: PLAY_NOW first, then LATE, WATCH, PASS; within each by confidence_score desc
   var order={PLAY_NOW:0,LATE:1,WATCH:2,PASS:3};
   raw.sort(function(a,b){
@@ -1213,7 +1229,7 @@ function buildMatchMarkets(data,tgt){
     hiddenDiv='<div id="mm-hidden-'+uid+'" style="display:none">'+hidden.map(function(mk){return buildMkCard(mk,tgt,uid);}).join('')+'</div>';
     setTimeout(function(){var l=document.getElementById('mm-btn-lbl-'+uid);if(l)l._orig=ml;},50);
   }
-  return hdr+summary+filterBar+visHtml+moreBtn+hiddenDiv;
+  return hdr+summary+filterBar+developingBanner+visHtml+moreBtn+hiddenDiv;
 }
 
 function openMarketDetail(id,tgt){
