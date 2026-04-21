@@ -5493,9 +5493,9 @@ async def analytics_data(request: Request, days: int = 90):
           AND outcome IN ('won','lost')
           AND timestamp >= EXTRACT(EPOCH FROM NOW() - (%s || ' days')::INTERVAL)::bigint
         GROUP BY league, cat
-        HAVING COUNT(*) FILTER (WHERE outcome IN ('won','lost')) >= 8
+        HAVING COUNT(*) FILTER (WHERE outcome IN ('won','lost')) >= 3
         ORDER BY profit DESC
-        LIMIT 25
+        LIMIT 50
     """, (str(days),), fetch='all') or []
 
     league_split = []

@@ -121,7 +121,7 @@
     <div class="card">
       <div class="card-hd">
         <span class="card-title">Performance by League</span>
-        <span class="card-note" id="lg-note">min 8 settled</span>
+        <span class="card-note" id="lg-note">min 3 settled</span>
       </div>
       <div id="lg-body"><div class="loading">Loading…</div></div>
     </div>
@@ -239,7 +239,7 @@ function renderMarket(rows) {
 
 function renderLeague(rows) {
   const el = document.getElementById('lg-body');
-  document.getElementById('lg-note').textContent = `${rows.length} leagues · min 8 settled`;
+  document.getElementById('lg-note').textContent = `${rows.length} leagues · min 3 settled`;
   if (!rows.length) { el.innerHTML = '<div class="empty-state"><div class="icon">🏆</div>Not enough data yet</div>'; return; }
   let html = `<table><thead><tr>
     <th>League</th><th>Cat</th>
