@@ -454,6 +454,124 @@ def load_all_time_summary():
 
 
 @st.cache_data(ttl=300)
+def load_market_split(days: int = 90):
+    db = DatabaseHelper()
+    rows = db.execute("""
+        SELECT
+            COALESCE(market_category, 'CORE')  AS cat,
+            market                             AS mkt,
+            COUNT(*)                           AS settled,
+            COUNT(*) FILTER (WHERE UPPER(result) IN ('WON','WIN')) AS wins,
+            COALESCE(AVG(clv_pct) FILTER (WHERE clv_pct IS NOT NULL), 0) AS avg_clv,
+            COALESCE(SUM(CASE WHEN UPPER(result) IN ('WON','WIN')  THEN (odds - 1.0)
+                              WHEN UPPER(result) IN ('LOST','LOSS') THEN -1.0 ELSE 0 END), 0) AS profit
+        FROM football_opportunities
+        WHERE mode = 'PROD'
+          AND UPPER(result) IN ('WON','WIN','LOST','LOSS')
+          AND timestamp >= EXTRACT(EPOCH FROM NOW() - (%s || ' days')::INTERVAL)::bigint
+        GROUP BY cat, mkt
+        HAVING COUNT(*) >= 5
+        ORDER BY profit DESC
+    """, (str(days),), fetch='all')
+    return rows or []
+
+
+@st.cache_data(ttl=300)
+def load_league_split(days: int = 90):
+    db = DatabaseHelper()
+    rows = db.execute("""
+        SELECT
+            league,
+            COALESCE(market_category, 'CORE') AS cat,
+            COUNT(*)                          AS settled,
+            COUNT(*) FILTER (WHERE UPPER(result) IN ('WON','WIN')) AS wins,
+            COALESCE(AVG(clv_pct) FILTER (WHERE clv_pct IS NOT NULL), 0) AS avg_clv,
+            COALESCE(SUM(CASE WHEN UPPER(result) IN ('WON','WIN')  THEN (odds - 1.0)
+                              WHEN UPPER(result) IN ('LOST','LOSS') THEN -1.0 ELSE 0 END), 0) AS profit
+        FROM football_opportunities
+        WHERE mode = 'PROD'
+          AND UPPER(result) IN ('WON','WIN','LOST','LOSS')
+          AND timestamp >= EXTRACT(EPOCH FROM NOW() - (%s || ' days')::INTERVAL)::bigint
+        GROUP BY league, cat
+        HAVING COUNT(*) >= 8
+        ORDER BY profit DESC
+        LIMIT 20
+    """, (str(days),), fetch='all')
+    return rows or []
+
+
+@st.cache_data(ttl=300)
+def load_odds_bucket_split(days: int = 90):
+    db = DatabaseHelper()
+    rows = db.execute("""
+        SELECT
+            CASE
+                WHEN odds < 1.60 THEN '< 1.60'
+                WHEN odds < 1.80 THEN '1.60 – 1.79'
+                WHEN odds < 2.00 THEN '1.80 – 1.99'
+                WHEN odds < 2.50 THEN '2.00 – 2.49'
+                WHEN odds < 3.00 THEN '2.50 – 2.99'
+                ELSE '3.00+'
+            END                                AS bucket,
+            CASE
+                WHEN odds < 1.60 THEN 0
+                WHEN odds < 1.80 THEN 1
+                WHEN odds < 2.00 THEN 2
+                WHEN odds < 2.50 THEN 3
+                WHEN odds < 3.00 THEN 4
+                ELSE 5
+            END                                AS sort_order,
+            COUNT(*)                           AS settled,
+            COUNT(*) FILTER (WHERE UPPER(result) IN ('WON','WIN')) AS wins,
+            COALESCE(AVG(clv_pct) FILTER (WHERE clv_pct IS NOT NULL), 0) AS avg_clv,
+            COALESCE(SUM(CASE WHEN UPPER(result) IN ('WON','WIN')  THEN (odds - 1.0)
+                              WHEN UPPER(result) IN ('LOST','LOSS') THEN -1.0 ELSE 0 END), 0) AS profit,
+            AVG(odds)                          AS avg_odds
+        FROM football_opportunities
+        WHERE mode = 'PROD'
+          AND UPPER(result) IN ('WON','WIN','LOST','LOSS')
+          AND odds > 0
+          AND timestamp >= EXTRACT(EPOCH FROM NOW() - (%s || ' days')::INTERVAL)::bigint
+        GROUP BY bucket, sort_order
+        HAVING COUNT(*) >= 5
+        ORDER BY sort_order
+    """, (str(days),), fetch='all')
+    return rows or []
+
+
+@st.cache_data(ttl=600)
+def load_timing_drift(days: int = 90):
+    """
+    Timing analysis: open → 5min → close odds drift per market category.
+    Shows whether the model is entering early (5min drift positive = odds rose after signal)
+    or late (5min drift negative = market moved against the pick).
+    """
+    db = DatabaseHelper()
+    rows = db.execute("""
+        SELECT
+            COALESCE(market_category, 'CORE')           AS cat,
+            market                                      AS mkt,
+            COUNT(*) FILTER (WHERE odds_5min IS NOT NULL) AS n_5min,
+            COUNT(*) FILTER (WHERE close_odds IS NOT NULL) AS n_close,
+            AVG((odds_5min  / NULLIF(open_odds,0) - 1) * 100)
+                FILTER (WHERE odds_5min IS NOT NULL AND open_odds > 0)  AS avg_5min_drift,
+            AVG((close_odds / NULLIF(open_odds,0) - 1) * 100)
+                FILTER (WHERE close_odds IS NOT NULL AND open_odds > 0) AS avg_close_drift,
+            AVG(clv_pct) FILTER (WHERE clv_pct IS NOT NULL)             AS avg_clv
+        FROM football_opportunities
+        WHERE mode = 'PROD'
+          AND open_odds IS NOT NULL
+          AND open_odds > 0
+          AND timestamp >= EXTRACT(EPOCH FROM NOW() - (%s || ' days')::INTERVAL)::bigint
+        GROUP BY cat, mkt
+        HAVING COUNT(*) FILTER (WHERE odds_5min IS NOT NULL) >= 5
+            OR COUNT(*) FILTER (WHERE close_odds IS NOT NULL) >= 5
+        ORDER BY cat, mkt
+    """, (str(days),), fetch='all')
+    return rows or []
+
+
+@st.cache_data(ttl=300)
 def load_clv_proof_of_edge(days: int = 30):
     db = DatabaseHelper()
     rows = db.execute("""
@@ -1136,15 +1254,134 @@ with tab_track:
         section_title("Daily Units", "📊")
         st.plotly_chart(fig2, use_container_width=True, config={"displayModeBar": False})
 
-        market_data = load_all_time_summary()
-        if market_data:
-            st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)
-            section_title("Performance by Market", "🎯")
-            mdf = pd.DataFrame(market_data, columns=["Market", "Picks", "Wins", "Units"])
-            mdf["Market"] = mdf["Market"].apply(_clean_market)
-            mdf["Hit Rate"] = mdf.apply(lambda r: f"{r['Wins']/r['Picks']*100:.0f}%" if r["Picks"] > 0 else "-", axis=1)
-            mdf["Units"] = mdf["Units"].apply(lambda x: f"{x:+.1f}u")
-            st.dataframe(mdf.drop(columns=["Wins"]), use_container_width=True, hide_index=True)
+        # ── Split Analytics ──────────────────────────────────────────────────────
+        st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)
+        section_title("Split Analysis", "🔬")
+        st.caption(f"All splits use {days}-day window · min 5 settled signals per group · PROD mode only")
+
+        split_tab_mkt, split_tab_lg, split_tab_odds, split_tab_timing = st.tabs([
+            "By Market", "By League", "By Odds Bucket", "Timing / Drift"
+        ])
+
+        # ── By Market ──────────────────────────────────────────────────────────
+        with split_tab_mkt:
+            mkt_rows = load_market_split(days)
+            if not mkt_rows:
+                st.caption("Not enough settled data yet.")
+            else:
+                CAT_COLOR = {'CORE': '#60A5FA', 'SPECIAL': '#FB923C'}
+                mdf2 = pd.DataFrame(mkt_rows, columns=["Cat", "Market", "Settled", "Wins", "Avg CLV%", "Profit (u)"])
+                mdf2["Market"]    = mdf2["Market"].apply(_clean_market)
+                mdf2["Hit Rate"]  = mdf2.apply(lambda r: f"{r['Wins']/r['Settled']*100:.0f}%" if r["Settled"] > 0 else "—", axis=1)
+                mdf2["Avg CLV%"]  = mdf2["Avg CLV%"].apply(lambda x: f"{float(x):+.2f}%")
+                mdf2["ROI"]       = [
+                    f"{(float(r['Profit (u)']) / int(r['Settled']) * 100):+.1f}%"
+                    if int(r["Settled"]) > 0 else "—"
+                    for _, r in mdf2.iterrows()
+                ]
+                mdf2["Profit (u)"] = mdf2["Profit (u)"].apply(lambda x: f"{float(x):+.2f}u")
+                st.dataframe(
+                    mdf2[["Cat", "Market", "Settled", "Hit Rate", "ROI", "Avg CLV%", "Profit (u)"]],
+                    use_container_width=True, hide_index=True
+                )
+
+        # ── By League ──────────────────────────────────────────────────────────
+        with split_tab_lg:
+            lg_rows = load_league_split(days)
+            if not lg_rows:
+                st.caption("Not enough settled data yet.")
+            else:
+                ldf = pd.DataFrame(lg_rows, columns=["League", "Cat", "Settled", "Wins", "Avg CLV%", "Profit (u)"])
+                ldf["Hit Rate"]  = ldf.apply(lambda r: f"{r['Wins']/r['Settled']*100:.0f}%" if r["Settled"] > 0 else "—", axis=1)
+                ldf["Avg CLV%"]  = ldf["Avg CLV%"].apply(lambda x: f"{float(x):+.2f}%")
+                ldf["ROI"]       = [
+                    f"{(float(r['Profit (u)']) / int(r['Settled']) * 100):+.1f}%"
+                    if int(r["Settled"]) > 0 else "—"
+                    for _, r in ldf.iterrows()
+                ]
+                ldf["Profit (u)"] = ldf["Profit (u)"].apply(lambda x: f"{float(x):+.2f}u")
+                st.dataframe(
+                    ldf[["League", "Cat", "Settled", "Hit Rate", "ROI", "Avg CLV%", "Profit (u)"]],
+                    use_container_width=True, hide_index=True
+                )
+
+        # ── By Odds Bucket ─────────────────────────────────────────────────────
+        with split_tab_odds:
+            bkt_rows = load_odds_bucket_split(days)
+            if not bkt_rows:
+                st.caption("Not enough settled data yet.")
+            else:
+                bdf = pd.DataFrame(bkt_rows, columns=["Bucket", "_sort", "Settled", "Wins", "Avg CLV%", "Profit (u)", "Avg Odds"])
+                bdf = bdf.sort_values("_sort")
+                bdf["Hit Rate"]   = bdf.apply(lambda r: f"{r['Wins']/r['Settled']*100:.0f}%" if r["Settled"] > 0 else "—", axis=1)
+                bdf["Avg CLV%"]   = bdf["Avg CLV%"].apply(lambda x: f"{float(x):+.2f}%")
+                bdf["ROI"]        = [
+                    f"{(float(r['Profit (u)']) / int(r['Settled']) * 100):+.1f}%"
+                    if int(r["Settled"]) > 0 else "—"
+                    for _, r in bdf.iterrows()
+                ]
+                bdf["Avg Odds"]   = bdf["Avg Odds"].apply(lambda x: f"{float(x):.2f}")
+                bdf["Profit (u)"] = bdf["Profit (u)"].apply(lambda x: f"{float(x):+.2f}u")
+
+                # Visual bar chart of ROI by bucket
+                roi_vals = [(float(r['Profit (u)'].replace('u','')) / int(r['Settled']) * 100)
+                            if int(r['Settled']) > 0 else 0
+                            for _, r in bdf.iterrows()]
+                fig_bkt = go.Figure(go.Bar(
+                    x=bdf["Bucket"].tolist(),
+                    y=roi_vals,
+                    marker_color=["#00F59D" if v >= 0 else "#FF4B6B" for v in roi_vals],
+                    text=[f"{v:+.1f}%" for v in roi_vals],
+                    textposition="outside",
+                    hovertemplate="%{x}<br>ROI: %{y:+.1f}%<extra></extra>",
+                ))
+                fig_bkt.update_layout(
+                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                    font=dict(color="#9BA0B5", size=12),
+                    margin=dict(l=10, r=10, t=20, b=10), height=220,
+                    showlegend=False,
+                    xaxis=dict(gridcolor="#1C2030"),
+                    yaxis=dict(gridcolor="#1C2030", ticksuffix="%"),
+                )
+                st.plotly_chart(fig_bkt, use_container_width=True, config={"displayModeBar": False})
+                st.dataframe(
+                    bdf[["Bucket", "Avg Odds", "Settled", "Hit Rate", "ROI", "Avg CLV%", "Profit (u)"]],
+                    use_container_width=True, hide_index=True
+                )
+
+        # ── Timing / Drift ─────────────────────────────────────────────────────
+        with split_tab_timing:
+            timing_rows = load_timing_drift(days)
+
+            st.markdown("""
+            <div style="padding:12px 16px;border-radius:8px;background:rgba(96,165,250,0.06);
+                        border:1px solid rgba(96,165,250,0.2);margin-bottom:16px;font-size:0.82rem;color:#C4C9DC;">
+                <b style="color:#60A5FA;">How to read this:</b><br>
+                <b>5-min drift</b> = how much the odds changed in the first 5 min after the signal was generated.<br>
+                <span style="color:#00F59D;">Positive drift</span> = odds rose → market agreed with us later → <b>you were early</b>.<br>
+                <span style="color:#FF4B6B;">Negative drift</span> = odds fell → market moved against → <b>model or timing issue</b>.<br>
+                <b>CLV drift</b> = same comparison vs the final closing line. The gold standard.
+            </div>
+            """, unsafe_allow_html=True)
+
+            if not timing_rows:
+                st.caption("Timing data accumulates as the 5-min capture runs each cycle. Check back soon.")
+            else:
+                tdf = pd.DataFrame(timing_rows, columns=[
+                    "Cat", "Market", "5min N", "Close N", "5min Drift", "Close Drift", "Avg CLV%"
+                ])
+                tdf["Market"] = tdf["Market"].apply(_clean_market)
+                tdf["5min Drift"] = tdf["5min Drift"].apply(
+                    lambda x: f"{float(x):+.2f}%" if x is not None else "—")
+                tdf["Close Drift"] = tdf["Close Drift"].apply(
+                    lambda x: f"{float(x):+.2f}%" if x is not None else "—")
+                tdf["Avg CLV%"] = tdf["Avg CLV%"].apply(
+                    lambda x: f"{float(x):+.2f}%" if x is not None else "—")
+                st.dataframe(
+                    tdf[["Cat", "Market", "5min N", "5min Drift", "Close N", "Close Drift", "Avg CLV%"]],
+                    use_container_width=True, hide_index=True
+                )
+                st.caption("5-min N = signals with 5-min data captured · Close N = signals with closing line data")
 
         if not is_premium:
             st.markdown('<hr class="pgr-divider">', unsafe_allow_html=True)

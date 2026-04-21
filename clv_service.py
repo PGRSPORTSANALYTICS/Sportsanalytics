@@ -1282,7 +1282,115 @@ class CLVService:
             stats['failed'], stats['na'],
             f"{stats['avg_clv']:+.2f}%" if stats['avg_clv'] is not None else "—"
         )
+
+        # ── 5-minute drift capture (runs every cycle) ─────────────────────────
+        try:
+            drift_updated = self.capture_early_drift()
+            if drift_updated:
+                logger.info("📊 5-min drift: captured %d pick(s)", drift_updated)
+        except Exception as drift_exc:
+            logger.warning("5-min drift capture failed: %s", drift_exc)
+
         return stats
+
+    def capture_early_drift(self) -> int:
+        """
+        Capture market odds ~5 minutes after a signal is generated.
+
+        Finds picks created 3–15 minutes ago that still have odds_5min IS NULL,
+        fetches their current odds from TheOddsAPI, and saves as odds_5min.
+
+        This enables:
+        - Timing analysis (were we early/late vs the market?)
+        - Detecting whether the model or the timing is the issue
+        - Per-bet drift: open → 5min → close
+        """
+        MIN_AGE_SEC = 3 * 60     # at least 3 min old
+        MAX_AGE_SEC = 20 * 60    # no older than 20 min
+        now = _now()
+
+        try:
+            rows = db_helper.execute("""
+                SELECT id, home_team, away_team, league,
+                       market, selection, open_odds, kickoff_epoch, kickoff_utc,
+                       best_odds_bookmaker, fixture_id
+                FROM football_opportunities
+                WHERE odds_5min    IS NULL
+                  AND open_ts      IS NOT NULL
+                  AND open_ts      >= %s
+                  AND open_ts      <= %s
+                  AND open_odds    IS NOT NULL
+                  AND status       = 'pending'
+            """, (now - MAX_AGE_SEC, now - MIN_AGE_SEC), fetch='all') or []
+        except Exception as exc:
+            logger.warning("capture_early_drift: DB query failed: %s", exc)
+            return 0
+
+        if not rows:
+            return 0
+
+        logger.info("📊 5-min drift: %d candidate(s)", len(rows))
+        updated = 0
+
+        for row in rows:
+            bet = {
+                'id':             row[0],
+                'home_team':      row[1],
+                'away_team':      row[2],
+                'league':         row[3],
+                'market':         row[4],
+                'selection':      row[5],
+                'open_odds':      float(row[6]),
+                'kickoff_epoch':  int(row[7]) if row[7] else 0,
+                'kickoff_utc':    row[8],
+                'seconds_to_ko':  (int(row[7]) - now) if row[7] else 0,
+                'open_source_book': row[9] or 'unknown',
+                'fixture_id':     row[10],
+            }
+
+            db_market = bet.get('market', '')
+            if not _is_supported(db_market):
+                continue
+
+            mtype = _market_type(db_market, bet.get('selection', ''))
+            sport = _sport_key(bet.get('league', ''))
+
+            current_odds = None
+            if mtype and sport:
+                try:
+                    result = self.fetch_closing_odds(bet)
+                    if result:
+                        current_odds = result['odds']
+                except Exception:
+                    pass
+
+            if current_odds and 1.0 < current_odds < 50.0:
+                # Basic drift sanity check — reject if >40% away from open
+                drift_pct = abs(current_odds - bet['open_odds']) / bet['open_odds']
+                if drift_pct > 0.40:
+                    logger.debug(
+                        "5-min drift: rejected suspicious move %.2f→%.2f (%.0f%%) for bet %d",
+                        bet['open_odds'], current_odds, drift_pct * 100, bet['id']
+                    )
+                    continue
+                try:
+                    db_helper.execute("""
+                        UPDATE football_opportunities
+                        SET odds_5min    = %s,
+                            odds_5min_ts = %s
+                        WHERE id = %s
+                          AND odds_5min IS NULL
+                    """, (float(current_odds), now, bet['id']))
+                    updated += 1
+                    logger.debug(
+                        "5-min drift: bet=%d  %.2f → %.2f  (%+.1f%%)",
+                        bet['id'], bet['open_odds'], current_odds,
+                        (current_odds / bet['open_odds'] - 1) * 100,
+                    )
+                except Exception as exc:
+                    logger.warning("5-min drift: DB update failed for bet %d: %s", bet['id'], exc)
+
+        return updated
 
 
 # ─────────────────────────────────────────────────────────────────────────────
