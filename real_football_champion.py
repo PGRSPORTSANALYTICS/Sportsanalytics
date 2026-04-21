@@ -4169,8 +4169,9 @@ class RealFootballChampion:
                  open_odds, odds_source, trust_level,
                  odds_by_bookmaker, best_odds_value, best_odds_bookmaker, avg_odds, fair_odds, fixture_id,
                  model_prob, calibrated_prob, sim_probability, ev_sim, disagreement,
-                 open_ts, pgr_score, league_tier, routing_reason, clv_score, clv_tier)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 open_ts, pgr_score, league_tier, routing_reason, clv_score, clv_tier,
+                 market_category)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (home_team, away_team, selection, market, match_date, mode) DO NOTHING
                 RETURNING id
             ''', (
@@ -4217,6 +4218,7 @@ class RealFootballChampion:
                 routing_reason_val,
                 opp_dict.get('clv_score'),
                 opp_dict.get('clv_tier'),
+                'CORE',
             ), fetch='one')
             
             # Only proceed if a new row was inserted (ON CONFLICT DO NOTHING returns NULL if duplicate)
@@ -5288,8 +5290,8 @@ def _save_bet_candidates_to_db(candidates, market_label: str, force_learning: bo
                  trust_level, sim_probability, ev_sim,
                  odds_by_bookmaker, best_odds_value, best_odds_bookmaker, avg_odds, fair_odds,
                  model_prob, calibrated_prob,
-                 open_ts)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 open_ts, market_category)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (home_team, away_team, selection, market, match_date, mode) DO NOTHING
                 RETURNING id
             ''', (
@@ -5327,6 +5329,7 @@ def _save_bet_candidates_to_db(candidates, market_label: str, force_learning: bo
                 float(candidate.confidence),   # model_prob (0-1 range)
                 float(candidate.confidence),   # calibrated_prob (same as model_prob for corners)
                 int(time.time()),  # open_ts = epoch when pick was created
+                'SPECIAL',
             ), fetch='one')
             
             if result:

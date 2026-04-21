@@ -309,14 +309,43 @@ def load_todays_picks():
                fair_odds, model_prob, best_odds_value, best_odds_bookmaker,
                odds_by_bookmaker, timestamp,
                clv_pct, clv_status, disagreement, hidden_value_status, profile_boost_score,
-               clv_source_book
+               clv_source_book,
+               COALESCE(market_category, 'CORE') as market_category
         FROM football_opportunities
         WHERE mode = 'PROD'
           AND match_date = CURRENT_DATE::text
         ORDER BY timestamp DESC
-        LIMIT 40
+        LIMIT 60
     """, fetch='all')
     return rows or []
+
+
+@st.cache_data(ttl=300)
+def load_category_performance():
+    db = DatabaseHelper()
+    rows = db.execute("""
+        SELECT
+            COALESCE(market_category, 'CORE') AS cat,
+            COUNT(*) FILTER (WHERE UPPER(result) IN ('WON','WIN','LOST','LOSS')) AS settled,
+            COUNT(*) FILTER (WHERE UPPER(result) IN ('WON','WIN'))               AS wins,
+            COALESCE(AVG(clv_pct) FILTER (WHERE clv_pct IS NOT NULL), 0)         AS avg_clv,
+            COALESCE(SUM(CASE
+                WHEN UPPER(result) IN ('WON','WIN')  THEN (odds - 1.0)
+                WHEN UPPER(result) IN ('LOST','LOSS') THEN -1.0
+                ELSE 0 END), 0) AS profit_units
+        FROM football_opportunities
+        WHERE mode = 'PROD'
+          AND UPPER(status) = 'SETTLED'
+          AND timestamp >= EXTRACT(EPOCH FROM NOW() - INTERVAL '90 days')::bigint
+        GROUP BY cat
+    """, fetch='all')
+    result = {'CORE': None, 'SPECIAL': None}
+    for r in (rows or []):
+        cat, settled, wins, avg_clv, profit = r[0], r[1], r[2], float(r[3] or 0), float(r[4] or 0)
+        roi = (profit / settled * 100) if settled > 0 else 0.0
+        hr  = (wins / settled * 100) if settled > 0 else 0.0
+        result[cat] = {'settled': settled, 'wins': wins, 'clv': avg_clv, 'roi': roi, 'hr': hr, 'profit': profit}
+    return result
 
 
 @st.cache_data(ttl=120)
@@ -714,10 +743,90 @@ else:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# MARKETS PERFORMANCE HEADER
+# ─────────────────────────────────────────────────────────────────────────────
+_cat_perf = load_category_performance()
+_cp_core    = _cat_perf.get('CORE')
+_cp_special = _cat_perf.get('SPECIAL')
+
+def _perf_val(d, key, fmt="+.1f", suffix="", fallback="—"):
+    if d is None: return fallback
+    v = d.get(key)
+    if v is None: return fallback
+    try:
+        return f"{v:{fmt}}{suffix}"
+    except Exception:
+        return fallback
+
+_core_clv   = _perf_val(_cp_core,    'clv',     '+.2f', '%')
+_core_roi   = _perf_val(_cp_core,    'roi',     '+.1f', '%')
+_corner_clv = _perf_val(_cp_special, 'clv',     '+.2f', '%')
+_corner_roi = _perf_val(_cp_special, 'roi',     '+.1f', '%')
+_core_n     = _cp_core['settled']    if _cp_core    else 0
+_corner_n   = _cp_special['settled'] if _cp_special else 0
+
+def _clv_color(s):
+    if s == '—': return '#9BA0B5'
+    try: return '#00F59D' if float(s.replace('%','')) >= 0 else '#FF4B6B'
+    except: return '#9BA0B5'
+
+def _roi_color(s):
+    if s == '—': return '#9BA0B5'
+    try: return '#4ade80' if float(s.replace('%','')) >= 0 else '#FF4B6B'
+    except: return '#9BA0B5'
+
+st.markdown(f"""
+<div style="display:flex;gap:12px;flex-wrap:wrap;margin:0 0 20px 0;">
+  <div style="flex:1;min-width:220px;padding:16px 20px;border-radius:12px;
+              background:#0F1628;border:1px solid #1C2030;">
+    <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.1em;
+                color:#9BA0B5;margin-bottom:10px;">⚡ Core Markets</div>
+    <div style="display:flex;gap:20px;align-items:baseline;">
+      <div>
+        <div style="font-size:1.4rem;font-weight:700;color:{_clv_color(_core_clv)};">{_core_clv}</div>
+        <div style="font-size:0.7rem;color:#9BA0B5;margin-top:2px;">Avg CLV</div>
+      </div>
+      <div>
+        <div style="font-size:1.4rem;font-weight:700;color:{_roi_color(_core_roi)};">{_core_roi}</div>
+        <div style="font-size:0.7rem;color:#9BA0B5;margin-top:2px;">ROI</div>
+      </div>
+      <div style="margin-left:auto;text-align:right;">
+        <div style="font-size:1rem;font-weight:600;color:#F2F5F8;">{_core_n}</div>
+        <div style="font-size:0.7rem;color:#9BA0B5;margin-top:2px;">Settled</div>
+      </div>
+    </div>
+    <div style="font-size:0.7rem;color:#9BA0B5;margin-top:8px;">Goals O/U · BTTS · AH · Double Chance</div>
+  </div>
+  <div style="flex:1;min-width:220px;padding:16px 20px;border-radius:12px;
+              background:#0F1628;border:1px solid #1C2030;">
+    <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.1em;
+                color:#9BA0B5;margin-bottom:10px;">🔢 Special Markets</div>
+    <div style="display:flex;gap:20px;align-items:baseline;">
+      <div>
+        <div style="font-size:1.4rem;font-weight:700;color:{_clv_color(_corner_clv)};">{_corner_clv}</div>
+        <div style="font-size:0.7rem;color:#9BA0B5;margin-top:2px;">Avg CLV</div>
+      </div>
+      <div>
+        <div style="font-size:1.4rem;font-weight:700;color:{_roi_color(_corner_roi)};">{_corner_roi}</div>
+        <div style="font-size:0.7rem;color:#9BA0B5;margin-top:2px;">ROI</div>
+      </div>
+      <div style="margin-left:auto;text-align:right;">
+        <div style="font-size:1rem;font-weight:600;color:#F2F5F8;">{_corner_n}</div>
+        <div style="font-size:0.7rem;color:#9BA0B5;margin-top:2px;">Settled</div>
+      </div>
+    </div>
+    <div style="font-size:0.7rem;color:#9BA0B5;margin-top:8px;">Corners · Cards</div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # TABS
 # ─────────────────────────────────────────────────────────────────────────────
-tab_today, tab_scanner, tab_track, tab_clv, tab_bt = st.tabs([
-    "⚡ Today's Signals",
+tab_core, tab_special, tab_scanner, tab_track, tab_clv, tab_bt = st.tabs([
+    "⚡ Core Signals",
+    "🔢 Corners & Cards",
     "🔍 Market Scanner",
     "📈 Track Record",
     "🎯 Proof of Edge",
@@ -726,115 +835,154 @@ tab_today, tab_scanner, tab_track, tab_clv, tab_bt = st.tabs([
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TAB 1 — TODAY'S SIGNALS
 # ─────────────────────────────────────────────────────────────────────────────
-with tab_today:
-    picks = load_todays_picks()
+# SHARED: signal card renderer used by both Core and Special tabs
+# ─────────────────────────────────────────────────────────────────────────────
+def _category_badge(market_cat, market_raw):
+    m = str(market_raw).lower()
+    if market_cat == 'SPECIAL':
+        if 'corner' in m:
+            return '<span style="font-size:0.65rem;padding:2px 8px;border-radius:999px;background:rgba(251,146,60,0.15);color:#FB923C;border:1px solid rgba(251,146,60,0.4);font-weight:600;letter-spacing:0.05em;">CORNERS</span>'
+        return '<span style="font-size:0.65rem;padding:2px 8px;border-radius:999px;background:rgba(248,113,113,0.15);color:#F87171;border:1px solid rgba(248,113,113,0.4);font-weight:600;letter-spacing:0.05em;">CARDS</span>'
+    return '<span style="font-size:0.65rem;padding:2px 8px;border-radius:999px;background:rgba(96,165,250,0.15);color:#60A5FA;border:1px solid rgba(96,165,250,0.4);font-weight:600;letter-spacing:0.05em;">CORE</span>'
 
-    today_wins     = sum(1 for p in picks if str(p[9] or "").upper() == "WON")
-    today_losses   = sum(1 for p in picks if str(p[9] or "").upper() == "LOST")
-    today_pend     = sum(1 for p in picks if str(p[8] or "").upper() == "PENDING")
-    today_settled  = today_wins + today_losses
-    today_hr       = (today_wins / today_settled * 100) if today_settled > 0 else 0.0
+
+def _render_signals(picks_list, is_premium_user, empty_icon="⚡", empty_msg="No signals detected yet today.", empty_sub="Engine scans every 12 minutes — check back soon."):
+    wins    = sum(1 for p in picks_list if str(p[9] or "").upper() == "WON")
+    losses  = sum(1 for p in picks_list if str(p[9] or "").upper() == "LOST")
+    pend    = sum(1 for p in picks_list if str(p[8] or "").upper() == "PENDING")
+    settled = wins + losses
+    hr      = (wins / settled * 100) if settled > 0 else 0.0
 
     st.markdown(f"""
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px;">
-        <span class="stat-pill"><b style="color:#00F59D;">{today_wins}</b>&nbsp;won today</span>
-        <span class="stat-pill"><b style="color:#FF4B6B;">{today_losses}</b>&nbsp;lost</span>
-        <span class="stat-pill"><b style="color:#FBBF24;">{today_pend}</b>&nbsp;pending</span>
-        {'<span class="stat-pill"><b>Hit rate: ' + f'{today_hr:.0f}%</b></span>' if today_settled > 0 else ''}
+        <span class="stat-pill"><b style="color:#00F59D;">{wins}</b>&nbsp;won</span>
+        <span class="stat-pill"><b style="color:#FF4B6B;">{losses}</b>&nbsp;lost</span>
+        <span class="stat-pill"><b style="color:#FBBF24;">{pend}</b>&nbsp;pending</span>
+        {'<span class="stat-pill"><b>Hit rate: ' + f'{hr:.0f}%</b></span>' if settled > 0 else ''}
     </div>
     """, unsafe_allow_html=True)
 
-    if not picks:
-        st.markdown("""
+    if not picks_list:
+        st.markdown(f"""
         <div class="empty-state">
-            <div class="big">⚡</div>
-            <p>No signals detected yet today.<br>Engine scans every 12 minutes — check back soon.</p>
+            <div class="big">{empty_icon}</div>
+            <p>{empty_msg}<br>{empty_sub}</p>
+        </div>
+        """, unsafe_allow_html=True)
+        return
+
+    if is_premium_user:
+        col_a, col_b = st.columns(2)
+        for i, p in enumerate(picks_list):
+            home, away, league, market, selection, odds = p[0],p[1],p[2],p[3],p[4],p[5]
+            conf, edge, status, result, ko = p[6],p[7],p[8],p[9],p[10]
+            fair_odds, model_prob = p[11],p[12]
+            clv_pct_val  = p[17]
+            clv_src_book = p[22] if len(p) > 22 else None
+            market_cat   = p[23] if len(p) > 23 else 'CORE'
+            conf_lbl, conf_cls = _clean_confidence(conf)
+            badge      = _result_badge(status, result)
+            clv_badge  = _clv_status_badge(clv_src_book, clv_pct_val)
+            cat_badge  = _category_badge(market_cat, market)
+            card_cls   = _pick_card_class(result)
+            market_clean = _clean_market(market)
+            edge_str   = f"+{edge:.1f}%" if edge else "—"
+            ko_str     = str(ko)[:5] if ko else "—"
+            fair_str   = f"{float(fair_odds):.2f}" if fair_odds else "—"
+            model_str  = (f"{float(model_prob)*100:.0f}%" if model_prob and float(model_prob) <= 1
+                          else (f"{float(model_prob):.0f}%" if model_prob else "—"))
+            clv_str    = f"{float(clv_pct_val):+.1f}%" if clv_pct_val is not None else None
+            html = f"""
+            <div class="{card_cls}">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+                    <div style="display:flex;gap:6px;align-items:center;">
+                        {cat_badge}
+                        <span style="font-size:0.78rem;color:#9BA0B5;">{league}</span>
+                    </div>
+                    <div style="display:flex;gap:6px;align-items:center;">{clv_badge}{badge}</div>
+                </div>
+                <div class="pick-match">{home} vs {away}</div>
+                <div class="pick-selection">{selection}</div>
+                <div class="pick-meta">
+                    <span>Odds <b style="color:#F2F5F8;">{float(odds):.2f}</b></span>
+                    <span>{market_clean}</span>
+                    <span>KO {ko_str}</span>
+                    <span class="badge badge-{'high' if conf_cls=='high' else ('medium' if conf_cls=='medium' else 'low')}">{conf_lbl}</span>
+                </div>
+                <div class="pick-meta" style="margin-top:6px;">
+                    <span>Edge <b style="color:#00F59D;">{edge_str}</b></span>
+                    <span>Fair <b style="color:#F2F5F8;">{fair_str}</b></span>
+                    <span>Model <b style="color:#F2F5F8;">{model_str}</b></span>
+                    {f'<span>CLV <b style="color:#4ade80;">{clv_str}</b></span>' if clv_str else ''}
+                </div>
+            </div>"""
+            if i % 2 == 0:
+                col_a.markdown(html, unsafe_allow_html=True)
+            else:
+                col_b.markdown(html, unsafe_allow_html=True)
+
+        st.markdown("""
+        <div class="trust-bar">
+            <span><span class="chk">&#10003;</span> No cross-line comparisons</span>
+            <span><span class="chk">&#10003;</span> No soft book validation</span>
+            <span><span class="chk">&#10003;</span> All CLV verified vs sharp closing lines</span>
+            <span style="margin-left:auto;font-size:0.70rem;letter-spacing:0.1em;
+                         color:#334155;text-transform:uppercase;">
+                Sharp verified system &middot; Est. 2025
+            </span>
         </div>
         """, unsafe_allow_html=True)
     else:
-        if is_premium:
-            # ── PREMIUM: full picks ──────────────────────────────────────────
-            col_a, col_b = st.columns(2)
-            for i, p in enumerate(picks):
-                home, away, league, market, selection, odds = p[0],p[1],p[2],p[3],p[4],p[5]
-                conf, edge, status, result, ko = p[6],p[7],p[8],p[9],p[10]
-                fair_odds, model_prob = p[11],p[12]
-                clv_pct_val   = p[17]
-                clv_src_book  = p[22] if len(p) > 22 else None
-                conf_lbl, conf_cls = _clean_confidence(conf)
-                badge = _result_badge(status, result)
-                clv_badge = _clv_status_badge(clv_src_book, clv_pct_val)
-                card_cls = _pick_card_class(result)
-                market_clean = _clean_market(market)
-                edge_str = f"+{edge:.1f}%" if edge else "—"
-                ko_str = str(ko)[:5] if ko else "—"
-                fair_str = f"{float(fair_odds):.2f}" if fair_odds else "—"
-                model_str = f"{float(model_prob)*100:.0f}%" if model_prob and float(model_prob) <= 1 else (f"{float(model_prob):.0f}%" if model_prob else "—")
-                clv_str = f"{float(clv_pct_val):+.1f}%" if clv_pct_val is not None else None
-                html = f"""
-                <div class="{card_cls}">
-                    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
-                        <span style="font-size:0.78rem;color:#9BA0B5;">{league}</span>
-                        <div style="display:flex;gap:6px;align-items:center;">{clv_badge}{badge}</div>
-                    </div>
-                    <div class="pick-match">{home} vs {away}</div>
-                    <div class="pick-selection">{selection}</div>
-                    <div class="pick-meta">
-                        <span>Odds <b style="color:#F2F5F8;">{float(odds):.2f}</b></span>
-                        <span>{market_clean}</span>
-                        <span>KO {ko_str}</span>
-                        <span class="badge badge-{'high' if conf_cls=='high' else ('medium' if conf_cls=='medium' else 'low')}">{conf_lbl}</span>
-                    </div>
-                    <div class="pick-meta" style="margin-top:6px;">
-                        <span>Edge <b style="color:#00F59D;">{edge_str}</b></span>
-                        <span>Fair <b style="color:#F2F5F8;">{fair_str}</b></span>
-                        <span>Model <b style="color:#F2F5F8;">{model_str}</b></span>
-                        {f'<span>CLV <b style="color:#4ade80;">{clv_str}</b></span>' if clv_str else ''}
-                    </div>
-                </div>"""
-                if i % 2 == 0:
-                    col_a.markdown(html, unsafe_allow_html=True)
-                else:
-                    col_b.markdown(html, unsafe_allow_html=True)
-
-            # Trust bar — builds implicit trust, user reads it subconsciously
-            st.markdown("""
-            <div class="trust-bar">
-                <span><span class="chk">&#10003;</span> No cross-line comparisons</span>
-                <span><span class="chk">&#10003;</span> No soft book validation</span>
-                <span><span class="chk">&#10003;</span> All CLV verified vs sharp closing lines</span>
-                <span style="margin-left:auto;font-size:0.70rem;letter-spacing:0.1em;
-                             color:#334155;text-transform:uppercase;">
-                    Sharp verified system &middot; Est. 2025
-                </span>
+        PREVIEW_FREE = 2
+        col_a, col_b = st.columns(2)
+        for i, p in enumerate(picks_list):
+            home, away, league, market, status, result = p[0],p[1],p[2],p[3],p[8],p[9]
+            if i % 2 == 0:
+                with col_a:
+                    _fomo_pick_card(home, away, league, market, result, status, i)
+            else:
+                with col_b:
+                    _fomo_pick_card(home, away, league, market, result, status, i)
+            if i >= PREVIEW_FREE - 1:
+                break
+        remaining = len(picks_list) - PREVIEW_FREE
+        if remaining > 0:
+            st.markdown(f"""
+            <div style="margin:8px 0;padding:14px 20px;border-radius:10px;
+                        border:1px solid #1C2030;background:#101320;
+                        text-align:center;color:#9BA0B5;font-size:0.88rem;">
+                🔒 &nbsp; <b style="color:#F2F5F8;">{remaining} more signals</b> available today — details visible for members only
             </div>
             """, unsafe_allow_html=True)
-        else:
-            # ── FREE: teaser signals ─────────────────────────────────────────
-            PREVIEW_FREE = 2
-            col_a, col_b = st.columns(2)
-            for i, p in enumerate(picks):
-                home, away, league, market, status, result = p[0],p[1],p[2],p[3],p[8],p[9]
-                if i % 2 == 0:
-                    with col_a:
-                        _fomo_pick_card(home, away, league, market, result, status, i)
-                else:
-                    with col_b:
-                        _fomo_pick_card(home, away, league, market, result, status, i)
-                if i >= PREVIEW_FREE - 1:
-                    break
 
-            remaining = len(picks) - PREVIEW_FREE
-            if remaining > 0:
-                st.markdown(f"""
-                <div style="margin:8px 0;padding:14px 20px;border-radius:10px;
-                            border:1px solid #1C2030;background:#101320;
-                            text-align:center;color:#9BA0B5;font-size:0.88rem;">
-                    🔒 &nbsp; <b style="color:#F2F5F8;">{remaining} more signals</b> available today — details visible for members only
-                </div>
-                """, unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TAB 1 — CORE SIGNALS (Goals O/U, BTTS, AH, Double Chance)
+# ─────────────────────────────────────────────────────────────────────────────
+with tab_core:
+    all_picks  = load_todays_picks()
+    core_picks = [p for p in all_picks if (p[23] if len(p) > 23 else 'CORE') == 'CORE']
+    _render_signals(
+        core_picks, is_premium,
+        empty_icon="⚡",
+        empty_msg="No Core signals detected yet today.",
+        empty_sub="Goals O/U, BTTS, AH and Double Chance signals appear here as the engine scans.",
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TAB 2 — CORNERS & CARDS
+# ─────────────────────────────────────────────────────────────────────────────
+with tab_special:
+    all_picks     = load_todays_picks()
+    special_picks = [p for p in all_picks if (p[23] if len(p) > 23 else 'CORE') == 'SPECIAL']
+    _render_signals(
+        special_picks, is_premium,
+        empty_icon="🔢",
+        empty_msg="No Corners or Cards signals yet today.",
+        empty_sub="Special market signals appear here — scanned every 15 minutes.",
+    )
 
             _cta_banner()
 
