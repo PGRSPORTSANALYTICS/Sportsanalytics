@@ -239,22 +239,30 @@ function renderMarket(rows) {
 
 function renderLeague(rows) {
   const el = document.getElementById('lg-body');
-  document.getElementById('lg-note').textContent = `${rows.length} leagues · min 3 settled`;
-  if (!rows.length) { el.innerHTML = '<div class="empty-state"><div class="icon">🏆</div>Not enough data yet</div>'; return; }
+  document.getElementById('lg-note').textContent = `${rows.length} leagues in period · switch to "All time" to see all`;
+  if (!rows.length) {
+    el.innerHTML = '<div class="empty-state"><div class="icon">🏆</div>No settled data in this period — try a longer window</div>';
+    return;
+  }
   let html = `<table><thead><tr>
     <th>League</th><th>Cat</th>
     <th class="right">Settled</th><th class="right">Hit Rate</th>
     <th class="right">ROI</th><th class="right">Avg CLV</th><th class="right">Profit</th>
   </tr></thead><tbody>`;
   for (const r of rows) {
-    html += `<tr>
-      <td style="color:#e2e8f0;font-weight:500">${r.league || '—'}</td>
+    const lowSample = r.settled < 5;
+    const leagueName = r.league || '—';
+    const sampleWarn = lowSample
+      ? `<span style="font-size:9px;color:#52525b;margin-left:4px" title="Low sample — not statistically meaningful">⚠ low sample</span>`
+      : '';
+    html += `<tr style="${lowSample ? 'opacity:0.6' : ''}">
+      <td style="color:#e2e8f0;font-weight:500">${leagueName}${sampleWarn}</td>
       <td>${catBadge(r.cat)}</td>
       <td class="right">${r.settled}</td>
-      <td class="right">${fmt(r.hr,'%',0)}</td>
-      <td class="right">${fmt(r.roi,'%',1)}</td>
+      <td class="right">${lowSample ? '<span class="neu">—</span>' : fmt(r.hr,'%',0)}</td>
+      <td class="right">${lowSample ? '<span class="neu">—</span>' : fmt(r.roi,'%',1)}</td>
       <td class="right">${fmt(r.avg_clv,'%',2)}</td>
-      <td class="right">${fmt(r.profit,'u',2)}</td>
+      <td class="right">${lowSample ? '<span class="neu">—</span>' : fmt(r.profit,'u',2)}</td>
     </tr>`;
   }
   el.innerHTML = html + '</tbody></table>';
