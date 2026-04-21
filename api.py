@@ -5417,6 +5417,168 @@ async def push_clear_all(request: Request, x_admin_key: Optional[str] = Header(N
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# ANALYTICS PAGE  (admin-protected split analytics)
+# ─────────────────────────────────────────────────────────────────────────────
+@app.get("/analytics", include_in_schema=False)
+async def analytics_page(request: Request):
+    from auth_premium import is_admin_session
+    if not is_admin_session(request):
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse("/admin-login")
+    html_path = STATIC_DIR / "analytics.html"
+    if html_path.exists():
+        return HTMLResponse(html_path.read_text())
+    return HTMLResponse("<h1>analytics.html not found</h1>", status_code=404)
+
+
+@app.get("/api/v2/analytics", include_in_schema=False)
+async def analytics_data(request: Request, days: int = 90):
+    from auth_premium import is_admin_session
+    admin_key_h = request.headers.get("x-admin-key", "")
+    admin_pw  = os.environ.get("ADMIN_PASSWORD", "")
+    admin_key = os.environ.get("ADMIN_API_KEY", "")
+    key_ok = admin_key_h and (admin_key_h == admin_pw or admin_key_h == admin_key)
+    if not is_admin_session(request) and not key_ok:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    days = max(7, min(days, 365))
+    db = db_helper
+
+    def _safe(val, fmt=None):
+        if val is None: return None
+        try:
+            v = float(val)
+            return round(v, 2)
+        except Exception:
+            return None
+
+    # ── Market split ─────────────────────────────────────────────────────────
+    mkt_rows = db.execute("""
+        SELECT
+            COALESCE(market_category,'CORE') AS cat,
+            market,
+            COUNT(*) FILTER (WHERE outcome IN ('won','lost')) AS settled,
+            COUNT(*) FILTER (WHERE outcome = 'won')           AS wins,
+            COALESCE(AVG(clv_pct) FILTER (WHERE clv_pct IS NOT NULL), 0) AS avg_clv,
+            COALESCE(SUM(CASE WHEN outcome IN ('won','lost') THEN profit_loss ELSE 0 END), 0) AS profit
+        FROM football_opportunities
+        WHERE mode='PROD'
+          AND outcome IN ('won','lost')
+          AND timestamp >= EXTRACT(EPOCH FROM NOW() - (%s || ' days')::INTERVAL)::bigint
+        GROUP BY cat, market
+        HAVING COUNT(*) FILTER (WHERE outcome IN ('won','lost')) >= 5
+        ORDER BY profit DESC
+    """, (str(days),), fetch='all') or []
+
+    market_split = []
+    for r in mkt_rows:
+        cat, mkt, settled, wins, avg_clv, profit = r[0], r[1], int(r[2] or 0), int(r[3] or 0), _safe(r[4]), _safe(r[5])
+        roi = round(profit / settled * 100, 1) if settled > 0 and profit is not None else None
+        hr  = round(wins / settled * 100, 1) if settled > 0 else None
+        market_split.append({'cat': cat, 'market': mkt, 'settled': settled, 'wins': wins,
+                              'hr': hr, 'roi': roi, 'avg_clv': avg_clv, 'profit': profit})
+
+    # ── League split ──────────────────────────────────────────────────────────
+    lg_rows = db.execute("""
+        SELECT
+            league,
+            COALESCE(market_category,'CORE') AS cat,
+            COUNT(*) FILTER (WHERE outcome IN ('won','lost')) AS settled,
+            COUNT(*) FILTER (WHERE outcome = 'won')           AS wins,
+            COALESCE(AVG(clv_pct) FILTER (WHERE clv_pct IS NOT NULL), 0) AS avg_clv,
+            COALESCE(SUM(CASE WHEN outcome IN ('won','lost') THEN profit_loss ELSE 0 END), 0) AS profit
+        FROM football_opportunities
+        WHERE mode='PROD'
+          AND outcome IN ('won','lost')
+          AND timestamp >= EXTRACT(EPOCH FROM NOW() - (%s || ' days')::INTERVAL)::bigint
+        GROUP BY league, cat
+        HAVING COUNT(*) FILTER (WHERE outcome IN ('won','lost')) >= 8
+        ORDER BY profit DESC
+        LIMIT 25
+    """, (str(days),), fetch='all') or []
+
+    league_split = []
+    for r in lg_rows:
+        league, cat, settled, wins, avg_clv, profit = r[0], r[1], int(r[2] or 0), int(r[3] or 0), _safe(r[4]), _safe(r[5])
+        roi = round(profit / settled * 100, 1) if settled > 0 and profit is not None else None
+        hr  = round(wins / settled * 100, 1) if settled > 0 else None
+        league_split.append({'league': league, 'cat': cat, 'settled': settled, 'wins': wins,
+                              'hr': hr, 'roi': roi, 'avg_clv': avg_clv, 'profit': profit})
+
+    # ── Odds bucket split ─────────────────────────────────────────────────────
+    bkt_rows = db.execute("""
+        SELECT
+            CASE WHEN odds < 1.60 THEN '< 1.60'
+                 WHEN odds < 1.80 THEN '1.60-1.79'
+                 WHEN odds < 2.00 THEN '1.80-1.99'
+                 WHEN odds < 2.50 THEN '2.00-2.49'
+                 WHEN odds < 3.00 THEN '2.50-2.99'
+                 ELSE '3.00+' END AS bucket,
+            CASE WHEN odds < 1.60 THEN 0 WHEN odds < 1.80 THEN 1 WHEN odds < 2.00 THEN 2
+                 WHEN odds < 2.50 THEN 3 WHEN odds < 3.00 THEN 4 ELSE 5 END AS sort_key,
+            COUNT(*) FILTER (WHERE outcome IN ('won','lost')) AS settled,
+            COUNT(*) FILTER (WHERE outcome = 'won')           AS wins,
+            COALESCE(AVG(clv_pct) FILTER (WHERE clv_pct IS NOT NULL), 0) AS avg_clv,
+            COALESCE(SUM(CASE WHEN outcome IN ('won','lost') THEN profit_loss ELSE 0 END), 0) AS profit,
+            ROUND(AVG(odds)::numeric, 2) AS avg_odds
+        FROM football_opportunities
+        WHERE mode='PROD'
+          AND outcome IN ('won','lost')
+          AND odds > 0
+          AND timestamp >= EXTRACT(EPOCH FROM NOW() - (%s || ' days')::INTERVAL)::bigint
+        GROUP BY bucket, sort_key
+        HAVING COUNT(*) FILTER (WHERE outcome IN ('won','lost')) >= 5
+        ORDER BY sort_key
+    """, (str(days),), fetch='all') or []
+
+    odds_buckets = []
+    for r in bkt_rows:
+        bucket, _, settled, wins, avg_clv, profit, avg_odds = r[0], r[1], int(r[2] or 0), int(r[3] or 0), _safe(r[4]), _safe(r[5]), _safe(r[6])
+        roi = round(profit / settled * 100, 1) if settled > 0 and profit is not None else None
+        hr  = round(wins / settled * 100, 1) if settled > 0 else None
+        odds_buckets.append({'bucket': bucket, 'settled': settled, 'wins': wins,
+                              'hr': hr, 'roi': roi, 'avg_clv': avg_clv, 'profit': profit, 'avg_odds': avg_odds})
+
+    # ── Timing / drift ────────────────────────────────────────────────────────
+    drift_rows = db.execute("""
+        SELECT
+            COALESCE(market_category,'CORE') AS cat,
+            market,
+            COUNT(*) FILTER (WHERE odds_5min IS NOT NULL)  AS n_5min,
+            COUNT(*) FILTER (WHERE close_odds IS NOT NULL) AS n_close,
+            ROUND(AVG((odds_5min / NULLIF(open_odds,0) - 1) * 100)
+                  FILTER (WHERE odds_5min IS NOT NULL AND open_odds > 0)::numeric, 2)  AS avg_5min_drift,
+            ROUND(AVG((close_odds / NULLIF(open_odds,0) - 1) * 100)
+                  FILTER (WHERE close_odds IS NOT NULL AND open_odds > 0)::numeric, 2) AS avg_close_drift,
+            ROUND(AVG(clv_pct) FILTER (WHERE clv_pct IS NOT NULL)::numeric, 2)        AS avg_clv
+        FROM football_opportunities
+        WHERE mode='PROD'
+          AND open_odds IS NOT NULL AND open_odds > 0
+          AND timestamp >= EXTRACT(EPOCH FROM NOW() - (%s || ' days')::INTERVAL)::bigint
+        GROUP BY cat, market
+        HAVING COUNT(*) FILTER (WHERE odds_5min IS NOT NULL) >= 3
+            OR COUNT(*) FILTER (WHERE close_odds IS NOT NULL) >= 5
+        ORDER BY cat, avg_clv DESC NULLS LAST
+    """, (str(days),), fetch='all') or []
+
+    timing_drift = []
+    for r in drift_rows:
+        timing_drift.append({
+            'cat': r[0], 'market': r[1],
+            'n_5min': int(r[2] or 0), 'n_close': int(r[3] or 0),
+            'avg_5min_drift': _safe(r[4]), 'avg_close_drift': _safe(r[5]), 'avg_clv': _safe(r[6])
+        })
+
+    return {
+        'period_days': days,
+        'market_split': market_split,
+        'league_split': league_split,
+        'odds_buckets': odds_buckets,
+        'timing_drift': timing_drift,
+    }
+
+
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":

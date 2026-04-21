@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PGR — Split Analytics</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0a0a0f; color: #e2e8f0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; }
+
+  .topbar { background: #0d1117; border-bottom: 1px solid rgba(255,255,255,0.06); padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+  .topbar-left { display: flex; align-items: center; gap: 12px; }
+  .logo { width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(145deg,#16a34a,#15803d); display:flex;align-items:center;justify-content:center; font-weight:700; font-size:13px; color:#fff; }
+  .topbar-title { font-size: 15px; font-weight: 700; color: #f1f5f9; }
+  .topbar-sub { font-size: 11px; color: #52525b; }
+  .btn-sm { font-size: 12px; padding: 6px 14px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: #94a3b8; cursor: pointer; text-decoration: none; transition: background .12s; display:inline-block; }
+  .btn-sm:hover { background: rgba(255,255,255,0.1); }
+
+  .main { padding: 20px; max-width: 1100px; margin: 0 auto; }
+
+  .period-bar { display: flex; gap: 8px; margin-bottom: 24px; align-items: center; flex-wrap: wrap; }
+  .period-bar span { font-size: 11px; color: #52525b; text-transform: uppercase; letter-spacing:.06em; margin-right: 4px; }
+  .period-btn { font-size: 12px; padding: 6px 16px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); background: transparent; color: #94a3b8; cursor: pointer; transition: all .12s; }
+  .period-btn.active { background: #22c55e; color: #000; font-weight: 700; border-color: transparent; }
+  .period-btn:hover:not(.active) { background: rgba(255,255,255,0.08); }
+
+  .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.07); padding-bottom: 0; flex-wrap: wrap; }
+  .tab-btn { font-size: 13px; padding: 8px 18px; border: none; background: transparent; color: #71717a; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all .12s; white-space:nowrap; }
+  .tab-btn.active { color: #f1f5f9; border-bottom-color: #22c55e; }
+  .tab-btn:hover:not(.active) { color: #94a3b8; }
+
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; }
+
+  .card { background: #0d1117; border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; overflow: hidden; margin-bottom: 20px; }
+  .card-hd { padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:space-between; }
+  .card-title { font-size: 12px; font-weight: 600; color: #71717a; text-transform: uppercase; letter-spacing:.08em; }
+  .card-note { font-size: 11px; color: #3f3f46; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th { font-size: 10px; font-weight: 600; color: #52525b; text-transform: uppercase; letter-spacing:.05em; padding: 9px 14px; text-align: left; background: rgba(255,255,255,0.015); border-bottom: 1px solid rgba(255,255,255,0.05); }
+  th.right { text-align: right; }
+  td { font-size: 12px; padding: 9px 14px; border-bottom: 1px solid rgba(255,255,255,0.04); color: #94a3b8; }
+  td.right { text-align: right; font-variant-numeric: tabular-nums; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.018); }
+
+  .pos { color: #22c55e; font-weight: 600; }
+  .neg { color: #ef4444; font-weight: 600; }
+  .neu { color: #94a3b8; }
+
+  .cat-core { display:inline-block; padding:2px 8px; border-radius:20px; font-size:10px; font-weight:600; background:rgba(96,165,250,0.12); color:#60a5fa; border:1px solid rgba(96,165,250,0.3); }
+  .cat-special { display:inline-block; padding:2px 8px; border-radius:20px; font-size:10px; font-weight:600; background:rgba(251,146,60,0.12); color:#fb923c; border:1px solid rgba(251,146,60,0.3); }
+
+  .bucket-bar { height: 6px; border-radius: 3px; background: #1e293b; overflow: hidden; margin-top: 4px; min-width: 60px; }
+  .bucket-fill { height: 100%; border-radius: 3px; transition: width .3s; }
+
+  .empty-state { text-align:center; padding: 48px 20px; color: #3f3f46; font-size: 13px; }
+  .empty-state .icon { font-size: 32px; margin-bottom: 12px; }
+
+  .loading { text-align:center; padding:40px; color:#52525b; font-size:13px; }
+
+  .drift-legend { display:flex; gap:16px; flex-wrap:wrap; font-size:11px; color:#52525b; padding: 10px 14px; background: rgba(255,255,255,0.015); border-bottom: 1px solid rgba(255,255,255,0.05); }
+  .drift-legend b { color:#94a3b8; }
+
+  .section-hint { font-size: 11px; color: #3f3f46; padding: 8px 14px; background: rgba(255,255,255,0.015); border-bottom: 1px solid rgba(255,255,255,0.04); line-height: 1.5; }
+
+  @media (max-width: 600px) {
+    .main { padding: 12px; }
+    td, th { padding: 8px 10px; font-size: 11px; }
+    .topbar { padding: 12px 14px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="logo">P</div>
+    <div>
+      <div class="topbar-title">Split Analytics</div>
+      <div class="topbar-sub">Market · League · Odds Bucket · Timing</div>
+    </div>
+  </div>
+  <div>
+    <a href="/admin" class="btn-sm">← Admin</a>
+  </div>
+</div>
+
+<div class="main">
+
+  <div class="period-bar">
+    <span>Period</span>
+    <button class="period-btn" data-d="7">7 days</button>
+    <button class="period-btn active" data-d="30">30 days</button>
+    <button class="period-btn" data-d="90">90 days</button>
+    <button class="period-btn" data-d="180">6 months</button>
+    <button class="period-btn" data-d="365">All time</button>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="market">By Market</button>
+    <button class="tab-btn" data-tab="league">By League</button>
+    <button class="tab-btn" data-tab="odds">By Odds Bucket</button>
+    <button class="tab-btn" data-tab="timing">Timing / Drift</button>
+  </div>
+
+  <!-- BY MARKET -->
+  <div class="tab-pane active" id="tab-market">
+    <div class="card">
+      <div class="card-hd">
+        <span class="card-title">Performance by Market</span>
+        <span class="card-note" id="mkt-note"></span>
+      </div>
+      <div id="mkt-body"><div class="loading">Loading…</div></div>
+    </div>
+  </div>
+
+  <!-- BY LEAGUE -->
+  <div class="tab-pane" id="tab-league">
+    <div class="card">
+      <div class="card-hd">
+        <span class="card-title">Performance by League</span>
+        <span class="card-note" id="lg-note">min 8 settled</span>
+      </div>
+      <div id="lg-body"><div class="loading">Loading…</div></div>
+    </div>
+  </div>
+
+  <!-- BY ODDS BUCKET -->
+  <div class="tab-pane" id="tab-odds">
+    <div class="card">
+      <div class="card-hd">
+        <span class="card-title">Performance by Odds Bucket</span>
+        <span class="card-note">ROI bar = scale relative to best bucket</span>
+      </div>
+      <div id="odds-body"><div class="loading">Loading…</div></div>
+    </div>
+  </div>
+
+  <!-- TIMING / DRIFT -->
+  <div class="tab-pane" id="tab-timing">
+    <div class="card">
+      <div class="card-hd">
+        <span class="card-title">Timing / Odds Drift</span>
+      </div>
+      <div class="drift-legend">
+        <span><b>5-min drift</b> = odds change in first 5 min after signal — <span class="pos">positive</span> = you were early, market agreed later · <span class="neg">negative</span> = market moved against you</span>
+        <span><b>Close drift</b> = same vs final closing line (gold standard)</span>
+      </div>
+      <div id="timing-body"><div class="loading">Loading…</div></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let currentDays = 30;
+let cache = {};
+
+function fmt(v, suffix='', decimals=1) {
+  if (v === null || v === undefined) return '<span class="neu">—</span>';
+  const n = parseFloat(v);
+  const cls = n >= 0 ? 'pos' : 'neg';
+  const sign = n >= 0 ? '+' : '';
+  return `<span class="${cls}">${sign}${n.toFixed(decimals)}${suffix}</span>`;
+}
+
+function fmtNeutral(v, suffix='', decimals=2) {
+  if (v === null || v === undefined) return '<span class="neu">—</span>';
+  return `${parseFloat(v).toFixed(decimals)}${suffix}`;
+}
+
+function catBadge(cat) {
+  if (!cat) return '';
+  return cat === 'SPECIAL'
+    ? `<span class="cat-special">SPECIAL</span>`
+    : `<span class="cat-core">CORE</span>`;
+}
+
+function cleanMarket(m) {
+  if (!m) return '—';
+  const map = {'value single':'Market Signal','corners_over':'Corners Over','corners_under':'Corners Under',
+    'corners_handicap':'Corners Handicap','cards_over':'Cards Over','cards_under':'Cards Under',
+    'btts':'BTTS','double_chance':'Double Chance','asian_handicap':'Asian Handicap',
+    'over_2.5':'Over 2.5','under_2.5':'Under 2.5','over_3.5':'Over 3.5',
+    'corners':'Corners','cards':'Cards'};
+  const key = m.toLowerCase().trim();
+  return map[key] || m.replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+async function load(days) {
+  if (cache[days]) { render(cache[days]); return; }
+  ['mkt-body','lg-body','odds-body','timing-body'].forEach(id => {
+    document.getElementById(id).innerHTML = '<div class="loading">Loading…</div>';
+  });
+  try {
+    const res = await fetch(`/api/v2/analytics?days=${days}`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    cache[days] = data;
+    render(data);
+  } catch(e) {
+    ['mkt-body','lg-body','odds-body','timing-body'].forEach(id => {
+      document.getElementById(id).innerHTML = `<div class="empty-state"><div class="icon">⚠️</div>${e.message}</div>`;
+    });
+  }
+}
+
+function render(data) {
+  renderMarket(data.market_split || []);
+  renderLeague(data.league_split || []);
+  renderOdds(data.odds_buckets || []);
+  renderTiming(data.timing_drift || []);
+}
+
+function renderMarket(rows) {
+  const el = document.getElementById('mkt-body');
+  document.getElementById('mkt-note').textContent = `${rows.length} markets · min 5 settled`;
+  if (!rows.length) { el.innerHTML = '<div class="empty-state"><div class="icon">📊</div>Not enough data yet</div>'; return; }
+  let html = `<table><thead><tr>
+    <th>Category</th><th>Market</th>
+    <th class="right">Settled</th><th class="right">Hit Rate</th>
+    <th class="right">ROI</th><th class="right">Avg CLV</th><th class="right">Profit</th>
+  </tr></thead><tbody>`;
+  for (const r of rows) {
+    html += `<tr>
+      <td>${catBadge(r.cat)}</td>
+      <td style="color:#e2e8f0;font-weight:500">${cleanMarket(r.market)}</td>
+      <td class="right">${r.settled}</td>
+      <td class="right">${fmt(r.hr,'%',0)}</td>
+      <td class="right">${fmt(r.roi,'%',1)}</td>
+      <td class="right">${fmt(r.avg_clv,'%',2)}</td>
+      <td class="right">${fmt(r.profit,'u',2)}</td>
+    </tr>`;
+  }
+  el.innerHTML = html + '</tbody></table>';
+}
+
+function renderLeague(rows) {
+  const el = document.getElementById('lg-body');
+  document.getElementById('lg-note').textContent = `${rows.length} leagues · min 8 settled`;
+  if (!rows.length) { el.innerHTML = '<div class="empty-state"><div class="icon">🏆</div>Not enough data yet</div>'; return; }
+  let html = `<table><thead><tr>
+    <th>League</th><th>Cat</th>
+    <th class="right">Settled</th><th class="right">Hit Rate</th>
+    <th class="right">ROI</th><th class="right">Avg CLV</th><th class="right">Profit</th>
+  </tr></thead><tbody>`;
+  for (const r of rows) {
+    html += `<tr>
+      <td style="color:#e2e8f0;font-weight:500">${r.league || '—'}</td>
+      <td>${catBadge(r.cat)}</td>
+      <td class="right">${r.settled}</td>
+      <td class="right">${fmt(r.hr,'%',0)}</td>
+      <td class="right">${fmt(r.roi,'%',1)}</td>
+      <td class="right">${fmt(r.avg_clv,'%',2)}</td>
+      <td class="right">${fmt(r.profit,'u',2)}</td>
+    </tr>`;
+  }
+  el.innerHTML = html + '</tbody></table>';
+}
+
+function renderOdds(rows) {
+  const el = document.getElementById('odds-body');
+  if (!rows.length) { el.innerHTML = '<div class="empty-state"><div class="icon">🎲</div>Not enough data yet</div>'; return; }
+  const maxAbsROI = Math.max(...rows.map(r => Math.abs(r.roi || 0)), 1);
+  let html = `<table><thead><tr>
+    <th>Odds Range</th><th>Avg Odds</th>
+    <th class="right">Settled</th><th class="right">Hit Rate</th>
+    <th class="right">ROI</th><th class="right">Avg CLV</th><th class="right">Profit</th>
+  </tr></thead><tbody>`;
+  for (const r of rows) {
+    const roi = r.roi ?? 0;
+    const barW = Math.round(Math.abs(roi) / maxAbsROI * 100);
+    const barColor = roi >= 0 ? '#22c55e' : '#ef4444';
+    html += `<tr>
+      <td style="color:#e2e8f0;font-weight:600">${r.bucket}</td>
+      <td>
+        <div style="font-size:11px;color:#94a3b8">${fmtNeutral(r.avg_odds,'',2)}</div>
+        <div class="bucket-bar"><div class="bucket-fill" style="width:${barW}%;background:${barColor}"></div></div>
+      </td>
+      <td class="right">${r.settled}</td>
+      <td class="right">${fmt(r.hr,'%',0)}</td>
+      <td class="right">${fmt(r.roi,'%',1)}</td>
+      <td class="right">${fmt(r.avg_clv,'%',2)}</td>
+      <td class="right">${fmt(r.profit,'u',2)}</td>
+    </tr>`;
+  }
+  el.innerHTML = html + '</tbody></table>';
+}
+
+function renderTiming(rows) {
+  const el = document.getElementById('timing-body');
+  if (!rows.length) {
+    el.innerHTML = '<div class="empty-state"><div class="icon">⏱️</div>5-min drift data accumulates as the engine runs each cycle — check back after a few matches</div>';
+    return;
+  }
+  let html = `<table><thead><tr>
+    <th>Cat</th><th>Market</th>
+    <th class="right">5-min N</th><th class="right">5-min Drift</th>
+    <th class="right">Close N</th><th class="right">Close Drift</th>
+    <th class="right">Avg CLV</th>
+  </tr></thead><tbody>`;
+  for (const r of rows) {
+    html += `<tr>
+      <td>${catBadge(r.cat)}</td>
+      <td style="color:#e2e8f0;font-weight:500">${cleanMarket(r.market)}</td>
+      <td class="right">${r.n_5min}</td>
+      <td class="right">${r.avg_5min_drift !== null ? fmt(r.avg_5min_drift,'%',2) : '<span class="neu">—</span>'}</td>
+      <td class="right">${r.n_close}</td>
+      <td class="right">${r.avg_close_drift !== null ? fmt(r.avg_close_drift,'%',2) : '<span class="neu">—</span>'}</td>
+      <td class="right">${fmt(r.avg_clv,'%',2)}</td>
+    </tr>`;
+  }
+  el.innerHTML = html + '</tbody></table>';
+}
+
+// Period buttons
+document.querySelectorAll('.period-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentDays = parseInt(btn.dataset.d);
+    load(currentDays);
+  });
+});
+
+// Tab buttons
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+load(currentDays);
+</script>
+</body>
+</html>
