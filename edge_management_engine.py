@@ -40,8 +40,8 @@ MIN_SAMPLE_CLV          = 100     # min picks for CLV-based decisions
 MIN_SAMPLE_HIT_RATE     =  25     # min picks for hit-rate-drop signal
 MIN_SAMPLE_ROI          =  25     # min picks for ROI signal
 MIN_SAMPLE_MARKET       =  25     # overall gate (any signal valid above this)
-MIN_SAMPLE_LEAGUE       =  50     # min picks for league CLV signal
-MIN_SAMPLE_PROMOTE      = 100     # min picks for league PROD promotion
+MIN_SAMPLE_LEAGUE       =  20     # min picks for league CLV signal
+MIN_SAMPLE_PROMOTE      =  50     # min picks for league PROD promotion
 SHRINK_CHANGE_FLAG      =  0.10   # ±0.10 shift in shrink factor → instability
 EV_ADJ_DEGRADED         =  2.0    # raise min-EV by 2pp for degraded markets
 EV_ADJ_ACTIVE_CLV       = -0.5    # lower min-EV 0.5pp for positive-CLV markets
@@ -421,24 +421,24 @@ class EdgeManagementEngine:
         status  = "PROD"
         reasons = []
 
-        # Summer leagues always start in LEARNING until validated
-        if is_summer and (clv is None or n < MIN_SAMPLE_LEAGUE):
-            status = "LEARNING"
-            reasons.append("Summer league – requires fresh CLV validation")
+        # Summer league note — advisory only (does NOT change status)
+        if is_summer:
+            reasons.append("Summer league — volume cap applies (not a quality block)")
 
-        # CLV signal (primary)
-        elif clv is not None and n >= MIN_SAMPLE_LEAGUE:
+        # CLV signal (primary) — only LEARNING if CLV is proven negative
+        if clv is not None and n >= MIN_SAMPLE_LEAGUE:
             if clv < CLV_DEGRADED_THRESHOLD:
                 status = "LEARNING"
-                reasons.append(f"CLV {clv:+.2f}% < 0 over {n} picks")
+                reasons.append(f"CLV {clv:+.2f}% negative over {n} picks — LEARNING only")
             elif clv > 0 and hist_n >= MIN_SAMPLE_PROMOTE:
                 status = "PROD"
                 reasons.append(f"Stable positive CLV {clv:+.2f}% over {hist_n} picks")
             else:
-                status = "LEARNING"
-                reasons.append(f"Positive CLV but insufficient history ({hist_n}/{MIN_SAMPLE_PROMOTE})")
+                # CLV neutral or building — allow through, data quality gate is the gatekeeper
+                status = "PROD"
+                reasons.append(f"CLV {clv:+.2f}% building ({hist_n}/{MIN_SAMPLE_PROMOTE} history) — data gate active")
 
-        # Fallback: ROI / hit-rate
+        # Fallback: ROI / hit-rate (when no CLV data)
         elif roi is not None and n >= MIN_SAMPLE_LEAGUE:
             if roi < ROI_DISABLE_THRESHOLD:
                 status = "LEARNING"
@@ -450,8 +450,9 @@ class EdgeManagementEngine:
                 status = "PROD"
                 reasons.append(f"ROI {roi:+.1f}% acceptable (no CLV data)")
         else:
-            status = "LEARNING"
-            reasons.append(f"Insufficient data ({n} picks, CLV={clv})")
+            # Insufficient history — pass through, sharp anchor / data quality gate applies
+            status = "PROD"
+            reasons.append(f"Building history ({n} picks) — signal quality managed by data gate")
 
         return LeagueDecision(
             league   = league,
