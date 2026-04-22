@@ -5570,12 +5570,83 @@ async def analytics_data(request: Request, days: int = 90):
             'avg_5min_drift': _safe(r[4]), 'avg_close_drift': _safe(r[5]), 'avg_clv': _safe(r[6])
         })
 
+    # ── A/B Entry Timing ──────────────────────────────────────────────────────
+    # Compare CLV between: A (instant entry) vs B (20-min delayed entry)
+    # CLV for each: (close_implied - entry_implied) / entry_implied * 100
+    # close_implied = 1/close_odds, entry_implied = 1/entry_odds
+    ab_raw = db.execute("""
+        SELECT
+            ab_version,
+            COUNT(*) FILTER (WHERE close_odds IS NOT NULL AND entry_odds IS NOT NULL) AS n_settled,
+            ROUND(
+                AVG(
+                    (1.0 / NULLIF(close_odds, 0) - 1.0 / NULLIF(entry_odds, 0))
+                    / NULLIF(1.0 / NULLIF(entry_odds, 0), 0) * 100
+                ) FILTER (WHERE close_odds IS NOT NULL AND entry_odds IS NOT NULL)
+            ::numeric, 2) AS avg_clv,
+            ROUND(AVG(entry_odds) FILTER (WHERE entry_odds IS NOT NULL)::numeric, 3) AS avg_entry_odds,
+            ROUND(AVG(open_odds)  FILTER (WHERE open_odds  IS NOT NULL)::numeric, 3) AS avg_open_odds,
+            ROUND(
+                AVG((entry_odds / NULLIF(open_odds, 0) - 1) * 100)
+                FILTER (WHERE entry_odds IS NOT NULL AND open_odds IS NOT NULL)
+            ::numeric, 2) AS avg_entry_vs_open_drift,
+            COUNT(*) AS total_signals
+        FROM football_opportunities
+        WHERE ab_version IS NOT NULL
+          AND mode = 'PROD'
+          AND timestamp >= EXTRACT(EPOCH FROM NOW() - (%s || ' days')::INTERVAL)::bigint
+        GROUP BY ab_version
+        ORDER BY ab_version
+    """, (str(days),), fetch='all') or []
+
+    ab_timing = []
+    for r in ab_raw:
+        ab_timing.append({
+            'version':             r[0],
+            'n_settled':           int(r[1] or 0),
+            'avg_clv':             _safe(r[2]),
+            'avg_entry_odds':      _safe(r[3]),
+            'avg_open_odds':       _safe(r[4]),
+            'avg_drift_vs_open':   _safe(r[5]),
+            'total_signals':       int(r[6] or 0),
+        })
+
+    # Per-market A/B breakdown (when enough data)
+    ab_market_raw = db.execute("""
+        SELECT
+            ab_version,
+            market,
+            COUNT(*) FILTER (WHERE close_odds IS NOT NULL AND entry_odds IS NOT NULL) AS n,
+            ROUND(
+                AVG(
+                    (1.0 / NULLIF(close_odds, 0) - 1.0 / NULLIF(entry_odds, 0))
+                    / NULLIF(1.0 / NULLIF(entry_odds, 0), 0) * 100
+                ) FILTER (WHERE close_odds IS NOT NULL AND entry_odds IS NOT NULL)
+            ::numeric, 2) AS avg_clv
+        FROM football_opportunities
+        WHERE ab_version IS NOT NULL
+          AND mode = 'PROD'
+          AND timestamp >= EXTRACT(EPOCH FROM NOW() - (%s || ' days')::INTERVAL)::bigint
+        GROUP BY ab_version, market
+        HAVING COUNT(*) FILTER (WHERE close_odds IS NOT NULL AND entry_odds IS NOT NULL) >= 3
+        ORDER BY market, ab_version
+    """, (str(days),), fetch='all') or []
+
+    ab_by_market = []
+    for r in ab_market_raw:
+        ab_by_market.append({
+            'version': r[0], 'market': r[1],
+            'n': int(r[2] or 0), 'avg_clv': _safe(r[3])
+        })
+
     return {
         'period_days': days,
         'market_split': market_split,
         'league_split': league_split,
         'odds_buckets': odds_buckets,
         'timing_drift': timing_drift,
+        'ab_timing':    ab_timing,
+        'ab_by_market': ab_by_market,
     }
 
 

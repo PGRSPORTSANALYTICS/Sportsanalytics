@@ -4224,7 +4224,26 @@ class RealFootballChampion:
             # Only proceed if a new row was inserted (ON CONFLICT DO NOTHING returns NULL if duplicate)
             if not result:
                 return False  # Duplicate - skip Discord notification
-            
+
+            # ── A/B Entry Timing Test ─────────────────────────────────────────
+            # A: enter immediately (open_odds at creation)
+            # B: wait 20 min — CLV service will capture entry_odds later
+            import random as _random
+            _ab = 'A' if _random.random() < 0.5 else 'B'
+            _ab_delay = 0 if _ab == 'A' else 20
+            _ab_entry_odds = odds_value if _ab == 'A' else None
+            _ab_entry_ts   = int(time.time()) if _ab == 'A' else None
+            db_helper.execute("""
+                UPDATE football_opportunities
+                   SET ab_version       = %s,
+                       entry_delay_min  = %s,
+                       entry_odds       = %s,
+                       entry_ts         = %s
+                 WHERE id = %s
+            """, (_ab, _ab_delay, _ab_entry_odds, _ab_entry_ts, result[0]))
+            print(f"🧪 A/B timing: version={_ab} | delay={_ab_delay}min | pick_id={result[0]}")
+            # ─────────────────────────────────────────────────────────────────
+
             try:
                 from bet_distribution_controller import send_instant_pick
                 sent = send_instant_pick({

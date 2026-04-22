@@ -103,6 +103,7 @@
     <button class="tab-btn" data-tab="league">By League</button>
     <button class="tab-btn" data-tab="odds">By Odds Bucket</button>
     <button class="tab-btn" data-tab="timing">Timing / Drift</button>
+    <button class="tab-btn" data-tab="abtiming">Entry Timing A/B</button>
   </div>
 
   <!-- BY MARKET -->
@@ -152,6 +153,21 @@
     </div>
   </div>
 
+  <!-- ENTRY TIMING A/B -->
+  <div class="tab-pane" id="tab-abtiming">
+    <div class="card">
+      <div class="card-hd">
+        <span class="card-title">Entry Timing A/B Test</span>
+        <span class="card-note">A = entry omedelbart · B = entry efter 20 min</span>
+      </div>
+      <div class="drift-legend" style="margin-bottom:16px">
+        <span>Mäter om CLV förbättras om man väntar 20 minuter innan entry. Varje signal tilldelas slumpmässigt version A eller B. CLV beräknas mot Pinnacle closing line vid avspark.</span>
+      </div>
+      <div id="abt-summary"></div>
+      <div id="abt-body"><div class="loading">Loading…</div></div>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -191,7 +207,7 @@ function cleanMarket(m) {
 
 async function load(days) {
   if (cache[days]) { render(cache[days]); return; }
-  ['mkt-body','lg-body','odds-body','timing-body'].forEach(id => {
+  ['mkt-body','lg-body','odds-body','timing-body','abt-body'].forEach(id => {
     document.getElementById(id).innerHTML = '<div class="loading">Loading…</div>';
   });
   try {
@@ -201,7 +217,7 @@ async function load(days) {
     cache[days] = data;
     render(data);
   } catch(e) {
-    ['mkt-body','lg-body','odds-body','timing-body'].forEach(id => {
+    ['mkt-body','lg-body','odds-body','timing-body','abt-body'].forEach(id => {
       document.getElementById(id).innerHTML = `<div class="empty-state"><div class="icon">⚠️</div>${e.message}</div>`;
     });
   }
@@ -212,6 +228,7 @@ function render(data) {
   renderLeague(data.league_split || []);
   renderOdds(data.odds_buckets || []);
   renderTiming(data.timing_drift || []);
+  renderABTiming(data.ab_timing || [], data.ab_by_market || []);
 }
 
 function renderMarket(rows) {
@@ -321,6 +338,99 @@ function renderTiming(rows) {
     </tr>`;
   }
   el.innerHTML = html + '</tbody></table>';
+}
+
+function renderABTiming(summary, byMarket) {
+  const sumEl  = document.getElementById('abt-summary');
+  const bodyEl = document.getElementById('abt-body');
+
+  if (!summary.length) {
+    sumEl.innerHTML = '';
+    bodyEl.innerHTML = '<div class="empty-state"><div class="icon">🧪</div>A/B-testet startade idag — data samlas in. Resultaten syns här när tillräckligt med signaler har stängts.</div>';
+    return;
+  }
+
+  // Summary cards
+  let sumHtml = '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:18px">';
+  for (const r of summary) {
+    const vLabel  = r.version === 'A' ? 'Version A — Direkt entry' : 'Version B — +20 min delay';
+    const vColor  = r.version === 'A' ? '#3b82f6' : '#f59e0b';
+    const clvFmt  = r.avg_clv !== null ? (r.avg_clv >= 0 ? `<span class="pos">+${r.avg_clv.toFixed(2)}%</span>` : `<span class="neg">${r.avg_clv.toFixed(2)}%</span>`) : '<span class="neu">—</span>';
+    const driftFmt = r.avg_drift_vs_open !== null ? (r.avg_drift_vs_open >= 0 ? `<span class="pos">+${r.avg_drift_vs_open.toFixed(2)}%</span>` : `<span class="neg">${r.avg_drift_vs_open.toFixed(2)}%</span>`) : '<span class="neu">—</span>';
+    sumHtml += `
+      <div style="background:#1e293b;border:1px solid #334155;border-top:3px solid ${vColor};border-radius:8px;padding:16px 20px;min-width:220px;flex:1">
+        <div style="font-size:11px;color:#71717a;margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">${vLabel}</div>
+        <div style="font-size:26px;font-weight:700;margin-bottom:8px">${clvFmt}</div>
+        <div style="font-size:12px;color:#94a3b8">Avg CLV mot closing line</div>
+        <hr style="border-color:#334155;margin:10px 0">
+        <div style="font-size:12px;display:flex;justify-content:space-between">
+          <span style="color:#64748b">Signaler totalt</span><strong style="color:#e2e8f0">${r.total_signals}</strong>
+        </div>
+        <div style="font-size:12px;display:flex;justify-content:space-between;margin-top:4px">
+          <span style="color:#64748b">Avgjorda</span><strong style="color:#e2e8f0">${r.n_settled}</strong>
+        </div>
+        <div style="font-size:12px;display:flex;justify-content:space-between;margin-top:4px">
+          <span style="color:#64748b">Entry drift vs open</span><strong>${driftFmt}</strong>
+        </div>
+        <div style="font-size:12px;display:flex;justify-content:space-between;margin-top:4px">
+          <span style="color:#64748b">Snitt entry odds</span><strong style="color:#e2e8f0">${r.avg_entry_odds ?? '—'}</strong>
+        </div>
+      </div>`;
+  }
+  sumHtml += '</div>';
+
+  // Verdict banner
+  const a = summary.find(r => r.version === 'A');
+  const b = summary.find(r => r.version === 'B');
+  if (a && b && a.n_settled >= 10 && b.n_settled >= 10) {
+    const diff = ((b.avg_clv ?? 0) - (a.avg_clv ?? 0)).toFixed(2);
+    const winner  = parseFloat(diff) > 0 ? 'B (vänta 20 min)' : 'A (direkt)';
+    const wColor  = parseFloat(diff) > 0 ? '#22c55e' : '#3b82f6';
+    const diffStr = parseFloat(diff) > 0 ? `+${diff}%` : `${diff}%`;
+    sumHtml += `<div style="background:#0f172a;border:1px solid ${wColor}33;border-left:4px solid ${wColor};border-radius:6px;padding:12px 16px;margin-bottom:18px;font-size:13px;color:#e2e8f0">
+      Preliminärt resultat: <strong style="color:${wColor}">${winner}</strong> ger bättre CLV med <strong>${diffStr}</strong> skillnad. Minst 30 avgjorda per arm för statistisk säkerhet.
+    </div>`;
+  } else {
+    sumHtml += `<div style="background:#0f172a;border:1px solid #334155;border-left:4px solid #f59e0b;border-radius:6px;padding:12px 16px;margin-bottom:18px;font-size:13px;color:#94a3b8">
+      Samlar data — behöver minst 10 avgjorda per version (A+B) för att dra slutsatser.
+    </div>`;
+  }
+
+  sumEl.innerHTML = sumHtml;
+
+  // Per-market table
+  if (!byMarket.length) {
+    bodyEl.innerHTML = '<div style="color:#71717a;font-size:13px;text-align:center;padding:20px">Per-marknadsdata kräver minst 3 avgjorda per version+marknad</div>';
+    return;
+  }
+
+  // Group by market
+  const markets = [...new Set(byMarket.map(r => r.market))];
+  let html = `<table><thead><tr>
+    <th>Marknad</th>
+    <th class="right" style="color:#3b82f6">A CLV (direkt)</th>
+    <th class="right" style="color:#3b82f6">A n</th>
+    <th class="right" style="color:#f59e0b">B CLV (+20 min)</th>
+    <th class="right" style="color:#f59e0b">B n</th>
+    <th class="right">Skillnad B−A</th>
+  </tr></thead><tbody>`;
+
+  for (const mkt of markets) {
+    const ar = byMarket.find(r => r.market === mkt && r.version === 'A');
+    const br = byMarket.find(r => r.market === mkt && r.version === 'B');
+    const aClv = ar?.avg_clv ?? null;
+    const bClv = br?.avg_clv ?? null;
+    const diff = (aClv !== null && bClv !== null) ? (bClv - aClv) : null;
+    html += `<tr>
+      <td style="color:#e2e8f0;font-weight:500">${cleanMarket(mkt)}</td>
+      <td class="right">${fmt(aClv,'%',2)}</td>
+      <td class="right">${ar ? ar.n : '<span class="neu">—</span>'}</td>
+      <td class="right">${fmt(bClv,'%',2)}</td>
+      <td class="right">${br ? br.n : '<span class="neu">—</span>'}</td>
+      <td class="right">${diff !== null ? fmt(diff,'%',2) : '<span class="neu">—</span>'}</td>
+    </tr>`;
+  }
+  bodyEl.innerHTML = html + '</tbody></table>';
 }
 
 // Period buttons

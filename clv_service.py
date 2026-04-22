@@ -1291,6 +1291,14 @@ class CLVService:
         except Exception as drift_exc:
             logger.warning("5-min drift capture failed: %s", drift_exc)
 
+        # ── A/B Version B — delayed entry capture (runs every cycle) ──────────
+        try:
+            ab_updated = self.capture_delayed_entry_b()
+            if ab_updated:
+                logger.info("🧪 A/B entry: Version B entry_odds captured for %d pick(s)", ab_updated)
+        except Exception as ab_exc:
+            logger.warning("A/B delayed entry capture failed: %s", ab_exc)
+
         return stats
 
     def capture_early_drift(self) -> int:
@@ -1389,6 +1397,100 @@ class CLVService:
                     )
                 except Exception as exc:
                     logger.warning("5-min drift: DB update failed for bet %d: %s", bet['id'], exc)
+
+        return updated
+
+    def capture_delayed_entry_b(self) -> int:
+        """
+        A/B Entry Timing — Version B: capture entry_odds ~20 minutes after signal creation.
+
+        Finds Version B picks where entry_odds IS NULL and signal is 15–25 minutes old,
+        then fetches current Pinnacle/sharp odds and saves as entry_odds + entry_ts.
+        This allows direct CLV comparison: A (instant entry) vs B (20-min delayed entry).
+        """
+        MIN_AGE_SEC = 15 * 60    # signal must be at least 15 min old
+        MAX_AGE_SEC = 25 * 60    # but no older than 25 min
+        now = _now()
+
+        try:
+            rows = db_helper.execute("""
+                SELECT id, home_team, away_team, league,
+                       market, selection, open_odds, kickoff_epoch, kickoff_utc,
+                       best_odds_bookmaker, fixture_id
+                FROM football_opportunities
+                WHERE ab_version     = 'B'
+                  AND entry_odds     IS NULL
+                  AND open_ts        IS NOT NULL
+                  AND open_ts        >= %s
+                  AND open_ts        <= %s
+                  AND open_odds      IS NOT NULL
+                  AND status         = 'pending'
+            """, (now - MAX_AGE_SEC, now - MIN_AGE_SEC), fetch='all') or []
+        except Exception as exc:
+            logger.warning("capture_delayed_entry_b: DB query failed: %s", exc)
+            return 0
+
+        if not rows:
+            return 0
+
+        logger.info("🧪 A/B Version B: %d candidate(s) for delayed entry capture", len(rows))
+        updated = 0
+
+        for row in rows:
+            bet = {
+                'id':             row[0],
+                'home_team':      row[1],
+                'away_team':      row[2],
+                'league':         row[3],
+                'market':         row[4],
+                'selection':      row[5],
+                'open_odds':      float(row[6]),
+                'kickoff_epoch':  int(row[7]) if row[7] else 0,
+                'kickoff_utc':    row[8],
+                'seconds_to_ko':  (int(row[7]) - now) if row[7] else 0,
+                'open_source_book': row[9] or 'unknown',
+                'fixture_id':     row[10],
+            }
+
+            db_market = bet.get('market', '')
+            if not _is_supported(db_market):
+                continue
+
+            mtype = _market_type(db_market, bet.get('selection', ''))
+            sport = _sport_key(bet.get('league', ''))
+
+            current_odds = None
+            if mtype and sport:
+                try:
+                    result = self.fetch_closing_odds(bet)
+                    if result:
+                        current_odds = result['odds']
+                except Exception:
+                    pass
+
+            if current_odds and 1.0 < current_odds < 50.0:
+                drift_pct = abs(current_odds - bet['open_odds']) / bet['open_odds']
+                if drift_pct > 0.50:
+                    logger.debug("A/B-B: rejected suspicious move %.2f→%.2f for bet %d",
+                                 bet['open_odds'], current_odds, bet['id'])
+                    continue
+                try:
+                    db_helper.execute("""
+                        UPDATE football_opportunities
+                           SET entry_odds = %s,
+                               entry_ts   = %s
+                         WHERE id = %s
+                           AND entry_odds IS NULL
+                    """, (float(current_odds), now, bet['id']))
+                    updated += 1
+                    direction = "📈" if current_odds > bet['open_odds'] else "📉"
+                    logger.info(
+                        "🧪 A/B-B entry captured: bet=%d  open=%.2f  20min=%.2f  %s(%+.1f%%)",
+                        bet['id'], bet['open_odds'], current_odds, direction,
+                        (current_odds / bet['open_odds'] - 1) * 100,
+                    )
+                except Exception as exc:
+                    logger.warning("A/B-B entry: DB update failed for bet %d: %s", bet['id'], exc)
 
         return updated
 
