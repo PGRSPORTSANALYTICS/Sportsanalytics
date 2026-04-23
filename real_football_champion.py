@@ -2079,24 +2079,50 @@ class RealFootballChampion:
                 
                 elif market_key == 'spreads':  # Asian Handicap markets
                     found_spreads = True
+                    _home_name = match.get('home_team', '').lower()
+                    _away_name = match.get('away_team', '').lower()
+                    _home_win_p = xg_analysis.get('home_win_prob', 0.45)
+                    _away_win_p = xg_analysis.get('away_win_prob', 0.40)
+
                     for outcome in outcomes:
-                        name = outcome.get('name')
+                        name = outcome.get('name', '') or ''
                         odds = outcome.get('price', 0)
                         point = outcome.get('point', 0)
-                        
-                        # Process Asian Handicap (-0.5, +0.5, -1, +1) within odds range
+
+                        if not name:
+                            continue
+
+                        # Identify whether this outcome belongs to the home or away team
+                        _nl = name.lower()
+                        _is_home = (_nl in _home_name or _home_name in _nl or
+                                    any(w in _home_name for w in _nl.split() if len(w) > 3))
+                        _is_away = (_nl in _away_name or _away_name in _nl or
+                                    any(w in _away_name for w in _nl.split() if len(w) > 3))
+
+                        if not _is_home and not _is_away:
+                            continue  # Cannot match to a known team — skip
+
+                        # Process Asian Handicap within odds range
                         if abs(point) <= 1.5 and 1.55 <= odds <= 2.50:
-                            if point > 0:  # Team getting handicap advantage
-                                implied_prob = 1.0 / odds
-                                true_prob = 0.55  # Slightly favor the handicap receiver
-                                edge = (true_prob - implied_prob) * 100
-                                selection = f'{name} +{point}'
-                            else:  # Team giving handicap
-                                implied_prob = 1.0 / odds
-                                true_prob = 0.45  # Slightly against the handicap giver
-                                edge = (true_prob - implied_prob) * 100
-                                selection = f'{name} {point}'
-                            
+                            implied_prob = 1.0 / odds
+                            _base = _home_win_p if _is_home else _away_win_p
+
+                            if point > 0:  # Team receiving handicap (underdog)
+                                # Cover probability = base win% + benefit of head-start
+                                true_prob = min(_base + (abs(point) * 0.12), 0.82)
+                                selection = f'{name} +{abs(point)}'
+                            else:  # Team giving handicap (should be the favorite)
+                                # Sanity check: away team giving -1.5 against a heavy home favourite is wrong
+                                if _is_away and _home_win_p > 0.55:
+                                    print(f"⚠️ AH sanity skip: {name} {point} — away team unlikely "
+                                          f"to be {abs(point)}-goal favourite (home_win={_home_win_p:.0%})")
+                                    continue
+                                # Must win by more than abs(point) goals → reduce base probability
+                                true_prob = max(_base - (abs(point) * 0.12), 0.15)
+                                selection = f'{name} -{abs(point)}'
+
+                            edge = (true_prob - implied_prob) * 100
+
                             if edge >= self.min_edge:
                                 bm_odds = self.collect_bookmaker_odds(match, selection, 'spreads', point)
                                 opportunity = self.create_opportunity(
