@@ -5177,9 +5177,10 @@ def _data_quality_gate(opp_dict: Dict) -> tuple:
         source = next(iter(book_names))
         return ('BLOCK', f"single_soft_source:{source}")
 
-    # Rule 2 — DEVELOPING: too few books or no recognised sharp anchor
+    # Rule 2 — DEVELOPING: truly minimal data (fewer than 2 real bookmakers)
+    # Sharp anchor (Pinnacle/Betfair) is preferred but NOT required — CLV tracked as bonus when available
     has_sharp = bool(book_names & _GATE_SHARP_BOOKS)
-    if n_books < _GATE_MIN_BOOKS or not has_sharp:
+    if n_books < 2:
         return ('DEVELOPING', f"books={n_books},sharp={'yes' if has_sharp else 'no'}")
 
     return ('PASS', '')

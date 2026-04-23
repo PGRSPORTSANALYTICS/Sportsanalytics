@@ -1153,9 +1153,9 @@ function buildMkCard(mk,tgt,uid){
     +'<span class="vd-badge '+vd.cls+'">'+vd.lbl+'</span>'
     +(mk.verdict_reason?'<span class="mk2-vr">'+mk.verdict_reason+'</span>':'')
     +'</div>'
-    // confidence band bar score
+    // confidence bar score (label only shown for HIGH/MEDIUM — never show negative labels)
     +'<div class="mk2-conf-row">'
-    +'<span class="mk2-conf-lbl '+bs.cls+'">'+mk.confidence_band+'</span>'
+    +(bs.cls==='cb-high'||bs.cls==='cb-medium'?'<span class="mk2-conf-lbl '+bs.cls+'">'+mk.confidence_band+'</span>':'')
     +'<div class="mk2-conf-bar-wrap"><div class="mk2-conf-bar" style="width:'+Math.min(100,score)+'%;background:'+bs.col+'"></div></div>'
     +'<span class="mk2-conf-score" style="color:'+bs.col+'">'+score+'</span>'
     +'</div>'

@@ -38,7 +38,7 @@ ROI_DISABLE_THRESHOLD   = -20.0   # recent ROI < -20%       → DISABLE
 # low-volume markets (Corners, Cards) only generate ~10–30 settled picks per window.
 MIN_SAMPLE_CLV          = 100     # min picks for CLV-based decisions
 MIN_SAMPLE_HIT_RATE     =  25     # min picks for hit-rate-drop signal
-MIN_SAMPLE_ROI          =  25     # min picks for ROI signal
+MIN_SAMPLE_ROI          =  50     # min picks for ROI signal (raised — 25 is pure variance territory)
 MIN_SAMPLE_MARKET       =  25     # overall gate (any signal valid above this)
 MIN_SAMPLE_LEAGUE       =  20     # min picks for league CLV signal
 MIN_SAMPLE_PROMOTE      =  50     # min picks for league PROD promotion
@@ -349,9 +349,24 @@ class EdgeManagementEngine:
                     f"(threshold {ROI_DISABLE_THRESHOLD}%)"
                 )
             elif roi_rec < ROI_DEGRADED_THRESHOLD and not clv_strong_positive:
-                if status not in ("DISABLED",):
-                    status = "DEGRADED"
-                reasons.append(f"ROI {roi_rec:+.1f}% negative over {sample} picks")
+                # ROI alone is NOT enough to degrade — require CLV confirmation OR very large sample
+                # Historical 23% ROI over 2000+ bets means short-term ROI dips are normal variance
+                clv_also_negative = (clv_avg is not None
+                                     and clv_avg < CLV_DEGRADED_THRESHOLD
+                                     and clv_n >= MIN_SAMPLE_CLV)
+                large_sample = sample >= 100
+                if clv_also_negative or large_sample:
+                    if status not in ("DISABLED",):
+                        status = "DEGRADED"
+                    reasons.append(
+                        f"ROI {roi_rec:+.1f}% negative over {sample} picks"
+                        + (f" + CLV {clv_avg:+.2f}% confirms" if clv_also_negative else " (large sample)")
+                    )
+                else:
+                    reasons.append(
+                        f"ROI {roi_rec:+.1f}% negative ({sample} picks) — variance territory, "
+                        f"CLV confirmation needed before degrading"
+                    )
             elif roi_rec < ROI_DEGRADED_THRESHOLD and clv_strong_positive:
                 reasons.append(
                     f"ROI {roi_rec:+.1f}% negative but CLV {clv_avg:+.2f}% overrides "
