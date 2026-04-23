@@ -863,14 +863,11 @@ function applyFilters(picks){
     if(S.filters.sharp&&pickStatus(p)!=='SHARP_CONFIRMED')return false;
     return true;
   });
-  if(sc==='all')return base;
+  if(sc==='all'||sc==='auto')return base;
   if(sc==='strong')return base.filter(p=>sigClass(p)==='strong');
   if(sc==='medium')return base.filter(p=>SC_ORDER[sigClass(p)]>=SC_ORDER['medium']);
   if(sc==='developing')return base.filter(p=>SC_ORDER[sigClass(p)]>=SC_ORDER['developing']);
-  // auto: strong (all) + medium (max 8)
-  const strong=base.filter(p=>sigClass(p)==='strong');
-  const medium=base.filter(p=>sigClass(p)==='medium').slice(0,8);
-  return [...strong,...medium];
+  return base;
 }
 
 /* ── KPI strip ── */
