@@ -624,7 +624,7 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
   </div>
   <div class="nav-sp"></div>
   <span class="nav-ts" id="updatedAt">syncing…</span>
-  <span class="nav-ts" style="font-size:8px;opacity:.4;margin-right:4px">v20260423a</span>
+  <span class="nav-ts" style="font-size:8px;opacity:.4;margin-right:4px">v20260423b</span>
   <span class="tier-badge" id="tierBadge">FREE</span>
 </nav>
 
@@ -776,6 +776,22 @@ const fP=(v,s=true)=>{if(v==null||isNaN(v))return'—';return(s&&v>0?'+':'')+Num
 const fO=v=>(v==null||isNaN(v))?'—':Number(v).toFixed(2);
 const ago=m=>{if(m==null)return'—';if(m<1)return'now';if(m<60)return`${m}m`;return`${Math.floor(m/60)}h`};
 
+/* ── Kickoff date formatter (Swedish) ── */
+const _DAYS_SV=['Sön','Mån','Tis','Ons','Tor','Fre','Lör'];
+const _MTHS_SV=['jan','feb','mar','apr','maj','jun','jul','aug','sep','okt','nov','dec'];
+function fmtKO(epoch){
+  if(!epoch)return'';
+  const d=new Date(epoch*1000);
+  const now=new Date();
+  const t0=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  const t1=new Date(t0.getTime()+86400000);
+  const t2=new Date(t0.getTime()+172800000);
+  const hm=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  if(d>=t0&&d<t1)return'Idag '+hm;
+  if(d>=t1&&d<t2)return'Imorgon '+hm;
+  return _DAYS_SV[d.getDay()]+' '+d.getDate()+' '+_MTHS_SV[d.getMonth()]+' '+hm;
+}
+
 const SHARP_BOOKS=new Set(['Pinnacle','Betfair','Matchbook','betfair_ex_eu','pinnacle','matchbook']);
 
 function pickStatus(p){return p.confidence_label||(p.sharp_price_at_detection?'SHARP_CONFIRMED':'UNVERIFIED_LEGACY')}
@@ -921,7 +937,8 @@ function renderScanner(picks){
       const mktDisplay=(mkt==='VALUE SINGLE'||mkt==='VALUE SINGLES')?'':mkt.slice(0,28);
       const teams=`${p.home_team||''} vs ${p.away_team||''}`;
       const mktCtTxt=p._mkt_count>1?` · ${p._mkt_count} mkts`:'';
-      const subParts=[p.league,p.kickoff_str||ago(p.age_minutes)].filter(Boolean);
+      const koStr=fmtKO(p.kickoff_epoch)||p.kickoff_str||'';
+      const subParts=[p.league,koStr].filter(Boolean);
       const sub=subParts.join(' · ')+mktCtTxt;
       const books=rowBooks(p, window.innerWidth<=860?2:3);
       const scBadge=sc==='strong'?'<span class="r-badge" style="background:rgba(74,222,128,.15);color:#4ade80">STRONG</span>':(sc==='medium'?'<span class="r-badge" style="background:rgba(251,191,36,.12);color:#fbbf24">MEDIUM</span>':'<span class="r-badge" style="background:rgba(148,163,184,.1);color:#94a3b8">DEV</span>');
@@ -1006,7 +1023,7 @@ async function fetchMatchMarkets(id,tgt){
   }
   _mmState.data=data;_mmState.tgt=tgt;
   const html=buildMatchMarkets(data,tgt);
-  const ko=data.kickoff_epoch?new Date(data.kickoff_epoch*1000).toISOString().slice(11,16)+' UTC':'';
+  const ko=fmtKO(data.kickoff_epoch)||(data.kickoff_epoch?new Date(data.kickoff_epoch*1000).toISOString().slice(11,16)+' UTC':'');
   if(tgt==='desk'){
     $('detTitle').innerHTML=(data.home_team||'?')+' vs '+(data.away_team||'?');
     $('detSub').textContent=(data.league||'')+' · '+(ko||'')+' · '+(data.total_markets||0)+' markets';
@@ -1519,7 +1536,7 @@ setTimeout(()=>{if(!_rendered)safeRender();},5000);
 setTimeout(()=>{
   const sb=$('scBody');
   if(sb && sb.innerHTML.includes('Loading signals')){
-    sb.innerHTML='<div class="empty-s"><div class="empty-t" style="color:#4ade80">JS OK · fetching data…</div><div class="empty-sub">v20260423a · if stuck, check URL = /live</div></div>';
+    sb.innerHTML='<div class="empty-s"><div class="empty-t" style="color:#4ade80">JS OK · fetching data…</div><div class="empty-sub">v20260423b · if stuck, check URL = /live</div></div>';
   }
 },1000);
 
