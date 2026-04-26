@@ -860,8 +860,8 @@ class CLVService:
             )
             return (round(avg_odds, 4), source_label, matched_out)
 
-        if fallback_hit:
-            odds, book_title, matched_out = fallback_hit
+        if soft_hit:
+            odds, book_title, matched_out = soft_hit
             logger.info(
                 "CLV: soft source — no sharp book found, using %s (bronze)",
                 book_title

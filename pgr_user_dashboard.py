@@ -1102,8 +1102,6 @@ with tab_special:
         empty_sub="Special market signals appear here — scanned every 15 minutes.",
     )
 
-            _cta_banner()
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TAB 2 — MARKET SCANNER

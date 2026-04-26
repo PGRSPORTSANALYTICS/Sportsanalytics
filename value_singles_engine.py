@@ -998,14 +998,14 @@ class ValueSinglesEngine:
                 _clv_score_final = min(6, _clv_score)
 
                 # ── CLV Tier classification ───────────────────────────────────────
+                # CLV is bonus intelligence — NOT a gate. All EV+ signals pass.
                 if _clv_score_final >= 5:
                     _clv_tier = "SHARP"
                 elif _clv_score_final == 4:
                     _clv_tier = "VOLUME"
                 else:
-                    # Tier 3 = TRASH — hard block, no DB insert
-                    _reject("rejected_clv_trash", home_team, away_team, market_key, float(ev), float(odds))
-                    continue
+                    # Low CLV score → DEVELOPING tier (saved, not blocked)
+                    _clv_tier = "DEVELOPING"
 
                 # ── Store as raw candidate (routing deferred to pass 2) ───────────
                 raw_candidates.append({
@@ -1125,19 +1125,14 @@ class ValueSinglesEngine:
                 # ── CLV liquidity gate ───────────────────────────────────────────────
                 pass  # Continues to CLV gate below
 
-            # ── CLV liquidity gate ────────────────────────────────────────────
-            # Low-liquidity leagues (Tier C) need sharper odds signal to qualify.
-            # Standard/Premium leagues (Tier A/B) require volume-grade CLV quality.
-            # League-learning picks bypass this gate — we want all data collected.
+            # ── CLV liquidity gate (advisory only — not a hard block) ───────────
+            # CLV is bonus intelligence. Low CLV score → DEVELOPING tier, not blocked.
             _min_clv = 5 if _league_tier == "C" else 4
             if _clv_score_p2 < _min_clv and not is_league_learning and not is_flagged_league:
-                _reject(
-                    "rejected_clv_score",
-                    home_team, away_team, market_key, float(ev), float(odds)
-                )
-                print(f"   ❌ CLV gate: {home_team} vs {away_team} [{market_key}] "
-                      f"CLV={_clv_score_p2}/6 < {_min_clv} (Tier {_league_tier})")
-                continue
+                # Downgrade to DEVELOPING tier — signal still saved for analysis
+                _clv_tier = "DEVELOPING"
+                print(f"   ⚠️ CLV advisory: {home_team} vs {away_team} [{market_key}] "
+                      f"CLV={_clv_score_p2}/6 < {_min_clv} — saved as DEVELOPING")
 
             # ── Determine routing tier ────────────────────────────────────────
             # IMPORTANT: Pass pro_picks_today=0 here so routing is purely quality-based.
