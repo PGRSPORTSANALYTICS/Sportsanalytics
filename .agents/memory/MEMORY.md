@@ -1,0 +1,1 @@
+- [EV removed as gate](ev-removal-jul2026.md) — EV no longer blocks/routes signals; confidence + PGR score + odds range is the filter now

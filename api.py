@@ -126,10 +126,18 @@ app.middleware("http")(premium_middleware)
 
 @app.on_event("startup")
 async def startup_event():
-    """Bootstrap DB tables required for auth and payments."""
-    ensure_users_table()
-    ensure_dashboard_tokens_table()
-    ensure_stripe_events_table()
+    """Bootstrap DB tables required for auth and payments. Tolerates DB being offline."""
+    import logging
+    _log = logging.getLogger("api")
+    for fn_name, fn in [
+        ("ensure_users_table", ensure_users_table),
+        ("ensure_dashboard_tokens_table", ensure_dashboard_tokens_table),
+        ("ensure_stripe_events_table", ensure_stripe_events_table),
+    ]:
+        try:
+            fn()
+        except Exception as exc:
+            _log.warning("Startup table init skipped (%s): %s", fn_name, exc)
 
 # Include Discord OAuth router
 app.include_router(discord_auth_router)

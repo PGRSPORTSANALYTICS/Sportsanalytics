@@ -59,30 +59,29 @@ MIN_COMBINED_CONFIDENCE = 0.01
 # ============================================================
 
 # ============================================================
-# VALUE SINGLES — THREE-LAYER ARCHITECTURE (Mar 30, 2026)
+# VALUE SINGLES — THREE-LAYER ARCHITECTURE (Mar 30, 2026 / Jul 2026: EV removed as gate)
 # PRO PICK / VALUE OPPORTUNITY / WATCHLIST
-# Single broad scan, then route by EV / confidence / odds / pgr_score
+# Single broad scan, route by confidence + PGR score + odds range
 # ============================================================
 
 # Layer 1: PRO PICK — official bets, count toward public ROI/units/record
-PRO_MIN_EV = 0.25              # 25% EV
+PRO_MIN_EV = 0.0               # EV not used as gate — kept for logging only
 PRO_MIN_CONFIDENCE = 0.70      # 70% model confidence
-PRO_MIN_ODDS = 2.10            # Raised from 1.75 — data shows edge only at 2.10+ (Apr 2026)
+PRO_MIN_ODDS = 2.10
 PRO_MAX_ODDS = 2.30
-# Minimum Expected Value (EV) for candidate generation scan (three-layer routing, Mar 30 2026)
-# Candidates below 7% EV are rejected before PGR scoring.
-MIN_VALUE_SINGLE_EV = 0.03  # 3% floor — SIGNAL flatten: dashboard supports 3/5/8/10 bands, backend must too
+# No EV floor — candidates enter by confidence + odds range, routed by PGR score
+MIN_VALUE_SINGLE_EV = 0.0      # EV gate removed (Jul 2026)
 MAX_VALUE_SINGLES_PER_DAY = 8  # Max 8 PRO picks/day
 
 # Layer 2: VALUE OPPORTUNITY — published in dashboard + Discord, NOT official bets
-VALUE_MIN_EV = 0.10            # 10% EV (lowered from 12% Apr 2026 — more volume needed)
+VALUE_MIN_EV = 0.0             # EV not used as gate — kept for logging only
 VALUE_MIN_CONFIDENCE = 0.60    # 60% model confidence
-VALUE_MIN_ODDS = 2.10          # Raised from 1.60 — data shows edge only at 2.10+ (Apr 2026)
+VALUE_MIN_ODDS = 1.70
 VALUE_MAX_ODDS = 4.00
 
 # Layer 3: WATCHLIST — saved internally for model learning, never public
-WATCHLIST_MIN_EV = 0.07        # 7% EV
-WATCHLIST_MIN_CONFIDENCE = 0.50
+WATCHLIST_MIN_EV = 0.0         # EV not used as gate
+WATCHLIST_MIN_CONFIDENCE = 0.52
 
 # Broad scan floor — all candidates enter here, routing decides their layer
 MIN_VALUE_SINGLE_ODDS = 1.60   # Lowered Apr 20 2026 — allow standard totals odds range for signal coverage
@@ -678,11 +677,10 @@ class ValueSinglesEngine:
             # Flagged leagues → allowed through but forced to WATCHLIST in pass 2
             _is_flagged_league = league_key in WATCHLIST_ONLY_LEAGUES
             
-            # Dynamic thresholds for tournament matches (less H2H data available)
-            match_ev_threshold = TOURNAMENT_MIN_EV if is_tournament else MIN_VALUE_SINGLE_EV
+            # Dynamic confidence threshold for tournament matches (less H2H data available)
             match_confidence_threshold = TOURNAMENT_MIN_CONFIDENCE if is_tournament else MIN_VALUE_SINGLE_CONFIDENCE
             if is_tournament:
-                print(f"🏆 Tournament match: {home_team} vs {away_team} - using relaxed thresholds (EV: {match_ev_threshold:.1%}, Conf: {match_confidence_threshold:.0%})")
+                print(f"🏆 Tournament match: {home_team} vs {away_team} - using relaxed confidence threshold ({match_confidence_threshold:.0%})")
 
             # 2) Odds — primary from The Odds API via champion, fallback from API-Football
             if not hasattr(self.champion, "get_odds_for_match"):
@@ -818,19 +816,12 @@ class ValueSinglesEngine:
                 if abs(prob_shift) > 3:
                     print(f"   📐 CAL: {market_key} p={raw_prob:.3f}→{calibrated_prob:.3f} (shift {prob_shift:+.1f}pp) ev={raw_ev:.3f}→{ev_after_cal:.3f}")
 
-                adj_ev, is_blocked, block_reason = apply_ev_controls(ev_after_cal)
-                if is_blocked:
-                    print(f"   🚫 BLOCKED: {market_key} cal_ev={ev_after_cal:.1%} - {block_reason}")
-                    _reject("rejected_ev_controls", home_team, away_team, market_key, float(ev_after_cal), float(odds))
-                    continue
+                adj_ev, _ev_blocked, _ev_block_reason = apply_ev_controls(ev_after_cal)
+                # EV controls no longer block signals — EV is informational only (Jul 2026)
                 
                 # ── Three-layer routing ──────────────────────────────────────────────
                 ev = adj_ev
-
-                # Candidate EV floor (12% minimum, Apr 2026)
-                if ev < self.ev_threshold:
-                    _reject("rejected_low_ev", home_team, away_team, market_key, float(ev), float(odds))
-                    continue
+                # EV is kept for display/logging — not used as a gate (Jul 2026)
 
                 # ── PGR SCORE (Pass 1: compute only, no routing decision yet) ──────
                 _league_key_for_routing = match.get('sport_key') or match.get('league_key') or match.get('odds_api_key') or ''
@@ -1153,9 +1144,9 @@ class ValueSinglesEngine:
                     pro_picks_today=0,  # Cap applied at selection step, not here
                 )
             else:
-                if ev >= 0.25 and calibrated_prob >= 0.70 and 1.75 <= odds <= 2.30 and pgr_score >= 55.0:
+                if calibrated_prob >= 0.70 and 2.10 <= odds <= 2.30 and pgr_score >= 55.0:
                     _routing, _routing_reason = "PRO_PICK", "routed_pro_pick"
-                elif ev >= 0.10 and calibrated_prob >= 0.60 and pgr_score >= 35.0:
+                elif calibrated_prob >= 0.60 and 1.70 <= odds <= 4.00 and pgr_score >= 35.0:
                     _routing, _routing_reason = "VALUE_OPP", "routed_value_opp"
                 elif pgr_score >= 20.0:
                     _routing, _routing_reason = "WATCHLIST", "routed_watchlist"

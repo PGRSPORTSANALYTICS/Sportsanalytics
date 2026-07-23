@@ -2,21 +2,20 @@
 PGR Score — Weighted candidate ranking for three-layer signal routing.
 
 Formula (weights must sum to 1.0):
-  EV             40%
-  Confidence     25%
-  CLV Potential  15%
-  Market Softness 10%
-  League Tier    10%
+  Confidence     55%   (primary quality signal — model conviction)
+  CLV Potential  25%   (closing-line value / sharp book proximity)
+  Market Softness 10%  (book agreement, line stability)
+  League Tier    10%   (data reliability by competition level)
 
-Each component is normalised to 0–100 before weighting.
+EV is computed and displayed for information only — it does NOT gate signals.
 """
 
 from typing import Optional
 from league_config import get_league_by_odds_key
 
-EV_WEIGHT = 0.40
-CONFIDENCE_WEIGHT = 0.25
-CLV_WEIGHT = 0.15
+EV_WEIGHT = 0.0           # EV no longer gates — kept at 0 for compatibility
+CONFIDENCE_WEIGHT = 0.55
+CLV_WEIGHT = 0.25
 MARKET_SOFTNESS_WEIGHT = 0.10
 LEAGUE_TIER_WEIGHT = 0.10
 
@@ -123,7 +122,7 @@ def compute_pgr_score(
     if clv_potential is not None:
         clv_score = min(max(clv_potential * 200, 0.0), 100.0)
     else:
-        clv_score = ev_score
+        clv_score = conf_score * 0.80
 
     if market_softness is not None:
         soft_score = min(max(market_softness * 100, 0.0), 100.0)
@@ -147,26 +146,31 @@ def compute_pgr_score(
     return final_score
 
 
-PRO_PICK_MIN_EV = 0.25
-PRO_PICK_MIN_CONFIDENCE = 0.70
-PRO_PICK_MIN_ODDS = 1.75
+# PRO PICK — highest quality tier (official tracked bets)
+PRO_PICK_MIN_CONFIDENCE = 0.70  # 70% model conviction
+PRO_PICK_MIN_ODDS = 2.10
 PRO_PICK_MAX_ODDS = 2.30
 PRO_PICK_MAX_PER_DAY = 5
-PRO_PICK_MIN_PGR_SCORE = 55.0   # Minimum weighted PGR score required for PRO PICK
+PRO_PICK_MIN_PGR_SCORE = 55.0
 
-VALUE_OPP_MIN_EV = 0.10  # Lowered from 12% Apr 2026 — more volume needed for data collection
+# VALUE OPP — published signals, not officially tracked bets
 VALUE_OPP_MIN_CONFIDENCE = 0.60
-VALUE_OPP_MIN_ODDS = 1.60
+VALUE_OPP_MIN_ODDS = 1.70
 VALUE_OPP_MAX_ODDS = 4.00
-VALUE_OPP_MIN_PGR_SCORE = 35.0  # Minimum weighted PGR score required for VALUE OPP
+VALUE_OPP_MIN_PGR_SCORE = 35.0
 
-WATCHLIST_MIN_EV = 0.03  # SIGNAL flatten Apr 17 2026: lowered from 7% to expose all 3%+ ACTIVE/DEGRADED signals (Developing Edge band)
-WATCHLIST_MIN_CONFIDENCE = 0.50
-WATCHLIST_MIN_PGR_SCORE = 20.0  # Minimum PGR score for WATCHLIST (below this → REJECTED)
+# WATCHLIST — internal learning only
+WATCHLIST_MIN_CONFIDENCE = 0.52
+WATCHLIST_MIN_PGR_SCORE = 20.0
 
-CANDIDATE_MIN_EV = 0.07
 CANDIDATE_MIN_ODDS = 1.60
 CANDIDATE_MAX_ODDS = 4.00
+
+# Legacy — kept for display/logging only, not used as gates
+PRO_PICK_MIN_EV = 0.0
+VALUE_OPP_MIN_EV = 0.0
+WATCHLIST_MIN_EV = 0.0
+CANDIDATE_MIN_EV = 0.0
 
 REJECTION_REASONS = [
     "rejected_low_ev",
@@ -205,19 +209,16 @@ def route_candidate(
         return "REJECTED", "rejected_low_odds"
     if odds > CANDIDATE_MAX_ODDS:
         return "REJECTED", "rejected_high_odds"
-    if ev < WATCHLIST_MIN_EV:
-        return "REJECTED", "rejected_low_ev"
     if confidence < WATCHLIST_MIN_CONFIDENCE:
         return "REJECTED", "rejected_low_confidence"
 
     if pgr_score < WATCHLIST_MIN_PGR_SCORE:
         return "REJECTED", "rejected_score_below_threshold"
 
-    # ── PRO PICK: all hard criteria + PGR score gate ─────────────────────────
+    # ── PRO PICK: confidence + odds range + PGR + league tier ────────────────
     # Tier C leagues cannot qualify for PRO PICK — they are downgraded, not rejected.
     if (
-        ev >= PRO_PICK_MIN_EV
-        and confidence >= PRO_PICK_MIN_CONFIDENCE
+        confidence >= PRO_PICK_MIN_CONFIDENCE
         and PRO_PICK_MIN_ODDS <= odds <= PRO_PICK_MAX_ODDS
         and league_tier in ("A", "B")
         and pgr_score >= PRO_PICK_MIN_PGR_SCORE
@@ -225,20 +226,16 @@ def route_candidate(
     ):
         return "PRO_PICK", "routed_pro_pick"
 
-    # ── VALUE OPP: relaxed criteria + PGR score gate ─────────────────────────
-    # Tier C candidates that meet PRO thresholds fall through to VALUE OPP here.
+    # ── VALUE OPP: confidence + odds range + PGR ─────────────────────────────
     if (
-        ev >= VALUE_OPP_MIN_EV
-        and confidence >= VALUE_OPP_MIN_CONFIDENCE
+        confidence >= VALUE_OPP_MIN_CONFIDENCE
         and VALUE_OPP_MIN_ODDS <= odds <= VALUE_OPP_MAX_ODDS
         and pgr_score >= VALUE_OPP_MIN_PGR_SCORE
     ):
         return "VALUE_OPP", "routed_value_opp"
 
-    # ── WATCHLIST: EV 7–12% band + confidence floor + PGR score gate ───────────
-    # Upper bound ensures EV>12% candidates are never silently filed as WATCHLIST;
-    # they are either routed VALUE_OPP (if confidence qualifies) or explicitly rejected.
-    if WATCHLIST_MIN_EV <= ev < VALUE_OPP_MIN_EV and confidence >= WATCHLIST_MIN_CONFIDENCE:
+    # ── WATCHLIST: confidence floor + PGR gate ───────────────────────────────
+    if confidence >= WATCHLIST_MIN_CONFIDENCE and pgr_score >= WATCHLIST_MIN_PGR_SCORE:
         return "WATCHLIST", "routed_watchlist"
 
     return "REJECTED", "rejected_score_below_threshold"
