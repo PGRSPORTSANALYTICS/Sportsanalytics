@@ -18,17 +18,20 @@ class APICacheManager:
     
     def __init__(self, api_name: str, quota_limit: int):
         """
-        Initialize cache manager for a specific API
-        
-        Args:
-            api_name: Name of API (e.g., 'api_football', 'odds_api')
-            quota_limit: Daily request limit
+        Initialize cache manager for a specific API.
+        Falls back to in-memory tracking when the database is unavailable.
         """
         self.api_name = api_name
         self.quota_limit = quota_limit
         self.cache_table = f"{api_name}_cache"
+        self._mem_count = 0          # in-memory fallback counter
+        self._db_available = True
         
-        self._ensure_quota_initialized()
+        try:
+            self._ensure_quota_initialized()
+        except Exception as exc:
+            logger.warning("APICacheManager DB unavailable — using in-memory quota tracking: %s", exc)
+            self._db_available = False
     
     def _ensure_quota_initialized(self):
         """Ensure this API has a quota counter entry"""
@@ -58,58 +61,59 @@ class APICacheManager:
                 ''', (self.api_name,), fetch=None)
     
     def check_quota_available(self) -> bool:
-        """
-        Check if we have quota available for another request
-        
-        Returns:
-            bool: True if quota available, False if exhausted
-        """
-        self._reset_if_new_day()
-        
-        result = db_helper.execute('''
-            SELECT request_count, quota_limit FROM api_request_counter
-            WHERE api_name = %s
-        ''', (self.api_name,), fetch='one')
-        
-        if not result:
-            return True
-        
-        request_count, quota_limit = result
-        return request_count < quota_limit
+        """Check if we have quota available for another request."""
+        if not self._db_available:
+            return self._mem_count < self.quota_limit
+        try:
+            self._reset_if_new_day()
+            result = db_helper.execute('''
+                SELECT request_count, quota_limit FROM api_request_counter
+                WHERE api_name = %s
+            ''', (self.api_name,), fetch='one')
+            if not result:
+                return True
+            request_count, quota_limit = result
+            return request_count < quota_limit
+        except Exception:
+            return self._mem_count < self.quota_limit
     
     # Budget threshold at which a warning is emitted (fraction of quota_limit)
     BUDGET_WARNING_THRESHOLD = 5000
 
     def increment_request_count(self):
-        """Increment the request counter after making an API call"""
-        db_helper.execute('''
-            UPDATE api_request_counter
-            SET request_count = request_count + 1,
-                last_request_time = CURRENT_TIMESTAMP
-            WHERE api_name = %s
-        ''', (self.api_name,), fetch=None)
-        
-        result = db_helper.execute('''
-            SELECT request_count, quota_limit FROM api_request_counter
-            WHERE api_name = %s
-        ''', (self.api_name,), fetch='one')
-        
-        if result:
-            request_count, quota_limit = result
-            if request_count % 10 == 0:
-                logger.info(f"📊 {self.api_name}: {request_count}/{quota_limit} requests today")
-            # Budget warning when crossing the 5000-request threshold
-            if request_count >= self.BUDGET_WARNING_THRESHOLD and (request_count - 1) < self.BUDGET_WARNING_THRESHOLD:
-                logger.warning(
-                    f"⚠️ API BUDGET WARNING: {self.api_name} has used {request_count}/{quota_limit} requests today "
-                    f"({request_count/quota_limit*100:.0f}%). Approaching daily limit — cache will be prioritised."
-                )
-            elif request_count > self.BUDGET_WARNING_THRESHOLD and request_count % 100 == 0:
-                remaining = quota_limit - request_count
-                logger.warning(
-                    f"⚠️ API BUDGET HIGH: {self.api_name} {request_count}/{quota_limit} requests today. "
-                    f"{remaining} remaining."
-                )
+        """Increment the request counter after making an API call."""
+        self._mem_count += 1
+        if not self._db_available:
+            return
+        try:
+            db_helper.execute('''
+                UPDATE api_request_counter
+                SET request_count = request_count + 1,
+                    last_request_time = CURRENT_TIMESTAMP
+                WHERE api_name = %s
+            ''', (self.api_name,), fetch=None)
+            result = db_helper.execute('''
+                SELECT request_count, quota_limit FROM api_request_counter
+                WHERE api_name = %s
+            ''', (self.api_name,), fetch='one')
+            if result:
+                request_count, quota_limit = result
+                if request_count % 10 == 0:
+                    logger.info(f"📊 {self.api_name}: {request_count}/{quota_limit} requests today")
+                # Budget warning when crossing the 5000-request threshold
+                if request_count >= self.BUDGET_WARNING_THRESHOLD and (request_count - 1) < self.BUDGET_WARNING_THRESHOLD:
+                    logger.warning(
+                        f"⚠️ API BUDGET WARNING: {self.api_name} has used {request_count}/{quota_limit} requests today "
+                        f"({request_count/quota_limit*100:.0f}%). Approaching daily limit — cache will be prioritised."
+                    )
+                elif request_count > self.BUDGET_WARNING_THRESHOLD and request_count % 100 == 0:
+                    remaining = quota_limit - request_count
+                    logger.warning(
+                        f"⚠️ API BUDGET HIGH: {self.api_name} {request_count}/{quota_limit} requests today. "
+                        f"{remaining} remaining."
+                    )
+        except Exception:
+            pass
     
     def get_cached_response(self, cache_key: str, endpoint: str) -> Optional[Dict]:
         """

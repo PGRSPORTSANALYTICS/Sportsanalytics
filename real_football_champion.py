@@ -5198,10 +5198,12 @@ def _data_quality_gate(opp_dict: Dict) -> tuple:
     book_names = set(bm_odds.keys()) if isinstance(bm_odds, dict) else set()
     n_books    = len(book_names)
 
-    # Rule 1 — BLOCK: single soft source (API-Football, SofaScore, etc.)
+    # Rule 1 — DEVELOPING (was BLOCK): single soft source (API-Football, SofaScore, etc.)
+    # Changed Jul 2026: when The Odds API is unavailable, API-Football is our best source.
+    # Signals are saved as DEVELOPING for analysis rather than being discarded.
     if n_books <= 1 and book_names and book_names <= _GATE_SOFT_SOURCES:
         source = next(iter(book_names))
-        return ('BLOCK', f"single_soft_source:{source}")
+        return ('DEVELOPING', f"single_soft_source:{source}")
 
     # Rule 2 — DEVELOPING: truly minimal data (fewer than 2 real bookmakers)
     # Sharp anchor (Pinnacle/Betfair) is preferred but NOT required — CLV tracked as bonus when available
