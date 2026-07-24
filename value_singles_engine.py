@@ -1116,14 +1116,7 @@ class ValueSinglesEngine:
                 # ── CLV liquidity gate ───────────────────────────────────────────────
                 pass  # Continues to CLV gate below
 
-            # ── CLV liquidity gate (advisory only — not a hard block) ───────────
-            # CLV is bonus intelligence. Low CLV score → DEVELOPING tier, not blocked.
-            _min_clv = 5 if _league_tier == "C" else 4
-            if _clv_score_p2 < _min_clv and not is_league_learning and not is_flagged_league:
-                # Downgrade to DEVELOPING tier — signal still saved for analysis
-                _clv_tier = "DEVELOPING"
-                print(f"   ⚠️ CLV advisory: {home_team} vs {away_team} [{market_key}] "
-                      f"CLV={_clv_score_p2}/6 < {_min_clv} — saved as DEVELOPING")
+            # CLV is tracked for display only — not used to gate or downgrade signals (Jul 2026)
 
             # ── Determine routing tier ────────────────────────────────────────
             # IMPORTANT: Pass pro_picks_today=0 here so routing is purely quality-based.

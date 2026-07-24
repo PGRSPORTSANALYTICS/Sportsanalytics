@@ -2,22 +2,21 @@
 PGR Score — Weighted candidate ranking for three-layer signal routing.
 
 Formula (weights must sum to 1.0):
-  Confidence     55%   (primary quality signal — model conviction)
-  CLV Potential  25%   (closing-line value / sharp book proximity)
-  Market Softness 10%  (book agreement, line stability)
-  League Tier    10%   (data reliability by competition level)
+  Confidence     80%   (primary quality signal — model conviction)
+  Market Softness 12%  (book agreement, line stability)
+  League Tier     8%   (data reliability by competition level)
 
-EV is computed and displayed for information only — it does NOT gate signals.
+EV and CLV are computed and displayed for information only — neither gates signals.
 """
 
 from typing import Optional
 from league_config import get_league_by_odds_key
 
-EV_WEIGHT = 0.0           # EV no longer gates — kept at 0 for compatibility
-CONFIDENCE_WEIGHT = 0.55
-CLV_WEIGHT = 0.25
-MARKET_SOFTNESS_WEIGHT = 0.10
-LEAGUE_TIER_WEIGHT = 0.10
+EV_WEIGHT = 0.0           # EV informational only
+CONFIDENCE_WEIGHT = 0.80
+CLV_WEIGHT = 0.0          # CLV informational only
+MARKET_SOFTNESS_WEIGHT = 0.12
+LEAGUE_TIER_WEIGHT = 0.08
 
 MARKET_WEIGHTS: dict[str, float] = {
     "CORNERS": 1.20,
